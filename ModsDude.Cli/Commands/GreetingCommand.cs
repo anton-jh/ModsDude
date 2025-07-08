@@ -9,7 +9,19 @@ internal sealed class GreetingCommand(IAnsiConsole console) : Command
 
     public override int Execute(CommandContext context)
     {
-        _console.MarkupLine("Hello, [bold]World[/]!");
+        var loop = true;
+
+        while (loop)
+        {
+            var name = _console.Prompt(new TextPrompt<string>("What's your [green]name[/]?"));
+            _console.MarkupLine($"[yellow]Hello[/], [bold][red]{name}[/][/]!");
+
+            loop = _console.Prompt(new TextPrompt<bool>("Should I ask again?")
+                .AddChoice(true)
+                .AddChoice(false)
+                .DefaultValue(false)
+                .WithConverter(x => x ? "y" : "n"));
+        }
         return 0;
     }
 }
