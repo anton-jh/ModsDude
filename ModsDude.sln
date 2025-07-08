@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.WindowsClient.View
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.WindowsClient.Wpf", "ModsDude.WindowsClient\ModsDude.WindowsClient.Wpf\ModsDude.WindowsClient.Wpf.csproj", "{AA955BA3-9A46-44E3-9AB8-28DB2B3A3CEB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Cli", "ModsDude.Cli\ModsDude.Cli.csproj", "{2156D2DB-9F21-4423-9052-2E2EE0E38F44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -171,6 +173,18 @@ Global
 		{AA955BA3-9A46-44E3-9AB8-28DB2B3A3CEB}.Release|x64.Build.0 = Release|Any CPU
 		{AA955BA3-9A46-44E3-9AB8-28DB2B3A3CEB}.Release|x86.ActiveCfg = Release|Any CPU
 		{AA955BA3-9A46-44E3-9AB8-28DB2B3A3CEB}.Release|x86.Build.0 = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|x64.Build.0 = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Debug|x86.Build.0 = Debug|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|x64.ActiveCfg = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|x64.Build.0 = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|x86.ActiveCfg = Release|Any CPU
+		{2156D2DB-9F21-4423-9052-2E2EE0E38F44}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -187,5 +201,8 @@ Global
 		{A8016746-F77B-48D7-9AD9-12ECF3DBC028} = {E280AC91-E6F2-4CB2-8F53-7589EB0C449A}
 		{6C3940C7-82E1-426E-A834-2BD80CEFD926} = {E280AC91-E6F2-4CB2-8F53-7589EB0C449A}
 		{AA955BA3-9A46-44E3-9AB8-28DB2B3A3CEB} = {E280AC91-E6F2-4CB2-8F53-7589EB0C449A}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1B145B9F-9FAF-4B83-A416-0468D9FA48AD}
 	EndGlobalSection
 EndGlobal
