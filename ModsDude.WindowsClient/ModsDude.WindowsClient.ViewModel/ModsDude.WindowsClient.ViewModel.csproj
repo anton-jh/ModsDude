@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ModsDude.WindowsClient.Model\ModsDude.WindowsClient.Model.csproj" />
+    <ProjectReference Include="..\ModsDude.WindowsClient.Utilities\ModsDude.WindowsClient.Utilities.csproj" />
+  </ItemGroup>
+
+</Project>
