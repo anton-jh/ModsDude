@@ -16,6 +16,11 @@ internal sealed class GreetingCommand(IAnsiConsole console) : Command
             var name = _console.Prompt(new TextPrompt<string>("What's your [green]name[/]?"));
             _console.MarkupLine($"[yellow]Hello[/], [bold][red]{name}[/][/]!");
 
+            var test = _console.Prompt<string>(new SelectionPrompt<string>()
+                .AddChoices("val 1", "val 2", "val 3"));
+
+            _console.Write(new FigletText(test));
+
             loop = _console.Prompt(new TextPrompt<bool>("Should I ask again?")
                 .AddChoice(true)
                 .AddChoice(false)
