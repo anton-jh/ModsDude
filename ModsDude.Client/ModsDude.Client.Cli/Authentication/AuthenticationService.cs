@@ -36,7 +36,7 @@ internal class AuthenticationService : IAccessTokenAccessor
 
         var accounts = (await _client.GetAccountsAsync()).ToList();
 
-        if (accounts.Any())
+        if (accounts.Count != 0)
         {
             try
             {
@@ -44,27 +44,22 @@ internal class AuthenticationService : IAccessTokenAccessor
             }
             catch (MsalUiRequiredException)
             {
-
-            }
-            catch (Exception ex)
-            {
-                throw;
+                result = await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
             }
         }
 
         if (result is null)
         {
-            try
-            {
-                result = await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
+            result = await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
         }
 
         return result.AccessToken;
+    }
+
+
+    public async Task ForceRelogin(CancellationToken cancellationToken)
+    {
+        await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
     }
 
 

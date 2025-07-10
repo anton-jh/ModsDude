@@ -16,7 +16,8 @@ var builder = Host.CreateDefaultBuilder(args);
 builder.ConfigureServices(static (ctx, services) =>
 {
     services.AddSingleton(AnsiConsole.Console);
-    services.AddSingleton<IAccessTokenAccessor, AuthenticationService>();
+    services.AddSingleton<AuthenticationService>();
+    services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<AuthenticationService>());
     services.AddSingleton<ClientConfiguration>();
     services.AddModsDudeClient();
 });
@@ -29,7 +30,8 @@ var app = new CommandApp<ListReposCommand>(registrar);
 app.Configure(config =>
 {
     config.AddCommand<GreetingCommand>("greet");
-    config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos").WithAlias("my-repos");
+    config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
+    config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
 });
 
 
