@@ -1,12 +1,13 @@
-﻿using ModsDude.Client.Core.ModsDudeServer.Generated;
+﻿using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ModsDude.Client.Cli.Commands;
+namespace ModsDude.Client.Cli.Commands.Repos;
 internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConsole)
-    : AsyncCommand
+    : AsyncCommandBase<EmptyCommandSettings>(ansiConsole)
 {
-    public override async Task<int> ExecuteAsync(CommandContext context)
+    public override async Task ExecuteAsync(EmptyCommandSettings _)
     {
         var repoMemberships = await reposClient.GetMyReposV1Async();
 
@@ -14,7 +15,8 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
 
         table.AddColumns(
             new TableColumn("Id"),
-            new TableColumn("Name"));
+            new TableColumn("Name"),
+            new TableColumn("Membership level"));
 
         foreach (var repoMembership in repoMemberships)
         {
@@ -24,8 +26,12 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
                 repoMembership.MembershipLevel.ToString());
         }
 
-        ansiConsole.Write(table);
+        _ansiConsole.Clear();
 
-        return 0;
+        _ansiConsole.Write(table);
+        _ansiConsole.WriteLine();
+
+        _ansiConsole.MarkupLine("[blue]<- Press any key to dismiss.[/]");
+        Console.ReadKey(true);
     }
 }

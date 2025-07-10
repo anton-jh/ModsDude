@@ -1,22 +1,24 @@
-﻿using ModsDude.Cli.Commands;
+﻿using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Cli.Commands.Repos;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ModsDude.Client.Cli.Commands;
-internal class MenuCommand(IAnsiConsole ansiConsole)
+namespace ModsDude.Client.Cli.Commands.Misc;
+internal class MenuCommand(
+    IAnsiConsole ansiConsole,
+    IServiceProvider serviceProvider)
     : AsyncCommand
 {
     public override async Task<int> ExecuteAsync(CommandContext context)
     {
-        var root = new SubMenuNode(ansiConsole, "Menu", [
-            new CommandNode<GreetingCommand>(ansiConsole, "Say hi"),
-            new SubMenuNode(ansiConsole, "Sub-menu", [
-                new CommandNode<ReloginCommand>(ansiConsole, "Re-login / change user"),
-                new GroupNode(ansiConsole, "Group", [
-                    new CommandNode<GreetingCommand>(ansiConsole, "Say hi again"),
-                    new CommandNode<ReloginCommand>(ansiConsole, "Re-login / change user"),
-                ]),
-                new CommandNode<ReloginCommand>(ansiConsole, "Re-login / change user"),
+        var root = new SubMenuNode("Menu", ansiConsole, [
+            new SubMenuNode("Repos", ansiConsole, [
+                new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
+                new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole)
+            ]),
+            new GroupNode("Misc", ansiConsole, [
+                new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole)
             ])
         ]);
 
@@ -26,7 +28,8 @@ internal class MenuCommand(IAnsiConsole ansiConsole)
     }
 }
 
-internal abstract class MenuNode(IAnsiConsole ansiConsole, string label)
+
+internal abstract class MenuNode(string label, IAnsiConsole ansiConsole)
 {
     protected readonly IAnsiConsole _ansiConsole = ansiConsole;
 
@@ -35,19 +38,24 @@ internal abstract class MenuNode(IAnsiConsole ansiConsole, string label)
     public abstract Task Select();
 }
 
-internal class CommandNode<TCommand>(IAnsiConsole ansiConsole, string label)
-    : MenuNode(ansiConsole, label)
-    where TCommand : class, ICommand
+
+internal class CommandNode<TCommand>(
+    string label,
+    IServiceProvider serviceProvider,
+    IAnsiConsole ansiConsole)
+    : MenuNode(label, ansiConsole)
+    where TCommand : class, IInteractiveCommand
 {
-    public override Task Select()
+    public override async Task Select()
     {
-        _ansiConsole.MarkupLine($"Selected command node '{Label}'");
-        return Task.CompletedTask;
+        var commandInstance = serviceProvider.GetRequiredService<TCommand>();
+        await commandInstance.ExecuteAsync();
     }
 }
 
-internal class SubMenuNode(IAnsiConsole ansiConsole, string label, IEnumerable<MenuNode> children)
-    : MenuNode(ansiConsole, label)
+
+internal class SubMenuNode(string label, IAnsiConsole ansiConsole, IEnumerable<MenuNode> children)
+    : MenuNode(label, ansiConsole)
 {
     public IEnumerable<MenuNode> Children { get; } = children;
 
@@ -64,7 +72,7 @@ internal class SubMenuNode(IAnsiConsole ansiConsole, string label, IEnumerable<M
                 .EnableSearch()
                 .WrapAround(true);
 
-            var backNode = new MiscNode(_ansiConsole, "<- Back");
+            var backNode = new MiscNode("<- Back", _ansiConsole);
             prompt.AddChoice(backNode);
 
             foreach (var node in Children)
@@ -91,10 +99,11 @@ internal class SubMenuNode(IAnsiConsole ansiConsole, string label, IEnumerable<M
     }
 }
 
+
 internal class GroupNode : MenuNode
 {
-    public GroupNode(IAnsiConsole ansiConsole, string label, IEnumerable<MenuNode> children)
-        : base(ansiConsole, label)
+    public GroupNode(string label, IAnsiConsole ansiConsole, IEnumerable<MenuNode> children)
+        : base(label, ansiConsole)
     {
         if (children.Any(x => x is GroupNode))
         {
@@ -114,8 +123,9 @@ internal class GroupNode : MenuNode
     }
 }
 
-internal class MiscNode(IAnsiConsole ansiConsole, string label)
-    : MenuNode(ansiConsole, label)
+
+internal class MiscNode(string label, IAnsiConsole ansiConsole)
+    : MenuNode(label, ansiConsole)
 {
     public override Task Select()
     {

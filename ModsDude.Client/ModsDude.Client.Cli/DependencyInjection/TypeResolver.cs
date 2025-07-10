@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Spectre.Console.Cli;
 
-namespace ModsDude.Cli.DependencyInjection;
+namespace ModsDude.Client.Cli.DependencyInjection;
 
 /// <summary>
 /// Credit to Stevan Freeborn

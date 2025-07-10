@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using ModsDude.Cli.Commands;
-using ModsDude.Cli.DependencyInjection;
 using ModsDude.Client.Cli.Authentication;
-using ModsDude.Client.Cli.Commands;
+using ModsDude.Client.Cli.Commands.Misc;
+using ModsDude.Client.Cli.Commands.Repos;
+using ModsDude.Client.Cli.DependencyInjection;
 using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.ModsDudeServer;
 using Spectre.Console;
@@ -29,11 +29,11 @@ var app = new CommandApp<MenuCommand>(registrar);
 
 app.Configure(config =>
 {
-    config.PropagateExceptions();
+    //config.PropagateExceptions();
 
-    config.AddCommand<GreetingCommand>("greet");
-    config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
+    config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
+    config.AddCommand<CreateRepoCommand>("create-repo");
 });
 
 
