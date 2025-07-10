@@ -24,11 +24,13 @@ builder.ConfigureServices(static (ctx, services) =>
 
 
 var registrar = new TypeRegistrar(builder);
-var app = new CommandApp<ListReposCommand>(registrar);
+var app = new CommandApp<MenuCommand>(registrar);
 
 
 app.Configure(config =>
 {
+    config.PropagateExceptions();
+
     config.AddCommand<GreetingCommand>("greet");
     config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
