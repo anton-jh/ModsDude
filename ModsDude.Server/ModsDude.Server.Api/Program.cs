@@ -40,31 +40,30 @@ builder.Services
     .AddEndpointsApiExplorer()
     .AddOpenApiDocument(config =>
     {
-        var instance = builder.Configuration["AzureAdB2C:Instance"];
-        var domain = builder.Configuration["AzureAdB2C:Domain"];
-        var policy = builder.Configuration["AzureAdB2C:SignUpSignInPolicyId"];
+        var tokenEndpoint = builder.Configuration["EntraExternalId:TokenEndpoint"];
+        var authorizationEndpoint = builder.Configuration["EntraExternalId:AuthorizationEndpoint"];
 
         config.Title = "ModsDude Server";
-        config.AddSecurity("AzureAD_B2C", new OpenApiSecurityScheme
+        config.AddSecurity("EntraExternalId", new OpenApiSecurityScheme
         {
             Type = OpenApiSecuritySchemeType.OAuth2,
             Flows = new OpenApiOAuthFlows
             {
                 AuthorizationCode = new OpenApiOAuthFlow
                 {
-                    AuthorizationUrl = $"{instance}/{domain}/oauth2/v2.0/authorize?p={policy}",
-                    TokenUrl = $"{instance}/{domain}/oauth2/v2.0/token?p={policy}",
-                    RefreshUrl = $"{instance}/{domain}/oauth2/v2.0/token?p={policy}",
+                    AuthorizationUrl = authorizationEndpoint,
+                    TokenUrl = tokenEndpoint,
+                    RefreshUrl = tokenEndpoint,
                     Scopes =
                     {
                         { "offline_access", "Offline access" },
                         { "openid", "OpenID" },
-                        { "https://modsdude.onmicrosoft.com/modsdude-server/default", "ModsDude Server Default scope" }
+                        { "api://modsdude-server/act_as_user", "ModsDude Server default user scope" }
                     }
                 }
             }
         });
-        config.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("AzureAD_B2C"));
+        config.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("EntraExternalId"));
     });
 
 builder.Services
@@ -87,13 +86,13 @@ builder.Services
     .AddMicrosoftIdentityWebApi(
     options =>
     {
-        builder.Configuration.Bind("AzureAdB2C", options);
+        builder.Configuration.Bind("EntraExternalId", options);
         options.TokenValidationParameters.NameClaimType = "name";
         options.MapInboundClaims = false;
     },
     options =>
     {
-        builder.Configuration.Bind("AzureAdB2C", options);
+        builder.Configuration.Bind("EntraExternalId", options);
     });
 builder.Services.AddAuthorization();
 
