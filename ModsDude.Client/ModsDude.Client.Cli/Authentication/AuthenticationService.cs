@@ -1,5 +1,7 @@
 ﻿using Microsoft.Identity.Client;
+using Microsoft.Identity.Client.Extensions.Msal;
 using ModsDude.Client.Core.Authentication;
+using ModsDude.Client.Core.Helpers;
 
 namespace ModsDude.Client.Cli.Authentication;
 
@@ -10,6 +12,7 @@ internal class AuthenticationService : IAccessTokenAccessor
     private static readonly string _redirectUri = "http://localhost";
     private static readonly string[] _scopes = ["api://modsdude-server/act_as_user", "openid", "offline_access"];
     private readonly IPublicClientApplication _client;
+    private bool _tokenCacheConfigured = false;
 
 
     public AuthenticationService()
@@ -24,6 +27,11 @@ internal class AuthenticationService : IAccessTokenAccessor
 
     public async Task<string> Get(CancellationToken cancellationToken)
     {
+        if (!_tokenCacheConfigured)
+        {
+            await ConfigureTokenCacheAsync();
+        }
+
         AuthenticationResult? result = null;
 
         var accounts = (await _client.GetAccountsAsync()).ToList();
@@ -57,5 +65,19 @@ internal class AuthenticationService : IAccessTokenAccessor
         }
 
         return result.AccessToken;
+    }
+
+
+    private async Task ConfigureTokenCacheAsync()
+    {
+        var storageProperties = new StorageCreationPropertiesBuilder("msal_cache.dat", FileSystemHelper.GetAppDataDirectory())
+            .WithMacKeyChain("ModsDudeTokenCache", "MSAL")
+            .WithLinuxUnprotectedFile()
+            .Build();
+
+        var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+        cacheHelper.RegisterCache(_client.UserTokenCache);
+
+        _tokenCacheConfigured = true;
     }
 }
