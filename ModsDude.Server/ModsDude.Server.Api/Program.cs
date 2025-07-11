@@ -126,6 +126,8 @@ var apiVersionSet = app.NewApiVersionSet()
     .Build();
 
 
+app.UseHttpsRedirection();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseOpenApi();

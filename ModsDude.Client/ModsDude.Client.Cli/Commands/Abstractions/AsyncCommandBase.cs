@@ -32,9 +32,9 @@ internal abstract class AsyncCommandBase<TSettings>(
             _ansiConsole.MarkupLine("[red]Oops![/] [yellow]Seems like something went wrong.[/]");
             _ansiConsole.WriteLine();
 
-            if (ex is ApiException<CustomProblemDetails> apiEx && apiEx.Result.Title is not null)
+            if (ex is ApiException<CustomProblemDetails> apiEx)
             {
-                _ansiConsole.WriteLine(apiEx.Result.Title);
+                _ansiConsole.WriteLine(apiEx.Result.Title ?? "Unknown error");
             }
 
             _ansiConsole.WriteException(ex);
