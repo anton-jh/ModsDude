@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -31,7 +32,6 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
         _ansiConsole.Write(table);
         _ansiConsole.WriteLine();
 
-        _ansiConsole.MarkupLine("[blue]<- Press any key to dismiss.[/]");
-        Console.ReadKey(true);
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 }

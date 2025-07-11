@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.ModsDudeServer.Generated;
+﻿using ModsDude.Client.Cli.Extensions;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -39,8 +40,7 @@ internal abstract class AsyncCommandBase<TSettings>(
             _ansiConsole.WriteException(ex);
             _ansiConsole.WriteLine();
 
-            _ansiConsole.MarkupLine("[blue]Press any key to dismiss.[/]");
-            Console.ReadKey(true);
+            _ansiConsole.PressAnyKeyToDismiss();
         }
     }
 
