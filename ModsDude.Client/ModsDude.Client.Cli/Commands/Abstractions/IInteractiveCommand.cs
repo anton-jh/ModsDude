@@ -6,9 +6,3 @@ internal interface IInteractiveCommand
 {
     Task ExecuteAsync(CancellationToken cancellationToken);
 }
-
-//internal interface IInteractiveCommand<TSettings> : IInteractiveCommand
-//    where TSettings : CommandSettings, new()
-//{
-//    Task ExecuteAsync(TSettings settings, CancellationToken cancellationToken);
-//}

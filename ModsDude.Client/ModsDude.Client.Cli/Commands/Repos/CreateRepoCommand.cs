@@ -6,7 +6,6 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Reflection;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace ModsDude.Client.Cli.Commands.Repos;
 internal class CreateRepoCommand(

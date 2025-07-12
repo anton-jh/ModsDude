@@ -1,6 +1,4 @@
-﻿using System.Text.Json.Serialization;
-
-namespace ModsDude.Client.Core.GameAdapters;
+﻿namespace ModsDude.Client.Core.GameAdapters;
 public interface IAdapterSettings
 {
     IAdapterSettingsValidationError[] Validate();
