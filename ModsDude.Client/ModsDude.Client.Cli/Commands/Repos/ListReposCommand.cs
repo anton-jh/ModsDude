@@ -8,9 +8,9 @@ namespace ModsDude.Client.Cli.Commands.Repos;
 internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConsole)
     : AsyncCommandBase<EmptyCommandSettings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(EmptyCommandSettings _)
+    public override async Task ExecuteAsync(EmptyCommandSettings _, CancellationToken cancellationToken)
     {
-        var repoMemberships = await reposClient.GetMyReposV1Async();
+        var repoMemberships = await reposClient.GetMyReposV1Async(cancellationToken);
 
         var table = new Table();
 

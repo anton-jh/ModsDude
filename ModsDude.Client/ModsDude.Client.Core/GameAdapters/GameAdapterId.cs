@@ -5,11 +5,11 @@ public readonly record struct GameAdapterId
     private const string _separator = "__";
 
 
-    public GameAdapterId(string id, string compatibilityVersion)
+    public GameAdapterId(string id, int compatibilityVersion)
     {
-        if (id.Contains(_separator) || compatibilityVersion.Contains(_separator))
+        if (id.Contains(_separator))
         {
-            throw new ArgumentException($"Id or compatibilityVersion parts cannot contain the separator: '{_separator}'");
+            throw new ArgumentException($"Id cannot contain the separator: '{_separator}'");
         }
 
         Id = id;
@@ -18,7 +18,7 @@ public readonly record struct GameAdapterId
 
 
     public string Id { get; }
-    public string CompatibilityVersion { get; }
+    public int CompatibilityVersion { get; }
 
 
     public override readonly string ToString()
@@ -31,7 +31,7 @@ public readonly record struct GameAdapterId
     {
         return s.Split(_separator) switch
         {
-            [var id, var version] => new(id, version),
+            [var id, var version] when int.TryParse(version, out var parsedVersion) => new(id, parsedVersion),
             _ => throw new FormatException()
         };
     }
@@ -39,9 +39,9 @@ public readonly record struct GameAdapterId
     public static bool TryParse(string s, out GameAdapterId result)
     {
         var parts = s.Split(_separator);
-        if (parts is [var id, var version])
+        if (parts is [var id, var version] && int.TryParse(version, out var parsedVersion))
         {
-            result = new(id, version);
+            result = new(id, parsedVersion);
             return true;
         }
         result = default;

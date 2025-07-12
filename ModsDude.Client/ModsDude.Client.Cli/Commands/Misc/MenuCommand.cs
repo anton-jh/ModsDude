@@ -48,8 +48,27 @@ internal class CommandNode<TCommand>(
 {
     public override async Task Select()
     {
+        var cts = new CancellationTokenSource();
+
+        void OnCancel(object? sender, ConsoleCancelEventArgs e)
+        {
+            cts.Cancel();
+            e.Cancel = true;
+        }
+
         var commandInstance = serviceProvider.GetRequiredService<TCommand>();
-        await commandInstance.ExecuteAsync();
+
+        try
+        {
+            Console.CancelKeyPress += OnCancel;
+            await commandInstance.ExecuteAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        { }
+        finally
+        {
+            Console.CancelKeyPress -= OnCancel;
+        }
     }
 }
 

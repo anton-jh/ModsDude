@@ -1,7 +1,7 @@
 ﻿namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 
 [AttributeUsage(AttributeTargets.Property)]
-public class DescriptionAttribute(string text) : Attribute
+public class TitleAttribute(string text) : Attribute
 {
-    public string Text { get; } = text;
+    public string Text { get; init; } = text;
 }

@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 namespace ModsDude.Client.Cli.Commands.Abstractions;
 internal abstract class AsyncCommandBase<TSettings>(
     IAnsiConsole ansiConsole)
-    : AsyncCommand<TSettings>, IInteractiveCommand<TSettings>
+    : AsyncCommand<TSettings>, IInteractiveCommand
     where TSettings : CommandSettings, new()
 {
     protected readonly IAnsiConsole _ansiConsole = ansiConsole;
@@ -14,18 +14,18 @@ internal abstract class AsyncCommandBase<TSettings>(
 
     public override async Task<int> ExecuteAsync(CommandContext context, TSettings settings)
     {
-        await ExecuteAsync(settings);
+        await ExecuteAsync(settings, default);
 
         return 0;
     }
 
-    public virtual async Task ExecuteAsync()
+    public virtual async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await ExecuteAsync(new());
+            await ExecuteAsync(new(), cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _ansiConsole.Clear();
 
@@ -44,5 +44,5 @@ internal abstract class AsyncCommandBase<TSettings>(
         }
     }
 
-    public abstract Task ExecuteAsync(TSettings settings);
+    public abstract Task ExecuteAsync(TSettings settings, CancellationToken cancellationToken);
 }

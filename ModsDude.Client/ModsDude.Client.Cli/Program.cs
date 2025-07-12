@@ -5,6 +5,7 @@ using ModsDude.Client.Cli.Commands.Misc;
 using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.DependencyInjection;
 using ModsDude.Client.Core.Authentication;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -20,6 +21,7 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<AuthenticationService>());
     services.AddSingleton<ClientConfiguration>();
     services.AddModsDudeClient();
+    services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 });
 
 
@@ -29,7 +31,7 @@ var app = new CommandApp<MenuCommand>(registrar);
 
 app.Configure(config =>
 {
-    //config.PropagateExceptions();
+    config.PropagateExceptions();
 
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
     config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");

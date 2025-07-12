@@ -1,19 +1,17 @@
-﻿using ModsDude.Client.Core.Models;
-
-namespace ModsDude.Client.Core.GameAdapters;
+﻿namespace ModsDude.Client.Core.GameAdapters;
 
 public interface IGameAdapter
 {
     GameAdapterDescriptor Descriptor { get; }
     bool HasModAdapter { get; }
     bool HasSavegameAdapter { get; }
-    IAdapterBaseSettings GetBaseSettingsTemplate();
-    IAdapterInstanceSettings GetInstanceSettingsTemplate();
+    IAdapterSettings GetBaseSettingsTemplate();
+    IAdapterSettings GetInstanceSettingsTemplate();
 }
 
 public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameAdapter
-    where TBaseSettings : IAdapterBaseSettings, new()
-    where TInstanceSettings : IAdapterInstanceSettings, new()
+    where TBaseSettings : IAdapterSettings, new()
+    where TInstanceSettings : IAdapterSettings, new()
 {
     public abstract GameAdapterDescriptor Descriptor { get; }
 
@@ -23,8 +21,8 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
     public abstract IModAdapter? ModAdapter { get; }
     public abstract ISavegameAdapter? SavegameAdapter { get; }
 
-    public IAdapterBaseSettings GetBaseSettingsTemplate() => new TBaseSettings();
-    public IAdapterInstanceSettings GetInstanceSettingsTemplate() => new TInstanceSettings();
+    public IAdapterSettings GetBaseSettingsTemplate() => new TBaseSettings();
+    public IAdapterSettings GetInstanceSettingsTemplate() => new TInstanceSettings();
 }
 
 public interface IModAdapter

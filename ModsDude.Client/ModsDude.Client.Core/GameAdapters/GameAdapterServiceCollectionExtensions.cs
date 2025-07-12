@@ -14,6 +14,8 @@ public static class GameAdapterServiceCollectionExtensions
             services.AddSingleton(typeof(IGameAdapter), type);
         }
 
+        services.AddSingleton<IGameAdapterIndex, GameAdapterIndex>();
+
         return services;
     }
 }

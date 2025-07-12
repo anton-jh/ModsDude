@@ -4,11 +4,11 @@ namespace ModsDude.Client.Cli.Commands.Abstractions;
 
 internal interface IInteractiveCommand
 {
-    Task ExecuteAsync();
+    Task ExecuteAsync(CancellationToken cancellationToken);
 }
 
-internal interface IInteractiveCommand<TSettings> : IInteractiveCommand
-    where TSettings : CommandSettings, new()
-{
-    Task ExecuteAsync(TSettings settings);
-}
+//internal interface IInteractiveCommand<TSettings> : IInteractiveCommand
+//    where TSettings : CommandSettings, new()
+//{
+//    Task ExecuteAsync(TSettings settings, CancellationToken cancellationToken);
+//}
