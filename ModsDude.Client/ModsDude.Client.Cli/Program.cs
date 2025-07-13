@@ -44,6 +44,7 @@ app.Configure(config =>
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
     config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
     config.AddCommand<CreateRepoCommand>("create-repo");
+    config.AddCommand<DeleteRepoCommand>("delete-repo");
 });
 
 
