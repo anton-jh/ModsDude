@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Cli.Authentication;
 using ModsDude.Client.Cli.Commands.Misc;
 using ModsDude.Client.Cli.Commands.Repos;
@@ -13,6 +14,11 @@ using Spectre.Console.Cli;
 
 var builder = Host.CreateDefaultBuilder(args);
 
+
+builder.ConfigureLogging(logging =>
+{
+    logging.ClearProviders();
+});
 
 builder.ConfigureServices(static (ctx, services) =>
 {

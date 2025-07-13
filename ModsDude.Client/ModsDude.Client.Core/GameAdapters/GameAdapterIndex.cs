@@ -4,6 +4,7 @@ public interface IGameAdapterIndex
 {
     IEnumerable<IGameAdapter> GetAllLatest();
     IGameAdapter? GetById(GameAdapterId id);
+    IGameAdapter? GetLatestByPartialId(string id);
 }
 
 internal class GameAdapterIndex : IGameAdapterIndex
@@ -29,6 +30,13 @@ internal class GameAdapterIndex : IGameAdapterIndex
     public IGameAdapter? GetById(GameAdapterId id)
     {
         return _allGameAdapters.FirstOrDefault(x => x.Descriptor.Id == id);
+    }
+
+    public IGameAdapter? GetLatestByPartialId(string id)
+    {
+        return _allGameAdapters
+            .Where(x => x.Descriptor.Id.Id == id)
+            .MaxBy(x => x.Descriptor.Id.CompatibilityVersion);
     }
 
     public IEnumerable<IGameAdapter> GetAllLatest()

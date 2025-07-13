@@ -15,7 +15,7 @@ public class UpdateRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPut("repos/{repoId:guid}", UpdateRepo)
+        return builder.MapPut("repo/{repoId:guid}", UpdateRepo)
             .WithTags("Repos");
     }
 

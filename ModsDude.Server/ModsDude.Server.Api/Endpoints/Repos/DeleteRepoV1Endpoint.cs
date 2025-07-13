@@ -14,7 +14,7 @@ public class DeleteRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapDelete("repos/{repoId:guid}", DeleteRepo)
+        return builder.MapDelete("repo/{repoId:guid}", DeleteRepo)
             .WithTags("Repos");
     }
 

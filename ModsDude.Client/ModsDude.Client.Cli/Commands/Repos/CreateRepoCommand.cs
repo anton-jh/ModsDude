@@ -16,10 +16,67 @@ internal class CreateRepoCommand(
 {
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
-        var name = settings.Name ?? await _ansiConsole.PromptAsync(new TextPrompt<string>("Give the repo a friendly name:"), cancellationToken);
-        name = name.Trim();
+        var name = await CollectName(settings, cancellationToken);
+        var gameAdapter = await CollectGameAdapter(settings, cancellationToken);
+        var adapterBaseSettings = await CollectAdapterBaseSettings(settings, gameAdapter, cancellationToken);
 
-        var gameAdapter = await SelectGameAdapter(cancellationToken);
+        await reposClient.CreateRepoV1Async(new()
+        {
+            Name = name,
+            AdapterId = gameAdapter.Descriptor.Id.ToString(),
+            AdapterConfiguration = JsonSerializer.Serialize(adapterBaseSettings),
+        }, cancellationToken);
+    }
+
+
+    private async Task<string> CollectName(Settings settings, CancellationToken cancellationToken)
+    {
+        var nameTaken = false;
+        string name = settings.Name ?? "";
+
+        while (nameTaken || string.IsNullOrWhiteSpace(name))
+        {
+            _ansiConsole.Clear();
+            if (nameTaken)
+            {
+                _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
+            }
+            name = settings.Name ?? await _ansiConsole.PromptAsync(new TextPrompt<string>("[yellow]Give the repo a friendly name:[/]"), cancellationToken);
+            name = name.Trim();
+
+            var nameTakenResult = await reposClient.CheckNameTakenV1Async(new() { Name = name }, cancellationToken);
+            nameTaken = nameTakenResult.IsTaken;
+        }
+
+        return name;
+    }
+
+    private async Task<IGameAdapter> CollectGameAdapter(Settings settings, CancellationToken cancellationToken)
+    {
+        if (settings.Adapter is not null)
+        {
+            var adapter = GameAdapterId.TryParse(settings.Adapter, out var parsedAdapterId)
+                ? gameAdapterIndex.GetById(parsedAdapterId)
+                : gameAdapterIndex.GetLatestByPartialId(settings.Adapter);
+
+            if (adapter is not null)
+            {
+                return adapter;
+            }
+        }
+
+        _ansiConsole.Clear();
+        var prompt = new SelectionPrompt<IGameAdapter>()
+            .Title("[yellow]Select the game adapter to use:[/]")
+            .UseConverter(x => $"[yellow]{x.Descriptor.DisplayName}[/]: {x.Descriptor.Description}")
+            .AddChoices(gameAdapterIndex.GetAllLatest());
+
+        return await _ansiConsole.PromptAsync(prompt, cancellationToken);
+    }
+
+    private async Task<IAdapterSettings> CollectAdapterBaseSettings(Settings settings, IGameAdapter gameAdapter, CancellationToken cancellationToken)
+    {
+        // todo how to collect this from command line parameters? --base-settings-[propertyName] maybe? can i do that with Spectre?
 
         var adapterBaseSettings = gameAdapter.GetBaseSettingsTemplate();
 
@@ -32,23 +89,7 @@ internal class CreateRepoCommand(
 
         } while (validationErrors.Any());
 
-        await reposClient.CreateRepoV1Async(new()
-        {
-            Name = name,
-            AdapterId = gameAdapter.Descriptor.Id.ToString(),
-            AdapterConfiguration = JsonSerializer.Serialize(adapterBaseSettings),
-        }, cancellationToken);
-    }
-
-
-    private async Task<IGameAdapter> SelectGameAdapter(CancellationToken cancellationToken)
-    {
-        var prompt = new SelectionPrompt<IGameAdapter>()
-            .Title("Select the game adapter to use:")
-            .UseConverter(x => $"[yellow]{x.Descriptor.DisplayName}[/]: {x.Descriptor.Description}")
-            .AddChoices(gameAdapterIndex.GetAllLatest());
-
-        return await _ansiConsole.PromptAsync(prompt, cancellationToken);
+        return adapterBaseSettings;
     }
 
     private async Task SetBaseSettings(IAdapterSettings settings, IEnumerable<IAdapterSettingsValidationError> validationErrors, CancellationToken cancellationToken)
@@ -122,5 +163,8 @@ internal class CreateRepoCommand(
     {
         [CommandOption("-n|--name")]
         public string? Name { get; init; }
+
+        [CommandOption("--adapter")]
+        public string? Adapter { get; init; }
     }
 }

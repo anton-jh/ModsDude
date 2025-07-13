@@ -2,7 +2,7 @@
 
 public readonly record struct GameAdapterId
 {
-    private const string _separator = "__";
+    private const string _separator = "@";
 
 
     public GameAdapterId(string id, int compatibilityVersion)
