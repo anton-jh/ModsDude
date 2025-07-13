@@ -14,7 +14,7 @@ internal abstract class AsyncCommandBase<TSettings>(
 
     public override async Task<int> ExecuteAsync(CommandContext context, TSettings settings)
     {
-        await ExecuteAsync(settings, default);
+        await ExecuteAsync(settings, false, default);
 
         return 0;
     }
@@ -23,7 +23,7 @@ internal abstract class AsyncCommandBase<TSettings>(
     {
         try
         {
-            await ExecuteAsync(new(), cancellationToken);
+            await ExecuteAsync(new(), true, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -44,5 +44,5 @@ internal abstract class AsyncCommandBase<TSettings>(
         }
     }
 
-    public abstract Task ExecuteAsync(TSettings settings, CancellationToken cancellationToken);
+    public abstract Task ExecuteAsync(TSettings settings, bool runFromMenu, CancellationToken cancellationToken);
 }

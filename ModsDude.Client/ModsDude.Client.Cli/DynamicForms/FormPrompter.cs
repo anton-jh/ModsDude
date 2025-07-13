@@ -1,40 +1,59 @@
-﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+﻿using ModsDude.Client.Cli.Extensions;
+using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using Spectre.Console;
 using System.Reflection;
 
 namespace ModsDude.Client.Cli.DynamicForms;
 internal class FormPrompter(IAnsiConsole ansiConsole)
 {
-    public async Task Prompt<TForm>(TForm form, string title, CancellationToken cancellationToken)
+    public async Task Prompt<TForm>(TForm form, string title, bool onlyModify, bool runFromMenu, CancellationToken cancellationToken)
         where TForm : IDynamicForm
     {
         IEnumerable<IDynamicFormValidationError> validationErrors = [];
 
         do
         {
-            await Prompt(form, title, validationErrors, cancellationToken);
+            await Prompt(
+                form: form,
+                titleMarkup: title,
+                validationErrors: validationErrors,
+                onlyModify: onlyModify,
+                runFromMenu: runFromMenu,
+                cancellationToken: cancellationToken);
+
             validationErrors = form.Validate();
 
         } while (validationErrors.Any());
     }
 
 
-    private async Task Prompt(IDynamicForm form, string titleMarkup, IEnumerable<IDynamicFormValidationError> validationErrors, CancellationToken cancellationToken)
+    private async Task Prompt(
+        IDynamicForm form,
+        string titleMarkup,
+        IEnumerable<IDynamicFormValidationError> validationErrors,
+        bool onlyModify,
+        bool runFromMenu,
+        CancellationToken cancellationToken)
     {
         var isFirst = true;
         var properties = form.GetType().GetProperties().Where(x => x.CanWrite);
-
-        if (!properties.Any())
-        {
-            return;
-        }
 
         if (validationErrors.Any())
         {
             properties = validationErrors.SelectMany(x => x.Properties).Distinct();
         }
 
-        ansiConsole.Clear();
+        if (onlyModify)
+        {
+            properties = properties.Where(x => x.GetCustomAttribute<CanBeModifiedAttribute>() is not null);
+        }
+
+        if (!properties.Any())
+        {
+            return;
+        }
+
+        ansiConsole.If(runFromMenu)?.Clear();
         ansiConsole.MarkupLine(titleMarkup);
         ansiConsole.WriteLine();
 

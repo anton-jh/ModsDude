@@ -9,7 +9,7 @@ internal class ReloginCommand(
     AuthenticationService authenticationService)
     : AsyncCommandBase<EmptyCommandSettings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(EmptyCommandSettings _, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(EmptyCommandSettings settings, bool runFromMenu_, CancellationToken cancellationToken)
     {
         await authenticationService.ForceRelogin(cancellationToken);
     }

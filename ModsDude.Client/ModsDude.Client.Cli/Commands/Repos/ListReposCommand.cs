@@ -8,7 +8,7 @@ namespace ModsDude.Client.Cli.Commands.Repos;
 internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConsole)
     : AsyncCommandBase<EmptyCommandSettings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(EmptyCommandSettings _, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(EmptyCommandSettings _, bool runFromMenu, CancellationToken cancellationToken)
     {
         var repoMemberships = await reposClient.GetMyReposV1Async(cancellationToken);
 
@@ -27,11 +27,11 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
                 repoMembership.MembershipLevel.ToString());
         }
 
-        _ansiConsole.Clear();
+        _ansiConsole.If(runFromMenu)?.Clear();
 
         _ansiConsole.Write(table);
         _ansiConsole.WriteLine();
 
-        _ansiConsole.PressAnyKeyToDismiss();
+        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
     }
 }
