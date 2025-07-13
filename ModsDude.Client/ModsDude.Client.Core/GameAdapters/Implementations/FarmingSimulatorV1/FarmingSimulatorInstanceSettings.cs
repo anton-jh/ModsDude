@@ -1,7 +1,7 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
-public class FarmingSimulatorInstanceSettings : AdapterSettings<FarmingSimulatorInstanceSettings>
+public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInstanceSettings>
 {
     public FarmingSimulatorInstanceSettings()
     {
@@ -20,7 +20,7 @@ public class FarmingSimulatorInstanceSettings : AdapterSettings<FarmingSimulator
     public string? GameDataFolder { get; set; }
 
 
-    protected override IEnumerable<AdapterSettingsValidationError<FarmingSimulatorInstanceSettings>> Validate()
+    protected override IEnumerable<DynamicFormValidationError<FarmingSimulatorInstanceSettings>> Validate()
     {
         if (!Directory.Exists(GameDataFolder))
         {

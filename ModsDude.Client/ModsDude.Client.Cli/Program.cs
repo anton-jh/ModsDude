@@ -5,6 +5,7 @@ using ModsDude.Client.Cli.Authentication;
 using ModsDude.Client.Cli.Commands.Misc;
 using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.DependencyInjection;
+using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer;
@@ -26,6 +27,7 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<AuthenticationService>();
     services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<AuthenticationService>());
     services.AddSingleton<ClientConfiguration>();
+    services.AddSingleton<FormPrompter>();
     services.AddModsDudeClient();
     services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 });
