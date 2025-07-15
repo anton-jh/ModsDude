@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
@@ -7,6 +8,7 @@ using Spectre.Console.Cli;
 namespace ModsDude.Client.Cli.Commands.Repos;
 internal class DeleteRepoCommand(
     IAnsiConsole ansiConsole,
+    RepoCollector repoCollector,
     IReposClient reposClient)
     : AsyncCommandBase<DeleteRepoCommand.Settings>(ansiConsole)
 {
@@ -14,7 +16,7 @@ internal class DeleteRepoCommand(
 
     public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
     {
-        var repoMembership = await CollectRepo(settings, runFromMenu, cancellationToken);
+        var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
         if (repoMembership is null)
         {
@@ -34,33 +36,6 @@ internal class DeleteRepoCommand(
         _ansiConsole.If(runFromMenu)?.Clear();
         _ansiConsole.MarkupLine($"Repo '{repoMembership.Repo.Name}' successfully deleted.");
         _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
-    }
-
-
-    private async Task<RepoMembershipDto?> CollectRepo(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
-    {
-        IEnumerable<RepoMembershipDto> repos = [];
-
-        await _ansiConsole.Status()
-            .StartAsync("Fetching repos...", async ctx =>
-            {
-                repos = await reposClient.GetMyReposV1Async(cancellationToken);
-            });
-
-        repos = repos.Where(x => x.MembershipLevel == RepoMembershipLevel.Admin);
-
-        if (settings.RepoId is null)
-        {
-            return await _ansiConsole.PromptAsync(new SelectionPrompt<RepoMembershipDto>()
-                .WrapAround()
-                .EnableSearch()
-                .UseConverter(x => x.Repo.Name)
-                .AddChoices(repos), cancellationToken);
-        }
-        else
-        {
-            return repos.FirstOrDefault(x => x.Repo.Id == settings.RepoId);
-        }
     }
 
     private async Task<bool> CollectConfirmation(Settings settings, RepoMembershipDto repoMembership, bool runFromMenu, CancellationToken cancellationToken)

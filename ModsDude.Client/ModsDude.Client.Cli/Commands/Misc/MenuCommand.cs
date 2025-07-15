@@ -12,11 +12,12 @@ internal class MenuCommand(
 {
     public override async Task<int> ExecuteAsync(CommandContext context)
     {
-        var root = new SubMenuNode("Menu", ansiConsole, [
-            new SubMenuNode("Repos", ansiConsole, [
+        var root = new SubMenuNode("Main menu", ansiConsole, [
+            new GroupNode("Repos", ansiConsole, [
                 new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
                 new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
-                new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole)
+                new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole),
+                new CommandNode<EditRepoCommand>("Edit a repo", serviceProvider, ansiConsole)
             ]),
             new GroupNode("Misc", ansiConsole, [
                 new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole)

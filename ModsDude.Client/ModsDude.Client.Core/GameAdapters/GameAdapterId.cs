@@ -32,7 +32,7 @@ public readonly record struct GameAdapterId
         return s.Split(_separator) switch
         {
             [var id, var version] when int.TryParse(version, out var parsedVersion) => new(id, parsedVersion),
-            _ => throw new FormatException()
+            _ => throw new FormatException($"Invalid GameAdapterId string '{s}'")
         };
     }
 

@@ -6,14 +6,15 @@ using System.Reflection;
 namespace ModsDude.Client.Cli.DynamicForms;
 internal class FormPrompter(IAnsiConsole ansiConsole)
 {
-    public async Task Prompt<TForm>(TForm form, string title, bool onlyModify, bool runFromMenu, CancellationToken cancellationToken)
+    public async Task<bool> Prompt<TForm>(TForm form, string title, bool onlyModify, bool runFromMenu, CancellationToken cancellationToken)
         where TForm : IDynamicForm
     {
         IEnumerable<IDynamicFormValidationError> validationErrors = [];
+        var changed = false;
 
         do
         {
-            await Prompt(
+            var newChanged = await Prompt(
                 form: form,
                 titleMarkup: title,
                 validationErrors: validationErrors,
@@ -21,13 +22,17 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
                 runFromMenu: runFromMenu,
                 cancellationToken: cancellationToken);
 
+            changed = changed || newChanged;
+
             validationErrors = form.Validate();
 
         } while (validationErrors.Any());
+
+        return changed;
     }
 
 
-    private async Task Prompt(
+    private async Task<bool> Prompt(
         IDynamicForm form,
         string titleMarkup,
         IEnumerable<IDynamicFormValidationError> validationErrors,
@@ -35,6 +40,7 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
         bool runFromMenu,
         CancellationToken cancellationToken)
     {
+        var changed = false;
         var isFirst = true;
         var properties = form.GetType().GetProperties().Where(x => x.CanWrite);
 
@@ -48,14 +54,16 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
             properties = properties.Where(x => x.GetCustomAttribute<CanBeModifiedAttribute>() is not null);
         }
 
-        if (!properties.Any())
-        {
-            return;
-        }
-
         ansiConsole.If(runFromMenu)?.Clear();
         ansiConsole.MarkupLine(titleMarkup);
         ansiConsole.WriteLine();
+
+        if (!properties.Any())
+        {
+            ansiConsole.MarkupLine("[Red](Nothing here)[/]");
+            ansiConsole.If(runFromMenu)?.PressAnyKeyToContinue();
+            return false;
+        }
 
         foreach (var property in properties)
         {
@@ -99,6 +107,11 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
                     newValue = null;
                 }
 
+                if (newValue != (string?)property.GetValue(form))
+                {
+                    changed = true;
+                }
+
                 property.SetValue(form, newValue);
             }
             else
@@ -107,5 +120,7 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
                     $"Invalid form property type '{property.PropertyType}' ({property.DeclaringType?.Name}.{property.Name})");
             }
         }
+
+        return changed;
     }
 }

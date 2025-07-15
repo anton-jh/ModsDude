@@ -10,7 +10,8 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
 {
     public override async Task ExecuteAsync(EmptyCommandSettings _, bool runFromMenu, CancellationToken cancellationToken)
     {
-        var repoMemberships = await reposClient.GetMyReposV1Async(cancellationToken);
+        var repoMemberships = await _ansiConsole.Status()
+            .StartAsync("Fetching repos...", _ => reposClient.GetMyReposV1Async(cancellationToken));
 
         var table = new Table();
 

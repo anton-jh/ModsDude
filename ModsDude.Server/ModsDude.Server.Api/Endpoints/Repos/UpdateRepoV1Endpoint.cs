@@ -44,17 +44,23 @@ public class UpdateRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        if (await repoRepository.CheckNameIsTaken(new RepoName(request.Name), cancellationToken))
+        var newName = new RepoName(request.Name);
+        if (repo.Name != newName)
         {
-            return TypedResults.BadRequest(Problems.NameTaken(request.Name));
+            if (await repoRepository.CheckNameIsTaken(newName, cancellationToken))
+            {
+                return TypedResults.BadRequest(Problems.NameTaken(request.Name));
+            }
+            repo.Name = newName;
         }
 
-        repo.Name = new RepoName(request.Name);
+        repo.AdapterData = repo.AdapterData with { Configuration = new(request.AdapterConfiguration) };
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(RepoDto.FromModel(repo));
     }
 
 
-    public record UpdateRepoRequest(string Name);
+    public record UpdateRepoRequest(string Name, string AdapterConfiguration);
 }

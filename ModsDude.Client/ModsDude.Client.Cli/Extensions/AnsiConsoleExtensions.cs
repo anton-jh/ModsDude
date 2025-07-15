@@ -8,4 +8,10 @@ internal static class AnsiConsoleExtensions
         ansiConsole.MarkupLine("[blue] <- Press any key to dismiss.[/]");
         Console.ReadKey(true);
     }
+
+    public static void PressAnyKeyToContinue(this IAnsiConsole ansiConsole)
+    {
+        ansiConsole.MarkupLine("[blue] Press any key to continue. ->[/]");
+        Console.ReadKey(true);
+    }
 }

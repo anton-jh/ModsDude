@@ -3157,6 +3157,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("name", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string Name { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("adapterConfiguration", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string AdapterConfiguration { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]

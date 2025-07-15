@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.GameAdapters;
@@ -6,19 +7,19 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using System.Text.Json;
 
 namespace ModsDude.Client.Cli.Commands.Repos;
 internal class CreateRepoCommand(
     IAnsiConsole ansiConsole,
     IReposClient reposClient,
     IGameAdapterIndex gameAdapterIndex,
-    FormPrompter formPrompter)
+    FormPrompter formPrompter,
+    RepoNameCollector repoNameCollector)
     : AsyncCommandBase<CreateRepoCommand.Settings>(ansiConsole)
 {
     public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
     {
-        var name = await CollectName(settings, runFromMenu, cancellationToken);
+        var name = await repoNameCollector.Collect(settings.Name, runFromMenu, cancellationToken);
         var gameAdapter = await CollectGameAdapter(settings, runFromMenu, cancellationToken);
         var adapterBaseSettings = await CollectAdapterBaseSettings(gameAdapter, runFromMenu, cancellationToken);
 
@@ -29,10 +30,8 @@ internal class CreateRepoCommand(
                 {
                     Name = name,
                     AdapterId = gameAdapter.Descriptor.Id.ToString(),
-                    AdapterConfiguration = JsonSerializer.Serialize(adapterBaseSettings),
+                    AdapterConfiguration = adapterBaseSettings.Serialize(),
                 }, cancellationToken);
-
-                await Task.Delay(2000);
             });
 
         _ansiConsole.If(runFromMenu)?.Clear();
@@ -40,29 +39,6 @@ internal class CreateRepoCommand(
         _ansiConsole.MarkupLine("Repo successfully created.");
         _ansiConsole.WriteLine();
         _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
-    }
-
-
-    private async Task<string> CollectName(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
-    {
-        var nameTaken = false;
-        string name = settings.Name ?? "";
-
-        while (nameTaken || string.IsNullOrWhiteSpace(name))
-        {
-            _ansiConsole.If(runFromMenu)?.Clear();
-            if (nameTaken)
-            {
-                _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
-            }
-            name = settings.Name ?? await _ansiConsole.PromptAsync(new TextPrompt<string>("[yellow]Give the repo a friendly name:[/]"), cancellationToken);
-            name = name.Trim();
-
-            var nameTakenResult = await reposClient.CheckNameTakenV1Async(new() { Name = name }, cancellationToken);
-            nameTaken = nameTakenResult.IsTaken;
-        }
-
-        return name;
     }
 
     private async Task<IGameAdapter> CollectGameAdapter(Settings settings, bool runFromMenu, CancellationToken cancellationToken)

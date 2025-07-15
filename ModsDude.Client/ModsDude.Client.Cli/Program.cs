@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ModsDude.Client.Cli.Authentication;
 using ModsDude.Client.Cli.Commands.Misc;
 using ModsDude.Client.Cli.Commands.Repos;
+using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DependencyInjection;
 using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Core.Authentication;
@@ -28,6 +29,8 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<AuthenticationService>());
     services.AddSingleton<ClientConfiguration>();
     services.AddSingleton<FormPrompter>();
+    services.AddSingleton<RepoCollector>();
+    services.AddSingleton<RepoNameCollector>();
     services.AddModsDudeClient();
     services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 });
@@ -45,6 +48,7 @@ app.Configure(config =>
     config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
     config.AddCommand<CreateRepoCommand>("create-repo");
     config.AddCommand<DeleteRepoCommand>("delete-repo");
+    config.AddCommand<EditRepoCommand>("edit-repo");
 });
 
 

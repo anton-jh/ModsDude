@@ -1,8 +1,11 @@
-﻿namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
+﻿using System.Text.Json;
+
+namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 
 public interface IDynamicForm
 {
     IDynamicFormValidationError[] Validate();
+    string Serialize();
 }
 
 
@@ -17,5 +20,10 @@ public abstract class DynamicForm<T> : IDynamicForm
     protected virtual IEnumerable<DynamicFormValidationError<T>> Validate()
     {
         return [];
+    }
+
+    public string Serialize()
+    {
+        return JsonSerializer.Serialize(this, GetType());
     }
 }

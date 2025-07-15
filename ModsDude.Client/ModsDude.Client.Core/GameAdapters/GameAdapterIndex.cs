@@ -3,7 +3,7 @@
 public interface IGameAdapterIndex
 {
     IEnumerable<IGameAdapter> GetAllLatest();
-    IGameAdapter? GetById(GameAdapterId id);
+    IGameAdapter GetById(GameAdapterId id);
     IGameAdapter? GetLatestByPartialId(string id);
 }
 
@@ -27,9 +27,10 @@ internal class GameAdapterIndex : IGameAdapterIndex
     }
 
 
-    public IGameAdapter? GetById(GameAdapterId id)
+    public IGameAdapter GetById(GameAdapterId id)
     {
-        return _allGameAdapters.FirstOrDefault(x => x.Descriptor.Id == id);
+        return _allGameAdapters.FirstOrDefault(x => x.Descriptor.Id == id)
+            ?? throw new ArgumentException($"Cannot find GameAdapter with id '{id}'.");
     }
 
     public IGameAdapter? GetLatestByPartialId(string id)

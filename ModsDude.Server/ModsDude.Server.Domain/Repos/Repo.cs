@@ -21,7 +21,7 @@ public class Repo
     public RepoId Id { get; init; } = new(Guid.NewGuid());
 
     public RepoName Name { get; set; }
-    public required AdapterData AdapterData { get; init; }
+    public required AdapterData AdapterData { get; set; }
     public DateTime Created { get; }
 
     
