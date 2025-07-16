@@ -50,7 +50,7 @@ internal class CommandNode<TCommand>(
 {
     public override async Task Select()
     {
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         void OnCancel(object? sender, ConsoleCancelEventArgs e)
         {
