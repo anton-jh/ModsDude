@@ -51,6 +51,7 @@ app.Configure(config =>
     config.AddCommand<EditRepoCommand>("edit-repo");
     config.AddCommand<RepoDetailsCommand>("inspect-repo");
     config.AddCommand<ListProfilesCommand>("list-profiles").WithAlias("profiles");
+    config.AddCommand<CreateProfileCommand>("create-profile");
 });
 
 

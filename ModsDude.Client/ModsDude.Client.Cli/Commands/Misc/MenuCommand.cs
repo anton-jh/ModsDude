@@ -25,6 +25,7 @@ internal class MenuCommand(
             ]),
             new GroupNode("Profiles", ansiConsole, [
                 new CommandNode<ListProfilesCommand>("List profiles", serviceProvider, ansiConsole),
+                new CommandNode<CreateProfileCommand>("Create profile", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Misc", ansiConsole, [
                 new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole),
