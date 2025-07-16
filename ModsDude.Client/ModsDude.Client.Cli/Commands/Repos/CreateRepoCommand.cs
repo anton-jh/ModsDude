@@ -1,5 +1,4 @@
 ﻿using ModsDude.Client.Cli.Commands.Abstractions;
-using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.GameAdapters;
@@ -13,13 +12,12 @@ internal class CreateRepoCommand(
     IAnsiConsole ansiConsole,
     IReposClient reposClient,
     IGameAdapterIndex gameAdapterIndex,
-    FormPrompter formPrompter,
-    RepoNameCollector repoNameCollector)
+    FormPrompter formPrompter)
     : AsyncCommandBase<CreateRepoCommand.Settings>(ansiConsole)
 {
     public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
     {
-        var name = await repoNameCollector.Collect(settings.Name, runFromMenu, cancellationToken);
+        var name = await CollectName(settings, runFromMenu, cancellationToken);
         var gameAdapter = await CollectGameAdapter(settings, runFromMenu, cancellationToken);
         var adapterBaseSettings = await CollectAdapterBaseSettings(gameAdapter, runFromMenu, cancellationToken);
 
@@ -39,6 +37,33 @@ internal class CreateRepoCommand(
         _ansiConsole.MarkupLine("Repo successfully created.");
         _ansiConsole.WriteLine();
         _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+    }
+
+
+    private async Task<string> CollectName(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    {
+        var nameTaken = false;
+        var name = "";
+
+        while (nameTaken || string.IsNullOrWhiteSpace(name))
+        {
+            _ansiConsole.If(runFromMenu)?.Clear();
+            if (nameTaken)
+            {
+                _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
+            }
+            var prompt = new TextPrompt<string>("[yellow]Give the repo a friendly name:[/]");
+
+            name = await _ansiConsole.PromptAsync(prompt, cancellationToken);
+            name = name.Trim();
+
+            var nameTakenResult = await _ansiConsole.Status()
+                    .StartAsync("Checking so the name is not taken...", _ => reposClient.CheckNameTakenV1Async(new() { Name = name }, cancellationToken));
+
+            nameTaken = nameTakenResult.IsTaken;
+        }
+
+        return name;
     }
 
     private async Task<IGameAdapter> CollectGameAdapter(Settings settings, bool runFromMenu, CancellationToken cancellationToken)

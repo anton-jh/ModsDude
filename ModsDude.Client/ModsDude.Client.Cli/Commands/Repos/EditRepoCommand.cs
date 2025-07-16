@@ -13,7 +13,6 @@ internal class EditRepoCommand(
     RepoCollector repoCollector,
     IGameAdapterIndex gameAdapterIndex,
     FormPrompter formPrompter,
-    RepoNameCollector repoNameCollector,
     IReposClient reposClient)
     : AsyncCommandBase<EditRepoCommand.Settings>(ansiConsole)
 {
@@ -21,7 +20,7 @@ internal class EditRepoCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
-        var newName = await repoNameCollector.Collect(settings.SetName, runFromMenu, cancellationToken);
+        var newName = await CollectName(settings, repoMembership.Repo.Name, runFromMenu, cancellationToken);
 
         var gameAdapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId));
         var baseSettings = gameAdapter.DeserializeBaseSettings(repoMembership.Repo.AdapterConfiguration);
@@ -49,6 +48,42 @@ internal class EditRepoCommand(
         _ansiConsole.MarkupLine("Repo successfully updated.");
         _ansiConsole.WriteLine();
         _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+    }
+
+
+    private async Task<string> CollectName(Settings settings, string current, bool runFromMenu, CancellationToken cancellationToken)
+    {
+        if (!runFromMenu && settings.SetName is null)
+        {
+            return current;
+        }
+
+        var nameTaken = false;
+        var name = settings.SetName;
+
+        while (nameTaken || string.IsNullOrWhiteSpace(name))
+        {
+            _ansiConsole.If(runFromMenu)?.Clear();
+            if (nameTaken)
+            {
+                _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
+            }
+            var prompt = new TextPrompt<string>("[yellow]Rename:[/]")
+                .DefaultValue(current);
+
+            name = await _ansiConsole.PromptAsync(prompt, cancellationToken);
+            name = name.Trim();
+
+            if (name != current)
+            {
+                var nameTakenResult = await _ansiConsole.Status()
+                    .StartAsync("Checking so the name is not taken...", _ => reposClient.CheckNameTakenV1Async(new() { Name = name }, cancellationToken));
+
+                nameTaken = nameTakenResult.IsTaken;
+            }
+        }
+
+        return name;
     }
 
 

@@ -30,7 +30,6 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<ClientConfiguration>();
     services.AddSingleton<FormPrompter>();
     services.AddSingleton<RepoCollector>();
-    services.AddSingleton<RepoNameCollector>();
     services.AddModsDudeClient();
     services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 });
@@ -49,6 +48,7 @@ app.Configure(config =>
     config.AddCommand<CreateRepoCommand>("create-repo");
     config.AddCommand<DeleteRepoCommand>("delete-repo");
     config.AddCommand<EditRepoCommand>("edit-repo");
+    config.AddCommand<RepoDetailsCommand>("inspect-repo");
 });
 
 

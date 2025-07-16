@@ -14,11 +14,14 @@ internal class MenuCommand(
     {
         var root = new SubMenuNode("Main menu", ansiConsole, [
             new GroupNode("Repos", ansiConsole, [
-                new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
                 new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
-                new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole),
-                new CommandNode<EditRepoCommand>("Edit a repo", serviceProvider, ansiConsole)
+                new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
             ]),
+            new GroupNode("Repos - Admin", ansiConsole, [
+                new CommandNode<RepoDetailsCommand>("Repo details", serviceProvider, ansiConsole),
+                new CommandNode<EditRepoCommand>("Edit a repo", serviceProvider, ansiConsole),
+                new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole),
+                ]),
             new GroupNode("Misc", ansiConsole, [
                 new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole)
             ])
