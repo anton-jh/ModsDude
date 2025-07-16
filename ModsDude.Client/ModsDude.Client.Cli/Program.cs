@@ -31,6 +31,8 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<ClientConfiguration>();
     services.AddSingleton<FormPrompter>();
     services.AddSingleton<RepoCollector>();
+    services.AddSingleton<ProfileCollector>();
+    services.AddSingleton<NameConfirmationCollector>();
     services.AddModsDudeClient();
     services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 });
@@ -52,6 +54,7 @@ app.Configure(config =>
     config.AddCommand<RepoDetailsCommand>("inspect-repo");
     config.AddCommand<ListProfilesCommand>("list-profiles").WithAlias("profiles");
     config.AddCommand<CreateProfileCommand>("create-profile");
+    config.AddCommand<DeleteProfileCommand>("delete-profile");
 });
 
 

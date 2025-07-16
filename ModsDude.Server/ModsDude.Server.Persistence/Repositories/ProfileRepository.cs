@@ -41,6 +41,6 @@ public class ProfileRepository(
     public async Task<Profile?> GetById(RepoId repoId, ProfileId id, CancellationToken cancellationToken)
     {
         return await dbContext.Profiles
-            .FindAsync([id], cancellationToken);
+            .FindAsync([repoId, id], cancellationToken);
     }
 }
