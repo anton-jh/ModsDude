@@ -41,6 +41,6 @@ internal class RepoDetailsCommand(
     public class Settings : CommandSettings
     {
         [CommandOption("--repo-id")]
-        public Guid? RepoId { get; init; }
+        public Guid RepoId { get; init; }
     }
 }

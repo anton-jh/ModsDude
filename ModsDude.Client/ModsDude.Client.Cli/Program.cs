@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Cli.Authentication;
 using ModsDude.Client.Cli.Commands.Misc;
+using ModsDude.Client.Cli.Commands.Profiles;
 using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DependencyInjection;
@@ -41,7 +42,7 @@ var app = new CommandApp<MenuCommand>(registrar);
 
 app.Configure(config =>
 {
-    config.PropagateExceptions();
+    //config.PropagateExceptions();
 
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
     config.AddCommand<ListReposCommand>("list-repos").WithAlias("repos");
@@ -49,6 +50,7 @@ app.Configure(config =>
     config.AddCommand<DeleteRepoCommand>("delete-repo");
     config.AddCommand<EditRepoCommand>("edit-repo");
     config.AddCommand<RepoDetailsCommand>("inspect-repo");
+    config.AddCommand<ListProfilesCommand>("list-profiles").WithAlias("profiles");
 });
 
 

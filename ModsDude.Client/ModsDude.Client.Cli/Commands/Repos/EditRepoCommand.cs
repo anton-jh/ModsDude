@@ -84,7 +84,7 @@ internal class EditRepoCommand(
     public class Settings : CommandSettings
     {
         [CommandOption("--repo-id")]
-        public Guid? RepoId { get; init; }
+        public Guid RepoId { get; init; }
 
         [CommandOption("--set-name")]
         public string? SetName { get; init; }

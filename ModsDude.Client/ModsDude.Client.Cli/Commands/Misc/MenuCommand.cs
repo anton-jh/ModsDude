@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Cli.Commands.Profiles;
 using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.Commands.Shared;
 using Spectre.Console;
@@ -21,9 +22,12 @@ internal class MenuCommand(
                 new CommandNode<RepoDetailsCommand>("Repo details", serviceProvider, ansiConsole),
                 new CommandNode<EditRepoCommand>("Edit a repo", serviceProvider, ansiConsole),
                 new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole),
-                ]),
+            ]),
+            new GroupNode("Profiles", ansiConsole, [
+                new CommandNode<ListProfilesCommand>("List profiles", serviceProvider, ansiConsole),
+            ]),
             new GroupNode("Misc", ansiConsole, [
-                new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole)
+                new CommandNode<ReloginCommand>("Re-login / change user", serviceProvider, ansiConsole),
             ])
         ]);
 

@@ -69,7 +69,7 @@ internal class DeleteRepoCommand(
     public class Settings : CommandSettings
     {
         [CommandOption("--repo-id")]
-        public Guid? RepoId { get; init; }
+        public Guid RepoId { get; init; }
 
         [CommandOption("--repo-name")]
         public string? RepoName { get; init; }
