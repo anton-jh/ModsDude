@@ -1,4 +1,4 @@
-﻿using ModsDude.Client.Cli.Commands.Abstractions;
+﻿using ModsDude.Client.Cli.Commands.Shared;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Cli.Extensions;

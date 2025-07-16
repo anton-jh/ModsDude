@@ -1,6 +1,6 @@
 ﻿using Spectre.Console.Cli;
 
-namespace ModsDude.Client.Cli.Commands.Abstractions;
+namespace ModsDude.Client.Cli.Commands.Shared;
 
 internal interface IInteractiveCommand
 {

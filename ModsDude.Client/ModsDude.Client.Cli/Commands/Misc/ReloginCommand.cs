@@ -1,5 +1,5 @@
 ﻿using ModsDude.Client.Cli.Authentication;
-using ModsDude.Client.Cli.Commands.Abstractions;
+using ModsDude.Client.Cli.Commands.Shared;
 using Spectre.Console;
 using Spectre.Console.Cli;
 

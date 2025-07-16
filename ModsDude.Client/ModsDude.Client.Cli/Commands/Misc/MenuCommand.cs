@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Cli.Commands.Abstractions;
 using ModsDude.Client.Cli.Commands.Repos;
+using ModsDude.Client.Cli.Commands.Shared;
 using Spectre.Console;
 using Spectre.Console.Cli;
 

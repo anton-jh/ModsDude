@@ -3,7 +3,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ModsDude.Client.Cli.Commands.Abstractions;
+namespace ModsDude.Client.Cli.Commands.Shared;
 internal abstract class AsyncCommandBase<TSettings>(
     IAnsiConsole ansiConsole)
     : AsyncCommand<TSettings>, IInteractiveCommand
