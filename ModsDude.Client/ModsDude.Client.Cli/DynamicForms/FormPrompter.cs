@@ -6,7 +6,7 @@ using System.Reflection;
 namespace ModsDude.Client.Cli.DynamicForms;
 internal class FormPrompter(IAnsiConsole ansiConsole)
 {
-    public async Task<bool> Prompt<TForm>(TForm form, string title, bool onlyModify, bool runFromMenu, CancellationToken cancellationToken)
+    public async Task<bool> Prompt<TForm>(TForm form, string title, bool onlyModify, CancellationToken cancellationToken)
         where TForm : IDynamicForm
     {
         IEnumerable<IDynamicFormValidationError> validationErrors = [];
@@ -19,7 +19,6 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
                 titleMarkup: title,
                 validationErrors: validationErrors,
                 onlyModify: onlyModify,
-                runFromMenu: runFromMenu,
                 cancellationToken: cancellationToken);
 
             changed = changed || newChanged;
@@ -37,7 +36,6 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
         string titleMarkup,
         IEnumerable<IDynamicFormValidationError> validationErrors,
         bool onlyModify,
-        bool runFromMenu,
         CancellationToken cancellationToken)
     {
         var changed = false;
@@ -54,14 +52,14 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
             properties = properties.Where(x => x.GetCustomAttribute<CanBeModifiedAttribute>() is not null);
         }
 
-        ansiConsole.If(runFromMenu)?.Clear();
+        ansiConsole.Clear();
         ansiConsole.MarkupLine(titleMarkup);
         ansiConsole.WriteLine();
 
         if (!properties.Any())
         {
             ansiConsole.MarkupLine("[Red](Nothing here)[/]");
-            ansiConsole.If(runFromMenu)?.PressAnyKeyToContinue();
+            ansiConsole.PressAnyKeyToContinue();
             return false;
         }
 

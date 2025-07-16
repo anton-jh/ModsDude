@@ -14,18 +14,18 @@ internal class DeleteRepoCommand(
 {
     private const string _confirmationMessage = "[red]Are you sure you want to delete the following repo? This action is [bold]IRREVERSIBLE![/][/]";
 
-    public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
         if (repoMembership is null)
         {
             _ansiConsole.MarkupLineInterpolated($"[red]Repo with id '{settings.RepoId}' does not exist or you are not authorized to delete it.[/]");
-            _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+            _ansiConsole.PressAnyKeyToDismiss();
             return;
         }
 
-        var confirmation = await CollectConfirmation(settings, repoMembership, runFromMenu, cancellationToken);
+        var confirmation = await CollectConfirmation(settings, repoMembership, cancellationToken);
 
         await _ansiConsole.Status()
             .StartAsync($"Deleting repo '{repoMembership.Repo.Name}'...", async ctx =>
@@ -33,12 +33,12 @@ internal class DeleteRepoCommand(
                 await reposClient.DeleteRepoV1Async(repoMembership.Repo.Id, cancellationToken);
             });
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
         _ansiConsole.MarkupLine($"Repo '{repoMembership.Repo.Name}' successfully deleted.");
-        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 
-    private async Task<bool> CollectConfirmation(Settings settings, RepoMembershipDto repoMembership, bool runFromMenu, CancellationToken cancellationToken)
+    private async Task<bool> CollectConfirmation(Settings settings, RepoMembershipDto repoMembership, CancellationToken cancellationToken)
     {
         if (settings.RepoName is null || settings.RepoName != repoMembership.Repo.Name)
         {

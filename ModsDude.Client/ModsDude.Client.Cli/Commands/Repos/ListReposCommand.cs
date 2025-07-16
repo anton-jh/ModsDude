@@ -8,7 +8,7 @@ namespace ModsDude.Client.Cli.Commands.Repos;
 internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConsole)
     : AsyncCommandBase<EmptyCommandSettings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(EmptyCommandSettings _, bool runFromMenu, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(EmptyCommandSettings settings, CancellationToken cancellationToken)
     {
         var repoMemberships = await _ansiConsole.Status()
             .StartAsync("Fetching repos...", _ => reposClient.GetMyReposV1Async(cancellationToken));
@@ -28,11 +28,11 @@ internal class ListReposCommand(IReposClient reposClient, IAnsiConsole ansiConso
                 repoMembership.MembershipLevel.ToString());
         }
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
 
         _ansiConsole.Write(table);
         _ansiConsole.WriteLine();
 
-        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 }

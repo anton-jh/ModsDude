@@ -15,11 +15,11 @@ internal class CreateRepoCommand(
     FormPrompter formPrompter)
     : AsyncCommandBase<CreateRepoCommand.Settings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
-        var name = await CollectName(settings, runFromMenu, cancellationToken);
-        var gameAdapter = await CollectGameAdapter(settings, runFromMenu, cancellationToken);
-        var adapterBaseSettings = await CollectAdapterBaseSettings(gameAdapter, runFromMenu, cancellationToken);
+        var name = await CollectName(settings, cancellationToken);
+        var gameAdapter = await CollectGameAdapter(settings, cancellationToken);
+        var adapterBaseSettings = await CollectAdapterBaseSettings(gameAdapter, cancellationToken);
 
         await _ansiConsole.Status()
             .StartAsync("Creating repo...", async ctx =>
@@ -32,22 +32,22 @@ internal class CreateRepoCommand(
                 }, cancellationToken);
             });
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
 
         _ansiConsole.MarkupLine("Repo successfully created.");
         _ansiConsole.WriteLine();
-        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 
 
-    private async Task<string> CollectName(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    private async Task<string> CollectName(Settings settings, CancellationToken cancellationToken)
     {
         var nameTaken = false;
-        var name = "";
+        var name = settings.Name;
 
         while (nameTaken || string.IsNullOrWhiteSpace(name))
         {
-            _ansiConsole.If(runFromMenu)?.Clear();
+            _ansiConsole.Clear();
             if (nameTaken)
             {
                 _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
@@ -66,7 +66,7 @@ internal class CreateRepoCommand(
         return name;
     }
 
-    private async Task<IGameAdapter> CollectGameAdapter(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    private async Task<IGameAdapter> CollectGameAdapter(Settings settings, CancellationToken cancellationToken)
     {
         if (settings.Adapter is not null)
         {
@@ -80,7 +80,7 @@ internal class CreateRepoCommand(
             }
         }
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
         var prompt = new SelectionPrompt<IGameAdapter>()
             .Title("[yellow]Select the game adapter to use:[/]")
             .UseConverter(x => $"[yellow]{x.Descriptor.DisplayName}[/]: {x.Descriptor.Description}")
@@ -89,7 +89,7 @@ internal class CreateRepoCommand(
         return await _ansiConsole.PromptAsync(prompt, cancellationToken);
     }
 
-    private async Task<IDynamicForm> CollectAdapterBaseSettings(IGameAdapter gameAdapter, bool runFromMenu, CancellationToken cancellationToken)
+    private async Task<IDynamicForm> CollectAdapterBaseSettings(IGameAdapter gameAdapter, CancellationToken cancellationToken)
     {
         var adapterBaseSettings = gameAdapter.GetBaseSettingsTemplate();
 
@@ -97,7 +97,6 @@ internal class CreateRepoCommand(
             form: adapterBaseSettings,
             title: "[blue bold]Configure base settings for the game adapter[/]",
             onlyModify: false,
-            runFromMenu: runFromMenu,
             cancellationToken: cancellationToken);
 
         return adapterBaseSettings;

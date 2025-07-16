@@ -15,11 +15,11 @@ internal class RepoDetailsCommand(
     IGameAdapterIndex gameAdapterIndex)
     : AsyncCommandBase<RepoDetailsCommand.Settings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
 
         _ansiConsole.MarkupLineInterpolated($"([yellow]{repoMembership.Repo.Id}[/]) [yellow]{repoMembership.Repo.Name}[/]");
 
@@ -34,7 +34,7 @@ internal class RepoDetailsCommand(
             _ansiConsole.MarkupLineInterpolated($"{title}: {value}");
         }
 
-        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 
 

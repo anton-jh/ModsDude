@@ -16,11 +16,11 @@ internal class EditRepoCommand(
     IReposClient reposClient)
     : AsyncCommandBase<EditRepoCommand.Settings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(Settings settings, bool runFromMenu, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
-        var newName = await CollectName(settings, repoMembership.Repo.Name, runFromMenu, cancellationToken);
+        var newName = await CollectName(settings, repoMembership.Repo.Name, cancellationToken);
 
         var gameAdapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId));
         var baseSettings = gameAdapter.DeserializeBaseSettings(repoMembership.Repo.AdapterConfiguration);
@@ -30,7 +30,6 @@ internal class EditRepoCommand(
             title: "[blue bold]Edit base settings for the game adapter[/] (Submit empty to keep current value)\n" +
                    "[blue]Note:[/] Game adapters may support editing [italic]all[/], [italic]some[/] or [italic]none[/] or their settings.",
             onlyModify: true,
-            runFromMenu: runFromMenu,
             cancellationToken: cancellationToken);
 
         if (newName != repoMembership.Repo.Name || baseSettingsChanged)
@@ -43,32 +42,27 @@ internal class EditRepoCommand(
                 }, cancellationToken));
         }
 
-        _ansiConsole.If(runFromMenu)?.Clear();
+        _ansiConsole.Clear();
 
         _ansiConsole.MarkupLine("Repo successfully updated.");
         _ansiConsole.WriteLine();
-        _ansiConsole.If(runFromMenu)?.PressAnyKeyToDismiss();
+        _ansiConsole.PressAnyKeyToDismiss();
     }
 
 
-    private async Task<string> CollectName(Settings settings, string current, bool runFromMenu, CancellationToken cancellationToken)
+    private async Task<string> CollectName(Settings settings, string current, CancellationToken cancellationToken)
     {
-        if (!runFromMenu && settings.SetName is null)
-        {
-            return current;
-        }
-
         var nameTaken = false;
         var name = settings.SetName;
 
         while (nameTaken || string.IsNullOrWhiteSpace(name))
         {
-            _ansiConsole.If(runFromMenu)?.Clear();
+            _ansiConsole.Clear();
             if (nameTaken)
             {
                 _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
             }
-            var prompt = new TextPrompt<string>("[yellow]Rename:[/]")
+            var prompt = new TextPrompt<string>("[yellow]Give the repo a new friendly name:[/]")
                 .DefaultValue(current);
 
             name = await _ansiConsole.PromptAsync(prompt, cancellationToken);
