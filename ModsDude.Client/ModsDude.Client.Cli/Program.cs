@@ -55,6 +55,7 @@ app.Configure(config =>
     config.AddCommand<ListProfilesCommand>("list-profiles").WithAlias("profiles");
     config.AddCommand<CreateProfileCommand>("create-profile");
     config.AddCommand<DeleteProfileCommand>("delete-profile");
+    config.AddCommand<EditProfileCommand>("edit-profile");
 });
 
 

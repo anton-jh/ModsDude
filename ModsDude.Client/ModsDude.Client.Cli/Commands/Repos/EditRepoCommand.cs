@@ -62,7 +62,7 @@ internal class EditRepoCommand(
             {
                 _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
             }
-            var prompt = new TextPrompt<string>("[yellow]Give the repo a new friendly name:[/]")
+            var prompt = new TextPrompt<string>("[yellow]New name:[/]")
                 .DefaultValue(current);
 
             name = await _ansiConsole.PromptAsync(prompt, cancellationToken);

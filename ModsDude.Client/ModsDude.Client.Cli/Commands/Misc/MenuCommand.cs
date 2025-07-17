@@ -15,8 +15,8 @@ internal class MenuCommand(
     {
         var root = new SubMenuNode("Main menu", ansiConsole, [
             new GroupNode("Repos", ansiConsole, [
-                new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
                 new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
+                new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Repos - Admin", ansiConsole, [
                 new CommandNode<RepoDetailsCommand>("Repo details", serviceProvider, ansiConsole),
@@ -26,6 +26,7 @@ internal class MenuCommand(
             new GroupNode("Profiles", ansiConsole, [
                 new CommandNode<ListProfilesCommand>("List profiles", serviceProvider, ansiConsole),
                 new CommandNode<CreateProfileCommand>("Create profile", serviceProvider, ansiConsole),
+                new CommandNode<EditProfileCommand>("Edit profile", serviceProvider, ansiConsole),
                 new CommandNode<DeleteProfileCommand>("Delete profile", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Misc", ansiConsole, [

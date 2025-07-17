@@ -18,16 +18,16 @@ internal class DeleteProfileCommand(
 
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
-        var profileWithRepo = await profileCollector.Collect(settings.RepoId, settings.ProfileId, RepoMembershipLevel.Member, cancellationToken);
+        var (repo, profile) = await profileCollector.Collect(settings.RepoId, settings.ProfileId, RepoMembershipLevel.Member, cancellationToken);
 
-        if (profileWithRepo is null)
+        if (repo is null || profile is null)
         {
             _ansiConsole.MarkupLine("[red]There are no profiles for you to delete.[/]");
             _ansiConsole.PressAnyKeyToDismiss();
             return;
         }
 
-        var confirmation = await nameConfirmationCollector.Collect($"{profileWithRepo.RepoMembership.Repo.Name} / {profileWithRepo.Profile.Name}", _confirmationMessage, cancellationToken);
+        var confirmation = await nameConfirmationCollector.Collect($"{repo.Repo.Name} / {profile.Name}", _confirmationMessage, cancellationToken);
 
         if (confirmation == false)
         {
@@ -36,13 +36,13 @@ internal class DeleteProfileCommand(
         }
 
         await _ansiConsole.Status()
-            .StartAsync($"Deleting profile '{profileWithRepo.RepoMembership.Repo.Name}'...", async ctx =>
+            .StartAsync($"Deleting profile '{repo.Repo.Name}'...", async ctx =>
             {
-                await profilesClient.DeleteProfileV1Async(profileWithRepo.RepoMembership.Repo.Id, profileWithRepo.Profile.Id, cancellationToken);
+                await profilesClient.DeleteProfileV1Async(repo.Repo.Id, profile.Id, cancellationToken);
             });
 
         _ansiConsole.Clear();
-        _ansiConsole.MarkupLine($"Profile '{profileWithRepo.Profile.Name}' successfully deleted.");
+        _ansiConsole.MarkupLine($"Profile '{profile.Name}' successfully deleted.");
         _ansiConsole.PressAnyKeyToDismiss();
     }
 

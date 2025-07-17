@@ -39,8 +39,11 @@ internal class ProfileCollector(
         return selection;
     }
 
-    public async Task<ProfileDtoWithRepo?> Collect(Guid repoIdFromSettings, Guid profileIdFromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
+    public async Task<(RepoMembershipDto? Repo, ProfileDto? Profile)> Collect(Guid repoIdFromSettings, Guid profileIdFromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
     {
+        RepoMembershipDto? repo;
+        ProfileDto? profile;
+
         var repoMemberships = await ansiConsole.Status()
             .StartAsync("Fetching repos...", _ => reposClient.GetMyReposV1Async(cancellationToken));
 
@@ -49,10 +52,10 @@ internal class ProfileCollector(
 
         if (repoIdFromSettings != default)
         {
-            var result = await CollectFromRepo(repoIdFromSettings, profileIdFromSettings, repoMemberships, cancellationToken);
-            if (result is not null)
+            (repo, profile) = await CollectFromRepo(repoIdFromSettings, profileIdFromSettings, repoMemberships, cancellationToken);
+            if (repo is not null && profile is not null)
             {
-                return result;
+                return (repo, profile);
             }
         }
 
@@ -84,16 +87,16 @@ internal class ProfileCollector(
 
         if (!anyChoices)
         {
-            return null;
+            return (null, null);
         }
 
-        var profile = await ansiConsole.PromptAsync(prompt, cancellationToken);
-        var repo = repoMemberships.Single(x => x.Repo.Id == profile.RepoId);
+        profile = await ansiConsole.PromptAsync(prompt, cancellationToken);
+        repo = repoMemberships.Single(x => x.Repo.Id == profile.RepoId);
 
         return new(repo, profile);
     }
 
-    private async Task<ProfileDtoWithRepo?> CollectFromRepo(Guid repoIdFromSettings, Guid profileIdFromSettings, ICollection<RepoMembershipDto> repoMemberships, CancellationToken cancellationToken)
+    private async Task<(RepoMembershipDto? Repo, ProfileDto? Profile)> CollectFromRepo(Guid repoIdFromSettings, Guid profileIdFromSettings, ICollection<RepoMembershipDto> repoMemberships, CancellationToken cancellationToken)
     {
         var repo = repoMemberships.SingleOrDefault(x => x.Repo.Id == repoIdFromSettings);
         if (repo is not null)
@@ -111,6 +114,6 @@ internal class ProfileCollector(
             ansiConsole.MarkupLineInterpolated($"[red]Repo with id '{repoIdFromSettings}' does not exist or you do not have sufficient access.[/]");
             ansiConsole.PressAnyKeyToContinue();
         }
-        return null;
+        return (null, null);
     }
 }

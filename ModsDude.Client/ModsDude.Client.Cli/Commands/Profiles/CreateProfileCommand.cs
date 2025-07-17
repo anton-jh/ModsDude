@@ -47,7 +47,7 @@ internal class CreateProfileCommand(
             {
                 _ansiConsole.MarkupLineInterpolated($"[red]Name '{name}' taken.[/]");
             }
-            var prompt = new TextPrompt<string>("[yellow]Give the profile a friendly name:[/]");
+            var prompt = new TextPrompt<string>("[yellow]Name:[/]");
 
             name = await _ansiConsole.PromptAsync(prompt, cancellationToken);
             name = name.Trim();
