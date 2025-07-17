@@ -1,11 +1,13 @@
 ﻿using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Persistence;
 using Spectre.Console;
 
 namespace ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 internal class RepoCollector(
     IAnsiConsole ansiConsole,
-    IReposClient reposClient)
+    IReposClient reposClient,
+    IStateStore stateStore)
 {
     public async Task<RepoMembershipDto> Collect(Guid fromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
     {

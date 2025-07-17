@@ -9,8 +9,10 @@ using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DependencyInjection;
 using ModsDude.Client.Cli.DynamicForms;
 using ModsDude.Client.Core.Authentication;
+using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer;
+using ModsDude.Client.Core.Persistence;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -33,8 +35,7 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<RepoCollector>();
     services.AddSingleton<ProfileCollector>();
     services.AddSingleton<NameConfirmationCollector>();
-    services.AddModsDudeClient();
-    services.AddGameAdapters(typeof(IGameAdapter).Assembly);
+    //services.AddCore();
 });
 
 
