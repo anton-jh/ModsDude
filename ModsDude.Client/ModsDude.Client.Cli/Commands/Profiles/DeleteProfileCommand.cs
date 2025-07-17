@@ -8,7 +8,6 @@ using Spectre.Console.Cli;
 namespace ModsDude.Client.Cli.Commands.Profiles;
 internal class DeleteProfileCommand(
     IAnsiConsole ansiConsole,
-    RepoCollector repoCollector,
     ProfileCollector profileCollector,
     NameConfirmationCollector nameConfirmationCollector,
     IProfilesClient profilesClient)
@@ -19,17 +18,16 @@ internal class DeleteProfileCommand(
 
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
-        var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
-        var profile = await profileCollector.Collect(settings.ProfileId, repoMembership, cancellationToken);
+        var profileWithRepo = await profileCollector.Collect(settings.RepoId, settings.ProfileId, RepoMembershipLevel.Member, cancellationToken);
 
-        if (profile is null)
+        if (profileWithRepo is null)
         {
-            _ansiConsole.MarkupLine("[red]Repo does not have any profiles.[/]");
+            _ansiConsole.MarkupLine("[red]There are no profiles for you to delete.[/]");
             _ansiConsole.PressAnyKeyToDismiss();
             return;
         }
 
-        var confirmation = await nameConfirmationCollector.Collect($"{repoMembership.Repo.Name} / {profile.Name}", _confirmationMessage, cancellationToken);
+        var confirmation = await nameConfirmationCollector.Collect($"{profileWithRepo.RepoMembership.Repo.Name} / {profileWithRepo.Profile.Name}", _confirmationMessage, cancellationToken);
 
         if (confirmation == false)
         {
@@ -38,13 +36,13 @@ internal class DeleteProfileCommand(
         }
 
         await _ansiConsole.Status()
-            .StartAsync($"Deleting profile '{repoMembership.Repo.Name}'...", async ctx =>
+            .StartAsync($"Deleting profile '{profileWithRepo.RepoMembership.Repo.Name}'...", async ctx =>
             {
-                await profilesClient.DeleteProfileV1Async(repoMembership.Repo.Id, profile.Id, cancellationToken);
+                await profilesClient.DeleteProfileV1Async(profileWithRepo.RepoMembership.Repo.Id, profileWithRepo.Profile.Id, cancellationToken);
             });
 
         _ansiConsole.Clear();
-        _ansiConsole.MarkupLine($"Profile '{repoMembership.Repo.Name}' successfully deleted.");
+        _ansiConsole.MarkupLine($"Profile '{profileWithRepo.Profile.Name}' successfully deleted.");
         _ansiConsole.PressAnyKeyToDismiss();
     }
 
