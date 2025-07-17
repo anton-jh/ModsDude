@@ -14,8 +14,8 @@ internal class MenuCommand(
     public override async Task<int> ExecuteAsync(CommandContext context)
     {
         var root = new SubMenuNode("Main menu", ansiConsole, [
+            new CommandNode<OverviewCommand>("Overview", serviceProvider, ansiConsole),
             new GroupNode("Repos", ansiConsole, [
-                new CommandNode<ListReposCommand>("List all repos", serviceProvider, ansiConsole),
                 new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Repos - Admin", ansiConsole, [
@@ -24,7 +24,6 @@ internal class MenuCommand(
                 new CommandNode<DeleteRepoCommand>("Delete a repo", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Profiles", ansiConsole, [
-                new CommandNode<ListProfilesCommand>("List profiles", serviceProvider, ansiConsole),
                 new CommandNode<CreateProfileCommand>("Create profile", serviceProvider, ansiConsole),
                 new CommandNode<EditProfileCommand>("Edit profile", serviceProvider, ansiConsole),
                 new CommandNode<DeleteProfileCommand>("Delete profile", serviceProvider, ansiConsole),
