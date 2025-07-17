@@ -112,7 +112,7 @@ builder.Services
 
 builder.Services
     .AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
+        options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
 builder.Services
     .AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
 

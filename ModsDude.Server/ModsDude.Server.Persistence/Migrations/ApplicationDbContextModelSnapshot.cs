@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ModsDude.Server.Persistence.DbContexts;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -18,24 +18,24 @@ namespace ModsDude.Server.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.8")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.Mod", b =>
                 {
                     b.Property<Guid>("RepoId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("Created")
-                        .HasColumnType("datetimeoffset");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("Updated")
-                        .HasColumnType("datetimeoffset");
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("RepoId", "Id");
 
@@ -45,27 +45,27 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>
                 {
                     b.Property<Guid>("RepoId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ModId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("Created")
-                        .HasColumnType("datetimeoffset");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<int>("SequenceNumber")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.HasKey("RepoId", "ModId", "Id");
 
@@ -78,17 +78,17 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.Profiles.Profile", b =>
                 {
                     b.Property<Guid>("RepoId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("Created")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.HasKey("RepoId", "Id");
 
@@ -101,14 +101,14 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.RepoMemberships.RepoMembership", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("RepoId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Level")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.HasKey("UserId", "RepoId");
 
@@ -120,14 +120,14 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.Repos.Repo", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("Created")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.ComplexProperty<Dictionary<string, object>>("AdapterData", "ModsDude.Server.Domain.Repos.Repo.AdapterData#AdapterData", b1 =>
                         {
@@ -135,11 +135,11 @@ namespace ModsDude.Server.Persistence.Migrations
 
                             b1.Property<string>("Configuration")
                                 .IsRequired()
-                                .HasColumnType("nvarchar(max)");
+                                .HasColumnType("text");
 
                             b1.Property<string>("Id")
                                 .IsRequired()
-                                .HasColumnType("nvarchar(max)");
+                                .HasColumnType("text");
                         });
 
                     b.HasKey("Id");
@@ -150,23 +150,23 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.Users.User", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("Created")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsTrusted")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("LastSeen")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ProfileLastUpdated")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -196,26 +196,26 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.OwnsMany("ModsDude.Server.Domain.Mods.ModAttribute", "Attributes", b1 =>
                         {
                             b1.Property<Guid>("ModVersionRepoId")
-                                .HasColumnType("uniqueidentifier");
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("ModVersionModId")
-                                .HasColumnType("nvarchar(450)");
+                                .HasColumnType("text");
 
                             b1.Property<string>("ModVersionId")
-                                .HasColumnType("nvarchar(450)");
+                                .HasColumnType("text");
 
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
-                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("Id"));
 
                             b1.Property<string>("Key")
                                 .IsRequired()
-                                .HasColumnType("nvarchar(max)");
+                                .HasColumnType("text");
 
                             b1.Property<string>("Value")
-                                .HasColumnType("nvarchar(max)");
+                                .HasColumnType("text");
 
                             b1.HasKey("ModVersionRepoId", "ModVersionModId", "ModVersionId", "Id");
 
@@ -241,19 +241,19 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.OwnsMany("ModsDude.Server.Domain.Profiles.ModDependency", "ModDependencies", b1 =>
                         {
                             b1.Property<Guid>("ProfileId")
-                                .HasColumnType("uniqueidentifier");
+                                .HasColumnType("uuid");
 
                             b1.Property<Guid>("RepoId")
-                                .HasColumnType("uniqueidentifier");
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("ModId")
-                                .HasColumnType("nvarchar(450)");
+                                .HasColumnType("text");
 
                             b1.Property<string>("ModVersionId")
-                                .HasColumnType("nvarchar(450)");
+                                .HasColumnType("text");
 
                             b1.Property<bool>("LockVersion")
-                                .HasColumnType("bit");
+                                .HasColumnType("boolean");
 
                             b1.HasKey("ProfileId", "RepoId", "ModId", "ModVersionId");
 
@@ -281,7 +281,7 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.RepoMemberships.RepoMembership", b =>
                 {
                     b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
-                        .WithMany()
+                        .WithMany("_memberships")
                         .HasForeignKey("RepoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -296,6 +296,11 @@ namespace ModsDude.Server.Persistence.Migrations
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.Mod", b =>
                 {
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Repos.Repo", b =>
+                {
+                    b.Navigation("_memberships");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Users.User", b =>
