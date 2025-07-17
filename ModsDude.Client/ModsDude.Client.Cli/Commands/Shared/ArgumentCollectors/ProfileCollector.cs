@@ -1,13 +1,15 @@
 ﻿using ModsDude.Client.Cli.Extensions;
-using ModsDude.Client.Core.Models;
+using ModsDude.Client.Cli.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Persistence;
 using Spectre.Console;
 
 namespace ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 internal class ProfileCollector(
     IAnsiConsole ansiConsole,
     IProfilesClient profilesClient,
-    IReposClient reposClient)
+    IReposClient reposClient,
+    Store<State> store)
 {
     public async Task<ProfileDto?> Collect(Guid fromSettings, RepoMembershipDto repoMembership, CancellationToken cancellationToken)
     {
@@ -29,12 +31,22 @@ internal class ProfileCollector(
             ansiConsole.PressAnyKeyToContinue();
         }
 
-        selection ??= await ansiConsole.PromptAsync(new SelectionPrompt<ProfileDto>()
+        var prompt = new SelectionPrompt<ProfileDto>()
             .Title("Select profile")
             .WrapAround()
             .EnableSearch()
-            .UseConverter(x => x.Name)
-            .AddChoices(profiles), cancellationToken);
+            .UseConverter(x => x.Name);
+
+        var lastSelected = GetLastSelected(profiles);
+
+        if (lastSelected.Any())
+        {
+            prompt.AddChoiceGroup(new ProfileDto() { Name = "Recent" }, lastSelected);
+        }
+
+        prompt.AddChoiceGroup(new ProfileDto() { Name = "All" }, profiles);
+
+        selection ??= await ansiConsole.PromptAsync(prompt, cancellationToken);
 
         return selection;
     }
@@ -115,5 +127,32 @@ internal class ProfileCollector(
             ansiConsole.PressAnyKeyToContinue();
         }
         return (null, null);
+    }
+
+
+    private IEnumerable<ProfileDto> GetLastSelected(IEnumerable<ProfileDto> all)
+    {
+        var lastSelected = store.Get().LastSelectedProfiles;
+
+        foreach (var id in lastSelected)
+        {
+            if (all.SingleOrDefault(x => x.Id == id) is ProfileDto profile)
+            {
+                yield return profile;
+            }
+        }
+    }
+
+    private void UpdateLastSelected(ProfileDto selection)
+    {
+        var recent = store.Get().LastSelectedProfiles;
+
+        recent.Insert(0, selection.Id);
+        if (recent.Count > 3)
+        {
+            recent.RemoveRange(3, recent.Count - 3);
+        }
+
+        store.Save();
     }
 }

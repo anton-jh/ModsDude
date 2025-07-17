@@ -1,13 +1,9 @@
 ﻿using ModsDude.Client.Core.Persistence;
 
 namespace ModsDude.Client.Cli.Models;
-internal class State(int version)
-    : IState<State>
+internal class State
 {
-    public int Version { get; set; } = version;
-
-    public static State Create(int version)
-    {
-        return new(version);
-    }
+    public int Version { get; set; } = 1;
+    public List<Guid> LastSelectedRepos { get; init; } = [];
+    public List<Guid> LastSelectedProfiles { get; init; } = [];
 }

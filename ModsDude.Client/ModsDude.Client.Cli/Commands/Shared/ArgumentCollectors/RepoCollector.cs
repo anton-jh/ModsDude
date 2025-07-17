@@ -8,7 +8,7 @@ namespace ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 internal class RepoCollector(
     IAnsiConsole ansiConsole,
     IReposClient reposClient,
-    IStateStore<State> stateStore)
+    Store<State> store)
 {
     public async Task<RepoMembershipDto> Collect(Guid fromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
     {
@@ -27,13 +27,52 @@ internal class RepoCollector(
             ansiConsole.PressAnyKeyToContinue();
         }
 
-        selection ??= await ansiConsole.PromptAsync(new SelectionPrompt<RepoMembershipDto>()
+        var prompt = new SelectionPrompt<RepoMembershipDto>()
             .Title("Select repo")
             .WrapAround()
             .EnableSearch()
-            .UseConverter(x => x.Repo.Name)
-            .AddChoices(repoMemberships), cancellationToken);
+            .UseConverter(x => x.Repo.Name);
+
+        var lastSelected = GetLastSelected(repoMemberships);
+
+        if (lastSelected.Any())
+        {
+            prompt.AddChoiceGroup(new RepoMembershipDto() { Repo = new() { Name = "Recent" } }, lastSelected);
+        }
+
+        prompt.AddChoiceGroup(new RepoMembershipDto() { Repo = new() { Name = "All" } }, repoMemberships);
+
+        selection ??= await ansiConsole.PromptAsync(prompt, cancellationToken);
+
+        UpdateLastSelected(selection);
 
         return selection;
+    }
+
+
+    private IEnumerable<RepoMembershipDto> GetLastSelected(IEnumerable<RepoMembershipDto> all)
+    {
+        var lastSelected = store.Get().LastSelectedRepos;
+
+        foreach (var id in lastSelected)
+        {
+            if (all.SingleOrDefault(x => x.Repo.Id == id) is RepoMembershipDto repo)
+            {
+                yield return repo;
+            }
+        }
+    }
+
+    private void UpdateLastSelected(RepoMembershipDto selection)
+    {
+        var recent = store.Get().LastSelectedRepos;
+
+        recent.Insert(0, selection.Repo.Id);
+        if (recent.Count > 3)
+        {
+            recent.RemoveRange(3, recent.Count - 3);
+        }
+
+        store.Save();
     }
 }

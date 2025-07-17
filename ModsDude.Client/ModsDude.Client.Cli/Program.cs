@@ -8,9 +8,8 @@ using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.DependencyInjection;
 using ModsDude.Client.Cli.DynamicForms;
-using ModsDude.Client.Core.Authentication;
+using ModsDude.Client.Cli.Models;
 using ModsDude.Client.Core.Extensions;
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using Spectre.Console;
@@ -27,15 +26,15 @@ builder.ConfigureLogging(logging =>
 
 builder.ConfigureServices(static (ctx, services) =>
 {
-    services.AddSingleton(AnsiConsole.Console);
+    services.AddCore<AuthenticationService>();
     services.AddSingleton<AuthenticationService>();
-    services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<AuthenticationService>());
+    services.AddSingleton(AnsiConsole.Console);
     services.AddSingleton<ClientConfiguration>();
     services.AddSingleton<FormPrompter>();
     services.AddSingleton<RepoCollector>();
     services.AddSingleton<ProfileCollector>();
     services.AddSingleton<NameConfirmationCollector>();
-    services.AddCore();
+    services.AddSingleton(new Store<State>("cli.state.json"));
 });
 
 
