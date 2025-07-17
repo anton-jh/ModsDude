@@ -2,7 +2,16 @@
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Persistence;
-internal class StateStore : IStateStore
+
+public interface IStateStore<T>
+    where T : class, IState<T>
+{
+    T Get();
+    void Save();
+}
+
+internal class StateStore<T> : IStateStore<T>
+    where T : class, IState<T>
 {
     private const int _currentVersion = 1;
     private const string _filename = "state.json";
@@ -10,59 +19,33 @@ internal class StateStore : IStateStore
     private readonly static string _filepath = Path.Combine(FileSystemHelper.GetAppDataDirectory(), _filename);
     private readonly static JsonSerializerOptions _serializerOptions = new() { WriteIndented = true };
 
-    private readonly State _state;
-    private readonly Dictionary<string, object?> _cache = [];
+    private T? _state = null;
 
 
-    public StateStore()
+    public T Get()
     {
-        if (File.Exists(_filepath))
+        if (_state is null)
         {
-            var raw = File.ReadAllText(_filepath);
-            try
+            if (File.Exists(_filepath))
             {
-                _state = JsonSerializer.Deserialize<State>(raw) ?? new(_currentVersion);
+                var raw = File.ReadAllText(_filepath);
+                try
+                {
+                    _state = JsonSerializer.Deserialize<T>(raw) ?? T.Create(_currentVersion);
+                }
+                catch (JsonException)
+                {
+                    _state = T.Create(_currentVersion);
+                    File.Move(_filepath, Path.Combine(FileSystemHelper.GetAppDataDirectory(), $"state_corrupted_{DateTimeOffset.Now.ToUnixTimeMilliseconds()}.json"));
+                }
             }
-            catch (JsonException)
+            else
             {
-                _state = new(_currentVersion);
-                File.Move(_filepath, Path.Combine(FileSystemHelper.GetAppDataDirectory(), $"state_corrupted_{DateTimeOffset.Now.ToUnixTimeMilliseconds()}.json"));
+                _state = T.Create(_currentVersion);
             }
         }
-        else
-        {
-            _state = new(_currentVersion);
-        }
-    }
 
-
-    public T? Get<T>(string key)
-        where T : class
-    {
-        if (_cache.TryGetValue(key, out var fromCache))
-        {
-            return fromCache as T;
-        }
-
-        if (_state.Misc.TryGetValue(key, out var node))
-        {
-            var fromJson = JsonSerializer.Deserialize<T>(node);
-            _cache[key] = fromJson;
-
-            return fromJson;
-        }
-
-        return null;
-    }
-
-    public void Set<T>(string key, T value)
-        where T : class
-    {
-        var node = JsonSerializer.SerializeToNode(value);
-        _state.Misc[key] = node!;
-        _cache[key] = value;
-
-        Save();
+        return _state;
     }
 
     public void Save()

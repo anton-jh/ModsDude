@@ -35,7 +35,7 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<RepoCollector>();
     services.AddSingleton<ProfileCollector>();
     services.AddSingleton<NameConfirmationCollector>();
-    //services.AddCore();
+    services.AddCore();
 });
 
 
