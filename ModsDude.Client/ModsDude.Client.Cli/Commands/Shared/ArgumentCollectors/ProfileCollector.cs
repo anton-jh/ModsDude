@@ -37,14 +37,7 @@ internal class ProfileCollector(
             .EnableSearch()
             .UseConverter(x => x.Name);
 
-        var lastSelected = GetLastSelected(profiles);
-
-        if (lastSelected.Any())
-        {
-            prompt.AddChoiceGroup(new ProfileDto() { Name = "Recent" }, lastSelected);
-        }
-
-        prompt.AddChoiceGroup(new ProfileDto() { Name = "All" }, profiles);
+        prompt.AddChoices(profiles);
 
         selection ??= await ansiConsole.PromptAsync(prompt, cancellationToken);
 
@@ -127,20 +120,6 @@ internal class ProfileCollector(
             ansiConsole.PressAnyKeyToContinue();
         }
         return (null, null);
-    }
-
-
-    private IEnumerable<ProfileDto> GetLastSelected(IEnumerable<ProfileDto> all)
-    {
-        var lastSelected = store.Get().LastSelectedProfiles;
-
-        foreach (var id in lastSelected)
-        {
-            if (all.SingleOrDefault(x => x.Id == id) is ProfileDto profile)
-            {
-                yield return profile;
-            }
-        }
     }
 
     private void UpdateLastSelected(ProfileDto selection)
