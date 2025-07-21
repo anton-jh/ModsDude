@@ -33,14 +33,16 @@ internal class RepoCollector(
             .EnableSearch()
             .UseConverter(x => x.Repo.Name);
 
-        var lastSelected = GetLastSelected(repoMemberships);
+        var lastSelected = store.Get().LastSelectedRepos;
 
-        if (lastSelected.Any())
-        {
-            prompt.AddChoiceGroup(new RepoMembershipDto() { Repo = new() { Name = "Recent" } }, lastSelected);
-        }
+        prompt.AddChoices(repoMemberships
+            .Where(x => lastSelected.Contains(x.Repo.Id))
+            .OrderBy(x => lastSelected.IndexOf(x.Repo.Id)));
 
-        prompt.AddChoiceGroup(new RepoMembershipDto() { Repo = new() { Name = "All" } }, repoMemberships);
+        prompt.AddChoices(repoMemberships
+            .Where(x => !lastSelected.Contains(x.Repo.Id))
+            .OrderBy(x => x.Repo.Name)
+            .ThenBy(x => x.Repo.Id));
 
         selection ??= await ansiConsole.PromptAsync(prompt, cancellationToken);
 
@@ -50,24 +52,13 @@ internal class RepoCollector(
     }
 
 
-    private IEnumerable<RepoMembershipDto> GetLastSelected(IEnumerable<RepoMembershipDto> all)
-    {
-        var lastSelected = store.Get().LastSelectedRepos;
-
-        foreach (var id in lastSelected)
-        {
-            if (all.SingleOrDefault(x => x.Repo.Id == id) is RepoMembershipDto repo)
-            {
-                yield return repo;
-            }
-        }
-    }
-
     private void UpdateLastSelected(RepoMembershipDto selection)
     {
         var recent = store.Get().LastSelectedRepos;
 
+        recent.Remove(selection.Repo.Id);
         recent.Insert(0, selection.Repo.Id);
+
         if (recent.Count > 3)
         {
             recent.RemoveRange(3, recent.Count - 3);
