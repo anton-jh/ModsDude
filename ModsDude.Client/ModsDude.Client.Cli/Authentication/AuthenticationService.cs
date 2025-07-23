@@ -59,7 +59,16 @@ internal class AuthenticationService : IAccessTokenAccessor
 
     public async Task ForceRelogin(CancellationToken cancellationToken)
     {
-        await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
+        var accounts = await _client.GetAccountsAsync();
+        foreach (var account in accounts)
+        {
+            await _client.RemoveAsync(account);
+        }
+
+        await _client
+            .AcquireTokenInteractive(_scopes)
+            .WithPrompt(Prompt.SelectAccount)
+            .ExecuteAsync(cancellationToken);
     }
 
 
