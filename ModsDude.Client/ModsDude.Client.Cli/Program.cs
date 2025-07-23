@@ -34,6 +34,8 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<RepoCollector>();
     services.AddSingleton<ProfileCollector>();
     services.AddSingleton<NameConfirmationCollector>();
+    services.AddSingleton<UserCollector>();
+    services.AddSingleton<RepoMembershipLevelCollector>();
     services.AddSingleton(new Store<State>("cli.state.json"));
 });
 
@@ -55,6 +57,7 @@ app.Configure(config =>
     config.AddCommand<DeleteProfileCommand>("delete-profile");
     config.AddCommand<EditProfileCommand>("edit-profile");
     config.AddCommand<OverviewCommand>("overview");
+    config.AddCommand<AddMemberCommand>("add-repo-member");
 });
 
 

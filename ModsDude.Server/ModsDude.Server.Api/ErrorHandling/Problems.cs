@@ -2,6 +2,7 @@
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Users;
 using System.Diagnostics;
 using System.Runtime.Serialization;
 
@@ -77,6 +78,13 @@ public static class Problems
         Detail = $"Cannot find file for repo '{repoId.Value}', mod '{modId.Value}' and version '{modVersionId.Value}'."
     };
 
+    public static CustomProblemDetails UserAlreadyMember(RepoId repoId, UserId userId) => new()
+    {
+        Type = ProblemType.UserAlreadyMember,
+        Title = "User is already a member of this repo",
+        Detail = $"User '{userId.Value}' is already a member of '{repoId.Value}'."
+    };
+
     
     public enum ProblemType
     {
@@ -102,6 +110,9 @@ public static class Problems
         AlreadyExists,
 
         [EnumMember(Value = _typeBaseUri + "file-not-found")]
-        FileNotFound
+        FileNotFound,
+
+        [EnumMember(Value = _typeBaseUri + "user-already-member")]
+        UserAlreadyMember,
     }
 }

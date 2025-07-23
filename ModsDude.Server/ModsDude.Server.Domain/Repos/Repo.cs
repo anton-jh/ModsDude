@@ -14,7 +14,7 @@ public class Repo
     {
         Name = name;
         Created = created;
-        SetMembershipLevel(firstAdmin, RepoMembershipLevel.Admin);
+        UpdateMembershipLevel(firstAdmin, RepoMembershipLevel.Admin);
     }
 
 
@@ -24,8 +24,22 @@ public class Repo
     public required AdapterData AdapterData { get; set; }
     public DateTime Created { get; }
 
+
+    public void AddMember(UserId userId, RepoMembershipLevel level)
+    {
+        if (_memberships.FirstOrDefault(x => x.UserId == userId) is RepoMembership existing)
+        {
+            throw new InvalidOperationException($"Cannot add member '{userId.Value}' to '{Id.Value}'. User is already a member.");
+        }
+        else
+        {
+            var membership = new RepoMembership(
+                userId, Id, level);
+            _memberships.Add(membership);
+        }
+    }
     
-    public void SetMembershipLevel(UserId userId, RepoMembershipLevel level)
+    public void UpdateMembershipLevel(UserId userId, RepoMembershipLevel level)
     {
         if (_memberships.FirstOrDefault(x => x.UserId == userId) is RepoMembership existing)
         {

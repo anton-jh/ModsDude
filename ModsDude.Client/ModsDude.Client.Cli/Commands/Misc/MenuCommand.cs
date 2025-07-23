@@ -17,6 +17,7 @@ internal class MenuCommand(
             new CommandNode<OverviewCommand>("Overview", serviceProvider, ansiConsole),
             new GroupNode("Repos", ansiConsole, [
                 new CommandNode<CreateRepoCommand>("Create new repo", serviceProvider, ansiConsole),
+                new CommandNode<AddMemberCommand>("Add member", serviceProvider, ansiConsole),
             ]),
             new GroupNode("Repos - Admin", ansiConsole, [
                 new CommandNode<RepoDetailsCommand>("Repo details", serviceProvider, ansiConsole),

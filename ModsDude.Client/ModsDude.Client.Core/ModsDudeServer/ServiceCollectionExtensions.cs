@@ -8,6 +8,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpClient<IReposClient, ReposClient>();
         services.AddHttpClient<IProfilesClient, ProfilesClient>();
+        services.AddHttpClient<IUsersClient, UsersClient>();
+        services.AddHttpClient<IMembersClient, MembersClient>();
 
         return services;
     }

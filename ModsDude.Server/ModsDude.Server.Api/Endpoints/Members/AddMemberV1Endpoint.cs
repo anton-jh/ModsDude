@@ -50,7 +50,12 @@ public class AddMemberV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Repo with id '{repoId} does not exist'"));
         }
 
-        repo.SetMembershipLevel(subjectUser.Id, request.MembershipLevel);
+        if (repo.HasMember(subjectUser.Id))
+        {
+            return TypedResults.BadRequest(Problems.UserAlreadyMember(repo.Id, subjectUser.Id));
+        }
+
+        repo.AddMember(subjectUser.Id, request.MembershipLevel);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();
