@@ -2,6 +2,7 @@
 using ModsDude.Client.Cli.Commands.Shared;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -9,9 +10,9 @@ namespace ModsDude.Client.Cli.Commands.Repos;
 internal class RepoMenuCommand(
     IAnsiConsole ansiConsole,
     RepoCollector repoCollector,
-    EditRepoCommand editRepoCommand,
-    DeleteRepoCommand deleteRepoCommand,
-    ProfileMenuCommand profileMenuCommand,
+    IFactory<EditRepoCommand> editRepoCommand,
+    IFactory<DeleteRepoCommand> deleteRepoCommand,
+    IFactory<ProfileMenuCommand> profileMenuCommandFactory,
     IReposClient reposClient)
     : ContextMenuCommand<RepoMenuCommand.Settings>(ansiConsole)
 {
@@ -23,28 +24,28 @@ internal class RepoMenuCommand(
         _repo = await repoCollector.Collect(default, RepoMembershipLevel.Guest, cancellationToken);
 
         menu.AddChoice(new("Profiles...", ContextMenuChoice.CommandReturnAction.None,
-            () => profileMenuCommand.ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+            () => profileMenuCommandFactory.Create().ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
 
         if (_repo.MembershipLevel >= RepoMembershipLevel.Admin)
         {
             menu.AddChoiceGroup(new("Admin"),
                 new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
-                    () => editRepoCommand.ExecuteAsync(new EditRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)),
+                    () => editRepoCommand.Create().ExecuteAsync(new EditRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)),
                 new("Delete", ContextMenuChoice.CommandReturnAction.Return,
-                    () => deleteRepoCommand.ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+                    () => deleteRepoCommand.Create().ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
         }
 
         return true;
     }
 
-    protected override Task Refresh(Settings settings, CancellationToken cancellationToken)
+    protected override async Task Refresh(Settings settings, CancellationToken cancellationToken)
     {
         if (_repo is null)
         {
             throw new InvalidOperationException();
         }
 
-        return reposClient.GetRepoDetailsV1Async(_repo.Repo.Id, cancellationToken);
+        _repo.Repo = await reposClient.GetRepoDetailsV1Async(_repo.Repo.Id, cancellationToken);
     }
 
     protected override void WriteHeader(Settings settings)

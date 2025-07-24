@@ -37,8 +37,6 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<UserCollector>();
     services.AddSingleton<RepoMembershipLevelCollector>();
     services.AddSingleton(new Store<State>("cli.state.json"));
-    services.AddTransient<RepoMenuCommand>();
-    services.AddTransient<ProfileMenuCommand>();
 });
 
 
@@ -60,6 +58,8 @@ app.Configure(config =>
     config.AddCommand<EditProfileCommand>("edit-profile");
     config.AddCommand<OverviewCommand>("overview");
     config.AddCommand<AddMemberCommand>("add-repo-member");
+    config.AddCommand<RepoMenuCommand>("repo-menu").WithAlias("repo");
+    config.AddCommand<ProfileMenuCommand>("profile-menu").WithAlias("profile");
 });
 
 

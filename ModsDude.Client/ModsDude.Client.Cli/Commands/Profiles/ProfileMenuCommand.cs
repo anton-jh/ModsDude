@@ -2,6 +2,7 @@
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -10,8 +11,8 @@ internal class ProfileMenuCommand(
     IAnsiConsole ansiConsole,
     RepoCollector repoCollector,
     ProfileCollector profileCollector,
-    EditProfileCommand editProfileCommand,
-    DeleteProfileCommand deleteProfileCommand,
+    IFactory<EditProfileCommand> editProfileCommand,
+    IFactory<DeleteProfileCommand> deleteProfileCommand,
     IProfilesClient profilesClient)
     : ContextMenuCommand<ProfileMenuCommand.Settings>(ansiConsole)
 {
@@ -31,21 +32,21 @@ internal class ProfileMenuCommand(
         }
 
         menu.AddChoice(new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
-            () => editProfileCommand.ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
+            () => editProfileCommand.Create().ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
         menu.AddChoice(new("Delete", ContextMenuChoice.CommandReturnAction.Return,
-            () => deleteProfileCommand.ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
+            () => deleteProfileCommand.Create().ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
 
         return true;
     }
 
-    protected override Task Refresh(Settings settings, CancellationToken cancellationToken)
+    protected override async Task Refresh(Settings settings, CancellationToken cancellationToken)
     {
         if (_repo is null || _profile is null)
         {
             throw new InvalidOperationException();
         }
 
-        return profilesClient.GetProfileV1Async(_repo.Repo.Id, _profile.Id, cancellationToken);
+        _profile = await profilesClient.GetProfileV1Async(_repo.Repo.Id, _profile.Id, cancellationToken);
     }
 
     protected override void WriteHeader(Settings settings)

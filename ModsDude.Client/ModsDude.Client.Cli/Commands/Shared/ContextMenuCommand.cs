@@ -25,6 +25,7 @@ internal abstract class ContextMenuCommand<TSettings>(IAnsiConsole ansiConsole)
         {
             _ansiConsole.Clear();
             WriteHeader(settings);
+            _ansiConsole.WriteLine();
 
             var selection = await _ansiConsole.PromptAsync(menu, cancellationToken);
 
