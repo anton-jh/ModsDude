@@ -4,6 +4,7 @@ using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -12,7 +13,8 @@ internal class CreateRepoCommand(
     IAnsiConsole ansiConsole,
     IReposClient reposClient,
     IGameAdapterIndex gameAdapterIndex,
-    FormPrompter formPrompter)
+    FormPrompter formPrompter,
+    IFactory<RepoMenuCommand> repoMenuCommandFactory)
     : AsyncCommandBase<CreateRepoCommand.Settings>(ansiConsole)
 {
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
@@ -21,22 +23,21 @@ internal class CreateRepoCommand(
         var gameAdapter = await CollectGameAdapter(settings, cancellationToken);
         var adapterBaseSettings = await CollectAdapterBaseSettings(gameAdapter, cancellationToken);
 
-        await _ansiConsole.Status()
-            .StartAsync("Creating repo...", async ctx =>
+        var repo = await _ansiConsole.Status()
+            .StartAsync("Creating repo...", _ => reposClient.CreateRepoV1Async(new()
             {
-                await reposClient.CreateRepoV1Async(new()
-                {
-                    Name = name,
-                    AdapterId = gameAdapter.Descriptor.Id.ToString(),
-                    AdapterConfiguration = adapterBaseSettings.Serialize(),
-                }, cancellationToken);
-            });
+                Name = name,
+                AdapterId = gameAdapter.Descriptor.Id.ToString(),
+                AdapterConfiguration = adapterBaseSettings.Serialize(),
+            }, cancellationToken));
 
         _ansiConsole.Clear();
 
         _ansiConsole.MarkupLine("Repo successfully created.");
         _ansiConsole.WriteLine();
         _ansiConsole.PressAnyKeyToDismiss();
+
+        await repoMenuCommandFactory.Create().ExecuteAsync(new RepoMenuCommand.Settings { RepoId = repo.Id }, cancellationToken);
     }
 
 

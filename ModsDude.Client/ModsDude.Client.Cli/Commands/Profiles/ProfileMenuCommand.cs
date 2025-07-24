@@ -22,6 +22,7 @@ internal class ProfileMenuCommand(
 
     protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
     {
+        _ansiConsole.Clear();
         _repo = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
 
         if (_repo is null)
@@ -30,7 +31,7 @@ internal class ProfileMenuCommand(
             return false;
         }
 
-        _profile = await profileCollector.Collect(default, _repo, cancellationToken);
+        _profile = await profileCollector.Collect(settings.ProfileId, _repo, cancellationToken);
 
         if (_profile is null)
         {
@@ -38,10 +39,18 @@ internal class ProfileMenuCommand(
             return false;
         }
 
-        menu.AddChoice(new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
-            () => editProfileCommand.Create().ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
-        menu.AddChoice(new("Delete", ContextMenuChoice.CommandReturnAction.Return,
-            () => deleteProfileCommand.Create().ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
+        menu.AddChoice(new("Activate", ContextMenuChoice.CommandReturnAction.None,
+            () => _ansiConsole.Status().StartAsync("Activating...", _ => Task.Delay(2000))));
+
+        if (_repo.MembershipLevel >= RepoMembershipLevel.Member)
+        {
+            menu.AddChoiceGroup(new("Manage"), [
+                new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
+                    () => editProfileCommand.Create().ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)),
+                new("Delete", ContextMenuChoice.CommandReturnAction.Return,
+                    () => deleteProfileCommand.Create().ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken))
+            ]);
+        }
 
         return true;
     }

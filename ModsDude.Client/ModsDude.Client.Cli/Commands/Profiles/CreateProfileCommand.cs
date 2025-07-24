@@ -2,6 +2,7 @@
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -9,7 +10,8 @@ namespace ModsDude.Client.Cli.Commands.Profiles;
 internal class CreateProfileCommand(
     IAnsiConsole ansiConsole,
     RepoCollector repoCollector,
-    IProfilesClient profilesClient)
+    IProfilesClient profilesClient,
+    IFactory<ProfileMenuCommand> profileMenuCommandFactory)
     : AsyncCommandBase<CreateProfileCommand.Settings>(ansiConsole)
 {
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
@@ -24,7 +26,7 @@ internal class CreateProfileCommand(
 
         var name = await CollectName(settings, repoMembership, cancellationToken);
 
-        await _ansiConsole.Status()
+        var profile = await _ansiConsole.Status()
             .StartAsync("Creating profile...", _ => profilesClient.CreateProfileV1Async(repoMembership.Repo.Id, new()
             {
                 Name = name
@@ -35,6 +37,8 @@ internal class CreateProfileCommand(
         _ansiConsole.MarkupLine("Profile successfully created.");
         _ansiConsole.WriteLine();
         _ansiConsole.PressAnyKeyToDismiss();
+
+        await profileMenuCommandFactory.Create().ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = repoMembership.Repo.Id, ProfileId = profile.Id }, cancellationToken);
     }
 
 

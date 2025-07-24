@@ -13,7 +13,10 @@ internal class RepoMenuCommand(
     RepoCollector repoCollector,
     IFactory<EditRepoCommand> editRepoCommand,
     IFactory<DeleteRepoCommand> deleteRepoCommand,
+    IFactory<CreateProfileCommand> createProfileCommandFactory,
     IFactory<ProfileMenuCommand> profileMenuCommandFactory,
+    IFactory<RepoDetailsCommand> repoDetailsCommandFactory,
+    IFactory<AddMemberCommand> addMemberCommandFactory,
     IReposClient reposClient)
     : ContextMenuCommand<RepoMenuCommand.Settings>(ansiConsole)
 {
@@ -22,7 +25,8 @@ internal class RepoMenuCommand(
 
     protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
     {
-        _repo = await repoCollector.Collect(default, RepoMembershipLevel.Guest, cancellationToken);
+        _ansiConsole.Clear();
+        _repo = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
 
         if (_repo is null)
         {
@@ -30,16 +34,39 @@ internal class RepoMenuCommand(
             return false;
         }
 
-        menu.AddChoice(new("Profiles...", ContextMenuChoice.CommandReturnAction.None,
-            () => profileMenuCommandFactory.Create().ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+        menu.AddChoice(new("Details", ContextMenuChoice.CommandReturnAction.None,
+            () => repoDetailsCommandFactory.Create().ExecuteAsync(new RepoDetailsCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+
+        var profileChoices = new List<ContextMenuChoice>
+        {
+            new("Profiles...", ContextMenuChoice.CommandReturnAction.None,
+                () => profileMenuCommandFactory.Create().ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken))
+        };
+
+        if (_repo.MembershipLevel >= RepoMembershipLevel.Member)
+        {
+            profileChoices.Add(new("New profile", ContextMenuChoice.CommandReturnAction.None,
+                () => createProfileCommandFactory.Create().ExecuteAsync(new CreateProfileCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+        }
+
+        menu.AddChoiceGroup(new("Profiles"), profileChoices);
+
+        if (_repo.MembershipLevel >= RepoMembershipLevel.Member)
+        {
+            menu.AddChoiceGroup(new("Members"), [
+                new("Invite", ContextMenuChoice.CommandReturnAction.None,
+                    () => addMemberCommandFactory.Create().ExecuteAsync(new AddMemberCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken))
+            ]);
+        }
 
         if (_repo.MembershipLevel >= RepoMembershipLevel.Admin)
         {
-            menu.AddChoiceGroup(new("Admin"),
+            menu.AddChoiceGroup(new("Admin"), [
                 new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
                     () => editRepoCommand.Create().ExecuteAsync(new EditRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)),
                 new("Delete", ContextMenuChoice.CommandReturnAction.Return,
-                    () => deleteRepoCommand.Create().ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
+                    () => deleteRepoCommand.Create().ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken))
+            ]);
         }
 
         return true;

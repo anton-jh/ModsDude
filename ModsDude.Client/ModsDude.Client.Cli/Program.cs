@@ -41,25 +41,27 @@ builder.ConfigureServices(static (ctx, services) =>
 
 
 var registrar = new TypeRegistrar(builder);
-var app = new CommandApp<MenuCommand>(registrar);
+var app = new CommandApp<MainMenuCommand>(registrar);
 
 
 app.Configure(config =>
 {
     //config.PropagateExceptions();
 
+    config.AddCommand<OverviewCommand>("overview");
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");
     config.AddCommand<CreateRepoCommand>("create-repo");
-    config.AddCommand<DeleteRepoCommand>("delete-repo");
-    config.AddCommand<EditRepoCommand>("edit-repo");
-    config.AddCommand<RepoDetailsCommand>("inspect-repo");
-    config.AddCommand<CreateProfileCommand>("create-profile");
-    config.AddCommand<DeleteProfileCommand>("delete-profile");
-    config.AddCommand<EditProfileCommand>("edit-profile");
-    config.AddCommand<OverviewCommand>("overview");
-    config.AddCommand<AddMemberCommand>("add-repo-member");
+
     config.AddCommand<RepoMenuCommand>("repo-menu").WithAlias("repo");
+    config.AddCommand<EditRepoCommand>("edit-repo");
+    config.AddCommand<DeleteRepoCommand>("delete-repo");
+    config.AddCommand<RepoDetailsCommand>("inspect-repo");
+    config.AddCommand<AddMemberCommand>("add-repo-member");
+    config.AddCommand<CreateProfileCommand>("create-profile");
+
     config.AddCommand<ProfileMenuCommand>("profile-menu").WithAlias("profile");
+    config.AddCommand<EditProfileCommand>("edit-profile");
+    config.AddCommand<DeleteProfileCommand>("delete-profile");
 });
 
 
