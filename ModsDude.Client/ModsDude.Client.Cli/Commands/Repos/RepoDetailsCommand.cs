@@ -17,7 +17,7 @@ internal class RepoDetailsCommand(
 {
     public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
-        var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
+        var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
 
         if (repoMembership is null)
         {
@@ -26,8 +26,8 @@ internal class RepoDetailsCommand(
         }
 
         _ansiConsole.Clear();
-
-        _ansiConsole.MarkupLineInterpolated($"([yellow]{repoMembership.Repo.Id}[/]) [yellow]{repoMembership.Repo.Name}[/]");
+        _ansiConsole.MarkupLineInterpolated($"[grey italic]({repoMembership.Repo.Id})[/] [blue bold]{repoMembership.Repo.Name}[/]");
+        _ansiConsole.WriteLine();
 
         var gameAdapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId));
         var gameAdapterBaseSettings = gameAdapter.DeserializeBaseSettings(repoMembership.Repo.AdapterConfiguration);
@@ -40,6 +40,7 @@ internal class RepoDetailsCommand(
             _ansiConsole.MarkupLineInterpolated($"{title}: {value}");
         }
 
+        _ansiConsole.WriteLine();
         _ansiConsole.PressAnyKeyToDismiss();
     }
 
