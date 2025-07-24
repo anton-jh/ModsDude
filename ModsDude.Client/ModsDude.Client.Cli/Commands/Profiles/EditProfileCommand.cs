@@ -18,8 +18,7 @@ internal class EditProfileCommand(
 
         if (repo is null || profile is null)
         {
-            _ansiConsole.MarkupLine("[red]There are no profiles for you to edit.[/]");
-            _ansiConsole.PressAnyKeyToDismiss();
+            _ansiConsole.NothingHere();
             return;
         }
 

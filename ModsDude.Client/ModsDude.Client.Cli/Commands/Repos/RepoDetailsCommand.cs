@@ -19,6 +19,12 @@ internal class RepoDetailsCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
+        if (repoMembership is null)
+        {
+            _ansiConsole.NothingHere();
+            return;
+        }
+
         _ansiConsole.Clear();
 
         _ansiConsole.MarkupLineInterpolated($"([yellow]{repoMembership.Repo.Id}[/]) [yellow]{repoMembership.Repo.Name}[/]");

@@ -10,7 +10,7 @@ internal class RepoCollector(
     IReposClient reposClient,
     Store<State> store)
 {
-    public async Task<RepoMembershipDto> Collect(Guid fromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
+    public async Task<RepoMembershipDto?> Collect(Guid fromSettings, RepoMembershipLevel minimumLevel, CancellationToken cancellationToken)
     {
         IEnumerable<RepoMembershipDto> repoMemberships = await ansiConsole.Status()
             .StartAsync("Fetching repos...", _ => reposClient.GetMyReposV1Async(cancellationToken));
@@ -27,28 +27,35 @@ internal class RepoCollector(
             ansiConsole.PressAnyKeyToContinue();
         }
 
+        var lastSelectedIds = store.Get().LastSelectedRepos;
+
+        var lastSelected = repoMemberships
+            .Where(x => lastSelectedIds.Contains(x.Repo.Id))
+            .OrderBy(x => lastSelectedIds.IndexOf(x.Repo.Id));
+        var rest = repoMemberships
+            .Where(x => !lastSelectedIds.Contains(x.Repo.Id))
+            .OrderBy(x => x.Repo.Name)
+            .ThenBy(x => x.Repo.Id);
+
+        if (!lastSelected.Any() && !rest.Any())
+        {
+            return null;
+        }
+
         var prompt = new SelectionPrompt<RepoMembershipDto>()
             .Title("Select repo")
             .WrapAround()
             .EnableSearch()
             .UseConverter(x => x.Repo.Name);
 
-        var lastSelected = store.Get().LastSelectedRepos;
-
-        prompt.AddChoices(repoMemberships
-            .Where(x => lastSelected.Contains(x.Repo.Id))
-            .OrderBy(x => lastSelected.IndexOf(x.Repo.Id)));
-
-        prompt.AddChoices(repoMemberships
-            .Where(x => !lastSelected.Contains(x.Repo.Id))
-            .OrderBy(x => x.Repo.Name)
-            .ThenBy(x => x.Repo.Id));
+        prompt.AddChoices(lastSelected);
+        prompt.AddChoices(rest);
 
         selection ??= await ansiConsole.PromptAsync(prompt, cancellationToken);
 
         UpdateLastSelected(selection);
 
-        return selection; // TODO: return null if no repos to select from
+        return selection;
     }
 
 

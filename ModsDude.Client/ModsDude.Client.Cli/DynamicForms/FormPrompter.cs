@@ -58,8 +58,7 @@ internal class FormPrompter(IAnsiConsole ansiConsole)
 
         if (!properties.Any())
         {
-            ansiConsole.MarkupLine("[Red](Nothing here)[/]");
-            ansiConsole.PressAnyKeyToContinue();
+            ansiConsole.NothingHere();
             return false;
         }
 

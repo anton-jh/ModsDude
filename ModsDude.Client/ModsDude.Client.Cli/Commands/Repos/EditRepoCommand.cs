@@ -20,6 +20,12 @@ internal class EditRepoCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
+        if (repoMembership is null)
+        {
+            _ansiConsole.NothingHere();
+            return;
+        }
+
         var newName = await CollectName(settings, repoMembership.Repo.Name, cancellationToken);
 
         var gameAdapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId));

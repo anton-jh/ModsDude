@@ -16,6 +16,12 @@ internal class CreateProfileCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Member, cancellationToken);
 
+        if (repoMembership is null)
+        {
+            _ansiConsole.NothingHere();
+            return;
+        }
+
         var name = await CollectName(settings, repoMembership, cancellationToken);
 
         await _ansiConsole.Status()

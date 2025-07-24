@@ -23,6 +23,13 @@ internal class ProfileMenuCommand(
     protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
     {
         _repo = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
+
+        if (_repo is null)
+        {
+            _ansiConsole.NothingHere();
+            return false;
+        }
+
         _profile = await profileCollector.Collect(default, _repo, cancellationToken);
 
         if (_profile is null)

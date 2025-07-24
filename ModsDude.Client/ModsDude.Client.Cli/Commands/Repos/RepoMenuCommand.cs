@@ -1,6 +1,7 @@
 ﻿using ModsDude.Client.Cli.Commands.Profiles;
 using ModsDude.Client.Cli.Commands.Shared;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
+using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Utilities;
 using Spectre.Console;
@@ -22,6 +23,12 @@ internal class RepoMenuCommand(
     protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
     {
         _repo = await repoCollector.Collect(default, RepoMembershipLevel.Guest, cancellationToken);
+
+        if (_repo is null)
+        {
+            _ansiConsole.NothingHere();
+            return false;
+        }
 
         menu.AddChoice(new("Profiles...", ContextMenuChoice.CommandReturnAction.None,
             () => profileMenuCommandFactory.Create().ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));

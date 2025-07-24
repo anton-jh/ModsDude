@@ -19,6 +19,12 @@ internal class DeleteRepoCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Admin, cancellationToken);
 
+        if (repoMembership is null)
+        {
+            _ansiConsole.NothingHere();
+            return;
+        }
+
         var confirmation = await nameConfirmationCollector.Collect(repoMembership.Repo.Name, _confirmationMessage, cancellationToken);
 
         if (confirmation == false)

@@ -19,6 +19,12 @@ internal class AddMemberCommand(
     {
         var repoMembership = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Member, cancellationToken);
 
+        if (repoMembership is null)
+        {
+            _ansiConsole.NothingHere();
+            return;
+        }
+
         var repoDetails = await _ansiConsole.Status()
             .StartAsync("Fetching repo...", _ => reposClient.GetRepoDetailsV1Async(repoMembership.Repo.Id, cancellationToken));
 
