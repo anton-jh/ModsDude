@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 namespace ModsDude.Client.Cli.Commands.Shared;
 internal abstract class AsyncCommandBase<TSettings>(
     IAnsiConsole ansiConsole)
-    : AsyncCommand<TSettings>, IInteractiveCommand
+    : AsyncCommand<TSettings>, IInteractiveCommand, IInteractiveCommand<TSettings>
     where TSettings : CommandSettings, new()
 {
     protected readonly IAnsiConsole _ansiConsole = ansiConsole;

@@ -48,7 +48,7 @@ internal class RepoCollector(
 
         UpdateLastSelected(selection);
 
-        return selection;
+        return selection; // TODO: return null if no repos to select from
     }
 
 

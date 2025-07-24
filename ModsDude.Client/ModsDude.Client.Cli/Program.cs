@@ -37,6 +37,8 @@ builder.ConfigureServices(static (ctx, services) =>
     services.AddSingleton<UserCollector>();
     services.AddSingleton<RepoMembershipLevelCollector>();
     services.AddSingleton(new Store<State>("cli.state.json"));
+    services.AddTransient<RepoMenuCommand>();
+    services.AddTransient<ProfileMenuCommand>();
 });
 
 
