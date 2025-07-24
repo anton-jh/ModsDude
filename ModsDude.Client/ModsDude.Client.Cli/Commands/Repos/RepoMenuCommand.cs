@@ -13,81 +13,53 @@ internal class RepoMenuCommand(
     DeleteRepoCommand deleteRepoCommand,
     ProfileMenuCommand profileMenuCommand,
     IReposClient reposClient)
-    : AsyncCommandBase<RepoMenuCommand.Settings>(ansiConsole)
+    : ContextMenuCommand<RepoMenuCommand.Settings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
+    private RepoMembershipDto? _repo;
+
+
+    protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
     {
-        var repo = await repoCollector.Collect(default, RepoMembershipLevel.Guest, cancellationToken);
+        _repo = await repoCollector.Collect(default, RepoMembershipLevel.Guest, cancellationToken);
 
-        var menuPrompt = new SelectionPrompt<CommandMenuOption>()
-            .UseConverter(x => x.Label)
-            .EnableSearch()
-            .PageSize(20)
-            .WrapAround();
+        menu.AddChoice(new("Profiles...", ContextMenuChoice.CommandReturnAction.None,
+            () => profileMenuCommand.ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
 
-        var backChoice = new CommandMenuOption("<- Back");
-        menuPrompt.AddChoice(backChoice);
-
-        menuPrompt.AddChoice(new(
-            "Profiles...",
-            CommandMenuOption.CommandReturnAction.None,
-            () => profileMenuCommand.ExecuteAsync(new ProfileMenuCommand.Settings { RepoId = repo.Repo.Id }, cancellationToken)
-        ));
-
-        if (repo.MembershipLevel >= RepoMembershipLevel.Admin)
+        if (_repo.MembershipLevel >= RepoMembershipLevel.Admin)
         {
-            menuPrompt.AddChoiceGroup(new("Admin"),
-                new("Edit", CommandMenuOption.CommandReturnAction.Refresh, () => editRepoCommand.ExecuteAsync(new EditRepoCommand.Settings { RepoId = repo.Repo.Id }, cancellationToken)),
-                new("Delete", CommandMenuOption.CommandReturnAction.Return, () => deleteRepoCommand.ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = repo.Repo.Id }, cancellationToken)));
+            menu.AddChoiceGroup(new("Admin"),
+                new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
+                    () => editRepoCommand.ExecuteAsync(new EditRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)),
+                new("Delete", ContextMenuChoice.CommandReturnAction.Return,
+                    () => deleteRepoCommand.ExecuteAsync(new DeleteRepoCommand.Settings { RepoId = _repo.Repo.Id }, cancellationToken)));
         }
 
-        while (true)
-        {
-            _ansiConsole.Clear();
-            _ansiConsole.MarkupLineInterpolated($"[grey italic]({repo.Repo.Id})[/] [blue bold]{repo.Repo.Name}[/]");
-
-            var selection = await _ansiConsole.PromptAsync(menuPrompt, cancellationToken);
-
-            if (selection == backChoice)
-            {
-                return;
-            }
-
-            await selection.Action.Invoke();
-
-            if (selection.ReturnAction is CommandMenuOption.CommandReturnAction.Return)
-            {
-                return;
-            }
-            if (selection.ReturnAction is CommandMenuOption.CommandReturnAction.Refresh)
-            {
-                repo.Repo = await _ansiConsole.Status()
-                    .StartAsync("Refreshing...", _ => reposClient.GetRepoDetailsV1Async(repo.Repo.Id, cancellationToken));
-            }
-        }
+        return true;
     }
 
+    protected override Task Refresh(Settings settings, CancellationToken cancellationToken)
+    {
+        if (_repo is null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        return reposClient.GetRepoDetailsV1Async(_repo.Repo.Id, cancellationToken);
+    }
+
+    protected override void WriteHeader(Settings settings)
+    {
+        if (_repo is null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        _ansiConsole.MarkupLineInterpolated($"[grey italic]({_repo.Repo.Id})[/] [blue bold]{_repo.Repo.Name}[/]");
+    }
 
     public class Settings : CommandSettings
     {
         [CommandOption("--repo-id")]
         public Guid RepoId { get; init; }
-    }
-}
-
-
-internal record CommandMenuOption(string Label, CommandMenuOption.CommandReturnAction ReturnAction, Func<Task> Action)
-{
-    public CommandMenuOption(string Label)
-        : this(Label, CommandReturnAction.None, () => Task.CompletedTask)
-    {
-    }
-
-
-    public enum CommandReturnAction
-    {
-        None,
-        Refresh,
-        Return
     }
 }

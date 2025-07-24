@@ -1,5 +1,4 @@
-﻿using ModsDude.Client.Cli.Commands.Repos;
-using ModsDude.Client.Cli.Commands.Shared;
+﻿using ModsDude.Client.Cli.Commands.Shared;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
 using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -14,56 +13,50 @@ internal class ProfileMenuCommand(
     EditProfileCommand editProfileCommand,
     DeleteProfileCommand deleteProfileCommand,
     IProfilesClient profilesClient)
-    : AsyncCommandBase<ProfileMenuCommand.Settings>(ansiConsole)
+    : ContextMenuCommand<ProfileMenuCommand.Settings>(ansiConsole)
 {
-    public override async Task ExecuteAsync(Settings settings, CancellationToken cancellationToken)
-    {
-        var repo = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
-        var profile = await profileCollector.Collect(default, repo, cancellationToken);
+    private RepoMembershipDto? _repo;
+    private ProfileDto? _profile;
 
-        if (profile is null)
+
+    protected override async Task<bool> Prepare(Settings settings, SelectionPrompt<ContextMenuChoice> menu, CancellationToken cancellationToken)
+    {
+        _repo = await repoCollector.Collect(settings.RepoId, RepoMembershipLevel.Guest, cancellationToken);
+        _profile = await profileCollector.Collect(default, _repo, cancellationToken);
+
+        if (_profile is null)
         {
             _ansiConsole.NothingHere();
-            return;
+            return false;
         }
 
-        var menuPrompt = new SelectionPrompt<CommandMenuOption>()
-            .UseConverter(x => x.Label)
-            .EnableSearch()
-            .PageSize(20)
-            .WrapAround();
+        menu.AddChoice(new("Edit", ContextMenuChoice.CommandReturnAction.Refresh,
+            () => editProfileCommand.ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
+        menu.AddChoice(new("Delete", ContextMenuChoice.CommandReturnAction.Return,
+            () => deleteProfileCommand.ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = _profile.Id }, cancellationToken)));
 
-        var backChoice = new CommandMenuOption("<- Back");
-        menuPrompt.AddChoice(backChoice);
+        return true;
+    }
 
-        menuPrompt.AddChoice(new("Edit", CommandMenuOption.CommandReturnAction.Refresh, () => editProfileCommand.ExecuteAsync(new EditProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = profile.Id }, cancellationToken)));
-        menuPrompt.AddChoice(new("Delete", CommandMenuOption.CommandReturnAction.Return, () => deleteProfileCommand.ExecuteAsync(new DeleteProfileCommand.Settings { RepoId = settings.RepoId, ProfileId = profile.Id }, cancellationToken)));
-
-        while (true)
+    protected override Task Refresh(Settings settings, CancellationToken cancellationToken)
+    {
+        if (_repo is null || _profile is null)
         {
-            _ansiConsole.Clear();
-            _ansiConsole.MarkupLineInterpolated($"[grey italic]({repo.Repo.Id})[/] [blue bold]{repo.Repo.Name}[/]");
-            _ansiConsole.MarkupLineInterpolated($"  [grey italic]({profile.Id})[/] [blue bold]{profile.Name}[/]");
-
-            var selection = await _ansiConsole.PromptAsync(menuPrompt, cancellationToken);
-
-            if (selection == backChoice)
-            {
-                return;
-            }
-
-            await selection.Action.Invoke();
-
-            if (selection.ReturnAction is CommandMenuOption.CommandReturnAction.Return)
-            {
-                return;
-            }
-            if (selection.ReturnAction is CommandMenuOption.CommandReturnAction.Refresh)
-            {
-                profile = await _ansiConsole.Status()
-                    .StartAsync("Refreshing...", _ => profilesClient.GetProfileV1Async(repo.Repo.Id, profile.Id, cancellationToken));
-            }
+            throw new InvalidOperationException();
         }
+
+        return profilesClient.GetProfileV1Async(_repo.Repo.Id, _profile.Id, cancellationToken);
+    }
+
+    protected override void WriteHeader(Settings settings)
+    {
+        if (_repo is null || _profile is null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        _ansiConsole.MarkupLineInterpolated($"[grey italic]({_repo.Repo.Id})[/] [blue bold]{_repo.Repo.Name}[/]");
+        _ansiConsole.MarkupLineInterpolated($"  [grey italic]({_profile.Id})[/] [blue bold]{_profile.Name}[/]");
     }
 
 
