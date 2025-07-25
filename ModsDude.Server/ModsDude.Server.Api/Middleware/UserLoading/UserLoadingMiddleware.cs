@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using ModsDude.Server.Domain.Common;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using System.IdentityModel.Tokens.Jwt;
