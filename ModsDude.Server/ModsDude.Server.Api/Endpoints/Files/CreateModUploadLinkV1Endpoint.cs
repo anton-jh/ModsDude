@@ -7,6 +7,8 @@ using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Files;
@@ -28,7 +30,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
         CreateModUploadLinkRequest request,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IModRepository modRepository,
+        ApplicationDbContext dbContext,
         IModStorageService modStorageService,
         CancellationToken cancellationToken)
     {
@@ -41,7 +43,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var mod = await modRepository.GetMod(new RepoId(request.RepoId), new ModId(request.ModId), cancellationToken);
+        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(request.RepoId), new ModId(request.ModId)), cancellationToken);
         if (mod is not null && mod.CheckHasVersion(new ModVersionId(request.VersionId)))
         {
             return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new(request.RepoId), new(request.ModId), new(request.VersionId)));

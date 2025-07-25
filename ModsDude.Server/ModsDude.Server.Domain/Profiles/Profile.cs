@@ -1,6 +1,5 @@
 ﻿using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ModsDude.Server.Domain.Profiles;
 public class Profile(

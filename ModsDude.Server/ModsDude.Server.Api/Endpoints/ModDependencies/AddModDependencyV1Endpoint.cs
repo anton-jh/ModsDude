@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -9,6 +10,8 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.ModDependencies;
@@ -27,7 +30,7 @@ public class AddModDependencyV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
         IProfileRepository profileRepository,
-        IModRepository modRepository,
+        ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
@@ -46,10 +49,16 @@ public class AddModDependencyV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var modVersion = await modRepository.GetModVersion(new RepoId(repoId), new ModId(request.ModId), new ModVersionId(request.VersionId), cancellationToken);
-        if (modVersion is null)
+        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(repoId), new ModId(request.ModId)), cancellationToken);
+        if (mod is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No mod '{request.ModId}' found in repo '{repoId}'"));
+        }
+
+        var modVersion = mod.GetVersionById(new ModVersionId(request.VersionId));
+        if (modVersion is null)
+        {
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No version '{request.VersionId}' of mod '{request.ModId}' found in repo '{repoId}'"));
         }
 
         if (profile.ModDependencies.Any(x => x.ModVersion.Mod == modVersion.Mod))

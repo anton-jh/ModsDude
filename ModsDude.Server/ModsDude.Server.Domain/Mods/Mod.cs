@@ -50,6 +50,11 @@ public class Mod
         return Versions.Any(x => x.Id == versionId);
     }
 
+    public ModVersion? GetVersionById(ModVersionId versionId)
+    {
+        return Versions.SingleOrDefault(x => x.Id == versionId);
+    }
+
     public ModVersion GetLatestVersion()
     {
         return _versions

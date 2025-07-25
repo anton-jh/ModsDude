@@ -9,6 +9,8 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -28,7 +30,7 @@ public class RegisterModV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
         IModStorageService storageService,
-        IModRepository modRepository,
+        ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -47,7 +49,7 @@ public class RegisterModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), new ModId(request.ModId), new ModVersionId(request.VersionId)));
         }
 
-        var mod = await modRepository.GetMod(new RepoId(repoId), new ModId(request.ModId), cancellationToken);
+        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(repoId), new ModId(request.ModId)), cancellationToken);
 
         if (mod is null)
         {
@@ -60,7 +62,7 @@ public class RegisterModV1Endpoint : IEndpoint
                 request.Description,
                 request.DisplayName);
 
-            modRepository.AddNewMod(mod);
+            dbContext.Mods.Add(mod);
         }
         else
         {
