@@ -43,7 +43,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(request.RepoId), new ModId(request.ModId)), cancellationToken);
+        var mod = await dbContext.Mods.GetAsync(new RepoId(request.RepoId), new ModId(request.ModId), cancellationToken);
         if (mod is not null && mod.CheckHasVersion(new ModVersionId(request.VersionId)))
         {
             return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new(request.RepoId), new(request.ModId), new(request.VersionId)));

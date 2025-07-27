@@ -47,7 +47,7 @@ public class AddModDependencyV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(repoId), new ModId(request.ModId)), cancellationToken);
+        var mod = await dbContext.Mods.FindAsync(new RepoId(repoId), new ModId(request.ModId), cancellationToken);
         if (mod is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No mod '{request.ModId}' found in repo '{repoId}'"));

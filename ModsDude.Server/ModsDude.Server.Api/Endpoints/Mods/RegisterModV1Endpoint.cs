@@ -49,7 +49,7 @@ public class RegisterModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), new ModId(request.ModId), new ModVersionId(request.VersionId)));
         }
 
-        var mod = await dbContext.Mods.FindAsync(ModExtensions.GetKey(new RepoId(repoId), new ModId(request.ModId)), cancellationToken);
+        var mod = await dbContext.Mods.GetAsync(new RepoId(repoId), new ModId(request.ModId), cancellationToken);
 
         if (mod is null)
         {
