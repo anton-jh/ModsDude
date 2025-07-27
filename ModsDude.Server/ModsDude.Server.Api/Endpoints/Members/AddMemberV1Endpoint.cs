@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
@@ -25,12 +24,11 @@ public class AddMemberV1Endpoint : IEndpoint
     private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> AddMember(
         Guid repoId, AddMemberRequest request,
         ClaimsPrincipal claimsPrincipal,
-        IUserRepository userRepository,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member)
                 .GrantAccessToRepo(new RepoId(repoId), request.MembershipLevel))
@@ -40,7 +38,7 @@ public class AddMemberV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var subjectUser = await userRepository.GetByIdAsync(new UserId(request.UserId), cancellationToken);
+        var subjectUser = await dbContext.Users.GetAsync(new UserId(request.UserId), cancellationToken);
         if (subjectUser is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"User with id '{request.UserId}' does not exist"));

@@ -4,7 +4,6 @@ using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -28,14 +27,13 @@ public class RegisterModV1Endpoint : IEndpoint
         Guid repoId,
         RegisterModRequest request,
         ClaimsPrincipal claimsPrincipal,
-        IUserRepository userRepository,
         IModStorageService storageService,
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToBadRequest();

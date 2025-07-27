@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
@@ -29,12 +28,11 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
     public async Task<Results<Ok<CreateModUploadLinkResponse>, BadRequest<CustomProblemDetails>>> CreateModUploadLink(
         CreateModUploadLinkRequest request,
         ClaimsPrincipal claimsPrincipal,
-        IUserRepository userRepository,
         ApplicationDbContext dbContext,
         IModStorageService modStorageService,
         CancellationToken cancellationToken)
     {
-        var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Member))
             .MapToBadRequest();

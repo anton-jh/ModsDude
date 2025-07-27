@@ -6,10 +6,8 @@ using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.Middleware.UserLoading;
 using ModsDude.Server.Application;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Persistence.DbContexts;
-using ModsDude.Server.Persistence.Repositories;
 using ModsDude.Server.Storage.Extensions;
 using NSwag;
 using NSwag.AspNetCore;
@@ -101,9 +99,6 @@ builder.Services.AddScoped<UserLoadingMiddleware>();
 
 builder.Services
     .AddSingleton<ITimeService, TimeService>();
-
-builder.Services
-    .AddScoped<IUserRepository, UserRepository>();
 
 builder.Services
     .AddDbContext<ApplicationDbContext>(options =>

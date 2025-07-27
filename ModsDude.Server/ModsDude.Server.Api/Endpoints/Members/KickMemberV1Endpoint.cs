@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
@@ -24,7 +23,6 @@ public class KickMemberV1Endpoint : IEndpoint
     private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> KickMember(
         Guid repoId, string userId,
         ClaimsPrincipal claimsPrincipal,
-        IUserRepository userRepository,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -41,7 +39,7 @@ public class KickMemberV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Member '{userId}' not found"));
         }
 
-        var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .ChangeOthersMembership(subjectMembership))
             .MapToBadRequest();

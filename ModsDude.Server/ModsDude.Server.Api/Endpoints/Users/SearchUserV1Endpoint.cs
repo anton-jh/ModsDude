@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using ModsDude.Server.Api.Dtos;
-using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Users;
 
@@ -17,10 +18,10 @@ public class SearchUserV1Endpoint : IEndpoint
 
     private async Task<Ok<SearchUserResponse>> Search(
         [FromQuery] string username,
-        IUserRepository userRepository,
+        ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByUsernameAsync(new Username(username), cancellationToken);
+        var user = await dbContext.Users.GetByUsernameAsync(new Username(username), cancellationToken);
 
         var dto = user is null
             ? null
