@@ -6,6 +6,8 @@ using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
@@ -23,7 +25,7 @@ public class DeleteRepoV1Endpoint : IEndpoint
         Guid repoId,
         ClaimsPrincipal claimsPrincipal,
         IUnitOfWork unitOfWork,
-        IRepoRepository repoRepository,
+        ApplicationDbContext dbContext,
         IUserRepository userRepository,
         CancellationToken cancellationToken)
     {
@@ -36,13 +38,13 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var repo = await repoRepository.GetById(new RepoId(repoId));
+        var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        repoRepository.Delete(repo);
+        dbContext.Repos.Remove(repo);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();

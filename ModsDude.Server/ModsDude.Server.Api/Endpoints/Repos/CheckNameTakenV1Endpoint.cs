@@ -1,4 +1,5 @@
-﻿using ModsDude.Server.Application.Repositories;
+﻿using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
@@ -14,10 +15,10 @@ public class CheckNameTakenV1Endpoint : IEndpoint
 
     private static async Task<CheckNameTakenResponse> CheckNameTaken(
         CheckNameTakenRequest request,
-        IRepoRepository repoRepository,
+        ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var isTaken = await repoRepository.CheckNameIsTaken(new(request.Name), cancellationToken);
+        var isTaken = await dbContext.Repos.CheckNameIsTaken(new(request.Name), cancellationToken);
 
         return new(isTaken);
     }

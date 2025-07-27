@@ -7,6 +7,8 @@ using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Members;
@@ -24,7 +26,7 @@ public class AddMemberV1Endpoint : IEndpoint
         Guid repoId, AddMemberRequest request,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IRepoRepository repoRepository,
+        ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
@@ -44,7 +46,7 @@ public class AddMemberV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"User with id '{request.UserId}' does not exist"));
         }
 
-        var repo = await repoRepository.GetById(new RepoId(repoId));
+        var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Repo with id '{repoId} does not exist'"));

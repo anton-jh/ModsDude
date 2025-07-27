@@ -26,9 +26,8 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
     private async Task<Results<Ok<RepoDetailsDto>, BadRequest<CustomProblemDetails>>> GetRepoDetails(
         [FromRoute] Guid repoId,
         ClaimsPrincipal claimsPrincipal,
-        ApplicationDbContext dbContext,
         IUserRepository userRepository,
-        IRepoRepository repoRepository,
+        ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -39,8 +38,8 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
         {
             return authResult;
         }
-
-        var repo = await repoRepository.GetById(new RepoId(repoId));
+        
+        var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);

@@ -103,8 +103,7 @@ builder.Services
     .AddSingleton<ITimeService, TimeService>();
 
 builder.Services
-    .AddScoped<IUserRepository, UserRepository>()
-    .AddScoped<IRepoRepository, RepoRepository>();
+    .AddScoped<IUserRepository, UserRepository>();
 
 builder.Services
     .AddDbContext<ApplicationDbContext>(options =>

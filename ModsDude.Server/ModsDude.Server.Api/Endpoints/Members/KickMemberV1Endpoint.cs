@@ -6,6 +6,8 @@ using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Members;
@@ -22,12 +24,12 @@ public class KickMemberV1Endpoint : IEndpoint
     private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> KickMember(
         Guid repoId, string userId,
         ClaimsPrincipal claimsPrincipal,
-        IRepoRepository repoRepository,
         IUserRepository userRepository,
+        ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var repo = await repoRepository.GetById(new RepoId(repoId));
+        var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Repo '{repoId}' does not exist"));
