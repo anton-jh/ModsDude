@@ -7,6 +7,7 @@ using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.DbContexts;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Members;
@@ -26,7 +27,6 @@ public class UpdateMembershipV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
         IRepoRepository repoRepository,
-        IRepoMembershipRepository repoMembershipRepository,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {

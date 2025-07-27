@@ -103,7 +103,6 @@ builder.Services
     .AddSingleton<ITimeService, TimeService>();
 
 builder.Services
-    .AddScoped<IRepoMembershipRepository, RepoMembershipRepository>()
     .AddScoped<IUserRepository, UserRepository>()
     .AddScoped<IRepoRepository, RepoRepository>();
 

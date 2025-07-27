@@ -9,6 +9,7 @@ using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
@@ -28,7 +29,6 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         IUserRepository userRepository,
         IRepoRepository repoRepository,
-        IRepoMembershipRepository repoMembershipRepository,
         CancellationToken cancellationToken)
     {
         var authResult = await userRepository.GetByIdAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -46,7 +46,7 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        var memberships = await repoMembershipRepository.GetByRepoIdAsync(new RepoId(repoId), cancellationToken);
+        var memberships = await dbContext.RepoMemberships.GetByRepoIdAsync(new RepoId(repoId), cancellationToken);
         var memberIds = memberships.Select(x => x.UserId).ToList();
         var members = await dbContext.Users.Where(x => memberIds.Contains(x.Id)).ToListAsync(cancellationToken);
 
