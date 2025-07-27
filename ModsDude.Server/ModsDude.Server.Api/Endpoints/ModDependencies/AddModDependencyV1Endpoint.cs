@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -29,7 +28,6 @@ public class AddModDependencyV1Endpoint : IEndpoint
         Guid repoId, Guid profileId, AddModDependencyRequest request,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IProfileRepository profileRepository,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -43,7 +41,7 @@ public class AddModDependencyV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var profile = await profileRepository.GetById(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
+        var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));

@@ -7,6 +7,8 @@ using ModsDude.Server.Application.Repositories;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -24,7 +26,7 @@ public class DeleteProfileV1Endpoint : IEndpoint
         Guid repoId, Guid profileId,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IProfileRepository profileRepository,
+        ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
@@ -37,13 +39,13 @@ public class DeleteProfileV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var profile = await profileRepository.GetById(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
+        var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        profileRepository.Delete(profile);
+        dbContext.Profiles.Remove(profile);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();

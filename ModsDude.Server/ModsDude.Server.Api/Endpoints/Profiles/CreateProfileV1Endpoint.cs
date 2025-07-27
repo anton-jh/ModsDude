@@ -9,6 +9,8 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -27,7 +29,7 @@ public class CreateProfileV1Endpoint : IEndpoint
         CreateProfileRequest request,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IProfileRepository profileRepository,
+        ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -41,13 +43,13 @@ public class CreateProfileV1Endpoint : IEndpoint
             return authResult;
         }
 
-        if (await profileRepository.CheckNameIsTaken(new RepoId(repoId), new ProfileName(request.Name), cancellationToken))
+        if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileName(request.Name), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
         var profile = new Profile(new RepoId(repoId), new ProfileName(request.Name), timeService.Now());
-        profileRepository.AddNewProfile(profile);
+        dbContext.Profiles.Add(profile);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));

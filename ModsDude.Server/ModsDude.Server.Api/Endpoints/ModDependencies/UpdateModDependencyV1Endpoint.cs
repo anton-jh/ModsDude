@@ -9,6 +9,8 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.ModDependencies;
@@ -26,7 +28,7 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
         Guid repoId, Guid profileId, string modId, UpdateModDependencyRequest request,
         ClaimsPrincipal claimsPrincipal,
         IUserRepository userRepository,
-        IProfileRepository profileRepository,
+        ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
@@ -38,8 +40,8 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
         {
             return authResult;
         }
-
-        var profile = await profileRepository.GetById(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
+        
+        var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
