@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Cli.Authentication;
 using ModsDude.Client.Cli.Commands.Misc;
+using ModsDude.Client.Cli.Commands.Mods;
 using ModsDude.Client.Cli.Commands.Profiles;
 using ModsDude.Client.Cli.Commands.Repos;
 using ModsDude.Client.Cli.Commands.Shared.ArgumentCollectors;
@@ -41,12 +42,12 @@ builder.ConfigureServices(static (ctx, services) =>
 
 
 var registrar = new TypeRegistrar(builder);
-var app = new CommandApp<MainMenuCommand>(registrar);
+var app = new CommandApp<ModListEditorCommand>(registrar);
 
 
 app.Configure(config =>
 {
-    //config.PropagateExceptions();
+    config.PropagateExceptions();
 
     config.AddCommand<OverviewCommand>("overview");
     config.AddCommand<ReloginCommand>("re-login").WithAlias("logout");

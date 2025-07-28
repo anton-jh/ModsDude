@@ -7,9 +7,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddModsDudeClient(this IServiceCollection services)
     {
         services.AddHttpClient<IReposClient, ReposClient>();
-        services.AddHttpClient<IProfilesClient, ProfilesClient>();
         services.AddHttpClient<IUsersClient, UsersClient>();
         services.AddHttpClient<IMembersClient, MembersClient>();
+        services.AddHttpClient<IProfilesClient, ProfilesClient>();
+        services.AddHttpClient<IModDependenciesClient, ModDependenciesClient>();
 
         return services;
     }
