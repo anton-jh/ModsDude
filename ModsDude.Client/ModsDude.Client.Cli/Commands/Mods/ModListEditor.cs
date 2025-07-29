@@ -2,6 +2,7 @@
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Diagnostics.CodeAnalysis;
 
 namespace ModsDude.Client.Cli.Commands.Mods;
@@ -82,6 +83,38 @@ public class ModListEditor
                 _activePanel.SetFocus();
                 break;
 
+            case ConsoleKey.Enter:
+                if (_availablePanel.HasFocus && _availablePanel.Selection is Mod mod)
+                {
+                    var versionToAdd = mod.Latest;
+
+                    if (mod.Versions.Count() == 1)
+                    {
+                        _availableMods.Remove(mod);
+                    }
+                    if (_activeMods.FirstOrDefault(x => x.Parent == mod) is Mod.Version activeVersion)
+                    {
+                        if (activeVersion != versionToAdd)
+                        {
+                            _activeMods.Remove(activeVersion);
+                            _activeMods.Insert(0, versionToAdd);
+                        }
+                    }
+                    else
+                    {
+                        _activeMods.Insert(0, versionToAdd);
+                    }
+                }
+                else if (_activePanel.HasFocus && _activePanel.Selection is Mod.Version version)
+                {
+                    _activeMods.Remove(version);
+                    if (!_availableMods.Contains(version.Parent))
+                    {
+                        _availableMods.Insert(0, version.Parent);
+                    }
+                }
+                break;
+
             default:
                 GetActivePanel()?.HandleKeyPress(consoleKeyInfo);
                 break;
@@ -101,12 +134,12 @@ public class ModListEditor
 
     private static Markup RenderItem(Mod.Version item, bool isSelected, bool panelHasFocus)
     {
-        return new Markup(item.DisplayName,
+        return Markup.FromInterpolated($"{item.DisplayName} [italic grey]({item.SequenceNumber})[/]",
             (isSelected, panelHasFocus) switch
             {
                 (true, true) => Color.Blue,
                 (true, false) => Color.Grey,
-                _ => Color.Default
+                _ => null
             });
     }
 }
@@ -158,7 +191,8 @@ public abstract class InteractiveLivePanel
 }
 
 
-public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel //, IDisposable for ObservableCollection-events
+public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel, IDisposable
+    where T : class
 {
     private int _selectedIndex = 0;
     private readonly ObservableCollection<T> _items;
@@ -166,12 +200,18 @@ public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel //, IDispos
 
     public delegate IRenderable ItemRenderFunction<TItem>(TItem item, bool isSelected, bool panelHasFocus);
 
+
     public SelectionInteractiveLivePanel(ObservableCollection<T> items, ItemRenderFunction<T> itemRenderFunction)
         : base(Render(items, itemRenderFunction, selectedIndex: 0, panelHasFocus: false))
     {
         _items = items;
         _itemRenderFunction = itemRenderFunction;
+
+        _items.CollectionChanged += OnListChanged;
     }
+
+
+    public T? Selection => _items.Count > 0 ? _items[_selectedIndex] : null;
 
 
     public override void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
@@ -193,6 +233,12 @@ public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel //, IDispos
     private void Update()
     {
         Update(Render(_items, _itemRenderFunction, _selectedIndex, HasFocus));
+    }
+
+    private void OnListChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        _selectedIndex = Math.Max(0, Math.Min(_items.Count - 1, _selectedIndex));
+        Update();
     }
 
 
@@ -245,6 +291,10 @@ public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel //, IDispos
     {
         Update(Render(_items, _itemRenderFunction, _selectedIndex, HasFocus));
     }
-}
 
-// todo: handle empty lists
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        _items.CollectionChanged -= OnListChanged;
+    }
+}

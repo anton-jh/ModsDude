@@ -28,7 +28,7 @@ public static class ModFakers
         .RuleFor(m => m.Updated, (f, m) => f.Date.Between(m.Created, DateTime.Now))
         .RuleFor(m => m.Versions, (f, m) =>
         {
-            var versionCount = f.Random.Int(1, 2);
+            var versionCount = f.Random.Int(1, 5);
             var baseVersion = BaseModVersionDtoFaker.Generate();
 
             return Enumerable.Range(1, versionCount)

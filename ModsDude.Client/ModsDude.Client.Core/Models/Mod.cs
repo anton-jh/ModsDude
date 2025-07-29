@@ -27,7 +27,7 @@ public class Mod
 
     public string Id { get; }
     public Version Latest { get; }
-    public IEnumerable<Version> AllVersions => _olderVersions.Prepend(Latest);
+    public IEnumerable<Version> Versions => _olderVersions.Prepend(Latest);
     public string DisplayName => Latest.DisplayName;
 
 
