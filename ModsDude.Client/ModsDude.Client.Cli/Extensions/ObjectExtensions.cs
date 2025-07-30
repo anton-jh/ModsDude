@@ -5,4 +5,9 @@ internal static class ObjectExtensions
     {
         return condition ? obj : default;
     }
+
+    public static TOut Apply<TIn, TOut>(this TIn obj, Func<TIn, TOut> function)
+    {
+        return function(obj);
+    }
 }

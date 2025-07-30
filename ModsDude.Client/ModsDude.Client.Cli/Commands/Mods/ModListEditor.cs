@@ -1,19 +1,20 @@
-﻿using ModsDude.Client.Core.Models;
+﻿using ModsDude.Client.Cli.Extensions;
+using ModsDude.Client.Core.Models;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Diagnostics.CodeAnalysis;
 
 namespace ModsDude.Client.Cli.Commands.Mods;
 
 public class ModListEditor
 {
     private readonly IAnsiConsole _ansiConsole;
+    private readonly HashSet<Mod.Version> _originalActive;
     private readonly ObservableCollection<Mod> _availableMods;
     private readonly ObservableCollection<Mod.Version> _activeMods;
-    private readonly SelectionInteractiveLivePanel<Mod> _availablePanel;
-    private readonly SelectionInteractiveLivePanel<Mod.Version> _activePanel;
+    private readonly SelectableInteractiveLivePanel<Mod> _availablePanel;
+    private readonly SelectableInteractiveLivePanel<Mod.Version> _activePanel;
 
 
     public ModListEditor(
@@ -23,17 +24,27 @@ public class ModListEditor
     {
         _ansiConsole = ansiConsole;
 
-        _availableMods = new(available);
-        _activeMods = new(active);
+        _originalActive = new(active);
 
-        _availablePanel = new SelectionInteractiveLivePanel<Mod>(_availableMods, RenderItem);
-        _activePanel = new SelectionInteractiveLivePanel<Mod.Version>(_activeMods, RenderItem);
+        _activeMods = active
+            .Distinct()
+            .OrderBy(x => x.DisplayName)
+            .Apply(x => new ObservableCollection<Mod.Version>(x));
+
+        _availableMods = available
+            .Distinct()
+            .Where(m => !_activeMods.Any(v => v.Parent == m))
+            .OrderBy(x => x.DisplayName)
+            .Apply(x => new ObservableCollection<Mod>(x));
+
+        _availablePanel = new SelectableInteractiveLivePanel<Mod>(_availableMods, RenderItem);
+        _activePanel = new SelectableInteractiveLivePanel<Mod.Version>(_activeMods, RenderItem);
 
         _availablePanel.SetFocus();
     }
 
 
-    public void Run()
+    public void Start()
     {
         var layout = new Layout()
             .SplitColumns(_availablePanel.Layout, _activePanel.Layout);
@@ -86,33 +97,20 @@ public class ModListEditor
             case ConsoleKey.Enter:
                 if (_availablePanel.HasFocus && _availablePanel.Selection is Mod mod)
                 {
-                    var versionToAdd = mod.Latest;
-
-                    if (mod.Versions.Count() == 1)
-                    {
-                        _availableMods.Remove(mod);
-                    }
-                    if (_activeMods.FirstOrDefault(x => x.Parent == mod) is Mod.Version activeVersion)
-                    {
-                        if (activeVersion != versionToAdd)
-                        {
-                            _activeMods.Remove(activeVersion);
-                            _activeMods.Insert(0, versionToAdd);
-                        }
-                    }
-                    else
-                    {
-                        _activeMods.Insert(0, versionToAdd);
-                    }
+                    Activate(mod.Latest);
                 }
                 else if (_activePanel.HasFocus && _activePanel.Selection is Mod.Version version)
                 {
-                    _activeMods.Remove(version);
-                    if (!_availableMods.Contains(version.Parent))
-                    {
-                        _availableMods.Insert(0, version.Parent);
-                    }
+                    Deactivate(version);
                 }
+                break;
+
+            case ConsoleKey.U when _activePanel.HasFocus:
+                IncreaseVersionOfSelectedActive();
+                break;
+
+            case ConsoleKey.D when _activePanel.HasFocus:
+                DecreaseVersionOfSelectedActive();
                 break;
 
             default:
@@ -121,26 +119,135 @@ public class ModListEditor
         }
     }
 
-    private static Markup RenderItem(Mod item, bool isSelected, bool panelHasFocus)
+    private void Activate(Mod.Version version)
     {
-        return new Markup(item.DisplayName,
-            (isSelected, panelHasFocus) switch
-            {
-                (true, true) => Color.Blue,
-                (true, false) => Color.Grey,
-                _ => Color.Default
-            });
+        _availableMods.Remove(version.Parent);
+
+        var isUndo = _originalActive.Contains(version);
+        if (isUndo)
+        {
+            _activeMods.InsertSorted(version, x => x.DisplayName);
+        }
+        else
+        {
+            _activeMods.Insert(0, version);
+        }
     }
 
-    private static Markup RenderItem(Mod.Version item, bool isSelected, bool panelHasFocus)
+    private void Deactivate(Mod.Version version)
     {
-        return Markup.FromInterpolated($"{item.DisplayName} [italic grey]({item.SequenceNumber})[/]",
-            (isSelected, panelHasFocus) switch
+        _activeMods.Remove(version);
+
+        var isUndo = !_originalActive.Contains(version);
+        if (isUndo)
+        {
+            _availableMods.InsertSorted(version.Parent, x => x.DisplayName);
+        }
+        else
+        {
+            _availableMods.Insert(0, version.Parent);
+        }
+    }
+
+    private void IncreaseVersionOfSelectedActive()
+    {
+        var version = _activePanel.Selection;
+        if (version is null)
+        {
+            return;
+        }
+
+        var nextVersion = version.Parent.Versions
+            .Where(x => x.SequenceNumber > version.SequenceNumber)
+            .MinBy(x => x.SequenceNumber);
+        if (nextVersion is null)
+        {
+            return;
+        }
+
+        _activeMods.Remove(version);
+        if (_originalActive.Contains(nextVersion))
+        {
+            _activeMods.InsertSorted(nextVersion, x => x.DisplayName);
+        }
+        else
+        {
+            _activeMods.Insert(0, nextVersion);
+        }
+        _activePanel.SelectedIndex = _activeMods.IndexOf(nextVersion);
+    }
+
+    private void DecreaseVersionOfSelectedActive()
+    {
+        var version = _activePanel.Selection;
+        if (version is null)
+        {
+            return;
+        }
+
+        var prevVersion = version.Parent.Versions
+            .Where(x => x.SequenceNumber < version.SequenceNumber)
+            .MaxBy(x => x.SequenceNumber);
+        if (prevVersion is null)
+        {
+            return;
+        }
+
+        _activeMods.Remove(version);
+        if (_originalActive.Contains(prevVersion))
+        {
+            _activeMods.InsertSorted(prevVersion, x => x.DisplayName);
+        }
+        else
+        {
+            _activeMods.Insert(0, prevVersion);
+        }
+        _activePanel.SelectedIndex = _activeMods.IndexOf(prevVersion);
+    }
+
+
+    private Markup RenderItem(Mod item, bool isSelected, bool panelHasFocus)
+    {
+        var foreground = (isSelected, panelHasFocus) switch
+        {
+            (true, true) => Color.Blue,
+            (true, false) => Color.Grey,
+            _ => Color.Default
+        };
+        string changed = "";
+        if (_originalActive.Any(x => x.Parent == item))
+        {
+            changed = "[grey italic](-)[/] ";
+        }
+
+        return new Markup($"{changed}{item.DisplayName.EscapeMarkup()}",
+            new Style(foreground: foreground));
+    }
+
+    private Markup RenderItem(Mod.Version item, bool isSelected, bool panelHasFocus)
+    {
+        var foreground = (isSelected, panelHasFocus) switch
+        {
+            (true, true) => Color.Blue,
+            (true, false) => Color.Grey,
+            _ => Color.Default
+        };
+        string changed = "";
+        if (!_originalActive.Contains(item))
+        {
+            var sign = _originalActive.FirstOrDefault(x => x.Parent == item.Parent) switch
             {
-                (true, true) => Color.Blue,
-                (true, false) => Color.Grey,
-                _ => null
-            });
+                Mod.Version originalVersion when item.SequenceNumber > originalVersion.SequenceNumber
+                    => ">",
+                Mod.Version originalVersion when item.SequenceNumber < originalVersion.SequenceNumber
+                    => "<",
+                _ => "+"
+            };
+            changed = $"[grey italic]({sign})[/] ";
+        }
+
+        return new Markup($"{changed}{item.DisplayName.EscapeMarkup()}[italic grey]({item.SequenceNumber})[/]",
+            new Style(foreground: foreground));
     }
 }
 
@@ -191,7 +298,7 @@ public abstract class InteractiveLivePanel
 }
 
 
-public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel, IDisposable
+public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel, IDisposable
     where T : class
 {
     private int _selectedIndex = 0;
@@ -201,7 +308,7 @@ public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel, IDisposabl
     public delegate IRenderable ItemRenderFunction<TItem>(TItem item, bool isSelected, bool panelHasFocus);
 
 
-    public SelectionInteractiveLivePanel(ObservableCollection<T> items, ItemRenderFunction<T> itemRenderFunction)
+    public SelectableInteractiveLivePanel(ObservableCollection<T> items, ItemRenderFunction<T> itemRenderFunction)
         : base(Render(items, itemRenderFunction, selectedIndex: 0, panelHasFocus: false))
     {
         _items = items;
@@ -212,6 +319,15 @@ public class SelectionInteractiveLivePanel<T> : InteractiveLivePanel, IDisposabl
 
 
     public T? Selection => _items.Count > 0 ? _items[_selectedIndex] : null;
+    public int SelectedIndex
+    {
+        get => _selectedIndex;
+        set
+        {
+            _selectedIndex = Math.Max(0, Math.Min(value, _items.Count - 1));
+            Update();
+        }
+    }
 
 
     public override void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)

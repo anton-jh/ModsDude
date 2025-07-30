@@ -30,13 +30,14 @@ internal class ModListEditorCommand(
         //    return;
         //}
 
+        var mods = ModFakers.ModDtoFaker.Generate(20).Select(x => new Mod(x)).ToList();
 
         var editor = new ModListEditor(
-            available: ModFakers.ModDtoFaker.Generate(3).Select(x => new Mod(x)),
-            active: ModFakers.ModDtoFaker.Generate(50).Select(x => new Mod(x).Latest),
-            ansiConsole: _ansiConsole);
+            mods.Take(10),
+            mods.Skip(10).Select(x => x.Latest),
+            _ansiConsole);
 
-        editor.Run();
+        editor.Start();
     }
 
 
