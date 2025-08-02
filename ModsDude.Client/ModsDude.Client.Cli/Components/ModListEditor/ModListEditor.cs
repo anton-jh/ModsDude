@@ -1,20 +1,19 @@
 ﻿using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.Models;
 using Spectre.Console;
-using Spectre.Console.Rendering;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
+using System.Linq;
 
-namespace ModsDude.Client.Cli.Commands.Mods;
+namespace ModsDude.Client.Cli.Components.ModListEditor;
 
 public class ModListEditor
 {
     private readonly IAnsiConsole _ansiConsole;
     private readonly HashSet<Mod.Version> _originalActive;
-    private readonly ObservableCollection<Mod> _availableMods;
-    private readonly ObservableCollection<Mod.Version> _activeMods;
-    private readonly SelectableInteractiveLivePanel<Mod> _availablePanel;
-    private readonly SelectableInteractiveLivePanel<Mod.Version> _activePanel;
+    private readonly ObservableCollection<ModListItemViewModel<Mod>> _availableMods;
+    private readonly ObservableCollection<ModListItemViewModel<Mod.Version>> _activeMods;
+    private readonly SelectableInteractiveLivePanel<ModListItemViewModel<Mod>> _availablePanel;
+    private readonly SelectableInteractiveLivePanel<ModListItemViewModel<Mod.Version>> _activePanel;
 
 
     public ModListEditor(
@@ -29,16 +28,18 @@ public class ModListEditor
         _activeMods = active
             .Distinct()
             .OrderBy(x => x.DisplayName)
-            .Apply(x => new ObservableCollection<Mod.Version>(x));
+            .Select(x => new ModListItemViewModel<Mod.Version>(x, ModListItemState.Unchanged))
+            .Apply(x => new ObservableCollection<ModListItemViewModel<Mod.Version>>(x));
 
         _availableMods = available
             .Distinct()
-            .Where(m => !_activeMods.Any(v => v.Parent == m))
+            .Where(m => !_activeMods.Any(v => v.Item.Parent == m))
             .OrderBy(x => x.DisplayName)
-            .Apply(x => new ObservableCollection<Mod>(x));
+            .Select(x => new ModListItemViewModel<Mod>(x, ModListItemState.Unchanged))
+            .Apply(x => new ObservableCollection<ModListItemViewModel<Mod>>(x));
 
-        _availablePanel = new SelectableInteractiveLivePanel<Mod>(_availableMods, RenderItem);
-        _activePanel = new SelectableInteractiveLivePanel<Mod.Version>(_activeMods, RenderItem);
+        _availablePanel = new(_availableMods);
+        _activePanel = new(_activeMods);
 
         _availablePanel.SetFocus();
     }
@@ -248,169 +249,5 @@ public class ModListEditor
 
         return new Markup($"{changed}{item.DisplayName.EscapeMarkup()}[italic grey]({item.SequenceNumber})[/]",
             new Style(foreground: foreground));
-    }
-}
-
-
-public abstract class InteractiveLivePanel
-{
-    private IRenderable _renderable;
-    private Panel _panel;
-
-
-    protected InteractiveLivePanel(IRenderable renderable)
-    {
-        _renderable = new Markup("");
-        _panel = new(renderable);
-        Layout = new(_panel);
-        Update();
-    }
-
-
-    public bool HasFocus { get; private set; }
-    public Layout Layout { get; protected set; }
-
-
-    public void SetFocus(bool focus = true)
-    {
-        HasFocus = focus;
-        Update();
-        OnFocusChanged();
-    }
-
-
-    protected void Update(IRenderable? renderable = null)
-    {
-        if (renderable is not null && renderable != _renderable)
-        {
-            _renderable = renderable;
-            _panel = new(_renderable);
-            Layout.Update(_panel);
-        }
-
-        _panel.BorderColor(HasFocus
-            ? Color.Blue
-            : Color.Grey);
-    }
-
-    public abstract void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo);
-    protected abstract void OnFocusChanged();
-}
-
-
-public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel, IDisposable
-    where T : class
-{
-    private int _selectedIndex = 0;
-    private readonly ObservableCollection<T> _items;
-    private readonly ItemRenderFunction<T> _itemRenderFunction;
-
-    public delegate IRenderable ItemRenderFunction<TItem>(TItem item, bool isSelected, bool panelHasFocus);
-
-
-    public SelectableInteractiveLivePanel(ObservableCollection<T> items, ItemRenderFunction<T> itemRenderFunction)
-        : base(Render(items, itemRenderFunction, selectedIndex: 0, panelHasFocus: false))
-    {
-        _items = items;
-        _itemRenderFunction = itemRenderFunction;
-
-        _items.CollectionChanged += OnListChanged;
-    }
-
-
-    public T? Selection => _items.Count > 0 ? _items[_selectedIndex] : null;
-    public int SelectedIndex
-    {
-        get => _selectedIndex;
-        set
-        {
-            _selectedIndex = Math.Max(0, Math.Min(value, _items.Count - 1));
-            Update();
-        }
-    }
-
-
-    public override void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
-    {
-        switch (consoleKeyInfo.Key)
-        {
-            case ConsoleKey.UpArrow when _selectedIndex > 0:
-                _selectedIndex--;
-                Update();
-                break;
-            case ConsoleKey.DownArrow when _selectedIndex < _items.Count - 1:
-                _selectedIndex++;
-                Update();
-                break;
-        }
-    }
-
-
-    private void Update()
-    {
-        Update(Render(_items, _itemRenderFunction, _selectedIndex, HasFocus));
-    }
-
-    private void OnListChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        _selectedIndex = Math.Max(0, Math.Min(_items.Count - 1, _selectedIndex));
-        Update();
-    }
-
-
-    private static Rows Render(ObservableCollection<T> items, ItemRenderFunction<T> itemRenderFunction, int selectedIndex, bool panelHasFocus)
-    {
-        var renderedItems = new List<IRenderable>(9);
-
-        int totalVisible = 21;
-        int half = totalVisible / 2;
-
-        if (items.Count > 0)
-        {
-            int start = selectedIndex - half;
-            int end = selectedIndex + half + 1;
-
-            if (start < 0)
-            {
-                end += -start;
-                start = 0;
-            }
-
-            if (end > items.Count)
-            {
-                int overshoot = end - items.Count;
-                start -= overshoot;
-                end = items.Count;
-                if (start < 0) start = 0;
-            }
-
-            for (int i = start; i < end; i++)
-            {
-                renderedItems.Add(itemRenderFunction(items[i], selectedIndex == i, panelHasFocus));
-            }
-        }
-
-        while (renderedItems.Count < totalVisible)
-        {
-            renderedItems.Add(new Text(" "));
-        }
-
-        var rows = new Rows(renderedItems);
-        rows.Expand();
-
-        return rows;
-    }
-
-
-
-    protected override void OnFocusChanged()
-    {
-        Update(Render(_items, _itemRenderFunction, _selectedIndex, HasFocus));
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        _items.CollectionChanged -= OnListChanged;
     }
 }

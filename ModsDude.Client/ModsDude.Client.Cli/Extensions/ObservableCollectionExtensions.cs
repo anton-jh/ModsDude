@@ -25,3 +25,6 @@ public static class ObservableCollectionExtensions
         collection.Add(item);
     }
 }
+
+
+// todo move to ModListEditor, place sorted item AFTER all changed items.
