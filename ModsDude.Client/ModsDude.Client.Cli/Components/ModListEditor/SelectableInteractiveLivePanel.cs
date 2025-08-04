@@ -1,27 +1,25 @@
 ﻿using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 
-public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel, IDisposable
+public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel
     where T : class, IItemViewModel
 {
+    private readonly IEnumerable<T> _itemsSource;
+    private List<T> _items;
     private int _selectedIndex = 0;
-    private readonly ObservableCollection<T> _items;
 
 
-    public SelectableInteractiveLivePanel(ObservableCollection<T> items)
-        : base(Render(items, selectedIndex: 0, panelHasFocus: false))
+    public SelectableInteractiveLivePanel(IEnumerable<T> itemsSource)
+        : base(Render(itemsSource, selectedIndex: 0, panelHasFocus: false))
     {
-        _items = items;
-
-        _items.CollectionChanged += OnListChanged;
+        _itemsSource = itemsSource;
+        _items = _itemsSource.ToList();
     }
 
 
-    public T? Selection => _items.Count > 0 ? _items[_selectedIndex] : null;
+    public T? Selection => _items.Count != 0 ? _items[_selectedIndex] : null;
     public int SelectedIndex
     {
         get => _selectedIndex;
@@ -48,22 +46,19 @@ public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel, IDisposab
         }
     }
 
-
-    private void Update()
+    public void Update()
     {
+        _items = _itemsSource.ToList();
+        _selectedIndex = Math.Max(0, Math.Min(_items.Count - 1, _selectedIndex));
+
         Update(Render(_items, _selectedIndex, HasFocus));
     }
 
-    private void OnListChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        _selectedIndex = Math.Max(0, Math.Min(_items.Count - 1, _selectedIndex));
-        Update();
-    }
 
-
-    private static Rows Render(ObservableCollection<T> items, int selectedIndex, bool panelHasFocus)
+    private static Rows Render(IEnumerable<T> itemSource, int selectedIndex, bool panelHasFocus)
     {
-        var renderedItems = new List<IRenderable>(9);
+        var items = itemSource as List<T> ?? itemSource.ToList();
+        var renderedItems = new List<IRenderable>();
 
         int totalVisible = 21;
         int half = totalVisible / 2;
@@ -108,12 +103,6 @@ public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel, IDisposab
 
     protected override void OnFocusChanged()
     {
-        Update(Render(_items, _selectedIndex, HasFocus));
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        _items.CollectionChanged -= OnListChanged;
+        Update();
     }
 }

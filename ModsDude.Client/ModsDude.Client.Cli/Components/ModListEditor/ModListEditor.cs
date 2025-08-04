@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Cli.Extensions;
+﻿using Microsoft.Identity.Client;
+using ModsDude.Client.Cli.Extensions;
 using ModsDude.Client.Core.Models;
 using Spectre.Console;
 using System.Collections.ObjectModel;
@@ -9,46 +10,143 @@ namespace ModsDude.Client.Cli.Components.ModListEditor;
 public class ModListEditor
 {
     private readonly IAnsiConsole _ansiConsole;
-    private readonly HashSet<Mod.Version> _originalActive;
-    private readonly ObservableCollection<ModListItemViewModel<Mod>> _availableMods;
-    private readonly ObservableCollection<ModListItemViewModel<Mod.Version>> _activeMods;
-    private readonly SelectableInteractiveLivePanel<ModListItemViewModel<Mod>> _availablePanel;
-    private readonly SelectableInteractiveLivePanel<ModListItemViewModel<Mod.Version>> _activePanel;
+
+    private readonly HashSet<ModState> _mods;
+
+    private readonly IEnumerable<ModViewModel> _excludedView;
+    private readonly IEnumerable<ModViewModel> _includedView;
+    private readonly SelectableInteractiveLivePanel<ModViewModel> _leftPanel;
+    private readonly SelectableInteractiveLivePanel<ModViewModel> _rightPanel;
+
+    private RightFilter _rightFilter = RightFilter.All;
+    private LeftFilter _leftFilter = LeftFilter.All;
+
+
+    public enum Change
+    {
+        Added,
+        Removed,
+        ChangedVersion
+    }
+
+    public enum RightFilter
+    {
+        All,
+        Included,
+        Added,
+        ChangedVersion
+    }
+
+    public enum LeftFilter
+    {
+        All,
+        Available,
+        UpdateAvailable,
+        Removed
+    }
+
 
 
     public ModListEditor(
         IEnumerable<Mod> available,
-        IEnumerable<Mod.Version> active,
+        IEnumerable<Mod.Version> included,
         IAnsiConsole ansiConsole)
     {
         _ansiConsole = ansiConsole;
 
-        _originalActive = new(active);
+        var availableStates = available
+            .Except(included.Select(x => x.Parent))
+            .Select(x => new ModState.Available(x));
 
-        _activeMods = active
-            .Distinct()
-            .OrderBy(x => x.DisplayName)
-            .Select(x => new ModListItemViewModel<Mod.Version>(x, ModListItemState.Unchanged))
-            .Apply(x => new ObservableCollection<ModListItemViewModel<Mod.Version>>(x));
+        var includedStates = included
+            .Select(x => new ModState.Included(x));
 
-        _availableMods = available
-            .Distinct()
-            .Where(m => !_activeMods.Any(v => v.Item.Parent == m))
-            .OrderBy(x => x.DisplayName)
-            .Select(x => new ModListItemViewModel<Mod>(x, ModListItemState.Unchanged))
-            .Apply(x => new ObservableCollection<ModListItemViewModel<Mod>>(x));
+        _mods = new(Enumerable.Concat<ModState>(availableStates, includedStates));
 
-        _availablePanel = new(_availableMods);
-        _activePanel = new(_activeMods);
+        _includedView = ProjectRight();
+        _excludedView = ProjectLeft();
 
-        _availablePanel.SetFocus();
+        _leftPanel = new(_excludedView);
+        _rightPanel = new(_includedView);
+
+        _leftPanel.SetFocus();
     }
 
+
+    private IEnumerable<ModViewModel> ProjectRight()
+    {
+        var included = _mods
+            .OfType<ModState.Included>()
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        var added = _mods
+            .OfType<ModState.Added>()
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        var changedVersion = _mods
+            .OfType<ModState.ChangedVersion>()
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        IEnumerable<ModViewModel> items = _rightFilter switch
+        {
+            RightFilter.Included => included,
+
+            RightFilter.Added => added,
+
+            RightFilter.ChangedVersion => changedVersion,
+
+            _ => [..added, ..changedVersion, ..included]
+        };
+
+        foreach (var item in items)
+        {
+            yield return item;
+        }
+    }
+
+    private IEnumerable<ModViewModel> ProjectLeft()
+    {
+        var available = _mods
+            .OfType<ModState.Available>()
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        var removed = _mods
+            .OfType<ModState.Removed>()
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        var updates = _mods
+            .OfType<ModState.Included>()
+            .Where(x => x.UpdateAvailable)
+            .Select(x => new ModViewModel(x))
+            .OrderBy(x => x.Name);
+
+        IEnumerable<ModViewModel> items = _leftFilter switch
+        {
+            LeftFilter.Available => available,
+
+            LeftFilter.Removed => removed,
+
+            LeftFilter.UpdateAvailable => updates,
+
+            _ => [.. removed, .. updates, .. available]
+        };
+
+        foreach (var item in items)
+        {
+            yield return item;
+        }
+    }
+    
 
     public void Start()
     {
         var layout = new Layout()
-            .SplitColumns(_availablePanel.Layout, _activePanel.Layout);
+            .SplitColumns(_leftPanel.Layout, _rightPanel.Layout);
 
         _ansiConsole.Clear();
 
@@ -56,6 +154,8 @@ public class ModListEditor
         {
             while (true)
             {
+                _rightPanel.Update();
+                _leftPanel.Update();
                 ctx.Refresh();
                 var key = Console.ReadKey(true);
                 HandleKeyPress(key);
@@ -68,18 +168,8 @@ public class ModListEditor
     {
         void DeFocusAll()
         {
-            _availablePanel.SetFocus(false);
-            _activePanel.SetFocus(false);
-        }
-
-        InteractiveLivePanel? GetActivePanel()
-        {
-            return new InteractiveLivePanel[]
-                {
-                    _availablePanel,
-                    _activePanel
-                }
-                .SingleOrDefault(x => x.HasFocus);
+            _leftPanel.SetFocus(false);
+            _rightPanel.SetFocus(false);
         }
 
 
@@ -87,167 +177,58 @@ public class ModListEditor
         {
             case ConsoleKey.LeftArrow:
                 DeFocusAll();
-                _availablePanel.SetFocus();
+                _leftPanel.SetFocus();
                 break;
 
             case ConsoleKey.RightArrow:
                 DeFocusAll();
-                _activePanel.SetFocus();
+                _rightPanel.SetFocus();
                 break;
 
             case ConsoleKey.Enter:
-                if (_availablePanel.HasFocus && _availablePanel.Selection is Mod mod)
-                {
-                    Activate(mod.Latest);
-                }
-                else if (_activePanel.HasFocus && _activePanel.Selection is Mod.Version version)
-                {
-                    Deactivate(version);
-                }
+                SelectMod(x => x.HandleEnter());
                 break;
 
-            case ConsoleKey.U when _activePanel.HasFocus:
-                IncreaseVersionOfSelectedActive();
+            case ConsoleKey.Backspace:
+                SelectMod(x => x.HandleBackspace());
                 break;
 
-            case ConsoleKey.D when _activePanel.HasFocus:
-                DecreaseVersionOfSelectedActive();
+            case ConsoleKey.Spacebar:
+                SelectMod(x => x.HandleSpacebar());
                 break;
-
+                
             default:
                 GetActivePanel()?.HandleKeyPress(consoleKeyInfo);
                 break;
         }
     }
 
-    private void Activate(Mod.Version version)
+    private SelectableInteractiveLivePanel<ModViewModel>? GetActivePanel()
     {
-        _availableMods.Remove(version.Parent);
-
-        var isUndo = _originalActive.Contains(version);
-        if (isUndo)
-        {
-            _activeMods.InsertSorted(version, x => x.DisplayName);
-        }
-        else
-        {
-            _activeMods.Insert(0, version);
-        }
-    }
-
-    private void Deactivate(Mod.Version version)
-    {
-        _activeMods.Remove(version);
-
-        var isUndo = !_originalActive.Contains(version);
-        if (isUndo)
-        {
-            _availableMods.InsertSorted(version.Parent, x => x.DisplayName);
-        }
-        else
-        {
-            _availableMods.Insert(0, version.Parent);
-        }
-    }
-
-    private void IncreaseVersionOfSelectedActive()
-    {
-        var version = _activePanel.Selection;
-        if (version is null)
-        {
-            return;
-        }
-
-        var nextVersion = version.Parent.Versions
-            .Where(x => x.SequenceNumber > version.SequenceNumber)
-            .MinBy(x => x.SequenceNumber);
-        if (nextVersion is null)
-        {
-            return;
-        }
-
-        _activeMods.Remove(version);
-        if (_originalActive.Contains(nextVersion))
-        {
-            _activeMods.InsertSorted(nextVersion, x => x.DisplayName);
-        }
-        else
-        {
-            _activeMods.Insert(0, nextVersion);
-        }
-        _activePanel.SelectedIndex = _activeMods.IndexOf(nextVersion);
-    }
-
-    private void DecreaseVersionOfSelectedActive()
-    {
-        var version = _activePanel.Selection;
-        if (version is null)
-        {
-            return;
-        }
-
-        var prevVersion = version.Parent.Versions
-            .Where(x => x.SequenceNumber < version.SequenceNumber)
-            .MaxBy(x => x.SequenceNumber);
-        if (prevVersion is null)
-        {
-            return;
-        }
-
-        _activeMods.Remove(version);
-        if (_originalActive.Contains(prevVersion))
-        {
-            _activeMods.InsertSorted(prevVersion, x => x.DisplayName);
-        }
-        else
-        {
-            _activeMods.Insert(0, prevVersion);
-        }
-        _activePanel.SelectedIndex = _activeMods.IndexOf(prevVersion);
-    }
-
-
-    private Markup RenderItem(Mod item, bool isSelected, bool panelHasFocus)
-    {
-        var foreground = (isSelected, panelHasFocus) switch
-        {
-            (true, true) => Color.Blue,
-            (true, false) => Color.Grey,
-            _ => Color.Default
-        };
-        string changed = "";
-        if (_originalActive.Any(x => x.Parent == item))
-        {
-            changed = "[grey italic](-)[/] ";
-        }
-
-        return new Markup($"{changed}{item.DisplayName.EscapeMarkup()}",
-            new Style(foreground: foreground));
-    }
-
-    private Markup RenderItem(Mod.Version item, bool isSelected, bool panelHasFocus)
-    {
-        var foreground = (isSelected, panelHasFocus) switch
-        {
-            (true, true) => Color.Blue,
-            (true, false) => Color.Grey,
-            _ => Color.Default
-        };
-        string changed = "";
-        if (!_originalActive.Contains(item))
-        {
-            var sign = _originalActive.FirstOrDefault(x => x.Parent == item.Parent) switch
+        return new SelectableInteractiveLivePanel<ModViewModel>[]
             {
-                Mod.Version originalVersion when item.SequenceNumber > originalVersion.SequenceNumber
-                    => ">",
-                Mod.Version originalVersion when item.SequenceNumber < originalVersion.SequenceNumber
-                    => "<",
-                _ => "+"
-            };
-            changed = $"[grey italic]({sign})[/] ";
+                _leftPanel,
+                _rightPanel
+            }
+            .SingleOrDefault(x => x.HasFocus);
+    }
+
+    private void SelectMod(Func<ModViewModel, ModState> function)
+    {
+        var selection = GetActivePanel()?.Selection;
+
+        if (selection is null)
+        {
+            return;
         }
 
-        return new Markup($"{changed}{item.DisplayName.EscapeMarkup()}[italic grey]({item.SequenceNumber})[/]",
-            new Style(foreground: foreground));
+        var oldState = selection.State;
+        var newState = function(selection);
+
+        if (newState != oldState)
+        {
+            _mods.Remove(oldState);
+            _mods.Add(newState);
+        }
     }
 }

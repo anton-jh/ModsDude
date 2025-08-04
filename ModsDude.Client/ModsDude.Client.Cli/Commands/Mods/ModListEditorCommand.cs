@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using System;
 
 namespace ModsDude.Client.Cli.Commands.Mods;
 internal class ModListEditorCommand(
@@ -35,7 +36,7 @@ internal class ModListEditorCommand(
 
         var editor = new ModListEditor(
             mods.Take(10),
-            mods.Skip(10).Select(x => x.Latest),
+            mods.Skip(10).Select(x => PickRandom(x.Versions.ToList())),
             _ansiConsole);
 
         editor.Start();
@@ -49,5 +50,13 @@ internal class ModListEditorCommand(
 
         [CommandOption("--profile-id")]
         public Guid ProfileId { get; init; }
+    }
+
+
+    private static readonly Random _random = new();
+    public static T PickRandom<T>(List<T> list)
+    {
+        int index = _random.Next(list.Count);
+        return list[index];
     }
 }
