@@ -7,7 +7,7 @@ public static class ModFakers
     static ModFakers()
     {
         // Set deterministic output
-        Randomizer.Seed = new Random(1234);
+        Randomizer.Seed = new Random();
     }
 
     public static Faker<ModAttributeDto> ModAttributeDtoFaker => new Faker<ModAttributeDto>()

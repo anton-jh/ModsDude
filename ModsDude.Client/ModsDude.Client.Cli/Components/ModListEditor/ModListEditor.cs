@@ -77,17 +77,17 @@ public class ModListEditor
     {
         var included = _mods
             .OfType<ModState.Included>()
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
             .OrderBy(x => x.Name);
 
         var added = _mods
             .OfType<ModState.Added>()
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
             .OrderBy(x => x.Name);
 
         var changedVersion = _mods
             .OfType<ModState.ChangedVersion>()
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
             .OrderBy(x => x.Name);
 
         IEnumerable<ModViewModel> items = _rightFilter switch
@@ -111,18 +111,18 @@ public class ModListEditor
     {
         var available = _mods
             .OfType<ModState.Available>()
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
             .OrderBy(x => x.Name);
 
         var removed = _mods
             .OfType<ModState.Removed>()
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
             .OrderBy(x => x.Name);
 
         var updates = _mods
             .OfType<ModState.Included>()
             .Where(x => x.UpdateAvailable)
-            .Select(x => new ModViewModel(x))
+            .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
             .OrderBy(x => x.Name);
 
         IEnumerable<ModViewModel> items = _leftFilter switch

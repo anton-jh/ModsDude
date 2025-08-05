@@ -1,20 +1,25 @@
 ﻿using Spectre.Console;
 using Spectre.Console.Rendering;
+using System.Diagnostics;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 internal class ModViewModel
     : IItemViewModel
 {
-    public ModViewModel(ModState mod)
+    public ModViewModel(ModState mod, ModViewModelVariant variant)
     {
         State = mod;
+        Variant = variant;
         Name = mod.Mod.DisplayName;
         Version = mod switch
         {
             ModState.Added x => x.Version.SequenceNumber.ToString(),
             ModState.ChangedVersion x => x.To.SequenceNumber.ToString(),
             ModState.Included x when !x.UpdateAvailable => x.Version.SequenceNumber.ToString(),
-            ModState.Included x when x.UpdateAvailable => x.Mod.Latest.SequenceNumber.ToString(),
+            ModState.Included x when x.UpdateAvailable && Variant is ModViewModelVariant.Left
+                => x.Mod.Latest.SequenceNumber.ToString(),
+            ModState.Included x when x.UpdateAvailable && Variant is ModViewModelVariant.Right
+                => x.Version.SequenceNumber.ToString(),
             _ => null
         };
         Prefix = mod switch
@@ -29,6 +34,7 @@ internal class ModViewModel
 
 
     public ModState State { get; }
+    public ModViewModelVariant Variant { get; }
     public string Name { get; }
     public string? Prefix { get; }
     public string? Version { get; }
@@ -83,6 +89,11 @@ internal class ModViewModel
     }
 }
 
+internal enum ModViewModelVariant
+{
+    Left,
+    Right
+}
 
 // now:
 // - IAddable and so on?
