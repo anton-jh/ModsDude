@@ -32,11 +32,11 @@ internal class ModListEditorCommand(
         //    return;
         //}
 
-        var mods = ModFakers.ModDtoFaker.Generate(5000).Select(x => new Mod(x)).ToList();
+        var mods = ModFakers.ModDtoFaker.Generate(500).Select(x => new Mod(x)).ToList();
 
         var editor = new ModListEditor(
-            mods.Take(2500),
-            mods.Skip(2500).Select(x => PickRandom(x.Versions.ToList())),
+            available: mods.Take(100),
+            included: mods.Skip(400).Select(x => PickRandom(x.Versions.ToList())),
             _ansiConsole);
 
         editor.Start();
