@@ -3,7 +3,7 @@ using Spectre.Console.Rendering;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 
-public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel
+public class SelectableInteractiveListPanel<T> : InteractiveLivePanel
     where T : class, IItemViewModel
 {
     private readonly IEnumerable<T> _itemsSource;
@@ -11,7 +11,7 @@ public class SelectableInteractiveLivePanel<T> : InteractiveLivePanel
     private int _selectedIndex = 0;
 
 
-    public SelectableInteractiveLivePanel(IEnumerable<T> itemsSource)
+    public SelectableInteractiveListPanel(IEnumerable<T> itemsSource)
         : base(Render(itemsSource, selectedIndex: 0, panelHasFocus: false))
     {
         _itemsSource = itemsSource;

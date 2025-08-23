@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.73.1" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.73.1" />

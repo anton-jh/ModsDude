@@ -1,9 +1,5 @@
-﻿using Microsoft.Identity.Client;
-using ModsDude.Client.Cli.Extensions;
-using ModsDude.Client.Core.Models;
+﻿using ModsDude.Client.Core.Models;
 using Spectre.Console;
-using System.Collections.ObjectModel;
-using System.Linq;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 
@@ -15,35 +11,13 @@ public class ModListEditor
 
     private readonly IEnumerable<ModViewModel> _excludedView;
     private readonly IEnumerable<ModViewModel> _includedView;
-    private readonly SelectableInteractiveLivePanel<ModViewModel> _leftPanel;
-    private readonly SelectableInteractiveLivePanel<ModViewModel> _rightPanel;
+    private readonly SelectableInteractiveListPanel<ModViewModel> _leftPanel;
+    private readonly SelectableInteractiveListPanel<ModViewModel> _rightPanel;
+    private readonly List<IListFilter<ModState>> _leftFilters;
+    private readonly List<IListFilter<ModState>> _rightFilters;
 
-    private RightFilter _rightFilter = RightFilter.All;
-    private LeftFilter _leftFilter = LeftFilter.All;
-
-
-    public enum Change
-    {
-        Added,
-        Removed,
-        ChangedVersion
-    }
-
-    public enum RightFilter
-    {
-        All,
-        Included,
-        Added,
-        ChangedVersion
-    }
-
-    public enum LeftFilter
-    {
-        All,
-        Available,
-        UpdateAvailable,
-        Removed
-    }
+    private IListFilter<ModState> _selectedLeftFilter;
+    private IListFilter<ModState> _selectedRightFilter;
 
 
 
@@ -61,7 +35,24 @@ public class ModListEditor
         var includedStates = included
             .Select(x => new ModState.Included(x));
 
-        _mods = new(Enumerable.Concat<ModState>(availableStates, includedStates));
+        _mods = Enumerable.Concat<ModState>(availableStates, includedStates).ToHashSet();
+
+        var allFilter = new AllFilter<ModState>("All");
+        _selectedLeftFilter = allFilter;
+        _leftFilters = [
+            allFilter,
+            new TypeOfFilter<ModState, ModState.Available>("Available"),
+            new TypeOfFilter<ModState, ModState.Included>("Updates", x => x.UpdateAvailable),
+            new TypeOfFilter<ModState, ModState.Removed>("Removed")
+        ];
+        _selectedRightFilter = allFilter;
+        _rightFilters = [
+            allFilter,
+            new TypeOfFilter<ModState, ModState.Included>("Existing"),
+            new TypeOfFilter<ModState, ModState.Included>("Updates", x => x.UpdateAvailable),
+            new TypeOfFilter<ModState, ModState.ChangedVersion>("Changed"),
+            new TypeOfFilter<ModState, ModState.Added>("Added"),
+        ];
 
         _includedView = ProjectRight();
         _excludedView = ProjectLeft();
@@ -75,31 +66,9 @@ public class ModListEditor
 
     private IEnumerable<ModViewModel> ProjectRight()
     {
-        var included = _mods
-            .OfType<ModState.Included>()
+        var items = _selectedRightFilter.Apply(_mods)
             .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
             .OrderBy(x => x.Name);
-
-        var added = _mods
-            .OfType<ModState.Added>()
-            .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
-            .OrderBy(x => x.Name);
-
-        var changedVersion = _mods
-            .OfType<ModState.ChangedVersion>()
-            .Select(x => new ModViewModel(x, ModViewModelVariant.Right))
-            .OrderBy(x => x.Name);
-
-        IEnumerable<ModViewModel> items = _rightFilter switch
-        {
-            RightFilter.Included => included,
-
-            RightFilter.Added => added,
-
-            RightFilter.ChangedVersion => changedVersion,
-
-            _ => [..added, ..changedVersion, ..included]
-        };
 
         foreach (var item in items)
         {
@@ -109,32 +78,9 @@ public class ModListEditor
 
     private IEnumerable<ModViewModel> ProjectLeft()
     {
-        var available = _mods
-            .OfType<ModState.Available>()
+        var items = _selectedLeftFilter.Apply(_mods)
             .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
             .OrderBy(x => x.Name);
-
-        var removed = _mods
-            .OfType<ModState.Removed>()
-            .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
-            .OrderBy(x => x.Name);
-
-        var updates = _mods
-            .OfType<ModState.Included>()
-            .Where(x => x.UpdateAvailable)
-            .Select(x => new ModViewModel(x, ModViewModelVariant.Left))
-            .OrderBy(x => x.Name);
-
-        IEnumerable<ModViewModel> items = _leftFilter switch
-        {
-            LeftFilter.Available => available,
-
-            LeftFilter.Removed => removed,
-
-            LeftFilter.UpdateAvailable => updates,
-
-            _ => [.. removed, .. updates, .. available]
-        };
 
         foreach (var item in items)
         {
@@ -145,8 +91,12 @@ public class ModListEditor
 
     public void Start()
     {
+        var leftLayout = new Layout();
+        var leftTitleLayout = new Layout();
+        leftLayout.SplitRows(leftTitleLayout, _leftPanel.Layout);
+
         var layout = new Layout()
-            .SplitColumns(_leftPanel.Layout, _rightPanel.Layout);
+            .SplitColumns(leftLayout, _rightPanel.Layout);
 
         _ansiConsole.Clear();
 
@@ -154,8 +104,9 @@ public class ModListEditor
         {
             while (true)
             {
-                _rightPanel.Update();
+                leftTitleLayout.Update(new Markup($"[italic gray][[TAB]][/] {_selectedLeftFilter.DisplayName.EscapeMarkup()}"));
                 _leftPanel.Update();
+                _rightPanel.Update();
                 ctx.Refresh();
                 var key = Console.ReadKey(true);
                 HandleKeyPress(key);
@@ -166,12 +117,7 @@ public class ModListEditor
 
     private void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
     {
-        void DeFocusAll()
-        {
-            _leftPanel.SetFocus(false);
-            _rightPanel.SetFocus(false);
-        }
-
+        var activePanel = GetActivePanel();
 
         switch (consoleKeyInfo.Key)
         {
@@ -183,6 +129,17 @@ public class ModListEditor
             case ConsoleKey.RightArrow:
                 DeFocusAll();
                 _rightPanel.SetFocus();
+                break;
+
+            case ConsoleKey.Tab:
+                if (activePanel == _leftPanel)
+                {
+                    _selectedLeftFilter = _leftFilters[(_leftFilters.IndexOf(_selectedLeftFilter) + 1) % _leftFilters.Count];
+                }
+                else if (activePanel == _rightPanel)
+                {
+                    _selectedRightFilter = _rightFilters[(_rightFilters.IndexOf(_selectedRightFilter) + 1) % _rightFilters.Count];
+                }
                 break;
 
             case ConsoleKey.Enter:
@@ -198,14 +155,20 @@ public class ModListEditor
                 break;
                 
             default:
-                GetActivePanel()?.HandleKeyPress(consoleKeyInfo);
+                activePanel?.HandleKeyPress(consoleKeyInfo);
                 break;
         }
     }
 
-    private SelectableInteractiveLivePanel<ModViewModel>? GetActivePanel()
+    private void DeFocusAll()
     {
-        return new SelectableInteractiveLivePanel<ModViewModel>[]
+        _leftPanel.SetFocus(false);
+        _rightPanel.SetFocus(false);
+    }
+
+    private SelectableInteractiveListPanel<ModViewModel>? GetActivePanel()
+    {
+        return new SelectableInteractiveListPanel<ModViewModel>[]
             {
                 _leftPanel,
                 _rightPanel
