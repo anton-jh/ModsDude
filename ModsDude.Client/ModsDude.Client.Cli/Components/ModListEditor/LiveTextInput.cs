@@ -1,10 +1,9 @@
 ﻿using Spectre.Console;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
-internal class LiveTextInput : InteractiveLivePanel
+internal class LiveTextInput
 {
     public LiveTextInput()
-        : base(Render(""))
     {
         
     }
@@ -13,7 +12,7 @@ internal class LiveTextInput : InteractiveLivePanel
     public string Value { get; private set; } = "";
 
 
-    public override void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
+    public void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
     {
         if (consoleKeyInfo.Key is ConsoleKey.Backspace)
         {
@@ -31,7 +30,7 @@ internal class LiveTextInput : InteractiveLivePanel
         Value += character;
     }
 
-    protected override void OnFocusChanged()
+    protected void OnFocusChanged()
     {
     }
 

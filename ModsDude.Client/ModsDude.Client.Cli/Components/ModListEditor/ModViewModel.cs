@@ -1,17 +1,16 @@
 ﻿using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Diagnostics;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 internal class ModViewModel
     : IItemViewModel
 {
-    public ModViewModel(ModState mod, ModViewModelVariant variant)
+    public ModViewModel(ModStateWrapper mod, ModViewModelVariant variant)
     {
-        State = mod;
+        Mod = mod;
         Variant = variant;
-        Name = mod.Mod.DisplayName;
-        Version = mod switch
+        Name = mod.State.Mod.DisplayName;
+        Version = mod.State switch
         {
             ModState.Added x => x.Version.SequenceNumber.ToString(),
             ModState.ChangedVersion x => x.To.SequenceNumber.ToString(),
@@ -22,7 +21,7 @@ internal class ModViewModel
                 => x.Version.SequenceNumber.ToString(),
             _ => null
         };
-        Prefix = mod switch
+        Prefix = mod.State switch
         {
             ModState.Added => "+",
             ModState.ChangedVersion changedVersion => changedVersion.To.SequenceNumber > changedVersion.From.SequenceNumber ? ">" : "<",
@@ -33,7 +32,7 @@ internal class ModViewModel
     }
 
 
-    public ModState State { get; }
+    public ModStateWrapper Mod { get; }
     public ModViewModelVariant Variant { get; }
     public string Name { get; }
     public string? Prefix { get; }
@@ -61,9 +60,9 @@ internal class ModViewModel
         return new Markup(title, color);
     }
 
-    public ModState HandleEnter()
+    public void HandleEnter()
     {
-        return State switch
+        Mod.State = Mod.State switch
         {
             ModState.Available x => x.Add(),
             ModState.Included x when x.UpdateAvailable => x.Update(),
@@ -72,9 +71,9 @@ internal class ModViewModel
         };
     }
 
-    public ModState HandleBackspace()
+    public void HandleBackspace()
     {
-        return State switch
+        Mod.State = Mod.State switch
         {
             ModState.Added x => x.Remove(),
             ModState.ChangedVersion x => x.Remove(),
@@ -83,9 +82,9 @@ internal class ModViewModel
         };
     }
 
-    public ModState HandleSpacebar()
+    public void HandleSpacebar()
     {
-        return State.Reset();
+        Mod.State = Mod.State.Reset();
     }
 }
 
@@ -95,6 +94,3 @@ internal enum ModViewModelVariant
     Right
 }
 
-// now:
-// - IAddable and so on?
-// - separate view models for left and right list again (ModState.Included.UpdateAvailable needs to show current version in right list and latest in left list)
