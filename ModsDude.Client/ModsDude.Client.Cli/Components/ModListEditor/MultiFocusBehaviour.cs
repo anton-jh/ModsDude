@@ -21,5 +21,6 @@ internal class MultiFocusBehaviour
             item.HasFocus = false;
         }
         Current = focusable;
+        Current.HasFocus = true;
     }
 }

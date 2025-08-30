@@ -1,30 +1,39 @@
-﻿using Spectre.Console;
-using System.Linq;
+﻿using ModsDude.Client.Cli.Components.ModListEditor.Views;
+using Spectre.Console;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
 internal class ModListEditorSide : IFocusable
 {
-    private readonly List<IListFilter<ModState>> _filters;
+    private readonly List<IModListView> _views;
+    private readonly List<IModListOrdering> _orderings;
     private readonly IEnumerable<ModStateWrapper> _mods;
-    private readonly ModViewModelVariant _variant;
     private readonly SelectList<ModViewModel> _selectList;
+    private readonly Layout _headerLayout;
+    private readonly Layout _listLayout;
 
-    private IListFilter<ModState> _selectedFilter;
+    private IModListView _selectedView;
+    private IModListOrdering _selectedOrdering;
     private bool _hasFocus;
 
 
     public ModListEditorSide(
         IEnumerable<ModStateWrapper> mods,
-        List<IListFilter<ModState>> filters,
-        ModViewModelVariant variant)
+        List<IModListView> views,
+        List<IModListOrdering> orderings)
     {
-        var allFilter = new AllFilter<ModState>("All");
-        _filters = [allFilter, .. filters];
-        _selectedFilter = allFilter;
+        _views = views;
+        _selectedView = _views.First();
+        _orderings = orderings;
+        _selectedOrdering = _orderings.First();
 
         _mods = mods;
-        _variant = variant;
-        _selectList = new();
+        _selectList = new(GetViewModels());
+
+        _headerLayout = new Layout() { Size = 2 };
+        _listLayout = new Layout();
+        Layout = new Layout().SplitRows(
+            _headerLayout,
+            _listLayout);
     }
 
 
@@ -37,7 +46,7 @@ internal class ModListEditorSide : IFocusable
             _selectList.HasFocus = value;
         }
     }
-    public Layout Layout { get; } = new();
+    public Layout Layout { get; }
 
 
     public void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
@@ -56,8 +65,12 @@ internal class ModListEditorSide : IFocusable
                 ApplyAction(x => x.HandleBackspace());
                 break;
 
-            case ConsoleKey.Tab:
-                _selectedFilter = _filters[(_filters.IndexOf(_selectedFilter) + 1) % _filters.Count];
+            case ConsoleKey.Tab when consoleKeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift) == false:
+                _selectedView = _views[(_views.IndexOf(_selectedView) + 1) % _views.Count];
+                break;
+
+            case ConsoleKey.Tab when consoleKeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift) == true:
+                _selectedOrdering = _orderings[(_orderings.IndexOf(_selectedOrdering) + 1) % _orderings.Count];
                 break;
 
             default:
@@ -68,15 +81,22 @@ internal class ModListEditorSide : IFocusable
 
     public void Update()
     {
-        var panel = new Panel(_selectList.Update());
+        _headerLayout.Update(RenderHeader());
 
-        panel.BorderColor(HasFocus
+        var body = new Panel(_selectList.Update());
+        body.BorderColor(HasFocus
             ? Color.Blue
             : Color.Grey);
-
-        Layout.Update(panel);
+        _listLayout.Update(body);
     }
 
+
+    private Padder RenderHeader()
+    {
+        var markup = new Markup($"[grey][[TAB]][/] {_selectedView.Name}");
+
+        return new Padder(markup, new Padding(2, 1, 2, 0));
+    }
 
     private void ApplyAction(Action<ModViewModel> action)
     {
@@ -92,14 +112,11 @@ internal class ModListEditorSide : IFocusable
 
     private IEnumerable<ModViewModel> GetViewModels()
     {
-        var states = _mods.Select(x => x.State);
-        var filtered = _selectedFilter.Apply(states);
+        var items = _selectedView.Apply(_mods, _selectedOrdering);
 
-        return _selectedFilter.Apply(_mods.Select(x => x.State))
-            .Select(x => new ModViewModel(x, _variant));
+        foreach (var item in items)
+        {
+            yield return item;
+        }
     }
 }
-// now: filters operate on ModState, kinda need to operate on ModStateWrapper instead.
-// or, can i get rid of ModStateWrapper?
-// filters need to handle filtering AND ordering so maybe call them Views instead?
-// NO reason to make filters generic and shit. They're built specifically for this!

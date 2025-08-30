@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.Models;
+﻿using ModsDude.Client.Cli.Components.ModListEditor.Views;
+using ModsDude.Client.Core.Models;
 using Spectre.Console;
 
 namespace ModsDude.Client.Cli.Components.ModListEditor;
@@ -30,20 +31,26 @@ public class ModListEditor
             .Select(x => new ModStateWrapper(x))
             .ToHashSet();
 
-        List<IListFilter<ModState>> leftFilters = [
-            new TypeOfFilter<ModState, ModState.Available>("Available"),
-            new TypeOfFilter<ModState, ModState.Included>("Updates", x => x.UpdateAvailable),
-            new TypeOfFilter<ModState, ModState.Removed>("Removed")
+        List<IModListOrdering> orderings = [
+            new ModListOrderingByName(),
+            new ModListOrderingByRecent()
         ];
-        _leftSide = new ModListEditorSide(_mods, leftFilters, ModViewModelVariant.Left);
 
-        List<IListFilter<ModState>> rightFilters = [
-            new TypeOfFilter<ModState, ModState.Included>("Existing"),
-            new TypeOfFilter<ModState, ModState.Included>("Updates", x => x.UpdateAvailable),
-            new TypeOfFilter<ModState, ModState.ChangedVersion>("Changed"),
-            new TypeOfFilter<ModState, ModState.Added>("Added"),
+        List<IModListView> leftViews = [
+            new LeftDefaultModListView(),
+            new TypeOfModListView<ModState.Available>("Available", ModViewModelVariant.Left),
+            new UpdatesModListView(ModViewModelVariant.Left),
+            new TypeOfModListView<ModState.Removed>("Removed", ModViewModelVariant.Left)
         ];
-        _rightSide = new ModListEditorSide(_mods, rightFilters, ModViewModelVariant.Right);
+        _leftSide = new ModListEditorSide(_mods, leftViews, orderings);
+
+        List<IModListView> rightViews = [
+            new RightDefaultModListView(),
+            new UpdatesModListView(ModViewModelVariant.Right),
+            new TypeOfModListView<ModState.ChangedVersion>("Changed", ModViewModelVariant.Right),
+            new TypeOfModListView<ModState.Added>("Added", ModViewModelVariant.Right)
+        ];
+        _rightSide = new ModListEditorSide(_mods, rightViews, orderings);
 
         _multiFocusBehaviour = new([_leftSide, _rightSide], _leftSide);
     }

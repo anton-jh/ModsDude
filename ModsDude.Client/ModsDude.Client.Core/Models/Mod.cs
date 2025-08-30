@@ -15,13 +15,14 @@ public class Mod
         }
 
         var versions = mod.Versions
-            .Select(x => new Version(this, x.VersionId, x.DisplayName, x.SequenceNumber))
+            .Select(x => new Version(this, x.VersionId, x.DisplayName, x.SequenceNumber, x.Created))
             .OrderByDescending(x => x.SequenceNumber).ToList();
 
         Latest = versions.First();
         _olderVersions = versions.Skip(1).ToList();
 
         Id = mod.Id;
+        Created = mod.Created;
     }
 
 
@@ -29,13 +30,15 @@ public class Mod
     public Version Latest { get; }
     public IEnumerable<Version> Versions => _olderVersions.Prepend(Latest);
     public string DisplayName => Latest.DisplayName;
+    public DateTimeOffset Created { get; }
 
 
-    public class Version(Mod parent, string id, string displayName, int sequenceNumber)
+    public class Version(Mod parent, string id, string displayName, int sequenceNumber, DateTimeOffset created)
     {
         public Mod Parent { get; } = parent;
         public string Id { get; } = id;
         public string DisplayName { get; } = displayName;
         public int SequenceNumber { get; } = sequenceNumber;
+        public DateTimeOffset Created { get; } = created;
     }
 }
