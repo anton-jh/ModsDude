@@ -8,7 +8,7 @@ internal class ModListOrderingByRecent : IModListOrdering
     {
         var items = mods
             .Select(mod => (Date: GetDate(mod), Mod: mod))
-            .OrderByDescending(x => x.Date);
+            .OrderByDescending(x => x.Date).ThenBy(x => x.Mod.State.Mod.DisplayName);
 
         return items.Select(x => x.Mod);
     }

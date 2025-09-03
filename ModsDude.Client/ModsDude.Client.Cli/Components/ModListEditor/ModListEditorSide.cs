@@ -10,6 +10,7 @@ internal class ModListEditorSide : IFocusable
     private readonly SelectList<ModViewModel> _selectList;
     private readonly Layout _headerLayout;
     private readonly Layout _listLayout;
+    private readonly Layout _footerLayout;
 
     private IModListView _selectedView;
     private IModListOrdering _selectedOrdering;
@@ -30,10 +31,12 @@ internal class ModListEditorSide : IFocusable
         _selectList = new(GetViewModels());
 
         _headerLayout = new Layout() { Size = 2 };
+        _footerLayout = new Layout() { Size = 5 };
         _listLayout = new Layout();
         Layout = new Layout().SplitRows(
             _headerLayout,
-            _listLayout);
+            _listLayout,
+            _footerLayout);
     }
 
 
@@ -53,27 +56,23 @@ internal class ModListEditorSide : IFocusable
     {
         switch (consoleKeyInfo.Key)
         {
-            case ConsoleKey.Enter:
-                ApplyAction(x => x.HandleEnter());
-                break;
-
-            case ConsoleKey.Spacebar:
-                ApplyAction(x => x.HandleSpacebar());
-                break;
-
-            case ConsoleKey.Backspace:
-                ApplyAction(x => x.HandleBackspace());
-                break;
-
-            case ConsoleKey.Tab when consoleKeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift) == false:
+            case ConsoleKey.D:
                 _selectedView = _views[(_views.IndexOf(_selectedView) + 1) % _views.Count];
                 break;
 
-            case ConsoleKey.Tab when consoleKeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift) == true:
+            case ConsoleKey.A:
+                _selectedView = _views[(_views.IndexOf(_selectedView) - 1 + _views.Count) % _views.Count];
+                break;
+
+            case ConsoleKey.S:
                 _selectedOrdering = _orderings[(_orderings.IndexOf(_selectedOrdering) + 1) % _orderings.Count];
                 break;
 
             default:
+                if (_selectList.Selection?.HandleKeyPress(consoleKeyInfo) == true)
+                {
+                    break;
+                }
                 _selectList.HandleKeyPress(consoleKeyInfo);
                 break;
         }
@@ -81,33 +80,37 @@ internal class ModListEditorSide : IFocusable
 
     public void Update()
     {
-        _headerLayout.Update(RenderHeader());
-
         var body = new Panel(_selectList.Update());
         body.BorderColor(HasFocus
             ? Color.Blue
             : Color.Grey);
+
+        _headerLayout.Update(RenderHeader());
+        _footerLayout.Update(RenderFooter());
         _listLayout.Update(body);
     }
 
 
     private Padder RenderHeader()
     {
-        var markup = new Markup($"[grey][[TAB]][/] {_selectedView.Name}");
-
+        var markup = new Markup($"[grey][[A/D]][/] {_selectedView.Name.PadRight(_views.Max(x => x.Name.Length))}  " +
+            $"[grey][[S]][/] {_selectedOrdering.Name}");
         return new Padder(markup, new Padding(2, 1, 2, 0));
     }
 
-    private void ApplyAction(Action<ModViewModel> action)
+    private Padder RenderFooter()
     {
-        var selection = _selectList.Selection;
+        var actions = _selectList.Selection?.GetPossibleActions() ?? [];
 
-        if (selection is null)
+        var grid = new Grid()
+            .AddColumns(2);
+
+        foreach (var action in actions)
         {
-            return;
+            grid.AddRow(new Markup($"[grey][[{action.Key}]][/]"), new Markup(action.Label));
         }
 
-        action(selection);
+        return new Padder(grid, new Padding(2, 0, 2, 0));
     }
 
     private IEnumerable<ModViewModel> GetViewModels()

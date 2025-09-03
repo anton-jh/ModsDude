@@ -14,11 +14,11 @@ internal class ModViewModel
         {
             ModState.Added x => x.Version.SequenceNumber.ToString(),
             ModState.ChangedVersion x => x.To.SequenceNumber.ToString(),
-            ModState.Included x when !x.UpdateAvailable => x.Version.SequenceNumber.ToString(),
-            ModState.Included x when x.UpdateAvailable && Variant is ModViewModelVariant.Left
+            ModState.Included { UpdateAvailable: false } x => x.Version.SequenceNumber.ToString(),
+            ModState.Included { UpdateAvailable: true } x when Variant is ModViewModelVariant.Left
                 => x.Mod.Latest.SequenceNumber.ToString(),
-            ModState.Included x when x.UpdateAvailable && Variant is ModViewModelVariant.Right
-                => x.Version.SequenceNumber.ToString(),
+            ModState.Included { UpdateAvailable: true } x when Variant is ModViewModelVariant.Right
+                => $"{x.Version.SequenceNumber} > {x.Mod.Latest.SequenceNumber}",
             _ => null
         };
         Prefix = mod.State switch
@@ -60,32 +60,54 @@ internal class ModViewModel
         return new Markup(title, color);
     }
 
-    public void HandleEnter()
+    public bool HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
     {
-        Mod.State = Mod.State switch
+        var action = GetPossibleActions().FirstOrDefault(x => x.Key == consoleKeyInfo.Key);
+
+        if (action is not null)
         {
-            ModState.Available x => x.Add(),
-            ModState.Included x when x.UpdateAvailable => x.Update(),
-            ModState.Removed x => x.Add(),
-            var x => x
+            Mod.State = action.Func.Invoke();
+            return true;
+        }
+
+        return false;
+    }
+
+    public IEnumerable<KeyAction> GetPossibleActions()
+    {
+        return Mod.State switch
+        {
+            ModState.Added x => [
+                new(ConsoleKey.Backspace, "Remove", x.Remove),
+                new(ConsoleKey.Spacebar, "Reset", x.Reset),
+            ],
+
+            ModState.Available x => [
+                new(ConsoleKey.Enter, "Add", x.Add),
+            ],
+
+            ModState.ChangedVersion x => [
+                new(ConsoleKey.Backspace, "Remove", x.Remove),
+                new(ConsoleKey.Spacebar, "Reset", x.Reset),
+            ],
+
+            ModState.Included x => new List<KeyAction?>
+            {
+                x.UpdateAvailable ? new(ConsoleKey.Enter, "Update", x.Update) : null,
+                Variant is ModViewModelVariant.Right ? new(ConsoleKey.Backspace, "Remove", x.Remove) : null,
+            }.OfType<KeyAction>(),
+
+            ModState.Removed x => [
+                new(ConsoleKey.Enter, "Add", x.Add),
+                new(ConsoleKey.Spacebar, "Reset", x.Reset),
+            ],
+
+            _ => []
         };
     }
 
-    public void HandleBackspace()
-    {
-        Mod.State = Mod.State switch
-        {
-            ModState.Added x => x.Remove(),
-            ModState.ChangedVersion x => x.Remove(),
-            ModState.Included x => x.Remove(),
-            var x => x
-        };
-    }
 
-    public void HandleSpacebar()
-    {
-        Mod.State = Mod.State.Reset();
-    }
+    public record KeyAction(ConsoleKey Key, string Label, Func<ModState> Func);
 }
 
 internal enum ModViewModelVariant
@@ -93,4 +115,3 @@ internal enum ModViewModelVariant
     Left,
     Right
 }
-

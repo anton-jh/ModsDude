@@ -58,8 +58,14 @@ public class ModListEditor
 
     public void Start()
     {
+        var leftLayout = new Layout(_leftSide.Layout) { Ratio = 2 };
+        var rightLayout = new Layout(_rightSide.Layout) { Ratio = 2 };
+        
+        var centerPanel = new Panel(new Markup("Test 123")).Expand();
+        var centerLayout = new Layout(centerPanel);
+
         var layout = new Layout()
-            .SplitColumns(_leftSide.Layout, _rightSide.Layout);
+            .SplitColumns(leftLayout, centerLayout, rightLayout);
 
         _ansiConsole.Clear();
 
@@ -79,7 +85,7 @@ public class ModListEditor
 
     private void HandleKeyPress(ConsoleKeyInfo consoleKeyInfo)
     {
-        var activePanel = _multiFocusBehaviour.Current;
+        var activeSide = _multiFocusBehaviour.Current;
 
         switch (consoleKeyInfo.Key)
         {
@@ -92,7 +98,7 @@ public class ModListEditor
                 break;
 
             default:
-                activePanel.HandleKeyPress(consoleKeyInfo);
+                activeSide.HandleKeyPress(consoleKeyInfo);
                 break;
         }
     }
