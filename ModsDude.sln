@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ModsDude.Server", "ModsDude.Server", "{B5F5D79F-D466-7054-2E70-E9E7493C2180}"
 EndProject
@@ -27,6 +27,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Client.WinForms", "ModsDude.Client\ModsDude.Client.WinForms\ModsDude.Client.WinForms.csproj", "{03031F24-DC2D-425F-B5CA-F5E12CF121DE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -134,6 +136,18 @@ Global
 		{1E38D61A-9ECF-4E75-BFE4-50625BD3D206}.Release|x64.Build.0 = Release|Any CPU
 		{1E38D61A-9ECF-4E75-BFE4-50625BD3D206}.Release|x86.ActiveCfg = Release|Any CPU
 		{1E38D61A-9ECF-4E75-BFE4-50625BD3D206}.Release|x86.Build.0 = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|x64.Build.0 = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Debug|x86.Build.0 = Debug|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|x64.ActiveCfg = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|x64.Build.0 = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|x86.ActiveCfg = Release|Any CPU
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -147,6 +161,7 @@ Global
 		{0228A335-57DA-4C7E-A88D-A330741BFD32} = {B5F5D79F-D466-7054-2E70-E9E7493C2180}
 		{17DF71B6-9BD2-4ED7-9E74-FDE87BFAEA34} = {6D15BD6A-4AE5-43D2-5792-2F69DB82D193}
 		{1E38D61A-9ECF-4E75-BFE4-50625BD3D206} = {6D15BD6A-4AE5-43D2-5792-2F69DB82D193}
+		{03031F24-DC2D-425F-B5CA-F5E12CF121DE} = {6D15BD6A-4AE5-43D2-5792-2F69DB82D193}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1B145B9F-9FAF-4B83-A416-0468D9FA48AD}
