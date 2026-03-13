@@ -1,3 +1,12 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Extensions;
+using ModsDude.Client.Core.ModsDudeServer;
+using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.WinForms.Authentication;
+using ModsDude.Client.WinForms.Models.Persistence;
+
 namespace ModsDude.Client.WinForms;
 
 internal static class Program
@@ -6,13 +15,37 @@ internal static class Program
     ///  The main entry point for the application.
     /// </summary>
     [STAThread]
-    static void Main()
+    static async Task Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
+        var host = Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+            })
+            .ConfigureServices(ConfigureServices)
+            .Build();
+
+        await host.StartAsync();
+
 
         Application.SetColorMode(SystemColorMode.Dark);
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainWindow());
+
+        var mainWindow = host.Services.GetRequiredService<MainWindow>();
+
+
+        Application.Run(mainWindow);
+
+        await host.StopAsync();
+    }
+
+
+    internal static void ConfigureServices(HostBuilderContext ctx, IServiceCollection services)
+    {
+        services.AddCore<AuthenticationService>();
+        services.AddSingleton<AuthenticationService>();
+        services.AddSingleton<ClientConfiguration>();
+        services.AddSingleton(new Store<State>("cli.state.json"));
+        services.AddTransient<MainWindow>();
     }
 }
