@@ -1,0 +1,42 @@
+﻿<Application x:Class="ModsDude.Client.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ModsDude.Client.Wpf"
+             xmlns:mod="clr-namespace:ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;assembly=ModsDude.Client.Core"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             xmlns:wvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Windows"
+             xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+             xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
+             xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters">
+    <!--DispatcherUnhandledException="Application_DispatcherUnhandledException">-->
+
+    <Application.Resources>
+
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="Padding" Value="0 5" />
+        </Style>
+
+        <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
+            <p:CreateRepoPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type pvm:LoginPageViewModel}">
+            <p:LoginPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type pvm:MainPageViewModel}">
+            <p:MainPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type pvm:RepoPageViewModel}">
+            <p:RepoPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type pvm:ExamplePageViewModel}">
+            <p:ExamplePage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
+            <p:RepoAdminPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
+            <adp:FarmingSimulatorV1InstanceConfigPage />
+        </DataTemplate>
+
+    </Application.Resources>
+</Application>
