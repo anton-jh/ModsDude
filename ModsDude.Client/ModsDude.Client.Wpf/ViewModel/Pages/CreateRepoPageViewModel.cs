@@ -7,12 +7,12 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class CreateRepoPageViewModel(
     RepoService repoService,
-    IGameAdapterIndex gameAdapterRegistry)
+    IGameAdapterIndex gameAdapterIndex)
     : PageViewModel
 {
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
-    private string _name = "New repo";
+    private string _name = "";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
@@ -22,7 +22,7 @@ public partial class CreateRepoPageViewModel(
 
     
     public IGameAdapter? SelectedGameAdapter => SelectedGameAdapterDescriptor is not null
-        ? gameAdapterRegistry.GetById(SelectedGameAdapterDescriptor.Value.Id)
+        ? gameAdapterIndex.GetById(SelectedGameAdapterDescriptor.Value.Id)
         : null;
 
     public object? AdapterConfigurationModel => SelectedGameAdapter?.GetBaseSettingsTemplate();
@@ -32,7 +32,7 @@ public partial class CreateRepoPageViewModel(
         SelectedGameAdapterDescriptor is not null;
 
     public ObservableCollection<GameAdapterDescriptor> AvailableGameAdapters { get; } =
-        [.. gameAdapterRegistry.GetAllLatest().Select(x => x.Descriptor)];
+        [.. gameAdapterIndex.GetAllLatest().Select(x => x.Descriptor)];
 
 
     [RelayCommand(CanExecute = nameof(IsValid))]

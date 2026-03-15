@@ -12,15 +12,12 @@
         d:DataContext="{d:DesignInstance Type=wvm:DesignTimeMainWindowViewModel, IsDesignTimeCreatable=True}"
         Title="MainWindow" Height="720" Width="1280"
         WindowStartupLocation="CenterScreen"
-        FontSize="14">
+        FontSize="14"
+        Background="{DynamicResource AcrylicBackgroundFillColorBaseBrush}">
 
 
 
     <DockPanel>
-
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="Logout" Command="{Binding Path=LogoutCommand}" IsEnabled="{Binding Path=LoggedIn}" />
-        </Menu>
 
         <Frame DockPanel.Dock="Top"
                Content="{Binding Path=CurrentPage}" NavigationUIVisibility="Hidden" />

@@ -71,12 +71,16 @@ public class AuthenticationService : IAccessTokenAccessor
             result = await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
         }
 
+        IsLoggedIn = true;
+
         return result.AccessToken;
     }
 
 
     public async Task ForceRelogin(CancellationToken cancellationToken)
     {
+        IsLoggedIn = false;
+
         var accounts = await _client.GetAccountsAsync();
         foreach (var account in accounts)
         {
@@ -87,6 +91,8 @@ public class AuthenticationService : IAccessTokenAccessor
             .AcquireTokenInteractive(_scopes)
             .WithPrompt(Prompt.SelectAccount)
             .ExecuteAsync(cancellationToken);
+
+        IsLoggedIn = true;
     }
 
 

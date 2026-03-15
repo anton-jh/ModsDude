@@ -7,36 +7,39 @@
              xmlns:wvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Windows"
              xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
              xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
-             xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters">
+             xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters"
+             ThemeMode="Dark">
     <!--DispatcherUnhandledException="Application_DispatcherUnhandledException">-->
 
     <Application.Resources>
+        <ResourceDictionary>
 
-        <Style TargetType="{x:Type Button}">
-            <Setter Property="Padding" Value="0 5" />
-        </Style>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
 
-        <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
-            <p:CreateRepoPage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type pvm:LoginPageViewModel}">
-            <p:LoginPage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type pvm:MainPageViewModel}">
-            <p:MainPage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type pvm:RepoPageViewModel}">
-            <p:RepoPage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type pvm:ExamplePageViewModel}">
-            <p:ExamplePage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
-            <p:RepoAdminPage />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
-            <adp:FarmingSimulatorV1InstanceConfigPage />
-        </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
+                <p:CreateRepoPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:LoginPageViewModel}">
+                <p:LoginPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:MainPageViewModel}">
+                <p:MainPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoPageViewModel}">
+                <p:RepoPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:ExamplePageViewModel}">
+                <p:ExamplePage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
+                <p:RepoAdminPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
+                <adp:FarmingSimulatorV1InstanceConfigPage />
+            </DataTemplate>
 
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -5,6 +5,6 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 public interface IMenuItemViewModel
 {
-    string Title { get; }
-    PageViewModel GetPage();
+    public string Title { get; }
+    public PageViewModel GetPage();
 }

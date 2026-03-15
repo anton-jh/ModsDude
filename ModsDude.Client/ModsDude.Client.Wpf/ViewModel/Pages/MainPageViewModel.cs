@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -10,20 +11,24 @@ public partial class MainPageViewModel
     : PageViewModel
 {
     private readonly RepoService _repoService;
-    private readonly IFactory<NewRepoItemViewModel> _newRepoItemViewModelFactory;
     private readonly RepoPageViewModelFactory _repoPageViewModelFactory;
-    private NewRepoItemViewModel? _repoDraft;
+    private readonly IGameAdapterIndex _gameAdapterIndex;
 
 
     public MainPageViewModel(
         RepoService repoService,
-        IFactory<NewRepoItemViewModel> newRepoItemViewModelFactory,
-        RepoPageViewModelFactory repoPageViewModelFactory)
+        RepoPageViewModelFactory repoPageViewModelFactory,
+        IGameAdapterIndex gameAdapterIndex)
     {
+        MenuItems = [
+            new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude Home")),
+            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex))
+        ];
+
         _selectedMenuItem = MenuItems.First();
         _repoService = repoService;
-        _newRepoItemViewModelFactory = newRepoItemViewModelFactory;
         _repoPageViewModelFactory = repoPageViewModelFactory;
+        _gameAdapterIndex = gameAdapterIndex;
         repoService.RepoListChanged += RepoListChanged;
     }
 
@@ -48,16 +53,9 @@ public partial class MainPageViewModel
 
     public PageViewModel? CurrentPage => SelectedMenuItem?.GetPage();
 
-    public ObservableCollection<IMenuItemViewModel> MenuItems { get; } = [
-        new MenuItemViewModel("Home", new ExamplePageViewModel("Home page")),
-        new MenuItemViewModel("Test", new ExamplePageViewModel("Test page"))
-    ];
+    public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
 
     public ObservableCollection<IMenuItemViewModel> Repos { get; } = [];
-
-    public string NewRepoButtonText => _repoDraft is not null
-        ? "Cancel"
-        : "New";
 
 
     public override void Init()
@@ -78,35 +76,8 @@ public partial class MainPageViewModel
         }
     }
 
-    [RelayCommand]
-    private void ToggleCreateRepo()
-    {
-        if (_repoDraft is null)
-        {
-            _repoDraft = _newRepoItemViewModelFactory.Create();
-            Repos.Insert(0, _repoDraft);
-            SelectedMenuItem = _repoDraft;
-            OnPropertyChanged(nameof(NewRepoButtonText));
-        }
-        else
-        {
-            StopCreateRepo();
-        }
-    }
-
-    private void StopCreateRepo()
-    {
-        if (_repoDraft is not null)
-        {
-            Repos.Remove(_repoDraft);
-            _repoDraft = null;
-            OnPropertyChanged(nameof(NewRepoButtonText));
-        }
-    }
-
     private void RepoListChanged(Guid? repoIdOfInterest)
     {
-        StopCreateRepo();
         LoadReposCommand.Execute(null);
 
         if (repoIdOfInterest is not null)

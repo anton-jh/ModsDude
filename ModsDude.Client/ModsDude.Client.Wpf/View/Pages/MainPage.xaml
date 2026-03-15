@@ -12,42 +12,43 @@
       FontSize="14">
 
     <Page.Resources>
-        <DataTemplate DataType="{x:Type vm:NewRepoItemViewModel}">
-            <Label Content="{Binding Path=Title}" ToolTip="{Binding Path=Title}" FontStyle="Italic"/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:RepoItemViewModel}">
-            <Label Content="{Binding Path=Title}" ToolTip="{Binding Path=Title}" />
+        <DataTemplate x:Key="SidebarMenuItemTemplate" DataType="{x:Type vm:IMenuItemViewModel}">
+            <Grid ClipToBounds="True">
+                <TextBlock Text="{Binding Path=Title}"
+                           Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="NoWrap"
+                           ToolTip="{Binding Path=Title}" ToolTipService.InitialShowDelay="200" />
+            </Grid>
         </DataTemplate>
     </Page.Resources>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+    <Grid ColumnDefinitions="200, *">
 
         <DockPanel Grid.Column="0">
             <ListView DockPanel.Dock="Top"
-                      ItemsSource="{Binding Path=MenuItems}" SelectionMode="Single"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Label Content="{Binding Path=Title}" />
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <StackPanel DockPanel.Dock="Top"
-                        Orientation="Vertical">
-                <Button Content="Refresh" Command="{Binding Path=LoadReposCommand}" />
-                <Button Content="{Binding Path=NewRepoButtonText}" Command="{Binding Path=ToggleCreateRepoCommand}" />
-            </StackPanel>
-
-            <ListView DockPanel.Dock="Top"
-                      ItemsSource="{Binding Path=Repos}" SelectionMode="Single"
+                      ItemsSource="{Binding Path=MenuItems}"
+                      SelectionMode="Single"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
                       ScrollViewer.CanContentScroll="False"
-                      ScrollViewer.HorizontalScrollBarVisibility="Hidden">
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ItemTemplate="{StaticResource SidebarMenuItemTemplate}"
+                      >
+            </ListView>
+
+            <Separator DockPanel.Dock="Top"
+                       BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                       Margin="4 8"
+                       />
+
+            <ListView DockPanel.Dock="Top"
+                      ItemsSource="{Binding Path=Repos}"
+                      SelectionMode="Single"
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      ScrollViewer.CanContentScroll="False"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ItemTemplate="{StaticResource SidebarMenuItemTemplate}"
+                      >
             </ListView>
         </DockPanel>
 

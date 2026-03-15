@@ -11,7 +11,10 @@
       Title="ExamplePage"
       FontSize="14">
 
-    <StackPanel>
-        <Label Content="{Binding Path=Text}" />
-    </StackPanel>
+    <Border Margin="0 0 0 24" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" CornerRadius="4 0 0 0" >
+        <StackPanel>
+            <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+               Text="{Binding Path=Text}" Margin="32" />
+        </StackPanel>
+    </Border>
 </Page>

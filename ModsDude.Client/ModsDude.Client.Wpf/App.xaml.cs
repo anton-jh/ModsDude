@@ -41,7 +41,7 @@ public partial class App : Application
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
         window.Show();
 
-        await _serviceProvider.GetRequiredService<AuthenticationService>().ForceRelogin(default);
+        await _serviceProvider.GetRequiredService<AuthenticationService>().Get(default);
     }
 
 
@@ -66,7 +66,6 @@ public partial class App : Application
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
-        services.AddFactory<NewRepoItemViewModel>();
         services.AddTransient<RepoAdminPageViewModelFactory>();
         services.AddTransient<RepoPageViewModelFactory>();
 
