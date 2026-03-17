@@ -13,6 +13,7 @@ public class RepoPageViewModelFactory(
             repo,
             services.GetRequiredService<RepoAdminPageViewModelFactory>(),
             services.GetRequiredService<CreateProfilePageViewModelFactory>(),
+            services.GetRequiredService<ProfilePageViewModelFactory>(),
             services.GetRequiredService<ProfileService>());
     }
 }

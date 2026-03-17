@@ -13,6 +13,7 @@ public partial class RepoPageViewModel
     private readonly RepoModel _repo;
     private readonly RepoAdminPageViewModelFactory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModelFactory _createProfilePageViewModelFactory;
+    private readonly ProfilePageViewModelFactory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
 
 
@@ -20,11 +21,13 @@ public partial class RepoPageViewModel
         RepoModel repo,
         RepoAdminPageViewModelFactory repoAdminPageViewModelFactory,
         CreateProfilePageViewModelFactory createProfilePageViewModelFactory,
+        ProfilePageViewModelFactory profilePageViewModelFactory,
         ProfileService profileService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
+        _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
         _name = repo.Name;
 
@@ -82,7 +85,7 @@ public partial class RepoPageViewModel
     private async Task LoadProfiles(CancellationToken cancellationToken)
     {
         var profiles = await _profileService.GetProfiles(_repo.Id, cancellationToken);
-        var viewModels = profiles.Select(x => new ProfileItemViewModel(x));
+        var viewModels = profiles.Select(x => new ProfileItemViewModel(x, _profilePageViewModelFactory));
 
         Profiles.Clear();
         foreach (var profile in viewModels)

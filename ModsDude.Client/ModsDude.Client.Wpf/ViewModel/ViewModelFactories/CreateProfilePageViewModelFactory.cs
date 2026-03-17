@@ -1,14 +1,15 @@
-﻿using ModsDude.Client.Core.Models;
+﻿using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 
 public class CreateProfilePageViewModelFactory(
-    ProfileService profileService)
+    IServiceProvider services)
 {
     public CreateProfilePageViewModel Create(RepoModel repo)
     {
-        return new(repo, profileService);
+        return new(repo, services.GetRequiredService<ProfileService>());
     }
 }
