@@ -9,48 +9,28 @@
       d:DataContext="{d:DesignInstance Type=pvm:RepoAdminPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoAdminPage">
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <Grid RowDefinitions="*, auto">
 
-        <GroupBox Grid.Column="0" Grid.Row="0"
-                  Header="Basics">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="2*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="auto" />
-                </Grid.RowDefinitions>
+        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+            <StackPanel Orientation="Vertical" >
 
-                <Label Grid.Column="0" Grid.Row="0"
-                       Content="Name" />
-                <TextBox Grid.Column="1" Grid.Row="0"
-                         Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         VerticalContentAlignment="Center" />
+                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Margin="0 0 0 24"
+                           Text="Repo admin" />
 
-            </Grid>
-        </GroupBox>
+                <Label Content="Name" Margin="0 0 0 12"/>
+                <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
 
-        <Grid Grid.Column="1" Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="100" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="100" />
-            </Grid.ColumnDefinitions>
+            </StackPanel>
+        </Border>
 
-            <Button Grid.Column="0"
+        <StackPanel Grid.Row="1" Orientation="Horizontal" >
+            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
-            <Button Grid.Column="2"
+
+            <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
                     Content="Delete repo" Command="{Binding Path=DeleteRepoCommand}" />
-        </Grid>
+        </StackPanel>
 
     </Grid>
 </Page>

@@ -14,6 +14,7 @@ public class DesignTimeRepoPageViewModel
                 AdapterConfiguration = ""
             },
             null!,
+            null!,
             null!)
     {
     }

@@ -36,9 +36,17 @@
             <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
                 <p:RepoAdminPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:CreateProfilePageViewModel}">
+                <p:CreateProfilePage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
                 <adp:FarmingSimulatorV1InstanceConfigPage />
             </DataTemplate>
+
+            <Style x:Key="SidebarSeparator" TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Setter Property="Margin" Value="4 4" />
+            </Style>
 
         </ResourceDictionary>
     </Application.Resources>

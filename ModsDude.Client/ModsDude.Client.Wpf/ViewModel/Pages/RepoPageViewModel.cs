@@ -5,7 +5,6 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoPageViewModel
@@ -13,20 +12,27 @@ public partial class RepoPageViewModel
 {
     private readonly RepoModel _repo;
     private readonly RepoAdminPageViewModelFactory _repoAdminPageViewModelFactory;
+    private readonly CreateProfilePageViewModelFactory _createProfilePageViewModelFactory;
     private readonly ProfileService _profileService;
 
 
     public RepoPageViewModel(
         RepoModel repo,
         RepoAdminPageViewModelFactory repoAdminPageViewModelFactory,
+        CreateProfilePageViewModelFactory createProfilePageViewModelFactory,
         ProfileService profileService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
+        _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profileService = profileService;
         _name = repo.Name;
 
-        CreateMenu();
+        MenuItems = [
+            new MenuItemViewModel("Overview", new ExamplePageViewModel($"Repo overview ({Name})")),
+            new MenuItemViewModel("Admin", _repoAdminPageViewModelFactory.Create(_repo)),
+            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+        ];
         _selectedMenuItem = MenuItems.First();
     }
 
@@ -69,15 +75,6 @@ public partial class RepoPageViewModel
         LoadProfilesCommand.Execute(null);
     }
 
-
-    [MemberNotNull(nameof(MenuItems))]
-    private void CreateMenu()
-    {
-        MenuItems = [
-            new MenuItemViewModel("Overview", new ExamplePageViewModel($"Repo overview ({Name})")),
-            new MenuItemViewModel("Admin", _repoAdminPageViewModelFactory.Create(_repo))
-        ];
-    }
 
     [RelayCommand]
     private async Task LoadProfiles(CancellationToken cancellationToken)

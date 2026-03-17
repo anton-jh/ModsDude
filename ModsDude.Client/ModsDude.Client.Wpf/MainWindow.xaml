@@ -15,12 +15,8 @@
         FontSize="14"
         Background="{DynamicResource AcrylicBackgroundFillColorBaseBrush}">
 
+    <Frame Content="{Binding Path=CurrentPage}"
+           NavigationUIVisibility="Hidden"
+           Margin="0 12 0 0"/>
 
-
-    <DockPanel>
-
-        <Frame DockPanel.Dock="Top"
-               Content="{Binding Path=CurrentPage}" NavigationUIVisibility="Hidden" />
-
-    </DockPanel>
 </Window>

@@ -3,7 +3,6 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -26,6 +25,7 @@ public partial class MainPageViewModel
         ];
 
         _selectedMenuItem = MenuItems.First();
+        CurrentPage = _selectedMenuItem.GetPage();
         _repoService = repoService;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _gameAdapterIndex = gameAdapterIndex;
@@ -44,14 +44,18 @@ public partial class MainPageViewModel
             OnPropertyChanged(nameof(SelectedMenuItem));
 
             OnPropertyChanging(nameof(SelectedMenuItem));
-            OnPropertyChanging(nameof(CurrentPage));
             _selectedMenuItem = value;
             OnPropertyChanged(nameof(SelectedMenuItem));
+
+            OnPropertyChanging(nameof(CurrentPage));
+            CurrentPage = SelectedMenuItem?.GetPage();
             OnPropertyChanged(nameof(CurrentPage));
+
+            CurrentPage?.Init();
         }
     }
 
-    public PageViewModel? CurrentPage => SelectedMenuItem?.GetPage();
+    public PageViewModel? CurrentPage { get; private set; }
 
     public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
 

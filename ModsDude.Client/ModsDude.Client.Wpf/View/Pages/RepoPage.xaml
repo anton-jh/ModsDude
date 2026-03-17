@@ -11,55 +11,46 @@
       Title="RepoPage"
       FontSize="14">
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+    <Grid ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0"
-              Background="{DynamicResource AcrylicBackgroundFillColorBaseBrush}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="auto" />
-            </Grid.RowDefinitions>
+        <DockPanel Grid.Column="0">
 
-            <ListView Grid.Row="0"
-                  ItemsSource="{Binding Path=MenuItems}" SelectionMode="Single"
-                  SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}">
+            <ListView DockPanel.Dock="Top"
+                      ItemsSource="{Binding Path=MenuItems}" SelectionMode="Single"
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      ScrollViewer.CanContentScroll="True">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Label Content="{Binding Path=Title}" />
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <DockPanel Grid.Row="1">
-                <Button DockPanel.Dock="Top"
-                        Content="Refresh" Command="{Binding Path=LoadProfilesCommand}" />
-                <Button DockPanel.Dock="Top"
-                        Content="New" />
-                <ListView DockPanel.Dock="Top"
-                          ItemsSource="{Binding Path=Profiles}" SelectionMode="Single"
-                          SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                          ScrollViewer.CanContentScroll="False">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Label Content="{Binding Path=Title}" />
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-            </DockPanel>
-            <ListView Grid.Row="2"
-                  ItemsSource="{Binding Path=Instances}" SelectionMode="Single"
-                  SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}">
+
+            <Separator DockPanel.Dock="Top" Style="{StaticResource SidebarSeparator}"/>
+
+            <ListView DockPanel.Dock="Bottom"
+                      ItemsSource="{Binding Path=Instances}" SelectionMode="Single"
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      ScrollViewer.CanContentScroll="True">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Label Content="{Binding Path=Title}" />
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-        </Grid>
+
+            <Separator DockPanel.Dock="Bottom" Style="{StaticResource SidebarSeparator}"/>
+
+            <ListView ItemsSource="{Binding Path=Profiles}" SelectionMode="Single"
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      ScrollViewer.CanContentScroll="False">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Label Content="{Binding Path=Title}" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </DockPanel>
 
         <Frame
             Grid.Column="1"

@@ -68,6 +68,7 @@ public partial class App : Application
         services.AddFactory<CreateRepoPageViewModel>();
         services.AddTransient<RepoAdminPageViewModelFactory>();
         services.AddTransient<RepoPageViewModelFactory>();
+        services.AddTransient<CreateProfilePageViewModelFactory>();
 
         services.AddSingleton<RepoService>();
         services.AddSingleton<ProfileService>();

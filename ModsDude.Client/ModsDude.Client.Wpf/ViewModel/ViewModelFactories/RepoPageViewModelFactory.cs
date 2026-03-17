@@ -12,6 +12,7 @@ public class RepoPageViewModelFactory(
         return new RepoPageViewModel(
             repo,
             services.GetRequiredService<RepoAdminPageViewModelFactory>(),
+            services.GetRequiredService<CreateProfilePageViewModelFactory>(),
             services.GetRequiredService<ProfileService>());
     }
 }

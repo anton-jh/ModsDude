@@ -36,10 +36,7 @@
                       >
             </ListView>
 
-            <Separator DockPanel.Dock="Top"
-                       BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                       Margin="4 8"
-                       />
+            <Separator DockPanel.Dock="Top" Style="{StaticResource SidebarSeparator}" />
 
             <ListView DockPanel.Dock="Top"
                       ItemsSource="{Binding Path=Repos}"
