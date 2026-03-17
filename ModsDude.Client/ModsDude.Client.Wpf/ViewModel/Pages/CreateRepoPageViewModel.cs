@@ -38,7 +38,7 @@ public partial class CreateRepoPageViewModel(
     [RelayCommand(CanExecute = nameof(IsValid))]
     private async Task Submit(CancellationToken cancellationToken)
     {
-        if (SelectedGameAdapterDescriptor is null)
+        if (SelectedGameAdapterDescriptor is null || string.IsNullOrWhiteSpace(Name))
         {
             return;
         }

@@ -11,42 +11,22 @@
       Title="MainPage"
       FontSize="14">
 
-    <Page.Resources>
-        <DataTemplate x:Key="SidebarMenuItemTemplate" DataType="{x:Type vm:IMenuItemViewModel}">
-            <Grid ClipToBounds="True">
-                <TextBlock Text="{Binding Path=Title}"
-                           Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
-                           TextTrimming="CharacterEllipsis"
-                           TextWrapping="NoWrap"
-                           ToolTip="{Binding Path=Title}" ToolTipService.InitialShowDelay="200" />
-            </Grid>
-        </DataTemplate>
-    </Page.Resources>
-
-    <Grid ColumnDefinitions="200, *">
+    <Grid ColumnDefinitions="200 *">
 
         <DockPanel Grid.Column="0">
+            
             <ListView DockPanel.Dock="Top"
+                      Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
-                      SelectionMode="Single"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="False"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      ItemTemplate="{StaticResource SidebarMenuItemTemplate}"
-                      >
-            </ListView>
+                      />
 
             <Separator DockPanel.Dock="Top" Style="{StaticResource SidebarSeparator}" />
 
-            <ListView DockPanel.Dock="Top"
+            <ListView Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=Repos}"
-                      SelectionMode="Single"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="False"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      ItemTemplate="{StaticResource SidebarMenuItemTemplate}"
-                      >
-            </ListView>
+                      />
         </DockPanel>
 
         <Frame Grid.Column="1"

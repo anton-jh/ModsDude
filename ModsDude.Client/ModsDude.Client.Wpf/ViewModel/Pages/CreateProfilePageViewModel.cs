@@ -1,13 +1,13 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class CreateProfilePageViewModel(
     RepoModel repo,
-    IProfilesClient profilesClient)
+    ProfileService profileService)
     : PageViewModel
 {
     private readonly RepoModel _repo = repo;
@@ -19,9 +19,11 @@ public partial class CreateProfilePageViewModel(
     [RelayCommand]
     public async Task Submit(CancellationToken cancellationToken)
     {
-        await profilesClient.CreateProfileV1Async(_repo.Id, new()
+        if (string.IsNullOrWhiteSpace(Name))
         {
-            Name = Name,
-        }, cancellationToken);
+            return;
+        }
+
+        await profileService.CreateProfile(_repo.Id, Name, cancellationToken);
     }
 }

@@ -16,40 +16,26 @@
         <DockPanel Grid.Column="0">
 
             <ListView DockPanel.Dock="Top"
-                      ItemsSource="{Binding Path=MenuItems}" SelectionMode="Single"
+                      Style="{StaticResource SidebarList}"
+                      ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="True">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Label Content="{Binding Path=Title}" />
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                      />
 
             <Separator DockPanel.Dock="Top" Style="{StaticResource SidebarSeparator}"/>
 
             <ListView DockPanel.Dock="Bottom"
-                      ItemsSource="{Binding Path=Instances}" SelectionMode="Single"
+                      Style="{StaticResource SidebarList}"
+                      ItemsSource="{Binding Path=Instances}"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="True">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Label Content="{Binding Path=Title}" />
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                      />
 
             <Separator DockPanel.Dock="Bottom" Style="{StaticResource SidebarSeparator}"/>
 
-            <ListView ItemsSource="{Binding Path=Profiles}" SelectionMode="Single"
+            <ListView ItemsSource="{Binding Path=Profiles}"
+                      Style="{StaticResource SidebarList}"
                       SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="False">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Label Content="{Binding Path=Title}" />
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                      ScrollViewer.CanContentScroll="False"
+                      />
         </DockPanel>
 
         <Frame

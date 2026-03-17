@@ -80,9 +80,9 @@ public partial class MainPageViewModel
         }
     }
 
-    private void RepoListChanged(Guid? repoIdOfInterest)
+    private async void RepoListChanged(Guid? repoIdOfInterest)
     {
-        LoadReposCommand.Execute(null);
+        await LoadRepos(default);
 
         if (repoIdOfInterest is not null)
         {

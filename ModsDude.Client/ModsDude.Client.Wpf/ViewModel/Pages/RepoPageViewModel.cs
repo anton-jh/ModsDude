@@ -34,6 +34,8 @@ public partial class RepoPageViewModel
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
         ];
         _selectedMenuItem = MenuItems.First();
+
+        _profileService.ProfileListChanged += ProfileListChanged;
     }
 
 
@@ -86,6 +88,20 @@ public partial class RepoPageViewModel
         foreach (var profile in viewModels)
         {
             Profiles.Add(profile);
+        }
+    }
+
+    private async void ProfileListChanged(Guid? profileIdOfInterest)
+    {
+        await LoadProfiles(default);
+
+        if (profileIdOfInterest is not null)
+        {
+            var repo = Profiles
+                .OfType<ProfileItemViewModel>()
+                .FirstOrDefault(x => x.Id == profileIdOfInterest);
+
+            SelectedMenuItem = repo;
         }
     }
 }

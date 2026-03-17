@@ -55,7 +55,8 @@ public class RepoService(
     {
         var request = new UpdateRepoRequest()
         {
-            Name = name
+            Name = name,
+            AdapterConfiguration = "" // TEMP
         };
         try
         {

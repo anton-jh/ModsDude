@@ -43,6 +43,25 @@
                 <adp:FarmingSimulatorV1InstanceConfigPage />
             </DataTemplate>
 
+            <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
+                <Setter Property="SelectionMode" Value="Single" />
+                <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate DataType="{x:Type vm:IMenuItemViewModel}">
+                            <Grid ClipToBounds="True">
+                                <TextBlock Text="{Binding Path=Title}"
+                                           Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap"
+                                           ToolTip="{Binding Path=Title}" ToolTipService.InitialShowDelay="200" />
+                            </Grid>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="SidebarSeparator" TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}">
                 <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
                 <Setter Property="Margin" Value="4 4" />
