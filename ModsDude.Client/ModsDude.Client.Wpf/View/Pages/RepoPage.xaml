@@ -5,6 +5,7 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:DesignTimeRepoPageViewModel, IsDesignTimeCreatable=True}"
@@ -13,30 +14,27 @@
 
     <Grid ColumnDefinitions="200 *">
 
-        <DockPanel Grid.Column="0">
+        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
 
-            <ListView DockPanel.Dock="Top"
+            <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      />
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
 
-            <Separator DockPanel.Dock="Top" Style="{StaticResource SidebarSeparator}"/>
+            <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" />
 
-            <ListView DockPanel.Dock="Bottom"
+            <ListView Grid.Row="2"
+                      ItemsSource="{Binding Path=Profiles}"
+                      Style="{StaticResource SidebarList}"
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
+
+            <uc:SidebarHeader Grid.Row="3" Title="Installations" Command="" ActionIcon="&#xE713;" />
+
+            <ListView Grid.Row="4"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=Instances}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      />
-
-            <Separator DockPanel.Dock="Bottom" Style="{StaticResource SidebarSeparator}"/>
-
-            <ListView ItemsSource="{Binding Path=Profiles}"
-                      Style="{StaticResource SidebarList}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
-                      ScrollViewer.CanContentScroll="False"
-                      />
-        </DockPanel>
+                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
+        </Grid>
 
         <Frame
             Grid.Column="1"
