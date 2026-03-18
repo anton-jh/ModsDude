@@ -55,6 +55,7 @@
                         <DataTemplate DataType="{x:Type vm:IMenuItemViewModel}">
                             <Grid ClipToBounds="True">
                                 <TextBlock Text="{Binding Path=Title}"
+                                           Padding="12 8"
                                            Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
                                            TextTrimming="CharacterEllipsis"
                                            TextWrapping="NoWrap"
@@ -63,11 +64,6 @@
                         </DataTemplate>
                     </Setter.Value>
                 </Setter>
-            </Style>
-
-            <Style x:Key="SidebarSeparator" TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}">
-                <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <Setter Property="Margin" Value="4 4" />
             </Style>
 
         </ResourceDictionary>

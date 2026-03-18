@@ -34,8 +34,10 @@
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"/>
         </Button>
-        
-        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource SidebarSeparator}" />
+
+        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2"
+                   Foreground="{DynamicResource DividerStrokeColorDefaultBrush}"
+                   Margin="4 4" />
         
     </Grid>
     
