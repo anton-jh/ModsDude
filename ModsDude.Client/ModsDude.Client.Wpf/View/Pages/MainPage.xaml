@@ -19,7 +19,7 @@
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                       />
 
             <uc:SidebarHeader Grid.Row="1" Title="My repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" />
@@ -27,11 +27,11 @@
             <ListView Grid.Row="2"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=Repos}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}"
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                       />
         </Grid>
 
         <Frame Grid.Column="1"
-               Content="{Binding CurrentPage}" NavigationUIVisibility="Hidden" />
+               Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
 </Page>

@@ -19,25 +19,25 @@
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
             <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" />
 
             <ListView Grid.Row="2"
                       ItemsSource="{Binding Path=Profiles}"
                       Style="{StaticResource SidebarList}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
             <uc:SidebarHeader Grid.Row="3" Title="Installations" Command="" ActionIcon="&#xE713;" />
 
             <ListView Grid.Row="4"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=Instances}"
-                      SelectedItem="{Binding Path=SelectedMenuItem, Mode=TwoWay}" />
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
         </Grid>
 
         <Frame
             Grid.Column="1"
-            Content="{Binding CurrentPage}" NavigationUIVisibility="Hidden" />
+            Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
 </Page>

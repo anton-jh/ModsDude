@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -39,11 +40,21 @@ public partial class RepoPageViewModel
             new MenuItemViewModel("Admin", _repoAdminPageViewModelFactory.Create(_repo)),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
         ];
-        _selectedMenuItem = MenuItems.First();
+
+        Instances = [
+            new MenuItemViewModel("Game", new ExamplePageViewModel("Instance (Game)")),
+            new MenuItemViewModel("Dedicated server", new ExamplePageViewModel("Instance (Dedicated server)"))
+        ];
+
+        Profiles = [];
+
+        NavManager = new()
+        {
+            Selected = MenuItems.First()
+        };
 
         _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
 
-        Profiles = [];
         _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
     }
 
@@ -51,34 +62,13 @@ public partial class RepoPageViewModel
     [ObservableProperty]
     private string _name;
 
-    private IMenuItemViewModel? _selectedMenuItem;
-    public IMenuItemViewModel? SelectedMenuItem
-    {
-        get => _selectedMenuItem;
-        set
-        {
-            OnPropertyChanging(nameof(SelectedMenuItem));
-            _selectedMenuItem = null!;
-            OnPropertyChanged(nameof(SelectedMenuItem));
+    public SidebarNavigationManager NavManager { get; }
 
-            OnPropertyChanging(nameof(SelectedMenuItem));
-            OnPropertyChanging(nameof(CurrentPage));
-            _selectedMenuItem = value;
-            OnPropertyChanged(nameof(SelectedMenuItem));
-            OnPropertyChanged(nameof(CurrentPage));
-        }
-    }
-
-    public PageViewModel? CurrentPage => SelectedMenuItem?.GetPage();
-
-    public ObservableCollection<IMenuItemViewModel> MenuItems { get; private set; }
-
-    public ObservableCollection<IMenuItemViewModel> Instances { get; } = [
-        new MenuItemViewModel("Game", new ExamplePageViewModel("Instance (Game)")),
-        new MenuItemViewModel("Dedicated server", new ExamplePageViewModel("Instance (Dedicated server)"))
-    ];
+    public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
 
     public ObservableCollection<IMenuItemViewModel> Profiles { get; }
+
+    public ObservableCollection<IMenuItemViewModel> Instances { get; }
 
 
     public override void Init()
@@ -89,6 +79,7 @@ public partial class RepoPageViewModel
     public void Dispose()
     {
         _profilesSynchronizer.Dispose();
+        NavManager.Dispose();
     }
 
 
@@ -106,7 +97,7 @@ public partial class RepoPageViewModel
             .OfType<ProfileItemViewModel>()
             .FirstOrDefault(x => x.Id == profileIdOfInterest);
 
-        SelectedMenuItem = repo;
+        NavManager.Selected = repo;
     }
 
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)

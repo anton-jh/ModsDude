@@ -3,6 +3,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -27,42 +28,24 @@ public partial class MainPageViewModel
             new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex))
         ];
 
-        _selectedMenuItem = MenuItems.First();
-        CurrentPage = _selectedMenuItem.GetPage();
+        Repos = [];
+
+        NavManager = new()
+        {
+            Selected = MenuItems.First()
+        };
+
         _repoService = repoService;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _gameAdapterIndex = gameAdapterIndex;
 
-        Repos = [];
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
 
         repoService.RepoOfInterestChanged += RepoOfInterestChanged;
     }
     
 
-    private IMenuItemViewModel? _selectedMenuItem;
-    public IMenuItemViewModel? SelectedMenuItem
-    {
-        get => _selectedMenuItem;
-        set
-        {
-            OnPropertyChanging(nameof(SelectedMenuItem));
-            _selectedMenuItem = null;
-            OnPropertyChanged(nameof(SelectedMenuItem));
-
-            OnPropertyChanging(nameof(SelectedMenuItem));
-            _selectedMenuItem = value;
-            OnPropertyChanged(nameof(SelectedMenuItem));
-
-            OnPropertyChanging(nameof(CurrentPage));
-            CurrentPage = SelectedMenuItem?.GetPage();
-            OnPropertyChanged(nameof(CurrentPage));
-
-            CurrentPage?.Init();
-        }
-    }
-
-    public PageViewModel? CurrentPage { get; private set; }
+    public SidebarNavigationManager NavManager { get; }
 
     public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
 
@@ -77,6 +60,7 @@ public partial class MainPageViewModel
     public void Dispose()
     {
         _reposSynchronizer.Dispose();
+        NavManager.Dispose();
     }
 
 
@@ -92,7 +76,7 @@ public partial class MainPageViewModel
             .OfType<RepoItemViewModel>()
             .FirstOrDefault(x => x.Id == repoIdOfInterest);
 
-        SelectedMenuItem = repo;
+        NavManager.Selected = repo;
     }
 
     private RepoItemViewModel MapRepoToVm(RepoModel repo)
