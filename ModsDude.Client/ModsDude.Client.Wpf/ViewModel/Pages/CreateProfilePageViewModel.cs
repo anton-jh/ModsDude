@@ -16,9 +16,12 @@ public partial class CreateProfilePageViewModel(
 
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     private string _name = "";
 
-    [RelayCommand]
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
+
+    [RelayCommand(CanExecute = nameof(IsValid))]
     public async Task Submit(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(Name))

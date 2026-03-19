@@ -12,12 +12,15 @@ public partial class RepoAdminPageViewModel(
     : PageViewModel, IDisposable
 {
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name = repo.Name;
 
     public string OriginalName { get; } = repo.Name;
 
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 
-    [RelayCommand]
+
+    [RelayCommand(CanExecute = nameof(IsValid))]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
         navigationLockService.ReleaseLock(this);

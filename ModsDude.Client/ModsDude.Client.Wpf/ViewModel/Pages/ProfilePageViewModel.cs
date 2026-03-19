@@ -13,9 +13,13 @@ public partial class ProfilePageViewModel(
     : PageViewModel, IDisposable
 {
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name = profile.Name;
 
     public string OriginalName => profile.Name;
+
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
+
 
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
@@ -24,7 +28,7 @@ public partial class ProfilePageViewModel(
         await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsValid))]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
         navigationLockService.ReleaseLock(this);
