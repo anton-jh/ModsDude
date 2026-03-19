@@ -1,6 +1,8 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -8,13 +10,14 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoPageViewModel
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     private readonly RepoModel _repo;
     private readonly RepoAdminPageViewModelFactory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModelFactory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModelFactory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
+    private readonly ObservableCollectionSynchronizer<ProfileDto, IMenuItemViewModel, string> _profilesSynchronizer;
 
 
     public RepoPageViewModel(
@@ -38,7 +41,10 @@ public partial class RepoPageViewModel
         ];
         _selectedMenuItem = MenuItems.First();
 
-        _profileService.ProfileListChanged += ProfileListChanged;
+        _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
+
+        Profiles = [];
+        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
     }
 
 
@@ -72,7 +78,7 @@ public partial class RepoPageViewModel
         new MenuItemViewModel("Dedicated server", new ExamplePageViewModel("Instance (Dedicated server)"))
     ];
 
-    public ObservableCollection<IMenuItemViewModel> Profiles { get; } = [];
+    public ObservableCollection<IMenuItemViewModel> Profiles { get; }
 
 
     public override void Init()
@@ -80,31 +86,31 @@ public partial class RepoPageViewModel
         LoadProfilesCommand.Execute(null);
     }
 
+    public void Dispose()
+    {
+        _profilesSynchronizer.Dispose();
+    }
+
 
     [RelayCommand]
     private async Task LoadProfiles(CancellationToken cancellationToken)
     {
-        var profiles = await _profileService.GetProfiles(_repo.Id, cancellationToken);
-        var viewModels = profiles.Select(x => new ProfileItemViewModel(x, _profilePageViewModelFactory));
-
-        Profiles.Clear();
-        foreach (var profile in viewModels)
-        {
-            Profiles.Add(profile);
-        }
+        await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
     }
 
-    private async void ProfileListChanged(Guid? profileIdOfInterest)
+    private async void ProfileOfInterestChanged(Guid profileIdOfInterest)
     {
         await LoadProfiles(default);
 
-        if (profileIdOfInterest is not null)
-        {
-            var repo = Profiles
-                .OfType<ProfileItemViewModel>()
-                .FirstOrDefault(x => x.Id == profileIdOfInterest);
+        var repo = Profiles
+            .OfType<ProfileItemViewModel>()
+            .FirstOrDefault(x => x.Id == profileIdOfInterest);
 
-            SelectedMenuItem = repo;
-        }
+        SelectedMenuItem = repo;
+    }
+
+    private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
+    {
+        return new ProfileItemViewModel(profile, _profilePageViewModelFactory);
     }
 }

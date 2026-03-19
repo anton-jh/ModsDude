@@ -1,22 +1,25 @@
 ﻿using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Services;
 public class RepoService(
     IReposClient repoClient)
 {
-    public delegate void RepoListChangedEventHandler(Guid? repoIdOfInterest);
-    public event RepoListChangedEventHandler? RepoListChanged;
+    public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
+    public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
+
+    public ObservableCollection<RepoModel> Repos { get; } = [];
 
 
-    public async Task<IEnumerable<RepoModel>> GetRepos(CancellationToken cancellationToken)
+    public async Task RefreshRepos(CancellationToken cancellationToken)
     {
-        var repos = await repoClient.GetMyReposV1Async(cancellationToken);
+        var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
         var instances = new List<ILocalInstance>(); // TODO
 
-        var combinedRepos = repos.Select(x => new RepoModel()
+        var repoModels = reposFromApi.Select(x => new RepoModel()
         {
             Id = x.Repo.Id,
             Name = x.Repo.Name,
@@ -25,7 +28,12 @@ public class RepoService(
             LocalInstances = instances.Where(i => i.RepoId == x.Repo.Id).ToList()
         });
 
-        return combinedRepos;
+        Repos.Clear();
+
+        foreach (var repo in repoModels)
+        {
+            Repos.Add(repo);
+        }
     }
 
     public async Task CreateRepo(string name, string adapterId, object adapterConfiguration, CancellationToken cancellationToken)
@@ -48,6 +56,9 @@ public class RepoService(
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
+
+        await RefreshRepos(cancellationToken);
+
         OnRepoListChanged(repo.Id);
     }
 
@@ -66,6 +77,9 @@ public class RepoService(
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
+
+        await RefreshRepos(cancellationToken);
+
         OnRepoListChanged(id);
     }
 
@@ -73,12 +87,12 @@ public class RepoService(
     {
         await repoClient.DeleteRepoV1Async(id, cancellationToken);
 
-        OnRepoListChanged(null);
+        await RefreshRepos(cancellationToken);
     }
 
 
-    private void OnRepoListChanged(Guid? idOfInterest)
+    private void OnRepoListChanged(Guid idOfInterest)
     {
-        RepoListChanged?.Invoke(idOfInterest);
+        RepoOfInterestChanged?.Invoke(idOfInterest);
     }
 }

@@ -1,17 +1,27 @@
 ﻿using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Exceptions;
+using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 public class ProfileService(
     IProfilesClient profileClient)
 {
-    public delegate void ProfileListChangedEventHandler(Guid? profileIdOfInterest);
-    public event ProfileListChangedEventHandler? ProfileListChanged;
+    public delegate void ProfileOfInterestChangedEventHandler(Guid profileIdOfInterest);
+    public event ProfileOfInterestChangedEventHandler? ProfileOfInterestChanged;
+
+    public ObservableCollection<ProfileDto> Profiles { get; } = [];
 
 
-    public async Task<IEnumerable<ProfileDto>> GetProfiles(Guid repoId, CancellationToken cancellationToken)
+    public async Task RefreshProfiles(Guid repoId, CancellationToken cancellationToken)
     {
-        return await profileClient.GetProfilesV1Async(repoId, cancellationToken);
+        var profiles = await profileClient.GetProfilesV1Async(repoId, cancellationToken);
+        
+        Profiles.Clear();
+
+        foreach (var profile in profiles)
+        {
+            Profiles.Add(profile);
+        }
     }
 
     public async Task CreateProfile(Guid repoId, string name, CancellationToken cancellationToken)
@@ -31,7 +41,10 @@ public class ProfileService(
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
-        OnProfileListChanged(profile.Id);
+
+        await RefreshProfiles(repoId, cancellationToken);
+
+        OnProfileOfInterestChanged(profile.Id);
     }
 
     public async Task UpdateProfile(Guid repoId, Guid profileId, string name, CancellationToken cancellationToken)
@@ -49,18 +62,21 @@ public class ProfileService(
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
-        OnProfileListChanged(profileId);
+
+        await RefreshProfiles(repoId, cancellationToken);
+
+        OnProfileOfInterestChanged(profileId);
     }
 
     public async Task DeleteProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
         await profileClient.DeleteProfileV1Async(repoId, profileId, cancellationToken);
 
-        OnProfileListChanged(null);
+        await RefreshProfiles(repoId, cancellationToken);
     }
 
-    private void OnProfileListChanged(Guid? idOfInterest)
+    private void OnProfileOfInterestChanged(Guid idOfInterest)
     {
-        ProfileListChanged?.Invoke(idOfInterest);
+        ProfileOfInterestChanged?.Invoke(idOfInterest);
     }
 }

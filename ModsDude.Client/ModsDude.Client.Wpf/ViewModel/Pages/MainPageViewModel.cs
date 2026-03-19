@@ -1,5 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Helpers;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -7,11 +9,12 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class MainPageViewModel
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     private readonly RepoService _repoService;
     private readonly RepoPageViewModelFactory _repoPageViewModelFactory;
     private readonly IGameAdapterIndex _gameAdapterIndex;
+    private readonly ObservableCollectionSynchronizer<RepoModel, IMenuItemViewModel, string> _reposSynchronizer;
 
 
     public MainPageViewModel(
@@ -29,9 +32,13 @@ public partial class MainPageViewModel
         _repoService = repoService;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _gameAdapterIndex = gameAdapterIndex;
-        repoService.RepoListChanged += RepoListChanged;
-    }
 
+        Repos = [];
+        _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
+
+        repoService.RepoOfInterestChanged += RepoOfInterestChanged;
+    }
+    
 
     private IMenuItemViewModel? _selectedMenuItem;
     public IMenuItemViewModel? SelectedMenuItem
@@ -59,7 +66,7 @@ public partial class MainPageViewModel
 
     public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
 
-    public ObservableCollection<IMenuItemViewModel> Repos { get; } = [];
+    public ObservableCollection<IMenuItemViewModel> Repos { get; }
 
 
     public override void Init()
@@ -67,30 +74,29 @@ public partial class MainPageViewModel
         LoadReposCommand.Execute(null);
     }
 
+    public void Dispose()
+    {
+        _reposSynchronizer.Dispose();
+    }
+
+
     [RelayCommand]
     private async Task LoadRepos(CancellationToken cancellationToken)
     {
-        var repos = await _repoService.GetRepos(cancellationToken);
-        var viewModels = repos.Select(x => new RepoItemViewModel(x, _repoPageViewModelFactory));
-
-        Repos.Clear();
-        foreach (var repo in viewModels)
-        {
-            Repos.Add(repo);
-        }
+        await _repoService.RefreshRepos(cancellationToken);
     }
 
-    private async void RepoListChanged(Guid? repoIdOfInterest)
+    private async void RepoOfInterestChanged(Guid repoIdOfInterest)
     {
-        await LoadRepos(default);
+        var repo = Repos
+            .OfType<RepoItemViewModel>()
+            .FirstOrDefault(x => x.Id == repoIdOfInterest);
 
-        if (repoIdOfInterest is not null)
-        {
-            var repo = Repos
-                .OfType<RepoItemViewModel>()
-                .FirstOrDefault(x => x.Id == repoIdOfInterest);
+        SelectedMenuItem = repo;
+    }
 
-            SelectedMenuItem = repo;
-        }
+    private RepoItemViewModel MapRepoToVm(RepoModel repo)
+    {
+        return new RepoItemViewModel(repo, _repoPageViewModelFactory);
     }
 }
