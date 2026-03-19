@@ -45,7 +45,7 @@ public class UpdateProfileV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileName(request.Name), cancellationToken))
+        if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileId(profileId), new ProfileName(request.Name), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }

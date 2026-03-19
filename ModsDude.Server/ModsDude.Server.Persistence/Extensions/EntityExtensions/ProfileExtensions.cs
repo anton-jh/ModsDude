@@ -22,9 +22,12 @@ public static class ProfileExtensions
     
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, CancellationToken cancellationToken)
     {
-        return dbSet
-            .Where(x => x.RepoId == repoId)
-            .AnyAsync(x => x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);
+    }
+
+    public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileId except, ProfileName name, CancellationToken cancellationToken)
+    {
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Id != except && x.Name == name, cancellationToken);
     }
 
     public static async Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, ProfileId except, CancellationToken cancellationToken)
