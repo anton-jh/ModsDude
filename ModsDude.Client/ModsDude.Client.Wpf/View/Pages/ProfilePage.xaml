@@ -9,13 +9,28 @@
       d:DataContext="{d:DesignInstance Type=pvm:DesignTimeProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="ProfilePage">
 
-    <Border CornerRadius="4 0 0 0" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <StackPanel Orientation="Vertical" >
+    <Grid RowDefinitions="*, auto">
 
-            <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                   Margin="0 0 0 24"
-                   Text="{Binding Name}" />
+        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+            <StackPanel Orientation="Vertical" >
 
+                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Margin="0 0 0 24"
+                           Text="{Binding Name}" />
+
+                <Label Content="Name" Margin="0 0 0 12"/>
+                <TextBox Width="300" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
+
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" >
+            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+                    Content="Save changes" Command="{Binding SaveChangesCommand}" />
+
+            <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
+                    Content="Delete profile" Command="{Binding DeleteRepoCommand}" />
         </StackPanel>
-    </Border>
+
+    </Grid>
 </Page>

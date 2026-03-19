@@ -1,4 +1,6 @@
-﻿using ModsDude.Client.Core.ModsDudeServer.Generated;
+﻿using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
@@ -8,6 +10,8 @@ public class ProfilePageViewModelFactory(
 {
     public ProfilePageViewModel Create(ProfileDto profile)
     {
-        return new(profile);
+        return new(
+            profile,
+            services.GetRequiredService<ProfileService>());
     }
 }
