@@ -2,12 +2,14 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class CreateRepoPageViewModel(
     RepoService repoService,
-    IGameAdapterIndex gameAdapterIndex)
+    IGameAdapterIndex gameAdapterIndex,
+    NavigationLockService navigationLockService)
     : PageViewModel
 {
     [ObservableProperty]
@@ -48,5 +50,15 @@ public partial class CreateRepoPageViewModel(
             SelectedGameAdapterDescriptor.Value.Id.ToString(),
             "",
             cancellationToken);
+    }
+
+    partial void OnNameChanged(string value)
+    {
+        navigationLockService.AcquireLock(this);
+    }
+
+    partial void OnSelectedGameAdapterDescriptorChanged(GameAdapterDescriptor? value)
+    {
+        navigationLockService.AcquireLock(this);
     }
 }

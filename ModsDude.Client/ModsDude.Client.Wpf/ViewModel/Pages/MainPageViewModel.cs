@@ -21,16 +21,17 @@ public partial class MainPageViewModel
     public MainPageViewModel(
         RepoService repoService,
         RepoPageViewModelFactory repoPageViewModelFactory,
-        IGameAdapterIndex gameAdapterIndex)
+        IGameAdapterIndex gameAdapterIndex,
+        NavigationLockService navigationLockService)
     {
         MenuItems = [
             new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude Home")),
-            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex))
+            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService))
         ];
 
         Repos = [];
 
-        NavManager = new()
+        NavManager = new(navigationLockService)
         {
             Selected = MenuItems.First()
         };
@@ -38,7 +39,6 @@ public partial class MainPageViewModel
         _repoService = repoService;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _gameAdapterIndex = gameAdapterIndex;
-
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
 
         repoService.RepoOfInterestChanged += RepoOfInterestChanged;

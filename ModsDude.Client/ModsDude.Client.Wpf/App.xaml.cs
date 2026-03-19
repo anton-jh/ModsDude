@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Authentication;
 using ModsDude.Client.Wpf.Models;
+using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -70,6 +71,8 @@ public partial class App : Application
         services.AddSingleton<RepoPageViewModelFactory>();
         services.AddSingleton<CreateProfilePageViewModelFactory>();
         services.AddSingleton<ProfilePageViewModelFactory>();
+
+        services.AddSingleton<NavigationLockService>();
 
         services.AddSingleton<RepoService>();
         services.AddSingleton<ProfileService>();

@@ -2,40 +2,36 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public partial class ProfilePageViewModel
+public partial class ProfilePageViewModel(
+    ProfileDto profile,
+    ProfileService profileService,
+    NavigationLockService navigationLockService)
     : PageViewModel
 {
-    private readonly ProfileDto _profile;
-    private readonly ProfileService _profileService;
-
-
-    public ProfilePageViewModel(
-        ProfileDto profile,
-        ProfileService profileService)
-    {
-        Name = profile.Name;
-        _profile = profile;
-        _profileService = profileService;
-    }
-
-
     [ObservableProperty]
-    private string _name;
+    private string _name = profile.Name;
 
-    public string OriginalName => _profile.Name;
+    public string OriginalName => profile.Name;
 
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
     {
-        await _profileService.DeleteProfile(_profile.RepoId, _profile.Id, cancellationToken);
+        await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
     }
 
     [RelayCommand]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
-        await _profileService.UpdateProfile(_profile.RepoId, _profile.Id, Name, cancellationToken);
+        await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
+    }
+
+
+    partial void OnNameChanged(string value)
+    {
+        navigationLockService.AcquireLock(this);
     }
 }

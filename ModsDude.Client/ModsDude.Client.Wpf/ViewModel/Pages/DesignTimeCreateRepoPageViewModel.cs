@@ -1,5 +1,5 @@
 ﻿namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public class DesignTimeCreateRepoPageViewModel()
-    : CreateRepoPageViewModel(null!, null!)
+    : CreateRepoPageViewModel(null!, null!, null!)
 {
 }

@@ -26,7 +26,8 @@ public partial class RepoPageViewModel
         RepoAdminPageViewModelFactory repoAdminPageViewModelFactory,
         CreateProfilePageViewModelFactory createProfilePageViewModelFactory,
         ProfilePageViewModelFactory profilePageViewModelFactory,
-        ProfileService profileService)
+        ProfileService profileService,
+        NavigationLockService navigationLockService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
@@ -37,7 +38,7 @@ public partial class RepoPageViewModel
 
         MenuItems = [
             new MenuItemViewModel("Overview", new ExamplePageViewModel($"Repo overview ({Name})")),
-            new MenuItemViewModel("Admin", _repoAdminPageViewModelFactory.Create(_repo)),
+            new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
         ];
 
@@ -48,7 +49,7 @@ public partial class RepoPageViewModel
 
         Profiles = [];
 
-        NavManager = new()
+        NavManager = new(navigationLockService)
         {
             Selected = MenuItems.First()
         };
