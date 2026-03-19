@@ -10,7 +10,7 @@ public partial class ProfilePageViewModel(
     ProfileDto profile,
     ProfileService profileService,
     NavigationLockService navigationLockService)
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     [ObservableProperty]
     private string _name = profile.Name;
@@ -20,13 +20,20 @@ public partial class ProfilePageViewModel(
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
     {
+        navigationLockService.ReleaseLock(this);
         await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
     }
 
     [RelayCommand]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
+        navigationLockService.ReleaseLock(this);
         await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
+    }
+
+    public void Dispose()
+    {
+        navigationLockService.ReleaseLock(this);
     }
 
 

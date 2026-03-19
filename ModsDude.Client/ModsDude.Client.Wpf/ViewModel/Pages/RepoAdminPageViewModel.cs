@@ -9,7 +9,7 @@ public partial class RepoAdminPageViewModel(
     RepoModel repo,
     RepoService repoService,
     NavigationLockService navigationLockService)
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     [ObservableProperty]
     private string _name = repo.Name;
@@ -18,17 +18,24 @@ public partial class RepoAdminPageViewModel(
 
 
     [RelayCommand]
-    private async Task SaveChanges(CancellationToken cancellationToken)
+    public async Task SaveChanges(CancellationToken cancellationToken)
     {
-        await repoService.UpdateRepo(repo.Id, Name, cancellationToken);
         navigationLockService.ReleaseLock(this);
+        await repoService.UpdateRepo(repo.Id, Name, cancellationToken);
     }
 
     [RelayCommand]
-    private Task DeleteRepo(CancellationToken cancellationToken)
+    public async Task DeleteRepo(CancellationToken cancellationToken)
     {
-        return repoService.DeleteRepo(repo.Id, cancellationToken);
+        navigationLockService.ReleaseLock(this);
+        await repoService.DeleteRepo(repo.Id, cancellationToken);
     }
+
+    public void Dispose()
+    {
+        navigationLockService.ReleaseLock(this);
+    }
+
 
     partial void OnNameChanged(string value)
     {

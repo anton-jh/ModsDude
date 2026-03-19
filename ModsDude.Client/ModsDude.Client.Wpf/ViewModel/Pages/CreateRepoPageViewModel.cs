@@ -10,7 +10,7 @@ public partial class CreateRepoPageViewModel(
     RepoService repoService,
     IGameAdapterIndex gameAdapterIndex,
     NavigationLockService navigationLockService)
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
@@ -38,12 +38,14 @@ public partial class CreateRepoPageViewModel(
 
 
     [RelayCommand(CanExecute = nameof(IsValid))]
-    private async Task Submit(CancellationToken cancellationToken)
+    public async Task Submit(CancellationToken cancellationToken)
     {
         if (SelectedGameAdapterDescriptor is null || string.IsNullOrWhiteSpace(Name))
         {
             return;
         }
+
+        navigationLockService.ReleaseLock(this);
 
         await repoService.CreateRepo(
             Name,
@@ -51,6 +53,12 @@ public partial class CreateRepoPageViewModel(
             "",
             cancellationToken);
     }
+
+    public void Dispose()
+    {
+        navigationLockService.ReleaseLock(this);
+    }
+
 
     partial void OnNameChanged(string value)
     {

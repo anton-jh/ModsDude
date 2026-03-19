@@ -10,13 +10,13 @@ public partial class CreateProfilePageViewModel(
     RepoModel repo,
     ProfileService profileService,
     NavigationLockService navigationLockService)
-    : PageViewModel
+    : PageViewModel, IDisposable
 {
     private readonly RepoModel _repo = repo;
 
+
     [ObservableProperty]
     private string _name = "";
-
 
     [RelayCommand]
     public async Task Submit(CancellationToken cancellationToken)
@@ -26,7 +26,14 @@ public partial class CreateProfilePageViewModel(
             return;
         }
 
+        navigationLockService.ReleaseLock(this);
+
         await profileService.CreateProfile(_repo.Id, Name, cancellationToken);
+    }
+
+    public void Dispose()
+    {
+        navigationLockService.ReleaseLock(this);
     }
 
 
