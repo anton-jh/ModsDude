@@ -30,6 +30,11 @@ public partial class RepoAdminPageViewModel(
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
     {
+        if (!ConfirmDelete())
+        {
+            return;
+        }
+
         navigationLockService.ReleaseLock(this);
         await repoService.DeleteRepo(repo.Id, cancellationToken);
     }
@@ -43,5 +48,18 @@ public partial class RepoAdminPageViewModel(
     partial void OnNameChanged(string value)
     {
         navigationLockService.AcquireLock(this);
+    }
+
+
+    private bool ConfirmDelete()
+    {
+        var result = System.Windows.Forms.MessageBox.Show(
+            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
+            "Really?",
+            System.Windows.Forms.MessageBoxButtons.OKCancel,
+            System.Windows.Forms.MessageBoxIcon.Warning,
+            System.Windows.Forms.MessageBoxDefaultButton.Button2);
+
+        return result == System.Windows.Forms.DialogResult.OK;
     }
 }
