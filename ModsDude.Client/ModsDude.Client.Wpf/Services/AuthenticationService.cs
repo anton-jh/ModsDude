@@ -3,7 +3,7 @@ using Microsoft.Identity.Client.Extensions.Msal;
 using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Helpers;
 
-namespace ModsDude.Client.Wpf.Authentication;
+namespace ModsDude.Client.Wpf.Services;
 
 public class AuthenticationService : IAccessTokenAccessor
 {

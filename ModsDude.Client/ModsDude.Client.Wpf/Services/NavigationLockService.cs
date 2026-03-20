@@ -1,6 +1,6 @@
 ﻿using ModsDude.Client.Wpf.ViewModel.Pages;
 
-namespace ModsDude.Client.Wpf.Navigation;
+namespace ModsDude.Client.Wpf.Services;
 
 public class NavigationLockService
 {

@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
+using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;

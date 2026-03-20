@@ -2,7 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Navigation;
+using ModsDude.Client.Wpf.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
