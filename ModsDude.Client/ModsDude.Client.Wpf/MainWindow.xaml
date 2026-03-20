@@ -14,8 +14,20 @@
         WindowStartupLocation="CenterScreen"
         FontSize="14">
 
-    <Frame Content="{Binding Path=CurrentPage}"
-           NavigationUIVisibility="Hidden"
-           Margin="0 12 0 0"/>
+    <Grid>
+        <Frame Content="{Binding Path=CurrentPage}"
+               NavigationUIVisibility="Hidden"
+               Margin="0 12 0 0"/>
+
+        <Grid Background="{DynamicResource SmokeFillColorDefaultBrush}"
+              Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+              Margin="0 12 0 0">
+            
+            <ContentControl Content="{Binding Modal}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+            
+        </Grid>
+    </Grid>
 
 </Window>

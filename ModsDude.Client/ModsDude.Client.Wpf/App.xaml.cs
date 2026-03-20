@@ -62,6 +62,7 @@ public partial class App : Application
     {
         services.AddSingleton<MainWindow>();
         services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();

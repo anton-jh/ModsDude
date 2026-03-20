@@ -17,6 +17,7 @@ public class DesignTimeRepoPageViewModel
             null!,
             null!,
             null!,
+            null!,
             null!)
     {
     }

@@ -16,6 +16,7 @@ public class RepoPageViewModelFactory(
             services.GetRequiredService<CreateProfilePageViewModelFactory>(),
             services.GetRequiredService<ProfilePageViewModelFactory>(),
             services.GetRequiredService<ProfileService>(),
-            services.GetRequiredService<NavigationLockService>());
+            services.GetRequiredService<NavigationLockService>(),
+            services.GetRequiredService<IModalService>());
     }
 }

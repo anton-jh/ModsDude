@@ -1,0 +1,67 @@
+﻿<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.Dialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="400"
+             d:DataContext="{d:DesignInstance vm:DesignTimeConfirmationDialogViewModel, IsDesignTimeCreatable=True}">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="* auto">
+            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 0">
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Icon, Converter={StaticResource IconKindToStringConverter}}"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 12 24"
+                               VerticalAlignment="Center" />
+                    
+                    <TextBlock Text="{Binding Title}"
+                               HorizontalAlignment="Stretch"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 0 24" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding Message}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Margin="0 0 0 24" />
+
+            </StackPanel>
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid Grid.Row="1" ColumnDefinitions="* *">
+
+                    <Button Grid.Column="0"
+                            Margin="24 24 4 24"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="{Binding YesText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SetYesCommand}" />
+
+                    <Button Grid.Column="1"
+                            Margin="4 24 24 24"
+                            Content="{Binding NoText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SetNoCommand}" />
+
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+    
+</UserControl>

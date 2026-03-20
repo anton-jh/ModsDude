@@ -3,13 +3,15 @@ using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class ProfilePageViewModel(
     ProfileDto profile,
     ProfileService profileService,
-    NavigationLockService navigationLockService)
+    NavigationLockService navigationLockService,
+    IModalService modalService)
     : PageViewModel, IDisposable
 {
     [ObservableProperty]
@@ -27,17 +29,15 @@ public partial class ProfilePageViewModel(
         navigationLockService.ReleaseLock(this);
         await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
     }
-
+    
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
     {
-        if (!ConfirmDelete())
+        if (await ConfirmDelete())
         {
-            return;
+            navigationLockService.ReleaseLock(this);
+            await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
         }
-
-        navigationLockService.ReleaseLock(this);
-        await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
     }
 
     public void Dispose()
@@ -52,15 +52,17 @@ public partial class ProfilePageViewModel(
     }
 
 
-    private bool ConfirmDelete()
+    private async Task<bool> ConfirmDelete()
     {
-        var result = System.Windows.Forms.MessageBox.Show(
-            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
+        var modal = new ConfirmationDialogViewModel(
             "Really?",
-            System.Windows.Forms.MessageBoxButtons.OKCancel,
-            System.Windows.Forms.MessageBoxIcon.Warning,
-            System.Windows.Forms.MessageBoxDefaultButton.Button2);
+            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
+            IconKind.Warning,
+            "Delete",
+            "Keep");
 
-        return result == System.Windows.Forms.DialogResult.OK;
+        await modalService.Show(modal);
+
+        return modal.Result;
     }
 }

@@ -14,6 +14,7 @@ public class ProfilePageViewModelFactory(
         return new(
             profile,
             services.GetRequiredService<ProfileService>(),
-            services.GetRequiredService<NavigationLockService>());
+            services.GetRequiredService<NavigationLockService>(),
+            services.GetRequiredService<IModalService>());
     }
 }

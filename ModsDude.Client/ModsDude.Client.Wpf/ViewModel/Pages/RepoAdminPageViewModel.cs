@@ -3,12 +3,14 @@ using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoAdminPageViewModel(
     RepoModel repo,
     RepoService repoService,
-    NavigationLockService navigationLockService)
+    NavigationLockService navigationLockService,
+    IModalService modalService)
     : PageViewModel, IDisposable
 {
     [ObservableProperty]
@@ -30,13 +32,11 @@ public partial class RepoAdminPageViewModel(
     [RelayCommand]
     public async Task DeleteRepo(CancellationToken cancellationToken)
     {
-        if (!ConfirmDelete())
+        if (await ConfirmDelete())
         {
-            return;
+            navigationLockService.ReleaseLock(this);
+            await repoService.DeleteRepo(repo.Id, cancellationToken);
         }
-
-        navigationLockService.ReleaseLock(this);
-        await repoService.DeleteRepo(repo.Id, cancellationToken);
     }
 
     public void Dispose()
@@ -50,16 +50,17 @@ public partial class RepoAdminPageViewModel(
         navigationLockService.AcquireLock(this);
     }
 
-
-    private bool ConfirmDelete()
+    private async Task<bool> ConfirmDelete()
     {
-        var result = System.Windows.Forms.MessageBox.Show(
-            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
+        var modal = new ConfirmationDialogViewModel(
             "Really?",
-            System.Windows.Forms.MessageBoxButtons.OKCancel,
-            System.Windows.Forms.MessageBoxIcon.Warning,
-            System.Windows.Forms.MessageBoxDefaultButton.Button2);
+            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
+            IconKind.Warning,
+            "Delete",
+            "Keep");
 
-        return result == System.Windows.Forms.DialogResult.OK;
+        await modalService.Show(modal);
+
+        return modal.Result;
     }
 }

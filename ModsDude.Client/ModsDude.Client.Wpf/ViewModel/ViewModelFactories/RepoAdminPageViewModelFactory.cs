@@ -13,6 +13,7 @@ public class RepoAdminPageViewModelFactory(
         return new RepoAdminPageViewModel(
             repo,
             services.GetRequiredService<RepoService>(),
-            services.GetRequiredService<NavigationLockService>());
+            services.GetRequiredService<NavigationLockService>(),
+            services.GetRequiredService<IModalService>());
     }
 }

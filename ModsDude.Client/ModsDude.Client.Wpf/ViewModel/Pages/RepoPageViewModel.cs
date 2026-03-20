@@ -28,7 +28,8 @@ public partial class RepoPageViewModel
         CreateProfilePageViewModelFactory createProfilePageViewModelFactory,
         ProfilePageViewModelFactory profilePageViewModelFactory,
         ProfileService profileService,
-        NavigationLockService navigationLockService)
+        NavigationLockService navigationLockService,
+        IModalService modalService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
@@ -50,7 +51,7 @@ public partial class RepoPageViewModel
 
         Profiles = [];
 
-        NavManager = new(navigationLockService)
+        NavManager = new(navigationLockService, modalService)
         {
             Selected = MenuItems.First()
         };

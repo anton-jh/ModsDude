@@ -8,6 +8,8 @@
              xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
              xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
              xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters"
+             xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+             xmlns:vc="clr-namespace:ModsDude.Client.Wpf.View.ValueConverters"
              ThemeMode="Dark">
     <!--DispatcherUnhandledException="Application_DispatcherUnhandledException">-->
 
@@ -45,6 +47,13 @@
             <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
                 <adp:FarmingSimulatorV1InstanceConfigPage />
             </DataTemplate>
+
+            <DataTemplate DataType="{x:Type vm:ConfirmationDialogViewModel}">
+                <uc:Dialog />
+            </DataTemplate>
+
+            <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />

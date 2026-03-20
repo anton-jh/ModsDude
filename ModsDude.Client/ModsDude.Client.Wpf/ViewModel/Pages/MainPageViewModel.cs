@@ -23,7 +23,8 @@ public partial class MainPageViewModel
         RepoService repoService,
         RepoPageViewModelFactory repoPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
-        NavigationLockService navigationLockService)
+        NavigationLockService navigationLockService,
+        IModalService modalService)
     {
         MenuItems = [
             new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude Home")),
@@ -32,7 +33,7 @@ public partial class MainPageViewModel
 
         Repos = [];
 
-        NavManager = new(navigationLockService)
+        NavManager = new(navigationLockService, modalService)
         {
             Selected = MenuItems.First()
         };

@@ -6,58 +6,22 @@ using System.Windows;
 
 namespace ModsDude.Client.Wpf.Navigation;
 
-public partial class SidebarNavigationManager(NavigationLockService navigationLockService)
+public partial class SidebarNavigationManager(
+    NavigationLockService navigationLockService,
+    IModalService modalService)
     : ObservableObject, IDisposable
 {
     [ObservableProperty]
     private PageViewModel? _currentPage;
 
 
+    private IMenuItemViewModel? _selected;
     public IMenuItemViewModel? Selected
     {
-        get => field;
+        get => _selected;
         set
         {
-            if (navigationLockService.HasLock())
-            {
-                if (ConfirmNavigateAway())
-                {
-                    navigationLockService.Clear();
-                }
-                else
-                {
-                    var previous = field;
-
-                    Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        OnPropertyChanging();
-                        field = null;
-                        OnPropertyChanged();
-
-                        OnPropertyChanging();
-                        field = previous;
-                        OnPropertyChanged();
-                    });
-
-                    return;
-                }
-            }
-
-            if (CurrentPage is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-
-            OnPropertyChanging();
-            field = null;
-            OnPropertyChanged();
-
-            OnPropertyChanging();
-            field = value;
-            OnPropertyChanged();
-
-            CurrentPage = field?.GetPage();
-            CurrentPage?.Init();
+            _ = HandleSelectionChangeAsync(value);
         }
     }
 
@@ -70,15 +34,62 @@ public partial class SidebarNavigationManager(NavigationLockService navigationLo
     }
 
 
-    private static bool ConfirmNavigateAway()
+    private async Task HandleSelectionChangeAsync(IMenuItemViewModel? value)
     {
-        var result = System.Windows.Forms.MessageBox.Show(
-            "Are you sure you want to navigate away?\nThis will discard your current changes!",
-            "Huh?",
-            System.Windows.Forms.MessageBoxButtons.YesNo,
-            System.Windows.Forms.MessageBoxIcon.Warning,
-            System.Windows.Forms.MessageBoxDefaultButton.Button2);
+        var previous = Selected;
 
-        return result is System.Windows.Forms.DialogResult.Yes;
+        if (navigationLockService.HasLock())
+        {
+            var confirmed = await ConfirmNavigateAwayAsync();
+
+            if (!confirmed)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    OnPropertyChanging(nameof(Selected));
+                    _selected = null;
+                    OnPropertyChanged(nameof(Selected));
+
+                    OnPropertyChanging(nameof(Selected));
+                    _selected = previous;
+                    OnPropertyChanged(nameof(Selected));
+                });
+
+                return;
+            }
+
+            navigationLockService.Clear();
+        }
+
+        if (CurrentPage is IDisposable disposable)
+            disposable.Dispose();
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            OnPropertyChanging(nameof(Selected));
+            _selected = null;
+            OnPropertyChanged(nameof(Selected));
+
+            OnPropertyChanging(nameof(Selected));
+            _selected = value;
+            OnPropertyChanged(nameof(Selected));
+        });
+
+        CurrentPage = value?.GetPage();
+        CurrentPage?.Init();
+    }
+
+    private async Task<bool> ConfirmNavigateAwayAsync()
+    {
+        var modal = new ConfirmationDialogViewModel(
+            "Huh?",
+            "Are you sure you want to navigate away?\nThis will discard your current changes!",
+            IconKind.Warning,
+            "Discard changes",
+            "Stay");
+
+        await modalService.Show(modal);
+
+        return modal.Result;
     }
 }
