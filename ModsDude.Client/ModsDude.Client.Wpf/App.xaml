@@ -44,12 +44,18 @@
             <DataTemplate DataType="{x:Type pvm:ProfilePageViewModel}">
                 <p:ProfilePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type mod:FarmingSimulatorInstanceSettings}">
-                <adp:FarmingSimulatorV1InstanceConfigPage />
-            </DataTemplate>
 
             <DataTemplate DataType="{x:Type vm:ConfirmationDialogViewModel}">
                 <uc:Dialog />
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type vm:FolderPathDynamicFormFieldViewModel}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" />
+                    <TextBlock Text="{Binding Required}"/>
+                    <TextBlock Text="{Binding CanBeModified}" />
+                    <TextBlock Text="{Binding Value}" />
+                </StackPanel>
             </DataTemplate>
 
             <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />

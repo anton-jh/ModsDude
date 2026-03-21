@@ -5,7 +5,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
-using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -39,14 +39,16 @@ public partial class RepoPageViewModel
         _name = repo.Name;
 
         MenuItems = [
-            new MenuItemViewModel("Overview", new ExamplePageViewModel($"Repo overview ({Name})")),
+            new MenuItemViewModel("Overview", new ExamplePageViewModel(Name, "Overview")),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
+            new MenuItemViewModel("Members", new ExamplePageViewModel(Name, "Members")),
+            new MenuItemViewModel("Mods", new ExamplePageViewModel(Name, "Mods")),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
         ];
 
         Instances = [
-            new MenuItemViewModel("Game", new ExamplePageViewModel("Instance (Game)")),
-            new MenuItemViewModel("Dedicated server", new ExamplePageViewModel("Instance (Dedicated server)"))
+            new MenuItemViewModel("Game", new ExamplePageViewModel(Name, "Manage installation (Game)")),
+            new MenuItemViewModel("Dedicated server", new ExamplePageViewModel(Name, "Manage installation (Dedicated server)"))
         ];
 
         Profiles = [];
@@ -105,6 +107,6 @@ public partial class RepoPageViewModel
 
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
     {
-        return new ProfileItemViewModel(profile, _profilePageViewModelFactory);
+        return new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
     }
 }

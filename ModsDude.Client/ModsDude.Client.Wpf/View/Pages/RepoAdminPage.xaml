@@ -4,6 +4,8 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:RepoAdminPageViewModel, IsDesignTimeCreatable=False}"
@@ -12,14 +14,33 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <StackPanel Orientation="Vertical" >
+            <StackPanel Orientation="Vertical">
 
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Margin="0 0 0 24"
-                           Text="Repo admin" />
+                           Text="{Binding OriginalName}" />
+                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="Admin"
+                           Margin="0 8 0 36" />
 
-                <Label Content="Name" Margin="0 0 0 12"/>
-                <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16">
+                    <GroupBox Header="Basics" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+                            <Label Content="Name" Margin="0 0 0 12"/>
+                            <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0">
+                    <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
+                        <uc:DynamicFormEditor DataContext="{Binding BaseSettings}" />
+                    </GroupBox>
+                </Border>
 
             </StackPanel>
         </Border>

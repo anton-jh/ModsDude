@@ -11,18 +11,18 @@ public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInst
             "Farming Simulator 2025");
         if (Directory.Exists(gameDataFolder))
         {
-            GameDataFolder = gameDataFolder;
+            GameDataFolder = new(gameDataFolder);
         }
     }
 
 
     [Required, CanBeModified, Title("Game data folder")]
-    public string? GameDataFolder { get; set; }
+    public FolderPath? GameDataFolder { get; set; }
 
 
     protected override IEnumerable<DynamicFormValidationError<FarmingSimulatorInstanceSettings>> Validate()
     {
-        if (!Directory.Exists(GameDataFolder))
+        if (!Directory.Exists(GameDataFolder?.Value))
         {
             yield return new("Folder does not exist.", nameof(GameDataFolder));
         }

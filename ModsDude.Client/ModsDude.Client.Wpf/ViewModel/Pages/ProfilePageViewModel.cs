@@ -1,13 +1,15 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class ProfilePageViewModel(
+    RepoModel repo,
     ProfileDto profile,
     ProfileService profileService,
     NavigationLockService navigationLockService,
@@ -18,8 +20,8 @@ public partial class ProfilePageViewModel(
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name = profile.Name;
 
+    public string RepoName => repo.Name;
     public string OriginalName => profile.Name;
-
     public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 
 

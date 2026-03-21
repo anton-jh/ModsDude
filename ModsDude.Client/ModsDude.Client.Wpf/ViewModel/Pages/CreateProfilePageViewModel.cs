@@ -2,7 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -18,6 +18,8 @@ public partial class CreateProfilePageViewModel(
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     private string _name = "";
+
+    public string RepoName => _repo.Name;
 
     public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 

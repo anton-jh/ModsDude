@@ -16,8 +16,10 @@
             <StackPanel Orientation="Vertical" >
 
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Margin="0 0 0 24"
-                           Text="Create new repo"/>
+                           Text="ModsDude" />
+                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="Create repo"
+                           Margin="0 8 0 36" />
 
                 <Label Content="Name" Margin="0 0 0 12"/>
                 <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />

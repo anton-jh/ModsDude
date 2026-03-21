@@ -1,12 +1,16 @@
 ﻿using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Persistence;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Services;
 public class RepoService(
-    IReposClient repoClient)
+    IReposClient repoClient,
+    IGameAdapterIndex gameAdapterIndex,
+    StateStore store)
 {
     public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
     public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
@@ -17,14 +21,16 @@ public class RepoService(
     public async Task RefreshRepos(CancellationToken cancellationToken)
     {
         var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
-        var instances = new List<ILocalInstance>(); // TODO
+        var instances = store.Get().LocalInstances;
 
         var repoModels = reposFromApi.Select(x => new RepoModel()
         {
             Id = x.Repo.Id,
             Name = x.Repo.Name,
             AdapterId = x.Repo.AdapterId,
-            AdapterConfiguration = x.Repo.AdapterConfiguration,
+            AdapterConfiguration = gameAdapterIndex
+                .GetById(GameAdapterId.Parse(x.Repo.AdapterId))
+                .DeserializeBaseSettings(x.Repo.AdapterConfiguration),
             LocalInstances = instances.Where(i => i.RepoId == x.Repo.Id).ToList()
         });
 

@@ -11,7 +11,7 @@ public class DesignTimeRepoPageViewModel
                 Id = default,
                 Name = "Test repo 123",
                 AdapterId = "test_placeholder",
-                AdapterConfiguration = ""
+                AdapterConfiguration = null!
             },
             null!,
             null!,

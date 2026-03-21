@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Windows;
 

@@ -5,9 +5,10 @@ using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Models;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.Windows;
 using ModsDude.Shared.GenericFactories;
@@ -62,7 +63,6 @@ public partial class App : Application
     {
         services.AddSingleton<MainWindow>();
         services.AddSingleton<MainWindowViewModel>();
-        services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
@@ -73,12 +73,15 @@ public partial class App : Application
 
         services.AddSingleton<NavigationLockService>();
 
+        services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
+        services.AddSingleton<IDialogService, DialogService>();
+
         services.AddSingleton<RepoService>();
         services.AddSingleton<ProfileService>();
 
         services.AddCore<AuthenticationService>();
         services.AddSingleton<AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
-        services.AddSingleton(new Store<State>("wpf.state.json"));
+        services.AddSingleton<StateStore>();
     }
 }

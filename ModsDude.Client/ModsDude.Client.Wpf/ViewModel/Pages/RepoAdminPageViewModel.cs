@@ -2,7 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -10,7 +10,8 @@ public partial class RepoAdminPageViewModel(
     RepoModel repo,
     RepoService repoService,
     NavigationLockService navigationLockService,
-    IModalService modalService)
+    IModalService modalService,
+    IDialogService dialogService)
     : PageViewModel, IDisposable
 {
     [ObservableProperty]
@@ -18,6 +19,8 @@ public partial class RepoAdminPageViewModel(
     private string _name = repo.Name;
 
     public string OriginalName { get; } = repo.Name;
+
+    public DynamicFormViewModel BaseSettings { get; } = new(true, repo.AdapterConfiguration, dialogService);
 
     public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 

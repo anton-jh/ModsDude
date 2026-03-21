@@ -13,10 +13,11 @@
 
     <Border Padding="32" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" CornerRadius="4 0 0 0" >
         <StackPanel>
-            <TextBlock Style="{DynamicResource TitleTextBlockStyle}"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Path=Text}"
-                       Margin="0 0 0 24" />
+            <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding Title}" />
+            <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                       Text="{Binding Subtitle}"
+                       Margin="0 8 0 36" />
         </StackPanel>
     </Border>
 </Page>

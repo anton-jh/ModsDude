@@ -4,7 +4,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
-using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -27,7 +27,7 @@ public partial class MainPageViewModel
         IModalService modalService)
     {
         MenuItems = [
-            new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude Home")),
+            new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude", "Home")),
             new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService))
         ];
 

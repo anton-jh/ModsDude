@@ -1,9 +1,11 @@
-﻿using ModsDude.Client.Core.ModsDudeServer.Generated;
+﻿using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public class ProfileItemViewModel(
+    RepoModel repo,
     ProfileDto profile,
     ProfilePageViewModelFactory profilePageViewModelFactory)
     : IMenuItemViewModel
@@ -13,6 +15,6 @@ public class ProfileItemViewModel(
 
     public PageViewModel GetPage()
     {
-        return profilePageViewModelFactory.Create(profile);
+        return profilePageViewModelFactory.Create(repo, profile);
     }
 }

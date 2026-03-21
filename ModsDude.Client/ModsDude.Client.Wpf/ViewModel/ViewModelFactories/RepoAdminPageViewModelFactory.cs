@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 public class RepoAdminPageViewModelFactory(
@@ -14,6 +14,7 @@ public class RepoAdminPageViewModelFactory(
             repo,
             services.GetRequiredService<RepoService>(),
             services.GetRequiredService<NavigationLockService>(),
-            services.GetRequiredService<IModalService>());
+            services.GetRequiredService<IModalService>(),
+            services.GetRequiredService<IDialogService>());
     }
 }

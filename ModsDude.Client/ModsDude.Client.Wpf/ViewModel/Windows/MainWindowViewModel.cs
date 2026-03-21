@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using ModsDude.Shared.GenericFactories;
 

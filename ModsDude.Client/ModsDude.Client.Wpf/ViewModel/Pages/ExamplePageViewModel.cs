@@ -1,5 +1,5 @@
 ﻿namespace ModsDude.Client.Wpf.ViewModel.Pages;
-public class ExamplePageViewModel(string text)
+public class ExamplePageViewModel(string title, string subtitle = "Example page")
     : PageViewModel
 {
     public ExamplePageViewModel()
@@ -8,5 +8,6 @@ public class ExamplePageViewModel(string text)
     }
 
 
-    public string Text { get; } = text;
+    public string Title { get; } = title;
+    public string Subtitle { get; } = subtitle;
 }
