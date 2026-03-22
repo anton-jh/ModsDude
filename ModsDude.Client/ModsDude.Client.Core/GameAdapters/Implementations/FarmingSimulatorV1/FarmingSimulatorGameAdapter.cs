@@ -1,5 +1,5 @@
 ﻿namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
-public class FarmingSimulatorGameAdapter : GameAdapterBase<FarmingSimulatorBaseSettings, FarmingSimulatorInstanceSettings>
+public class FarmingSimulatorGameAdapter : GameAdapterBase<EmptyAdapterSettings, FarmingSimulatorInstanceSettings>
 {
     public override GameAdapterDescriptor Descriptor { get; } = new(
         Id: new("_farming_simulator", 1),

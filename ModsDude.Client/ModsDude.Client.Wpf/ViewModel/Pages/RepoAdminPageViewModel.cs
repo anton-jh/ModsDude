@@ -29,7 +29,7 @@ public partial class RepoAdminPageViewModel(
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
         navigationLockService.ReleaseLock(this);
-        await repoService.UpdateRepo(repo.Id, Name, cancellationToken);
+        await repoService.UpdateRepo(repo.Id, Name, BaseSettings.ExtractResults(), cancellationToken);
     }
 
     [RelayCommand]

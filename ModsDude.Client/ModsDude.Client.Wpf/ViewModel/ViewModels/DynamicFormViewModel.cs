@@ -29,31 +29,39 @@ public class DynamicFormViewModel
     public List<DynamicFormFieldViewModel> Fields { get; }
 
 
+    public IDynamicForm ExtractResults()
+    {
+        var obj = (IDynamicForm)Activator.CreateInstance(_settings.GetType())!;
+
+        foreach (var field in Fields)
+        {
+            field.Property.SetValue(obj, field.GetValue());
+        }
+
+        return obj;
+    }
+
+
     private List<DynamicFormFieldViewModel> ExtractFields()
     {
         return _settings
             .GetType()
             .GetProperties()
             .Select(ExtractField)
-            .OfType<DynamicFormFieldViewModel>()
             .ToList();
     }
 
-    private DynamicFormFieldViewModel? ExtractField(PropertyInfo property)
+    private DynamicFormFieldViewModel ExtractField(PropertyInfo property)
     {
         var title = property.GetCustomAttribute<TitleAttribute>()?.Text ?? property.Name;
         var required = property.GetCustomAttribute<RequiredAttribute>() is not null;
         var canBeModified = !Editing || property.GetCustomAttribute<CanBeModifiedAttribute>() is not null;
 
-        if (!canBeModified)
-        {
-            return null;
-        }
-
         DynamicFormFieldViewModel field;
         if (property.PropertyType == typeof(FolderPath))
         {
             field = new FolderPathDynamicFormFieldViewModel(
+                property,
                 title, required, canBeModified,
                 (string?)property.GetValue(_settings) ?? "",
                 _dialogService);
@@ -67,18 +75,21 @@ public class DynamicFormViewModel
     }
 }
 
-public abstract class DynamicFormFieldViewModel : ObservableObject
+public abstract class DynamicFormFieldViewModel(PropertyInfo property)
+    : ObservableObject
 {
-
+    public PropertyInfo Property { get; } = property;
+    public abstract object GetValue();
 }
 
 public partial class FolderPathDynamicFormFieldViewModel(
+    PropertyInfo property,
     string title,
     bool required,
     bool canBeModified,
     string value,
     IDialogService dialogService)
-    : DynamicFormFieldViewModel
+    : DynamicFormFieldViewModel(property)
 {
     public string Title { get; } = title;
     public bool Required { get; } = required;
@@ -86,6 +97,11 @@ public partial class FolderPathDynamicFormFieldViewModel(
 
     [ObservableProperty]
     private string _value = value;
+
+    public override object GetValue()
+    {
+        return Value;
+    }
 
 
     [RelayCommand]

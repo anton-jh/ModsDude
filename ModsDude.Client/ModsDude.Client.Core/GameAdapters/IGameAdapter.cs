@@ -1,5 +1,4 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
-using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters;
@@ -32,8 +31,6 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
 
     public virtual IDynamicForm DeserializeBaseSettings(string serialized)
     {
-        return new FarmingSimulatorInstanceSettings();
-
         return JsonSerializer.Deserialize<TBaseSettings>(serialized)
             ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");
     }

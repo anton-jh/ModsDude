@@ -10,8 +10,8 @@
              xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters"
              xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              xmlns:vc="clr-namespace:ModsDude.Client.Wpf.View.ValueConverters"
+             DispatcherUnhandledException="Application_DispatcherUnhandledException"
              ThemeMode="Dark">
-    <!--DispatcherUnhandledException="Application_DispatcherUnhandledException">-->
 
     <Application.Resources>
         <ResourceDictionary>
