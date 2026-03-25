@@ -1,7 +1,6 @@
 ﻿using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
-using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
@@ -29,7 +28,7 @@ public class RepoService(
         {
             Id = x.Repo.Id,
             Name = x.Repo.Name,
-            AdapterId = x.Repo.AdapterId,
+            AdapterId = GameAdapterId.Parse(x.Repo.AdapterId),
             AdapterConfiguration = gameAdapterIndex
                 .GetById(GameAdapterId.Parse(x.Repo.AdapterId))
                 .DeserializeBaseSettings(x.Repo.AdapterConfiguration),
@@ -70,7 +69,7 @@ public class RepoService(
         OnRepoListChanged(repo.Id);
     }
 
-    public async Task UpdateRepo(Guid id, string name, IDynamicForm baseSettings, CancellationToken cancellationToken)
+    public async Task UpdateRepo(Guid id, string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         var request = new UpdateRepoRequest()
         {

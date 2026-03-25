@@ -6,21 +6,28 @@ using System.Reflection;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
-public class DynamicFormViewModel
+public partial class DynamicFormViewModel
+    : ObservableObject, IDisposable
 {
-    private readonly IDynamicForm _settings;
+    private readonly DynamicForm _form;
     private readonly IDialogService _dialogService;
+    private bool? _oldIsValid = null;
 
 
     public DynamicFormViewModel(
         bool editing,
-        IDynamicForm settings,
+        DynamicForm settings,
         IDialogService dialogService)
     {
         Editing = editing;
-        _settings = settings;
+        _form = settings;
         _dialogService = dialogService;
         Fields = ExtractFields();
+
+        foreach (var field in Fields)
+        {
+            field.PropertyChanged += OnFieldModified;
+        }
     }
 
 
@@ -28,10 +35,15 @@ public class DynamicFormViewModel
 
     public List<DynamicFormFieldViewModel> Fields { get; }
 
+    public bool IsValid => _form.Validate().Length == 0;
 
-    public IDynamicForm ExtractResults()
+    public event EventHandler? Modified;
+    public event EventHandler? IsValidChanged;
+
+
+    public DynamicForm ExtractResults()
     {
-        var obj = (IDynamicForm)Activator.CreateInstance(_settings.GetType())!;
+        var obj = (DynamicForm)Activator.CreateInstance(_form.GetType())!;
 
         foreach (var field in Fields)
         {
@@ -41,10 +53,18 @@ public class DynamicFormViewModel
         return obj;
     }
 
+    public void Dispose()
+    {
+        foreach (var field in Fields)
+        {
+            field.PropertyChanged -= OnFieldModified;
+        }
+    }
+
 
     private List<DynamicFormFieldViewModel> ExtractFields()
     {
-        return _settings
+        return _form
             .GetType()
             .GetProperties()
             .Select(ExtractField)
@@ -63,7 +83,7 @@ public class DynamicFormViewModel
             field = new FolderPathDynamicFormFieldViewModel(
                 property,
                 title, required, canBeModified,
-                (string?)property.GetValue(_settings) ?? "",
+                (string?)property.GetValue(_form) ?? "",
                 _dialogService);
         }
         else
@@ -72,6 +92,19 @@ public class DynamicFormViewModel
         }
 
         return field;
+    }
+
+    private void OnFieldModified(object? sender, EventArgs? e)
+    {
+        var valid = IsValid;
+        if (valid != _oldIsValid)
+        {
+            _oldIsValid = valid;
+            OnPropertyChanged(nameof(IsValid));
+            IsValidChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        Modified?.Invoke(this, EventArgs.Empty);
     }
 }
 
@@ -97,6 +130,7 @@ public partial class FolderPathDynamicFormFieldViewModel(
 
     [ObservableProperty]
     private string _value = value;
+
 
     public override object GetValue()
     {

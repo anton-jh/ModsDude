@@ -8,34 +8,34 @@ public interface IGameAdapter
     GameAdapterDescriptor Descriptor { get; }
     bool HasModAdapter { get; }
     bool HasSavegameAdapter { get; }
-    IDynamicForm GetBaseSettingsTemplate();
-    IDynamicForm GetInstanceSettingsTemplate();
-    IDynamicForm DeserializeBaseSettings(string serialized);
-    IDynamicForm DeserializeInstanceSettings(string serialized);
+    DynamicForm BaseSettingsTemplate { get; }
+    DynamicForm InstanceSettingsTemplate { get; }
+    DynamicForm DeserializeBaseSettings(string serialized);
+    DynamicForm DeserializeInstanceSettings(string serialized);
 }
 
 public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameAdapter
-    where TBaseSettings : IDynamicForm, new()
-    where TInstanceSettings : IDynamicForm, new()
+    where TBaseSettings : DynamicForm, new()
+    where TInstanceSettings : DynamicForm, new()
 {
     public abstract GameAdapterDescriptor Descriptor { get; }
 
     public bool HasModAdapter => ModAdapter is not null;
     public bool HasSavegameAdapter => SavegameAdapter is not null;
+    public DynamicForm BaseSettingsTemplate { get; } = new TBaseSettings();
+    public DynamicForm InstanceSettingsTemplate { get; } = new TInstanceSettings();
 
     public abstract IModAdapter? ModAdapter { get; }
     public abstract ISavegameAdapter? SavegameAdapter { get; }
 
-    public IDynamicForm GetBaseSettingsTemplate() => new TBaseSettings();
-    public IDynamicForm GetInstanceSettingsTemplate() => new TInstanceSettings();
 
-    public virtual IDynamicForm DeserializeBaseSettings(string serialized)
+    public virtual DynamicForm DeserializeBaseSettings(string serialized)
     {
         return JsonSerializer.Deserialize<TBaseSettings>(serialized)
             ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");
     }
 
-    public virtual IDynamicForm DeserializeInstanceSettings(string serialized)
+    public virtual DynamicForm DeserializeInstanceSettings(string serialized)
     {
         return JsonSerializer.Deserialize<TInstanceSettings>(serialized)
             ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");

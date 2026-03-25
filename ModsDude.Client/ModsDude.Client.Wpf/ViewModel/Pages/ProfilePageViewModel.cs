@@ -56,12 +56,7 @@ public partial class ProfilePageViewModel(
 
     private async Task<bool> ConfirmDelete()
     {
-        var modal = new ConfirmationDialogViewModel(
-            "Really?",
-            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
-            IconKind.Warning,
-            "Delete",
-            "Keep");
+        var modal = ConfirmationDialogViewModel.ConfirmDelete(OriginalName);
 
         await modalService.Show(modal);
 

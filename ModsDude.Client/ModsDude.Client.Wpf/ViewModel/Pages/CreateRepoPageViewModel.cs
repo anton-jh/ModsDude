@@ -27,7 +27,7 @@ public partial class CreateRepoPageViewModel(
         ? gameAdapterIndex.GetById(SelectedGameAdapterDescriptor.Value.Id)
         : null;
 
-    public object? AdapterConfigurationModel => SelectedGameAdapter?.GetBaseSettingsTemplate();
+    public object? AdapterConfigurationModel => SelectedGameAdapter?.BaseSettingsTemplate; // TODO: probably replace with DynamicFormViewModel
 
     public bool IsValid =>
         !string.IsNullOrEmpty(Name) &&

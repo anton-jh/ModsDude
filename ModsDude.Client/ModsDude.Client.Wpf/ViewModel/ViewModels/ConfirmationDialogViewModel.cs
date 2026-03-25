@@ -1,6 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Security.Policy;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -33,6 +32,17 @@ public partial class ConfirmationDialogViewModel(
     {
         Result = false;
         Done = true;
+    }
+
+
+    public static ConfirmationDialogViewModel ConfirmDelete(string name)
+    {
+        return new ConfirmationDialogViewModel(
+            "Really?",
+            $"Are you sure you want to delete '{name}'.\nThis action cannot be undone!",
+            IconKind.Warning,
+            "Delete",
+            "Keep");
     }
 }
 

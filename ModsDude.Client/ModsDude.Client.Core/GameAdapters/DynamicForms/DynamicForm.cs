@@ -2,28 +2,27 @@
 
 namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 
-public interface IDynamicForm
+public abstract record DynamicForm
 {
-    IDynamicFormValidationError[] Validate();
-    string Serialize();
+    public abstract DynamicFormValidationError[] Validate();
+
+    public virtual string Serialize()
+    {
+        return JsonSerializer.Serialize(this, GetType());
+    }
 }
 
 
-public abstract class DynamicForm<T> : IDynamicForm
+public abstract record DynamicForm<T> : DynamicForm
     where T : DynamicForm<T>
 {
-    IDynamicFormValidationError[] IDynamicForm.Validate()
+    public override DynamicFormValidationError[] Validate()
     {
         return Validate().ToArray();
     }
 
-    protected virtual IEnumerable<DynamicFormValidationError<T>> Validate()
+    protected virtual IEnumerable<DynamicFormValidationError<T>> PerformValidation()
     {
         return [];
-    }
-
-    public string Serialize()
-    {
-        return JsonSerializer.Serialize(this, GetType());
     }
 }

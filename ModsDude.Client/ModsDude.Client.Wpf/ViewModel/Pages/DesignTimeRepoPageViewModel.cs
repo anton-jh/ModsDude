@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.Models;
+﻿using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public class DesignTimeRepoPageViewModel
@@ -10,7 +11,7 @@ public class DesignTimeRepoPageViewModel
             {
                 Id = default,
                 Name = "Test repo 123",
-                AdapterId = "test_placeholder",
+                AdapterId = new GameAdapterId("_example", 1),
                 AdapterConfiguration = null!
             },
             null!,

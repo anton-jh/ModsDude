@@ -2,14 +2,14 @@
 
 namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 
-public interface IDynamicFormValidationError
+public abstract record DynamicFormValidationError
 {
-    string Message { get; }
-    PropertyInfo[] Properties { get; }
+    public abstract string Message { get; }
+    public abstract PropertyInfo[] Properties { get; }
 }
 
-public record DynamicFormValidationError<TForm> : IDynamicFormValidationError
-    where TForm : IDynamicForm
+public record DynamicFormValidationError<TForm> : DynamicFormValidationError
+    where TForm : DynamicForm
 {
     public DynamicFormValidationError(string message, params PropertyInfo[] properties)
     {
@@ -34,8 +34,8 @@ public record DynamicFormValidationError<TForm> : IDynamicFormValidationError
         : this(message, propertyNames.Select(GetPropertyInfo).ToArray())
     { }
 
-    public string Message { get; }
-    public PropertyInfo[] Properties { get; }
+    public override string Message { get; }
+    public override PropertyInfo[] Properties { get; }
 
 
     private static PropertyInfo GetPropertyInfo(string propertyName)

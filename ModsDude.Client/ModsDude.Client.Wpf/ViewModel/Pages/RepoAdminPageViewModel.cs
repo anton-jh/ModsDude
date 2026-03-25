@@ -6,21 +6,40 @@ using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
-public partial class RepoAdminPageViewModel(
-    RepoModel repo,
-    RepoService repoService,
-    NavigationLockService navigationLockService,
-    IModalService modalService,
-    IDialogService dialogService)
-    : PageViewModel, IDisposable
+public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 {
+    private readonly RepoModel _repo;
+    private readonly RepoService _repoService;
+    private readonly NavigationLockService _navigationLockService;
+    private readonly IModalService _modalService;
+
+
+    public RepoAdminPageViewModel(
+        RepoModel repo,
+        RepoService repoService,
+        NavigationLockService navigationLockService,
+        IModalService modalService,
+        IDialogService dialogService)
+    {
+        _repo = repo;
+        _repoService = repoService;
+        _navigationLockService = navigationLockService;
+        _modalService = modalService;
+        _name = repo.Name;
+        OriginalName = repo.Name;
+        BaseSettingsEditor = new(true, repo.AdapterConfiguration, dialogService);
+
+        BaseSettingsEditor.Modified += OnBaseSettingsModified;
+    }
+
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
-    private string _name = repo.Name;
+    private string _name;
 
-    public string OriginalName { get; } = repo.Name;
+    public string OriginalName { get; }
 
-    public DynamicFormViewModel BaseSettings { get; } = new(true, repo.AdapterConfiguration, dialogService);
+    public DynamicFormViewModel BaseSettingsEditor { get; }
 
     public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 
@@ -28,8 +47,8 @@ public partial class RepoAdminPageViewModel(
     [RelayCommand(CanExecute = nameof(IsValid))]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
-        navigationLockService.ReleaseLock(this);
-        await repoService.UpdateRepo(repo.Id, Name, BaseSettings.ExtractResults(), cancellationToken);
+        _navigationLockService.ReleaseLock(this);
+        await _repoService.UpdateRepo(_repo.Id, Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
     }
 
     [RelayCommand]
@@ -37,33 +56,35 @@ public partial class RepoAdminPageViewModel(
     {
         if (await ConfirmDelete())
         {
-            navigationLockService.ReleaseLock(this);
-            await repoService.DeleteRepo(repo.Id, cancellationToken);
+            _navigationLockService.ReleaseLock(this);
+            await _repoService.DeleteRepo(_repo.Id, cancellationToken);
         }
     }
 
     public void Dispose()
     {
-        navigationLockService.ReleaseLock(this);
+        _navigationLockService.ReleaseLock(this);
+        BaseSettingsEditor.Modified -= OnBaseSettingsModified;
+        BaseSettingsEditor.Dispose();
     }
 
 
     partial void OnNameChanged(string value)
     {
-        navigationLockService.AcquireLock(this);
+        _navigationLockService.AcquireLock(this);
     }
 
     private async Task<bool> ConfirmDelete()
     {
-        var modal = new ConfirmationDialogViewModel(
-            "Really?",
-            $"Are you sure you want to delete '{OriginalName}'.\nThis action cannot be undone!",
-            IconKind.Warning,
-            "Delete",
-            "Keep");
+        var modal = ConfirmationDialogViewModel.ConfirmDelete(OriginalName);
 
-        await modalService.Show(modal);
+        await _modalService.Show(modal);
 
         return modal.Result;
+    }
+
+    private void OnBaseSettingsModified(object? sender, EventArgs e)
+    {
+        _navigationLockService.AcquireLock(this);
     }
 }

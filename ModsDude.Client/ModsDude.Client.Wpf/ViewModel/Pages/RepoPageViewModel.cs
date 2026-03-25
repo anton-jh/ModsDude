@@ -43,13 +43,11 @@ public partial class RepoPageViewModel
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
             new MenuItemViewModel("Members", new ExamplePageViewModel(Name, "Members")),
             new MenuItemViewModel("Mods", new ExamplePageViewModel(Name, "Mods")),
-            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
+            new MenuItemViewModel("Connect game instance", new ExamplePageViewModel(Name, "Connect game instance"))
         ];
 
-        Instances = [
-            new MenuItemViewModel("Game", new ExamplePageViewModel(Name, "Manage installation (Game)")),
-            new MenuItemViewModel("Dedicated server", new ExamplePageViewModel(Name, "Manage installation (Dedicated server)"))
-        ];
+        Instances = new(repo.LocalInstances.Select(MapInstanceToVm));
 
         Profiles = [];
 
@@ -59,7 +57,6 @@ public partial class RepoPageViewModel
         };
 
         _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
-
         _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
     }
 
@@ -108,5 +105,10 @@ public partial class RepoPageViewModel
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
     {
         return new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
+    }
+
+    private InstanceItemViewModel MapInstanceToVm(LocalInstance instance)
+    {
+        return new InstanceItemViewModel(_repo, instance);
     }
 }
