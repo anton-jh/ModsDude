@@ -2,9 +2,11 @@
 
 namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 
-public abstract record DynamicForm
+public abstract class DynamicForm
 {
     public abstract DynamicFormValidationError[] Validate();
+
+    public abstract DynamicForm Copy();
 
     public virtual string Serialize()
     {
@@ -13,16 +15,30 @@ public abstract record DynamicForm
 }
 
 
-public abstract record DynamicForm<T> : DynamicForm
-    where T : DynamicForm<T>
+public abstract class DynamicForm<T> : DynamicForm
+    where T : DynamicForm<T>, new()
 {
     public override DynamicFormValidationError[] Validate()
     {
-        return Validate().ToArray();
+        return PerformValidation().ToArray();
     }
 
     protected virtual IEnumerable<DynamicFormValidationError<T>> PerformValidation()
     {
         return [];
+    }
+
+    public override DynamicForm Copy()
+    {
+        var props = typeof(T).GetProperties();
+        var copy = new T();
+
+        foreach (var prop in props)
+        {
+            var value = prop.GetValue(this);
+            prop.SetValue(copy, value);
+        }
+
+        return copy;
     }
 }

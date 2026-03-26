@@ -27,7 +27,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         _modalService = modalService;
         _name = repo.Name;
         OriginalName = repo.Name;
-        BaseSettingsEditor = new(true, repo.AdapterConfiguration, dialogService);
+        BaseSettingsEditor = new(true, repo.AdapterConfiguration.Copy(), dialogService);
 
         BaseSettingsEditor.Modified += OnBaseSettingsModified;
     }
@@ -63,7 +63,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 
     public void Dispose()
     {
-        _navigationLockService.ReleaseLock(this);
+        _navigationLockService.Dispose();
         BaseSettingsEditor.Modified -= OnBaseSettingsModified;
         BaseSettingsEditor.Dispose();
     }

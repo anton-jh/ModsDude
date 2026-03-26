@@ -2,7 +2,7 @@
 
 namespace ModsDude.Client.Wpf.ViewModel.Services;
 
-public class NavigationLockService
+public class NavigationLockService : IDisposable
 {
     public PageViewModel? Lock { get; private set; }
 
@@ -33,5 +33,14 @@ public class NavigationLockService
     public void Clear()
     {
         Lock = null;
+    }
+
+    public void Dispose()
+    {
+        if (Lock is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+        Clear();
     }
 }

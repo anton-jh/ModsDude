@@ -44,6 +44,12 @@
             <DataTemplate DataType="{x:Type pvm:ProfilePageViewModel}">
                 <p:ProfilePage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:CreateLocalInstancePageViewModel}">
+                <p:CreateLocalInstancePage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:EditLocalInstancePageViewModel}">
+                <p:EditLocalInstancePage />
+            </DataTemplate>
 
             <DataTemplate DataType="{x:Type vm:ConfirmationDialogViewModel}">
                 <uc:Dialog />

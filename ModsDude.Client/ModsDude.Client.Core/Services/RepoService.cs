@@ -11,7 +11,7 @@ namespace ModsDude.Client.Core.Services;
 public class RepoService(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
-    StateStore store)
+    LocalInstanceService localInstanceService)
 {
     public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
     public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
@@ -22,18 +22,12 @@ public class RepoService(
     public async Task RefreshRepos(CancellationToken cancellationToken)
     {
         var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
-        var instances = store.Get().LocalInstances;
+        localInstanceService.Refresh();
+        var instances = localInstanceService.Instances;
+        // TODO: byt ut Store<State> mot ngt mer sammanhängande repository. Typ en Load()-metod som körs i
+        // början o sen bara en ObservableCollection för Instances och events för allt annat (om behövs).
 
-        var repoModels = reposFromApi.Select(x => new RepoModel()
-        {
-            Id = x.Repo.Id,
-            Name = x.Repo.Name,
-            AdapterId = GameAdapterId.Parse(x.Repo.AdapterId),
-            AdapterConfiguration = gameAdapterIndex
-                .GetById(GameAdapterId.Parse(x.Repo.AdapterId))
-                .DeserializeBaseSettings(x.Repo.AdapterConfiguration),
-            LocalInstances = instances.Where(i => i.RepoId == x.Repo.Id).ToList()
-        });
+        var repoModels = reposFromApi.Select();
 
         Repos.Clear();
 
@@ -101,5 +95,19 @@ public class RepoService(
     private void OnRepoListChanged(Guid idOfInterest)
     {
         RepoOfInterestChanged?.Invoke(idOfInterest);
+    }
+
+    private RepoModel MapRepoModel(RepoDto repo, )
+    {
+        return new RepoModel()
+        {
+            Id = x.Repo.Id,
+            Name = x.Repo.Name,
+            AdapterId = GameAdapterId.Parse(x.Repo.AdapterId),
+            AdapterConfiguration = gameAdapterIndex
+                .GetById(GameAdapterId.Parse(x.Repo.AdapterId))
+                .DeserializeBaseSettings(x.Repo.AdapterConfiguration),
+            LocalInstances = new(instances.Where(i => i.RepoId == x.Repo.Id))
+        }
     }
 }

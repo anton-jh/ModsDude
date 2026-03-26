@@ -70,6 +70,8 @@ public partial class App : Application
         services.AddSingleton<RepoPageViewModelFactory>();
         services.AddSingleton<CreateProfilePageViewModelFactory>();
         services.AddSingleton<ProfilePageViewModelFactory>();
+        services.AddSingleton<CreateLocalInstancePageViewModelFactory>();
+        services.AddSingleton<EditLocalInstancePageViewModelFactory>();
 
         services.AddSingleton<NavigationLockService>();
 
@@ -78,6 +80,7 @@ public partial class App : Application
 
         services.AddSingleton<RepoService>();
         services.AddSingleton<ProfileService>();
+        services.AddSingleton<LocalInstanceService>();
 
         services.AddCore<AuthenticationService>();
         services.AddSingleton<AuthenticationService>();

@@ -16,6 +16,7 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     private readonly Func<TModel, TViewModel> _factory;
     private readonly Func<TViewModel, TKey> _keySelector;
     private readonly IComparer<TKey> _comparer;
+    private readonly Func<TModel, bool> _filter;
     private readonly string? _propertyName;
     private readonly NotifyCollectionChangedEventHandler _collectionChangedHandler;
 
@@ -27,7 +28,8 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
         ObservableCollection<TViewModel> target,
         Func<TModel, TViewModel> factory,
         Expression<Func<TViewModel, TKey>> keySelectorExpression,
-        IComparer<TKey>? comparer = null)
+        IComparer<TKey>? comparer = null,
+        Func<TModel, bool>? filter = null)
     {
         _source = source;
         _target = target;
@@ -37,9 +39,12 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
         _propertyName = GetPropertyName(keySelectorExpression);
 
         _comparer = comparer ?? Comparer<TKey>.Default;
+        _filter = filter ?? (_ => true);
 
         foreach (var item in source)
+        {
             Add(item);
+        }
 
         _collectionChangedHandler = (s, e) =>
         {
@@ -61,6 +66,11 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
 
     private void Add(TModel model)
     {
+        if (!_filter(model))
+        {
+            return;
+        }
+
         var vm = _factory(model);
         _map[model] = vm;
 

@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Wpf.ViewModel.Services;
+using System.ComponentModel;
 using System.Reflection;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -78,12 +79,11 @@ public partial class DynamicFormViewModel
         var canBeModified = !Editing || property.GetCustomAttribute<CanBeModifiedAttribute>() is not null;
 
         DynamicFormFieldViewModel field;
-        if (property.PropertyType == typeof(FolderPath))
+        if (property.GetCustomAttribute<FolderPathAttribute>() is not null)
         {
             field = new FolderPathDynamicFormFieldViewModel(
-                property,
+                _form, property,
                 title, required, canBeModified,
-                (string?)property.GetValue(_form) ?? "",
                 _dialogService);
         }
         else
@@ -94,8 +94,13 @@ public partial class DynamicFormViewModel
         return field;
     }
 
-    private void OnFieldModified(object? sender, EventArgs? e)
+    private void OnFieldModified(object? sender, PropertyChangedEventArgs? e)
     {
+        if (e?.PropertyName != "Value")
+        {
+            return;
+        }
+
         var valid = IsValid;
         if (valid != _oldIsValid)
         {
@@ -108,31 +113,50 @@ public partial class DynamicFormViewModel
     }
 }
 
-public abstract class DynamicFormFieldViewModel(PropertyInfo property)
-    : ObservableObject
+public abstract partial class DynamicFormFieldViewModel : ObservableObject
 {
-    public PropertyInfo Property { get; } = property;
-    public abstract object GetValue();
+    private readonly DynamicForm _form;
+
+
+    public DynamicFormFieldViewModel(
+        DynamicForm form,
+        PropertyInfo property)
+    {
+        _form = form;
+        Property = property;
+        Value = property.GetValue(form);
+    }
+
+
+    public PropertyInfo Property { get; }
+
+    [ObservableProperty]
+    protected object? _value;
+
+    public abstract object? GetValue();
+
+
+    partial void OnValueChanged(object? value)
+    {
+        Property.SetValue(_form, value);
+    }
 }
 
 public partial class FolderPathDynamicFormFieldViewModel(
+    DynamicForm form,
     PropertyInfo property,
     string title,
     bool required,
     bool canBeModified,
-    string value,
     IDialogService dialogService)
-    : DynamicFormFieldViewModel(property)
+    : DynamicFormFieldViewModel(form, property)
 {
     public string Title { get; } = title;
     public bool Required { get; } = required;
     public bool CanBeModified { get; } = canBeModified;
 
-    [ObservableProperty]
-    private string _value = value;
 
-
-    public override object GetValue()
+    public override object? GetValue()
     {
         return Value;
     }
@@ -141,9 +165,9 @@ public partial class FolderPathDynamicFormFieldViewModel(
     [RelayCommand]
     public void PickFolder()
     {
-        var hint = string.IsNullOrWhiteSpace(Value) ? null : Value;
+        var hint = string.IsNullOrWhiteSpace((string?)Value) ? null : Value;
 
-        if (dialogService.PickFolder(hint) is string folder)
+        if (dialogService.PickFolder((string?)hint) is string folder)
         {
             Value = folder;
         }

@@ -19,7 +19,10 @@ public partial class RepoPageViewModel
     private readonly CreateProfilePageViewModelFactory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModelFactory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
+    private readonly CreateLocalInstancePageViewModelFactory _createLocalInstancePageViewModelFactory;
+    private readonly EditLocalInstancePageViewModelFactory _editLocalInstancePageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<ProfileDto, IMenuItemViewModel, string> _profilesSynchronizer;
+    private readonly ObservableCollectionSynchronizer<LocalInstance, IMenuItemViewModel, string> _instanceSynchronizer;
 
 
     public RepoPageViewModel(
@@ -29,13 +32,17 @@ public partial class RepoPageViewModel
         ProfilePageViewModelFactory profilePageViewModelFactory,
         ProfileService profileService,
         NavigationLockService navigationLockService,
-        IModalService modalService)
+        IModalService modalService,
+        CreateLocalInstancePageViewModelFactory createLocalInstancePageViewModelFactory,
+        EditLocalInstancePageViewModelFactory editLocalInstancePageViewModelFactory)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
+        _createLocalInstancePageViewModelFactory = createLocalInstancePageViewModelFactory;
+        _editLocalInstancePageViewModelFactory = editLocalInstancePageViewModelFactory;
         _name = repo.Name;
 
         MenuItems = [
@@ -44,20 +51,20 @@ public partial class RepoPageViewModel
             new MenuItemViewModel("Members", new ExamplePageViewModel(Name, "Members")),
             new MenuItemViewModel("Mods", new ExamplePageViewModel(Name, "Mods")),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
-            new MenuItemViewModel("Connect game instance", new ExamplePageViewModel(Name, "Connect game instance"))
+            new MenuItemViewModel("Connect game instance", () => _createLocalInstancePageViewModelFactory.Create(repo))
         ];
 
-        Instances = new(repo.LocalInstances.Select(MapInstanceToVm));
+        Instances = [];
+        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);
 
         Profiles = [];
+        _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
+        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
 
         NavManager = new(navigationLockService, modalService)
         {
             Selected = MenuItems.First()
         };
-
-        _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
-        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
     }
 
 
@@ -81,6 +88,7 @@ public partial class RepoPageViewModel
     public void Dispose()
     {
         _profilesSynchronizer.Dispose();
+        _instanceSynchronizer.Dispose();
         NavManager.Dispose();
     }
 
@@ -109,6 +117,6 @@ public partial class RepoPageViewModel
 
     private InstanceItemViewModel MapInstanceToVm(LocalInstance instance)
     {
-        return new InstanceItemViewModel(_repo, instance);
+        return new InstanceItemViewModel(_repo, instance, _editLocalInstancePageViewModelFactory);
     }
 }

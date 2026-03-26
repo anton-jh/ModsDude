@@ -2,4 +2,4 @@
 
 namespace ModsDude.Client.Core.GameAdapters;
 
-public record EmptyAdapterSettings : DynamicForm<EmptyAdapterSettings>;
+public class EmptyAdapterSettings : DynamicForm<EmptyAdapterSettings>;
