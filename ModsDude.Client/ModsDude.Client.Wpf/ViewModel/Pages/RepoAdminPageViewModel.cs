@@ -41,12 +41,19 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 
     public DynamicFormViewModel BaseSettingsEditor { get; }
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && BaseSettingsEditor.IsValid;
 
 
-    [RelayCommand(CanExecute = nameof(IsValid))]
+    [RelayCommand]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
+        if (!IsValid)
+        {
+            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            await _modalService.Show(modal);
+            return;
+        }
+
         _navigationLockService.ReleaseLock(this);
         await _repoService.UpdateRepo(_repo.Id, Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
     }
@@ -72,6 +79,19 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     partial void OnNameChanged(string value)
     {
         _navigationLockService.AcquireLock(this);
+    }
+
+    private List<string> GetValidationErrors()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            errors.Add("Name is required.");
+        }
+        errors.AddRange(BaseSettingsEditor.GetValidationErrors());
+
+        return errors;
     }
 
     private async Task<bool> ConfirmDelete()

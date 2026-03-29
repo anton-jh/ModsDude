@@ -51,7 +51,7 @@
                 <p:EditLocalInstancePage />
             </DataTemplate>
 
-            <DataTemplate DataType="{x:Type vm:ConfirmationDialogViewModel}">
+            <DataTemplate DataType="{x:Type vm:ModalViewModel}">
                 <uc:Dialog />
             </DataTemplate>
 

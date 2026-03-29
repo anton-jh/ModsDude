@@ -24,8 +24,8 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
 
     public bool HasModAdapter => ModAdapter is not null;
     public bool HasSavegameAdapter => SavegameAdapter is not null;
-    public DynamicForm BaseSettingsTemplate { get; } = new TBaseSettings();
-    public DynamicForm InstanceSettingsTemplate { get; } = new TInstanceSettings();
+    public DynamicForm BaseSettingsTemplate => new TBaseSettings();
+    public DynamicForm InstanceSettingsTemplate => new TInstanceSettings();
 
     public abstract IModAdapter? ModAdapter { get; }
     public abstract ISavegameAdapter? SavegameAdapter { get; }

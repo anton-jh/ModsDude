@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +14,12 @@ public abstract class DynamicForm
     public virtual string Serialize()
     {
         return JsonSerializer.Serialize(this, GetType());
+    }
+
+
+    public static string GetFieldTitle(PropertyInfo property)
+    {
+        return property.GetCustomAttribute<TitleAttribute>()?.Text ?? property.Name;
     }
 }
 

@@ -15,7 +15,6 @@ public partial class MainPageViewModel
 {
     private readonly RepoService _repoService;
     private readonly RepoPageViewModelFactory _repoPageViewModelFactory;
-    private readonly IGameAdapterIndex _gameAdapterIndex;
     private readonly ObservableCollectionSynchronizer<RepoModel, MenuItemViewModel, string> _reposSynchronizer;
 
 
@@ -24,11 +23,12 @@ public partial class MainPageViewModel
         RepoPageViewModelFactory repoPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
+        IDialogService dialogService,
         IModalService modalService)
     {
         MenuItems = [
             new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
-            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService))
+            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
         ];
 
         Repos = [];
@@ -40,7 +40,6 @@ public partial class MainPageViewModel
 
         _repoService = repoService;
         _repoPageViewModelFactory = repoPageViewModelFactory;
-        _gameAdapterIndex = gameAdapterIndex;
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
 
         repoService.RepoOfInterestChanged += RepoOfInterestChanged;

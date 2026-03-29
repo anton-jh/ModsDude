@@ -17,11 +17,11 @@ public partial class DynamicFormViewModel
 
     public DynamicFormViewModel(
         bool editing,
-        DynamicForm settings,
+        DynamicForm form,
         IDialogService dialogService)
     {
         Editing = editing;
-        _form = settings;
+        _form = form;
         _dialogService = dialogService;
         Fields = ExtractFields();
 
@@ -41,6 +41,13 @@ public partial class DynamicFormViewModel
     public event EventHandler? Modified;
     public event EventHandler? IsValidChanged;
 
+
+    public List<string> GetValidationErrors()
+    {
+        return _form.Validate()
+            .Select(x => $"{string.Join(", ", x.Properties.Select(p => DynamicForm.GetFieldTitle(p)))}: {x.Message}")
+            .ToList();
+    }
 
     public DynamicForm ExtractResults()
     {

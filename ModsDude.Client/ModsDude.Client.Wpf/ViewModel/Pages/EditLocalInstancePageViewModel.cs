@@ -37,7 +37,9 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
         OriginalName = subject.Name;
         RepoName = repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).DeserializeInstanceSettings(_subject.AdapterInstanceSettings), dialogService);
+        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId)
+            .DeserializeInstanceSettings(_subject.AdapterInstanceSettings), dialogService);
+
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
         InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
 
@@ -59,11 +61,14 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
     public DynamicFormViewModel InstanceSettingsEditor { get; }
 
 
-    [RelayCommand(CanExecute = nameof(IsValid))]
-    public void SaveChanges()
+    [RelayCommand]
+    public async Task SaveChanges()
     {
         if (!IsValid)
         {
+            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            await _modalService.Show(modal);
+
             return;
         }
 
@@ -106,6 +111,24 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
     private void OnInstanceSettingsIsValidChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsValid));
+    }
+
+    private List<string> GetValidationErrors()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            errors.Add("Name is required.");
+        }
+        if (_takenNames.Contains(Name))
+        {
+            errors.Add("Name is taken.");
+        }
+
+        errors.AddRange(InstanceSettingsEditor.GetValidationErrors());
+
+        return errors;
     }
 
     partial void OnNameChanged(string value)

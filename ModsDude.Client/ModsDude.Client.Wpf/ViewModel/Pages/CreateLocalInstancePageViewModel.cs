@@ -8,13 +8,13 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-
 public partial class CreateLocalInstancePageViewModel
     : PageViewModel, IDisposable
 {
     private readonly RepoModel _repo;
     private readonly NavigationLockService _navigationLockService;
     private readonly LocalInstanceService _localInstanceService;
+    private readonly IModalService _modalService;
     private readonly HashSet<string> _takenNames;
 
 
@@ -23,19 +23,20 @@ public partial class CreateLocalInstancePageViewModel
         IGameAdapterIndex gameAdapterIndex,
         IDialogService dialogService,
         NavigationLockService navigationLockService,
-        LocalInstanceService localInstanceService)
+        LocalInstanceService localInstanceService,
+        IModalService modalService)
     {
         var existingInstances = localInstanceService.GetByRepoId(repo.Id);
         _name = existingInstances.Count == 0 ? "Game" : "";
         _repo = repo;
         _navigationLockService = navigationLockService;
         _localInstanceService = localInstanceService;
+        _modalService = modalService;
         _takenNames = existingInstances.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
         InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).InstanceSettingsTemplate, dialogService);
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
-        InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
     }
 
 
@@ -49,12 +50,14 @@ public partial class CreateLocalInstancePageViewModel
 
     public DynamicFormViewModel InstanceSettingsEditor { get; }
 
-
-    [RelayCommand(CanExecute = nameof(IsValid))]
-    public void SaveChanges()
+    [RelayCommand]
+    public async Task SaveChanges()
     {
         if (!IsValid)
         {
+            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            await _modalService.Show(modal);
+
             return;
         }
 
@@ -67,7 +70,6 @@ public partial class CreateLocalInstancePageViewModel
     {
         _navigationLockService.Dispose();
         InstanceSettingsEditor.Modified -= OnInstanceSettingsModified;
-        InstanceSettingsEditor.IsValidChanged -= OnInstanceSettingsIsValidChanged;
         InstanceSettingsEditor.Dispose();
     }
 
@@ -77,9 +79,22 @@ public partial class CreateLocalInstancePageViewModel
         _navigationLockService.AcquireLock(this);
     }
 
-    private void OnInstanceSettingsIsValidChanged(object? sender, EventArgs e)
+    private List<string> GetValidationErrors()
     {
-        SaveChangesCommand.NotifyCanExecuteChanged();
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            errors.Add("Name is required.");
+        }
+        if (_takenNames.Contains(Name))
+        {
+            errors.Add("Name is taken.");
+        }
+
+        errors.AddRange(InstanceSettingsEditor.GetValidationErrors());
+
+        return errors;
     }
 
     partial void OnNameChanged(string value)

@@ -1,5 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -44,25 +43,25 @@ public partial class ConfirmationDialogViewModel(
             "Delete",
             "Keep");
     }
-}
 
-
-public partial class ModalViewModel : ObservableObject
-{
-
-    public delegate void ModalDoneHandler();
-    public event ModalDoneHandler? Completed;
-
-
-    [ObservableProperty]
-    private bool _done;
-
-
-    partial void OnDoneChanged(bool value)
+    public static ConfirmationDialogViewModel ValidationErrors(List<string> validationErrors)
     {
-        if (value == true)
+        string message;
+
+        if (validationErrors.Count > 5)
         {
-            Completed?.Invoke();
+            message = string.Join('\n', validationErrors[..4]) + "\n...";
         }
+        else
+        {
+            message = string.Join('\n', validationErrors.Take(5));
+        }
+
+        return new ConfirmationDialogViewModel(
+            "Not so fast!",
+            message,
+            IconKind.Error,
+            "Ok",
+            "Sure");
     }
 }

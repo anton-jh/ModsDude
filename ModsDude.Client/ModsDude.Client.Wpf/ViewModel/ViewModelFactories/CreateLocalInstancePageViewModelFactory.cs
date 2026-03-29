@@ -17,6 +17,7 @@ public class CreateLocalInstancePageViewModelFactory(
             serviceProvider.GetRequiredService<IGameAdapterIndex>(),
             serviceProvider.GetRequiredService<IDialogService>(),
             serviceProvider.GetRequiredService<NavigationLockService>(),
-            serviceProvider.GetRequiredService<LocalInstanceService>());
+            serviceProvider.GetRequiredService<LocalInstanceService>(),
+            serviceProvider.GetRequiredService<IModalService>());
     }
 }
