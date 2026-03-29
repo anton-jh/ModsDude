@@ -36,14 +36,17 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
         _takenNames = localInstanceService.GetByRepoId(repo.Id).Select(x => x.Name).Distinct().ToHashSet();
         OriginalName = subject.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).InstanceSettingsTemplate, dialogService);
+        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).DeserializeInstanceSettings(_subject.AdapterInstanceSettings), dialogService);
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
         InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
+
+        var _ = IsValid;
     }
 
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsValid))]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name;
 
     public string OriginalName { get; }
