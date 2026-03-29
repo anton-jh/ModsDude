@@ -10,7 +10,7 @@
         xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=wvm:DesignTimeMainWindowViewModel, IsDesignTimeCreatable=True}"
-        Title="ModsDude" Height="720" Width="1280"
+        Title="ModsDude" Height="1080" Width="1080"
         WindowStartupLocation="CenterScreen"
         FontSize="14">
 

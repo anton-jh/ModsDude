@@ -28,7 +28,7 @@
                       Style="{StaticResource SidebarList}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-            <uc:SidebarHeader Grid.Row="3" Title="Installations" Command="" ActionIcon="&#xE713;" />
+            <uc:SidebarHeader Grid.Row="3" Title="Game instances" Command="" ActionIcon="&#xE72C;" />
 
             <ListView Grid.Row="4"
                       Style="{StaticResource SidebarList}"

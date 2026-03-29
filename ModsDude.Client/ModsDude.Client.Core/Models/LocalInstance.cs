@@ -1,6 +1,9 @@
-﻿namespace ModsDude.Client.Core.Models;
+﻿using System.ComponentModel;
+
+namespace ModsDude.Client.Core.Models;
 
 public class LocalInstance
+    : INotifyPropertyChanged
 {
     public LocalInstance(Guid repoId, string name, string adapterInstanceSettings)
     {
@@ -10,7 +13,20 @@ public class LocalInstance
     }
 
 
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+
     public Guid RepoId { get; }
-    public string Name { get; internal set; }
+
+    public string Name
+    {
+        get => field;
+        set
+        {
+            field = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+        }
+    }
+
     public string AdapterInstanceSettings { get; internal set; }
 }

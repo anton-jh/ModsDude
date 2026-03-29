@@ -16,7 +16,7 @@ public partial class MainPageViewModel
     private readonly RepoService _repoService;
     private readonly RepoPageViewModelFactory _repoPageViewModelFactory;
     private readonly IGameAdapterIndex _gameAdapterIndex;
-    private readonly ObservableCollectionSynchronizer<RepoModel, IMenuItemViewModel, string> _reposSynchronizer;
+    private readonly ObservableCollectionSynchronizer<RepoModel, MenuItemViewModel, string> _reposSynchronizer;
 
 
     public MainPageViewModel(
@@ -27,7 +27,7 @@ public partial class MainPageViewModel
         IModalService modalService)
     {
         MenuItems = [
-            new MenuItemViewModel("Home", new ExamplePageViewModel("ModsDude", "Home")),
+            new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
             new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService))
         ];
 
@@ -49,9 +49,9 @@ public partial class MainPageViewModel
 
     public SidebarNavigationManager NavManager { get; }
 
-    public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
+    public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 
-    public ObservableCollection<IMenuItemViewModel> Repos { get; }
+    public ObservableCollection<MenuItemViewModel> Repos { get; }
 
 
     public override void Init()

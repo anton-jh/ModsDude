@@ -17,9 +17,9 @@
             <StackPanel Orientation="Vertical">
 
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding OriginalName}" />
+                           Text="{Binding RepoName}" />
                 <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="Edit"
+                           Text="{Binding OriginalName}"
                            Margin="0 8 0 36" />
 
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
@@ -38,7 +38,7 @@
                         Padding="16"
                         Margin="0 16 0 0">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
-                        <uc:DynamicFormEditor DataContext="{Binding InstanceSettings}" />
+                        <uc:DynamicFormEditor DataContext="{Binding InstanceSettingsEditor}" />
                     </GroupBox>
                 </Border>
 
@@ -50,7 +50,7 @@
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
 
             <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
-                    Content="Delete repo" Command="{Binding Path=DeleteCommand}" />
+                    Content="Disconnect game instance" Command="{Binding Path=DeleteCommand}" />
         </StackPanel>
 
     </Grid>

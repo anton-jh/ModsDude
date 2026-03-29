@@ -15,8 +15,8 @@ public partial class SidebarNavigationManager(
     private PageViewModel? _currentPage;
 
 
-    private IMenuItemViewModel? _selected;
-    public IMenuItemViewModel? Selected
+    private MenuItemViewModel? _selected;
+    public MenuItemViewModel? Selected
     {
         get => _selected;
         set
@@ -34,7 +34,7 @@ public partial class SidebarNavigationManager(
     }
 
 
-    private async Task HandleSelectionChangeAsync(IMenuItemViewModel? value)
+    private async Task HandleSelectionChangeAsync(MenuItemViewModel? value)
     {
         var previous = Selected;
 

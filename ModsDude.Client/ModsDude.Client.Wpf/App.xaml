@@ -73,7 +73,7 @@
                 <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
-                        <DataTemplate DataType="{x:Type vm:IMenuItemViewModel}">
+                        <DataTemplate DataType="{x:Type vm:MenuItemViewModel}">
                             <Grid ClipToBounds="True">
                                 <TextBlock Text="{Binding Path=Title}"
                                            Padding="12 8"

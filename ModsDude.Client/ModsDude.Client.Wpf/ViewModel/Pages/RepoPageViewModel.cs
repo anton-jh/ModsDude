@@ -21,8 +21,8 @@ public partial class RepoPageViewModel
     private readonly ProfileService _profileService;
     private readonly CreateLocalInstancePageViewModelFactory _createLocalInstancePageViewModelFactory;
     private readonly EditLocalInstancePageViewModelFactory _editLocalInstancePageViewModelFactory;
-    private readonly ObservableCollectionSynchronizer<ProfileDto, IMenuItemViewModel, string> _profilesSynchronizer;
-    private readonly ObservableCollectionSynchronizer<LocalInstance, IMenuItemViewModel, string> _instanceSynchronizer;
+    private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
+    private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
 
     public RepoPageViewModel(
@@ -47,10 +47,10 @@ public partial class RepoPageViewModel
         _name = repo.Name;
 
         MenuItems = [
-            new MenuItemViewModel("Overview", new ExamplePageViewModel(Name, "Overview")),
+            new MenuItemViewModel("Overview", () =>new ExamplePageViewModel(Name, "Overview")),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
-            new MenuItemViewModel("Members", new ExamplePageViewModel(Name, "Members")),
-            new MenuItemViewModel("Mods", new ExamplePageViewModel(Name, "Mods")),
+            new MenuItemViewModel("Members", () =>new ExamplePageViewModel(Name, "Members")),
+            new MenuItemViewModel("Mods", () => new ExamplePageViewModel(Name, "Mods")),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Connect game instance", () => _createLocalInstancePageViewModelFactory.Create(repo))
         ];
@@ -74,11 +74,11 @@ public partial class RepoPageViewModel
 
     public SidebarNavigationManager NavManager { get; }
 
-    public ObservableCollection<IMenuItemViewModel> MenuItems { get; }
+    public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 
-    public ObservableCollection<IMenuItemViewModel> Profiles { get; }
+    public ObservableCollection<MenuItemViewModel> Profiles { get; }
 
-    public ObservableCollection<IMenuItemViewModel> Instances { get; }
+    public ObservableCollection<MenuItemViewModel> Instances { get; }
 
 
     public override void Init()

@@ -35,6 +35,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
         _localInstanceService = localInstanceService;
         _takenNames = localInstanceService.GetByRepoId(repo.Id).Select(x => x.Name).Distinct().ToHashSet();
         OriginalName = subject.Name;
+        RepoName = repo.Name;
 
         InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).DeserializeInstanceSettings(_subject.AdapterInstanceSettings), dialogService);
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
@@ -48,6 +49,8 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
     [NotifyPropertyChangedFor(nameof(IsValid))]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name;
+
+    public string RepoName { get; }
 
     public string OriginalName { get; }
 
@@ -66,9 +69,9 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
         var instanceSettings = InstanceSettingsEditor.ExtractResults();
 
-        _localInstanceService.Update(_repo, _subject, Name, instanceSettings);
-
         _navigationLockService.ReleaseLock(this);
+
+        _localInstanceService.Update(_repo, _subject, Name, instanceSettings);
     }
 
     [RelayCommand]
@@ -80,10 +83,10 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
         if (modal.Result == true)
         {
+            _navigationLockService.ReleaseLock(this);
             _localInstanceService.Delete(_subject);
         }
 
-        _navigationLockService.ReleaseLock(this);
     }
 
     public void Dispose()
