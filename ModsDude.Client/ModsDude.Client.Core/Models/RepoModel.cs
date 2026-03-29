@@ -1,6 +1,5 @@
 ﻿using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
-using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Models;
 public class RepoModel
@@ -9,6 +8,4 @@ public class RepoModel
     public required string Name { get; set; }
     public required GameAdapterId AdapterId { get; init; }
     public required DynamicForm AdapterConfiguration { get; init; }
-
-    public ObservableCollection<LocalInstance> LocalInstances { get; init; } = [];
 }

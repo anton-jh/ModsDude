@@ -34,7 +34,8 @@ public partial class RepoPageViewModel
         NavigationLockService navigationLockService,
         IModalService modalService,
         CreateLocalInstancePageViewModelFactory createLocalInstancePageViewModelFactory,
-        EditLocalInstancePageViewModelFactory editLocalInstancePageViewModelFactory)
+        EditLocalInstancePageViewModelFactory editLocalInstancePageViewModelFactory,
+        LocalInstanceService localInstanceService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
@@ -55,7 +56,7 @@ public partial class RepoPageViewModel
         ];
 
         Instances = [];
-        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);
+        _instanceSynchronizer = new(localInstanceService.GetByRepoId(repo.Id), Instances, MapInstanceToVm, x => x.Title);
 
         Profiles = [];
         _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;

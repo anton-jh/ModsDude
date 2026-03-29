@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+﻿using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
 using System.Collections.ObjectModel;
@@ -6,79 +7,40 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Core.Services;
 
 public class LocalInstanceService(
-    StateStore store)
+    StateStore store,
+    IGameAdapterIndex gameAdapterIndex)
 {
-    public ObservableCollection<LocalInstance> Instances { get; } = [];
+    private readonly LocalState _state = store.Get();
 
 
-    public void Refresh()
+    public ObservableCollection<LocalInstance> GetByRepoId(Guid repoId)
     {
-        var state = store.Get();
-        Instances.Clear();
-        foreach (var inst in state.LocalInstances)
-        {
-            Instances.Add(inst);
-        }
+        return _state.GetRepoStateById(repoId).LocalInstances;
     }
 
-    public LocalInstance Create(Guid repoId, string name, DynamicForm instanceSettings)
+    public LocalInstance Create(RepoModel repo, string name, DynamicForm instanceSettings)
     {
-        var instance = new LocalInstance()
-        {
-            Id = Guid.NewGuid(),
-            RepoId = repoId,
-            Name = name,
-            AdapterInstanceSettings = instanceSettings
-        };
+        var instance = new LocalInstance(repo.Id, name, gameAdapterIndex.GetById(repo.AdapterId).SerializeInstanceSettings(instanceSettings));
 
-        var state = store.Get();
-        state.LocalInstances.Add(instance);
+        GetByRepoId(repo.Id).Add(instance);
+
         store.Save();
-
-        Instances.Clear();
-        foreach (var inst in state.LocalInstances)
-        {
-            Instances.Add(inst);
-        }
 
         return instance;
     }
 
-    public void Update(LocalInstance instance, string name, DynamicForm instanceSettings)
+    public void Update(RepoModel repo, LocalInstance instance, string name, DynamicForm instanceSettings)
     {
         instance.Name = name;
-        instance.AdapterInstanceSettings = instanceSettings;
+        instance.AdapterInstanceSettings = gameAdapterIndex.GetById(repo.AdapterId).SerializeInstanceSettings(instanceSettings);
 
-        var state = store.Get();
-        var old = state.LocalInstances.FirstOrDefault(x => x.Id == instance.Id);
-        if (old is not null)
-        {
-            state.LocalInstances.Remove(old);
-        }
-        state.LocalInstances.Add(instance);
         store.Save();
-
-        Instances.Clear();
-        foreach (var inst in state.LocalInstances)
-        {
-            Instances.Add(inst);
-        }
     }
 
     public void Delete(LocalInstance instance)
     {
-        var state = store.Get();
-        var existing = state.LocalInstances.FirstOrDefault(x => x.Id == instance.Id);
-        if (existing is not null)
-        {
-            state.LocalInstances.Remove(existing);
-        }
-        store.Save();
+        GetByRepoId(instance.RepoId).Remove(instance);
 
-        Instances.Clear();
-        foreach (var inst in state.LocalInstances)
-        {
-            Instances.Add(inst);
-        }
+        store.Save();
     }
 }

@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 

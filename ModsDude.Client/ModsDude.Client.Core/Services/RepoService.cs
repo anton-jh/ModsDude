@@ -3,15 +3,13 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Persistence;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Services;
 public class RepoService(
     IReposClient repoClient,
-    IGameAdapterIndex gameAdapterIndex,
-    LocalInstanceService localInstanceService)
+    IGameAdapterIndex gameAdapterIndex)
 {
     public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
     public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
@@ -22,12 +20,8 @@ public class RepoService(
     public async Task RefreshRepos(CancellationToken cancellationToken)
     {
         var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
-        localInstanceService.Refresh();
-        var instances = localInstanceService.Instances;
-        // TODO: byt ut Store<State> mot ngt mer sammanhängande repository. Typ en Load()-metod som körs i
-        // början o sen bara en ObservableCollection för Instances och events för allt annat (om behövs).
 
-        var repoModels = reposFromApi.Select();
+        var repoModels = reposFromApi.Select(MapRepoModel);
 
         Repos.Clear();
 
@@ -80,7 +74,7 @@ public class RepoService(
         }
 
         await RefreshRepos(cancellationToken);
-
+        
         OnRepoListChanged(id);
     }
 
@@ -97,17 +91,16 @@ public class RepoService(
         RepoOfInterestChanged?.Invoke(idOfInterest);
     }
 
-    private RepoModel MapRepoModel(RepoDto repo, )
+    private RepoModel MapRepoModel(RepoMembershipDto repoMembership)
     {
         return new RepoModel()
         {
-            Id = x.Repo.Id,
-            Name = x.Repo.Name,
-            AdapterId = GameAdapterId.Parse(x.Repo.AdapterId),
+            Id = repoMembership.Repo.Id,
+            Name = repoMembership.Repo.Name,
+            AdapterId = GameAdapterId.Parse(repoMembership.Repo.AdapterId),
             AdapterConfiguration = gameAdapterIndex
-                .GetById(GameAdapterId.Parse(x.Repo.AdapterId))
-                .DeserializeBaseSettings(x.Repo.AdapterConfiguration),
-            LocalInstances = new(instances.Where(i => i.RepoId == x.Repo.Id))
-        }
+                .GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId))
+                .DeserializeBaseSettings(repoMembership.Repo.AdapterConfiguration)
+        };
     }
 }

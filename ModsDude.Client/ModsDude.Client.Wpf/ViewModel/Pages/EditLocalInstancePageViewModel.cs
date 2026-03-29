@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -11,6 +12,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 {
     private readonly RepoModel _repo;
     private readonly NavigationLockService _navigationLockService;
+    private readonly LocalInstanceService _localInstanceService;
     private readonly HashSet<string> _takenNames;
     private readonly LocalInstance _subject;
     private readonly IModalService _modalService;
@@ -22,14 +24,16 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
         IGameAdapterIndex gameAdapterIndex,
         IDialogService dialogService,
         IModalService modalService,
-        NavigationLockService navigationLockService)
+        NavigationLockService navigationLockService,
+        LocalInstanceService localInstanceService)
     {
         _name = subject.Name;
         _repo = repo;
         _subject = subject;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
-        _takenNames = repo.LocalInstances.Select(x => x.Name).Distinct().ToHashSet();
+        _localInstanceService = localInstanceService;
+        _takenNames = localInstanceService.GetByRepoId(repo.Id).Select(x => x.Name).Distinct().ToHashSet();
         OriginalName = subject.Name;
 
         InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).InstanceSettingsTemplate, dialogService);
@@ -59,8 +63,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
         var instanceSettings = InstanceSettingsEditor.ExtractResults();
 
-        _subject.Name = Name;
-        _subject.AdapterInstanceSettings = instanceSettings;
+        _localInstanceService.Update(_repo, _subject, Name, instanceSettings);
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -74,7 +77,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
         if (modal.Result == true)
         {
-            _repo.LocalInstances.Remove(_subject);
+            _localInstanceService.Delete(_subject);
         }
 
         _navigationLockService.ReleaseLock(this);

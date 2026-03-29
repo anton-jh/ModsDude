@@ -12,6 +12,8 @@ public interface IGameAdapter
     DynamicForm InstanceSettingsTemplate { get; }
     DynamicForm DeserializeBaseSettings(string serialized);
     DynamicForm DeserializeInstanceSettings(string serialized);
+    string SerializeBaseSettings(DynamicForm settings);
+    string SerializeInstanceSettings(DynamicForm settings);
 }
 
 public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameAdapter
@@ -39,6 +41,26 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
     {
         return JsonSerializer.Deserialize<TInstanceSettings>(serialized)
             ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");
+    }
+
+    public virtual string SerializeBaseSettings(DynamicForm settings)
+    {
+        if (settings is not TBaseSettings typed)
+        {
+            throw new InvalidOperationException($"Cannot serialize base settings: Expected '{typeof(TBaseSettings).FullName}', got '{settings.GetType().FullName}'");
+        }
+
+        return JsonSerializer.Serialize(typed);
+    }
+
+    public virtual string SerializeInstanceSettings(DynamicForm settings)
+    {
+        if (settings is not TInstanceSettings typed)
+        {
+            throw new InvalidOperationException($"Cannot serialize instance settings: Expected '{typeof(TInstanceSettings).FullName}', got '{settings.GetType().FullName}'");
+        }
+
+        return JsonSerializer.Serialize(typed);
     }
 }
 

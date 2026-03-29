@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
 
@@ -17,6 +18,7 @@ public class EditLocalInstancePageViewModelFactory(
             serviceProvider.GetRequiredService<IGameAdapterIndex>(),
             serviceProvider.GetRequiredService<IDialogService>(),
             serviceProvider.GetRequiredService<IModalService>(),
-            serviceProvider.GetRequiredService<NavigationLockService>());
+            serviceProvider.GetRequiredService<NavigationLockService>(),
+            serviceProvider.GetRequiredService<LocalInstanceService>());
     }
 }

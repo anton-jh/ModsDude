@@ -1,11 +1,16 @@
-﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
-
-namespace ModsDude.Client.Core.Models;
+﻿namespace ModsDude.Client.Core.Models;
 
 public class LocalInstance
 {
-    public required Guid Id { get; init; }
-    public required Guid RepoId { get; init; }
-    public required string Name { get; set; }
-    public required DynamicForm AdapterInstanceSettings { get; set; }
+    public LocalInstance(Guid repoId, string name, string adapterInstanceSettings)
+    {
+        RepoId = repoId;
+        Name = name;
+        AdapterInstanceSettings = adapterInstanceSettings;
+    }
+
+
+    public Guid RepoId { get; }
+    public string Name { get; internal set; }
+    public string AdapterInstanceSettings { get; internal set; }
 }

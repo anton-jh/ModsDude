@@ -6,19 +6,20 @@ using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 public class RepoPageViewModelFactory(
-    IServiceProvider services)
+    IServiceProvider serviceProvider)
 {
     public RepoPageViewModel Create(RepoModel repo)
     {
         return new RepoPageViewModel(
             repo,
-            services.GetRequiredService<RepoAdminPageViewModelFactory>(),
-            services.GetRequiredService<CreateProfilePageViewModelFactory>(),
-            services.GetRequiredService<ProfilePageViewModelFactory>(),
-            services.GetRequiredService<ProfileService>(),
-            services.GetRequiredService<NavigationLockService>(),
-            services.GetRequiredService<IModalService>(),
-            services.GetRequiredService<CreateLocalInstancePageViewModelFactory>(),
-            services.GetRequiredService<EditLocalInstancePageViewModelFactory>());
+            serviceProvider.GetRequiredService<RepoAdminPageViewModelFactory>(),
+            serviceProvider.GetRequiredService<CreateProfilePageViewModelFactory>(),
+            serviceProvider.GetRequiredService<ProfilePageViewModelFactory>(),
+            serviceProvider.GetRequiredService<ProfileService>(),
+            serviceProvider.GetRequiredService<NavigationLockService>(),
+            serviceProvider.GetRequiredService<IModalService>(),
+            serviceProvider.GetRequiredService<CreateLocalInstancePageViewModelFactory>(),
+            serviceProvider.GetRequiredService<EditLocalInstancePageViewModelFactory>(),
+            serviceProvider.GetRequiredService<LocalInstanceService>());
     }
 }

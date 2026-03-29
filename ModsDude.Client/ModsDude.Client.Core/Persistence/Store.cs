@@ -30,6 +30,10 @@ public class Store<T>(string filename)
                         _state = new();
                         File.Move(_filepath, Path.Combine(FileSystemHelper.GetAppDataDirectory(), $"state_corrupted_{DateTimeOffset.Now.ToUnixTimeMilliseconds()}.json"));
                     }
+                    catch (Exception ex)
+                    {
+
+                    }
                 }
                 else
                 {

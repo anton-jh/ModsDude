@@ -25,11 +25,12 @@ public partial class CreateLocalInstancePageViewModel
         NavigationLockService navigationLockService,
         LocalInstanceService localInstanceService)
     {
-        _name = repo.LocalInstances.Count == 0 ? "Game" : "";
+        var existingInstances = localInstanceService.GetByRepoId(repo.Id);
+        _name = existingInstances.Count == 0 ? "Game" : "";
         _repo = repo;
         _navigationLockService = navigationLockService;
         _localInstanceService = localInstanceService;
-        _takenNames = repo.LocalInstances.Select(x => x.Name).Distinct().ToHashSet();
+        _takenNames = existingInstances.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
         InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).InstanceSettingsTemplate, dialogService);
@@ -57,7 +58,7 @@ public partial class CreateLocalInstancePageViewModel
             return;
         }
 
-        _localInstanceService.Create(_repo.Id, Name, InstanceSettingsEditor.ExtractResults());
+        _localInstanceService.Create(_repo, Name, InstanceSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
