@@ -7,7 +7,7 @@
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
-      d:DataContext="{d:DesignInstance Type=pvm:DesignTimeCreateProfilePageViewModel, IsDesignTimeCreatable=True}"
+      d:DataContext="{d:DesignInstance Type=pvm:CreateProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="CreateRepoPage">
 
     <Grid RowDefinitions="*, auto">
