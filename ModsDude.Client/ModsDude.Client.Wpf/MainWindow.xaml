@@ -9,8 +9,8 @@
         xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
         xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
         mc:Ignorable="d"
-        d:DataContext="{d:DesignInstance Type=wvm:DesignTimeMainWindowViewModel, IsDesignTimeCreatable=True}"
-        Title="ModsDude" Height="1080" Width="1080"
+        d:DataContext="{d:DesignInstance Type=wvm:MainWindowViewModel, IsDesignTimeCreatable=False}"
+        Title="ModsDude" Width="1600" Height="900"
         WindowStartupLocation="CenterScreen"
         FontSize="14">
 

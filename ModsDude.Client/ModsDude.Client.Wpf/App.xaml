@@ -44,6 +44,9 @@
             <DataTemplate DataType="{x:Type pvm:ProfilePageViewModel}">
                 <p:ProfilePage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:EditProfilePageViewModel}">
+                <p:EditProfilePage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:CreateLocalInstancePageViewModel}">
                 <p:CreateLocalInstancePage />
             </DataTemplate>

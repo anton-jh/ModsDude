@@ -46,7 +46,7 @@ public partial class MainPageViewModel
     }
     
 
-    public SidebarNavigationManager NavManager { get; }
+    public NavigationManager NavManager { get; }
 
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 

@@ -6,7 +6,7 @@ using System.Windows;
 
 namespace ModsDude.Client.Wpf.Navigation;
 
-public partial class SidebarNavigationManager(
+public partial class NavigationManager(
     NavigationLockService navigationLockService,
     IModalService modalService)
     : ObservableObject, IDisposable

@@ -1,65 +1,32 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using ModsDude.Client.Core.Models;
+﻿using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.ViewModel.Services;
+using ModsDude.Client.Wpf.Navigation;
+using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
+using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public partial class ProfilePageViewModel(
-    RepoModel repo,
-    ProfileDto profile,
-    ProfileService profileService,
-    NavigationLockService navigationLockService,
-    IModalService modalService)
-    : PageViewModel, IDisposable
+public class ProfilePageViewModel : PageViewModel
 {
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
-    private string _name = profile.Name;
-
-    public string RepoName => repo.Name;
-    public string OriginalName => profile.Name;
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
-
-
-    [RelayCommand(CanExecute = nameof(IsValid))]
-    public async Task SaveChanges(CancellationToken cancellationToken)
+    public ProfilePageViewModel(
+        RepoModel repo,
+        ProfileDto profile,
+        NavigationManager navigationManager,
+        EditProfilePageViewModelFactory editProfilePageViewModelFactory)
     {
-        navigationLockService.ReleaseLock(this);
-        await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
-    }
-    
-    [RelayCommand]
-    public async Task DeleteRepo(CancellationToken cancellationToken)
-    {
-        if (await ConfirmDelete())
-        {
-            navigationLockService.ReleaseLock(this);
-            await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
-        }
-    }
+        NavManager = navigationManager;
+        MenuItems = [
+            new MenuItemViewModel("Overview", () => new ExamplePageViewModel(profile.Name, "Overview")),
+            new MenuItemViewModel("Mods", () => new ExamplePageViewModel(profile.Name, "Mods")),
+            new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
+        ];
 
-    public void Dispose()
-    {
-        navigationLockService.ReleaseLock(this);
+        NavManager.Selected = MenuItems.First();
     }
 
 
-    partial void OnNameChanged(string value)
-    {
-        navigationLockService.AcquireLock(this);
-    }
+    public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 
-
-    private async Task<bool> ConfirmDelete()
-    {
-        var modal = ConfirmationDialogViewModel.ConfirmDelete(OriginalName);
-
-        await modalService.Show(modal);
-
-        return modal.Result;
-    }
+    public NavigationManager NavManager { get; }
 }

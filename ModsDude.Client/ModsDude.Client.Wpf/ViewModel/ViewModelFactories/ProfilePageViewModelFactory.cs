@@ -2,6 +2,7 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
 
@@ -15,8 +16,7 @@ public class ProfilePageViewModelFactory(
         return new(
             repo,
             profile,
-            services.GetRequiredService<ProfileService>(),
-            services.GetRequiredService<NavigationLockService>(),
-            services.GetRequiredService<IModalService>());
+            services.GetRequiredService<NavigationManager>(),
+            services.GetRequiredService<EditProfilePageViewModelFactory>());
     }
 }

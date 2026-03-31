@@ -47,9 +47,9 @@ public partial class RepoPageViewModel
         _name = repo.Name;
 
         MenuItems = [
-            new MenuItemViewModel("Overview", () =>new ExamplePageViewModel(Name, "Overview")),
+            new MenuItemViewModel("Overview", () => new ExamplePageViewModel(Name, "Overview")),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
-            new MenuItemViewModel("Members", () =>new ExamplePageViewModel(Name, "Members")),
+            new MenuItemViewModel("Members", () => new ExamplePageViewModel(Name, "Members")),
             new MenuItemViewModel("Mods", () => new ExamplePageViewModel(Name, "Mods")),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Connect game instance", () => _createLocalInstancePageViewModelFactory.Create(repo))
@@ -72,7 +72,7 @@ public partial class RepoPageViewModel
     [ObservableProperty]
     private string _name;
 
-    public SidebarNavigationManager NavManager { get; }
+    public NavigationManager NavManager { get; }
 
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 

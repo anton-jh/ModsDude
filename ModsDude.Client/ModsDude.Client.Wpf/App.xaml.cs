@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
@@ -70,10 +71,12 @@ public partial class App : Application
         services.AddSingleton<RepoPageViewModelFactory>();
         services.AddSingleton<CreateProfilePageViewModelFactory>();
         services.AddSingleton<ProfilePageViewModelFactory>();
+        services.AddSingleton<EditProfilePageViewModelFactory>();
         services.AddSingleton<CreateLocalInstancePageViewModelFactory>();
         services.AddSingleton<EditLocalInstancePageViewModelFactory>();
 
         services.AddSingleton<NavigationLockService>();
+        services.AddTransient<NavigationManager>();
 
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
         services.AddSingleton<IDialogService, DialogService>();
