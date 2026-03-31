@@ -7,7 +7,8 @@
              xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
              mc:Ignorable="d"
              Width="400"
-             d:DataContext="{d:DesignInstance vm:DesignTimeConfirmationDialogViewModel, IsDesignTimeCreatable=True}">
+             d:DataContext="{d:DesignInstance vm:DesignTimeConfirmationDialogViewModel, IsDesignTimeCreatable=True}"
+             Focusable="True">
 
     <Border CornerRadius="{StaticResource OverlayCornerRadius}"
             Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
@@ -63,5 +64,10 @@
             </Border>
         </Grid>
     </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Return" Command="{Binding SetYesCommand}" />
+        <KeyBinding Key="Esc" Command="{Binding SetNoCommand}" />
+    </UserControl.InputBindings>
     
 </UserControl>

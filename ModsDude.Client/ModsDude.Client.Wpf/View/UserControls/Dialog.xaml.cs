@@ -20,5 +20,6 @@ public partial class Dialog : UserControl
     public Dialog()
     {
         InitializeComponent();
+        Loaded += (_, __) => Focus();
     }
 }
