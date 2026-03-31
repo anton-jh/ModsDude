@@ -46,13 +46,14 @@ public partial class RepoPageViewModel
         _editLocalInstancePageViewModelFactory = editLocalInstancePageViewModelFactory;
         _name = repo.Name;
 
+        var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo));
         MenuItems = [
             new MenuItemViewModel("Overview", () => new ExamplePageViewModel(Name, "Overview")),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
             new MenuItemViewModel("Members", () => new ExamplePageViewModel(Name, "Members")),
             new MenuItemViewModel("Mods", () => new ExamplePageViewModel(Name, "Mods")),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
-            new MenuItemViewModel("Connect game instance", () => _createLocalInstancePageViewModelFactory.Create(repo))
+            connectGameMenuItem
         ];
 
         Instances = [];
@@ -66,6 +67,11 @@ public partial class RepoPageViewModel
         {
             Selected = MenuItems.First()
         };
+
+        if (Instances.Count == 0)
+        {
+            NavManager.Selected = connectGameMenuItem;
+        }
     }
 
 
