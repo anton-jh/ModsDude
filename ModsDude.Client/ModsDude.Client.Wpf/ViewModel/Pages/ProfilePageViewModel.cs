@@ -13,12 +13,13 @@ public class ProfilePageViewModel : PageViewModel
         RepoModel repo,
         ProfileDto profile,
         NavigationManager navigationManager,
-        EditProfilePageViewModelFactory editProfilePageViewModelFactory)
+        EditProfilePageViewModelFactory editProfilePageViewModelFactory,
+        ProfileModsEditorPageViewModelFactory profileModsEditorPageViewModelFactory)
     {
         NavManager = navigationManager;
         MenuItems = [
             new MenuItemViewModel("Overview", () => new ExamplePageViewModel(profile.Name, "Overview")),
-            new MenuItemViewModel("Mods", () => new ExamplePageViewModel(profile.Name, "Mods")),
+            new MenuItemViewModel("Mods", () => profileModsEditorPageViewModelFactory.Create(profile)),
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
         ];
 
