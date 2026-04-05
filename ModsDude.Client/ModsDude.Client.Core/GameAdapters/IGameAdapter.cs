@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Models;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters;
@@ -8,6 +9,8 @@ public interface IGameAdapter
     GameAdapterDescriptor Descriptor { get; }
     bool HasModAdapter { get; }
     bool HasSavegameAdapter { get; }
+    IModAdapter? ModAdapter { get; }
+    ISavegameAdapter? SavegameAdapter { get; }
     DynamicForm BaseSettingsTemplate { get; }
     DynamicForm InstanceSettingsTemplate { get; }
     DynamicForm DeserializeBaseSettings(string serialized);
@@ -66,17 +69,34 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
 
 public interface IModAdapter
 {
-    // Task DoStuff(ILocalInstance instance) // pass local instance to methods that need it here instead of having yet another interface
+    Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings);
+    Task<IEnumerable<LocalMod>> GetModsFromFolder(string path);
 }
 
 public interface ISavegameAdapter
 {
-    // Task DoStuff(ILocalInstance instance) // pass local instance to methods that need it here instead of having yet another interface
+    
 }
 
 public abstract class ModAdapterBase<TBaseSettings, TInstanceSettings> : IModAdapter
 {
+    public abstract Task<IEnumerable<LocalMod>> GetModsFromFolder(string path);
+    public Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings)
+    {
+        if (instanceSettings is not TInstanceSettings typedSettings)
+        {
+            throw ModAdapterBase<TBaseSettings, TInstanceSettings>.IncorrectInstanceSettingsThrowHelper(instanceSettings);
+        }
 
+        return GetModsFromInstalled(typedSettings);
+    }
+    public abstract Task<IEnumerable<LocalMod>> GetModsFromInstalled(TInstanceSettings instanceSettings);
+
+
+    private static ArgumentException IncorrectInstanceSettingsThrowHelper(DynamicForm obj)
+    {
+        return new ArgumentException($"Expected instanceSettings of type '{typeof(TInstanceSettings).Name}' but got '{obj.GetType().Name}'");
+    }
 }
 
 public abstract class SavegameAdapterBase<TBaseSettings, TInstanceSettings> : ISavegameAdapter
