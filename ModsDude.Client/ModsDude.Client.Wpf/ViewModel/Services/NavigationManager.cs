@@ -21,7 +21,7 @@ public partial class NavigationManager(
         get => _selected;
         set
         {
-            _ = HandleSelectionChangeAsync(value);
+            HandleSelectionChangeAsync(value);
         }
     }
 
@@ -34,7 +34,7 @@ public partial class NavigationManager(
     }
 
 
-    private async Task HandleSelectionChangeAsync(MenuItemViewModel? value)
+    private async void HandleSelectionChangeAsync(MenuItemViewModel? value)
     {
         var previous = Selected;
 

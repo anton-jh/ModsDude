@@ -10,6 +10,7 @@ using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
+using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using ModsDude.Client.Wpf.ViewModel.Windows;
 using ModsDude.Shared.GenericFactories;
 using System.IO;
@@ -45,17 +46,19 @@ public partial class App : Application
     }
 
 
-    private void Application_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    private async void Application_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
+        e.Handled = true;
+
         var exception = e.Exception switch
         {
             UserFriendlyException userFriendlyException => userFriendlyException,
             Exception unknownException => UserFriendlyException.WrapUnknown(unknownException)
         };
 
-        MessageBox.Show($"{exception.Message}\n\n{exception.DeveloperMessage}", "Oops", MessageBoxButton.OK, MessageBoxImage.Error);
-
-        e.Handled = true;
+        var modalService = _serviceProvider.GetRequiredService<IModalService>();
+        var modal = ConfirmationDialogViewModel.Error(exception);
+        await modalService.Show(modal);
     }
 
 

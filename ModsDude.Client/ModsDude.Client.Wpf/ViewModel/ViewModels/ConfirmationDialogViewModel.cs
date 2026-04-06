@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Exceptions;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -63,5 +64,17 @@ public partial class ConfirmationDialogViewModel(
             IconKind.Error,
             "Ok",
             "Sure");
+    }
+
+    public static ConfirmationDialogViewModel Error(UserFriendlyException exception)
+    {
+        var message = $"{exception.Message}.\n\nThis might not help:\n\n{exception.DeveloperMessage}";
+
+        return new ConfirmationDialogViewModel(
+            "Oops!",
+            message,
+            IconKind.Error,
+            "Disapointment: immeasurable",
+            "Day: ruined");
     }
 }

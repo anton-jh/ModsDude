@@ -11,6 +11,6 @@ public class UserFriendlyException(
 
     public static UserFriendlyException WrapUnknown(Exception exception)
     {
-        return new UserFriendlyException("Something went wrong", exception.Message, exception);
+        return new UserFriendlyException("Something broke", exception.Message, exception);
     }
 }

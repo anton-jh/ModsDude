@@ -6,7 +6,7 @@
              xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
              mc:Ignorable="d"
-             Width="400"
+             Width="500"
              d:DataContext="{d:DesignInstance vm:DesignTimeConfirmationDialogViewModel, IsDesignTimeCreatable=True}"
              Focusable="True">
 
