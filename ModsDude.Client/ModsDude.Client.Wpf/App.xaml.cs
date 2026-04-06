@@ -10,7 +10,6 @@ using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.Windows;
 using ModsDude.Shared.GenericFactories;
 using System.IO;
@@ -67,14 +66,14 @@ public partial class App : Application
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
-        services.AddSingleton<RepoAdminPageViewModelFactory>();
-        services.AddSingleton<RepoPageViewModelFactory>();
-        services.AddSingleton<CreateProfilePageViewModelFactory>();
-        services.AddSingleton<ProfilePageViewModelFactory>();
-        services.AddSingleton<EditProfilePageViewModelFactory>();
-        services.AddSingleton<ProfileModsEditorPageViewModelFactory>();
-        services.AddSingleton<CreateLocalInstancePageViewModelFactory>();
-        services.AddSingleton<EditLocalInstancePageViewModelFactory>();
+        services.AddSingleton<RepoAdminPageViewModel.Factory>();
+        services.AddSingleton<RepoPageViewModel.Factory>();
+        services.AddSingleton<CreateProfilePageViewModel.Factory>();
+        services.AddSingleton<ProfilePageViewModel.Factory>();
+        services.AddSingleton<EditProfilePageViewModel.Factory>();
+        services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
+        services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
+        services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();

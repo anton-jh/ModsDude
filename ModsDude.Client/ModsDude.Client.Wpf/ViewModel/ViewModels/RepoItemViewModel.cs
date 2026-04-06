@@ -1,10 +1,10 @@
 ﻿using ModsDude.Client.Core.Models;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
+using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public class RepoItemViewModel(
     RepoModel repo,
-    RepoPageViewModelFactory repoPageViewModelFactory)
+    RepoPageViewModel.Factory repoPageViewModelFactory)
     : MenuItemViewModel(
         repo.Name,
         () => repoPageViewModelFactory.Create(repo))

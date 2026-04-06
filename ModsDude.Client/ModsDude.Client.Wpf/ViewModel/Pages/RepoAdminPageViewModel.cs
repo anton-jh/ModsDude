@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -106,5 +107,12 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     private void OnBaseSettingsModified(object? sender, EventArgs e)
     {
         _navigationLockService.AcquireLock(this);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public RepoAdminPageViewModel Create(RepoModel repo)
+            => ActivatorUtilities.CreateInstance<RepoAdminPageViewModel>(serviceProvider, repo);
     }
 }

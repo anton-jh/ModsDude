@@ -1,12 +1,12 @@
 ﻿using ModsDude.Client.Core.Models;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
+using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 public class InstanceItemViewModel(
     RepoModel repo,
     LocalInstance instance,
-    EditLocalInstancePageViewModelFactory pageFactory)
+    EditLocalInstancePageViewModel.Factory pageFactory)
     : MenuItemViewModel(
         instance.Name,
         () => pageFactory.Create(repo, instance),

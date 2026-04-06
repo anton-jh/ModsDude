@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -45,5 +46,12 @@ public partial class CreateProfilePageViewModel(
     partial void OnNameChanged(string value)
     {
         navigationLockService.AcquireLock(this);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public CreateProfilePageViewModel Create(RepoModel repo)
+            => ActivatorUtilities.CreateInstance<CreateProfilePageViewModel>(serviceProvider, repo);
     }
 }

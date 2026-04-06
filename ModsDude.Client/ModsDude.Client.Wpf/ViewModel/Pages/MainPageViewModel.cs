@@ -5,7 +5,6 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 
@@ -14,13 +13,13 @@ public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
     private readonly RepoService _repoService;
-    private readonly RepoPageViewModelFactory _repoPageViewModelFactory;
+    private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<RepoModel, MenuItemViewModel, string> _reposSynchronizer;
 
 
     public MainPageViewModel(
         RepoService repoService,
-        RepoPageViewModelFactory repoPageViewModelFactory,
+        RepoPageViewModel.Factory repoPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
         IDialogService dialogService,

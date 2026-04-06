@@ -1,7 +1,7 @@
-﻿using ModsDude.Client.Core.Models;
+﻿using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Wpf.Navigation;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 
@@ -13,8 +13,8 @@ public class ProfilePageViewModel : PageViewModel
         RepoModel repo,
         ProfileDto profile,
         NavigationManager navigationManager,
-        EditProfilePageViewModelFactory editProfilePageViewModelFactory,
-        ProfileModsEditorPageViewModelFactory profileModsEditorPageViewModelFactory)
+        EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
+        ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory)
     {
         NavManager = navigationManager;
         MenuItems = [
@@ -30,4 +30,11 @@ public class ProfilePageViewModel : PageViewModel
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 
     public NavigationManager NavManager { get; }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public ProfilePageViewModel Create(RepoModel repo, ProfileDto profile)
+            => ActivatorUtilities.CreateInstance<ProfilePageViewModel>(serviceProvider, repo, profile);
+    }
 }
