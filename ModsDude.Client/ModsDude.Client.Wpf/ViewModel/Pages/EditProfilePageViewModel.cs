@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
@@ -73,5 +74,12 @@ public partial class EditProfilePageViewModel(
         await modalService.Show(modal);
 
         return modal.Result;
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public EditProfilePageViewModel Create(RepoModel repo, ProfileDto profile)
+            => ActivatorUtilities.CreateInstance<EditProfilePageViewModel>(serviceProvider, repo, profile);
     }
 }

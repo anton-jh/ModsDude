@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -16,5 +17,12 @@ public partial class ProfileModsEditorPageViewModel(
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
 
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public ProfileModsEditorPageViewModel Create(ProfileDto profile)
+            => ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, profile);
     }
 }

@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
@@ -100,5 +101,12 @@ public partial class CreateLocalInstancePageViewModel
     partial void OnNameChanged(string value)
     {
         _navigationLockService.AcquireLock(this);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public CreateLocalInstancePageViewModel Create(RepoModel repo)
+            => ActivatorUtilities.CreateInstance<CreateLocalInstancePageViewModel>(serviceProvider, repo);
     }
 }

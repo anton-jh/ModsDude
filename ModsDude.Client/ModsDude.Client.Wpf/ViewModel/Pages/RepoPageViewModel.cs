@@ -1,12 +1,12 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
-using ModsDude.Client.Wpf.ViewModel.ViewModelFactories;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 
@@ -15,26 +15,26 @@ public partial class RepoPageViewModel
     : PageViewModel, IDisposable
 {
     private readonly RepoModel _repo;
-    private readonly RepoAdminPageViewModelFactory _repoAdminPageViewModelFactory;
-    private readonly CreateProfilePageViewModelFactory _createProfilePageViewModelFactory;
-    private readonly ProfilePageViewModelFactory _profilePageViewModelFactory;
+    private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;
+    private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
+    private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
-    private readonly CreateLocalInstancePageViewModelFactory _createLocalInstancePageViewModelFactory;
-    private readonly EditLocalInstancePageViewModelFactory _editLocalInstancePageViewModelFactory;
+    private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
+    private readonly EditLocalInstancePageViewModel.Factory _editLocalInstancePageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
 
     public RepoPageViewModel(
         RepoModel repo,
-        RepoAdminPageViewModelFactory repoAdminPageViewModelFactory,
-        CreateProfilePageViewModelFactory createProfilePageViewModelFactory,
-        ProfilePageViewModelFactory profilePageViewModelFactory,
+        RepoAdminPageViewModel.Factory repoAdminPageViewModelFactory,
+        CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
+        ProfilePageViewModel.Factory profilePageViewModelFactory,
         ProfileService profileService,
         NavigationLockService navigationLockService,
         IModalService modalService,
-        CreateLocalInstancePageViewModelFactory createLocalInstancePageViewModelFactory,
-        EditLocalInstancePageViewModelFactory editLocalInstancePageViewModelFactory,
+        CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
+        EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory,
         LocalInstanceService localInstanceService)
     {
         _repo = repo;
@@ -125,5 +125,14 @@ public partial class RepoPageViewModel
     private InstanceItemViewModel MapInstanceToVm(LocalInstance instance)
     {
         return new InstanceItemViewModel(_repo, instance, _editLocalInstancePageViewModelFactory);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public RepoPageViewModel Create(RepoModel repo)
+        {
+            return ActivatorUtilities.CreateInstance<RepoPageViewModel>(serviceProvider, repo);
+        }
     }
 }
