@@ -20,6 +20,7 @@ public partial class RepoPageViewModel
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
     private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
+    private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly EditLocalInstancePageViewModel.Factory _editLocalInstancePageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
@@ -30,11 +31,12 @@ public partial class RepoPageViewModel
         RepoAdminPageViewModel.Factory repoAdminPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
+        EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory,
+        CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
+        RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         ProfileService profileService,
         NavigationLockService navigationLockService,
         IModalService modalService,
-        CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
-        EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory,
         LocalInstanceService localInstanceService)
     {
         _repo = repo;
@@ -43,6 +45,7 @@ public partial class RepoPageViewModel
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
         _createLocalInstancePageViewModelFactory = createLocalInstancePageViewModelFactory;
+        _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _editLocalInstancePageViewModelFactory = editLocalInstancePageViewModelFactory;
         _name = repo.Name;
 
@@ -51,7 +54,7 @@ public partial class RepoPageViewModel
             new MenuItemViewModel("Overview", () => new ExamplePageViewModel(Name, "Overview")),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
             new MenuItemViewModel("Members", () => new ExamplePageViewModel(Name, "Members")),
-            new MenuItemViewModel("Mods", () => new ExamplePageViewModel(Name, "Mods")),
+            new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
             connectGameMenuItem
         ];

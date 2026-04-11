@@ -77,6 +77,8 @@ public partial class App : Application
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
         services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
         services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
+        services.AddSingleton<RepoModsPageViewModel.Factory>();
+        services.AddSingleton<RepoModsImportPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();

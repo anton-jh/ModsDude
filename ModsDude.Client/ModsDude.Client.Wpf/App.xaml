@@ -56,6 +56,12 @@
             <DataTemplate DataType="{x:Type pvm:EditLocalInstancePageViewModel}">
                 <p:EditLocalInstancePage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
+                <p:RepoModsPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoModsImportPageViewModel}">
+                <p:RepoModsImportPage />
+            </DataTemplate>
 
             <DataTemplate DataType="{x:Type vm:ModalViewModel}">
                 <uc:Dialog />
