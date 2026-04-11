@@ -86,9 +86,9 @@ public partial class App : Application
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
         services.AddSingleton<IDialogService, DialogService>();
 
-        services.AddSingleton<RepoService>();
+        services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();
-        services.AddSingleton<LocalInstanceService>();
+        services.AddSingleton<LocalInstanceRepository>();
 
         services.AddCore<AuthenticationService>();
         services.AddSingleton<AuthenticationService>();

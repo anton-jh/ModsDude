@@ -7,14 +7,15 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Services;
-public class RepoService(
+public class RepoRepository(
     IReposClient repoClient,
-    IGameAdapterIndex gameAdapterIndex)
+    IGameAdapterIndex gameAdapterIndex,
+    LocalInstanceRepository localInstanceRepository)
 {
     public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
     public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
 
-    public ObservableCollection<RepoModel> Repos { get; } = [];
+    public ObservableCollection<Repo> Repos { get; } = [];
 
 
     public async Task RefreshRepos(CancellationToken cancellationToken)
@@ -57,16 +58,16 @@ public class RepoService(
         OnRepoListChanged(repo.Id);
     }
 
-    public async Task UpdateRepo(Guid id, string name, DynamicForm baseSettings, CancellationToken cancellationToken)
+    public async Task Update(Repo repo, CancellationToken cancellationToken)
     {
         var request = new UpdateRepoRequest()
         {
-            Name = name,
-            AdapterConfiguration = baseSettings.Serialize()
+            Name = repo.Name,
+            AdapterConfiguration = repo.BaseSettings.Serialize()
         };
         try
         {
-            await repoClient.UpdateRepoV1Async(id, request, cancellationToken);
+            await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
         }
         catch (ApiException ex) when (ex.StatusCode == 409)
         {
@@ -75,7 +76,7 @@ public class RepoService(
 
         await RefreshRepos(cancellationToken);
         
-        OnRepoListChanged(id);
+        OnRepoListChanged(repo.Id);
     }
 
     public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)
@@ -91,16 +92,8 @@ public class RepoService(
         RepoOfInterestChanged?.Invoke(idOfInterest);
     }
 
-    private RepoModel MapRepoModel(RepoMembershipDto repoMembership)
+    private Repo MapRepoModel(RepoMembershipDto repoMembership)
     {
-        return new RepoModel()
-        {
-            Id = repoMembership.Repo.Id,
-            Name = repoMembership.Repo.Name,
-            AdapterId = GameAdapterId.Parse(repoMembership.Repo.AdapterId),
-            AdapterConfiguration = gameAdapterIndex
-                .GetById(GameAdapterId.Parse(repoMembership.Repo.AdapterId))
-                .DeserializeBaseSettings(repoMembership.Repo.AdapterConfiguration)
-        };
+        return new Repo(repoMembership, gameAdapterIndex, this, localInstanceRepository);
     }
 }

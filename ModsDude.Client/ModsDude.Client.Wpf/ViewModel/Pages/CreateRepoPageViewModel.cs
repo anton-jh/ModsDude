@@ -8,7 +8,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class CreateRepoPageViewModel(
-    RepoService repoService,
+    RepoRepository repoRepository,
     IGameAdapterIndex gameAdapterIndex,
     NavigationLockService navigationLockService,
     IDialogService dialogService,
@@ -54,7 +54,7 @@ public partial class CreateRepoPageViewModel(
 
         navigationLockService.ReleaseLock(this);
 
-        await repoService.CreateRepo(
+        await repoRepository.CreateRepo(
             Name,
             SelectedGameAdapterDescriptor.Value.Id.ToString(),
             BaseSettingsEditor,

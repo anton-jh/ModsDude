@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -12,31 +11,28 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class CreateLocalInstancePageViewModel
     : PageViewModel, IDisposable
 {
-    private readonly RepoModel _repo;
+    private readonly Repo _repo;
     private readonly NavigationLockService _navigationLockService;
-    private readonly LocalInstanceService _localInstanceService;
     private readonly IModalService _modalService;
     private readonly HashSet<string> _takenNames;
 
 
     public CreateLocalInstancePageViewModel(
-        RepoModel repo,
+        Repo repo,
         IGameAdapterIndex gameAdapterIndex,
         IDialogService dialogService,
         NavigationLockService navigationLockService,
-        LocalInstanceService localInstanceService,
         IModalService modalService)
     {
-        var existingInstances = localInstanceService.GetByRepoId(repo.Id);
+        var existingInstances = repo.LocalInstances;
         _name = existingInstances.Count == 0 ? "Game" : "";
         _repo = repo;
         _navigationLockService = navigationLockService;
-        _localInstanceService = localInstanceService;
-        _modalService = modalService;
+        _modalService = modalService;   
         _takenNames = existingInstances.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId).InstanceSettingsTemplate, dialogService);
+        InstanceSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.InstanceSettingsTemplate, dialogService);
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
     }
 
@@ -62,7 +58,7 @@ public partial class CreateLocalInstancePageViewModel
             return;
         }
 
-        _localInstanceService.Create(_repo, Name, InstanceSettingsEditor.ExtractResults());
+        _repo.CreateLocalInstance(Name, InstanceSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -106,7 +102,7 @@ public partial class CreateLocalInstancePageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public CreateLocalInstancePageViewModel Create(RepoModel repo)
+        public CreateLocalInstancePageViewModel Create(Repo repo)
             => ActivatorUtilities.CreateInstance<CreateLocalInstancePageViewModel>(serviceProvider, repo);
     }
 }

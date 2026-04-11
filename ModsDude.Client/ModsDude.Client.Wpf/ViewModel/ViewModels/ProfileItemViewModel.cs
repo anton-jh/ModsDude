@@ -4,7 +4,7 @@ using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public class ProfileItemViewModel(
-    RepoModel repo,
+    Repo repo,
     ProfileDto profile,
     ProfilePageViewModel.Factory profilePageViewModelFactory)
     : MenuItemViewModel(

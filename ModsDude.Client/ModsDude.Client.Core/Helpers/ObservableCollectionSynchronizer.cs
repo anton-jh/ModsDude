@@ -5,18 +5,18 @@ using System.Linq.Expressions;
 
 namespace ModsDude.Client.Core.Helpers;
 
-public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> : IDisposable
-    where TModel : notnull
-    where TViewModel : notnull
+public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : IDisposable
+    where TSource : notnull
+    where TTarget : notnull
 {
-    private readonly ObservableCollection<TViewModel> _target;
-    private readonly ObservableCollection<TModel> _source;
-    private readonly Dictionary<TModel, TViewModel> _map = [];
-    private readonly Dictionary<TViewModel, PropertyChangedEventHandler> _propertyHandlers = [];
-    private readonly Func<TModel, TViewModel> _factory;
-    private readonly Func<TViewModel, TKey> _keySelector;
+    private readonly ObservableCollection<TTarget> _target;
+    private readonly ObservableCollection<TSource> _source;
+    private readonly Dictionary<TSource, TTarget> _map = [];
+    private readonly Dictionary<TTarget, PropertyChangedEventHandler> _propertyHandlers = [];
+    private readonly Func<TSource, TTarget> _factory;
+    private readonly Func<TTarget, TKey> _keySelector;
     private readonly IComparer<TKey> _comparer;
-    private readonly Func<TModel, bool> _filter;
+    private readonly Func<TSource, bool> _filter;
     private readonly string? _propertyName;
     private readonly NotifyCollectionChangedEventHandler _collectionChangedHandler;
 
@@ -24,12 +24,13 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
 
 
     public ObservableCollectionSynchronizer(
-        ObservableCollection<TModel> source,
-        ObservableCollection<TViewModel> target,
-        Func<TModel, TViewModel> factory,
-        Expression<Func<TViewModel, TKey>> keySelectorExpression,
+        ObservableCollection<TSource> source,
+        ObservableCollection<TTarget> target,
+        Func<TSource, TTarget> factory,
+        Expression<Func<TTarget, TKey>> keySelectorExpression,
         IComparer<TKey>? comparer = null,
-        Func<TModel, bool>? filter = null)
+        Func<TSource, bool>? filter = null,
+        bool targetAlreadyInitialized = false)
     {
         _source = source;
         _target = target;
@@ -41,19 +42,29 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
         _comparer = comparer ?? Comparer<TKey>.Default;
         _filter = filter ?? (_ => true);
 
-        foreach (var item in source)
+        if (targetAlreadyInitialized)
         {
-            Add(item);
+            foreach (var item in source)
+            {
+                Map(item);
+            }
+        }
+        else
+        {
+            foreach (var item in source)
+            {
+                Add(item);
+            }
         }
 
         _collectionChangedHandler = (s, e) =>
         {
             if (e.NewItems != null)
-                foreach (TModel item in e.NewItems)
+                foreach (TSource item in e.NewItems)
                     Add(item);
 
             if (e.OldItems != null)
-                foreach (TModel item in e.OldItems)
+                foreach (TSource item in e.OldItems)
                     Remove(item);
 
             if (e.Action == NotifyCollectionChangedAction.Reset)
@@ -64,7 +75,14 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     }
 
 
-    private void Add(TModel model)
+    private void Map(TSource model)
+    {
+        var vm = _factory(model);
+        _map[model] = vm;
+    }
+
+
+    private void Add(TSource model)
     {
         if (!_filter(model))
         {
@@ -76,11 +94,11 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
 
         if (vm is INotifyPropertyChanged npc)
         {
-            PropertyChangedEventHandler handler = (_, e) =>
+            void handler(object? _, PropertyChangedEventArgs e)
             {
                 if (_propertyName == null || e.PropertyName == _propertyName)
                     Resort(vm);
-            };
+            }
 
             npc.PropertyChanged += handler;
             _propertyHandlers[vm] = handler;
@@ -91,7 +109,7 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     }
 
 
-    private void Remove(TModel model)
+    private void Remove(TSource model)
     {
         if (_map.TryGetValue(model, out var vm))
         {
@@ -122,7 +140,7 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     }
 
 
-    private void Resort(TViewModel vm)
+    private void Resort(TTarget vm)
     {
         if (!_target.Contains(vm))
             return;
@@ -134,7 +152,7 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     }
 
 
-    private int FindInsertIndex(TViewModel vm)
+    private int FindInsertIndex(TTarget vm)
     {
         var key = _keySelector(vm);
 
@@ -150,7 +168,7 @@ public sealed class ObservableCollectionSynchronizer<TModel, TViewModel, TKey> :
     }
 
 
-    private static string? GetPropertyName(Expression<Func<TViewModel, TKey>> expr)
+    private static string? GetPropertyName(Expression<Func<TTarget, TKey>> expr)
     {
         if (expr.Body is MemberExpression member)
             return member.Member.Name;

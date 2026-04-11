@@ -1,5 +1,4 @@
-﻿using ModsDude.Client.Core.Models;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Persistence;
 
@@ -15,7 +14,7 @@ public class LocalState
     {
         if (!Repos.TryGetValue(repoId, out var value))
         {
-            value = new();
+            value = new LocalRepoState();
             Repos[repoId] = value;
         }
 
@@ -25,5 +24,5 @@ public class LocalState
 
 public class LocalRepoState
 {
-    public ObservableCollection<LocalInstance> LocalInstances { get; set; } = [];
+    public ObservableCollection<PersistedLocalInstance> LocalInstances { get; set; } = [];
 }

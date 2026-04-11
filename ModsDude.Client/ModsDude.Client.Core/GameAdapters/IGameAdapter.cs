@@ -69,8 +69,8 @@ public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameA
 
 public interface IModAdapter
 {
-    Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings);
-    Task<IEnumerable<LocalMod>> GetModsFromFolder(string path);
+    Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings, CancellationToken cancellationToken);
+    Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
 }
 
 public interface ISavegameAdapter
@@ -80,17 +80,17 @@ public interface ISavegameAdapter
 
 public abstract class ModAdapterBase<TBaseSettings, TInstanceSettings> : IModAdapter
 {
-    public abstract Task<IEnumerable<LocalMod>> GetModsFromFolder(string path);
-    public Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings)
+    public abstract Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
+    public Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings, CancellationToken cancellationToken)
     {
         if (instanceSettings is not TInstanceSettings typedSettings)
         {
             throw ModAdapterBase<TBaseSettings, TInstanceSettings>.IncorrectInstanceSettingsThrowHelper(instanceSettings);
         }
 
-        return GetModsFromInstalled(typedSettings);
+        return GetModsFromInstalled(typedSettings, cancellationToken);
     }
-    public abstract Task<IEnumerable<LocalMod>> GetModsFromInstalled(TInstanceSettings instanceSettings);
+    public abstract Task<IEnumerable<LocalMod>> GetModsFromInstalled(TInstanceSettings instanceSettings, CancellationToken cancellationToken);
 
 
     private static ArgumentException IncorrectInstanceSettingsThrowHelper(DynamicForm obj)

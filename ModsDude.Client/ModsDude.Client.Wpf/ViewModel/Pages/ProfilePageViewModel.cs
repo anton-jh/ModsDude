@@ -10,7 +10,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public class ProfilePageViewModel : PageViewModel
 {
     public ProfilePageViewModel(
-        RepoModel repo,
+        Repo repo,
         ProfileDto profile,
         NavigationManager navigationManager,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
@@ -34,7 +34,7 @@ public class ProfilePageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfilePageViewModel Create(RepoModel repo, ProfileDto profile)
+        public ProfilePageViewModel Create(Repo repo, ProfileDto profile)
             => ActivatorUtilities.CreateInstance<ProfilePageViewModel>(serviceProvider, repo, profile);
     }
 }

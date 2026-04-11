@@ -14,7 +14,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoPageViewModel
     : PageViewModel, IDisposable
 {
-    private readonly RepoModel _repo;
+    private readonly Repo _repo;
     private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
@@ -27,7 +27,7 @@ public partial class RepoPageViewModel
 
 
     public RepoPageViewModel(
-        RepoModel repo,
+        Repo repo,
         RepoAdminPageViewModel.Factory repoAdminPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
@@ -36,8 +36,7 @@ public partial class RepoPageViewModel
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         ProfileService profileService,
         NavigationLockService navigationLockService,
-        IModalService modalService,
-        LocalInstanceService localInstanceService)
+        IModalService modalService)
     {
         _repo = repo;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
@@ -60,7 +59,7 @@ public partial class RepoPageViewModel
         ];
 
         Instances = [];
-        _instanceSynchronizer = new(localInstanceService.GetByRepoId(repo.Id), Instances, MapInstanceToVm, x => x.Title);
+        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);
 
         Profiles = [];
         _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
@@ -133,7 +132,7 @@ public partial class RepoPageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoPageViewModel Create(RepoModel repo)
+        public RepoPageViewModel Create(Repo repo)
         {
             return ActivatorUtilities.CreateInstance<RepoPageViewModel>(serviceProvider, repo);
         }

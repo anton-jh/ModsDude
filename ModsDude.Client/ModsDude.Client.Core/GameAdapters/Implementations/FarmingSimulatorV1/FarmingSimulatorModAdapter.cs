@@ -8,28 +8,28 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
 public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSettings, FarmingSimulatorInstanceSettings>
 {
-    public override async Task<IEnumerable<LocalMod>> GetModsFromFolder(string path)
+    public override async Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
         var files = Directory.GetFiles(path);
-        var modTasks = files.Select(GetModFromFile);
+        var modTasks = files.Select(x => GetModFromFile(x, cancellationToken));
         var mods = await Task.WhenAll(modTasks);
 
         return mods.OfType<LocalMod>();
     }
 
-    public override async Task<IEnumerable<LocalMod>> GetModsFromInstalled(FarmingSimulatorInstanceSettings instanceSettings)
+    public override async Task<IEnumerable<LocalMod>> GetModsFromInstalled(FarmingSimulatorInstanceSettings instanceSettings, CancellationToken cancellationToken)
     {
         var maybe =
             from gameDataFolderPath in Maybe.From(instanceSettings.GameDataFolder)
-            select GetModsFromFolder(Path.Combine(gameDataFolderPath, "mods"));
+            select GetModsFromFolder(Path.Combine(gameDataFolderPath, "mods"), cancellationToken);
 
         return await maybe.GetValueOrDefault(Task.FromResult(Enumerable.Empty<LocalMod>()));
     }
 
-    private async Task<LocalMod?> GetModFromFile(string path)
+    private static async Task<LocalMod?> GetModFromFile(string path, CancellationToken cancellationToken)
     {
         var maybeLocalMod =
-            from desc in await GetModDesc(path)
+            from desc in await GetModDesc(path, cancellationToken)
             from filename in Maybe.From(Path.GetFileNameWithoutExtension(path))
             from version in Maybe.From(desc.Element("version")?.Value)
             from titleGroup in Maybe.From(desc.Element("title"))
@@ -41,7 +41,7 @@ public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSet
         return maybeLocalMod.HasValue ? maybeLocalMod.Value : null;
     }
 
-    private static async Task<ZipArchive?> GetZip(string path)
+    private static ZipArchive? GetZip(string path)
     {
         try
         {
@@ -54,9 +54,9 @@ public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSet
         }
     }
 
-    private static async Task<Maybe<XElement>> GetModDesc(string path)
+    private static async Task<Maybe<XElement>> GetModDesc(string path, CancellationToken cancellationToken)
     {
-        var zip = await GetZip(path);
+        var zip = GetZip(path);
         if (zip is null) return Maybe<XElement>.None;
 
         var entry = zip.GetEntry("modDesc.xml");
@@ -70,7 +70,7 @@ public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSet
         };
 
         using var reader = XmlReader.Create(xmlStream, settings);
-        var document = await Task.Run(() => XDocument.Load(reader));
+        var document = await Task.Run(() => XDocument.Load(reader), cancellationToken);
         return Maybe.From(document.Element("modDesc"));
     }
 

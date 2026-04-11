@@ -4,7 +4,7 @@ using ModsDude.Client.Wpf.ViewModel.Pages;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 public class InstanceItemViewModel(
-    RepoModel repo,
+    Repo repo,
     LocalInstance instance,
     EditLocalInstancePageViewModel.Factory pageFactory)
     : MenuItemViewModel(

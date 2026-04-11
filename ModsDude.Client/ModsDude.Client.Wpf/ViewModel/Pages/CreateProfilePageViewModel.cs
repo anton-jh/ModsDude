@@ -8,12 +8,12 @@ using ModsDude.Client.Wpf.ViewModel.Services;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class CreateProfilePageViewModel(
-    RepoModel repo,
+    Repo repo,
     ProfileService profileService,
     NavigationLockService navigationLockService)
     : PageViewModel, IDisposable
 {
-    private readonly RepoModel _repo = repo;
+    private readonly Repo _repo = repo;
 
 
     [ObservableProperty]
@@ -51,7 +51,7 @@ public partial class CreateProfilePageViewModel(
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public CreateProfilePageViewModel Create(RepoModel repo)
+        public CreateProfilePageViewModel Create(Repo repo)
             => ActivatorUtilities.CreateInstance<CreateProfilePageViewModel>(serviceProvider, repo);
     }
 }

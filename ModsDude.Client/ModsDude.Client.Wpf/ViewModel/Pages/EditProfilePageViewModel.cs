@@ -11,7 +11,7 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class EditProfilePageViewModel(
-    RepoModel repo,
+    Repo repo,
     ProfileDto profile,
     ProfileService profileService,
     NavigationLockService navigationLockService,
@@ -79,7 +79,7 @@ public partial class EditProfilePageViewModel(
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public EditProfilePageViewModel Create(RepoModel repo, ProfileDto profile)
+        public EditProfilePageViewModel Create(Repo repo, ProfileDto profile)
             => ActivatorUtilities.CreateInstance<EditProfilePageViewModel>(serviceProvider, repo, profile);
     }
 }

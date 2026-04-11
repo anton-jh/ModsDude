@@ -12,13 +12,13 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
-    private readonly RepoService _repoService;
+    private readonly RepoRepository _repoService;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
-    private readonly ObservableCollectionSynchronizer<RepoModel, MenuItemViewModel, string> _reposSynchronizer;
+    private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
 
     public MainPageViewModel(
-        RepoService repoService,
+        RepoRepository repoService,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
@@ -79,7 +79,7 @@ public partial class MainPageViewModel
         NavManager.Selected = repo;
     }
 
-    private RepoItemViewModel MapRepoToVm(RepoModel repo)
+    private RepoItemViewModel MapRepoToVm(Repo repo)
     {
         return new RepoItemViewModel(repo, _repoPageViewModelFactory);
     }

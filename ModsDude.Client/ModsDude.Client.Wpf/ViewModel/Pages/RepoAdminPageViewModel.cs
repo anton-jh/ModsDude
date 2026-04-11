@@ -9,15 +9,15 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 {
-    private readonly RepoModel _repo;
-    private readonly RepoService _repoService;
+    private readonly Repo _repo;
+    private readonly RepoRepository _repoService;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
 
 
     public RepoAdminPageViewModel(
-        RepoModel repo,
-        RepoService repoService,
+        Repo repo,
+        RepoRepository repoService,
         NavigationLockService navigationLockService,
         IModalService modalService,
         IDialogService dialogService)
@@ -28,7 +28,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         _modalService = modalService;
         _name = repo.Name;
         OriginalName = repo.Name;
-        BaseSettingsEditor = new(true, repo.AdapterConfiguration.Copy(), dialogService);
+        BaseSettingsEditor = new(true, repo.BaseSettings.Copy(), dialogService);
 
         BaseSettingsEditor.Modified += OnBaseSettingsModified;
     }
@@ -56,7 +56,8 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         }
 
         _navigationLockService.ReleaseLock(this);
-        await _repoService.UpdateRepo(_repo.Id, Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
+
+        await _repo.Update(Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
     }
 
     [RelayCommand]
@@ -112,7 +113,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoAdminPageViewModel Create(RepoModel repo)
+        public RepoAdminPageViewModel Create(Repo repo)
             => ActivatorUtilities.CreateInstance<RepoAdminPageViewModel>(serviceProvider, repo);
     }
 }

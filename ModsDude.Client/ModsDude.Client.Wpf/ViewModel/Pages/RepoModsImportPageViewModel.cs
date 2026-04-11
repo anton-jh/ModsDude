@@ -3,15 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Services;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public partial class RepoModsImportPageViewModel(
-    RepoModel repo,
-    IGameAdapterIndex gameAdapterIndex,
-    LocalInstanceService localInstanceService)
+public partial class RepoModsImportPageViewModel(Repo repo)
     : PageViewModel
 {
     public ObservableCollection<LocalMod> LocalMods { get; private set; } = [];
@@ -25,18 +21,13 @@ public partial class RepoModsImportPageViewModel(
 
     }
 
-    public override async void Init()
+    public override async void Init() // TODO make Init an async Task and handle loading in the background
     {
-        var adapter = gameAdapterIndex.GetById(repo.AdapterId);
-        var modAdapter = adapter.ModAdapter
-            ?? throw MissingModSupportExceptionThrowHelper();
-
         var mods = new List<LocalMod>();
 
-        foreach (var instance in localInstanceService.GetByRepoId(repo.Id))
+        foreach (var instance in repo.LocalInstances)
         {
-            var instanceSettings = adapter.DeserializeInstanceSettings(instance.AdapterInstanceSettings);
-            var installedMods = await modAdapter.GetModsFromInstalled(instanceSettings);
+            var installedMods = await instance.GetInstalledMods(default);
             mods.AddRange(installedMods);
         }
 
@@ -44,17 +35,9 @@ public partial class RepoModsImportPageViewModel(
     }
 
 
-    private UserFriendlyException MissingModSupportExceptionThrowHelper()
-    {
-        return new UserFriendlyException(
-            "This game adapter doesn't support mods",
-            $"Game adapter '{repo.AdapterId}' does not support mods");
-    }
-
-
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoModsImportPageViewModel Create(RepoModel repo)
+        public RepoModsImportPageViewModel Create(Repo repo)
             => ActivatorUtilities.CreateInstance<RepoModsImportPageViewModel>(serviceProvider, repo);
     }
 }

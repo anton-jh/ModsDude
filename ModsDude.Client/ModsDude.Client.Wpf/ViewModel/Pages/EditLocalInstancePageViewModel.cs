@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -11,35 +10,31 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public partial class EditLocalInstancePageViewModel : PageViewModel
 {
-    private readonly RepoModel _repo;
+    private readonly Repo _repo;
     private readonly NavigationLockService _navigationLockService;
-    private readonly LocalInstanceService _localInstanceService;
     private readonly HashSet<string> _takenNames;
     private readonly LocalInstance _subject;
     private readonly IModalService _modalService;
 
 
     public EditLocalInstancePageViewModel(
-        RepoModel repo,
+        Repo repo,
         LocalInstance subject,
         IGameAdapterIndex gameAdapterIndex,
         IDialogService dialogService,
         IModalService modalService,
-        NavigationLockService navigationLockService,
-        LocalInstanceService localInstanceService)
+        NavigationLockService navigationLockService)
     {
         _name = subject.Name;
         _repo = repo;
         _subject = subject;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
-        _localInstanceService = localInstanceService;
-        _takenNames = localInstanceService.GetByRepoId(repo.Id).Select(x => x.Name).Distinct().ToHashSet();
+        _takenNames = repo.LocalInstances.Select(x => x.Name).Distinct().ToHashSet();
         OriginalName = subject.Name;
         RepoName = repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, gameAdapterIndex.GetById(repo.AdapterId)
-            .DeserializeInstanceSettings(_subject.AdapterInstanceSettings), dialogService);
+        InstanceSettingsEditor = new DynamicFormViewModel(false, subject.InstanceSettings, dialogService);
 
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
         InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
@@ -77,7 +72,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
         _navigationLockService.ReleaseLock(this);
 
-        _localInstanceService.Update(_repo, _subject, Name, instanceSettings);
+        _subject.Update(Name, instanceSettings);
     }
 
     [RelayCommand]
@@ -90,9 +85,8 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
         if (modal.Result == true)
         {
             _navigationLockService.ReleaseLock(this);
-            _localInstanceService.Delete(_subject);
+            _repo.DeleteLocalInstance(_subject);
         }
-
     }
 
     public void Dispose()
@@ -140,7 +134,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public EditLocalInstancePageViewModel Create(RepoModel repo, LocalInstance subject)
+        public EditLocalInstancePageViewModel Create(Repo repo, LocalInstance subject)
             => ActivatorUtilities.CreateInstance<EditLocalInstancePageViewModel>(serviceProvider, repo, subject);
     }
 }

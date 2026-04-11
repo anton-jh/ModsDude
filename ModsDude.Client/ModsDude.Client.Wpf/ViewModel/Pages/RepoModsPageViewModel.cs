@@ -9,7 +9,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public class RepoModsPageViewModel : PageViewModel
 {
     public RepoModsPageViewModel(
-        RepoModel repo,
+        Repo repo,
         RepoModsImportPageViewModel.Factory repoModsImportPageViewModelFactory,
         NavigationManager navigationManager)
     {
@@ -28,7 +28,7 @@ public class RepoModsPageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoModsPageViewModel Create(RepoModel repo)
+        public RepoModsPageViewModel Create(Repo repo)
             => ActivatorUtilities.CreateInstance<RepoModsPageViewModel>(serviceProvider, repo);
     }
 }

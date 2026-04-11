@@ -13,4 +13,9 @@ public class UserFriendlyException(
     {
         return new UserFriendlyException("Something broke", exception.Message, exception);
     }
+
+    public static UserFriendlyException RepoNoModSupport()
+    {
+        return new("The configured game adapter does not support mods");
+    }
 }

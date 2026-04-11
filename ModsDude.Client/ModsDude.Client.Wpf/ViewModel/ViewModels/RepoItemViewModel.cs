@@ -3,7 +3,7 @@ using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public class RepoItemViewModel(
-    RepoModel repo,
+    Repo repo,
     RepoPageViewModel.Factory repoPageViewModelFactory)
     : MenuItemViewModel(
         repo.Name,
