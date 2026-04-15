@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInstanceSettings>
@@ -26,5 +27,12 @@ public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInst
         {
             yield return new("Folder does not exist.", nameof(GameDataFolder));
         }
+    }
+
+
+    public static FarmingSimulatorInstanceSettings Deserialize(string serialized)
+    {
+        return JsonSerializer.Deserialize<FarmingSimulatorInstanceSettings>(serialized)
+            ?? throw new ArgumentException("Could not deserialize instance settings");
     }
 }

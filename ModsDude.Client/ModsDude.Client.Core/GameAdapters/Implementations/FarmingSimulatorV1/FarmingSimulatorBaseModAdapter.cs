@@ -1,4 +1,6 @@
-﻿using ModsDude.Client.Core.Helpers;
+﻿using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using System.IO.Compression;
 using System.Xml;
@@ -71,13 +73,30 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
             ?? element.Elements().FirstOrDefault()?.Value
             ?? fallback);
     }
+
+    public IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings)
+    {
+        var instanceSettings = FarmingSimulatorInstanceSettings.Deserialize(serializedInstanceSettings);
+        instanceSettings.EnsureValid();
+        return new FarmingSimulatorInstanceModAdapter(instanceSettings);
+    }
+
+    public IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings)
+    {
+        if (instanceSettings is not FarmingSimulatorInstanceSettings settings)
+        {
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
+        }
+        settings.EnsureValid();
+        return new FarmingSimulatorInstanceModAdapter(settings);
+    }
 }
 
 
 public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings instanceSettings)
     : FarmingSimulatorBaseModAdapter, IInstanceModAdapter
 {
-    public async Task<IEnumerable<LocalMod>> GetModsFromInstalled(CancellationToken cancellationToken)
+    public async Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
     {
         var maybe =
             from gameDataFolderPath in Maybe.From(instanceSettings.GameDataFolder)

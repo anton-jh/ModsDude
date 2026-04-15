@@ -37,16 +37,19 @@ public interface IInstanceGameAdapter : IBaseGameAdapter
 public interface IBaseModAdapter
 {
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
+    IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings);
+    IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings);
 }
 
 public interface IInstanceModAdapter : IBaseModAdapter
 {
-    Task<IEnumerable<LocalMod>> GetModsFromInstalled(CancellationToken cancellationToken);
+    Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken);
 }
 
 public interface IBaseSavegameAdapter
 {
-
+    IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings);
+    IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings);
 }
 
 public interface IInstanceSavegameAdapter : IBaseSavegameAdapter

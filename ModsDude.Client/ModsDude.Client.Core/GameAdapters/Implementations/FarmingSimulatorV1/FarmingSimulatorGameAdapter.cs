@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+﻿using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
@@ -31,7 +32,7 @@ public class FarmingSimulatorGameAdapter : IGameAdapter
     {
         if (baseSettings is not FarmingSimulatorBaseSettings settings)
         {
-            throw new ArgumentException($"Incorrect base settings type. Expected '{typeof(FarmingSimulatorBaseSettings).FullName}', got '{baseSettings.GetType().FullName}'");
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorBaseSettings>(baseSettings);
         }
 
         settings.EnsureValid();
@@ -78,13 +79,18 @@ public class FarmingSimulatorBaseGameAdapter(
     {
         var instanceSettings = JsonSerializer.Deserialize<FarmingSimulatorInstanceSettings>(serializedInstanceSettings)
             ?? throw new ArgumentException("Could not deserialize instance settings");
+        instanceSettings.EnsureValid();
 
         return new FarmingSimulatorInstanceGameAdapter(BaseSettings, instanceSettings);
     }
 
     public IInstanceGameAdapter WithInstanceSettings(DynamicForm instanceSettings)
     {
-        throw new NotImplementedException();
+        if (instanceSettings is not FarmingSimulatorInstanceSettings settings)
+        {
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
+        }
+        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, settings);
     }
 }
 

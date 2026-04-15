@@ -7,7 +7,7 @@ public static class GameAdapterServiceCollectionExtensions
     public static IServiceCollection AddGameAdapters(this IServiceCollection services, Assembly assembly)
     {
         var types = assembly.GetTypes()
-            .Where(x => !x.IsAbstract && x.IsAssignableTo(typeof(IGameAdapter)));
+            .Where(x => !x.IsAbstract && x.IsAssignableTo(typeof(IGameAdapter)) && !x.IsAssignableTo(typeof(IBaseGameAdapter)));
 
         foreach (var type in types)
         {

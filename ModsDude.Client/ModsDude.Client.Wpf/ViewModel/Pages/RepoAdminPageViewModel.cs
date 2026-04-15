@@ -28,7 +28,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         _modalService = modalService;
         _name = repo.Name;
         OriginalName = repo.Name;
-        BaseSettingsEditor = new(true, repo.BaseSettings.Copy(), dialogService);
+        BaseSettingsEditor = new(true, repo.Adapter.BaseSettings.Copy(), dialogService);
 
         BaseSettingsEditor.Modified += OnBaseSettingsModified;
     }

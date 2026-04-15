@@ -10,6 +10,10 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoModsImportPageViewModel(Repo repo)
     : PageViewModel
 {
+    private readonly IBaseModAdapter _baseModAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke()
+        ?? throw UserFriendlyException.RepoNoModSupport();
+
+
     public ObservableCollection<LocalMod> LocalMods { get; private set; } = [];
 
     public string RepoName { get; } = repo.Name;
@@ -27,7 +31,7 @@ public partial class RepoModsImportPageViewModel(Repo repo)
 
         foreach (var instance in repo.LocalInstances)
         {
-            var installedMods = await instance.Adapter.GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>().GetInstalledMods(default);
+            var installedMods = await _baseModAdapter.WithInstanceSettings(instance.InstanceSettings).GetInstalledMods(default);
             mods.AddRange(installedMods);
         }
 
