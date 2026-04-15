@@ -45,9 +45,9 @@ public class FarmingSimulatorBaseGameAdapter(
     FarmingSimulatorBaseSettings settings)
     : FarmingSimulatorGameAdapter, IBaseGameAdapter
 {
-    private static readonly List<Func<object>> _capabilities = [
-        () => new FarmingSimulatorBaseModAdapter(),
-        () => new FarmingSimulatorBaseSavegameAdapter()
+    private static readonly List<object> _capabilities = [
+        new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter()),
+        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter())
         ];
 
 

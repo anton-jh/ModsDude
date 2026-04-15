@@ -28,7 +28,7 @@
 
                 <ComboBox Width="300" HorizontalAlignment="Left"
                           ItemsSource="{Binding Path=AvailableGameAdapters}"
-                          SelectedValue="{Binding Path=SelectedGameAdapterDescriptor}"
+                          SelectedValue="{Binding Path=SelectedGameAdapter}"
                           >
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
