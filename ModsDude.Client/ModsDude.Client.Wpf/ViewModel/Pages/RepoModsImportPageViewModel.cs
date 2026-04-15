@@ -27,7 +27,7 @@ public partial class RepoModsImportPageViewModel(Repo repo)
 
         foreach (var instance in repo.LocalInstances)
         {
-            var installedMods = await instance.GetInstalledMods(default);
+            var installedMods = await instance.Adapter.GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>().GetInstalledMods(default);
             mods.AddRange(installedMods);
         }
 

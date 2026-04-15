@@ -63,7 +63,7 @@ public class RepoRepository(
         var request = new UpdateRepoRequest()
         {
             Name = repo.Name,
-            AdapterConfiguration = repo.BaseSettings.Serialize()
+            AdapterConfiguration = repo.Adapter.BaseSettings.Serialize()
         };
         try
         {

@@ -32,7 +32,7 @@ public partial class CreateLocalInstancePageViewModel
         _takenNames = existingInstances.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.InstanceSettingsTemplate, dialogService);
+        InstanceSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetInstanceSettingsTemplate(), dialogService);
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
     }
 

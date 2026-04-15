@@ -1,105 +1,55 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
-using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters;
 
 public interface IGameAdapter
 {
-    GameAdapterDescriptor Descriptor { get; }
-    bool HasModAdapter { get; }
-    bool HasSavegameAdapter { get; }
-    IModAdapter? ModAdapter { get; }
-    ISavegameAdapter? SavegameAdapter { get; }
-    DynamicForm BaseSettingsTemplate { get; }
-    DynamicForm InstanceSettingsTemplate { get; }
-    DynamicForm DeserializeBaseSettings(string serialized);
-    DynamicForm DeserializeInstanceSettings(string serialized);
-    string SerializeBaseSettings(DynamicForm settings);
-    string SerializeInstanceSettings(DynamicForm settings);
+    GameAdapterId Id { get; }
+    string DisplayName { get; }
+    string Description { get; }
+    bool CanSupportMods { get; }
+    bool CanSupportSavegames { get; }
+
+    DynamicForm GetBaseSettingsTemplate();
+    IBaseGameAdapter WithBaseSettings(string serializedBaseSettings);
+    IBaseGameAdapter WithBaseSettings(DynamicForm baseSettings);
 }
 
-public abstract class GameAdapterBase<TBaseSettings, TInstanceSettings> : IGameAdapter
-    where TBaseSettings : DynamicForm, new()
-    where TInstanceSettings : DynamicForm, new()
+public interface IBaseGameAdapter : IGameAdapter
 {
-    public abstract GameAdapterDescriptor Descriptor { get; }
+    DynamicForm BaseSettings { get; }
 
-    public bool HasModAdapter => ModAdapter is not null;
-    public bool HasSavegameAdapter => SavegameAdapter is not null;
-    public DynamicForm BaseSettingsTemplate => new TBaseSettings();
-    public DynamicForm InstanceSettingsTemplate => new TInstanceSettings();
-
-    public abstract IModAdapter? ModAdapter { get; }
-    public abstract ISavegameAdapter? SavegameAdapter { get; }
-
-
-    public virtual DynamicForm DeserializeBaseSettings(string serialized)
-    {
-        return JsonSerializer.Deserialize<TBaseSettings>(serialized)
-            ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");
-    }
-
-    public virtual DynamicForm DeserializeInstanceSettings(string serialized)
-    {
-        return JsonSerializer.Deserialize<TInstanceSettings>(serialized)
-            ?? throw new ArgumentException("Cannot deserialize GameAdapter settings.");
-    }
-
-    public virtual string SerializeBaseSettings(DynamicForm settings)
-    {
-        if (settings is not TBaseSettings typed)
-        {
-            throw new InvalidOperationException($"Cannot serialize base settings: Expected '{typeof(TBaseSettings).FullName}', got '{settings.GetType().FullName}'");
-        }
-
-        return JsonSerializer.Serialize(typed);
-    }
-
-    public virtual string SerializeInstanceSettings(DynamicForm settings)
-    {
-        if (settings is not TInstanceSettings typed)
-        {
-            throw new InvalidOperationException($"Cannot serialize instance settings: Expected '{typeof(TInstanceSettings).FullName}', got '{settings.GetType().FullName}'");
-        }
-
-        return JsonSerializer.Serialize(typed);
-    }
+    DynamicForm GetInstanceSettingsTemplate();
+    DynamicForm DeserializeInstanceSettings(string serializedInstanceSettings);
+    Func<T>? GetBaseCapabilityAdapterFactory<T>();
+    IInstanceGameAdapter WithInstanceSettings(string serializedInstanceSettings);
+    IInstanceGameAdapter WithInstanceSettings(DynamicForm instanceSettings);
 }
 
-public interface IModAdapter
+public interface IInstanceGameAdapter : IBaseGameAdapter
 {
-    Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings, CancellationToken cancellationToken);
+    DynamicForm InstanceSettings { get; }
+
+    Func<T>? GetInstanceCapabilityAdapterFactory<T>();
+}
+
+public interface IBaseModAdapter
+{
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
 }
 
-public interface ISavegameAdapter
+public interface IInstanceModAdapter : IBaseModAdapter
 {
-    
+    Task<IEnumerable<LocalMod>> GetModsFromInstalled(CancellationToken cancellationToken);
 }
 
-public abstract class ModAdapterBase<TBaseSettings, TInstanceSettings> : IModAdapter
+public interface IBaseSavegameAdapter
 {
-    public abstract Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
-    public Task<IEnumerable<LocalMod>> GetModsFromInstalled(DynamicForm instanceSettings, CancellationToken cancellationToken)
-    {
-        if (instanceSettings is not TInstanceSettings typedSettings)
-        {
-            throw ModAdapterBase<TBaseSettings, TInstanceSettings>.IncorrectInstanceSettingsThrowHelper(instanceSettings);
-        }
 
-        return GetModsFromInstalled(typedSettings, cancellationToken);
-    }
-    public abstract Task<IEnumerable<LocalMod>> GetModsFromInstalled(TInstanceSettings instanceSettings, CancellationToken cancellationToken);
-
-
-    private static ArgumentException IncorrectInstanceSettingsThrowHelper(DynamicForm obj)
-    {
-        return new ArgumentException($"Expected instanceSettings of type '{typeof(TInstanceSettings).Name}' but got '{obj.GetType().Name}'");
-    }
 }
 
-public abstract class SavegameAdapterBase<TBaseSettings, TInstanceSettings> : ISavegameAdapter
+public interface IInstanceSavegameAdapter : IBaseSavegameAdapter
 {
 
 }

@@ -6,24 +6,15 @@ using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
-public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSettings, FarmingSimulatorInstanceSettings>
+public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
 {
-    public override async Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
+    public async Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
         var files = Directory.GetFiles(path);
         var modTasks = files.Select(x => GetModFromFile(x, cancellationToken));
         var mods = await Task.WhenAll(modTasks);
 
         return mods.OfType<LocalMod>();
-    }
-
-    public override async Task<IEnumerable<LocalMod>> GetModsFromInstalled(FarmingSimulatorInstanceSettings instanceSettings, CancellationToken cancellationToken)
-    {
-        var maybe =
-            from gameDataFolderPath in Maybe.From(instanceSettings.GameDataFolder)
-            select GetModsFromFolder(Path.Combine(gameDataFolderPath, "mods"), cancellationToken);
-
-        return await maybe.GetValueOrDefault(Task.FromResult(Enumerable.Empty<LocalMod>()));
     }
 
     private static async Task<LocalMod?> GetModFromFile(string path, CancellationToken cancellationToken)
@@ -79,5 +70,19 @@ public class FarmingSimulatorModAdapter : ModAdapterBase<FarmingSimulatorBaseSet
         return Maybe.From(element.Element("en")?.Value
             ?? element.Elements().FirstOrDefault()?.Value
             ?? fallback);
+    }
+}
+
+
+public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings instanceSettings)
+    : FarmingSimulatorBaseModAdapter, IInstanceModAdapter
+{
+    public async Task<IEnumerable<LocalMod>> GetModsFromInstalled(CancellationToken cancellationToken)
+    {
+        var maybe =
+            from gameDataFolderPath in Maybe.From(instanceSettings.GameDataFolder)
+            select GetModsFromFolder(Path.Combine(gameDataFolderPath, "mods"), cancellationToken);
+
+        return await maybe.GetValueOrDefault(Task.FromResult(Enumerable.Empty<LocalMod>()));
     }
 }

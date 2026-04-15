@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -19,32 +20,27 @@ public partial class CreateRepoPageViewModel(
     private string _name = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedGameAdapter))]
     [NotifyPropertyChangedFor(nameof(BaseSettingsEditor))]
-    private GameAdapterDescriptor? _selectedGameAdapterDescriptor;
+    private IGameAdapter? _selectedGameAdapter;
 
-    
-    public IGameAdapter? SelectedGameAdapter => SelectedGameAdapterDescriptor is not null
-        ? gameAdapterIndex.GetById(SelectedGameAdapterDescriptor.Value.Id)
-        : null;
 
-    public DynamicFormViewModel? BaseSettingsEditor => SelectedGameAdapter?.BaseSettingsTemplate is not null
-        ? new(false, SelectedGameAdapter.BaseSettingsTemplate, dialogService)
+    public DynamicFormViewModel? BaseSettingsEditor => SelectedGameAdapter?.GetBaseSettingsTemplate() is DynamicForm template
+        ? new(editing: false, template, dialogService)
         : null;
 
     public bool IsValid =>
         !string.IsNullOrWhiteSpace(Name) &&
-        SelectedGameAdapterDescriptor is not null &&
+        SelectedGameAdapter is not null &&
         (BaseSettingsEditor?.IsValid ?? false);
 
-    public ObservableCollection<GameAdapterDescriptor> AvailableGameAdapters { get; } =
-        [.. gameAdapterIndex.GetAllLatest().Select(x => x.Descriptor)];
+    public ObservableCollection<IGameAdapter> AvailableGameAdapters { get; } =
+        new(gameAdapterIndex.GetAllLatest());
 
 
     [RelayCommand]
     public async Task Submit(CancellationToken cancellationToken)
     {
-        if (!IsValid || SelectedGameAdapterDescriptor is null || string.IsNullOrWhiteSpace(Name) || BaseSettingsEditor is null)
+        if (!IsValid || SelectedGameAdapter is null || string.IsNullOrWhiteSpace(Name) || BaseSettingsEditor is null)
         {
             var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
             await modalService.Show(modal);
@@ -56,7 +52,7 @@ public partial class CreateRepoPageViewModel(
 
         await repoRepository.CreateRepo(
             Name,
-            SelectedGameAdapterDescriptor.Value.Id.ToString(),
+            SelectedGameAdapter.Id.ToString(),
             BaseSettingsEditor,
             cancellationToken);
     }
@@ -75,7 +71,7 @@ public partial class CreateRepoPageViewModel(
         {
             errors.Add("Name is required.");
         }
-        if (SelectedGameAdapterDescriptor is null)
+        if (SelectedGameAdapter is null)
         {
             errors.Add("Game adapter is required.");
         }
@@ -90,7 +86,7 @@ public partial class CreateRepoPageViewModel(
         navigationLockService.AcquireLock(this);
     }
 
-    partial void OnSelectedGameAdapterDescriptorChanged(GameAdapterDescriptor? value)
+    partial void OnSelectedGameAdapterChanged(IGameAdapter? value)
     {
         navigationLockService.AcquireLock(this);
     }

@@ -8,7 +8,7 @@ namespace ModsDude.Client.Core.GameAdapters.DynamicForms;
 public abstract class DynamicForm
 {
     public abstract DynamicFormValidationError[] Validate();
-
+    public abstract void EnsureValid();
     public abstract DynamicForm Copy();
 
     public virtual string Serialize()
@@ -30,6 +30,17 @@ public abstract class DynamicForm<T> : DynamicForm
     public override DynamicFormValidationError[] Validate()
     {
         return PerformValidation().ToArray();
+    }
+
+    public override void EnsureValid()
+    {
+        var errors = PerformValidation();
+
+        if (errors.Any())
+        {
+            throw new ArgumentException($"Invalid base settings:\n" +
+                $"{string.Join('\n', errors.Select(x => x.Message))}");
+        }
     }
 
     protected virtual IEnumerable<DynamicFormValidationError<T>> PerformValidation()

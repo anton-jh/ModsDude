@@ -1,5 +1,4 @@
-﻿using ModsDude.Client.Core.Exceptions;
-using ModsDude.Client.Core.GameAdapters;
+﻿using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Persistence;
 using System.ComponentModel;
@@ -9,33 +8,28 @@ namespace ModsDude.Client.Core.Models;
 public class LocalInstance
     : INotifyPropertyChanged
 {
-    private readonly IGameAdapter _adapter;
-
-
-    public LocalInstance(IGameAdapter adapter, Repo repo, PersistedLocalInstance persistedModel)
+    public LocalInstance(IBaseGameAdapter baseAdapter, Repo repo, PersistedLocalInstance persistedModel)
     {
-        _adapter = adapter;
-
         Id = persistedModel.Id;
         Repo = repo;
-        InstanceSettings = adapter.DeserializeInstanceSettings(persistedModel.AdapterInstanceSettings);
         PersistedModel = persistedModel;
+        InstanceSettings = baseAdapter.DeserializeInstanceSettings(persistedModel.AdapterInstanceSettings);
+        Adapter = baseAdapter.WithInstanceSettings(InstanceSettings);
     }
 
-    public LocalInstance(IGameAdapter adapter, Repo repo, string name, DynamicForm instanceSettings)
+    public LocalInstance(IBaseGameAdapter baseAdapter, Repo repo, string name, DynamicForm instanceSettings)
     {
-        _adapter = adapter;
-        InstanceSettings = instanceSettings;
-
         Id = Guid.NewGuid();
         Repo = repo;
+        InstanceSettings = instanceSettings;
         PersistedModel = new PersistedLocalInstance()
         {
             Id = Id,
             Name = name,
             RepoId = repo.Id,
-            AdapterInstanceSettings = _adapter.SerializeInstanceSettings(instanceSettings)
+            AdapterInstanceSettings = instanceSettings.Serialize()
         };
+        Adapter = baseAdapter.WithInstanceSettings(InstanceSettings);
     }
 
 
@@ -43,6 +37,7 @@ public class LocalInstance
 
     public Guid Id { get; }
     public Repo Repo { get; }
+    public IInstanceGameAdapter Adapter { get; }
 
     public string Name
     {
@@ -70,15 +65,5 @@ public class LocalInstance
         Name = name;
         InstanceSettings = instanceSettings;
         PersistedModel.AdapterInstanceSettings = instanceSettings.Serialize();
-    }
-
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
-    {
-        if (_adapter.ModAdapter is null)
-        {
-            throw UserFriendlyException.RepoNoModSupport();
-        }
-
-        return _adapter.ModAdapter.GetModsFromInstalled(InstanceSettings, cancellationToken);
     }
 }

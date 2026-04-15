@@ -15,7 +15,7 @@ internal class GameAdapterIndex : IGameAdapterIndex
     public GameAdapterIndex(IEnumerable<IGameAdapter> allGameAdapters)
     {
         var duplicates = allGameAdapters
-            .GroupBy(x => x.Descriptor.Id)
+            .GroupBy(x => x.Id)
             .Where(x => x.Count() > 1);
 
         if (duplicates.Any())
@@ -29,21 +29,21 @@ internal class GameAdapterIndex : IGameAdapterIndex
 
     public IGameAdapter GetById(GameAdapterId id)
     {
-        return _allGameAdapters.FirstOrDefault(x => x.Descriptor.Id == id)
+        return _allGameAdapters.FirstOrDefault(x => x.Id == id)
             ?? throw new ArgumentException($"Cannot find GameAdapter with id '{id}'.");
     }
 
     public IGameAdapter? GetLatestByPartialId(string id)
     {
         return _allGameAdapters
-            .Where(x => x.Descriptor.Id.Id == id)
-            .MaxBy(x => x.Descriptor.Id.CompatibilityVersion);
+            .Where(x => x.Id.Id == id)
+            .MaxBy(x => x.Id.CompatibilityVersion);
     }
 
     public IEnumerable<IGameAdapter> GetAllLatest()
     {
         return _allGameAdapters
-            .GroupBy(x => x.Descriptor.Id.Id)
-            .Select(x => x.OrderByDescending(x => x.Descriptor.Id.CompatibilityVersion).First());
+            .GroupBy(x => x.Id.Id)
+            .Select(x => x.OrderByDescending(x => x.Id.CompatibilityVersion).First());
     }
 }

@@ -6,14 +6,12 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 
 namespace ModsDude.Client.Core.Models;
 
 public class Repo
     : IDisposable
 {
-    private readonly IGameAdapter _adapter;
     private readonly RepoRepository _repoService;
     private readonly ObservableCollectionSynchronizer<LocalInstance, PersistedLocalInstance, Guid> _instancesSynchronizer;
 
@@ -24,15 +22,14 @@ public class Repo
         RepoRepository repoService,
         LocalInstanceRepository localInstanceRepository)
     {
-        _adapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembershipDto.Repo.AdapterId));
+        Adapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembershipDto.Repo.AdapterId)).WithBaseSettings(repoMembershipDto.Repo.AdapterConfiguration);
         _repoService = repoService;
         Id = repoMembershipDto.Repo.Id;
         Name = repoMembershipDto.Repo.Name;
         MembershipLevel = repoMembershipDto.MembershipLevel;
-        BaseSettings = _adapter.DeserializeBaseSettings(repoMembershipDto.Repo.AdapterConfiguration);
 
         LocalInstances = new(localInstanceRepository.GetByRepoId(Id)
-            .Select(x => new LocalInstance(_adapter, this, x)));
+            .Select(x => new LocalInstance(Adapter, this, x)));
 
         _instancesSynchronizer = new(
             source: LocalInstances,
@@ -46,9 +43,8 @@ public class Repo
     public Guid Id { get; }
     public string Name { get; private set; }
     public RepoMembershipLevel MembershipLevel { get; }
-    public DynamicForm BaseSettings { get; private set; }
     public ObservableCollection<LocalInstance> LocalInstances { get; }
-    public IGameAdapter Adapter => _adapter;
+    public IBaseGameAdapter Adapter { get; private set; }
 
     // TODO: Profiles
 
@@ -56,29 +52,19 @@ public class Repo
     public Task Update(string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         Name = name;
-        BaseSettings = baseSettings;
+        Adapter = Adapter.WithBaseSettings(baseSettings);
         return _repoService.Update(this, cancellationToken);
     }
 
     public void CreateLocalInstance(string name, DynamicForm instanceSettings)
     {
-        var instance = new LocalInstance(_adapter, this, name, instanceSettings);
+        var instance = new LocalInstance(Adapter, this, name, instanceSettings);
         LocalInstances.Add(instance);
     }
 
     public void DeleteLocalInstance(LocalInstance instance)
     {
         LocalInstances.Remove(instance);
-    }
-
-    public Task<IEnumerable<LocalMod>> GetModsFromFolder(string folderPath, CancellationToken cancellationToken)
-    {
-        if (_adapter.ModAdapter is null)
-        {
-            throw UserFriendlyException.RepoNoModSupport();
-        }
-
-        return _adapter.ModAdapter.GetModsFromFolder(folderPath, cancellationToken);
     }
 
     public void Dispose()
