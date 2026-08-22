@@ -76,7 +76,7 @@ public partial class NavigationManager(
         });
 
         CurrentPage = value?.GetPage();
-        CurrentPage?.Init();
+        CurrentPage?.TriggerInit();
     }
 
     private async Task<bool> ConfirmNavigateAwayAsync()

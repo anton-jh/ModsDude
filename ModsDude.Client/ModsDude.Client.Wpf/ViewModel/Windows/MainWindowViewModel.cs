@@ -55,7 +55,7 @@ public partial class MainWindowViewModel
         CurrentPage = value
             ? _mainPageViewModelFactory.Create()
             : new LoginPageViewModel();
-        CurrentPage.Init();
+        CurrentPage.TriggerInit();
     }
 
     public Task Show(ModalViewModel modal)

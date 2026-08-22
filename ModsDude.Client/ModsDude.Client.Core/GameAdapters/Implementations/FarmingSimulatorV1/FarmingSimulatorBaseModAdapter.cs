@@ -12,7 +12,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
 {
     public async Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
-        var files = Directory.GetFiles(path);
+        var files = Directory.EnumerateFiles(path);
         var modTasks = files.Select(x => GetModFromFile(x, cancellationToken));
         var mods = await Task.WhenAll(modTasks);
 

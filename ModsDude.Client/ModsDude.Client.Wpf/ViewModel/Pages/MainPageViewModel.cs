@@ -52,7 +52,7 @@ public partial class MainPageViewModel
     public ObservableCollection<MenuItemViewModel> Repos { get; }
 
 
-    public override void Init()
+    protected override void Init()
     {
         LoadReposCommand.Execute(null);
     }

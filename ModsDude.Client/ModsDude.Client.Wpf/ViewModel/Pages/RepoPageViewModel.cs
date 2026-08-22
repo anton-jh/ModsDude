@@ -89,7 +89,7 @@ public partial class RepoPageViewModel
     public ObservableCollection<MenuItemViewModel> Instances { get; }
 
 
-    public override void Init()
+    protected override void Init()
     {
         LoadProfilesCommand.Execute(null);
     }

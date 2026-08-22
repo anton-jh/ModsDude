@@ -1,9 +1,12 @@
-﻿using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -14,19 +17,27 @@ public partial class RepoModsImportPageViewModel(Repo repo)
         ?? throw UserFriendlyException.RepoNoModSupport();
 
 
-    public ObservableCollection<LocalMod> LocalMods { get; private set; } = [];
+    [ObservableProperty]
+    private ObservableCollection<LocalMod> _localMods = [];
 
     public string RepoName { get; } = repo.Name;
 
 
     [RelayCommand]
-    public async Task ImportCommand()
+    public async Task ImportAsync()
     {
-
+        
     }
 
-    public override async void Init() // TODO make Init an async Task and handle loading in the background
+    protected override void Init()
     {
+        
+    }
+
+    protected override async Task InitAsync()
+    {
+        await Task.Yield();
+
         var mods = new List<LocalMod>();
 
         foreach (var instance in repo.LocalInstances)
@@ -35,7 +46,7 @@ public partial class RepoModsImportPageViewModel(Repo repo)
             mods.AddRange(installedMods);
         }
 
-        LocalMods = new(mods);
+        LocalMods = new(mods.DistinctBy(x => (x.Id, x.Version)));
     }
 
 
