@@ -4,13 +4,23 @@ using System.Text.Json;
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInstanceSettings>
 {
+    // The installer has used both spellings over the years, and neither is guessable from the
+    // other, so probe for whichever one is actually on disk.
+    private static readonly string[] _gameDataFolderNames =
+        ["FarmingSimulator2025", "Farming Simulator 2025"];
+
+
     public FarmingSimulatorInstanceSettings()
     {
-        var gameDataFolder = Path.Join(
+        var myGames = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "My Games",
-            "Farming Simulator 2025");
-        if (Directory.Exists(gameDataFolder))
+            "My Games");
+
+        var gameDataFolder = _gameDataFolderNames
+            .Select(x => Path.Join(myGames, x))
+            .FirstOrDefault(Directory.Exists);
+
+        if (gameDataFolder is not null)
         {
             GameDataFolder = new(gameDataFolder);
         }

@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.View.Imaging;
 using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -83,8 +84,13 @@ public partial class App : Application
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
 
+        services.AddSingleton<ModListItemViewModel.Factory>();
+
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
         services.AddSingleton<IDialogService, DialogService>();
+
+        // Singleton so the decoded thumbnails survive navigating away from a page and back.
+        services.AddSingleton<IModImageProvider, ModImageProvider>();
 
         services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();

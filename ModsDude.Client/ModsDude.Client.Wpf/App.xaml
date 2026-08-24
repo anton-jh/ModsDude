@@ -18,6 +18,8 @@
 
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml"/>
+                <ResourceDictionary Source="View/Resources/Controls.xaml"/>
+                <ResourceDictionary Source="View/Resources/ModListItem.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
@@ -67,6 +69,16 @@
                 <uc:Dialog />
             </DataTemplate>
 
+            <!-- Without its own template this would fall through to the base ModalViewModel one
+                 above and render as a confirmation dialog. -->
+            <DataTemplate DataType="{x:Type vm:ModDetailsModalViewModel}">
+                <uc:ModDetailsDialog />
+            </DataTemplate>
+
+            <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,
+                 merged above. -->
+
+
             <DataTemplate DataType="{x:Type vm:FolderPathDynamicFormFieldViewModel}">
                 <StackPanel>
                     <TextBlock Text="{Binding Title}" />
@@ -77,7 +89,6 @@
             </DataTemplate>
 
             <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
-            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />

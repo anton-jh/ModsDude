@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public class RepoModsPageViewModel : PageViewModel
+public class RepoModsPageViewModel : PageViewModel, IDisposable
 {
     public RepoModsPageViewModel(
         Repo repo,
@@ -24,6 +24,17 @@ public class RepoModsPageViewModel : PageViewModel
 
     public NavigationManager NavManager { get; }
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
+
+
+    /// <summary>
+    /// Without this the sub page this owns is never disposed, so its initialization keeps running
+    /// long after the user has navigated on. Dragging across the menu leaves one of those behind
+    /// per page it passes over.
+    /// </summary>
+    public void Dispose()
+    {
+        NavManager.Dispose();
+    }
 
 
     public class Factory(IServiceProvider serviceProvider)
