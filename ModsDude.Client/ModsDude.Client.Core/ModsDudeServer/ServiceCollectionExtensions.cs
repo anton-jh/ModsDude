@@ -11,6 +11,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IMembersClient, MembersClient>();
         services.AddHttpClient<IProfilesClient, ProfilesClient>();
         services.AddHttpClient<IModDependenciesClient, ModDependenciesClient>();
+        services.AddHttpClient<IModsClient, ModsClient>();
+        services.AddHttpClient<IFilesClient, FilesClient>();
 
         return services;
     }

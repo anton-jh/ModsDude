@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Repos;
+using System.Diagnostics;
 
 namespace ModsDude.Server.Domain.Mods;
 
@@ -102,7 +103,13 @@ public class Mod
         var firstFollowing = _versions.FirstOrDefault(x => x.Id == before)
             ?? throw new InvalidOperationException($"Cannot insert before version with id '{before}'. No such version exists");
 
-        var allFollowing = _versions.Where(x => x.SequenceNumber >= firstFollowing.SequenceNumber);
+        // Captured before the shift below, which moves firstFollowing out from under it.
+        var insertAt = firstFollowing.SequenceNumber;
+
+        // Materialized: the predicate reads a sequence number that the loop body mutates.
+        var allFollowing = _versions
+            .Where(x => x.SequenceNumber >= insertAt)
+            .ToList();
 
         foreach (var version in allFollowing)
         {
@@ -117,7 +124,7 @@ public class Mod
             Description = description,
             DisplayName = displayName,
             Mod = this,
-            SequenceNumber = firstFollowing.SequenceNumber - 1
+            SequenceNumber = insertAt
         };
 
         _versions.Add(newVersion);
@@ -136,14 +143,18 @@ public class Mod
 
     public void RemoveVersion(ModVersion version, DateTimeOffset timestamp)
     {
+        if (_versions.Count == 1)
+        {
+            throw new InvalidOperationException($"Cannot remove only version of a Mod");
+        }
+        else if (_versions.Count < 1)
+        {
+            throw new UnreachableException("Mod has no versions. Should not be possible.");
+        }
+
         if (!_versions.Remove(version))
         {
             throw new InvalidOperationException($"Cannot remove version with id '{version.Id}'. No such version exists");
-        }
-
-        if (_versions.Count <= 1)
-        {
-            throw new InvalidOperationException($"Cannot remove only version of a Mod");
         }
 
         var newerVersions = _versions
@@ -160,9 +171,9 @@ public class Mod
 
     private int GetNextSequenceNumberForVersion()
     {
-        return _versions.MaxBy(x => x.SequenceNumber)
-            ?.SequenceNumber
-            ?? 0;
+        var maxSequenceNumber = _versions.MaxBy(x => x.SequenceNumber)?.SequenceNumber ?? -1;
+
+        return maxSequenceNumber + 1;
     }
 }
 
