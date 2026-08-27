@@ -140,8 +140,55 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 - [ ] Compute the SHA-256 while uploading and send it with registration.
 - [ ] Write imported files into the content store as they go (see Phase 3) so importing an
       existing install leaves the store warm.
-- [ ] Store a downscaled icon per version at registration. The client has the bytes in hand and
-      already decodes to 64px; without it every server-only row shows initials forever.
+- [ ] **Store the icon and every store image server-side**, so a mod nobody has locally still
+      renders with its artwork instead of initials and an empty details dialog. Full design in
+      [09](09-mod-catalog.md#mod-imagery).
+- [ ] Two derivatives per image — a 128 px thumbnail (~6 KB) and a full at native resolution
+      capped at 1024 px (~50 KB), as WebP — generated **client-side at import**, since only the
+      client can decode DDS (including the managed BC7 path) and the server has no business
+      opening mod files. Measured over 540 real mods, store art is only 1.2% of archive bytes
+      and tops out at 1024 px, so the full derivative is a **re-encode, not a downscale**; the
+      saving is DDS to WebP. The thumbnail is what matters: it turns a cold 540-row list from
+      ~27 MB into ~3 MB.
+- [ ] No separate storage of originals — they are already inside the mod blob. The case against
+      shipping them is transfer and decode (roughly an order of magnitude more bytes, plus a
+      managed BC7 decode, to render the same 64 px), not storage, which measurement shows would
+      have been affordable.
+- [ ] **Registration decides the imagery source, not local availability.** Registered versions
+      always render from the server's derivatives, even when the mod file is on this machine;
+      only unregistered import candidates are extracted from their archive. Hunting for the local
+      file to gain resolution nobody wants in a 96 px strip costs exactly the work derivatives
+      exist to avoid. It also gives stable hash cache keys, uniform presentation across a list,
+      and means nothing ever reads images out of the content store.
+- [ ] **Opportunistic backfill.** Since imagery never blocks registration, a version can exist
+      with no derivatives. A client about to render one while holding the mod file should
+      generate and upload them rather than fall back locally — closing the gap for everyone, and
+      removing the need for a separate backfill sweep.
+- [ ] Content-address the image blobs in their own container, `mod-images/{hash[0..2]}/{hash}`.
+      Versions overwhelmingly reuse artwork between releases, so dedupe collapses ~15,000
+      references to ~3,000 blobs for a 3,000-version repo — on the order of 150 MB of fulls and
+      20 MB of thumbnails. Server storage is not a constraint here; transfer and decode are.
+- [ ] **A machine-wide client image cache**, configured in `LocalState.Settings` beside the
+      stores with its own path, size cap and LRU. One per machine, not per volume — images are
+      always copies, so the hardlink constraint that makes stores per-volume does not apply.
+      Keep it distinct from the content store, which is what keeps "nothing reads images out of
+      the content store" true. Cache server derivatives by their own hash, with no size suffix,
+      since they arrive pre-sized.
+- [ ] `ModVersion` gains an **ordered collection of image references** (hash, kind, position,
+      filename) — structural, so not `ModAttribute`s. References, not ownership: a blob is
+      collectable once nothing points at it.
+- [ ] **Imagery must never block registration.** The mod file is verified before metadata is
+      written; images get the opposite treatment, uploaded best-effort after the fact and picked
+      up by the opportunistic backfill above. An import of 2,000 mods cannot half-fail over a
+      timed-out thumbnail.
+- [ ] A **batch existence check** before uploading — "which of these hashes do you have?" After
+      the first import most images are already present, and 2,000 mods x 20 images is 40,000
+      uploads that mostly need not happen.
+- [ ] Serve them through the API — `GET images/{hash}` at Guest level, redirecting to a SAS or
+      streaming — rather than per-image SAS minting, which inverts the mod-file trade-off for
+      files that are small and fetched in bulk. Affordable because a content-addressed image is
+      immutable and so cacheable forever; the client's existing disk cache then fetches each one
+      once per machine, ever.
 - [ ] Stop dropping `Description` when mapping `ModVersionDto`
       ([known issue](08-known-issues.md#the-client-drops-description-from-server-mod-versions)).
 

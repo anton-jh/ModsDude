@@ -151,6 +151,20 @@ first-class property rather than a `ModAttribute`, because the system depends on
 correctness rather than merely storing it on an adapter's behalf. See
 [07 — Mod sync design](07-mod-sync-design.md#content-hashing).
 
+### Images
+
+*Planned.* `ModVersion` also gains an **ordered collection of image references** — hash, kind
+(icon or store image), position, original filename — so a mod nobody has locally still renders
+with its real artwork.
+
+References, not blobs: the images live in blob storage keyed by content hash, so versions that
+reuse the same artwork share one copy, which is the normal case when a release changes only a
+script. Deleting a version drops its references; a blob is collectable once nothing points at
+it.
+
+Structural, so **not `ModAttribute`s** — the system dereferences these to decide what to render.
+See [09 — Mod catalog](09-mod-catalog.md#mod-imagery).
+
 ## Profile and ModDependency
 
 `ModsDude.Server.Domain/Profiles/`

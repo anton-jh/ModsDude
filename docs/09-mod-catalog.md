@@ -81,13 +81,203 @@ in the profile editor. Facts live in the two bools; display status is computed p
 
 ### What the server cannot supply yet
 
-- **No icons.** There is no download endpoint at all, so a server-only row falls back to
-  `Initials` forever — in exactly the list where the user is choosing between a local row and a
-  server row of the same mod. Store a downscaled icon per version at registration: the client
-  has the bytes in hand during import and already decodes to 64px.
+- **No imagery of any kind.** A server-only row falls back to `Initials` forever, and its
+  details dialog is empty — in exactly the list where the user is choosing between a local row
+  and a server row of the same mod. See [Mod imagery](#mod-imagery) below.
 - **No description.** `ModVersionDto` carries `Description`, but the client's `Mod.Version`
   drops it on the floor, so a details modal on a server-only mod would be blank.
 - **No usage information.** See [Manage](#manage) below.
+
+## Mod imagery
+
+The server stores **the icon and every store image** for a mod version, so a mod nobody has
+locally still renders with its real artwork. Without it, a repo's mods are initials in a list
+and a blank details dialog — which is worst precisely where it matters, when someone is
+deciding whether to add a mod they have never seen.
+
+### What the volumes actually are
+
+Measured over a real Farming Simulator 25 mods folder — 540 mods, 13.58 GB of archives:
+
+| | |
+| --- | --- |
+| All images inside the archives | 7.06 GB compressed — **52% of the archive** |
+| `icon_*` / `store_*` only | **0.16 GB compressed, 0.58 GB raw — 1.2% of the archive** |
+| Count | 593 icons, 2,063 store images (~4.9 per mod, ~230 KB raw each) |
+| Longest edge | median **512 px**, p90 512, **max 1024 — nothing larger** |
+
+Two things to take from that. Half of a mod archive is image data, but nearly all of it is model
+textures the catalog never touches; the store art we would actually serve is **a bit over one
+percent**. And that art is *small* — half-K squares, never above 1024 px.
+
+Storing originals would therefore be entirely affordable: well under a gigabyte for a repo of
+this size, before dedupe.
+
+### Store derivatives anyway — for transfer and decode
+
+Cheap to store is not the same as cheap to use. A cold list of 540 rows pulls one icon each,
+which as shipped DDS is tens of megabytes, and every one of them has to be decoded — for BC7,
+through the managed path, because WIC refuses it — and then thrown away down to 64 px.
+
+Re-encoded to WebP, that same list is a few megabytes of natively-decodable images. Roughly an
+order of magnitude less data and far less CPU, for pixels that render identically at the size
+they are actually shown.
+
+Note what this means for sizing: since sources top out at 1024 px, the larger derivative is
+**not** a downscale. It is a re-encode. DDS to WebP is where the saving comes from, not
+resolution.
+
+### Originals need no separate storage at all
+
+They are already on the server, inside the mod blob, so nothing needs a second copy of them.
+
+### Registration decides where imagery comes from
+
+The rule is keyed on `IsOnServer`, not on whether the file happens to be somewhere on this
+machine:
+
+| Version | Imagery from |
+| --- | --- |
+| **Registered** | The server's derivatives — always, even if the mod file is also here |
+| **Unregistered** (an import candidate) | Extracted from the archive in its source folder |
+
+Deliberately *not* "prefer local originals where available". Finding the local file means
+resolving it in the content store by hash or hunting through source folders, opening the
+archive, decoding BC7 through the managed path and downscaling — per row, for a list of two
+thousand. That is exactly the work the derivatives exist to avoid, spent to gain resolution
+nobody is looking for in a 96 px strip.
+
+It is not even faster after the first fetch. A content-addressed image is immutable, so it
+crosses the wire once per machine ever and lives in the disk cache afterwards.
+
+Three things follow:
+
+- **Better cache keys.** A server image is keyed by its hash — stable across machines and
+  unaffected by the mod file moving. The local key is
+  `{modPath}|{entryName}|{length}|{crc32}`, which changes when the file does.
+- **Uniform presentation.** Every row in a list renders through the same pipeline, rather than
+  some from originals and some from derivatives with visibly different sharpness.
+- **The content store is never an image source.** It holds mod files for sync and nothing reads
+  images out of it, so that code path simply does not exist.
+
+### The gap this leaves, and how it closes itself
+
+Imagery uploads best-effort and never blocks registration, so a version can be registered with
+no derivatives yet. Under the rule above that mod renders as initials — even for a user who has
+the file sitting right there.
+
+The fix is not a local fallback. A client that is about to render a registered version with no
+server imagery, and that holds the mod file, is **exactly the client that should generate and
+upload the missing derivatives**. Everyone benefits, not just whoever noticed.
+
+That makes backfill opportunistic rather than a separate sweep: the gap is closed by the first
+person who looks at the mod while holding it, which is the most likely thing to happen anyway.
+
+### Two sizes
+
+Store **two derivatives per image**, matching the two ways they are actually consumed:
+
+| Derivative | Bound | Typical size | Consumed by |
+| --- | --- | --- | --- |
+| Thumbnail | 128 px longest edge | ~6 KB | List rows (64 px) and the details strip (96 px) |
+| Full | native, capped at 1024 px | ~50 KB | Someone opening one image to look at it |
+
+One small size covers both small uses, since the client downscales and caches per size already.
+The cap is a safety net rather than a working limit — no image in the measured set reaches it.
+
+The thumbnail is what earns its keep. Without it, a cold 540-row list pulls ~27 MB of fulls to
+draw 64 px icons; with it, ~3 MB. Roughly a tenfold difference on the single most common
+operation in the app.
+
+At those sizes the whole thing is small: ~2,650 images for 540 mods is around 150 MB of
+derivatives, and dedupe across versions of the same mod pushes the per-version cost far below
+that.
+
+**The client generates them at import.** It already decodes DDS — including the managed BC7 path
+that WIC refuses — and has the bytes open. The server cannot decode DDS without taking on an
+image stack, and it has no business inspecting mod files anyway. Encode to WebP or PNG on the
+way up.
+
+### Content-addressed, like the mod files
+
+Name image blobs by the SHA-256 of the derivative, in their own container:
+
+```
+mod-images/{hash[0..2]}/{hash}
+```
+
+Deduplication is the reason. Mod versions overwhelmingly reuse imagery — a release that changes
+a script ships the same thirty store images as the one before it — so keying by content collapses
+that to one copy. It also dedupes across mods and repos where artwork is shared.
+
+Rough shape for a repo of 3,000 versions across ~600 distinct mods, at the measured ~4.9 images
+per mod: ~15,000 references collapsing to ~3,000 distinct blobs, so on the order of **150 MB of
+fulls and 20 MB of thumbnails**. Small enough that server-side storage is not a constraint on
+this design at all — the argument for derivatives is entirely about transfer and decode.
+
+### The database holds references
+
+`ModVersion` gains an ordered collection of image references — hash, kind (icon or store),
+position, original filename. **Not `ModAttribute`s.** Which images a version has is structural:
+it drives what renders, and the system dereferences it. Attributes are tags.
+
+The blob itself is shared, so the reference is a pointer, not ownership. Deleting a version
+removes its references; a blob is only collectable once nothing references it.
+
+### Imagery must never block registration
+
+`RegisterMod` verifies the mod file exists before writing metadata, and rightly so. **Images get
+the opposite treatment.** They are decoration, and an import of 2,000 mods must not fail — or
+worse, half-fail — because an image upload timed out.
+
+So: register the mod, then upload imagery best-effort, and let the opportunistic backfill above
+pick up whatever did not make it. A version with no images renders with initials, exactly as a
+local mod without an icon does today.
+
+Uploading needs a **batch existence check** — "which of these hashes do you already have?" —
+before uploading anything. After the first import into a repo most images are already present,
+and 2,000 mods × 20 images is 40,000 uploads that mostly need not happen.
+
+### Serving them back
+
+Mod files go straight to blob storage over a SAS because they are large and fetched rarely.
+Images invert both properties, so they invert the answer: minting 40,000 SAS URLs to draw one
+list would be absurd.
+
+Serve them through the API instead — `GET images/{hash}` at Guest level, redirecting to a
+short-lived SAS or streaming the bytes. Authorization stays at the API; the volume is fine
+because **a content-addressed image is immutable and therefore cacheable forever.**
+
+That last point does most of the work. `ModImageProvider` already keeps a PNG disk cache keyed
+by `CacheKey`, and for a server image the hash *is* the cache key — one that can never
+invalidate. Each image is fetched once per machine, ever.
+
+The client shape needs nothing new. `ModImage` is
+`(Name, CacheKey, Func<CancellationToken, Task<byte[]>>)`, which says nothing about where bytes
+come from — a server-backed image is the same record with an HTTP fetch in `Load`, and
+`IModImageProvider`, the lazy-loading behaviour and both caches keep working untouched.
+
+### The client-side image cache
+
+`ModImageProvider` already keeps a disk cache at `{LocalAppData}/ModsDude/image-cache`, written
+as PNG and named by a hash of `{cacheKey}|{maxWidth}`. Server imagery slots into it with one
+simplification: a downloaded derivative is already the right size, so it is cached by **its own
+hash** with no size suffix, and never needs re-deriving. The decode-and-downscale path stays for
+local images, keyed as it is today.
+
+**One cache per machine, not per volume.** The content store is per-volume because hardlinks
+cannot cross volumes; images are always copies, so that constraint does not apply and splitting
+them per volume would just duplicate them. It is configured alongside the stores in
+`LocalState.Settings` — its own path and its own maximum size, with the same LRU eviction.
+
+**Keep it separate from the content store.** Different size class, different lifetime, no volume
+binding — and the separation is what keeps *"the content store is never an image source"* true,
+which is the property that removes a whole class of lookup logic.
+
+Sizing it is not a worry. At ~6 KB a thumbnail, caching every icon in a 3,000-version repo is
+around 20 MB; fulls are only fetched when somebody opens an image. A few hundred megabytes is
+the realistic ceiling across several repos. Everything in it is re-downloadable, so eviction
+never has to ask the user anything.
 
 ## Mod sources
 

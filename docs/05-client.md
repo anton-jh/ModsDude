@@ -183,6 +183,7 @@ LocalState
 ├─ Version
 ├─ Settings                              NEW — machine-wide, not per repo or adapter
 │   ├─ Stores: { volumeRoot → { Path, MaxSizeBytes } }
+│   ├─ ImageCache: { Path, MaxSizeBytes } one per machine, not per volume
 │   └─ DisabledSources: { sourceId }     mod sources the user switched off
 ├─ Instances: { instanceId → { GameAdapterId, Name, AdapterInstanceSettings,
 │                              ActiveProfile: (RepoId, ProfileId)? } }
