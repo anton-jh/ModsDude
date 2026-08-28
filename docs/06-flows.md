@@ -141,13 +141,14 @@ Create, rename and delete all go through `ProfileService`, which after every mut
 refreshes the whole profile list and raises `ProfileOfInterestChanged`. `RepoPageViewModel`
 listens and selects the affected profile, so you land on what you just created.
 
-Name conflicts return the `name-taken` problem from the server. (The client's handler tests
-for HTTP 409 and the server returns 400, so the friendly message does not currently
-surface — see [08](08-known-issues.md).)
+Name conflicts return the `name-taken` problem from the server, which the client matches on
+`CustomProblemDetails.Type`.
 
-Editing a profile's **contents** — its mod dependencies — has full server-side support
+Editing a profile's **contents** — its mod dependencies — has server-side support
 (`GET/POST/PUT/DELETE .../modDependencies`) and a generated client, but
-`ProfileModsEditorPage` is still a stub showing hardcoded strings.
+`ProfileModsEditorPage` is still a stub showing hardcoded strings. Note that these endpoints
+were unusable until recently — none of them loaded `ModDependency.ModVersion`, so every one
+threw on a profile that had any dependencies. They are untested beyond that fix.
 
 ## Managing members
 

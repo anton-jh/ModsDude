@@ -39,7 +39,7 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
             return authResult;
         }
         
-        var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
+        var profile = await dbContext.Profiles.GetWithModDependenciesAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));

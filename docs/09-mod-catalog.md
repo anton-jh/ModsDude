@@ -244,9 +244,40 @@ Mod files go straight to blob storage over a SAS because they are large and fetc
 Images invert both properties, so they invert the answer: minting 40,000 SAS URLs to draw one
 list would be absurd.
 
-Serve them through the API instead — `GET images/{hash}` at Guest level, redirecting to a
-short-lived SAS or streaming the bytes. Authorization stays at the API; the volume is fine
-because **a content-addressed image is immutable and therefore cacheable forever.**
+Serve them through the API instead — `GET images/{hash}`, redirecting to a short-lived SAS or
+streaming the bytes. The volume is fine because **a content-addressed image is immutable and
+therefore cacheable forever.**
+
+### What "authorized" means for a global address
+
+The route carries no `repoId`, and it cannot: the whole point of content addressing is that one
+blob serves every repo that references it. So the check is **authenticated user**, not Guest of
+any particular repo — there is no repo to check against. Same for the batch existence check,
+which is an existence oracle over every image in the system.
+
+That is a real widening compared to everything else on the server, where repo scoping is baked
+into the primary key. It is acceptable here only because of what is behind the address: mod
+store art, which is already public on the sites the group downloads mods from, and which reveals
+nothing about who is in which repo. Say so explicitly rather than labelling the endpoint "Guest"
+and implying a scoping it does not have.
+
+### Verify image bytes too
+
+[07](07-mod-sync-design.md#cache-isolation) argues that a shared, cross-repo cache is only safe
+because **every lookup is keyed by hash and every ingest is verified**. The image path is the
+same shape — one globally shared address space, one permanently cached blob per address — and
+gets the same rule, or the argument does not hold for it.
+
+Concretely: the client hashes what it downloads and rejects a mismatch before writing to the
+disk cache. Without that, one member uploading hostile bytes at an address another repo
+references poisons that image for every machine, forever, because the client caches by hash and
+never re-derives. The blast radius is decoration rather than mod files, which is why this is a
+cheap check rather than an architectural problem — but it is the same check, and skipping it
+would be an unexplained inconsistency rather than a decision.
+
+Server-side verification on upload is the stronger version and is worth it if the derivative
+upload endpoint is doing work anyway: it is a hash of a small blob, and it stops a bad address
+being created at all rather than being detected by each reader in turn.
 
 That last point does most of the work. `ModImageProvider` already keeps a PNG disk cache keyed
 by `CacheKey`, and for a server image the hash *is* the cache key — one that can never
@@ -522,8 +553,14 @@ retry a no-op over everything already done:
 | Link response | Action |
 | --- | --- |
 | `200` | Upload, then register |
-| `FileAlreadyPresent` | Blob is there but unregistered — skip the upload, register |
+| `FileAlreadyPresent` + the blob's hash | Hash matches ours — skip the upload, register. Differs — this is an id/version collision, not our orphan; report it and register nothing |
 | `AlreadyRegistered` | Skip both, count as success |
+
+**`FileAlreadyPresent` has to carry the blob's hash.** Registering against a blob whose contents
+you have not established writes a hash that describes a different file, which makes every future
+download fail verification with no way to repair it — the blob exists, so no upload link can be
+minted for it again. See
+[07 — Mod sync design](07-mod-sync-design.md#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable).
 
 That last row also covers a teammate registering the same version concurrently, which from the
 client's point of view is the same situation — and is a **success** for this flow, since the

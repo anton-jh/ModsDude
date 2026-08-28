@@ -68,7 +68,7 @@ see [08 — Known issues](08-known-issues.md).
 
 ## Technology
 
-- **.NET 9**, C# with nullable reference types and file-scoped namespaces throughout.
+- **.NET 10**, C# with nullable reference types and file-scoped namespaces throughout.
 - **PostgreSQL** via EF Core. Migrations run automatically at startup (`Program.cs`).
 - **Azure Blob Storage** for mod files. The API never proxies file bytes; it issues
   user-delegation SAS links and the client talks to blob storage directly.

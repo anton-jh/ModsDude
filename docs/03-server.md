@@ -142,14 +142,26 @@ failures return 400, not 401/403.**
 ### Error responses
 
 `Api/ErrorHandling/Problems.cs` is a catalogue of RFC 7807-shaped problems. Each has a
-`ProblemType` enum member carrying a stable URI in an `[EnumMember]` attribute
+`ProblemType` enum member carrying a stable URI
 (`https://server.modsdude.com/api/problems/name-taken` and friends), so a client can switch
 on the type rather than parse prose. `Problems.NotFound.With(x => x.Detail = "...")` lets an
 endpoint specialise the detail without a new catalogue entry.
 
-The client, however, currently branches on HTTP status codes (`ex.StatusCode == 409`) rather
-than problem type — and the server returns `400` for these cases, so that handling does not
-fire. See [08 — Known issues](08-known-issues.md).
+**Every member carries that URI twice, and both attributes are load-bearing:**
+
+```csharp
+[EnumMember(Value = _typeBaseUri + "name-taken")]        // NJsonSchema → OpenAPI → generated client
+[JsonStringEnumMemberName(_typeBaseUri + "name-taken")]  // System.Text.Json → the wire
+NameTaken,
+```
+
+`System.Text.Json` does not honour `[EnumMember]` — only `[JsonStringEnumMemberName]`. With
+just the first, the OpenAPI document advertises URIs while the server sends bare member names,
+and no generated client can match the two. Adding a problem type means adding both attributes.
+
+The client branches on `CustomProblemDetails.Type`, so a newly added problem type stays
+invisible to it until `Generated.cs` is regenerated. Authorization failures still return `400`
+rather than `401`/`403` — see [08 — Known issues](08-known-issues.md).
 
 ## Persistence
 
@@ -167,6 +179,17 @@ Notable configuration:
   key order carries a `TODO` about putting `RepoId` first, and the unique index on
   `(RepoId, ProfileId, ModId)` that would enforce "one version per mod per profile" at the
   database level is **missing** — the rule is only enforced in the domain.
+
+  Two consequences worth knowing before touching anything that loads a `Profile`:
+
+  - `ModDependency.ModVersion` is **not** auto-included, and every domain operation on a
+    dependency navigates through it to reach the `Mod`. Loading a profile with
+    `Profiles.GetAsync` and then calling `AddDependency`, `DeleteDependency`,
+    `HasDependencyOn` or `ChangeVersion` throws. Use
+    `Profiles.GetWithModDependenciesAsync`, which includes `ModDependencies → ModVersion → Mod`.
+  - Because the collection is *owned*, it is materialised whenever a `Profile` entity is,
+    wanted or not — thousands of rows per profile at the target volumes. Read endpoints that
+    do not need dependencies project instead of materialising.
 - **`Repo._memberships` is mapped through the private backing field**, with a runtime guard
   that throws at model-build time if the field is renamed, so EF cannot silently fall back
   to a shadow property.
@@ -226,7 +249,7 @@ level required.
 | POST | `repos/check-name-taken` | — | No repo-scoped check; any authenticated user can probe any name |
 | GET | `repo/{repoId}` | Member | Repo details including the member list |
 | PUT | `repo/{repoId}` | Admin | Rename and/or replace adapter configuration |
-| DELETE | `repo/{repoId}` | Admin | |
+| DELETE | `repo/{repoId}` | Admin | Refuses with `repo-not-empty` while the repo has mods |
 
 Note the inconsistency: the collection is `repos`, the single resource is `repo`.
 

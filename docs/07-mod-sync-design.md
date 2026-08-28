@@ -48,6 +48,47 @@ publisher.
 
 `ModVersionDto` must expose it, since sync is the consumer.
 
+### It has to reach the reconciler without a full mod list
+
+The reconciler's *Desired* set is `(modId, versionId, contentHash)`, and it gets its input from
+`GET repos/{id}/profiles/{id}/modDependencies` — which returns `ModDependencyDto`, today
+`(ModId, ModVersionId, LockVersion)` and no hash. Resolving hashes from `ModVersionDto` instead
+means pulling `GET repos/{id}/mods`, the unpaged endpoint that returns every mod and every
+version, on every sync.
+
+So **`ModDependencyDto` carries the content hash too**, and the same request is what the plan
+preview reads display names from. Do it in the same change that adds `ContentHash` to the
+schema, not later: it is the same DTO pass, and doing it later means sync ships depending on the
+endpoint [08 — Known issues](08-known-issues.md#get-reposrepoidmods-returns-everything-unpaged)
+flags as a scaling problem, whose fix is sequenced after sync.
+
+### Hostile or wrong hashes have to be unregisterable, not just undownloadable
+
+The server does not verify the hash it is given, and that is fine as long as the *only* way to
+register one is to have uploaded the bytes it describes. The retry protocol in
+[09 — Mod catalog](09-mod-catalog.md#retry-is-impossible-without-splitting-the-problem-type)
+breaks that: on `FileAlreadyPresent` the client skips the upload and registers anyway, sending
+the hash of **its** file against **whatever bytes are already in the blob**.
+
+Where the orphan blob came from a different build carrying the same id and version — the case
+[09](09-mod-catalog.md#same-mod-several-sources) identifies as common enough to surface in the
+UI — the repo ends up with a registration nothing can ever satisfy. Verification then fails on
+download for every member, permanently, and there is no repair path: the blob exists, so no
+upload link can ever be minted for it again.
+
+Adopting an orphan therefore has to establish what the blob actually contains. Either:
+
+- the client re-downloads the orphan blob and hashes it before registering, which is correct but
+  costs a download on a path taken precisely because the upload already happened; or
+- the upload records the hash against the blob — Azure's `Content-MD5` is the wrong algorithm,
+  so this means blob metadata written at upload time or a server-side `x-ms-meta-sha256` — and
+  the link endpoint returns it, so the client can compare without transferring anything.
+
+The second is better and is what the split problem types should carry: `FileAlreadyPresent`
+should return the hash of the blob that is already there. A client whose file hashes differently
+then knows it is looking at a genuine id/version collision rather than its own failed upload,
+and can say so instead of poisoning the registration.
+
 ## The content store
 
 ### Content addressing
@@ -256,11 +297,25 @@ registered versions that would be tens of gigabytes for content the user may nev
 
 | Desired | Installed | Action |
 | --- | --- | --- |
-| yes | same version | **Keep.** No I/O |
+| yes | same version, matching bytes | **Keep.** No I/O |
+| yes | same version, different bytes | **Replace** |
 | yes | different version | **Replace** — uninstall the installed one, install the wanted one |
 | yes | absent | **Install** |
 | no | installed, this exact version is registered in the repo | **Uninstall (recoverable)** |
 | no | installed, not registered in the repo | **Uninstall (quarantine)** |
+
+**"Matching bytes" comes from the manifest, not from hashing the folder.** `GetInstalledMods`
+reports `(modId, versionId)` read out of the mod's own metadata, so two different builds that
+both call themselves `1.0.0` are indistinguishable to it — and that is a case
+[09](09-mod-catalog.md#same-mod-several-sources) says happens in practice. Content addressing
+protects the *store*; it does nothing for the *mod folder* unless something compares.
+
+The [sync manifest](#detecting-it-cheaply) already records each installed file's hash, size and
+mtime, so the comparison is free in the common case: a file whose size and mtime match the
+manifest is the file the manifest describes, and its recorded hash is the answer. Only a file
+that fails that stat check needs rehashing. Where there is no manifest at all — a folder the
+user populated themselves, or a first sync — every desired-and-installed file needs hashing
+once, which is the honest cost of not knowing.
 
 ### Installing
 
@@ -575,6 +630,13 @@ POST api/v1/files/createModDownloadLink
 A profile of 2,000 mods means 2,000 SAS mints on a cold store. If that proves slow, add a
 batch form taking a list — the user-delegation key is fetched once per call today and could
 be fetched once per batch.
+
+`ModDependencyDto` gains `ContentHash`, per [above](#it-has-to-reach-the-reconciler-without-a-full-mod-list).
+
+`CreateModUploadLink`'s `FileAlreadyPresent` response returns the existing blob's hash, per
+[above](#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable), which means
+the upload path has to record it — blob metadata written at upload time, since Azure's built-in
+content hash is MD5.
 
 ## Fitting it into the client
 

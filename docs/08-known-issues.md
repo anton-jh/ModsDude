@@ -8,6 +8,33 @@ one does not renumber the rest and break every link into this page.
 
 > **Recently fixed.**
 >
+> - **Every mod-dependency endpoint threw a `NullReferenceException`.**
+>   `ModDependency.ModVersion` is a plain reference navigation with no auto-include, and none
+>   of the four endpoints included it — while every domain operation on a dependency
+>   (`AddDependency`, `DeleteDependency`, `HasDependencyOn`, `ChangeVersion`) navigates
+>   through it. `ProfileExtensions.GetWithModDependenciesAsync` now loads the graph for the
+>   write endpoints; the read endpoint projects instead of materialising.
+> - **Problem types did not survive the wire.** The server serialises `ProblemType` with
+>   `System.Text.Json`, which ignores `[EnumMember]`, so the value sent was the bare member
+>   name — while the generated client, built from an OpenAPI document that *did* carry the
+>   `[EnumMember]` URIs, expected the URI. Every problem body failed to deserialise. Each
+>   member now carries `[JsonStringEnumMemberName]` alongside `[EnumMember]`.
+> - `RepoRepository` and `ProfileService` now branch on `CustomProblemDetails.Type` rather
+>   than HTTP 409, which the server never returns.
+> - **`DELETE repo/{repoId}` failed at the database** for any repo with mods, because the
+>   `Mod` → `Repo` foreign key is `Restrict`. It now refuses with a typed `repo-not-empty`
+>   problem instead of a 500.
+> - **`GET repos/{id}/profiles` and `GET repos/{id}/profile/{id}` read every profile's whole
+>   dependency set.** `ModDependencies` is an owned collection, so EF always materialised it
+>   for a `ProfileDto` that does not carry it. Both project now.
+> - `Store<T>.Save` wrote in place with `File.WriteAllText`, so an interrupted write produced
+>   exactly the corrupt file `Get` recovers from by discarding the user's instances. It writes
+>   through a temp file and moves it into place, as the image cache already did.
+> - `Store<T>` gained a compatibility predicate and `LocalState.CurrentVersion`, so the
+>   planned schema bump actually discards old state instead of deserialising it into the new
+>   shape.
+> - `Mod.RemoveVersion` had the same lazy-query-over-mutating-loop shape that was fixed in
+>   `InsertVersion`. Safe by accident; now materialised.
 > - `Mod.GetNextSequenceNumberForVersion` returned `max` instead of `max + 1`, so every
 >   version after the first collided on the unique index and mod versioning could not work.
 > - `Mod.RemoveVersion` validated the "cannot remove the only version" rule after mutating
@@ -20,24 +47,16 @@ one does not renumber the rest and break every link into this page.
 
 ## Correctness
 
-### Client error handling tests for a status code the server never returns
+### The generated client is stale
 
-`RepoRepository` and `ProfileService` both do:
+`Generated.cs` predates `ProblemType.RepoNotEmpty`, so its `ProblemType` enum has no member for
+it and Newtonsoft's `StringEnumConverter` cannot parse the value. A refused repo delete
+therefore surfaces as a raw `ApiException` rather than the typed problem, until the client is
+regenerated against a running API — see [03 — Server](03-server.md#regenerating-the-client).
 
-```csharp
-catch (ApiException ex) when (ex.StatusCode == 409)
-{
-    throw new UserFriendlyException("Name taken", null, ex);
-}
-```
-
-The server returns `TypedResults.BadRequest` — **400** — for `Problems.NameTaken`. The filter
-never matches, so a duplicate name surfaces as a raw `ApiException` in the generic error modal
-instead of "Name taken".
-
-The better fix is to branch on `CustomProblemDetails.Type`, which exists precisely so clients
-do not have to infer meaning from status codes. That would also cover the other typed problems
-the client currently ignores.
+More generally, nothing checks that `Generated.cs` matches the server it was generated from.
+Every problem type, DTO field and route added on the server is invisible to the client until
+somebody remembers to regenerate, and there is no build step or CI check that would notice.
 
 ### A second user with the same display name breaks signup
 
@@ -94,6 +113,19 @@ stands, **a mod whose import failed after upload can never be retried**, because
 request rejects it forever. See
 [09 — Mod catalog](09-mod-catalog.md#retry-is-impossible-without-splitting-the-problem-type).
 
+### Nothing ever reclaims blob storage
+
+There is no code path anywhere that deletes a blob. Deleting a repo orphans every mod file
+under its `{repoId}/` prefix permanently, and the delete endpoints planned for mods and
+versions would do the same at a smaller scale. Combined with the import orphans described in
+[09 — Mod catalog](09-mod-catalog.md#retry-is-impossible-without-splitting-the-problem-type),
+storage only ever grows.
+
+This is why `DELETE repo/{repoId}` now refuses a repo that still has mods rather than cascading
+— it keeps the amount of unreachable data bounded until a reclamation sweep exists. The
+side-effect is that a repo cannot be deleted at all until the mod delete endpoints land, since
+there is currently no way to empty one.
+
 ### Membership endpoints authorize after loading
 
 `KickMemberV1Endpoint` and `UpdateMembershipV1Endpoint` load the repo and look up the subject's
@@ -119,6 +151,14 @@ policy up or delete both — right now the file implies a mechanism the system d
 therefore impossible for every user until someone runs an `UPDATE` against Postgres. This is
 the accepted process for now, but it is undocumented in the app and a new user gets an
 unexplained "Not authorized".
+
+### MediatR is registered and never used
+
+`Program.cs` calls `AddMediatR(config => config.RegisterServicesFromAssemblyContaining<ApplicationAssemblyMarker>())`,
+and there is not a single handler, request or `ISender` injection in the solution. It implies a
+mediator-based application layer that the codebase deliberately does not have — see the note in
+[03 — Server](03-server.md#project-layout) about endpoints querying the DbContext directly.
+Either the package reference goes, or the intent should be written down.
 
 ### Empty and duplicate projects
 
@@ -183,6 +223,15 @@ which clears and refills the observable collection. That discards and rebuilds e
 model, losing selection and scroll position, and costs a full round trip for a one-field
 change. Fine at ten profiles; not at scale, and it is why the `*OfInterestChanged` event has
 to exist to restore selection afterwards.
+
+### Owned collections are always materialised
+
+Not a single bug so much as a trap the model sets. `Profile.ModDependencies` is an owned
+collection, so **any** query that materialises `Profile` entities reads every dependency row
+with it — thousands per profile at the stated volumes — whether or not the caller wants them.
+The two profile read endpoints hit this and now project instead; anything new that loads
+profiles has to make the same choice deliberately. The same applies to `ModVersion.Attributes`
+under `Mod`.
 
 ### No unique index backing the one-version-per-mod rule
 
