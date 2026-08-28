@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 
@@ -19,7 +20,24 @@ public static class ProfileExtensions
     {
         return dbSet.FindAsync(GetKey(repoId, profileId), cancellationToken);
     }
-    
+
+    /// <summary>
+    /// Loads a profile with each dependency's <see cref="ModDependency.ModVersion"/> and its owning
+    /// <see cref="Mod"/> populated. Every domain operation on a dependency navigates through them —
+    /// <see cref="Profile.AddDependency"/>, <see cref="Profile.DeleteDependency(ModId)"/>,
+    /// <see cref="Profile.HasDependencyOn"/>, <see cref="ModDependency.ChangeVersion"/> — so loading
+    /// the profile without them makes every one of those throw. <see cref="GetAsync"/> is fine for
+    /// anything that only touches the profile itself.
+    /// </summary>
+    public static Task<Profile?> GetWithModDependenciesAsync(this DbSet<Profile> dbSet, RepoId repoId, ProfileId profileId, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Include(x => x.ModDependencies)
+                .ThenInclude(x => x.ModVersion)
+                .ThenInclude(x => x.Mod)
+            .FirstOrDefaultAsync(x => x.RepoId == repoId && x.Id == profileId, cancellationToken);
+    }
+
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, CancellationToken cancellationToken)
     {
         return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);

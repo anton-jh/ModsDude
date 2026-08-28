@@ -22,7 +22,7 @@ come out right.
 | Repos, adapters, base settings | Working |
 | Local instances | Working |
 | Profiles (create/rename/delete) | Working |
-| Mod dependencies | Server complete, no UI |
+| Mod dependencies | Server works, no UI. Every endpoint threw until recently — treat as unproven |
 | Mod upload | Server complete, client wired up, import does not call it yet |
 | Mod download | **Does not exist** |
 | Profile → instance sync | **Does not exist** |
@@ -71,7 +71,20 @@ bag on `LocalState`**, keyed by volume, and stay out of both instance and repo s
 ### No migration
 
 The system has no users. `LocalState.Version` gets bumped and old state is discarded rather
-than migrated.
+than migrated. `Store<T>` now takes a compatibility predicate so that the bump actually
+discards rather than deserializing old JSON into the new shape.
+
+### One schema pass, before any real data exists
+
+Four separate items below each carry a "doing this later means a backfill" warning:
+`ModVersion.ContentHash`, mod id casing normalization, `ModVersion`'s image references, and
+`Mod.Locked`. They are the same warning, and while the database is empty they are also the same
+afternoon.
+
+So treat them as **one schema change made up front**, not four spread across three phases. The
+phases below still describe the behaviour each one unlocks, but none of the columns should be
+added late. The moment somebody bulk-imports two thousand mods, every one of them becomes a
+migration with a data-repair step.
 
 ---
 
@@ -86,6 +99,19 @@ afternoon.
 - [x] Fix `Mod.InsertVersion` — capture the target position and materialise the shift query,
       so the result no longer depends on `HashSet` iteration order.
 - [x] Register `IModsClient` and `IFilesClient` in `AddModsDudeClient`.
+- [x] Load `ModDependency.ModVersion` where the domain needs it. Every mod-dependency endpoint
+      threw a `NullReferenceException` on any profile that had dependencies, because the
+      navigation is not auto-included and every domain operation reaches the `Mod` through it.
+      The read endpoint projects; the write endpoints use `GetWithModDependenciesAsync`.
+- [x] Make `ProblemType` survive the wire. `System.Text.Json` ignores `[EnumMember]`, so the
+      server sent bare member names while the generated client — built from an OpenAPI document
+      carrying the URIs — could not parse them. Both attributes are now present.
+- [x] Branch the client on `CustomProblemDetails.Type` instead of HTTP 409.
+- [x] Stop `DELETE repo/{repoId}` failing at the database. The `Mod` → `Repo` FK is `Restrict`,
+      so deleting a repo with mods was a 500. It refuses with `repo-not-empty` instead.
+- [x] Project the two profile read endpoints. `ModDependencies` is owned, so materializing a
+      `Profile` read its whole dependency set for a DTO that does not carry it.
+- [x] Atomic writes and a compatibility gate in `Store<T>`.
 - [ ] **Flatten `Mod` and `ModVersion` into one entity** keyed `(RepoId, ModId, VersionId)`. A
       mod record is really *of* a version, not a container of them, and nearly all the data was
       already on the version. Removes the create-or-append branch in registration, the shadow FK
@@ -95,7 +121,6 @@ afternoon.
 - [ ] **Flatten the wire format with the entity.** `ModDto` currently nests
       `ModVersionDto[]`; it becomes one DTO per version. Leaving the response nested would make
       the client re-group on receipt — exactly the shape the flat client model exists to avoid.
-      Regenerate the NSwag client afterwards.
 - [ ] Keep `SequenceNumber` **contiguous**, with the existing shift-on-insert and close-on-remove
       logic — just moved off the entity, since there is no parent left to hang it on. A sparse
       key was considered and rejected: the shift is tens of rows for one mod, mutated in memory
@@ -103,12 +128,23 @@ afternoon.
       solving. Gaps would only add an exhaustion case to reason about in exchange for nothing.
 - [ ] `ModDependency.CanBeUpgraded()` / `Upgrade()` lose their `ModVersion.Mod.Versions`
       navigation; pass the candidate versions in, or move the operation to the endpoint that has
-      to query for them anyway.
-- [ ] Do this **before** anything registers mods in earnest — one migration and no real data
-      makes it nearly free now, a data migration later. Same argument as the casing fix.
+      to query for them anyway. The `GetWithModDependenciesAsync` include and the
+      `ModVersion.Mod.Id` projection above simplify with them.
+- [ ] Do the flattening **before** anything registers mods in earnest — one migration and no real
+      data makes it nearly free now, a data migration later. Same argument as the casing fix.
+- [ ] **Regenerate `Generated.cs`** — it already predates `ProblemType.RepoNotEmpty`, so the
+      client cannot parse that problem, and the flattened DTOs will need it again. Needs a
+      running API; see [03 — Server](03-server.md#regenerating-the-client).
 - [ ] Add `ModVersion.ContentHash` (SHA-256, a first-class property — not a `ModAttribute`),
-      populate it on registration, and expose it on `ModVersionDto`. Everything in Phase 3
-      depends on it, and adding it later means a backfill.
+      populate it on registration, and expose it on **both** `ModVersionDto` and
+      `ModDependencyDto`. Sync reads the profile's dependencies, not the repo's mod list; without
+      the hash there, every sync would have to pull the unpaged `GET repos/{id}/mods` to resolve
+      it. Everything in Phase 3 depends on this, and adding it later means a backfill.
+- [ ] **Record the uploaded file's hash against the blob** (blob metadata — Azure's built-in
+      content hash is MD5), so `CreateModUploadLink` can return it with `FileAlreadyPresent`.
+      Without it, adopting an orphaned blob registers a hash describing a file nobody has, which
+      no download can ever satisfy and no upload link can ever repair. See
+      [07](07-mod-sync-design.md#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable).
 - [ ] Move the server base URL into the WPF `appsettings.json` and apply it in
       `AddModsDudeClient` ([known issue](08-known-issues.md#the-clients-server-url-is-hardcoded-to-localhost)).
       Blocks ever running against a deployed server.
@@ -158,6 +194,9 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 - [ ] **Split the upload-link problem types** into `FileAlreadyPresent` and `AlreadyRegistered`
       ([known issue](08-known-issues.md#the-two-upload-link-rejections-are-indistinguishable)).
       Without this a mod whose import failed after upload can never be retried.
+      `FileAlreadyPresent` carries the existing blob's hash: matching it means this is our own
+      orphan and registering is safe, differing means an id/version collision to report rather
+      than register over. Both are new problem types, so the client needs regenerating with them.
 - [ ] Implement import: per mod, link → upload → register, 4–6 mods concurrently. Per-mod
       ordering protects the never-register-before-upload invariant; concurrency across mods
       does not weaken it. Treat both "already present" responses as success, which makes retry
@@ -179,8 +218,12 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 - [ ] Per-row progress and error state. At two thousand mods a single global spinner cannot
       distinguish a working import from a hung one.
 - [ ] Compute the SHA-256 while uploading and send it with registration.
-- [ ] Write imported files into the content store as they go (see Phase 3) so importing an
-      existing install leaves the store warm.
+- [ ] Write imported files into the content store as they go so importing an existing install
+      leaves the store warm. **This pulls the store forward out of Phase 3** — it needs the
+      per-volume store, the store assignment and `LocalState.Settings`, which are otherwise
+      Phase 2.5 and 3 work. Either bring those three items forward with it, or accept that the
+      first imports leave a cold store and drop this bullet; what does not work is leaving it
+      here as written.
 - [ ] **Store the icon and every store image server-side**, so a mod nobody has locally still
       renders with its artwork instead of initials and an empty details dialog. Full design in
       [09](09-mod-catalog.md#mod-imagery).
@@ -225,11 +268,17 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 - [ ] A **batch existence check** before uploading — "which of these hashes do you have?" After
       the first import most images are already present, and 2,000 mods x 20 images is 40,000
       uploads that mostly need not happen.
-- [ ] Serve them through the API — `GET images/{hash}` at Guest level, redirecting to a SAS or
-      streaming — rather than per-image SAS minting, which inverts the mod-file trade-off for
-      files that are small and fetched in bulk. Affordable because a content-addressed image is
-      immutable and so cacheable forever; the client's existing disk cache then fetches each one
-      once per machine, ever.
+- [ ] Serve them through the API — `GET images/{hash}`, redirecting to a SAS or streaming —
+      rather than per-image SAS minting, which inverts the mod-file trade-off for files that are
+      small and fetched in bulk. Affordable because a content-addressed image is immutable and so
+      cacheable forever; the client's existing disk cache then fetches each one once per machine,
+      ever. The route has no `repoId` and cannot have one, so the check is **authenticated user**,
+      not Guest of a repo — document that widening rather than implying a scoping it lacks.
+- [ ] **Verify image bytes on ingest**, client-side at minimum. The image blobs are one globally
+      shared address space cached permanently by hash, which is exactly the shape
+      [07](07-mod-sync-design.md#cache-isolation) says is only safe when every ingest is
+      verified. Skipping it for images would be an unexplained inconsistency, and it is a hash of
+      a 6 KB file.
 - [ ] Stop dropping `Description` when mapping `ModVersionDto`
       ([known issue](08-known-issues.md#the-client-drops-description-from-server-mod-versions)).
 
@@ -252,7 +301,11 @@ showing overlapping data under different rules.
       arbitration someone regrets. Same operation the arbitration dialog already performs.
 - [ ] Add delete endpoints for a mod version and for a whole mod
       ([known issue](08-known-issues.md#no-delete-endpoint-for-mods-or-versions)). "Remove whole
-      mod" needs its own path, since `RemoveVersion` refuses the last one.
+      mod" needs its own path, since `RemoveVersion` refuses the last one. **They delete the blob
+      too** — nothing anywhere reclaims blob storage today, and adding a second way to strand
+      bytes before there is a way to reclaim them makes the problem worse rather than deferring
+      it. This is also what unblocks `DELETE repo/{repoId}`, which now refuses a repo that still
+      has mods and therefore cannot be used at all until a repo can be emptied.
 - [ ] Replace the `ProfileModsEditorPage` stub with the two-list editor over
       `GET/POST/PUT/DELETE .../modDependencies`. The left list is the union of registered and
       local mods, so a mod can be added *and imported* without a detour to another page.
@@ -271,13 +324,26 @@ showing overlapping data under different rules.
       rather than inherited — a Farming Simulator map mod declares its maps in `modDesc`, which
       the adapter is already parsing, so the answer comes out the same for every version. No
       prompt at import. An adapter can never set `ModDependency.Locked`.
+- [ ] **`RegisterModRequest` grows a `Locked` field** — the adapter's determination has no way
+      to reach the server otherwise.
 - [ ] Accept the consequence: **no repo-wide user override.** Someone who disagrees with the
       adapter unlocks on the dependency, which is per-profile and survives version changes since
       `ChangeVersion` does not touch it. "Unlock" means "in my profile", not "in this repo" —
       the price of collapsing `Mod` into the version.
+
+      This is also why no mod-mutation endpoint is needed. A `PUT repos/{repoId}/mods/{modId}`
+      would be the obvious companion to a repo-wide, user-editable flag, and there is no endpoint
+      that mutates a `Mod` today — but with `Locked` on the version and the override living on
+      the dependency, `PUT .../modDependencies/{modId}` already carries it.
 - [ ] **Not a `ModAttribute`.** Attributes are tags and categories and the system must never
       depend on one — `Locked` changes what a batch update is allowed to touch, so it is a real
       property. Same rule that put `ContentHash` in the schema.
+- [ ] **Decide what "newer" means before shipping the update actions.** Everything below reads
+      `SequenceNumber`, which until Phase 7 is registration order — folder scan order, for a repo
+      built by bulk-importing an install. "Apply all updates" would then move mods to whatever
+      happened to be registered last, confidently and in bulk, on the exact action the locking
+      design exists to make safe. Either pull Phase 7's comparer forward to here, or ship these
+      actions per-row only and label the batch one as unavailable until ordering is real.
 - [ ] Expose `ModDependency.Upgrade` / `CanBeUpgraded`, which exist on the domain and have no
       endpoint. **"Apply all updates" skips locked mods entirely** and reports what it skipped
       ("Update 47 mods · 3 locked, skipped"). Save then cannot contain an unintended version
@@ -297,7 +363,8 @@ Client-only, no server changes. Small, but it has to land before sync, because s
 know which profile owns a folder and where the store lives.
 
 - [ ] Move instances out from under repos in `LocalState`: key by instance id, carry
-      `GameAdapterId` instead of `RepoId`. Bump `Version` and discard old state.
+      `GameAdapterId` instead of `RepoId`. Bump `LocalState.CurrentVersion`; `StateStore`'s
+      compatibility predicate already discards anything older.
 - [ ] `Repo` offers the instances whose adapter `Id` matches, rather than owning a list. The
       sidebar keeps listing them under each repo exactly as it does now.
 - [ ] Add `ActiveProfile: (RepoId, ProfileId)?` to the persisted instance.
@@ -306,7 +373,9 @@ know which profile owns a folder and where the store lives.
 - [ ] A settings page. There is no such page today; the app has nowhere to put a global
       setting.
 - [ ] Rework `CreateLocalInstancePage` / `EditLocalInstancePage` accordingly. The name
-      uniqueness check moves from per-repo to per-adapter.
+      uniqueness check moves from per-repo to per-adapter. Phase 4 reworks `EditLocalInstancePage`
+      again into the instance's real page — worth doing as one piece of work rather than touching
+      the same page twice.
 
 ## Phase 3 — Sync
 
@@ -346,6 +415,12 @@ The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md)
 - [ ] Extend `IInstanceModAdapter` with the write side: where a mod file belongs, what it
       should be called, install, uninstall. Filesystem operations stay in the sync engine;
       adapters only supply paths.
+- [ ] **Classify on bytes, not just on version id.** `GetInstalledMods` reads the version out of
+      the mod's own metadata, so two builds both calling themselves `1.0.0` look identical to it
+      — the case [09](09-mod-catalog.md#same-mod-several-sources) says happens in practice. Use
+      the sync manifest's recorded hash, falling back to rehashing only files whose size or mtime
+      no longer match it. Without this, content addressing protects the store and does nothing
+      for the mod folder.
 - [ ] `ModSyncService` in `Client.Core`: plan, then execute. Populate the serving store with
       everything **this profile** needs first — not the repo's full mod set — so the
       destructive phase only ever runs against a complete store.
@@ -495,15 +570,23 @@ Driven by the stated volumes, not by generic good practice.
       `Mod.Updated` ([known issue](08-known-issues.md#get-reposrepoidmods-returns-everything-unpaged)).
       They solve different problems: pagination bounds any single response, the delta bounds
       the steady state. Paginate the delta too — a first sync against an established repo
-      returns everything.
+      returns everything. **Phase 1's `ModCatalog` merges source scans with this endpoint**, so
+      it meets the stated volumes long before this phase; either pull it forward or accept that
+      the catalog is slow until here.
+- [ ] **A blob reclamation sweep** — nothing anywhere deletes a blob today
+      ([known issue](08-known-issues.md#nothing-ever-reclaims-blob-storage)). Import orphans,
+      deleted versions and deleted repos all strand bytes permanently. A sweep over the `mods`
+      container against registered `(repoId, modId, versionId)` triples is the whole job; the
+      same applies to `mod-images` against the reference table.
 - [ ] Stop full-list refreshing after every mutation
       ([known issue](08-known-issues.md#full-list-refresh-after-every-mutation)) — apply the
       returned DTO to the existing collection instead. Removes the need for the
       `*OfInterestChanged` selection dance.
 - [ ] Return 401/403 for authorization failures rather than 400
-      ([known issue](08-known-issues.md#authorization-failures-return-400)), and branch the
-      client on `CustomProblemDetails.Type` rather than status code
-      ([known issue](08-known-issues.md#client-error-handling-tests-for-a-status-code-the-server-never-returns)).
+      ([known issue](08-known-issues.md#authorization-failures-return-400)). The client already
+      branches on `CustomProblemDetails.Type` rather than status code, so this is free on that
+      side — but `MapToBadRequest` and every endpoint's `Results<...>` signature name the status,
+      so it is a wider change than it looks.
 - [ ] Fix the duplicate-username crash
       ([known issue](08-known-issues.md#a-second-user-with-the-same-display-name-breaks-signup)).
       One collision and a real person cannot use the app.
@@ -513,9 +596,15 @@ Driven by the stated volumes, not by generic good practice.
       ([known issue](08-known-issues.md#scope-policies-are-defined-and-never-applied)).
 - [ ] Delete `ModsDude.Server.Services`, `ModsDude.Server.Common`, the empty
       `ModsDude.Client.Cli` directory, and the stale `slnLaunch` entry
-      ([known issue](08-known-issues.md#empty-and-duplicate-projects)).
+      ([known issue](08-known-issues.md#empty-and-duplicate-projects)). Drop the unused MediatR
+      registration with them ([known issue](08-known-issues.md#mediatr-is-registered-and-never-used)),
+      or write down what it is for.
 - [x] A real README: what it is, what it needs, how to run it.
 - [ ] CI in the empty `.github/workflows/`: build and test on push. One file.
+- [ ] **Something that notices when `Generated.cs` is stale.** Every problem type, DTO field and
+      route added on the server is invisible to the client until somebody remembers to
+      regenerate, and nothing warns. Checking in the OpenAPI document and diffing it in CI is the
+      cheap version.
 
 ## Phase 7 — Version ordering from version strings
 

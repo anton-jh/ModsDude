@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
@@ -40,6 +41,14 @@ public class DeleteRepoV1Endpoint : IEndpoint
         if (repo is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
+        }
+
+        // The Mod -> Repo foreign key is Restrict, so deleting a repo that still has mods fails at
+        // the database with an unhandled exception. Refuse it here instead, with a problem the
+        // client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
+        if (await dbContext.Mods.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
+        {
+            return TypedResults.BadRequest(Problems.RepoNotEmpty(new RepoId(repoId)));
         }
 
         dbContext.Repos.Remove(repo);

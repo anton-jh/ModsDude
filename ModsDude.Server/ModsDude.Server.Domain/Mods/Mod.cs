@@ -157,8 +157,11 @@ public class Mod
             throw new InvalidOperationException($"Cannot remove version with id '{version.Id}'. No such version exists");
         }
 
+        // Materialized for the same reason as in InsertVersion: the loop body mutates the sequence
+        // number the predicate reads, over a HashSet whose iteration order is unspecified.
         var newerVersions = _versions
-            .Where(x => x.SequenceNumber > version.SequenceNumber);
+            .Where(x => x.SequenceNumber > version.SequenceNumber)
+            .ToList();
 
         foreach (var newerVersion in newerVersions)
         {

@@ -37,7 +37,7 @@ public class ProfileService(
         {
             profile = await profileClient.CreateProfileV1Async(repoId, request, cancellationToken);
         }
-        catch (ApiException ex) when (ex.StatusCode == 409)
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
@@ -58,7 +58,7 @@ public class ProfileService(
         {
             await profileClient.UpdateProfileV1Async(repoId, profileId, request, cancellationToken);
         }
-        catch (ApiException ex) when (ex.StatusCode == 409)
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }

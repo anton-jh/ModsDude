@@ -48,7 +48,7 @@ public class RepoRepository(
         {
             repo = await repoClient.CreateRepoV1Async(request, cancellationToken);
         }
-        catch (ApiException ex) when (ex.StatusCode == 409)
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
@@ -69,7 +69,7 @@ public class RepoRepository(
         {
             await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
         }
-        catch (ApiException ex) when (ex.StatusCode == 409)
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }

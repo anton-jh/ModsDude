@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -37,13 +38,18 @@ public class GetProfileV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var profile = await dbContext.Profiles.FindAsync([new RepoId(repoId), new ProfileId(profileId)], cancellationToken);
+        // Projected rather than materialized — see GetProfilesV1Endpoint. ModDependencies is owned
+        // and would be read in full for a DTO that does not carry it.
+        var profile = await dbContext.Profiles
+            .Where(x => x.RepoId == new RepoId(repoId) && x.Id == new ProfileId(profileId))
+            .Select(x => new { x.Id, x.RepoId, x.Name })
+            .FirstOrDefaultAsync(cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        var dto = ProfileDto.FromModel(profile);
+        var dto = new ProfileDto(profile.Id.Value, profile.RepoId.Value, profile.Name.Value);
 
         return TypedResults.Ok(dto);
     }

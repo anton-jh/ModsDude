@@ -212,11 +212,14 @@ problem from reappearing. `LocalState.Settings` is a new concept: the first genu
 client setting.
 
 There is no migration. The system has no users yet, so `Version` gets bumped and old state
-is discarded.
+is discarded. `Store<T>` takes an optional compatibility predicate for exactly this, and
+`StateStore` passes `state => state.Version == LocalState.CurrentVersion` — without it a bumped
+version would silently deserialize old JSON into the new shape rather than discarding it.
 
-A corrupt file is not fatal: a `JsonException` on load moves the file aside as
-`state_corrupted_{unixMillis}.json` and starts fresh, so a bad write costs the user their
-instance list rather than the ability to launch.
+Neither a corrupt file nor an incompatible one is fatal: both move the file aside as
+`{name}_discarded_{unixMillis}.json` and start fresh, so the cost is the user's instance list
+rather than the ability to launch. Saves go through a temp file and an atomic move, so an
+interrupted write cannot be the thing that produces a corrupt file in the first place.
 
 `LocalInstanceRepository` hands out the `ObservableCollection<PersistedLocalInstance>` for a
 repo and subscribes `store.Save()` to its `CollectionChanged` — **adding or removing an
@@ -257,9 +260,11 @@ shape: hold an `ObservableCollection` of the current data, and after any mutatio
 Pages listen for that event and select the matching sidebar item — which is why creating a
 repo lands you on the new repo's page.
 
-They translate `ApiException` into `UserFriendlyException` for the cases they know about.
-(These checks currently test for HTTP 409, which the server does not return — see
-[08 — Known issues](08-known-issues.md).)
+They translate `ApiException<CustomProblemDetails>` into `UserFriendlyException` for the cases
+they know about, branching on `ex.Result.Type` rather than on the HTTP status code — the
+status is `400` for every typed problem, so it carries no information. A problem type the
+generated client does not know about cannot be matched, so adding one on the server means
+regenerating.
 
 `ModsDudeClientBase` attaches the bearer token to every outgoing request by calling
 `IAccessTokenAccessor.Get`, so token refresh is transparent to callers.

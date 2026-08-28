@@ -5,6 +5,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using System.Diagnostics;
 using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
 
 namespace ModsDude.Server.Api.ErrorHandling;
 
@@ -85,34 +86,61 @@ public static class Problems
         Detail = $"User '{userId.Value}' is already a member of '{repoId.Value}'."
     };
 
-    
+    public static CustomProblemDetails RepoNotEmpty(RepoId repoId) => new()
+    {
+        Type = ProblemType.RepoNotEmpty,
+        Title = "Repo is not empty",
+        Detail = $"Repo '{repoId.Value}' still has registered mods. Remove them before deleting the repo."
+    };
+
+
+    /// <summary>
+    /// Every member carries the same URI twice, and both are load bearing.
+    /// <see cref="EnumMemberAttribute"/> is what NJsonSchema writes into the OpenAPI document, and
+    /// therefore what the generated client expects; System.Text.Json ignores it and only honours
+    /// <see cref="JsonStringEnumMemberNameAttribute"/>. With only the first, the wire value is the
+    /// bare member name and no client can match it against the schema it was generated from.
+    /// </summary>
     public enum ProblemType
     {
         [EnumMember(Value = _typeBaseUri + "name-taken")]
+        [JsonStringEnumMemberName(_typeBaseUri + "name-taken")]
         NameTaken,
 
         [EnumMember(Value = _typeBaseUri + "not-found")]
+        [JsonStringEnumMemberName(_typeBaseUri + "not-found")]
         NotFound,
 
         [EnumMember(Value = _typeBaseUri + "mod-dependency-exists")]
+        [JsonStringEnumMemberName(_typeBaseUri + "mod-dependency-exists")]
         ModDependencyExists,
 
         [EnumMember(Value = _typeBaseUri + "insufficient-repo-access")]
+        [JsonStringEnumMemberName(_typeBaseUri + "insufficient-repo-access")]
         InsufficientRepoAccess,
 
         [EnumMember(Value = _typeBaseUri + "not-authorized")]
+        [JsonStringEnumMemberName(_typeBaseUri + "not-authorized")]
         NotAuthorized,
 
         [EnumMember(Value = _typeBaseUri + "cannot-kick-only-admin")]
+        [JsonStringEnumMemberName(_typeBaseUri + "cannot-kick-only-admin")]
         CannotKickOnlyAdmin,
 
         [EnumMember(Value = _typeBaseUri + "already-exists")]
+        [JsonStringEnumMemberName(_typeBaseUri + "already-exists")]
         AlreadyExists,
 
         [EnumMember(Value = _typeBaseUri + "file-not-found")]
+        [JsonStringEnumMemberName(_typeBaseUri + "file-not-found")]
         FileNotFound,
 
         [EnumMember(Value = _typeBaseUri + "user-already-member")]
+        [JsonStringEnumMemberName(_typeBaseUri + "user-already-member")]
         UserAlreadyMember,
+
+        [EnumMember(Value = _typeBaseUri + "repo-not-empty")]
+        [JsonStringEnumMemberName(_typeBaseUri + "repo-not-empty")]
+        RepoNotEmpty,
     }
 }

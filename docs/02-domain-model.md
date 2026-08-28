@@ -133,6 +133,12 @@ returns the highest. The entity exposes three mutations:
   shifting everything from `before` onwards up by one.
 - `RemoveVersion` — deletes and closes the gap by shifting later versions down.
 
+**Nothing curates it today.** `RegisterModRequest` carries no placement, so `RegisterMod` always
+appends and `InsertVersion` is unreachable from the API. The ordering a repo has is therefore
+registration order — which, for a repo built by bulk-importing an existing install, is folder
+scan order. Anything that reasons about "newer" (`CanBeUpgraded`, "apply all updates") is
+reasoning about that until the comparer lands.
+
 **This is a curated ordering, and it is going to change.** The intended model is that order
 derives from the mod's own version string, compared by a comparer the adapter supplies —
 Farming Simulator's `1.2.3.4` and another game's `v2-beta` do not compare the same way.
@@ -296,6 +302,17 @@ a human's profile.
 
 `AddDependency` also refuses a `ModVersion` whose `Mod.RepoId` differs from the profile's —
 mods do not cross repo boundaries.
+
+**Every one of these operations reaches the `Mod` through `ModVersion`**, which is what makes the
+domain readable — and what makes the navigation mandatory rather than optional. A profile loaded
+without it has dependencies whose `ModVersion` is `null`, and `AddDependency`,
+`DeleteDependency`, `HasDependencyOn` and `ChangeVersion` all throw. See
+[03 — Server](03-server.md#persistence).
+
+[Flattening](#flattening) shortens that chain rather than removing the requirement: with no
+`Mod` to hop to, the operations read `(RepoId, ModId)` straight off the version and the include
+becomes one level instead of two. `ModDependency.ModVersion` still has to be loaded, and loading
+it is still not automatic.
 
 Note that `Upgrade()` and `CanBeUpgraded()` are not reachable from any endpoint yet; the
 API only offers `ChangeVersion` via `PUT .../modDependencies/{modId}`.

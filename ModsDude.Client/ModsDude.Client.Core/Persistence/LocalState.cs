@@ -4,7 +4,15 @@ namespace ModsDude.Client.Core.Persistence;
 
 public class LocalState
 {
-    public int Version { get; set; } = 1;
+    /// <summary>
+    /// Bumped whenever the persisted shape changes. There is no migration: state written by an
+    /// older version is discarded by <see cref="StateStore"/>'s compatibility check, which is
+    /// affordable while the system has no users.
+    /// </summary>
+    public const int CurrentVersion = 1;
+
+
+    public int Version { get; set; } = CurrentVersion;
     public List<Guid> LastSelectedRepos { get; init; } = [];
     public List<Guid> LastSelectedProfiles { get; init; } = [];
     public Dictionary<Guid, LocalRepoState> Repos { get; init; } = [];
