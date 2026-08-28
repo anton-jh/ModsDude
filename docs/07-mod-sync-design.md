@@ -326,16 +326,103 @@ user their instance has drifted.** It is a manual remedy for an invisible proble
 
 Reminding people harder is not the fix. Making the drift visible is.
 
+### What sync records, and why it has to
+
+A mod folder cannot tell you which profile it was supposed to be. Once the game has updated a
+few mods, the contents match neither the old profile nor any other, and two different profiles
+can pin identical mod sets anyway. **Drift is only meaningful against something recorded.**
+
+Two things are stored, and they are not the same kind of thing:
+
+| | What it is | If it is lost |
+| --- | --- | --- |
+| `ActiveProfile` on the instance | The standing intent: *this folder follows that profile* | The intent is gone. Nothing can recover which profile it was |
+| The sync manifest | A snapshot: what the last sync actually installed | Costs a full folder scan. Nothing is wrong |
+
+`ActiveProfile` is a **source of truth** — underivable, so it must be persisted, which is why it
+sits on the persisted instance in `LocalState` rather than being inferred at runtime.
+
+The manifest is an **optimisation only**. Reconciliation never needs it: it works from the actual
+folder contents against the profile's dependencies, which is what a first sync does. The manifest
+exists so the *check* can be cheap. Losing it degrades a stat-per-file into a rescan and nothing
+else, so it never needs to be authoritative, backed up, or repaired.
+
+Worth noting the manifest also catches drift from the other direction. It records the mod set
+that was applied, so comparing it against the profile's current dependencies detects **someone
+else having edited the shared profile** since this instance last synced — without needing a
+revision number on `Profile`, which does not have one.
+
+Two states to handle rather than assume away:
+
+- **A dangling `ActiveProfile`** — the profile was deleted, or the user was removed from the
+  repo. The instance should say so and offer to pick another, not fail silently or keep
+  reporting drift against something unreachable.
+- **`ActiveProfile` set but no manifest** — a fresh install, or discarded local state. Drift is
+  simply unknown; fall back to a full reconcile, which produces the right answer anyway.
+
+### Where the manifest lives
+
+A **separate file per instance**, alongside `state.json` — `manifests/{instanceId}.json` — not
+inline in `LocalState` and not in the game's own folder.
+
+Not inline, because `state.json` is loaded eagerly and rewritten whenever an instance changes; a
+manifest for 2,000 mods with a hash each is a few hundred kilobytes that has no business being
+re-serialised every time someone renames something.
+
+Not in the mod folder, because writing bookkeeping into a directory the game owns and an in-game
+updater rewrites is asking for it to be clobbered or to confuse something. It would survive the
+loss of `LocalState`, which is the one argument for it — but per the table above, losing the
+manifest costs a scan, so that is not worth buying.
+
+### Nothing keeps the manifest in sync, and nothing should
+
+The manifest is **frozen between syncs**. It is written when a sync completes and then never
+touched until the next one. It does not follow the folder, and must not: drift *is* the
+difference between the two, so a manifest that tracked the folder could never detect anything.
+
+That makes changes while ModsDude is closed — the normal case, since people play the game with
+it shut — the **intended detection path** rather than a hole in it:
+
+```
+sync completes        manifest written, folder matches it
+ModsDude closes
+game updates mods     folder changes, manifest does not
+ModsDude opens        compare  ->  mismatch  ->  drift
+```
+
+Nothing has to be observing at the moment of the change. The manifest is what lets a comparison
+made *later* still be meaningful, which is exactly what a folder alone cannot give you.
+
+Two rules keep it trustworthy:
+
+- **Write it only on success**, atomically via temp-file-and-rename. A sync that fails halfway
+  leaves the previous manifest in place, so the next check reports drift — which is true, and
+  re-applying fixes it. A partially-written manifest would instead claim a state that never
+  existed.
+- **An unreachable folder is unknown, not drifted.** An unplugged drive or an offline network
+  path should say so quietly, not raise a warning about mods that may be perfectly fine.
+
 ### Detecting it cheaply
 
-Reconciliation already computes exactly this — desired versus actual. A drift check is a plan
-computed and not executed. The cost is a folder scan, which is too expensive to run on every app
-launch against a 2,000-mod folder.
+Reconciliation already computes drift properly — desired versus actual, a plan computed and not
+executed. The cost is opening every archive to read `modDesc`, which is far too slow to run on
+every launch against a 2,000-mod folder.
 
-So **write a sync manifest** when a sync completes: what was installed, with each file's hash,
-size and modification time. Checking for drift is then a stat of each file against the manifest,
-with a full rescan only when something has moved. That turns a minute of scanning into a
-fraction of a second in the common case where nothing changed.
+**The expensive part is reading the archives, not listing the directory.** A single
+non-recursive `Directory.EnumerateFiles` over 2,000 entries, taking name, size and modification
+time, is milliseconds. So the cheap check is a directory listing compared against the manifest,
+which catches all three cases that matter:
+
+| Difference | Meaning |
+| --- | --- |
+| A name in the listing that is not in the manifest | A mod was added |
+| A name in the manifest that is not in the listing | A mod was removed |
+| Same name, different size or mtime | A mod was replaced or updated |
+
+Only when the listing disagrees does anything open an archive, and then only for the files that
+actually differ. The recorded hashes are not read at all on this path — they exist so an
+uninstall knows which store blob a file corresponds to, and so a suspicious file can be
+confirmed.
 
 A `FileSystemWatcher` on instance folders can catch changes as they happen, so the app already
 knows at next launch. Useful as an optimisation on top of the manifest, not as a replacement —
@@ -510,14 +597,16 @@ And the variant only appears when the derived target set is non-empty, per the t
 
 ### When to check
 
-`FileSystemWatcher` on the instance folders is the primary signal here rather than an
-optimisation: it catches the change *while the game is running*, so the notification is already
-there the instant the user alt-tabs back, with no scan on return at all.
+**The manifest comparison is the primary mechanism, at startup and on window activation.** It is
+the only one that works in the common case, which is ModsDude being closed while the game runs —
+a watcher observing nothing cannot report anything. Debounce the activation check, since
+`Window.Activated` fires on every alt-tab and someone switching back and forth does not need a
+directory listing each time.
 
-Back it with a manifest check on window activation, since watchers miss events across sleep and
-on network paths. That check is a stat per file, so it is affordable — but debounce it, because
-`Window.Activated` fires on every alt-tab and a user switching back and forth does not need
-2,000 stat calls each time.
+`FileSystemWatcher` is a **latency optimisation on top of that**, for the narrower case where
+ModsDude happens to be open while mods change: it puts the notification up immediately rather
+than at the next activation. Worth having, but it decides nothing on its own, and the design
+must not depend on having been running.
 
 ### Hardlink support is an adapter property
 

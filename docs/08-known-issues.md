@@ -166,7 +166,9 @@ var mods = await dbContext.Mods.Where(x => x.RepoId == new RepoId(repoId)).ToLis
 ```
 
 With `Mod.Versions` auto-included, this materialises every mod, every version, and every
-version's attributes in one response. Against the stated target of thousands of registered
+version's attributes in one response. (The flattening in
+[02](02-domain-model.md#flattening) removes the auto-include, which helps but does not fix
+this — an unpaged query over a flat table is still unpaged.) Against the stated target of thousands of registered
 versions per repo, this is a multi-megabyte payload on every mods page load, plus the
 allocation cost on both ends.
 

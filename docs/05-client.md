@@ -188,7 +188,15 @@ LocalState
 ├─ Instances: { instanceId → { GameAdapterId, Name, AdapterInstanceSettings,
 │                              ActiveProfile: (RepoId, ProfileId)? } }
 └─ Repos: { repoId → LocalRepoState }
+
+manifests/{instanceId}.json            NEW — what the last sync installed
 ```
+
+`ActiveProfile` has to be persisted: a mod folder cannot tell you which profile it was meant to
+match, so nothing can reconstruct it once the contents change. The sync manifest is a separate
+file per instance rather than part of `LocalState`, which is loaded eagerly and rewritten on
+every instance change — a manifest for 2,000 mods is a few hundred kilobytes. See
+[07](07-mod-sync-design.md#what-sync-records-and-why-it-has-to).
 
 **Instances move out from under repos** and key on `GameAdapterId` instead, so one game
 installation is configured once and listed under every repo using that adapter. A repo

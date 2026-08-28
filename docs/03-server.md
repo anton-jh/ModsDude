@@ -158,6 +158,11 @@ implements `IUnitOfWork` (`CommitAsync` → `SaveChangesAsync`).
 
 Notable configuration:
 
+> **`Mod` and `ModVersion` are being collapsed into one entity** keyed
+> `(RepoId, ModId, VersionId)`, which removes the shadow FK properties, the owned-collection
+> mapping and the `Versions` auto-include described below. See
+> [02 — Domain model](02-domain-model.md#flattening).
+
 - **Composite keys everywhere.** `Mod` is `(RepoId, ModId)`; `Profile` is `(RepoId, ProfileId)`;
   `RepoMembership` is `(UserId, RepoId)`. Repo scoping is baked into the primary key rather
   than being a filter you can forget.

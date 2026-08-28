@@ -76,10 +76,11 @@ blast radius is every repo on the disk. See
 [07 — Mod sync design](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
 The adapter is also responsible for deciding whether a newly registered mod is
-**version-sensitive**, setting `Mod.Locked` when a completely new mod is registered — a Farming
-Simulator map mod declares its maps in `modDesc`, which the adapter is parsing anyway. It never
-sets `ModDependency.Locked`; profile-level locking is a human decision. See
-[02 — Domain model](02-domain-model.md#locking-in-two-places).
+**version-sensitive**, setting `ModVersion.Locked` at registration — a Farming Simulator map mod
+declares its maps in `modDesc`, which the adapter is parsing anyway. It re-derives the answer
+from each file rather than inheriting it, which comes out consistent because every version of a
+map mod declares maps. It never sets `ModDependency.Locked`; profile-level locking is a human
+decision. See [02 — Domain model](02-domain-model.md#locking-in-two-places).
 
 ## Version ordering
 
@@ -118,6 +119,12 @@ public readonly record struct GameAdapterId(string Id, int CompatibilityVersion)
 
 Serialized as `id@version` — `_farming_simulator@1`. The `@` is reserved and rejected in the
 `Id`.
+
+**Adapters ship with the client, and the server does not validate the identifier it stores.** A
+repo pinned to `_farming_simulator@1` cannot be opened by a client build that no longer carries
+that adapter version, and nothing anywhere warns about it. Keep old versions shipping, or accept
+that dropping one strands the repos using it. See
+[01 — Overview](01-overview.md#three-consequences-worth-knowing).
 
 The compatibility version exists so an adapter can make a **breaking change to its settings
 shape** without stranding existing repos. Ship `_farming_simulator@2` alongside `@1`; repos

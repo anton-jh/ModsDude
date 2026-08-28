@@ -92,6 +92,12 @@ membership set with it.
 
 `ModsDude.Server.Domain/Mods/`
 
+> **Planned change: these collapse into one entity.** `Mod` currently *contains* an ordered set
+> of `ModVersion`, which is backwards — a mod record is really *of* a version. Nearly all the
+> data already lives on the version, and the last mod-scoped field, `Locked`, is moving there
+> too. See [Flattening](#flattening) at the end of this section. The description below is the
+> code as it stands.
+
 A `Mod` is identified by the composite key `(RepoId, ModId)`. **`ModId` is supplied by the
 game, not minted by us** — for Farming Simulator it is the archive filename without its
 extension, which is how the game itself identifies a mod. This means the same conceptual
@@ -138,6 +144,12 @@ is a repo-level fact every member shares. So `SequenceNumber` survives as the st
 with the comparer filling it in automatically wherever it can, and `InsertVersion` becomes the
 mechanism arbitration writes through. See [PLAN.md](PLAN.md).
 
+Because the comparer may abstain, ordering a set of versions is a **partial order plus a
+topological sort**, not a call to `OrderBy` — and an abstention only becomes a question when
+nothing else settles the pair transitively. An import can also introduce several new versions of
+one mod at once, which shifts already-registered rows. See
+[09 — Mod catalog](09-mod-catalog.md#ordering-a-set-is-a-partial-order-not-a-sort).
+
 `InsertVersion` captures the target position into a local and materialises the shift query
 before mutating anything. That is deliberate: the predicate reads a sequence number the loop
 body changes, over a `HashSet` whose iteration order is unspecified, so leaving the query
@@ -165,7 +177,57 @@ it.
 Structural, so **not `ModAttribute`s** — the system dereferences these to decide what to render.
 See [09 — Mod catalog](09-mod-catalog.md#mod-imagery).
 
-## Profile and ModDependency
+### Flattening
+
+*Planned.* `Mod` disappears. There is one entity, keyed `(RepoId, ModId, VersionId)`, holding
+everything: display name, description, attributes, ordering, `ContentHash`, image references,
+`Locked`, created. A "mod" stops being a row and becomes what it always was in practice — a
+group of version rows sharing a `ModId`.
+
+The containment was the wrong way round. A record about a mod is really a record *of a version*
+of it, and the data had already migrated accordingly: `Mod` was left holding identity, two
+timestamps and a collection.
+
+What this removes:
+
+- The create-or-append branch in `RegisterModV1Endpoint` — every registration is one insert.
+- The shadow FK properties and owned-collection mapping in the EF configuration.
+- `Navigation(x => x.Versions).AutoInclude()`, which is part of why
+  `GET repos/{id}/mods` materialises every mod, every version and every attribute at once.
+- The `Mod.RepoId` `TODO`, by answering it.
+- Two entities where the wire format, the adapter output and the UI rows are all per-version
+  anyway.
+
+**Ordering stays contiguous.** `SequenceNumber` keeps working exactly as it does now:
+`InsertVersion` shifts later rows up, `RemoveVersion` closes the gap, and the unique index on
+`(RepoId, ModId, SequenceNumber)` enforces it.
+
+A sparse key with gaps was considered, to make every insert a single row. It is not worth it.
+The shift touches one mod's versions — tens of rows, found by an indexed query, mutated in
+memory and written by one `SaveChanges`, which is already atomic. The aggregate disappears
+because the *entity* flattens, not because the shift does, so nothing is gained by removing a
+write that was never the problem.
+
+Gaps would also introduce an exhaustion case to reason about — halving a 1024 gap runs out after
+ten consecutive back-fills between the same pair — in exchange for solving nothing. Contiguous
+numbering has no such case, and keeps the values readable when someone is looking at the table.
+
+The logic itself is unchanged; it just moves off the `Mod` entity to wherever registration
+happens, since there is no longer a parent to hang it on.
+
+**`Locked` moves to the version.** It is set by the adapter from the mod file, and since every
+version of a map mod declares its maps, the adapter's answer is the same each time — consistent
+by derivation rather than by being stored once. The trade is that there is no longer a repo-wide
+*user* override: someone who disagrees unlocks on the `ModDependency` instead, which is
+per-profile and survives version changes. See [Locking, in two places](#locking-in-two-places).
+
+**Two domain methods lose their navigation.** `ModDependency.CanBeUpgraded()` and `Upgrade()`
+reach the sibling versions through `ModVersion.Mod.Versions`. Without a parent they need the
+candidate set passed in, or the operation moves up to the endpoint that already has to query for
+it. That is the real cost of flattening, and it is small.
+
+Worth doing **early**: there is one migration and no real data, so this is nearly free now and a
+data migration later — the same argument as normalising mod-id casing.
 
 `ModsDude.Server.Domain/Profiles/`
 
@@ -197,7 +259,7 @@ Two rules make this work as a coordination mechanism:
 
 ### Locking, in two places
 
-*Planned — `Mod.Locked` does not exist yet.*
+*Planned — neither property exists yet.*
 
 Locking stops version-sensitive mods being bumped by accident. The motivating case is a
 Farming Simulator map: changing map versions partway through a save can corrupt it, and the
@@ -207,24 +269,27 @@ damage shows up long after the change that caused it.
 
 | Where | Scope | Set by |
 | --- | --- | --- |
-| `Mod.Locked` | Repo-wide — this mod is version-sensitive, in every profile | The **adapter** at registration, and the user afterwards |
+| `ModVersion.Locked` | The mod itself is version-sensitive | The **adapter**, from the mod file, at registration |
 | `ModDependency.Locked` | This profile only | The **user**, from within the profile |
 
 The effective answer is the disjunction — a mod is treated as locked in a profile's mod list
 when **either** is true:
 
 ```csharp
-public bool IsEffectivelyLocked => Locked || ModVersion.Mod.Locked;
+public bool IsEffectivelyLocked => Locked || ModVersion.Locked;
 ```
 
-Keeping that on `ModDependency` puts the rule in one place, since the domain can already reach
-the `Mod` through `ModVersion`.
+Keeping that on `ModDependency` puts the rule in one place.
 
-**The adapter sets `Mod.Locked` only, and only when a completely new mod is registered** — not
-when a new version is added to a mod that already exists. That maps onto the branch
-`RegisterModV1Endpoint` already has: the adapter's determination is an argument to the `Mod`
-constructor and is untouched by `AddVersion`. There is no prompt at import; the adapter's answer
-is simply the starting value, and the user can change it later from the relevant views.
+**The adapter sets `ModVersion.Locked` from the file, on every registration.** Every version of
+a map mod declares its maps, so the answer comes out the same each time — consistent because it
+is re-derived, not because it was stored once. There is no prompt at import.
+
+The consequence to know about: **there is no repo-wide user override.** A user who thinks the
+adapter is wrong unlocks on the `ModDependency` instead, which is per-profile and survives
+version changes, since `ChangeVersion` does not touch it. "Unlock" therefore means "in my
+profile" rather than "in this repo" — acceptable for a group this size, and the price of
+flattening `Mod` away.
 
 An adapter can never set `ModDependency.Locked`. Profile-level locking is a human decision about
 a human's profile.
@@ -244,7 +309,8 @@ The client does not reuse the server's entities. It has its own, in
   hydrates it with the stored base settings, and owns the machine's `LocalInstance` list for
   that repo. Disposable, because it holds a collection synchronizer.
 - **`Mod` / `Mod.Version`** — a view over `ModDto` that pre-splits latest from older
-  versions.
+  versions. **Dead code**: nothing references it but `ModFakers`. It goes away with the
+  flattening rather than being kept and renamed.
 - **`LocalInstance`** — **one mod folder** on this machine: a sync target. Holds the
   deserialized `DynamicForm` instance settings and the adapter instance built from them.
   **Never sent to the server**; persisted in `state.json` (see [05 — Client](05-client.md)).

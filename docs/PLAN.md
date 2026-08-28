@@ -86,6 +86,26 @@ afternoon.
 - [x] Fix `Mod.InsertVersion` — capture the target position and materialise the shift query,
       so the result no longer depends on `HashSet` iteration order.
 - [x] Register `IModsClient` and `IFilesClient` in `AddModsDudeClient`.
+- [ ] **Flatten `Mod` and `ModVersion` into one entity** keyed `(RepoId, ModId, VersionId)`. A
+      mod record is really *of* a version, not a container of them, and nearly all the data was
+      already on the version. Removes the create-or-append branch in registration, the shadow FK
+      properties and owned-collection mapping, the `Versions` auto-include that makes
+      `GET repos/{id}/mods` so heavy, and the `Mod.RepoId` TODO. Full reasoning in
+      [02](02-domain-model.md#flattening).
+- [ ] **Flatten the wire format with the entity.** `ModDto` currently nests
+      `ModVersionDto[]`; it becomes one DTO per version. Leaving the response nested would make
+      the client re-group on receipt — exactly the shape the flat client model exists to avoid.
+      Regenerate the NSwag client afterwards.
+- [ ] Keep `SequenceNumber` **contiguous**, with the existing shift-on-insert and close-on-remove
+      logic — just moved off the entity, since there is no parent left to hang it on. A sparse
+      key was considered and rejected: the shift is tens of rows for one mod, mutated in memory
+      and written by one atomic `SaveChanges`, so it was never the problem the aggregate was
+      solving. Gaps would only add an exhaustion case to reason about in exchange for nothing.
+- [ ] `ModDependency.CanBeUpgraded()` / `Upgrade()` lose their `ModVersion.Mod.Versions`
+      navigation; pass the candidate versions in, or move the operation to the endpoint that has
+      to query for them anyway.
+- [ ] Do this **before** anything registers mods in earnest — one migration and no real data
+      makes it nearly free now, a data migration later. Same argument as the casing fix.
 - [ ] Add `ModVersion.ContentHash` (SHA-256, a first-class property — not a `ModAttribute`),
       populate it on registration, and expose it on `ModVersionDto`. Everything in Phase 3
       depends on it, and adding it later means a backfill.
@@ -107,9 +127,16 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 - [ ] `IsLocal` / `IsOnServer` per **version**, not per mod. Derived three-state where a page
       needs it, never stored. Split `ModStatus` into these facts plus a per-context display
       status.
-- [ ] A merged `CatalogMod` / `CatalogModVersion` in `Client.Core`, so one row view model
-      serves local, server and both. Rename `LocalModImage` → `ModImage` and the client-side
-      `Mod` → `RepoMod`.
+- [ ] A merged **flat** `CatalogModVersion` in `Client.Core` — one record per version, no
+      parent — so one row view model serves local, server and both. Flat all the way through:
+      the server entity is flat, `LocalMod` is already one record per file, and a row view model
+      wraps one version, so a parent would be a shape invented mid-pipeline. Grouping for the
+      version selector and update detection is a `ToLookup(x => x.ModId)` built where needed,
+      which beats maintaining a nested model that must be rebuilt every time a source checkbox
+      recomposes the set.
+- [ ] Rename `LocalModImage` → `ModImage`. **Delete** the client-side `Mod` that wraps `ModDto`
+      rather than renaming it — nothing references it but `ModFakers`, and its only job was the
+      latest-versus-older grouping the lookup now does on demand.
 - [ ] **Mod sources.** Scan a set of sources rather than a fixed folder: every instance's mod
       folder, the system Downloads folder, plus folders the user adds for the session with the
       folder browser. List them all, each with an enable/disable checkbox. **Disabled standing
@@ -135,6 +162,20 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
       ordering protects the never-register-before-upload invariant; concurrency across mods
       does not weaken it. Treat both "already present" responses as success, which makes retry
       idempotent and covers a teammate importing the same version concurrently.
+- [ ] Handle **several new versions of one mod in a single import** — one from a mod folder, one
+      from Downloads. Compute positions against the final intended order, then register in
+      ascending order as *insert before the next known version*, so each step is individually
+      valid and no batch-placement API is needed. Versions of the same mod must register
+      **sequentially**, since each insert depends on the previous; concurrency stays across
+      distinct mods. Note this can move an already-registered version's sequence number.
+- [ ] **The version comparer and the arbitration dialog are prerequisites of this**, not Phase 7
+      work — placing several incoming versions needs them. See the note on Phase 7.
+- [ ] **Assert both neighbours when placing a version**, not just the one to insert before.
+      *Insert v2 between v1 and v4*, rejected if v4 no longer immediately follows v1. Relative
+      placement alone stops collisions but still permits a silently wrong order when two members
+      insert against a state neither has seen the other change — which offers a downgrade as an
+      upgrade. Optimistic concurrency using only what the client already computed, retried
+      through the refetch loop import already has.
 - [ ] Per-row progress and error state. At two thousand mods a single global spinner cannot
       distinguish a working import from a hung one.
 - [ ] Compute the SHA-256 while uploading and send it with registration.
@@ -206,6 +247,9 @@ showing overlapping data under different rules.
 - [ ] Add profile-usage information to `ModDto` or a dedicated endpoint. "Unused" cannot be
       computed client-side safely — deleting on a partial view risks removing a version a
       teammate's profile just picked up.
+- [ ] **Reorder a mod's versions by hand** from Manage — the backstop for an ordering that is
+      wrong for reasons optimistic concurrency cannot catch: a comparer that guessed badly, or an
+      arbitration someone regrets. Same operation the arbitration dialog already performs.
 - [ ] Add delete endpoints for a mod version and for a whole mod
       ([known issue](08-known-issues.md#no-delete-endpoint-for-mods-or-versions)). "Remove whole
       mod" needs its own path, since `RemoveVersion` refuses the last one.
@@ -220,15 +264,17 @@ showing overlapping data under different rules.
 - [ ] **Import-on-save, not import-on-drag.** A local-only mod moving right is marked pending;
       Save uploads and registers, then updates the dependencies last in one request. Uploading
       on drag makes Cancel meaningless and litters the repo with mods nobody kept.
-- [ ] **`Mod.Locked`** — a new domain property and column, repo-wide, alongside the existing
+- [ ] **`ModVersion.Locked`** — a new domain property and column, alongside the existing
       per-profile flag. Rename `ModDependency.LockVersion` → `Locked` to match, and add
-      `IsEffectivelyLocked => Locked || ModVersion.Mod.Locked` so the rule lives in one place.
-      Both are user-editable; the dependency one only from within a profile.
-- [ ] **The adapter sets `Mod.Locked` at registration of a completely new mod** — not per new
-      version, or a later import would quietly overturn a user's choice. A Farming Simulator map
-      mod declares its maps in `modDesc`, which the adapter is already parsing. It maps onto the
-      branch `RegisterModV1Endpoint` already has, as an argument to the `Mod` constructor. No
+      `IsEffectivelyLocked => Locked || ModVersion.Locked` so the rule lives in one place.
+- [ ] **The adapter sets `ModVersion.Locked` at every registration**, re-derived from the file
+      rather than inherited — a Farming Simulator map mod declares its maps in `modDesc`, which
+      the adapter is already parsing, so the answer comes out the same for every version. No
       prompt at import. An adapter can never set `ModDependency.Locked`.
+- [ ] Accept the consequence: **no repo-wide user override.** Someone who disagrees with the
+      adapter unlocks on the dependency, which is per-profile and survives version changes since
+      `ChangeVersion` does not touch it. "Unlock" means "in my profile", not "in this repo" —
+      the price of collapsing `Mod` into the version.
 - [ ] **Not a `ModAttribute`.** Attributes are tags and categories and the system must never
       depend on one — `Locked` changes what a batch update is allowed to touch, so it is a real
       property. Same rule that put `ContentHash` in the schema.
@@ -311,7 +357,21 @@ The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md)
 - [ ] A sync page: plan summary (install / replace / uninstall / quarantine), the
       confirmation, per-mod progress, cancellation.
 - [ ] **Write a sync manifest** on completion — installed files with hash, size and mtime — so
-      drift detection is a stat per file rather than a rescan of a 2,000-mod folder.
+      drift detection is a directory listing rather than opening 2,000 archives. One file per
+      instance at `manifests/{instanceId}.json`, beside `state.json`: not inline in `LocalState`,
+      which is loaded eagerly and rewritten on every instance change, and not in the game's own
+      folder, which an in-game updater rewrites.
+- [ ] Keep the two records distinct. `ActiveProfile` is a **source of truth** — a folder cannot
+      tell you which profile it was meant to be, so losing it loses the intent irrecoverably. The
+      manifest is an **optimisation** — reconciliation works without it, straight from folder
+      contents against the profile, so losing it costs a scan and nothing more.
+- [ ] Comparing the manifest's mod set against the profile's current dependencies also catches
+      **someone else having edited the shared profile** since this instance synced — no revision
+      number on `Profile` required, which is just as well since it has none.
+- [ ] Handle a **dangling `ActiveProfile`** (profile deleted, or the user removed from the repo):
+      say so and offer to pick another, rather than failing or reporting drift against something
+      unreachable. And `ActiveProfile` with no manifest — fresh install, discarded state — falls
+      back to a full reconcile.
 - [ ] **Drift detection and a Re-apply affordance**, on the instance row and the repo/profile
       overviews. In Farming Simulator mods are updated *inside the game*, which silently leaves
       the instance not matching its profile; today nothing anywhere would tell the user, and the
@@ -383,9 +443,23 @@ launching the game from it does not help. What matters is what the user sees on 
 - [ ] An instance that cannot be applied to right now — a dedicated server mid-session, a folder
       held by a running game — is reported and left drifted, which the drift notification already
       covers. That is a "not now", not a "not this one", so it needs no pre-selection.
-- [ ] `FileSystemWatcher` on instance folders as the primary signal, so the notification is
-      already up when the user alt-tabs back, with no scan on return. Manifest check on window
-      activation as the backstop, debounced — `Window.Activated` fires on every alt-tab.
+- [ ] **The manifest comparison is the primary mechanism**, at startup and on window activation
+      (debounced — `Window.Activated` fires on every alt-tab). It is the only one that works when
+      ModsDude is closed while the game runs, which is the normal case. `FileSystemWatcher` is a
+      latency optimisation on top, for when the app happens to be open; the design must not
+      depend on having been running.
+- [ ] The manifest is **frozen between syncs** — written on completion, never updated to follow
+      the folder. A manifest that tracked the folder could not detect anything, since drift is
+      the difference between the two.
+- [ ] Write it **only on success**, atomically. A half-finished sync leaves the previous manifest
+      and the next check reports drift, which is true; a partial manifest would claim a state
+      that never existed.
+- [ ] The cheap check is a **directory listing**, not opening archives: name, size and mtime from
+      one non-recursive `EnumerateFiles` catches additions, removals and replacements. Open
+      archives only for entries that actually differ. The recorded hashes are not read on this
+      path — they are there so an uninstall knows which store blob a file matches.
+- [ ] An unreachable folder — unplugged drive, offline network path — is **unknown, not
+      drifted**. Say so quietly rather than warning about mods that may be fine.
 
 Sequenced right after sync, ahead of the cosmetic work below: it closes the one failure mode
 that silently damages savegames.
@@ -445,6 +519,13 @@ Driven by the stated volumes, not by generic good practice.
 
 ## Phase 7 — Version ordering from version strings
 
+> **This is sequenced wrong and most of it belongs in Phase 1.** Import can bring in several
+> versions of one mod at once — one from a mod folder, one from Downloads — and placing them
+> needs the comparer. Without it Phase 1 can only append, so an out-of-order import writes a
+> wrong ordering from the first day and Phase 7 inherits bad data to repair. The comparer, the
+> partial-order sort and the arbitration dialog should land with import; what genuinely remains
+> here is backfilling existing rows, which is nothing while there is no real data.
+
 A design change, deliberately sequenced late because it touches the domain and the sync engine
 depends on stable ordering.
 
@@ -471,10 +552,20 @@ mis-order releases. The comparer should be confident or abstain — never guess.
       the same release, or possibly adjacent ones, and nothing in the strings settles it.
       Likewise a date-like `2024.03` next to a semantic `1.4`. Guessing here produces a wrong
       order that nobody notices until a profile pins the wrong build.
-- [ ] **Resolve ambiguity in one batched dialog.** Collect every pair the comparer abstained on
-      and ask once, showing each mod's full version list with the unresolved ones highlighted
-      and draggable into place. One dialog per import, not one per mod — a repo with a thousand
-      mods might produce dozens, and a modal per mod is unusable.
+- [ ] **Order a set as a partial order, not a sort.** `OrderBy` assumes a total order and
+      misbehaves with an abstaining comparer. Build the partial order from pairwise comparisons
+      over the union of registered and incoming versions, then topologically sort it — a few
+      dozen versions makes all-pairs free. An abstention is only a *question* when nothing
+      settles the pair transitively.
+- [ ] **Resolve ambiguity in one batched dialog, before registering.** Collect every pair left
+      genuinely unordered and ask once, showing each mod's version list in the order that was
+      derived with the unplaceable ones floating and draggable. One dialog per import, not one
+      per mod. Unambiguous mods proceed immediately and never wait on it.
+- [ ] Cancelling that dialog **skips those mods and continues the import** — one unorderable mod
+      is not a reason to lose a two-thousand-mod batch.
+- [ ] Never register at a provisional position and fix it later: the newest version would be
+      wrong in the interim, and a version appended past the real newest would advertise itself as
+      an update and offer everyone a downgrade.
 - [ ] Persist the resolution. Ordering is a **repo-level fact shared by every member**, so the
       answer is written to `SequenceNumber` server-side and nobody is asked again. Rows the
       comparer ordered on its own are written the same way.

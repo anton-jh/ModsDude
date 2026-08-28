@@ -66,6 +66,61 @@ at a time, from one repo**.
 `ModsDude.Server.Services` and `ModsDude.Server.Common` exist but are effectively empty —
 see [08 — Known issues](08-known-issues.md).
 
+## Where work happens
+
+One rule decides nearly every placement question in this system:
+
+> **The server owns what members must agree on. The client owns everything derived from files.**
+
+The server never opens a mod archive, never parses a version string, never reads
+`AdapterData.Configuration`. That is what lets a new game ship as a client-side adapter with no
+server deployment — and it is why so much apparently server-shaped work is done client-side and
+sent up as a result.
+
+| | Server | Client |
+| --- | --- | --- |
+| Identity, membership, authorization | ● | |
+| Repos, profiles, mod dependencies | ● | |
+| Name uniqueness, one-dependency-per-mod | ● | |
+| Mod version rows, sequence, `ContentHash`, `Locked`, image refs | ● stores | ● derives |
+| Blob storage and SAS issuance | ● | |
+| Verifying the blob exists before registering | ● | |
+| Reading mod archives, `modDesc`, icons | | ● |
+| Comparing version strings, computing order | | ● |
+| Deciding a mod is version-sensitive | | ● |
+| Hashing files, generating image derivatives | | ● |
+| Instances, sources, content store, sync, drift | | ● |
+
+### What the server does and does not validate
+
+It enforces **structural** invariants — the caller is authorized, the name is free, a sequence
+number is unique within a mod, the blob exists before metadata is written. It does not check
+**semantic** ones: that a declared hash matches the bytes, that `1.2` really is newer than `1.1`,
+or that a mod flagged version-sensitive actually is.
+
+That is a deliberate trust posture, not an oversight. Members are authenticated and few, and the
+places where being wrong would matter are caught elsewhere: a wrong `ContentHash` fails
+verification on download, so it breaks only the publisher's own mod
+([07](07-mod-sync-design.md#cache-isolation)). Everything else is cosmetic or repairable.
+
+### Three consequences worth knowing
+
+**Adapters ship with the client, so the server cannot help a client that lacks one.** A repo
+pins `_farming_simulator@1`; a client build that no longer carries that adapter version cannot
+open the repo at all. The server stores the identifier without validating it, so nothing warns
+anyone. There is no mitigation today — worth knowing before dropping an old adapter.
+
+**Placement instructions are relative, and assert their neighbours.** Registration says *insert
+version X between A and B*, not *take sequence number 2*. Absolute positions collide under
+concurrent registration; relative ones do not, but relative alone still allows a silently wrong
+order when two members insert against a state neither has seen the other change. Asserting both
+neighbours turns that into a rejection, a refetch and a recompute. See
+[09](09-mod-catalog.md#importing-several-versions-of-one-mod-at-once).
+
+**The client trusts the server's stored ordering rather than recomputing it.** Recomputing on
+read would let two clients on different adapter compatibility versions disagree about which mod
+version is newest. Stored once, read by everyone.
+
 ## Technology
 
 - **.NET 9**, C# with nullable reference types and file-scoped namespaces throughout.

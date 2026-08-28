@@ -114,6 +114,12 @@ Client                          Server                         Blob storage
   │◀── ModDto                                                       │
 ```
 
+> **Changing.** `Mod` and `ModVersion` collapse into a single entity, so the create-or-append
+> branch disappears — every registration is one insert — and the request grows a placement
+> (*insert between A and B*) plus `contentHash` and `locked`. The response flattens with the
+> entity. See [02 — Domain model](02-domain-model.md#flattening) and
+> [09 — Mod catalog](09-mod-catalog.md#importing-several-versions-of-one-mod-at-once).
+
 Three properties of this design are worth keeping:
 
 - **Mod bytes never pass through the API.** The server's role is authorization and

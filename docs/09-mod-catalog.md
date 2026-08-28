@@ -50,14 +50,12 @@ than `(string, string)` tuples so no code path can bypass the normalization.
 a *mixed* set that has to sort, filter and select uniformly, and two row types force
 `IEnumerable<object>` plus duplicated templates.
 
-One core model, in `Client.Core`:
+One core model, in `Client.Core`, **flat — one record per version, no parent**:
 
 ```csharp
-public record CatalogMod(ModKey Id, IReadOnlyList<CatalogModVersion> Versions);
-
 public record CatalogModVersion(
     ModKey ModId, ModVersionKey VersionId, string Name, string Description,
-    bool IsLocal, bool IsOnServer)
+    bool IsLocal, bool IsOnServer, bool Locked)
 {
     public string? Author { get; init; }
     public ModImage? Icon { get; init; }
@@ -66,14 +64,27 @@ public record CatalogModVersion(
 }
 ```
 
+Flat matches everything around it. The server entity is flattening to one row per version, so
+the wire format is flat and nothing has to be re-nested on receipt. `LocalMod` — the adapter's
+output — is already one record per file, which is to say per version. And a row view model wraps
+exactly one version. A `CatalogMod` parent would be a shape invented in the middle of a pipeline
+that is per-version at both ends.
+
+**Grouping is a query, not a structure.** Two places need "all versions of this mod" — the
+profile editor's version selector, and working out whether a newer version exists. Both are a
+`ToLookup(x => x.ModId)` built where needed, which is cheaper than maintaining a parallel nested
+model that has to be rebuilt every time the flat set changes — and it changes often, since
+`ModCatalog` recomposes whenever a source checkbox is toggled.
+
 The lazy-image design generalizes for free. `LocalModImage` is
 `(Name, CacheKey, Func<CancellationToken, Task<byte[]>>)` and says nothing about zip archives —
 a server-backed version hands back the same record with an HTTP fetch in `Load`, and
 `IModImageProvider` keeps working untouched. Rename it `ModImage`.
 
-Two renames worth doing at the same time: the client-side `Mod` that wraps `ModDto` reads
-confusingly generic next to `LocalMod` — call it `RepoMod`. And `LocalMod` is fine as adapter
-output, because it genuinely is "what was found on disk".
+The client-side `Mod` that wraps `ModDto` — the one that pre-splits latest from older versions —
+is **deleted rather than renamed**. Nothing references it but `ModFakers`, and its only job was
+the grouping that the lookup above now does on demand. `LocalMod` keeps its name, because it
+genuinely is "what was found on disk".
 
 `ModStatus` should be split. It currently mixes fact (`AlreadyInRepo`) with context-dependent
 judgment (`New`, `UpdateAvailable`), and "New" means different things on the import page than
@@ -434,15 +445,18 @@ corrupt it, and the damage shows up long after the change that caused it.
 An adapter can tell that a mod is version-sensitive — a Farming Simulator map mod declares its
 maps in `modDesc`, so the adapter can spot one while it is already parsing that file.
 
-It sets **`Mod.Locked`**, a real domain property, when a **completely new mod** is registered.
-Not per new version: a mod that is version-sensitive stays so, and re-deciding on every upload
-would let a later import quietly overturn a user's choice. There is no prompt — the adapter's
-answer is the starting value, and the user changes it afterwards if they disagree.
+It sets **`ModVersion.Locked`**, a real domain property, at registration — re-derived from each
+file rather than inherited, which comes out consistent because every version of a map mod
+declares its maps. There is no prompt.
 
 Two properties, two scopes, described in full in
-[02 — Domain model](02-domain-model.md#locking-in-two-places): `Mod.Locked` is repo-wide,
-`ModDependency.Locked` is per profile, and a mod counts as locked in a profile's list when
-either is true. The adapter can only ever set the first.
+[02 — Domain model](02-domain-model.md#locking-in-two-places): `ModVersion.Locked` says the mod
+itself is version-sensitive, `ModDependency.Locked` is the user's per-profile decision, and a
+mod counts as locked when either is true. The adapter can only ever set the first.
+
+Because the adapter re-derives it, there is **no repo-wide user override** — someone who
+disagrees unlocks on the dependency, which is per-profile and survives version changes. That is
+the price of collapsing `Mod` into the version, and a fair one at this scale.
 
 **This is not a `ModAttribute`.** Attributes are tags and categories; the system must never
 depend on one for its behaviour. `Locked` changes what the software *does* — which mods a batch
@@ -459,7 +473,7 @@ is what makes a safety prompt into noise — and a prompt people have learned to
 nobody.
 
 So: **"apply all updates" applies updates to unlocked mods only** — unlocked meaning neither
-`Mod.Locked` nor `ModDependency.Locked`. Locked mods are not candidates, and the action reports
+`ModVersion.Locked` nor `ModDependency.Locked`. Locked mods are not candidates, and the action reports
 what it skipped: *"Update 47 mods · 3 locked, skipped"*. The save that follows cannot contain an
 unintended version change, so it needs no prompt at all.
 
@@ -500,6 +514,98 @@ Do not run it strictly serially, though — 200 mods at two round trips each wil
 handful of mods concurrently, each doing its own link → upload → register in sequence. The
 *per-mod* ordering is what protects the invariant; batching across mods is independent of it.
 This is network-bound, so a fixed 4–6, not the `ProcessorCount` the scanner uses.
+
+### Importing several versions of one mod at once
+
+Nothing stops a single import carrying two new versions of the same mod — one sitting in an
+instance's mod folder, another in Downloads. A worked example, mod A:
+
+| Version | State |
+| --- | --- |
+| v1 | registered, sequence 0 |
+| v4 | registered, sequence 1 |
+| v2 | unregistered, in the instance's mod folder |
+| v3 | unregistered, in Downloads |
+
+The intended result is `v1, v2, v3, v4`, which means **v4's sequence number moves too** — two
+rows insert ahead of it. Source is irrelevant to ordering; only the version strings matter.
+
+**Positions are computed against the final intended order, then applied one at a time.** Register
+the new versions in ascending order, each as *insert before the next already-known version*: v2
+before v4 gives `v1, v2, v4`; then v3 before v4 gives `v1, v2, v3, v4`. Each step is individually
+valid, so no batch-placement API is needed.
+
+The instruction is **relative on purpose** — *insert before v4*, not *take sequence 2*. Absolute
+positions would collide outright under concurrent registration.
+
+But relative alone is not enough, and it is worth being precise about why. Two members inserting
+different new versions of the same mod, each computing against a state that does not yet include
+the other's:
+
+```
+start        v1, v4
+A lands      insert v3 before v4   ->  v1, v3, v4
+B lands      insert v2 before v4   ->  v1, v3, v2, v4     <- wrong, and silent
+```
+
+No constraint is violated. `CanBeUpgraded()` treats any higher sequence as newer, so a profile
+pinned to v3 would be offered v2 as an upgrade — a downgrade dressed as an update.
+
+**So assert both neighbours, not one.** The client already knows where the version belongs in the
+order it computed, so it can say *insert v2 between v1 and v4* and the server can check that v4
+really does immediately follow v1. Above, B's assertion fails once A has landed; B refetches,
+recomputes against `v1, v3, v4`, sends *insert v2 between v1 and v3*, and the result is correct.
+
+That is optimistic concurrency using only what the client already has — no revision token, no
+extra round trip in the common case, and the retry is the refetch-and-recompute loop the import
+already needs for the *already present* responses. The first version of a mod asserts an empty
+set; an append asserts what it believes the last version to be, so it also catches somebody else
+appending first.
+
+A spurious rejection is possible — someone appending v5 while you insert v2 invalidates an
+assertion that would have been harmless. Retries are cheap and this is rare; precision is not
+worth the complexity of narrowing it.
+
+**Keep a manual reorder as the backstop.** Optimistic concurrency handles races, but ordering can
+also simply be wrong — a comparer that guessed badly, or an arbitration someone regrets. The
+Manage page should be able to reorder a mod's versions by hand, which is the same operation
+arbitration already performs.
+
+That adds one constraint to the concurrency rule above: **versions of the same mod register
+sequentially**, because each insert depends on the previous having landed. Concurrency stays at
+the level of distinct mods, which is where it was anyway.
+
+### Ordering a set is a partial order, not a sort
+
+With a comparer allowed to abstain, `OrderBy` is the wrong tool — .NET's sort assumes a total
+order and will happily produce nonsense, or throw, when comparisons are inconsistent.
+
+Order the union of registered and incoming versions by building a **partial order** from the
+pairwise comparisons and topologically sorting it. A mod has at most a few dozen versions, so
+comparing every pair is free.
+
+The useful consequence: **an abstention is not automatically a question.** If the comparer cannot
+place `v1` against `v4` directly, but does know `v1 < v2` and `v2 < v4`, the order is settled
+transitively. Only pairs left genuinely unordered — no path between them in either direction —
+need a human.
+
+### When abstention forces a prompt
+
+The adapter is *not* required to parse everything. What abstention costs is a question, asked at
+a specific moment:
+
+- **Resolve before registering, never after.** A version registered at a provisional position
+  would make the newest version wrong in the interim, and "latest" is what drives update
+  detection — a mod appended past v4 would advertise itself as the newest and offer everyone a
+  downgrade.
+- **One dialog per import, covering every ambiguous mod**, showing each one's version list in the
+  order that *was* derived, with the unplaceable versions floating and draggable into place. One
+  interaction per mod, not one per unresolved pair.
+- **Unambiguous mods never wait.** Compute ordering for the whole selection first; everything the
+  comparer settled proceeds immediately, and only the remainder needs the dialog.
+- **Cancelling the dialog skips those mods, it does not abort the import.** An unorderable mod is
+  one mod's problem, and someone importing two thousand of them should not lose the batch over
+  it. The skipped ones stay unregistered and can be imported again later.
 
 ### Retry is impossible without splitting the problem type
 
