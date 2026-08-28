@@ -152,26 +152,6 @@ therefore impossible for every user until someone runs an `UPDATE` against Postg
 the accepted process for now, but it is undocumented in the app and a new user gets an
 unexplained "Not authorized".
 
-### MediatR is registered and never used
-
-`Program.cs` calls `AddMediatR(config => config.RegisterServicesFromAssemblyContaining<ApplicationAssemblyMarker>())`,
-and there is not a single handler, request or `ISender` injection in the solution. It implies a
-mediator-based application layer that the codebase deliberately does not have — see the note in
-[03 — Server](03-server.md#project-layout) about endpoints querying the DbContext directly.
-Either the package reference goes, or the intent should be written down.
-
-### Empty and duplicate projects
-
-- `ModsDude.Server.Services` contains only `UserService` with an empty `Register()` method — and
-  is the one project still on `net7.0` while everything else targets `net10.0`, so deleting it
-  also removes the odd framework out.
-- `ModsDude.Server.Common` contains `DomainValidationException` and
-  `InvalidPasswordException`; `DomainValidationException` also exists in
-  `ModsDude.Server.Domain/Exceptions/`. Only the Domain one is referenced.
-- `ModsDude.Client/ModsDude.Client.Cli/` is an empty directory with `bin`/`obj` and no project
-  file.
-- `ModsDude.slnLaunch.user` references `ModsDude.Client.WinForms`, which does not exist.
-
 ### The client drops `Description` from server mod versions
 
 `ModVersionDto` carries `Description`, but `Models/Mod.cs:18` constructs `Mod.Version` without

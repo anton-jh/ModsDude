@@ -63,9 +63,6 @@ at a time, from one repo**.
 | Client WPF | `ModsDude.Client.Wpf` | The desktop app: views, view models, navigation, imaging |
 | Shared | `ModsDude.Shared` | Small helpers used by both sides of the client |
 
-`ModsDude.Server.Services` and `ModsDude.Server.Common` exist but are effectively empty —
-see [08 — Known issues](08-known-issues.md).
-
 ## Where work happens
 
 One rule decides nearly every placement question in this system:

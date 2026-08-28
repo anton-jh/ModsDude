@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.Middleware.UserLoading;
-using ModsDude.Server.Application;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Persistence.DbContexts;
@@ -15,12 +14,6 @@ using NSwag.Generation.Processors.Security;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services
-    .AddMediatR(config =>
-    {
-        config.RegisterServicesFromAssemblyContaining<ApplicationAssemblyMarker>();
-    });
 
 builder.Services
     .ConfigureHttpJsonOptions(options =>

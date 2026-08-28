@@ -8,8 +8,6 @@ ModsDude.Server.Application  Authorization primitives, ITimeService, IUnitOfWork
 ModsDude.Server.Domain       Entities and invariants. No framework references
 ModsDude.Server.Persistence  EF Core / PostgreSQL — DbContext, entity configuration, migrations
 ModsDude.Server.Storage      Azure Blob Storage — SAS issuance
-ModsDude.Server.Services     Empty. Contains only a stub UserService
-ModsDude.Server.Common       Empty. Duplicates two exception types from Domain
 ```
 
 The dependency direction is Api → Application → Domain, with Persistence and Storage

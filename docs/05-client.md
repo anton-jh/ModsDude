@@ -7,8 +7,6 @@ Two projects:
   shell would plug in.
 - **`ModsDude.Client.Wpf`** — the desktop app. Views, view models, navigation, imaging.
 
-`ModsDude.Client.Cli` exists as an empty leftover directory with no project file.
-
 ## MVVM conventions
 
 CommunityToolkit.Mvvm throughout: `[ObservableProperty]` on private fields,

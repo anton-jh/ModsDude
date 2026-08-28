@@ -594,11 +594,9 @@ Driven by the stated volumes, not by generic good practice.
       ([known issue](08-known-issues.md#membership-endpoints-authorize-after-loading)).
 - [ ] Either wire up the scope policies or delete them
       ([known issue](08-known-issues.md#scope-policies-are-defined-and-never-applied)).
-- [ ] Delete `ModsDude.Server.Services`, `ModsDude.Server.Common`, the empty
-      `ModsDude.Client.Cli` directory, and the stale `slnLaunch` entry
-      ([known issue](08-known-issues.md#empty-and-duplicate-projects)). Drop the unused MediatR
-      registration with them ([known issue](08-known-issues.md#mediatr-is-registered-and-never-used)),
-      or write down what it is for.
+- [x] Delete the empty and duplicate projects — `ModsDude.Server.Services`,
+      `ModsDude.Server.Common`, the `ModsDude.Client.Cli` directory — fix the stale `slnLaunch`
+      entry, and drop the unused MediatR registration and package references.
 - [x] A real README: what it is, what it needs, how to run it.
 - [ ] CI in the empty `.github/workflows/`: build and test on push. One file.
 - [ ] **Something that notices when `Generated.cs` is stale.** Every problem type, DTO field and
