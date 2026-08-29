@@ -1,5 +1,5 @@
 {
-  "runtime": "Net80",
+  "runtime": "Net100",
   "defaultVariables": null,
   "documentGenerator": {
     "fromDocument": {
@@ -96,7 +96,7 @@
       "templateDirectory": null,
       "serviceHost": null,
       "serviceSchemes": null,
-      "output": null,
+      "output": "ModsDudeServer/Generated.cs",
       "newLineBehavior": "Auto"
     }
   }
