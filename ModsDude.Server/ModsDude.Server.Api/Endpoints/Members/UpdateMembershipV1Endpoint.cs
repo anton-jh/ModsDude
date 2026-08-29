@@ -51,7 +51,12 @@ public class UpdateMembershipV1Endpoint : IEndpoint
             return authResult;
         }
 
-        subjectMembership.Level = request.NewLevel;
+        if (request.NewLevel < RepoMembershipLevel.Admin && repo.IsOnlyAdmin(new UserId(userId)))
+        {
+            return TypedResults.BadRequest(Problems.CannotDemoteOnlyAdmin);
+        }
+
+        repo.UpdateMembershipLevel(new UserId(userId), request.NewLevel);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();

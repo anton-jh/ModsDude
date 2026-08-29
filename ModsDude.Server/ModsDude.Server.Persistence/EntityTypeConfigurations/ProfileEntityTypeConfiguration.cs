@@ -18,10 +18,16 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
                 ModDependencyShadowProperties.RepoId,
                 ModDependencyShadowProperties.ProfileId);
 
+            // Restrict, not the cascade EF would infer: deleting a version a profile pins would
+            // otherwise remove the mod from that profile without anyone asking, and the delete
+            // endpoints refuse exactly that case. Restrict makes the database enforce the same rule,
+            // so a dependency added between the endpoint's check and its commit fails loudly instead
+            // of being swept away.
             modDependency.HasOne(x => x.ModVersion).WithMany().HasForeignKey(
                 ModDependencyShadowProperties.RepoId,
                 ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId);
+                ModDependencyShadowProperties.ModVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modDependency.HasKey(
                 ModDependencyShadowProperties.RepoId,

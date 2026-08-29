@@ -38,6 +38,29 @@ public static class ProfileExtensions
             .FirstOrDefaultAsync(x => x.RepoId == repoId && x.Id == profileId, cancellationToken);
     }
 
+    /// <summary>
+    /// Whether any profile in the repo pins this exact version. Deleting one that is pinned would
+    /// silently drop a mod out of somebody else's profile, so the delete endpoints refuse instead —
+    /// and the <see cref="ModDependency"/> foreign key is Restrict so the database refuses too,
+    /// rather than cascading the row away behind the check.
+    /// </summary>
+    public static Task<bool> CheckIfVersionIsDependedOn(this DbSet<Profile> dbSet, RepoId repoId, ModId modId, ModVersionId modVersionId, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId)
+            .SelectMany(x => x.ModDependencies)
+            .AnyAsync(x => x.ModVersion.ModId == modId && x.ModVersion.Id == modVersionId, cancellationToken);
+    }
+
+    /// <inheritdoc cref="CheckIfVersionIsDependedOn"/>
+    public static Task<bool> CheckIfModIsDependedOn(this DbSet<Profile> dbSet, RepoId repoId, ModId modId, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId)
+            .SelectMany(x => x.ModDependencies)
+            .AnyAsync(x => x.ModVersion.ModId == modId, cancellationToken);
+    }
+
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, CancellationToken cancellationToken)
     {
         return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);

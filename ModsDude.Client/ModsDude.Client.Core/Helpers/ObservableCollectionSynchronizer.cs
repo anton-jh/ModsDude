@@ -19,10 +19,18 @@ public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : I
     private readonly Func<TSource, bool> _filter;
     private readonly string? _propertyName;
     private readonly NotifyCollectionChangedEventHandler _collectionChangedHandler;
+    private readonly bool _disposeRemovedTargets;
 
     private bool _disposed;
 
 
+    /// <param name="disposeRemovedTargets">
+    /// Whether a target that leaves the collection is disposed. On by default because the
+    /// synchronizer is what built it, and nothing else holds it afterwards - a target that
+    /// subscribed to its source in its constructor would otherwise outlive the collection it was
+    /// removed from. Pass false where the factory is a pass-through and the target is really the
+    /// source, owned by whoever owns the source collection.
+    /// </param>
     public ObservableCollectionSynchronizer(
         ObservableCollection<TSource> source,
         ObservableCollection<TTarget> target,
@@ -30,11 +38,13 @@ public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : I
         Expression<Func<TTarget, TKey>> keySelectorExpression,
         IComparer<TKey>? comparer = null,
         Func<TSource, bool>? filter = null,
-        bool targetAlreadyInitialized = false)
+        bool targetAlreadyInitialized = false,
+        bool disposeRemovedTargets = true)
     {
         _source = source;
         _target = target;
         _factory = factory;
+        _disposeRemovedTargets = disposeRemovedTargets;
 
         _keySelector = keySelectorExpression.Compile();
         _propertyName = GetPropertyName(keySelectorExpression);
@@ -122,6 +132,8 @@ public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : I
 
             _target.Remove(vm);
             _map.Remove(model);
+
+            Release(vm);
         }
     }
 
@@ -135,36 +147,70 @@ public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : I
         }
 
         _propertyHandlers.Clear();
+
+        var removed = _map.Values.ToList();
+
         _map.Clear();
         _target.Clear();
+
+        foreach (var vm in removed)
+        {
+            Release(vm);
+        }
+    }
+
+
+    private void Release(TTarget vm)
+    {
+        if (_disposeRemovedTargets && vm is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 
 
     private void Resort(TTarget vm)
     {
-        if (!_target.Contains(vm))
+        var oldIndex = _target.IndexOf(vm);
+
+        if (oldIndex < 0)
             return;
 
-        _target.Remove(vm);
+        var newIndex = FindInsertIndex(vm, oldIndex);
 
-        int index = FindInsertIndex(vm);
-        _target.Insert(index, vm);
+        if (newIndex == oldIndex)
+            return;
+
+        // Moved rather than removed and re-inserted. Removing it would clear any selection sitting
+        // on it, and in the sidebar the selection is what the user is looking at.
+        _target.Move(oldIndex, newIndex);
     }
 
 
-    private int FindInsertIndex(TTarget vm)
+    /// <param name="skipIndex">
+    /// An index to ignore, for an item already in the collection that is being placed again. The
+    /// result then counts positions as if that item were absent, which is what
+    /// <see cref="ObservableCollection{T}.Move"/> expects.
+    /// </param>
+    private int FindInsertIndex(TTarget vm, int skipIndex = -1)
     {
         var key = _keySelector(vm);
+        var index = 0;
 
         for (int i = 0; i < _target.Count; i++)
         {
+            if (i == skipIndex)
+                continue;
+
             var existingKey = _keySelector(_target[i]);
 
             if (_comparer.Compare(key, existingKey) < 0)
-                return i;
+                return index;
+
+            index++;
         }
 
-        return _target.Count;
+        return index;
     }
 
 

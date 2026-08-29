@@ -6,7 +6,7 @@ public class ModImageReference(
     int position,
     string fileName)
 {
-    public string Hash { get; init; } = hash;
+    public string Hash { get; init; } = ModImageHash.Validated(hash);
     public ModImageKind Kind { get; init; } = kind;
     public int Position { get; init; } = position;
     public string FileName { get; init; } = fileName;

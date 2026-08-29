@@ -15,6 +15,7 @@ public record ModDto(
     string ContentHash,
     bool Locked,
     IEnumerable<ModAttributeDto> Attributes,
+    IEnumerable<ModImageReferenceDto> Images,
     DateTimeOffset Created,
     DateTimeOffset Updated)
 {
@@ -29,6 +30,7 @@ public record ModDto(
             model.ContentHash,
             model.Locked,
             model.Attributes.Select(ModAttributeDto.FromModel),
+            model.Images.OrderBy(x => x.Kind).ThenBy(x => x.Position).Select(ModImageReferenceDto.FromModel),
             model.Created,
             model.Updated);
     }

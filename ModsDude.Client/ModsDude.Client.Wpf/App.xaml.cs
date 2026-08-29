@@ -72,9 +72,12 @@ public partial class App : Application
         services.AddFactory<CreateRepoPageViewModel>();
         services.AddFactory<SettingsPageViewModel>();
         services.AddSingleton<RepoAdminPageViewModel.Factory>();
+        services.AddSingleton<RepoOverviewPageViewModel.Factory>();
+        services.AddSingleton<RepoMembersPageViewModel.Factory>();
         services.AddSingleton<RepoPageViewModel.Factory>();
         services.AddSingleton<CreateProfilePageViewModel.Factory>();
         services.AddSingleton<ProfilePageViewModel.Factory>();
+        services.AddSingleton<ProfileOverviewPageViewModel.Factory>();
         services.AddSingleton<EditProfilePageViewModel.Factory>();
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
         services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
@@ -95,8 +98,10 @@ public partial class App : Application
 
         services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();
+        services.AddSingleton<MembershipService>();
         services.AddSingleton<LocalInstanceRepository>();
         services.AddSingleton<ClientSettingsRepository>();
+        services.AddSingleton<LastSelectionRepository>();
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

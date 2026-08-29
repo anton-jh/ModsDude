@@ -39,10 +39,19 @@ public class Repo
         }
     }
     
+    /// <summary>
+    /// Upserts the membership. Demoting the only Admin is refused for the same reason kicking them
+    /// is: it leaves a repo nobody can administer, and no remaining member can undo it.
+    /// </summary>
     public void UpdateMembershipLevel(UserId userId, RepoMembershipLevel level)
     {
         if (_memberships.FirstOrDefault(x => x.UserId == userId) is RepoMembership existing)
         {
+            if (level < RepoMembershipLevel.Admin && IsOnlyAdmin(userId))
+            {
+                throw new InvalidOperationException($"Cannot demote the only Admin of repo '{Id}'");
+            }
+
             existing.Level = level;
         }
         else

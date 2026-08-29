@@ -1,4 +1,4 @@
-﻿using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
@@ -11,8 +11,13 @@ public class RepoRepository(
     IGameAdapterIndex gameAdapterIndex,
     LocalInstanceRepository localInstanceRepository)
 {
-    public delegate void RepoOfInterestChangedEventHandler(Guid repoIdOfInterest);
-    public event RepoOfInterestChangedEventHandler? RepoOfInterestChanged;
+    public delegate void RepoCreatedEventHandler(Guid repoId);
+
+    /// <summary>
+    /// Raised for a repo that did not exist a moment ago, so the shell can navigate to it. Renames
+    /// need no equivalent: the model is updated in place and the menu entry follows it.
+    /// </summary>
+    public event RepoCreatedEventHandler? RepoCreated;
 
     public ObservableCollection<Repo> Repos { get; } = [];
 
@@ -21,20 +26,29 @@ public class RepoRepository(
     {
         var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
 
-        var repoModels = reposFromApi.Select(MapRepoModel);
+        var byId = reposFromApi.ToDictionary(x => x.Repo.Id);
 
-        // Each repo holds a synchronizer subscribed to the machine's instance list, which outlives
-        // every refresh.
-        foreach (var repo in Repos)
+        // Reconciled rather than rebuilt. Clearing would discard every menu entry and every open
+        // page built from these repos, and each Repo holds a synchronizer subscribed to the
+        // machine's instance list that has to be disposed exactly when the repo really goes away.
+        for (var i = Repos.Count - 1; i >= 0; i--)
         {
-            repo.Dispose();
+            if (!byId.ContainsKey(Repos[i].Id))
+            {
+                Remove(Repos[i]);
+            }
         }
 
-        Repos.Clear();
-
-        foreach (var repo in repoModels)
+        foreach (var dto in reposFromApi)
         {
-            Repos.Add(repo);
+            if (FindRepo(dto.Repo.Id) is Repo existing)
+            {
+                existing.Apply(dto);
+            }
+            else
+            {
+                Repos.Add(MapRepoModel(dto));
+            }
         }
     }
 
@@ -57,43 +71,58 @@ public class RepoRepository(
             throw new UserFriendlyException("Name taken", null, ex);
         }
 
-        await RefreshRepos(cancellationToken);
+        // The creator is the repo's first Admin, so the response carries everything the list needs.
+        Repos.Add(MapRepoModel(new RepoMembershipDto()
+        {
+            Repo = repo,
+            MembershipLevel = RepoMembershipLevel.Admin
+        }));
 
-        OnRepoListChanged(repo.Id);
+        RepoCreated?.Invoke(repo.Id);
     }
 
-    public async Task Update(Repo repo, CancellationToken cancellationToken)
+    public async Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         var request = new UpdateRepoRequest()
         {
-            Name = repo.Name,
-            AdapterConfiguration = repo.Adapter.BaseSettings.Serialize()
+            Name = name,
+            AdapterConfiguration = baseSettings.Serialize()
         };
+
+        RepoDto updated;
+
         try
         {
-            await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
+            updated = await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
         {
             throw new UserFriendlyException("Name taken", null, ex);
         }
 
-        await RefreshRepos(cancellationToken);
-        
-        OnRepoListChanged(repo.Id);
+        repo.Apply(updated);
     }
 
     public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)
     {
         await repoClient.DeleteRepoV1Async(id, cancellationToken);
 
-        await RefreshRepos(cancellationToken);
+        if (FindRepo(id) is Repo removed)
+        {
+            Remove(removed);
+        }
     }
 
 
-    private void OnRepoListChanged(Guid idOfInterest)
+    private Repo? FindRepo(Guid id)
     {
-        RepoOfInterestChanged?.Invoke(idOfInterest);
+        return Repos.FirstOrDefault(x => x.Id == id);
+    }
+
+    private void Remove(Repo repo)
+    {
+        Repos.Remove(repo);
+        repo.Dispose();
     }
 
     private Repo MapRepoModel(RepoMembershipDto repoMembership)

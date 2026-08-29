@@ -27,7 +27,6 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _name = repo.Name;
-        OriginalName = repo.Name;
         BaseSettingsEditor = new(true, repo.Adapter.BaseSettings.Copy(), dialogService);
 
         BaseSettingsEditor.Modified += OnBaseSettingsModified;
@@ -38,7 +37,8 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name;
 
-    public string OriginalName { get; }
+    /// <summary>The name as the server has it. Read from the model rather than snapshotted, because saving now updates the model in place instead of rebuilding it.</summary>
+    public string OriginalName => _repo.Name;
 
     public DynamicFormViewModel BaseSettingsEditor { get; }
 
@@ -58,6 +58,8 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         _navigationLockService.ReleaseLock(this);
 
         await _repo.Update(Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
+
+        OnPropertyChanged(nameof(OriginalName));
     }
 
     [RelayCommand]

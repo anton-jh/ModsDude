@@ -20,5 +20,10 @@ internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModV
         });
 
         builder.HasIndex(x => new { x.RepoId, x.ModId, x.SequenceNumber }).IsUnique();
+
+        // Backs the delta form of the mod list, which orders by Updated inside a repo and resumes
+        // from a timestamp. Without it the endpoint that exists to make repeated syncs cheap sorts
+        // every version in the repo on every page.
+        builder.HasIndex(x => new { x.RepoId, x.Updated, x.ModId, x.Id });
     }
 }

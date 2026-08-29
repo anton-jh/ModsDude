@@ -1,4 +1,3 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Helpers;
@@ -9,6 +8,7 @@ using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class RepoPageViewModel
@@ -19,22 +19,28 @@ public partial class RepoPageViewModel
     private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
+    private readonly LastSelectionRepository _lastSelectionRepository;
     private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly EditLocalInstancePageViewModel.Factory _editLocalInstancePageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
+    private bool _selectionRestored;
+
 
     public RepoPageViewModel(
         Repo repo,
         RepoAdminPageViewModel.Factory repoAdminPageViewModelFactory,
+        RepoOverviewPageViewModel.Factory repoOverviewPageViewModelFactory,
+        RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
         EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory,
         CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         ProfileService profileService,
+        LastSelectionRepository lastSelectionRepository,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
@@ -43,16 +49,16 @@ public partial class RepoPageViewModel
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
+        _lastSelectionRepository = lastSelectionRepository;
         _createLocalInstancePageViewModelFactory = createLocalInstancePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _editLocalInstancePageViewModelFactory = editLocalInstancePageViewModelFactory;
-        _name = repo.Name;
 
         var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo));
         MenuItems = [
-            new MenuItemViewModel("Overview", () => new ExamplePageViewModel(Name, "Overview")),
+            new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
-            new MenuItemViewModel("Members", () => new ExamplePageViewModel(Name, "Members")),
+            new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo)),
             new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
             connectGameMenuItem
@@ -62,7 +68,8 @@ public partial class RepoPageViewModel
         _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);
 
         Profiles = [];
-        _profileService.ProfileOfInterestChanged += ProfileOfInterestChanged;
+        _profileService.ProfileCreated += OnProfileCreated;
+        _profileService.ProfileUpdated += OnProfileUpdated;
         _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
 
         NavManager = new(navigationLockService, modalService)
@@ -74,11 +81,10 @@ public partial class RepoPageViewModel
         {
             NavManager.Selected = connectGameMenuItem;
         }
+
+        NavManager.PropertyChanged += OnNavigationChanged;
     }
 
-
-    [ObservableProperty]
-    private string _name;
 
     public NavigationManager NavManager { get; }
 
@@ -96,6 +102,10 @@ public partial class RepoPageViewModel
 
     public void Dispose()
     {
+        _profileService.ProfileCreated -= OnProfileCreated;
+        _profileService.ProfileUpdated -= OnProfileUpdated;
+        NavManager.PropertyChanged -= OnNavigationChanged;
+
         _profilesSynchronizer.Dispose();
         _instanceSynchronizer.Dispose();
         NavManager.Dispose();
@@ -106,17 +116,61 @@ public partial class RepoPageViewModel
     private async Task LoadProfiles(CancellationToken cancellationToken)
     {
         await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
+
+        RestoreLastSelectedProfile();
     }
 
-    private async void ProfileOfInterestChanged(Guid profileIdOfInterest)
+    /// <summary>
+    /// Only on the first load, and only once the repo is actually usable - being pushed at "Connect
+    /// game" matters more than coming back to where you were.
+    /// </summary>
+    private void RestoreLastSelectedProfile()
     {
-        await LoadProfiles(default);
+        if (_selectionRestored)
+        {
+            return;
+        }
 
-        var repo = Profiles
-            .OfType<ProfileItemViewModel>()
-            .FirstOrDefault(x => x.Id == profileIdOfInterest);
+        _selectionRestored = true;
 
-        NavManager.Selected = repo;
+        if (Instances.Count == 0)
+        {
+            return;
+        }
+
+        var entries = Profiles.OfType<ProfileItemViewModel>().ToList();
+
+        if (_lastSelectionRepository.GetLastProfile(entries.Select(x => x.Id)) is not Guid profileId)
+        {
+            return;
+        }
+
+        NavManager.Selected = entries.First(x => x.Id == profileId);
+    }
+
+    private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NavigationManager.Selected) &&
+            NavManager.Selected is ProfileItemViewModel profile)
+        {
+            _lastSelectionRepository.RecordProfile(profile.Id);
+        }
+    }
+
+    private void OnProfileCreated(Guid profileId)
+    {
+        if (Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId) is ProfileItemViewModel profile)
+        {
+            NavManager.Selected = profile;
+        }
+    }
+
+    private void OnProfileUpdated(Guid profileId)
+    {
+        foreach (var profile in Profiles.OfType<ProfileItemViewModel>().Where(x => x.Id == profileId))
+        {
+            profile.RefreshTitle();
+        }
     }
 
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)

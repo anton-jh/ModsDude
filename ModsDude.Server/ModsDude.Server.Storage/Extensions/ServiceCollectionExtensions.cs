@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
             clientBuilder.AddBlobServiceClient(new Uri($"https://{storageAccountName}.blob.core.windows.net"));
         });
         services.AddScoped<IModStorageService, ModStorageService>();
+        services.AddScoped<IModImageStorageService, ModImageStorageService>();
 
         return services;
     }

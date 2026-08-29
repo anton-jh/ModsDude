@@ -63,6 +63,8 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.HasIndex("RepoId", "ModId", "SequenceNumber")
                         .IsUnique();
 
+                    b.HasIndex("RepoId", "Updated", "ModId", "Id");
+
                     b.ToTable("ModVersions");
                 });
 
@@ -292,7 +294,7 @@ namespace ModsDude.Server.Persistence.Migrations
                             b1.HasOne("ModsDude.Server.Domain.Mods.ModVersion", "ModVersion")
                                 .WithMany()
                                 .HasForeignKey("RepoId", "ModId", "ModVersionId")
-                                .OnDelete(DeleteBehavior.Cascade)
+                                .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
 
                             b1.Navigation("ModVersion");

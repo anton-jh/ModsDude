@@ -113,15 +113,33 @@ public class RepoMembershipTests
     }
 
     [Fact]
-    public void Demoting_the_only_admin_is_not_stopped_by_the_kick_rule()
+    public void Demoting_the_only_admin_is_refused()
     {
-        // The only-Admin rule guards KickMember alone. A repo can be left with no Admin at all by
-        // demoting instead, which no endpoint prevents either.
         var repo = CreateRepo();
 
-        repo.UpdateMembershipLevel(_creator, RepoMembershipLevel.Guest);
+        Assert.Throws<InvalidOperationException>(() => repo.UpdateMembershipLevel(_creator, RepoMembershipLevel.Guest));
+        Assert.Equal(RepoMembershipLevel.Admin, repo.GetMembership(_creator)?.Level);
+    }
 
-        Assert.False(repo.IsOnlyAdmin(_creator));
+    [Fact]
+    public void Demoting_an_admin_is_allowed_once_another_admin_exists()
+    {
+        var repo = CreateRepo();
+
+        repo.AddMember(_other, RepoMembershipLevel.Admin);
+        repo.UpdateMembershipLevel(_creator, RepoMembershipLevel.Member);
+
+        Assert.Equal(RepoMembershipLevel.Member, repo.GetMembership(_creator)?.Level);
+    }
+
+    [Fact]
+    public void Promoting_the_only_admin_to_admin_again_is_not_a_demotion()
+    {
+        var repo = CreateRepo();
+
+        repo.UpdateMembershipLevel(_creator, RepoMembershipLevel.Admin);
+
+        Assert.Equal(RepoMembershipLevel.Admin, repo.GetMembership(_creator)?.Level);
     }
 
     [Fact]

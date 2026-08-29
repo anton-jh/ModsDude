@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -8,18 +8,23 @@ using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
     private readonly RepoRepository _repoService;
+    private readonly LastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
+
+    private bool _selectionRestored;
 
 
     public MainPageViewModel(
         RepoRepository repoService,
+        LastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
@@ -41,12 +46,14 @@ public partial class MainPageViewModel
         };
 
         _repoService = repoService;
+        _lastSelectionRepository = lastSelectionRepository;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
 
-        repoService.RepoOfInterestChanged += RepoOfInterestChanged;
+        repoService.RepoCreated += OnRepoCreated;
+        NavManager.PropertyChanged += OnNavigationChanged;
     }
-    
+
 
     public NavigationManager NavManager { get; }
 
@@ -62,6 +69,9 @@ public partial class MainPageViewModel
 
     public void Dispose()
     {
+        _repoService.RepoCreated -= OnRepoCreated;
+        NavManager.PropertyChanged -= OnNavigationChanged;
+
         _reposSynchronizer.Dispose();
         NavManager.Dispose();
     }
@@ -71,15 +81,48 @@ public partial class MainPageViewModel
     private async Task LoadRepos(CancellationToken cancellationToken)
     {
         await _repoService.RefreshRepos(cancellationToken);
+
+        RestoreLastSelectedRepo();
     }
 
-    private async void RepoOfInterestChanged(Guid repoIdOfInterest)
+    /// <summary>
+    /// Only on the first load. The refresh button runs the same command, and jumping the user back to
+    /// where they were an hour ago because they asked for fresh data would be its own bug.
+    /// </summary>
+    private void RestoreLastSelectedRepo()
     {
-        var repo = Repos
-            .OfType<RepoItemViewModel>()
-            .FirstOrDefault(x => x.Id == repoIdOfInterest);
+        if (_selectionRestored)
+        {
+            return;
+        }
 
-        NavManager.Selected = repo;
+        _selectionRestored = true;
+
+        var entries = Repos.OfType<RepoItemViewModel>().ToList();
+
+        if (_lastSelectionRepository.GetLastRepo(entries.Select(x => x.Id)) is not Guid repoId)
+        {
+            return;
+        }
+
+        NavManager.Selected = entries.First(x => x.Id == repoId);
+    }
+
+    private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NavigationManager.Selected) &&
+            NavManager.Selected is RepoItemViewModel repo)
+        {
+            _lastSelectionRepository.RecordRepo(repo.Id);
+        }
+    }
+
+    private void OnRepoCreated(Guid repoId)
+    {
+        if (Repos.OfType<RepoItemViewModel>().FirstOrDefault(x => x.Id == repoId) is RepoItemViewModel repo)
+        {
+            NavManager.Selected = repo;
+        }
     }
 
     private RepoItemViewModel MapRepoToVm(Repo repo)

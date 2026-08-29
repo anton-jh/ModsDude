@@ -37,6 +37,9 @@ public partial class EditProfilePageViewModel(
     {
         navigationLockService.ReleaseLock(this);
         await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
+
+        // The DTO is updated in place rather than replaced, so nothing else announces the new name.
+        OnPropertyChanged(nameof(OriginalName));
     }
     
     [RelayCommand]

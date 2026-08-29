@@ -10,6 +10,7 @@
              xmlns:adp="clr-namespace:ModsDude.Client.Wpf.View.Pages.GameAdapters"
              xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              xmlns:vc="clr-namespace:ModsDude.Client.Wpf.View.ValueConverters"
+             xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
              DispatcherUnhandledException="Application_DispatcherUnhandledException"
              ThemeMode="Dark">
 
@@ -39,6 +40,15 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
                 <p:RepoAdminPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoOverviewPageViewModel}">
+                <p:RepoOverviewPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoMembersPageViewModel}">
+                <p:RepoMembersPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:ProfileOverviewPageViewModel}">
+                <p:ProfileOverviewPage />
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:CreateProfilePageViewModel}">
                 <p:CreateProfilePage />
@@ -95,6 +105,8 @@
 
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />
+                <!-- Selection is navigation here, so a drag down the list must not visit every item. -->
+                <Setter Property="b:DragSelection.Suppressed" Value="True" />
                 <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
                 <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
                 <Setter Property="ItemTemplate">

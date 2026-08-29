@@ -22,7 +22,13 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
 
 
     public record CreateModUploadLinkRequest(Guid RepoId, string ModId, string VersionId);
-    public record CreateModUploadLinkResponse(string Link);
+
+    /// <param name="ContentHashMetadataKey">
+    /// The blob metadata entry the client must write the file's SHA-256 into as it uploads. Named
+    /// here rather than agreed by convention, because the server is the only party that reads it
+    /// back and a silent mismatch would only surface as an unrepairable registration much later.
+    /// </param>
+    public record CreateModUploadLinkResponse(string Link, string ContentHashMetadataKey);
 
 
     public async Task<Results<Ok<CreateModUploadLinkResponse>, BadRequest<CustomProblemDetails>>> CreateModUploadLink(
@@ -41,19 +47,25 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
+        // The two refusals below need opposite responses from the client, so they are distinct
+        // problems: there is nothing left to do for a registered version, while an unregistered blob
+        // is the orphan a failed import left behind and is finished by registering without
+        // re-uploading. Answering both with one problem made a failed import unretryable.
         var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(request.RepoId), new ModId(request.ModId), new ModVersionId(request.VersionId), cancellationToken);
         if (modVersion is not null)
         {
-            return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new(request.RepoId), new(request.ModId), new(request.VersionId)));
+            return TypedResults.BadRequest(Problems.ModVersionAlreadyRegistered(new(request.RepoId), new(request.ModId), new(request.VersionId)));
         }
 
         if (await modStorageService.CheckIfModExists(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken))
         {
-            return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new(request.RepoId), new(request.ModId), new(request.VersionId)));
+            var storedContentHash = await modStorageService.GetRecordedContentHash(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
+
+            return TypedResults.BadRequest(Problems.ModFileAlreadyPresent(new(request.RepoId), new(request.ModId), new(request.VersionId), storedContentHash));
         }
 
         var link = await modStorageService.GetUploadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
 
-        return TypedResults.Ok(new CreateModUploadLinkResponse(link));
+        return TypedResults.Ok(new CreateModUploadLinkResponse(link, modStorageService.ContentHashMetadataKey));
     }
 }
