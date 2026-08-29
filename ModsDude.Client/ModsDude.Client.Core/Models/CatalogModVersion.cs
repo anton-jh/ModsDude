@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Imagery;
+
 namespace ModsDude.Client.Core.Models;
 
 /// <summary>
@@ -32,9 +34,28 @@ public record CatalogModVersion(
 
     public string? Author { get; init; }
 
+    /// <summary>
+    /// The archive's own icon, for a version that has a file here. Not what a registered version
+    /// renders - see <see cref="ServerImages"/> - but what its derivatives are generated from.
+    /// </summary>
     public ModImage? Icon { get; init; }
 
+    /// <inheritdoc cref="Icon"/>
     public IReadOnlyList<ModImage> Images { get; init; } = [];
+
+    /// <summary>
+    /// The derivatives the repo holds for this version. Empty until imagery has been published,
+    /// which happens after registration and never blocks it.
+    /// </summary>
+    /// <remarks>
+    /// A registered version renders from these and not from the archive, even when the file is on
+    /// this machine. Hunting for the local file would cost a per-row archive open and a managed BC7
+    /// decode to gain resolution nobody is looking for in a 96 px strip - exactly the work
+    /// derivatives exist to avoid - and it is not even faster after the first fetch, since a
+    /// content-addressed image crosses the wire once per machine ever. It also means the content
+    /// store is never an image source. See docs/09-mod-catalog.md#registration-decides-where-imagery-comes-from.
+    /// </remarks>
+    public IReadOnlyList<ModImageReference> ServerImages { get; init; } = [];
 
     /// <summary>Every source this version turned up in. Empty for a version only the repo has.</summary>
     public IReadOnlyList<ModOccurrence> FoundIn { get; init; } = [];

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Collections.ObjectModel;
@@ -18,7 +19,7 @@ public partial class ModDetailsModalViewModel : ModalViewModel
     private int _fullImageRequest;
 
 
-    public ModDetailsModalViewModel(CatalogModVersion mod, IModImageProvider imageProvider)
+    public ModDetailsModalViewModel(CatalogModVersion mod, ModVersionImagery imagery, IModImageProvider imageProvider)
     {
         _imageProvider = imageProvider;
 
@@ -26,9 +27,9 @@ public partial class ModDetailsModalViewModel : ModalViewModel
 
         // Store images are the presentable ones, but plenty of mods - script mods especially -
         // ship nothing but an icon.
-        var images = mod.Images.Count > 0
-            ? mod.Images
-            : mod.Icon is null ? [] : (IReadOnlyList<ModImage>)[mod.Icon];
+        var images = imagery.Images.Count > 0
+            ? imagery.Images
+            : imagery.Icon is null ? [] : (IReadOnlyList<ModImage>)[imagery.Icon];
 
         Images = new ObservableCollection<ModImageViewModel>(images.Select(x => new ModImageViewModel(x, imageProvider)));
         SelectedImage = Images.FirstOrDefault();

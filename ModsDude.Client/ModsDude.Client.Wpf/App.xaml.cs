@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
@@ -95,6 +96,18 @@ public partial class App : Application
 
         // Singleton so the decoded thumbnails survive navigating away from a page and back.
         services.AddSingleton<IModImageProvider, ModImageProvider>();
+
+        // One cache per machine, not one per volume: images are always copies, so the hardlink
+        // constraint that makes content stores per-volume does not apply to them.
+        services.AddSingleton(sp => new ModImageCache(() => sp.GetRequiredService<ClientSettingsRepository>().Settings.ImageCache));
+        services.AddSingleton<IModImageStore, ModImageStore>();
+        services.AddSingleton<IModImagerySource, ModImagerySource>();
+
+        // Both faces of one object: the import track fires it and forgets, and a row about to draw
+        // a registered version with no imagery waits for what came back.
+        services.AddSingleton<ModImagePublisher>();
+        services.AddSingleton<IModImagePublisher>(sp => sp.GetRequiredService<ModImagePublisher>());
+        services.AddSingleton<IModImageBackfill>(sp => sp.GetRequiredService<ModImagePublisher>());
 
         services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();

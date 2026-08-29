@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Models;
+
 namespace ModsDude.Client.Core.ModVersions;
 
 /// <summary>
@@ -27,12 +29,12 @@ public static class ModVersionPlacementPlanner
     /// import treats a version that is already there as a success, not as something to place.
     /// </param>
     public static ModVersionPlacementPlan Plan(
-        string modId,
-        IReadOnlyList<string> registeredInOrder,
-        IReadOnlyList<string> incoming,
+        ModKey modId,
+        IReadOnlyList<ModVersionKey> registeredInOrder,
+        IReadOnlyList<ModVersionKey> incoming,
         IModVersionComparer comparer)
     {
-        var registered = new HashSet<string>(registeredInOrder, StringComparer.Ordinal);
+        var registered = new HashSet<ModVersionKey>(registeredInOrder);
         var toPlace = Distinct(incoming.Where(x => !registered.Contains(x)));
 
         var ordering = ModVersionPartialOrder.Derive([.. registeredInOrder, .. toPlace], comparer, registeredInOrder);
@@ -54,21 +56,21 @@ public static class ModVersionPlacementPlanner
     /// registered version past another.
     /// </param>
     public static ModVersionPlacementPlan PlanFor(
-        string modId,
-        IReadOnlyList<string> registeredInOrder,
-        IReadOnlyList<string> incoming,
-        IReadOnlyList<string> resolvedOrder)
+        ModKey modId,
+        IReadOnlyList<ModVersionKey> registeredInOrder,
+        IReadOnlyList<ModVersionKey> incoming,
+        IReadOnlyList<ModVersionKey> resolvedOrder)
     {
-        var registered = new HashSet<string>(registeredInOrder, StringComparer.Ordinal);
+        var registered = new HashSet<ModVersionKey>(registeredInOrder);
         var toPlace = Distinct(incoming.Where(x => !registered.Contains(x)));
 
-        var expected = new HashSet<string>(registeredInOrder.Concat(toPlace), StringComparer.Ordinal);
+        var expected = new HashSet<ModVersionKey>(registeredInOrder.Concat(toPlace));
         if (!expected.SetEquals(resolvedOrder) || resolvedOrder.Count != expected.Count)
         {
             throw new ArgumentException("The resolved order must contain every registered and incoming version exactly once.", nameof(resolvedOrder));
         }
 
-        if (!resolvedOrder.Where(registered.Contains).SequenceEqual(registeredInOrder, StringComparer.Ordinal))
+        if (!resolvedOrder.Where(registered.Contains).SequenceEqual(registeredInOrder))
         {
             throw new ArgumentException("The resolved order may not reorder versions that are already registered.", nameof(resolvedOrder));
         }
@@ -78,12 +80,12 @@ public static class ModVersionPlacementPlanner
 
 
     private static IReadOnlyList<ModVersionRegistration> Registrations(
-        IReadOnlySet<string> registered,
-        IReadOnlyList<string> toPlace,
-        IReadOnlyList<string> finalOrder)
+        IReadOnlySet<ModVersionKey> registered,
+        IReadOnlyList<ModVersionKey> toPlace,
+        IReadOnlyList<ModVersionKey> finalOrder)
     {
-        var placing = new HashSet<string>(toPlace, StringComparer.Ordinal);
-        var known = new HashSet<string>(registered, StringComparer.Ordinal);
+        var placing = new HashSet<ModVersionKey>(toPlace);
+        var known = new HashSet<ModVersionKey>(registered);
         var registrations = new List<ModVersionRegistration>(toPlace.Count);
 
         for (var position = 0; position < finalOrder.Count; position++)
@@ -95,11 +97,12 @@ public static class ModVersionPlacementPlanner
 
             // Ascending, so everything ahead of this version is already registered - the one
             // immediately before it in the final order is the version it will really follow.
-            var after = position > 0 ? finalOrder[position - 1] : null;
+            var after = position > 0 ? finalOrder[position - 1] : (ModVersionKey?)null;
 
             var before = finalOrder
                 .Skip(position + 1)
-                .FirstOrDefault(known.Contains);
+                .Cast<ModVersionKey?>()
+                .FirstOrDefault(x => known.Contains(x!.Value));
 
             registrations.Add(new ModVersionRegistration(finalOrder[position], new ModVersionPlacement(after, before)));
             known.Add(finalOrder[position]);
@@ -108,9 +111,9 @@ public static class ModVersionPlacementPlanner
         return registrations;
     }
 
-    private static IReadOnlyList<string> Distinct(IEnumerable<string> versions)
+    private static IReadOnlyList<ModVersionKey> Distinct(IEnumerable<ModVersionKey> versions)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<ModVersionKey>();
 
         return [.. versions.Where(seen.Add)];
     }
@@ -123,8 +126,8 @@ public static class ModVersionPlacementPlanner
 /// never registered at a position the ordering did not settle.
 /// </param>
 public sealed record ModVersionPlacementPlan(
-    string ModId,
-    IReadOnlyList<string> Order,
+    ModKey ModId,
+    IReadOnlyList<ModVersionKey> Order,
     IReadOnlyList<ModVersionRegistration> Registrations,
     IReadOnlyList<ModVersionPair> UnorderedPairs)
 {
@@ -132,7 +135,7 @@ public sealed record ModVersionPlacementPlan(
 }
 
 
-public sealed record ModVersionRegistration(string VersionId, ModVersionPlacement Placement);
+public sealed record ModVersionRegistration(ModVersionKey VersionId, ModVersionPlacement Placement);
 
 
 /// <summary>
@@ -142,4 +145,4 @@ public sealed record ModVersionRegistration(string VersionId, ModVersionPlacemen
 /// </summary>
 /// <param name="After">Null when the version goes first, which asserts that <paramref name="Before"/> is currently the oldest.</param>
 /// <param name="Before">Null when the version is appended, which asserts that <paramref name="After"/> is currently the newest.</param>
-public sealed record ModVersionPlacement(string? After, string? Before);
+public sealed record ModVersionPlacement(ModVersionKey? After, ModVersionKey? Before);

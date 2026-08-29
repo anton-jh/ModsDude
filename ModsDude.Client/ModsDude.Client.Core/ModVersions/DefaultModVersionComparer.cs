@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Models;
 using System.Globalization;
 
 namespace ModsDude.Client.Core.ModVersions;
@@ -55,14 +56,14 @@ public sealed class DefaultModVersionComparer : IModVersionComparer
     public static DefaultModVersionComparer Instance { get; } = new();
 
 
-    public ModVersionComparison Compare(string left, string right)
+    public ModVersionComparison Compare(ModVersionKey left, ModVersionKey right)
     {
-        if (string.Equals(left, right, StringComparison.Ordinal))
+        if (left == right)
         {
             return ModVersionComparison.Equal;
         }
 
-        if (!ParsedVersion.TryParse(left, out var parsedLeft) || !ParsedVersion.TryParse(right, out var parsedRight))
+        if (!ParsedVersion.TryParse(left.Value, out var parsedLeft) || !ParsedVersion.TryParse(right.Value, out var parsedRight))
         {
             return ModVersionComparison.Undecidable;
         }

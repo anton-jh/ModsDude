@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Models;
+
 namespace ModsDude.Client.Core.ModVersions;
 
 /// <summary>
@@ -37,9 +39,9 @@ public static class ModVersionImportPlanner
 
 
 public sealed record ModVersionImportCandidate(
-    string ModId,
-    IReadOnlyList<string> RegisteredInOrder,
-    IReadOnlyList<string> Incoming);
+    ModKey ModId,
+    IReadOnlyList<ModVersionKey> RegisteredInOrder,
+    IReadOnlyList<ModVersionKey> Incoming);
 
 
 /// <param name="Ready">Mods whose ordering the comparer settled. These register without waiting.</param>
@@ -56,7 +58,7 @@ public sealed record ModVersionImportPlan(
     /// What cancelling the dialog costs: these mods stay unregistered and can be imported again
     /// later, and the rest of the import is unaffected.
     /// </summary>
-    public IReadOnlyList<string> ModIdsSkippedByCancelling => [.. Arbitration.Select(x => x.ModId)];
+    public IReadOnlyList<ModKey> ModIdsSkippedByCancelling => [.. Arbitration.Select(x => x.ModId)];
 }
 
 
@@ -66,21 +68,20 @@ public sealed record ModVersionImportPlan(
 /// </param>
 /// <param name="UnorderedPairs">The pairs that made this mod a question.</param>
 public sealed record ModVersionArbitrationItem(
-    string ModId,
+    ModKey ModId,
     IReadOnlyList<ModVersionArbitrationEntry> Versions,
     IReadOnlyList<ModVersionPair> UnorderedPairs)
 {
-    public IReadOnlyList<string> RegisteredInOrder => [.. Versions.Where(x => !x.IsIncoming).Select(x => x.VersionId)];
+    public IReadOnlyList<ModVersionKey> RegisteredInOrder => [.. Versions.Where(x => !x.IsIncoming).Select(x => x.VersionId)];
 
-    public IReadOnlyList<string> Incoming => [.. Versions.Where(x => x.IsIncoming).Select(x => x.VersionId)];
+    public IReadOnlyList<ModVersionKey> Incoming => [.. Versions.Where(x => x.IsIncoming).Select(x => x.VersionId)];
 
     internal static ModVersionArbitrationItem For(ModVersionPlacementPlan plan, ModVersionImportCandidate candidate)
     {
-        var registered = new HashSet<string>(candidate.RegisteredInOrder, StringComparer.Ordinal);
+        var registered = new HashSet<ModVersionKey>(candidate.RegisteredInOrder);
 
-        var unplaceable = new HashSet<string>(
-            plan.UnorderedPairs.SelectMany(x => new[] { x.First, x.Second }),
-            StringComparer.Ordinal);
+        var unplaceable = new HashSet<ModVersionKey>(
+            plan.UnorderedPairs.SelectMany(x => new[] { x.First, x.Second }));
 
         return new ModVersionArbitrationItem(
             plan.ModId,
@@ -88,7 +89,7 @@ public sealed record ModVersionArbitrationItem(
             plan.UnorderedPairs);
     }
 
-    private static ModVersionArbitrationEntry Entry(string version, IReadOnlySet<string> registered, IReadOnlySet<string> unplaceable)
+    private static ModVersionArbitrationEntry Entry(ModVersionKey version, IReadOnlySet<ModVersionKey> registered, IReadOnlySet<ModVersionKey> unplaceable)
     {
         var isIncoming = !registered.Contains(version);
 
@@ -101,4 +102,4 @@ public sealed record ModVersionArbitrationItem(
 
 /// <param name="IsIncoming">False for a version the repo already holds, which the user may not move.</param>
 /// <param name="IsUnplaceable">Whether the ordering failed to place this incoming version.</param>
-public sealed record ModVersionArbitrationEntry(string VersionId, bool IsIncoming, bool IsUnplaceable);
+public sealed record ModVersionArbitrationEntry(ModVersionKey VersionId, bool IsIncoming, bool IsUnplaceable);

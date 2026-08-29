@@ -1,22 +1,21 @@
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace ModsDude.Client.Wpf.View.Imaging;
 
 /// <inheritdoc cref="IModImageProvider"/>
-public class ModImageProvider : IModImageProvider, IDisposable
+public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposable
 {
     /// <summary>
     /// Images at or below this width are small enough to keep around - a thousand of them is a
     /// handful of megabytes. Anything larger is loaded on demand and dropped again.
     /// </summary>
-    private const int _maxCachedWidth = 128;
+    private const int _maxCachedWidth = ModImageDerivatives.ThumbnailMaxEdge;
 
     private readonly ConcurrentDictionary<string, Lazy<Task<ImageSource?>>> _cache = new();
 
@@ -26,25 +25,28 @@ public class ModImageProvider : IModImageProvider, IDisposable
     /// </summary>
     private readonly SemaphoreSlim _throttle = new(Math.Max(2, Environment.ProcessorCount / 2));
 
-    private readonly string _diskCacheDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ModsDude",
-        "image-cache");
-
 
     public Task<ImageSource?> GetAsync(ModImage image, int maxWidth, CancellationToken cancellationToken)
     {
-        if (maxWidth > _maxCachedWidth || maxWidth == IModImageProvider.FullSize)
+        var wantsFullSize = maxWidth == IModImageProvider.FullSize || maxWidth > _maxCachedWidth;
+
+        // A server-backed image is stored as two renditions, and asking for the larger one is what
+        // opening an image to look at it means. A local image is loaded whole either way.
+        var source = wantsFullSize
+            ? image.FullSize ?? image
+            : image;
+
+        if (wantsFullSize)
         {
-            return LoadAsync(image, maxWidth, cancellationToken);
+            return LoadAsync(source, maxWidth, cancellationToken);
         }
 
-        var key = $"{image.CacheKey}|{maxWidth}";
+        var key = $"{source.CacheKey}|{maxWidth}";
 
         // Deliberately not passing the caller's token: the task is shared between everyone asking
         // for this image, so one row scrolling out of view must not cancel it for the others.
         return _cache
-            .GetOrAdd(key, _ => new Lazy<Task<ImageSource?>>(() => LoadThroughDiskCacheAsync(image, maxWidth, key)))
+            .GetOrAdd(key, _ => new Lazy<Task<ImageSource?>>(() => LoadThroughDiskCacheAsync(source, maxWidth, key)))
             .Value;
     }
 
@@ -57,19 +59,25 @@ public class ModImageProvider : IModImageProvider, IDisposable
 
     private async Task<ImageSource?> LoadThroughDiskCacheAsync(ModImage image, int maxWidth, string key)
     {
-        var path = GetDiskCachePath(key);
-
-        var cached = await Task.Run(() => TryReadFromDisk(path));
-        if (cached is not null)
+        // A derivative is already the size it will be drawn at and already sits in the cache under
+        // its own address, so re-deriving it would only store the same picture twice under a key
+        // that can invalidate.
+        if (image.IsPreSized)
         {
-            return cached;
+            return await LoadAsync(image, maxWidth, CancellationToken.None);
+        }
+
+        if (await cache.TryReadAsync(key, CancellationToken.None) is byte[] cached
+            && TryDecodeCached(cached) is ImageSource decodedFromCache)
+        {
+            return decodedFromCache;
         }
 
         var decoded = await LoadAsync(image, maxWidth, CancellationToken.None);
 
         if (decoded is BitmapSource bitmap)
         {
-            _ = Task.Run(() => TryWriteToDisk(path, bitmap));
+            _ = Task.Run(() => WriteToCacheAsync(key, bitmap));
         }
 
         return decoded;
@@ -95,7 +103,8 @@ public class ModImageProvider : IModImageProvider, IDisposable
         catch (Exception)
         {
             // A mod with an unreadable image just shows the placeholder. Nothing here is worth
-            // interrupting the user over.
+            // interrupting the user over. That covers a derivative whose bytes did not hash to the
+            // address they came from, which is refused rather than drawn.
             return null;
         }
         finally
@@ -104,24 +113,11 @@ public class ModImageProvider : IModImageProvider, IDisposable
         }
     }
 
-    private string GetDiskCachePath(string key)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        var name = Convert.ToHexString(hash, 0, 10);
-
-        return Path.Combine(_diskCacheDirectory, $"{name}.png");
-    }
-
-    private static ImageSource? TryReadFromDisk(string path)
+    private static ImageSource? TryDecodeCached(byte[] data)
     {
         try
         {
-            if (File.Exists(path) is false)
-            {
-                return null;
-            }
-
-            using var stream = new MemoryStream(File.ReadAllBytes(path));
+            using var stream = new MemoryStream(data);
 
             var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
             frame.Freeze();
@@ -135,23 +131,17 @@ public class ModImageProvider : IModImageProvider, IDisposable
         }
     }
 
-    private void TryWriteToDisk(string path, BitmapSource bitmap)
+    private async Task WriteToCacheAsync(string key, BitmapSource bitmap)
     {
         try
         {
-            Directory.CreateDirectory(_diskCacheDirectory);
-
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
 
-            var temporaryPath = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
+            using var buffer = new MemoryStream();
+            encoder.Save(buffer);
 
-            using (var stream = File.Create(temporaryPath))
-            {
-                encoder.Save(stream);
-            }
-
-            File.Move(temporaryPath, path, overwrite: true);
+            await cache.WriteAsync(key, buffer.ToArray(), CancellationToken.None);
         }
         catch (Exception)
         {

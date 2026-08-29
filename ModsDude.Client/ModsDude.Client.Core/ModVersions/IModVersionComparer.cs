@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Models;
+
 namespace ModsDude.Client.Core.ModVersions;
 
 /// <summary>
@@ -21,5 +23,5 @@ namespace ModsDude.Client.Core.ModVersions;
 /// </remarks>
 public interface IModVersionComparer
 {
-    ModVersionComparison Compare(string left, string right);
+    ModVersionComparison Compare(ModVersionKey left, ModVersionKey right);
 }

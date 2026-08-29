@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Models;
+
 namespace ModsDude.Client.Core.ModVersions;
 
 /// <summary>
@@ -20,9 +22,9 @@ public static class ModVersionPartialOrder
     /// are ignored.
     /// </param>
     public static ModVersionOrdering Derive(
-        IReadOnlyList<string> versions,
+        IReadOnlyList<ModVersionKey> versions,
         IModVersionComparer comparer,
-        IReadOnlyList<string>? settledOrder = null)
+        IReadOnlyList<ModVersionKey>? settledOrder = null)
     {
         var nodes = Distinct(versions);
         var settledPositions = SettledPositions(settledOrder, nodes);
@@ -66,11 +68,11 @@ public static class ModVersionPartialOrder
 
 
     private static ModVersionComparison CompareNodes(
-        IReadOnlyList<string> nodes,
+        IReadOnlyList<ModVersionKey> nodes,
         int left,
         int right,
         IModVersionComparer comparer,
-        IReadOnlyDictionary<string, int> settledPositions)
+        IReadOnlyDictionary<ModVersionKey, int> settledPositions)
     {
         if (settledPositions.TryGetValue(nodes[left], out var settledLeft)
             && settledPositions.TryGetValue(nodes[right], out var settledRight))
@@ -141,10 +143,10 @@ public static class ModVersionPartialOrder
     /// the partial order leaves a choice, that choice falls to the caller's input order, so two
     /// runs over the same input cannot disagree.
     /// </summary>
-    private static IReadOnlyList<string> TopologicalSort(IReadOnlyList<string> nodes, bool[,] precedes)
+    private static IReadOnlyList<ModVersionKey> TopologicalSort(IReadOnlyList<ModVersionKey> nodes, bool[,] precedes)
     {
         var placed = new bool[nodes.Count];
-        var order = new List<string>(nodes.Count);
+        var order = new List<ModVersionKey>(nodes.Count);
 
         for (var step = 0; step < nodes.Count; step++)
         {
@@ -182,14 +184,14 @@ public static class ModVersionPartialOrder
     }
 
     private static IReadOnlyList<ModVersionPair> UnorderedPairs(
-        IReadOnlyList<string> nodes,
-        IReadOnlyList<string> order,
+        IReadOnlyList<ModVersionKey> nodes,
+        IReadOnlyList<ModVersionKey> order,
         bool[,] reachable,
         bool[,] interchangeable)
     {
         var positions = order
             .Select((version, position) => (version, position))
-            .ToDictionary(x => x.version, x => x.position, StringComparer.Ordinal);
+            .ToDictionary(x => x.version, x => x.position);
 
         var pairs = new List<ModVersionPair>();
 
@@ -211,26 +213,26 @@ public static class ModVersionPartialOrder
         return [.. pairs.OrderBy(x => positions[x.First]).ThenBy(x => positions[x.Second])];
     }
 
-    private static IReadOnlyList<string> Distinct(IReadOnlyList<string> versions)
+    private static IReadOnlyList<ModVersionKey> Distinct(IReadOnlyList<ModVersionKey> versions)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<ModVersionKey>();
 
         return [.. versions.Where(seen.Add)];
     }
 
-    private static IReadOnlyDictionary<string, int> SettledPositions(IReadOnlyList<string>? settledOrder, IReadOnlyList<string> nodes)
+    private static IReadOnlyDictionary<ModVersionKey, int> SettledPositions(IReadOnlyList<ModVersionKey>? settledOrder, IReadOnlyList<ModVersionKey> nodes)
     {
         if (settledOrder is null)
         {
-            return new Dictionary<string, int>(StringComparer.Ordinal);
+            return new Dictionary<ModVersionKey, int>();
         }
 
-        var known = new HashSet<string>(nodes, StringComparer.Ordinal);
+        var known = new HashSet<ModVersionKey>(nodes);
 
         return settledOrder
             .Where(known.Contains)
             .Select((version, position) => (version, position))
-            .ToDictionary(x => x.version, x => x.position, StringComparer.Ordinal);
+            .ToDictionary(x => x.version, x => x.position);
     }
 }
 
@@ -244,7 +246,7 @@ public static class ModVersionPartialOrder
 /// are questions for the user.
 /// </param>
 public sealed record ModVersionOrdering(
-    IReadOnlyList<string> Order,
+    IReadOnlyList<ModVersionKey> Order,
     IReadOnlyList<ModVersionPair> UnorderedPairs)
 {
     public bool IsFullyOrdered => UnorderedPairs.Count == 0;
@@ -255,4 +257,4 @@ public sealed record ModVersionOrdering(
 /// Two versions the comparer left unordered. <paramref name="First"/> is whichever the derived
 /// order happened to put first, so that a pair reads the same way twice.
 /// </summary>
-public readonly record struct ModVersionPair(string First, string Second);
+public readonly record struct ModVersionPair(ModVersionKey First, ModVersionKey Second);

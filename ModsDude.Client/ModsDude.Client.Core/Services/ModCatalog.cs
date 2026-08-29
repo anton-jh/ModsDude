@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
@@ -418,8 +419,10 @@ public sealed class ModCatalog : IDisposable
         List<ModOccurrence>? occurrences)
     {
         // The registered record is the shared truth, so it wins where both exist - two members
-        // looking at the same registered version should read the same thing. Imagery still comes
-        // from the archive: serving it from the repo is a separate piece of work.
+        // looking at the same registered version should read the same thing. That extends to
+        // imagery: the archive's images are carried for a version nobody has registered and for
+        // deriving what a registered one is missing, but what a registered version renders is
+        // whatever the repo points at.
         return new CatalogModVersion(
             identity.ModId,
             identity.VersionId,
@@ -432,6 +435,7 @@ public sealed class ModCatalog : IDisposable
             Author = local?.Author,
             Icon = local?.Icon,
             Images = local?.Images ?? [],
+            ServerImages = dto is null ? [] : [.. dto.Images.Select(ModImageReference.FromDto)],
             FoundIn = occurrences ?? [],
             ContentHash = dto?.ContentHash,
             SequenceNumber = dto?.SequenceNumber

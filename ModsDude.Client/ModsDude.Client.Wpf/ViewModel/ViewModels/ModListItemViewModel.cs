@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Text.RegularExpressions;
@@ -18,16 +19,26 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </remarks>
 public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 {
+    private readonly Guid _repoId;
     private readonly IModImageProvider _imageProvider;
+    private readonly IModImagerySource _imagerySource;
     private readonly IModalService _modalService;
 
+    private Task<ModVersionImagery>? _imagery;
     private bool _thumbnailRequested;
 
 
-    public ModListItemViewModel(CatalogModVersion mod, IModImageProvider imageProvider, IModalService modalService)
+    public ModListItemViewModel(
+        Guid repoId,
+        CatalogModVersion mod,
+        IModImageProvider imageProvider,
+        IModImagerySource imagerySource,
+        IModalService modalService)
     {
         Mod = mod;
+        _repoId = repoId;
         _imageProvider = imageProvider;
+        _imagerySource = imagerySource;
         _modalService = modalService;
 
         ShortDescription = BuildShortDescription(mod.Name, mod.Description);
@@ -98,27 +109,60 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     }
 
     /// <summary>
-    /// Reads the icon out of the mod archive the first time the row is shown. Everything here
-    /// stays cold until then - with a few thousand mods in a folder, unpacking every archive up
-    /// front would cost minutes of startup and hundreds of megabytes.
+    /// Reads the icon the first time the row is shown. Everything here stays cold until then - with
+    /// a few thousand mods in a folder, unpacking every archive up front would cost minutes of
+    /// startup and hundreds of megabytes.
     /// </summary>
     public async Task LoadAsync()
     {
-        if (_thumbnailRequested || Mod.Icon is null)
+        if (_thumbnailRequested)
         {
             return;
         }
 
         _thumbnailRequested = true;
 
-        Thumbnail = await _imageProvider.GetAsync(Mod.Icon, IModImageProvider.ThumbnailSize, CancellationToken.None);
+        var imagery = await ResolveImageryAsync();
+
+        if (imagery.Icon is null)
+        {
+            // Initials, exactly as for a local mod that ships without an icon.
+            return;
+        }
+
+        Thumbnail = await _imageProvider.GetAsync(imagery.Icon, IModImageProvider.ThumbnailSize, CancellationToken.None);
     }
 
 
     [RelayCommand]
-    private Task ShowDetails()
+    private async Task ShowDetails()
     {
-        return _modalService.Show(new ModDetailsModalViewModel(Mod, _imageProvider));
+        await _modalService.Show(new ModDetailsModalViewModel(Mod, await ResolveImageryAsync(), _imageProvider));
+    }
+
+    /// <summary>
+    /// Where this row's imagery comes from, resolved once and shared with the details dialog. For a
+    /// registered version that has none and whose file is here, this is what generates and uploads
+    /// it - the client that noticed the gap is the one best placed to close it, for everyone.
+    /// </summary>
+    private Task<ModVersionImagery> ResolveImageryAsync()
+    {
+        return _imagery ??= ResolveAsync();
+
+
+        async Task<ModVersionImagery> ResolveAsync()
+        {
+            try
+            {
+                return await _imagerySource.GetAsync(_repoId, Mod, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // There is no user action to suggest and an error per row would be unusable, so a
+                // row whose imagery could not be reached renders as initials.
+                return ModVersionImagery.None;
+            }
+        }
     }
 
 
@@ -153,7 +197,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ModListItemViewModel Create(CatalogModVersion mod)
-            => ActivatorUtilities.CreateInstance<ModListItemViewModel>(serviceProvider, mod);
+        public ModListItemViewModel Create(Guid repoId, CatalogModVersion mod)
+            => ActivatorUtilities.CreateInstance<ModListItemViewModel>(serviceProvider, repoId, mod);
     }
 }

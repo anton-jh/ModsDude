@@ -10,8 +10,8 @@ using System.IO;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// Machine-wide settings. Today that is the content store: which store serves each disk holding mod
-/// folders, where it lives and how large it may grow.
+/// Machine-wide settings: which store serves each disk holding mod folders, where those stores live
+/// and how large they may grow, and the one image cache that serves the whole machine.
 /// </summary>
 public partial class SettingsPageViewModel
     : PageViewModel, IDisposable
@@ -54,6 +54,12 @@ public partial class SettingsPageViewModel
         ModFolderVolumes = [];
         Stores = [];
 
+        ImageCache = new ImageCacheViewModel(
+            settings.ImageCache.Path,
+            settings.ImageCache.MaxSizeBytes / (double)_bytesPerGigabyte,
+            dialogService);
+        ImageCache.Modified += OnStoreModified;
+
         foreach (var volume in modFolderVolumes)
         {
             var row = new VolumeAssignmentViewModel(
@@ -72,6 +78,7 @@ public partial class SettingsPageViewModel
 
     public ObservableCollection<VolumeAssignmentViewModel> ModFolderVolumes { get; }
     public ObservableCollection<ContentStoreViewModel> Stores { get; }
+    public ImageCacheViewModel ImageCache { get; }
 
     public bool HasVolumes => ModFolderVolumes.Count > 0;
     public bool HasNoVolumes => ModFolderVolumes.Count == 0;
@@ -108,6 +115,9 @@ public partial class SettingsPageViewModel
             };
         }
 
+        settings.ImageCache.Path = ImageCache.Path;
+        settings.ImageCache.MaxSizeBytes = (long)(ImageCache.MaxSizeGigabytes * _bytesPerGigabyte);
+
         _settingsRepository.Save();
         _navigationLockService.ReleaseLock(this);
     }
@@ -118,6 +128,8 @@ public partial class SettingsPageViewModel
         {
             volume.ServingVolumeChanged -= OnServingVolumeChanged;
         }
+
+        ImageCache.Modified -= OnStoreModified;
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -190,6 +202,15 @@ public partial class SettingsPageViewModel
             {
                 errors.Add($"The store on {store.VolumeRoot} needs a maximum size.");
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(ImageCache.Path))
+        {
+            errors.Add("The image cache needs a folder.");
+        }
+        if (ImageCache.MaxSizeGigabytes <= 0)
+        {
+            errors.Add("The image cache needs a maximum size.");
         }
 
         return errors;

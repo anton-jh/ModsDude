@@ -13,7 +13,9 @@ namespace ModsDude.Client.Wpf.View.Imaging;
 /// <remarks>
 /// Mod images are almost exclusively DDS. Windows ships a WIC codec for it, which covers the
 /// legacy FourCC formats - every mod icon observed so far is DXT1 - but it refuses BC7, which is
-/// what the majority of store images use. Those get decoded in managed code instead.
+/// what the majority of store images use. Those get decoded in managed code instead. Server
+/// derivatives arrive as WebP, which WIC only reads where an optional Windows extension happens to
+/// be installed, so they go through the codec the app ships with.
 /// </remarks>
 internal static class ModImageDecoder
 {
@@ -22,27 +24,57 @@ internal static class ModImageDecoder
 
     public static ImageSource Decode(byte[] data, int maxWidth)
     {
+        return Resize(DecodeToBitmap(data), maxWidth);
+    }
+
+    /// <summary>
+    /// The image at its own resolution, as straight BGRA. What derivative generation needs: the
+    /// encoder resizes from the full-resolution pixels rather than from something already reduced.
+    /// </summary>
+    public static DecodedImage DecodeToPixels(byte[] data)
+    {
+        var bitmap = DecodeToBitmap(data);
+
+        var converted = bitmap.Format == PixelFormats.Bgra32
+            ? bitmap
+            : new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+
+        var stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+
+        return new DecodedImage(pixels, converted.PixelWidth, converted.PixelHeight);
+    }
+
+
+    private static BitmapSource DecodeToBitmap(byte[] data)
+    {
+        if (WebPCodec.IsWebP(data))
+        {
+            return WebPCodec.Decode(data);
+        }
+
         try
         {
-            return DecodeWithWindowsCodecs(data, maxWidth);
+            return DecodeWithWindowsCodecs(data);
         }
         catch (Exception ex) when (ex is FileFormatException or NotSupportedException or COMException or ArgumentException or OverflowException)
         {
-            return DecodeBlockCompressed(data, maxWidth);
+            return DecodeBlockCompressed(data);
         }
     }
 
-    private static ImageSource DecodeWithWindowsCodecs(byte[] data, int maxWidth)
+    private static BitmapSource DecodeWithWindowsCodecs(byte[] data)
     {
         // WIC needs to seek, and the callers hand us bytes read out of a zip entry.
         using var stream = new MemoryStream(data);
 
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
 
-        return Resize(decoder.Frames[0], maxWidth);
+        return decoder.Frames[0];
     }
 
-    private static ImageSource DecodeBlockCompressed(byte[] data, int maxWidth)
+    private static BitmapSource DecodeBlockCompressed(byte[] data)
     {
         using var stream = new MemoryStream(data);
 
@@ -62,9 +94,7 @@ internal static class ModImageDecoder
             bgra[(i * 4) + 3] = pixels[i].a;
         }
 
-        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, bgra, width * 4);
-
-        return Resize(bitmap, maxWidth);
+        return BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, bgra, width * 4);
     }
 
     private static ImageSource Resize(BitmapSource source, int maxWidth)
@@ -109,3 +139,7 @@ internal static class ModImageDecoder
         return result;
     }
 }
+
+
+/// <param name="Bgra">Straight, unpremultiplied BGRA, one row after another with no padding.</param>
+internal record DecodedImage(byte[] Bgra, int Width, int Height);

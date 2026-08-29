@@ -142,7 +142,7 @@ public partial class RepoModsImportPageViewModel
             .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(x =>
             {
-                var item = _itemFactory.Create(x);
+                var item = _itemFactory.Create(_repo.Id, x);
 
                 item.Status = x.GetImportStatus();
 

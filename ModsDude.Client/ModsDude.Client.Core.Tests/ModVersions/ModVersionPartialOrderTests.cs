@@ -1,4 +1,6 @@
-﻿using ModsDude.Client.Core.ModVersions;
+using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModVersions;
+using static ModsDude.Client.Core.Tests.Keys;
 
 namespace ModsDude.Client.Core.Tests.ModVersions;
 
@@ -8,10 +10,10 @@ public class ModVersionPartialOrderTests
     public void A_fully_ordered_set_comes_back_in_order()
     {
         var ordering = ModVersionPartialOrder.Derive(
-            ["1.2.0.0", "1.0.0.0", "1.10.0.0", "1.9.0.0"],
+            Vs("1.2.0.0", "1.0.0.0", "1.10.0.0", "1.9.0.0"),
             DefaultModVersionComparer.Instance);
 
-        Assert.Equal(["1.0.0.0", "1.2.0.0", "1.9.0.0", "1.10.0.0"], ordering.Order);
+        Assert.Equal(Vs("1.0.0.0", "1.2.0.0", "1.9.0.0", "1.10.0.0"), ordering.Order);
         Assert.Empty(ordering.UnorderedPairs);
         Assert.True(ordering.IsFullyOrdered);
     }
@@ -21,9 +23,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b", "c"], abstainOn: [("a", "c")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["c", "a", "b"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("c", "a", "b"), comparer);
 
-        Assert.Equal(["a", "b", "c"], ordering.Order);
+        Assert.Equal(Vs("a", "b", "c"), ordering.Order);
         Assert.Empty(ordering.UnorderedPairs);
     }
 
@@ -32,9 +34,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b", "c"], abstainOn: [("b", "c")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "c"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "c"), comparer);
 
-        Assert.Equal(new ModVersionPair("b", "c"), Assert.Single(ordering.UnorderedPairs));
+        Assert.Equal(new ModVersionPair(V("b"), V("c")), Assert.Single(ordering.UnorderedPairs));
         Assert.False(ordering.IsFullyOrdered);
     }
 
@@ -43,9 +45,11 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b", "c"], abstainOn: [("a", "c"), ("b", "c")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "c"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "c"), comparer);
 
-        Assert.Equal([new ModVersionPair("a", "c"), new ModVersionPair("b", "c")], ordering.UnorderedPairs);
+        Assert.Equal(
+            [new ModVersionPair(V("a"), V("c")), new ModVersionPair(V("b"), V("c"))],
+            ordering.UnorderedPairs);
     }
 
     [Fact]
@@ -53,17 +57,17 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b", "c"], abstainOn: [("a", "b")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["b", "a", "c"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("b", "a", "c"), comparer);
 
         // Neither of a and b is placed against the other, so the input order breaks the tie - and
         // both still precede c, which is settled.
-        Assert.Equal(["b", "a", "c"], ordering.Order);
+        Assert.Equal(Vs("b", "a", "c"), ordering.Order);
     }
 
     [Fact]
     public void An_under_determined_order_comes_out_the_same_on_every_run()
     {
-        var input = new[] { "d", "b", "a", "c" };
+        var input = Vs("d", "b", "a", "c");
         var comparer = new ScriptedComparer(["a", "b", "c", "d"], abstainOn: [("a", "b"), ("c", "d")]);
 
         var first = ModVersionPartialOrder.Derive(input, comparer);
@@ -71,8 +75,10 @@ public class ModVersionPartialOrderTests
         var third = ModVersionPartialOrder.Derive(input, comparer);
 
         // b and a are interchangeable here, and so are d and c; the input order settles both.
-        Assert.Equal(["b", "a", "d", "c"], first.Order);
-        Assert.Equal([new ModVersionPair("b", "a"), new ModVersionPair("d", "c")], first.UnorderedPairs);
+        Assert.Equal(Vs("b", "a", "d", "c"), first.Order);
+        Assert.Equal(
+            [new ModVersionPair(V("b"), V("a")), new ModVersionPair(V("d"), V("c"))],
+            first.UnorderedPairs);
         Assert.Equal(first.Order, second.Order);
         Assert.Equal(first.Order, third.Order);
         Assert.Equal(first.UnorderedPairs, third.UnorderedPairs);
@@ -83,19 +89,19 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b"], abstainOn: [("a", "b")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["b", "a"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("b", "a"), comparer);
 
-        Assert.Equal(new ModVersionPair("b", "a"), Assert.Single(ordering.UnorderedPairs));
+        Assert.Equal(new ModVersionPair(V("b"), V("a")), Assert.Single(ordering.UnorderedPairs));
     }
 
     [Fact]
     public void A_repeated_version_is_only_ordered_once()
     {
         var ordering = ModVersionPartialOrder.Derive(
-            ["1.0", "1.1", "1.0"],
+            Vs("1.0", "1.1", "1.0"),
             DefaultModVersionComparer.Instance);
 
-        Assert.Equal(["1.0", "1.1"], ordering.Order);
+        Assert.Equal(Vs("1.0", "1.1"), ordering.Order);
     }
 
 
@@ -104,9 +110,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer([], abstainOn: []);
 
-        var ordering = ModVersionPartialOrder.Derive(["v1", "1.0", "1.00"], comparer, settledOrder: ["v1", "1.0", "1.00"]);
+        var ordering = ModVersionPartialOrder.Derive(Vs("v1", "1.0", "1.00"), comparer, settledOrder: Vs("v1", "1.0", "1.00"));
 
-        Assert.Equal(["v1", "1.0", "1.00"], ordering.Order);
+        Assert.Equal(Vs("v1", "1.0", "1.00"), ordering.Order);
         Assert.Empty(ordering.UnorderedPairs);
     }
 
@@ -115,9 +121,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["c", "b", "a"], abstainOn: []);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "c"], comparer, settledOrder: ["a", "b", "c"]);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "c"), comparer, settledOrder: Vs("a", "b", "c"));
 
-        Assert.Equal(["a", "b", "c"], ordering.Order);
+        Assert.Equal(Vs("a", "b", "c"), ordering.Order);
         Assert.Empty(ordering.UnorderedPairs);
     }
 
@@ -126,9 +132,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "x", "b"], abstainOn: []);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "x"], comparer, settledOrder: ["a", "b"]);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "x"), comparer, settledOrder: Vs("a", "b"));
 
-        Assert.Equal(["a", "x", "b"], ordering.Order);
+        Assert.Equal(Vs("a", "x", "b"), ordering.Order);
     }
 
     [Fact]
@@ -136,9 +142,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b"], abstainOn: []);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b"], comparer, settledOrder: ["a", "gone", "b"]);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b"), comparer, settledOrder: Vs("a", "gone", "b"));
 
-        Assert.Equal(["a", "b"], ordering.Order);
+        Assert.Equal(Vs("a", "b"), ordering.Order);
     }
 
 
@@ -149,11 +155,15 @@ public class ModVersionPartialOrderTests
         // the topological sort picking a winner out of the cycle.
         var comparer = new CyclicComparer();
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "c"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "c"), comparer);
 
-        Assert.Equal(["a", "b", "c"], ordering.Order);
+        Assert.Equal(Vs("a", "b", "c"), ordering.Order);
         Assert.Equal(
-            [new ModVersionPair("a", "b"), new ModVersionPair("a", "c"), new ModVersionPair("b", "c")],
+            [
+                new ModVersionPair(V("a"), V("b")),
+                new ModVersionPair(V("a"), V("c")),
+                new ModVersionPair(V("b"), V("c"))
+            ],
             ordering.UnorderedPairs);
     }
 
@@ -162,10 +172,10 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new CyclicComparer();
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b", "c", "z"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b", "c", "z"), comparer);
 
-        Assert.Equal("z", ordering.Order[3]);
-        Assert.DoesNotContain(ordering.UnorderedPairs, x => x.First == "z" || x.Second == "z");
+        Assert.Equal(V("z"), ordering.Order[3]);
+        Assert.DoesNotContain(ordering.UnorderedPairs, x => x.First == V("z") || x.Second == V("z"));
     }
 
     [Fact]
@@ -173,9 +183,9 @@ public class ModVersionPartialOrderTests
     {
         var comparer = new ScriptedComparer(["a", "b"], abstainOn: [], equalOn: [("a", "b")]);
 
-        var ordering = ModVersionPartialOrder.Derive(["a", "b"], comparer);
+        var ordering = ModVersionPartialOrder.Derive(Vs("a", "b"), comparer);
 
-        Assert.Equal(["a", "b"], ordering.Order);
+        Assert.Equal(Vs("a", "b"), ordering.Order);
         Assert.Empty(ordering.UnorderedPairs);
     }
 
@@ -191,7 +201,7 @@ public class ModVersionPartialOrderTests
         (string, string)[]? equalOn = null)
         : IModVersionComparer
     {
-        public ModVersionComparison Compare(string left, string right)
+        public ModVersionComparison Compare(ModVersionKey left, ModVersionKey right)
         {
             if (Mentions(abstainOn, left, right))
             {
@@ -216,14 +226,14 @@ public class ModVersionPartialOrderTests
                 : ModVersionComparison.Later;
         }
 
-        private static bool Mentions((string, string)[] pairs, string left, string right) =>
-            pairs.Any(x => (x.Item1 == left && x.Item2 == right) || (x.Item1 == right && x.Item2 == left));
+        private static bool Mentions((string, string)[] pairs, ModVersionKey left, ModVersionKey right) =>
+            pairs.Any(x => (x.Item1 == left.Value && x.Item2 == right.Value) || (x.Item1 == right.Value && x.Item2 == left.Value));
 
-        private int PositionOf(string version)
+        private int PositionOf(ModVersionKey version)
         {
             for (var position = 0; position < truth.Count; position++)
             {
-                if (truth[position] == version)
+                if (truth[position] == version.Value)
                 {
                     return position;
                 }
@@ -238,14 +248,14 @@ public class ModVersionPartialOrderTests
         private static readonly (string, string)[] _edges =
             [("a", "b"), ("b", "c"), ("c", "a"), ("a", "z"), ("b", "z"), ("c", "z")];
 
-        public ModVersionComparison Compare(string left, string right)
+        public ModVersionComparison Compare(ModVersionKey left, ModVersionKey right)
         {
-            if (_edges.Any(x => x.Item1 == left && x.Item2 == right))
+            if (_edges.Any(x => x.Item1 == left.Value && x.Item2 == right.Value))
             {
                 return ModVersionComparison.Earlier;
             }
 
-            if (_edges.Any(x => x.Item1 == right && x.Item2 == left))
+            if (_edges.Any(x => x.Item1 == right.Value && x.Item2 == left.Value))
             {
                 return ModVersionComparison.Later;
             }
