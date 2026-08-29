@@ -332,11 +332,13 @@ The client does not reuse the server's entities. It has its own, in
   deserialized `DynamicForm` instance settings and the adapter instance built from them.
   **Never sent to the server**; persisted in `state.json` (see [05 — Client](05-client.md)).
 
-  An instance is scoped to a **game adapter**, not to a repo. That matters as soon as
-  someone joins two repos for the same game: they have one installation, and it should be
-  configured once and offered under both. A game that keeps mods in more than one place gets
-  one instance per folder — the model tracks folders, not installations, and does not assume
-  a game is installed at all.
+  An instance is scoped to a **game**, not to a repo. That matters as soon as someone joins
+  two repos for the same game: they have one installation, and it should be configured once
+  and offered under both. The scope is not the adapter id — one adapter serves both Farming
+  Simulator 22 and 25 — but an `InstanceScope` the base adapter derives from its base
+  settings; see [04 — Game adapters](04-game-adapters.md#instance-scope). A game that keeps
+  mods in more than one place gets one instance per folder — the model tracks folders, not
+  installations, and does not assume a game is installed at all.
 
   Because sync makes a folder match a profile exactly, an instance has **one active profile
   at a time, from one repo**, recorded as a `(RepoId, ProfileId)` pair. Ownership is

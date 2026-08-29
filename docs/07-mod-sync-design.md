@@ -593,20 +593,21 @@ you start from decides what you pick:
 
 | From | Fixed | Chosen |
 | --- | --- | --- |
-| The instance's page | The instance | A profile, from the repos this instance's adapter serves |
-| Any of the profile's pages | The profile | An instance, from those matching the repo's adapter |
+| The instance's page | The instance | A profile, from the repos this instance's scope serves |
+| Any of the profile's pages | The profile | An instance, from those matching the repo's scope |
 
-Both are dropdowns, and both disappear when there is nothing to choose. With one instance for
-the adapter — the common case for most games — the profile-side control is a plain button with
-no dropdown at all.
+Both are dropdowns, and both disappear when there is nothing to choose. With one instance in the
+scope — the common case for most games — the profile-side control is a plain button with no
+dropdown at all.
 
-The two sets are **not** symmetrical, which follows from instances being adapter-scoped:
+The two sets are **not** symmetrical, which follows from instances being scoped to a game rather
+than a repo (see [04](04-game-adapters.md#instance-scope)):
 
 - **From a profile**, the candidates are simply the repo's own instance list — the same one the
   sidebar shows under that repo. `RepoPageViewModel` builds both lists, so a profile and an
   instance visible together are compatible by construction. Nothing needs filtering or
   re-checking; a drag between two entries of that menu is always a valid pairing.
-- **From an instance**, the candidates span **every repo the instance's adapter serves**, grouped
+- **From an instance**, the candidates span **every repo sharing the instance's scope**, grouped
   by repo. An instance is shared across those repos and holds one active profile that may have
   come from any of them, so a dropdown limited to the repo you happened to navigate in through
   would be unable to display the instance's own current state — it would show a blank for a

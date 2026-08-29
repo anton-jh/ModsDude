@@ -39,9 +39,12 @@ personal and never leaves the machine.** The repo says "this profile needs these
 these versions". The instance says "and the mods go in this folder". Neither knows about
 the other's half until the client puts them together.
 
-An **instance is one mod folder** — a sync target. It is scoped to a *game adapter*, not to
-a repo, so one Farming Simulator installation is configured once and appears under every
-Farming Simulator repo you belong to. Games that keep mods in more than one place get one
+An **instance is one mod folder** — a sync target. It is scoped to a *game*, not to a repo, so
+one Farming Simulator 25 installation is configured once and appears under every FS25 repo you
+belong to. The scope is the adapter plus whatever its base settings say about which game it was
+configured for, because one adapter can serve several — FS22 and FS25 share one, and a scripted
+adapter could serve a dozen. See [04 — Game adapters](04-game-adapters.md#instance-scope).
+Games that keep mods in more than one place get one
 instance per folder: BeamNG.drive with BeamMP needs three, since singleplayer, the MP
 client, and a dedicated server each read from a different directory. The model deliberately
 does not care whether those folders belong to the same installation, or whether a game is

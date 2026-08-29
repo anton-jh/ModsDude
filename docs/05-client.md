@@ -183,7 +183,8 @@ LocalState
 │   ├─ Stores: { volumeRoot → { Path, MaxSizeBytes } }
 │   ├─ ImageCache: { Path, MaxSizeBytes } one per machine, not per volume
 │   └─ DisabledSources: { sourceId }     mod sources the user switched off
-├─ Instances: { instanceId → { GameAdapterId, Name, AdapterInstanceSettings,
+├─ Instances: { instanceId → { InstanceScope, GameAdapterId, Name,
+│                              AdapterInstanceSettings,
 │                              ActiveProfile: (RepoId, ProfileId)? } }
 └─ Repos: { repoId → LocalRepoState }
 
@@ -196,11 +197,15 @@ file per instance rather than part of `LocalState`, which is loaded eagerly and 
 every instance change — a manifest for 2,000 mods is a few hundred kilobytes. See
 [07](07-mod-sync-design.md#what-sync-records-and-why-it-has-to).
 
-**Instances move out from under repos** and key on `GameAdapterId` instead, so one game
-installation is configured once and listed under every repo using that adapter. A repo
-offers an instance whose adapter `Id` matches; if the compatibility versions differ, the
-repo's adapter has to be able to read settings authored by the older one, which is what
-compatibility versions are for.
+**Instances move out from under repos** and key on an `InstanceScope` instead, so one game
+installation is configured once and listed under every repo targeting the same game. The scope
+is the adapter id plus — for an adapter serving more than one game — a discriminator its base
+settings decide: `_farming_simulator#fs25`. A repo offers the instances whose scope equals its
+own. The `GameAdapterId` is stored alongside, recording which adapter version authored the
+settings; it is deliberately not part of the scope, so where the compatibility versions differ
+the repo's adapter has to be able to read settings authored by the older one, which is what
+compatibility versions are for. See
+[04 — Game adapters](04-game-adapters.md#instance-scope).
 
 **Content store settings are machine-wide.** The store is content-addressed, so it does not
 care which game or which repo a file belongs to — a Farming Simulator archive and a BeamNG

@@ -35,17 +35,25 @@ come out right.
 
 Decisions taken after the initial write-up. All are prerequisites for Phase 3.
 
-### Instances are adapter-scoped, and an instance is one mod folder
+### Instances are scoped to a game, and an instance is one mod folder
 
 `LocalInstance` is currently scoped to a **repo**, which breaks as soon as someone joins more
 than one repo for the same game: a member of three Farming Simulator repos has one
 installation but must configure it three times, and all three instances believe they own the
 same mods folder.
 
-An instance is scoped to the **game adapter** instead — configured once, listed under every
-repo using that adapter. It also gains an explicit **active profile**, a `(RepoId, ProfileId)`
+An instance is scoped to the **game** instead — configured once, listed under every repo
+targeting that game. It also gains an explicit **active profile**, a `(RepoId, ProfileId)`
 pair, since sync makes a folder match a profile exactly and only one repo can own a folder at
 a time.
+
+**The scope is not the adapter id.** One adapter serves both Farming Simulator 22 and 25, and a
+generic scripted adapter would serve a dozen games under one id — so keying instances on
+`GameAdapterId` would offer an FS22 folder to an FS25 repo. `IBaseGameAdapter` produces an
+`InstanceScope` instead: the adapter id, plus a discriminator its **base settings** decide, and
+a repo offers the instances whose scope equals its own. Farming Simulator's base settings gain a
+`GameVersion` to feed it. Full reasoning, and the two rules a discriminator has to obey, in
+[04 — Game adapters](04-game-adapters.md#instance-scope).
 
 **An instance is one mod folder, not one installation.** Games keeping mods in several places
 get several instances. BeamNG.drive with BeamMP needs three — singleplayer, MP client, and a
@@ -362,11 +370,23 @@ showing overlapping data under different rules.
 Client-only, no server changes. Small, but it has to land before sync, because sync needs to
 know which profile owns a folder and where the store lives.
 
+- [ ] Add `InstanceScope` and `IBaseGameAdapter.Scope`, defaulting to the adapter id alone. An
+      adapter serving more than one game overrides it from its base settings — see
+      [04 — Game adapters](04-game-adapters.md#instance-scope).
+- [ ] Give `FarmingSimulatorBaseSettings` a `GameVersion`, required and not `[CanBeModified]`,
+      and read it in both `FarmingSimulatorBaseGameAdapter.Scope` and the game-data-folder probe
+      in `FarmingSimulatorInstanceSettings`, which hardcodes `2025` today.
+- [ ] Move `CanSupportMods` / `CanSupportSavegames` from `IGameAdapter` to `IBaseGameAdapter`.
+      Same layering mistake one stage up: for a scripted adapter the answer depends on base
+      settings. Nothing reads either flag yet, so it is free now and breaking later.
 - [ ] Move instances out from under repos in `LocalState`: key by instance id, carry
-      `GameAdapterId` instead of `RepoId`. Bump `LocalState.CurrentVersion`; `StateStore`'s
-      compatibility predicate already discards anything older.
-- [ ] `Repo` offers the instances whose adapter `Id` matches, rather than owning a list. The
-      sidebar keeps listing them under each repo exactly as it does now.
+      `InstanceScope` and `GameAdapterId` instead of `RepoId`. Bump `LocalState.CurrentVersion`;
+      `StateStore`'s compatibility predicate already discards anything older.
+- [ ] `Repo` offers the instances whose `InstanceScope` equals its own, rather than owning a
+      list. The sidebar keeps listing them under each repo exactly as it does now.
+- [ ] Refuse a second instance pointing at a folder another instance already owns, **across all
+      scopes**. Adapter scope used to make this impossible; splitting it by game does not. Needs
+      the adapter to be able to answer which folder an instance owns.
 - [ ] Add `ActiveProfile: (RepoId, ProfileId)?` to the persisted instance.
 - [ ] Add `LocalState.Settings` — the first machine-wide client setting — holding, per volume,
       which store serves it, that store's path, and its maximum size.
@@ -507,7 +527,7 @@ launching the game from it does not help. What matters is what the user sees on 
 - [ ] **Activation from the profile side too**, on the profile *shell* so it is present on every
       sub-page rather than just Overview — `ProfilePageViewModel` already owns that
       sub-navigation. A dropdown to pick the instance when the adapter has more than one, and a
-      plain button when it has one. Eligibility is by matching `GameAdapterId`.
+      plain button when it has one. Eligibility is by matching `InstanceScope`.
 - [ ] Label the control for what it will do: *Re-apply* when the instance is already on this
       profile, *Activate* when it is on another or none. Activation re-syncs the folder and
       uninstalls what the previous profile put there, so use the reconciler's plan preview as the
@@ -559,7 +579,7 @@ only once the core works.
       on the fix above — once a drag passes the threshold and `DragDrop.DoDragDrop` captures the
       mouse, selection stops following, which is exactly what makes the gesture possible. No
       drop-target filtering is needed: both lists belong to `RepoPageViewModel`, so everything
-      visible is already scoped to the selected repo and therefore to its adapter. One direction
+      visible is already scoped to the selected repo and therefore to its scope. One direction
       is enough: "put this profile into that game" reads correctly, the reverse does not.
 
 ## Phase 6 — Scale and hygiene

@@ -26,8 +26,9 @@ The reason for the split is the repo/instance divide from
 [01 — Overview](01-overview.md):
 
 - **Base settings** are stored on the server in `Repo.AdapterData.Configuration` and are the
-  same for every member. Things the group agrees on — for Farming Simulator, currently
-  nothing, but conceptually the game version the repo targets.
+  same for every member. Things the group agrees on — for Farming Simulator, the game version
+  the repo targets, which is also what its [instance scope](#instance-scope) keys on. Empty in
+  the code as it stands.
 - **Instance settings** are per-machine and never leave it. For Farming Simulator, the path
   to the game data folder.
 
@@ -55,6 +56,13 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 `IGameAdapter` also carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
 adapter to find out.
+
+> **Planned: those two move to `IBaseGameAdapter`.** They sit on the catalogue stage, before
+> base settings exist, which assumes the answer cannot depend on how a repo configured the
+> adapter. For a scripted adapter it plainly can — one script implements savegames and another
+> does not. Nothing reads either flag today, so moving them is free now and a breaking interface
+> change once the UI starts consulting them. It is the same layering mistake as keying instances
+> on the adapter id, one stage further up; see [Instance scope](#instance-scope).
 
 The capability adapters mirror the same base-then-instance shape: `IBaseModAdapter` can scan
 an arbitrary folder, and `WithInstanceSettings` turns it into an `IInstanceModAdapter` that
@@ -139,6 +147,111 @@ settings. `GameAdapterIndex` supports both lookups:
 Note the leading underscore in `_farming_simulator`: built-in adapters are namespaced apart
 from any future third-party ones.
 
+## Instance scope
+
+*Planned — see [PLAN.md](PLAN.md#settled-architecture-decisions).*
+
+An instance is not scoped to a repo. One Farming Simulator installation should be configured
+once and offered under every Farming Simulator repo you belong to, which is why instances move
+out from under repos. The obvious key for that is the adapter id — and it is not quite right,
+because **one adapter can serve more than one game**.
+
+Farming Simulator 22 and 25 read the same `modDesc.xml` out of the same kind of archive and
+differ only in where the folder is and which mods belong in it. One adapter handles both. But an
+FS22 install and an FS25 install are not interchangeable sync targets: offering one under the
+other's repo points a profile at the wrong folder and fills it with the wrong mods. A generic
+scripted adapter — one Lua adapter driving a dozen games from a script the repo supplies — makes
+it starker, since every one of those games reports the same `GameAdapterId`.
+
+The key is therefore not the adapter but **the identity of the game the adapter is configured
+for**, and base settings are what configure it. So `IBaseGameAdapter` produces it:
+
+```csharp
+public interface IBaseGameAdapter : IGameAdapter
+{
+    // ...
+    InstanceScope Scope => new(Id.Id);
+}
+```
+
+A default interface member, the same pattern as `VersionComparer` above: an adapter serving one
+game says nothing and gets the adapter id alone. One serving several overrides.
+
+```csharp
+// FarmingSimulatorBaseGameAdapter
+public InstanceScope Scope => new(Id.Id, _baseSettings.GameVersion.ToString());
+```
+
+`InstanceScope` is a record struct over `(AdapterId, Discriminator?)`, rendering as
+`_farming_simulator#fs25`, or plain `_farming_simulator` where there is no discriminator. It is a
+type rather than a bare string because `_farming_simulator#fs25` and `_farming_simulator@1` are
+both plausible-looking strings, and comparing the wrong pair fails as a **silently empty instance
+list** rather than as a compile error — the same reason `GameAdapterId` exists.
+
+Note `Id.Id`, not `Id`: **the compatibility version is deliberately not part of the scope.** A
+repo on `_farming_simulator@2` still matches instances created under `@1`, which is the standing
+rule that a newer adapter must be able to read settings authored by an older one.
+
+### What it changes
+
+| | Keyed on the adapter | Keyed on the scope |
+| --- | --- | --- |
+| Persisted on the instance | `GameAdapterId` | `InstanceScope`, plus the `GameAdapterId` that authored the settings |
+| A repo offers | instances whose adapter `Id` matches | instances whose scope equals `Adapter.Scope` |
+| Farming Simulator base settings | empty | `GameVersion`, required, not modifiable |
+
+Everything downstream is unchanged. The sidebar still lists instances under each repo,
+activation eligibility is still an equality test, and `CreateLocalInstancePage` still renders
+`GetInstanceSettingsTemplate()` from the repo it was opened under. Only the value being compared
+is different.
+
+### Two rules for the discriminator
+
+Neither is cheap to enforce in code, so they are written down here instead.
+
+**Only base-settings fields that lack `[CanBeModified]` may feed it.** Those are the identity
+fields — the attribute's whole meaning is that a game path can change and a game identity cannot.
+An adapter deriving its scope from a modifiable field turns an admin editing base settings into a
+silent orphaning of every instance on every member's machine.
+
+**A scripted adapter takes the discriminator from inside the script, not from the reference to
+it.** Two repos pointing at the same Lua script by different paths or URLs must land on the same
+scope, so the script declares its own game id. Keying on how it was referenced produces
+accidental non-sharing that looks exactly like a bug.
+
+### Consequences
+
+**Game identity is immutable, so an FS22 repo cannot become an FS25 repo.** That follows from the
+first rule, and it is the right answer — the mods are different files, so it is a new repo rather
+than an edit — but treat it as a decision rather than a side effect. If it is ever wanted, it is
+an admin-level *re-scope repo* operation that has to re-point or orphan every member's instances,
+not a field on a form.
+
+**This is not what compatibility versions are for.** `@2` means the adapter's settings shape
+broke and existing repos stay on `@1`. FS22 and FS25 coexist indefinitely and neither succeeds
+the other; conflating the two axes would strand every FS22 repo the day FS26 ships.
+
+**Scope resolution can become asynchronous.** A scripted adapter cannot report a scope until the
+client holds the script, so a repo whose script has not been fetched cannot list its instances
+yet — and `Repo` hydrates its adapter synchronously in its constructor today. Farming Simulator
+resolves synchronously, so nothing is blocked on this now. It is the one place where a generic
+adapter costs more than an override.
+
+**Folder collision has to be checked globally.** Adapter scope was what stopped two instances
+claiming the same directory; splitting it by game reopens the possibility, since two scopes can
+name the same folder. The check has to run across all instances regardless of scope, which needs
+the adapter to answer *which folder does this instance own* — something the sync engine wants
+anyway.
+
+**The instance settings template genuinely varies with base settings now.**
+`FarmingSimulatorInstanceSettings` probes `My Documents\My Games\FarmingSimulator2025` in its
+constructor; with a `GameVersion` in base settings it probes for the year the repo actually
+targets. The shape does not change, only a default value — which is worth noticing, because the
+mechanism gets exercised by the dullest possible case before anything exotic depends on it.
+`GetInstanceSettingsTemplate()` and `DeserializeInstanceSettings()` have always been on
+`IBaseGameAdapter` rather than `IGameAdapter`, so the interface allowed this all along; nothing
+used it.
+
 ## Registration
 
 `AddGameAdapters(assembly)` reflects over the assembly and registers every non-abstract type
@@ -214,7 +327,7 @@ the only one that exists.
 | `FarmingSimulatorGameAdapter` | Catalogue entry, `_farming_simulator@1` |
 | `FarmingSimulatorBaseGameAdapter` | + base settings, exposes base capability factories |
 | `FarmingSimulatorInstanceGameAdapter` | + instance settings, exposes instance capability factories |
-| `FarmingSimulatorBaseSettings` | Empty today |
+| `FarmingSimulatorBaseSettings` | Empty today. Planned: `GameVersion`, which feeds the [instance scope](#instance-scope) |
 | `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods |
 | `FarmingSimulatorInstanceModAdapter` | Scans `{GameDataFolder}/mods` |
@@ -280,6 +393,10 @@ before offering the feature.
 Override `VersionComparer` only if the shared parser genuinely cannot read your game's version
 strings. Most cannot benefit from an override, and an incorrect one silently mis-orders
 releases.
+
+Override `Scope` only if the adapter serves more than one game — see
+[Instance scope](#instance-scope). The base-settings field it reads must not be
+`[CanBeModified]`.
 
 ### Where the comparison runs
 

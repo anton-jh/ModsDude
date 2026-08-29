@@ -56,8 +56,10 @@ same repo have entirely separate instance lists.
 
 > **Changing.** Instances are currently scoped to a repo, so joining three Farming Simulator
 > repos means configuring the same installation three times, with three instances silently
-> believing they own the same folder. They are moving to adapter scope — configured once,
-> listed under every repo using that adapter, with an explicit active profile. See
+> believing they own the same folder. They are moving to an `InstanceScope` — configured once,
+> listed under every repo targeting the same game, with an explicit active profile. The scope is
+> not the adapter id alone, because one adapter serves both FS22 and FS25; see
+> [04 — Game adapters](04-game-adapters.md#instance-scope) and
 > [PLAN.md](PLAN.md#settled-architecture-decisions).
 
 ## Importing mods from an installed game
