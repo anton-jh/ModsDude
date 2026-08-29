@@ -32,7 +32,7 @@ public class ModImageProvider : IModImageProvider, IDisposable
         "image-cache");
 
 
-    public Task<ImageSource?> GetAsync(LocalModImage image, int maxWidth, CancellationToken cancellationToken)
+    public Task<ImageSource?> GetAsync(ModImage image, int maxWidth, CancellationToken cancellationToken)
     {
         if (maxWidth > _maxCachedWidth || maxWidth == IModImageProvider.FullSize)
         {
@@ -55,7 +55,7 @@ public class ModImageProvider : IModImageProvider, IDisposable
     }
 
 
-    private async Task<ImageSource?> LoadThroughDiskCacheAsync(LocalModImage image, int maxWidth, string key)
+    private async Task<ImageSource?> LoadThroughDiskCacheAsync(ModImage image, int maxWidth, string key)
     {
         var path = GetDiskCachePath(key);
 
@@ -75,7 +75,7 @@ public class ModImageProvider : IModImageProvider, IDisposable
         return decoded;
     }
 
-    private async Task<ImageSource?> LoadAsync(LocalModImage image, int maxWidth, CancellationToken cancellationToken)
+    private async Task<ImageSource?> LoadAsync(ModImage image, int maxWidth, CancellationToken cancellationToken)
     {
         try
         {

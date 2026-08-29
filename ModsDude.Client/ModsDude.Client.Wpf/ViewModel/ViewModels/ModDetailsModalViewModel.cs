@@ -18,7 +18,7 @@ public partial class ModDetailsModalViewModel : ModalViewModel
     private int _fullImageRequest;
 
 
-    public ModDetailsModalViewModel(LocalMod mod, IModImageProvider imageProvider)
+    public ModDetailsModalViewModel(CatalogModVersion mod, IModImageProvider imageProvider)
     {
         _imageProvider = imageProvider;
 
@@ -28,18 +28,18 @@ public partial class ModDetailsModalViewModel : ModalViewModel
         // ship nothing but an icon.
         var images = mod.Images.Count > 0
             ? mod.Images
-            : mod.Icon is null ? [] : (IReadOnlyList<LocalModImage>)[mod.Icon];
+            : mod.Icon is null ? [] : (IReadOnlyList<ModImage>)[mod.Icon];
 
         Images = new ObservableCollection<ModImageViewModel>(images.Select(x => new ModImageViewModel(x, imageProvider)));
         SelectedImage = Images.FirstOrDefault();
     }
 
 
-    public LocalMod Mod { get; }
+    public CatalogModVersion Mod { get; }
 
     public string Name => Mod.Name;
-    public string Version => Mod.Version;
-    public string Id => Mod.Id;
+    public string Version => Mod.VersionId.Value;
+    public string Id => Mod.ModId.Value;
     public string? Author => Mod.Author;
     public string Description => string.IsNullOrWhiteSpace(Mod.Description)
         ? "This mod doesn't describe itself."

@@ -1,9 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Core.Exceptions;
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.ComponentModel;
 using System.Windows.Data;
@@ -14,23 +13,19 @@ public partial class RepoModsImportPageViewModel
     : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly IBaseModAdapter _baseModAdapter;
+    private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly CancellationTokenSource _cancellation = new();
-
-    /// <summary>How long the page must survive before it is worth scanning the mod folders.</summary>
-    private static readonly TimeSpan _scanDelay = TimeSpan.FromMilliseconds(150);
 
     private IReadOnlyList<ModListItemViewModel> _mods = [];
     private bool _suspendSelectionTracking;
 
 
-    public RepoModsImportPageViewModel(Repo repo, ModListItemViewModel.Factory itemFactory)
+    public RepoModsImportPageViewModel(Repo repo, ModCatalog catalog, ModListItemViewModel.Factory itemFactory)
     {
         _repo = repo;
+        _catalog = catalog;
         _itemFactory = itemFactory;
-        _baseModAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke()
-            ?? throw UserFriendlyException.RepoNoModSupport();
 
         RepoName = repo.Name;
     }
@@ -62,7 +57,7 @@ public partial class RepoModsImportPageViewModel
     [NotifyPropertyChangedFor(nameof(HasVisibleMods))]
     private int _visibleCount;
 
-    /// <summary>True once loading has finished and the instances turned up nothing.</summary>
+    /// <summary>True once loading has finished and the sources turned up nothing.</summary>
     [ObservableProperty]
     private bool _isEmpty;
 
@@ -101,7 +96,7 @@ public partial class RepoModsImportPageViewModel
         var selected = _mods.Where(x => x.IsSelected).Select(x => x.Mod).ToList();
 
         // TODO: upload each mod through the server's mod upload link endpoint, reporting progress
-        // per row.
+        // per row, then _catalog.Invalidate().
         await Task.CompletedTask;
     }
 
@@ -110,12 +105,12 @@ public partial class RepoModsImportPageViewModel
 
 
     /// <summary>
-    /// Called when the user navigates away. Scanning a mod folder is the most expensive thing this
-    /// app does, and there is no point finishing it for a page nobody is looking at.
+    /// Called when the user navigates away. Stops this page waiting on the catalog; the scans
+    /// themselves belong to the shell, which cancels them when the whole Mods page goes.
     /// </summary>
     public void Dispose()
     {
-        // Deliberately not disposed: the scan may still be inside the token's registration, and
+        // Deliberately not disposed: the wait may still be inside the token's registration, and
         // disposing a source out from under that is not safe. Nothing here holds a wait handle,
         // so letting it be collected costs nothing.
         _cancellation.Cancel();
@@ -138,48 +133,22 @@ public partial class RepoModsImportPageViewModel
 
     protected override async Task InitAsync()
     {
-        // Dragging across the menu builds and discards one page per item it passes over. Holding
-        // off briefly means a page nobody actually stopped on never touches the disk at all.
-        await Task.Delay(_scanDelay, _cancellation.Token);
+        var snapshot = await _catalog.GetAsync(_cancellation.Token);
 
-        // Which instances a mod was found in - the same mod is usually installed in several.
-        var sources = new Dictionary<(string Id, string Version), List<string>>();
-        var mods = new List<LocalMod>();
+        // With a single source every row would name the same one, which is just noise.
+        var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
 
-        foreach (var instance in _repo.LocalInstances)
-        {
-            var installedMods = await _baseModAdapter
-                .WithInstanceSettings(instance.SerializedInstanceSettings)
-                .GetInstalledMods(_cancellation.Token);
-
-            foreach (var mod in installedMods)
-            {
-                mods.Add(mod);
-
-                if (sources.TryGetValue((mod.Id, mod.Version), out var instances))
-                {
-                    instances.Add(instance.Name);
-                }
-                else
-                {
-                    sources[(mod.Id, mod.Version)] = [instance.Name];
-                }
-            }
-        }
-
-        // With a single instance every row would name the same one, which is just noise.
-        var showInstances = _repo.LocalInstances.Count > 1;
-
-        _mods = mods
-            .DistinctBy(x => (x.Id, x.Version))
+        _mods = snapshot.Versions
             .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(x =>
             {
                 var item = _itemFactory.Create(x);
 
-                if (showInstances)
+                item.Status = x.GetImportStatus();
+
+                if (showSources && x.FoundIn.Count > 0)
                 {
-                    item.Instances = string.Join(", ", sources[(x.Id, x.Version)]);
+                    item.Instances = string.Join(", ", x.FoundIn.Select(source => source.Source.Name));
                 }
 
                 item.PropertyChanged += OnModPropertyChanged;
@@ -244,7 +213,7 @@ public partial class RepoModsImportPageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoModsImportPageViewModel Create(Repo repo)
-            => ActivatorUtilities.CreateInstance<RepoModsImportPageViewModel>(serviceProvider, repo);
+        public RepoModsImportPageViewModel Create(Repo repo, ModCatalog catalog)
+            => ActivatorUtilities.CreateInstance<RepoModsImportPageViewModel>(serviceProvider, repo, catalog);
     }
 }

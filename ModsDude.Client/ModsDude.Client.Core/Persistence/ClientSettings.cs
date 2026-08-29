@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Core.Helpers;
+using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Persistence;
 
@@ -18,6 +19,15 @@ public class ClientSettings
     /// by copy, trading sync time for space on the constrained disk. Both are legitimate choices.
     /// </summary>
     public Dictionary<string, string> StoreAssignments { get; init; } = [];
+
+    /// <summary>
+    /// Mod sources the user switched off. Machine-wide rather than per repo, because "do not look
+    /// for mods in this folder" is a fact about the folder and not about which repo happens to be
+    /// open - and an instance is already shared across every repo targeting its game. Ad-hoc sources
+    /// never appear here: they stop existing when the page does.
+    /// See docs/09-mod-catalog.md#the-source-list.
+    /// </summary>
+    public HashSet<ModSourceId> DisabledSources { get; init; } = [];
 
 
     /// <summary>The store that serves mod folders on <paramref name="volumeRoot"/>, if one is configured.</summary>

@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -8,14 +9,23 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 public class RepoModsPageViewModel : PageViewModel, IDisposable
 {
+    private readonly ModCatalog _catalog;
+
+
     public RepoModsPageViewModel(
         Repo repo,
+        ModCatalog.Factory catalogFactory,
         RepoModsImportPageViewModel.Factory repoModsImportPageViewModelFactory,
         NavigationManager navigationManager)
     {
+        // Owned by the shell rather than by either sub page, so that moving between Import and
+        // Manage - which show the same mods under different rules - composes from the scans already
+        // in memory instead of walking every mod folder again.
+        _catalog = catalogFactory.Create(repo);
+
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Import", () => repoModsImportPageViewModelFactory.Create(repo)),
+            new MenuItemViewModel("Import", () => repoModsImportPageViewModelFactory.Create(repo, _catalog)),
             new MenuItemViewModel("Manage", () => new ExamplePageViewModel(repo.Name, "Mods | Manage"))
             ];
         NavManager.Selected = MenuItems.First();
@@ -34,6 +44,7 @@ public class RepoModsPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         NavManager.Dispose();
+        _catalog.Dispose();
     }
 
 

@@ -1,4 +1,5 @@
 ﻿using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.GameAdapters;
@@ -8,6 +9,18 @@ public interface IGameAdapter
     GameAdapterId Id { get; }
     string DisplayName { get; }
     string Description { get; }
+
+    /// <summary>
+    /// How this game's version strings compare. An adapter that says nothing gets the shared parser,
+    /// which covers dotted numerics with an optional v prefix and pre-release suffixes; a game
+    /// numbering its mods by date or build number replaces it wholesale.
+    /// </summary>
+    /// <remarks>
+    /// An overriding adapter is held to the same rule as the default one: <b>abstain rather than
+    /// guess</b>. A version the comparer declines to place costs one question, asked once and stored
+    /// repo-wide; a version it places wrongly is not noticed until a profile pins the wrong build.
+    /// </remarks>
+    IModVersionComparer VersionComparer => DefaultModVersionComparer.Instance;
 
     DynamicForm GetBaseSettingsTemplate();
     IBaseGameAdapter WithBaseSettings(string serializedBaseSettings);

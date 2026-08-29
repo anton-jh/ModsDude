@@ -39,25 +39,54 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Null for anything that is not a readable mod archive. A source is now any folder the user
+    /// points at - Downloads holds installers, documents, half-finished downloads another process
+    /// still has open, and archives whose central directory does not add up - so a file that cannot
+    /// be read as a mod is skipped rather than taking the whole folder's scan down with it.
+    /// </summary>
     private static LocalMod? GetModFromFile(string path, CancellationToken cancellationToken)
     {
+        try
+        {
+            return ReadModFromFile(path, cancellationToken);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or XmlException)
+        {
+            // A filter rather than a catch body, so a cancelled scan still unwinds.
+            return null;
+        }
+    }
+
+    private static LocalMod? ReadModFromFile(string path, CancellationToken cancellationToken)
+    {
         using var zip = GetZip(path);
-        if (zip is null) return null;
 
         var maybeDesc = GetModDesc(zip, cancellationToken);
         if (maybeDesc.HasValue is false) return null;
 
         var desc = maybeDesc.Value;
 
+        // Normalized here, where the id is produced, rather than at each use site - which is how one
+        // gets missed. See docs/09-mod-catalog.md#the-casing-trap.
         var maybeLocalMod =
             from filename in Maybe.From(Path.GetFileNameWithoutExtension(path))
-            from version in Maybe.From(desc.Element("version")?.Value)
+            where string.IsNullOrWhiteSpace(filename) is false
+            from rawVersion in Maybe.From(desc.Element("version")?.Value)
+            where string.IsNullOrWhiteSpace(rawVersion) is false
             from titleGroup in Maybe.From(desc.Element("title"))
             from title in GetEnglishOrFallback(titleGroup, filename)
             from descriptionGroup in Maybe.From(desc.Element("description"))
             from description in GetEnglishOrFallback(descriptionGroup, "")
-            select new LocalMod(filename, version, title, NormalizeDescription(description), () => File.OpenRead(path))
+            select new LocalMod(
+                ModKey.From(filename),
+                ModVersionKey.From(rawVersion),
+                title,
+                NormalizeDescription(description),
+                () => File.OpenRead(path))
             {
+                FilePath = path,
+                FileLength = new FileInfo(path).Length,
                 Author = desc.Element("author")?.Value.Trim(),
                 Icon = GetIcon(zip, path, desc),
                 Images = GetImages(zip, path)
@@ -66,16 +95,21 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
         return maybeLocalMod.HasValue ? maybeLocalMod.Value : null;
     }
 
-    private static ZipArchive? GetZip(string path)
+    private static ZipArchive GetZip(string path)
     {
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+
         try
         {
-            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
             return new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         }
-        catch (InvalidDataException)
+        catch
         {
-            return null;
+            // 'leaveOpen: false' only starts applying once the archive exists, so a constructor that
+            // throws leaves the handle to close - once per non-zip in the folder, which in Downloads
+            // is most of them.
+            stream.Dispose();
+            throw;
         }
     }
 
@@ -83,6 +117,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Reading the entry list is where a damaged central directory surfaces, not the constructor.
         var entry = zip.GetEntry("modDesc.xml");
         if (entry is null) return Maybe<XElement>.None;
 
@@ -146,7 +181,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     /// The icon declared in modDesc.xml regularly names an extension the archive doesn't actually
     /// contain (".png" declared, ".dds" shipped), so fall back to matching on the name alone.
     /// </summary>
-    private static LocalModImage? GetIcon(ZipArchive zip, string modPath, XElement desc)
+    private static ModImage? GetIcon(ZipArchive zip, string modPath, XElement desc)
     {
         var declared = desc.Element("iconFilename")?.Value;
 
@@ -160,7 +195,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     /// The store images - the ones the in-game shop shows. A mod ships anywhere from none of them
     /// (script mods) to a few dozen (vehicle packs).
     /// </summary>
-    private static IReadOnlyList<LocalModImage> GetImages(ZipArchive zip, string modPath)
+    private static IReadOnlyList<ModImage> GetImages(ZipArchive zip, string modPath)
     {
         return zip.Entries
             .Where(x => x.Name.StartsWith("store_", StringComparison.OrdinalIgnoreCase) && IsImage(x.Name))
@@ -185,13 +220,13 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
             string.Equals(StripExtension(x.FullName.Replace('\\', '/')), withoutExtension, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static LocalModImage CreateImage(string modPath, ZipArchiveEntry entry)
+    private static ModImage CreateImage(string modPath, ZipArchiveEntry entry)
     {
         // The entry belongs to an archive that is about to be closed - capture the name instead.
         var entryName = entry.FullName;
         var cacheKey = $"{modPath}|{entryName}|{entry.Length}|{entry.Crc32}";
 
-        return new LocalModImage(entry.Name, cacheKey, async cancellationToken =>
+        return new ModImage(entry.Name, cacheKey, async cancellationToken =>
         {
             await using var stream = new FileStream(modPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);

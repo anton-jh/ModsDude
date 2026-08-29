@@ -101,6 +101,9 @@ public partial class App : Application
         services.AddSingleton<MembershipService>();
         services.AddSingleton<LocalInstanceRepository>();
         services.AddSingleton<ClientSettingsRepository>();
+        // A catalog is created per surface and disposed with it, so its per-source scan cache lives
+        // exactly as long as the page whose checkboxes recompose from it.
+        services.AddSingleton<ModCatalog.Factory>();
         services.AddSingleton<LastSelectionRepository>();
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]

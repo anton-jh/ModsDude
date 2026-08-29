@@ -29,11 +29,16 @@ public static class FileSystemHelper
             return false;
         }
 
-        return string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
+        return string.Equals(NormalizePathForComparison(left), NormalizePathForComparison(right), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NormalizePath(string path)
+    /// <summary>
+    /// A path in the form two references to the same folder always agree on. Lower-cased rather than
+    /// left to a case-insensitive comparer, because callers use it to build keys that outlive the
+    /// comparer - json does not carry one.
+    /// </summary>
+    public static string NormalizePathForComparison(string path)
     {
-        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToLowerInvariant();
     }
 }

@@ -9,9 +9,13 @@ using System.Windows.Media;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// One mod as it appears in a list. Bound to an implicit template in App.xaml, so any items
+/// One mod version as it appears in a list. Bound to an implicit template in App.xaml, so any items
 /// control fed these renders the same row.
 /// </summary>
+/// <remarks>
+/// Wraps a <see cref="CatalogModVersion"/> rather than a local mod, which is what lets one row type
+/// serve a list that mixes what is on disk, what the repo holds, and what is both.
+/// </remarks>
 public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 {
     private readonly IModImageProvider _imageProvider;
@@ -20,7 +24,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     private bool _thumbnailRequested;
 
 
-    public ModListItemViewModel(LocalMod mod, IModImageProvider imageProvider, IModalService modalService)
+    public ModListItemViewModel(CatalogModVersion mod, IModImageProvider imageProvider, IModalService modalService)
     {
         Mod = mod;
         _imageProvider = imageProvider;
@@ -31,11 +35,11 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     }
 
 
-    public LocalMod Mod { get; }
+    public CatalogModVersion Mod { get; }
 
-    public string Id => Mod.Id;
+    public string Id => Mod.ModId.Value;
     public string Name => Mod.Name;
-    public string Version => Mod.Version;
+    public string Version => Mod.VersionId.Value;
     public string? Author => Mod.Author;
     public string ShortDescription { get; }
 
@@ -53,8 +57,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     private bool _isSelectable = true;
 
     /// <summary>
-    /// The instances the mod was found in - the same mod is usually installed in several. Left
-    /// unset where naming them would say nothing, such as a repo with a single instance.
+    /// The sources the version was found in - the same mod is usually installed in several. Left
+    /// unset where naming them would say nothing, such as a single enabled source.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasInstances))]
@@ -63,18 +67,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
-    private ModStatus _status = ModStatus.None;
+    private ModDisplayStatus _status = ModDisplayStatus.None;
 
 
-    public bool HasStatus => Status is not ModStatus.None;
+    public bool HasStatus => Status is not ModDisplayStatus.None;
 
     public bool HasInstances => string.IsNullOrWhiteSpace(Instances) is false;
 
     public string StatusText => Status switch
     {
-        ModStatus.New => "New",
-        ModStatus.UpdateAvailable => "Update",
-        ModStatus.AlreadyInRepo => "In repo",
+        ModDisplayStatus.New => "New",
+        ModDisplayStatus.UpdateAvailable => "Update",
+        ModDisplayStatus.AlreadyInRepo => "In repo",
         _ => string.Empty
     };
 
@@ -149,7 +153,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ModListItemViewModel Create(LocalMod mod)
+        public ModListItemViewModel Create(CatalogModVersion mod)
             => ActivatorUtilities.CreateInstance<ModListItemViewModel>(serviceProvider, mod);
     }
 }

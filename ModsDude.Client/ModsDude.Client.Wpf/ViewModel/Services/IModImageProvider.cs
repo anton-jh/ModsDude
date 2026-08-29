@@ -20,5 +20,5 @@ public interface IModImageProvider
     /// the image can't be read or decoded - a mod with a broken icon shouldn't take the page down.
     /// Results at thumbnail sizes are cached, so calling this repeatedly for the same image is cheap.
     /// </summary>
-    Task<ImageSource?> GetAsync(LocalModImage image, int maxWidth, CancellationToken cancellationToken);
+    Task<ImageSource?> GetAsync(ModImage image, int maxWidth, CancellationToken cancellationToken);
 }
