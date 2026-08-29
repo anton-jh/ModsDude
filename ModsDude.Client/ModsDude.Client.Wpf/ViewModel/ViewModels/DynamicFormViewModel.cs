@@ -93,12 +93,26 @@ public partial class DynamicFormViewModel
                 title, required, canBeModified,
                 _dialogService);
         }
+        else if (GetEnumType(property.PropertyType) is Type enumType)
+        {
+            field = new OptionsDynamicFormFieldViewModel(
+                _form, property,
+                title, required, canBeModified,
+                enumType);
+        }
         else
         {
             throw new InvalidOperationException($"Cannot handle dynamic form field of type '{property.PropertyType.FullName}'");
         }
 
         return field;
+    }
+
+    private static Type? GetEnumType(Type propertyType)
+    {
+        var type = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+        return type.IsEnum ? type : null;
     }
 
     private void OnFieldModified(object? sender, PropertyChangedEventArgs? e)
@@ -180,3 +194,51 @@ public partial class FolderPathDynamicFormFieldViewModel(
         }
     }
 }
+
+/// <summary>
+/// A field whose value is one of an enum's members - a game version, say. The member's
+/// <see cref="TitleAttribute"/> names it where one is present.
+/// </summary>
+public class OptionsDynamicFormFieldViewModel
+    : DynamicFormFieldViewModel
+{
+    public OptionsDynamicFormFieldViewModel(
+        DynamicForm form,
+        PropertyInfo property,
+        string title,
+        bool required,
+        bool canBeModified,
+        Type enumType)
+        : base(form, property)
+    {
+        Title = title;
+        Required = required;
+        CanBeModified = canBeModified;
+
+        Options = Enum.GetValues(enumType)
+            .Cast<object>()
+            .Select(x => new DynamicFormFieldOption(x, GetOptionTitle(enumType, x)))
+            .ToList();
+    }
+
+
+    public string Title { get; }
+    public bool Required { get; }
+    public bool CanBeModified { get; }
+    public IReadOnlyList<DynamicFormFieldOption> Options { get; }
+
+
+    public override object? GetValue()
+    {
+        return Value;
+    }
+
+
+    private static string GetOptionTitle(Type enumType, object value)
+    {
+        return enumType.GetField(value.ToString()!)?.GetCustomAttribute<TitleAttribute>()?.Text
+            ?? value.ToString()!;
+    }
+}
+
+public record DynamicFormFieldOption(object Value, string Title);

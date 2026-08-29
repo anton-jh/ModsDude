@@ -149,7 +149,7 @@ public partial class RepoModsImportPageViewModel
         foreach (var instance in _repo.LocalInstances)
         {
             var installedMods = await _baseModAdapter
-                .WithInstanceSettings(instance.InstanceSettings)
+                .WithInstanceSettings(instance.SerializedInstanceSettings)
                 .GetInstalledMods(_cancellation.Token);
 
             foreach (var mod in installedMods)

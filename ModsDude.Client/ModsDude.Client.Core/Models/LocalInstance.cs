@@ -5,65 +5,59 @@ using System.ComponentModel;
 
 namespace ModsDude.Client.Core.Models;
 
+/// <summary>
+/// One mod folder on this machine: a sync target. Scoped to a game rather than to a repo, so the
+/// settings it carries are hydrated by whichever repo offers it - they are the same settings under
+/// all of them.
+/// </summary>
 public class LocalInstance
     : INotifyPropertyChanged
 {
-    public LocalInstance(IBaseGameAdapter baseAdapter, Repo repo, PersistedLocalInstance persistedModel)
+    internal LocalInstance(PersistedLocalInstance persistedModel)
     {
-        Id = persistedModel.Id;
-        Repo = repo;
         PersistedModel = persistedModel;
-        InstanceSettings = baseAdapter.DeserializeInstanceSettings(persistedModel.AdapterInstanceSettings);
-        Adapter = baseAdapter.WithInstanceSettings(InstanceSettings);
-    }
-
-    public LocalInstance(IBaseGameAdapter baseAdapter, Repo repo, string name, DynamicForm instanceSettings)
-    {
-        Id = Guid.NewGuid();
-        Repo = repo;
-        InstanceSettings = instanceSettings;
-        PersistedModel = new PersistedLocalInstance()
-        {
-            Id = Id,
-            Name = name,
-            RepoId = repo.Id,
-            AdapterInstanceSettings = instanceSettings.Serialize()
-        };
-        Adapter = baseAdapter.WithInstanceSettings(InstanceSettings);
     }
 
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public Guid Id { get; }
-    public Repo Repo { get; }
-    public IInstanceGameAdapter Adapter { get; }
+    public Guid Id => PersistedModel.Id;
+    public InstanceScope Scope => PersistedModel.Scope;
+    public GameAdapterId GameAdapterId => PersistedModel.GameAdapterId;
+    public string Name => PersistedModel.Name;
+    public string SerializedInstanceSettings => PersistedModel.AdapterInstanceSettings;
+    public string? ModFolder => PersistedModel.ModFolder;
+    public ActiveProfile? ActiveProfile => PersistedModel.ActiveProfile;
 
-    public string Name
-    {
-        get => PersistedModel.Name;
-        set
-        {
-            PersistedModel.Name = value;
-            PropertyChanged?.Invoke(this, new(nameof(Name)));
-        }
-    }
-    public DynamicForm InstanceSettings
-    {
-        get => field;
-        set
-        {
-            field = value;
-            PropertyChanged?.Invoke(this, new(nameof(InstanceSettings)));
-        }
-    }
     internal PersistedLocalInstance PersistedModel { get; }
 
 
-    public void Update(string name, DynamicForm instanceSettings)
+    public DynamicForm GetInstanceSettings(IBaseGameAdapter baseAdapter)
     {
-        Name = name;
-        InstanceSettings = instanceSettings;
+        return baseAdapter.DeserializeInstanceSettings(PersistedModel.AdapterInstanceSettings);
+    }
+
+    public IInstanceGameAdapter GetAdapter(IBaseGameAdapter baseAdapter)
+    {
+        return baseAdapter.WithInstanceSettings(PersistedModel.AdapterInstanceSettings);
+    }
+
+
+    internal void Update(string name, DynamicForm instanceSettings, string? modFolder)
+    {
+        PersistedModel.Name = name;
         PersistedModel.AdapterInstanceSettings = instanceSettings.Serialize();
+        PersistedModel.ModFolder = modFolder;
+
+        PropertyChanged?.Invoke(this, new(nameof(Name)));
+        PropertyChanged?.Invoke(this, new(nameof(SerializedInstanceSettings)));
+        PropertyChanged?.Invoke(this, new(nameof(ModFolder)));
+    }
+
+    internal void SetActiveProfile(ActiveProfile? activeProfile)
+    {
+        PersistedModel.ActiveProfile = activeProfile;
+
+        PropertyChanged?.Invoke(this, new(nameof(ActiveProfile)));
     }
 }

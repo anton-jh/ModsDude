@@ -24,11 +24,20 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
                 ModDependencyShadowProperties.ModVersionId);
 
             modDependency.HasKey(
-                ModDependencyShadowProperties.ProfileId, // todo: repoid first
                 ModDependencyShadowProperties.RepoId,
+                ModDependencyShadowProperties.ProfileId,
                 ModDependencyShadowProperties.ModId,
                 ModDependencyShadowProperties.ModVersionId);
-        }); // todo: unique index on repoid,profileid,modid
+
+            // Backs the one-version-per-mod rule that Profile.AddDependency enforces in the domain.
+            // Without it a concurrent double-add pins one mod at two versions, which the sync engine
+            // has no way to resolve.
+            modDependency.HasIndex(
+                ModDependencyShadowProperties.RepoId,
+                ModDependencyShadowProperties.ProfileId,
+                ModDependencyShadowProperties.ModId)
+                .IsUnique();
+        });
 
         builder.Property(x => x.Name);
         builder.Property(x => x.Created);

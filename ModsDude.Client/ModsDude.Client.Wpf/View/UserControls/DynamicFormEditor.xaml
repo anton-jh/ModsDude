@@ -10,10 +10,10 @@
              d:DataContext="{d:DesignInstance vm:DynamicFormViewModel, IsDesignTimeCreatable=False}">
     
     <ItemsControl ItemsSource="{Binding Fields}">
-        <ItemsControl.ItemTemplate>
-            
+        <ItemsControl.Resources>
+
             <DataTemplate DataType="{x:Type vm:FolderPathDynamicFormFieldViewModel}">
-                <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}">
                     <Label Content="{Binding Title}" Margin="0 0 0 12"/>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Pick folder" Command="{Binding PickFolderCommand}" />
@@ -21,7 +21,18 @@
                     </StackPanel>
                 </StackPanel>
             </DataTemplate>
-            
-        </ItemsControl.ItemTemplate>
+
+            <DataTemplate DataType="{x:Type vm:OptionsDynamicFormFieldViewModel}">
+                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}">
+                    <Label Content="{Binding Title}" Margin="0 0 0 12"/>
+                    <ComboBox Width="300" HorizontalAlignment="Left"
+                              ItemsSource="{Binding Options}"
+                              DisplayMemberPath="Title"
+                              SelectedValuePath="Value"
+                              SelectedValue="{Binding Value, Mode=TwoWay}" />
+                </StackPanel>
+            </DataTemplate>
+
+        </ItemsControl.Resources>
     </ItemsControl>
 </UserControl>

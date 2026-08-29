@@ -240,12 +240,13 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
 public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings instanceSettings)
     : FarmingSimulatorBaseModAdapter, IInstanceModAdapter
 {
-    public async Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
-    {
-        var maybe =
-            from gameDataFolderPath in Maybe.From(instanceSettings.GameDataFolder)
-            select GetModsFromFolder(Path.Combine(gameDataFolderPath, "mods"), cancellationToken);
+    public string ModFolder => Path.Combine(
+        instanceSettings.GameDataFolder ?? throw new InvalidOperationException("Instance settings carry no game data folder."),
+        "mods");
 
-        return await maybe.GetValueOrDefault(Task.FromResult(Enumerable.Empty<LocalMod>()));
+
+    public Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
+    {
+        return GetModsFromFolder(ModFolder, cancellationToken);
     }
 }

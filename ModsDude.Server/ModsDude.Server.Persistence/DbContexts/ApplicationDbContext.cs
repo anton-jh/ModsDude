@@ -15,7 +15,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Repo> Repos { get; init; }
     public required DbSet<RepoMembership> RepoMemberships { get; init; }
     public required DbSet<Profile> Profiles { get; init; }
-    public required DbSet<Mod> Mods { get; init; }
+    public required DbSet<ModVersion> ModVersions { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

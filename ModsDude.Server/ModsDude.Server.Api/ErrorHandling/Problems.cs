@@ -28,11 +28,11 @@ public static class Problems
         Detail = $"The requested resource does not exist."
     };
 
-    public static CustomProblemDetails ModDependencyExists(Profile profile, Mod mod) => new()
+    public static CustomProblemDetails ModDependencyExists(Profile profile, ModId modId) => new()
     {
         Type = ProblemType.ModDependencyExists,
         Title = "Profile already has a dependency on mod",
-        Detail = $"The profile '{profile.Id.Value}' already has a dependency on mod '{mod.Id.Value}'."
+        Detail = $"The profile '{profile.Id.Value}' already has a dependency on mod '{modId.Value}'."
     };
 
     public static CustomProblemDetails InsufficientRepoAccess(RepoMembershipLevel minimumLevel)
@@ -84,6 +84,13 @@ public static class Problems
         Type = ProblemType.UserAlreadyMember,
         Title = "User is already a member of this repo",
         Detail = $"User '{userId.Value}' is already a member of '{repoId.Value}'."
+    };
+
+    public static CustomProblemDetails VersionPlacementConflict(RepoId repoId, ModId modId) => new()
+    {
+        Type = ProblemType.VersionPlacementConflict,
+        Title = "Version placement no longer matches the ordering",
+        Detail = $"The requested placement for a version of mod '{modId.Value}' in repo '{repoId.Value}' no longer matches the version order. Refetch the mod's versions, recompute the placement and retry."
     };
 
     public static CustomProblemDetails RepoNotEmpty(RepoId repoId) => new()
@@ -142,5 +149,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "repo-not-empty")]
         [JsonStringEnumMemberName(_typeBaseUri + "repo-not-empty")]
         RepoNotEmpty,
+
+        [EnumMember(Value = _typeBaseUri + "version-placement-conflict")]
+        [JsonStringEnumMemberName(_typeBaseUri + "version-placement-conflict")]
+        VersionPlacementConflict,
     }
 }

@@ -45,19 +45,20 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var modDependency = profile.ModDependencies.FirstOrDefault(x => x.ModVersion.Mod.Id == new ModId(modId));
+        var modDependency = profile.ModDependencies.FirstOrDefault(x => x.ModVersion.ModId == new ModId(modId));
         if (modDependency is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No dependency on mod '{modId}' found in profile '{profileId}'"));
         }
 
-        if (!modDependency.ModVersion.Mod.Versions.Any(x => x.Id == new ModVersionId(request.VersionId)))
+        var newVersion = await dbContext.ModVersions.GetAsync(new RepoId(repoId), new ModId(modId), new ModVersionId(request.VersionId), cancellationToken);
+        if (newVersion is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No version '{request.VersionId}' of mod '{modId}' found in repo '{repoId}'"));
         }
 
-        modDependency.ChangeVersion(new ModVersionId(request.VersionId));
-        modDependency.LockVersion = request.LockVersion;
+        modDependency.ChangeVersion(newVersion);
+        modDependency.Locked = request.Locked;
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -65,5 +66,5 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
     }
 
 
-    public record UpdateModDependencyRequest(string VersionId, bool LockVersion);
+    public record UpdateModDependencyRequest(string VersionId, bool Locked);
 }

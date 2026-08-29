@@ -35,7 +35,7 @@ public partial class App : Application
         _configuration = builder.Build();
 
         var serviceCollection = new ServiceCollection();
-        ConfigureServices(serviceCollection);
+        ConfigureServices(serviceCollection, _configuration);
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 
@@ -63,13 +63,14 @@ public partial class App : Application
     }
 
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<MainWindow>();
         services.AddSingleton<MainWindowViewModel>();
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
+        services.AddFactory<SettingsPageViewModel>();
         services.AddSingleton<RepoAdminPageViewModel.Factory>();
         services.AddSingleton<RepoPageViewModel.Factory>();
         services.AddSingleton<CreateProfilePageViewModel.Factory>();
@@ -95,8 +96,10 @@ public partial class App : Application
         services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();
         services.AddSingleton<LocalInstanceRepository>();
+        services.AddSingleton<ClientSettingsRepository>();
 
-        services.AddCore<AuthenticationService>();
+        services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
+            ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
         services.AddSingleton<AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
         services.AddSingleton<StateStore>();

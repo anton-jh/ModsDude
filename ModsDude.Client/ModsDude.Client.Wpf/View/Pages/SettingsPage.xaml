@@ -1,0 +1,108 @@
+﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance pvm:SettingsPageViewModel, IsDesignTimeCreatable=False}"
+      Title="SettingsPage">
+
+    <Grid RowDefinitions="*, auto">
+
+        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Orientation="Vertical">
+
+                    <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="ModsDude" />
+                    <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                               Text="Settings"
+                               Margin="0 8 0 36" />
+
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16">
+                        <GroupBox Header="Mod storage" Padding="0 16 0 16">
+                            <StackPanel Orientation="Vertical">
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="Downloaded mods are kept in a content store shared by every repo and game on this machine. Each disk holding mod folders is served by one store - its own, or one on another disk." />
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Margin="0 16 0 0"
+                                           Visibility="{Binding HasNoVolumes, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Text="Connect a game first - stores are configured for the disks your mod folders are on." />
+
+                                <ItemsControl ItemsSource="{Binding ModFolderVolumes}" Margin="0 8 0 0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:VolumeAssignmentViewModel}">
+                                            <StackPanel Orientation="Vertical" Margin="0 16 0 0">
+                                                <TextBlock FontWeight="SemiBold" Text="{Binding VolumeRoot}" />
+                                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding InstanceSummary}" />
+
+                                                <ComboBox Width="420" HorizontalAlignment="Left" Margin="0 12 0 0"
+                                                          ItemsSource="{Binding Options}"
+                                                          DisplayMemberPath="Description"
+                                                          SelectedValuePath="VolumeRoot"
+                                                          SelectedValue="{Binding ServingVolume, Mode=TwoWay}" />
+
+                                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                           Margin="0 8 0 0"
+                                                           Text="{Binding TradeOff}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                            </StackPanel>
+                        </GroupBox>
+                    </Border>
+
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16"
+                            Margin="0 16 0 0"
+                            Visibility="{Binding HasVolumes, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <GroupBox Header="Stores" Padding="0 16 0 16">
+                            <ItemsControl ItemsSource="{Binding Stores}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ContentStoreViewModel}">
+                                        <StackPanel Orientation="Vertical" Margin="0 0 0 16">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding VolumeRoot}" />
+                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding ServedSummary}" />
+
+                                            <Label Content="Folder" Margin="0 12 0 8" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="Pick folder" Command="{Binding PickPathCommand}" />
+                                                <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="320" Margin="8 0 0 0" />
+                                            </StackPanel>
+
+                                            <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
+                                            <TextBox Width="120" HorizontalAlignment="Left"
+                                                     Text="{Binding MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </GroupBox>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal">
+            <Button Width="250" Margin="32 24" Style="{DynamicResource AccentButtonStyle}"
+                    Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
+        </StackPanel>
+
+    </Grid>
+</Page>

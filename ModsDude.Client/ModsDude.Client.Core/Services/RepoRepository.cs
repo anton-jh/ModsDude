@@ -4,7 +4,6 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Collections.ObjectModel;
-using System.Text.Json;
 
 namespace ModsDude.Client.Core.Services;
 public class RepoRepository(
@@ -24,6 +23,13 @@ public class RepoRepository(
 
         var repoModels = reposFromApi.Select(MapRepoModel);
 
+        // Each repo holds a synchronizer subscribed to the machine's instance list, which outlives
+        // every refresh.
+        foreach (var repo in Repos)
+        {
+            repo.Dispose();
+        }
+
         Repos.Clear();
 
         foreach (var repo in repoModels)
@@ -32,17 +38,15 @@ public class RepoRepository(
         }
     }
 
-    public async Task CreateRepo(string name, string adapterId, object adapterConfiguration, CancellationToken cancellationToken)
+    public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         RepoDto repo;
-
-        var serializedAdapterConfiguration = JsonSerializer.Serialize(adapterConfiguration);
 
         var request = new CreateRepoRequest()
         {
             Name = name,
             AdapterId = adapterId,
-            AdapterConfiguration = serializedAdapterConfiguration,
+            AdapterConfiguration = baseSettings.Serialize(),
         };
         try
         {

@@ -9,7 +9,7 @@
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance pvm:CreateLocalInstancePageViewModel, IsDesignTimeCreatable=False}"
-      Title="EditLocalInstancePage">
+      Title="CreateLocalInstancePage">
 
     <Grid RowDefinitions="*, auto">
 

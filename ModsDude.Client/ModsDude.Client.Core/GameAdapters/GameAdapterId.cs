@@ -1,5 +1,9 @@
-﻿namespace ModsDude.Client.Core.GameAdapters;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
+namespace ModsDude.Client.Core.GameAdapters;
+
+[JsonConverter(typeof(GameAdapterIdJsonConverter))]
 public readonly record struct GameAdapterId
 {
     private const string _separator = "@";
@@ -46,5 +50,19 @@ public readonly record struct GameAdapterId
         }
         result = default;
         return false;
+    }
+}
+
+public sealed class GameAdapterIdJsonConverter : JsonConverter<GameAdapterId>
+{
+    public override GameAdapterId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return GameAdapterId.Parse(reader.GetString()
+            ?? throw new JsonException("Expected a game adapter id string."));
+    }
+
+    public override void Write(Utf8JsonWriter writer, GameAdapterId value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString());
     }
 }

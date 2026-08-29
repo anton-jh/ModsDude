@@ -1,8 +1,8 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -12,6 +12,7 @@ public partial class CreateLocalInstancePageViewModel
     : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
+    private readonly LocalInstanceRepository _localInstanceRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly HashSet<string> _takenNames;
@@ -19,17 +20,21 @@ public partial class CreateLocalInstancePageViewModel
 
     public CreateLocalInstancePageViewModel(
         Repo repo,
-        IGameAdapterIndex gameAdapterIndex,
+        LocalInstanceRepository localInstanceRepository,
         IDialogService dialogService,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
-        var existingInstances = repo.LocalInstances;
-        _name = existingInstances.Count == 0 ? "Game" : "";
+        // Names are unique within the scope, not within the repo: the same instances are offered
+        // under every repo targeting this game.
+        var instancesInScope = localInstanceRepository.GetByScope(repo.Scope).ToList();
+
+        _name = instancesInScope.Count == 0 ? "Game" : "";
         _repo = repo;
+        _localInstanceRepository = localInstanceRepository;
         _navigationLockService = navigationLockService;
-        _modalService = modalService;   
-        _takenNames = existingInstances.Select(x => x.Name).Distinct().ToHashSet();
+        _modalService = modalService;
+        _takenNames = instancesInScope.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
         InstanceSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetInstanceSettingsTemplate(), dialogService);
@@ -43,7 +48,7 @@ public partial class CreateLocalInstancePageViewModel
     [NotifyPropertyChangedFor(nameof(IsValid))]
     private string _name;
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && InstanceSettingsEditor.IsValid;
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && InstanceSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel InstanceSettingsEditor { get; }
 
@@ -58,7 +63,7 @@ public partial class CreateLocalInstancePageViewModel
             return;
         }
 
-        _repo.CreateLocalInstance(Name, InstanceSettingsEditor.ExtractResults());
+        _localInstanceRepository.Create(_repo.Adapter, Name, InstanceSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -73,7 +78,20 @@ public partial class CreateLocalInstancePageViewModel
 
     private void OnInstanceSettingsModified(object? sender, EventArgs e)
     {
+        OnPropertyChanged(nameof(IsValid));
         _navigationLockService.AcquireLock(this);
+    }
+
+    /// <summary>
+    /// Checked across every scope, since two games' instances can name the same folder and only one
+    /// of them can own it. Only asked of settings that are valid in their own right - the adapter
+    /// refuses to hydrate anything else.
+    /// </summary>
+    private LocalInstance? FindFolderConflict()
+    {
+        return InstanceSettingsEditor.IsValid
+            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, InstanceSettingsEditor.ExtractResults())
+            : null;
     }
 
     private List<string> GetValidationErrors()
@@ -90,6 +108,11 @@ public partial class CreateLocalInstancePageViewModel
         }
 
         errors.AddRange(InstanceSettingsEditor.GetValidationErrors());
+
+        if (FindFolderConflict() is LocalInstance owner)
+        {
+            errors.Add($"That folder already belongs to '{owner.Name}'.");
+        }
 
         return errors;
     }

@@ -43,10 +43,10 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        // The Mod -> Repo foreign key is Restrict, so deleting a repo that still has mods fails at
-        // the database with an unhandled exception. Refuse it here instead, with a problem the
-        // client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
-        if (await dbContext.Mods.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
+        // The ModVersion -> Repo foreign key is Restrict, so deleting a repo that still has mods
+        // fails at the database with an unhandled exception. Refuse it here instead, with a problem
+        // the client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
+        if (await dbContext.ModVersions.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.RepoNotEmpty(new RepoId(repoId)));
         }

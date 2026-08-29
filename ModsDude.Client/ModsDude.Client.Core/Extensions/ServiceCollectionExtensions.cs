@@ -6,11 +6,11 @@ using ModsDude.Client.Core.ModsDudeServer;
 namespace ModsDude.Client.Core.Extensions;
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddCore<TAccessTokenAccessor>(this IServiceCollection services)
+    public static IServiceCollection AddCore<TAccessTokenAccessor>(this IServiceCollection services, string serverBaseUrl)
         where TAccessTokenAccessor : IAccessTokenAccessor
     {
         services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<TAccessTokenAccessor>());
-        services.AddModsDudeClient();
+        services.AddModsDudeClient(serverBaseUrl);
         services.AddGameAdapters(typeof(IGameAdapter).Assembly);
 
         return services;

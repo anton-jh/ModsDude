@@ -1,9 +1,7 @@
-﻿using ModsDude.Client.Core.Exceptions;
-using ModsDude.Client.Core.GameAdapters;
+﻿using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using System.Collections.ObjectModel;
 
@@ -13,7 +11,7 @@ public class Repo
     : IDisposable
 {
     private readonly RepoRepository _repoService;
-    private readonly ObservableCollectionSynchronizer<LocalInstance, PersistedLocalInstance, Guid> _instancesSynchronizer;
+    private readonly ObservableCollectionSynchronizer<LocalInstance, LocalInstance, string> _instancesSynchronizer;
 
 
     public Repo(
@@ -28,15 +26,16 @@ public class Repo
         Name = repoMembershipDto.Repo.Name;
         MembershipLevel = repoMembershipDto.MembershipLevel;
 
-        LocalInstances = new(localInstanceRepository.GetByRepoId(Id)
-            .Select(x => new LocalInstance(Adapter, this, x)));
+        LocalInstances = [];
 
+        // Offered, not owned: an instance belongs to a game, so every repo targeting that game
+        // lists the same instances.
         _instancesSynchronizer = new(
-            source: LocalInstances,
-            target: localInstanceRepository.GetByRepoId(Id),
-            factory: x => x.PersistedModel,
-            keySelectorExpression: x => Id,
-            targetAlreadyInitialized: true);
+            source: localInstanceRepository.Instances,
+            target: LocalInstances,
+            factory: x => x,
+            keySelectorExpression: x => x.Name,
+            filter: x => x.Scope == Scope);
     }
 
 
@@ -45,6 +44,7 @@ public class Repo
     public RepoMembershipLevel MembershipLevel { get; }
     public ObservableCollection<LocalInstance> LocalInstances { get; }
     public IBaseGameAdapter Adapter { get; private set; }
+    public InstanceScope Scope => Adapter.Scope;
 
     // TODO: Profiles
 
@@ -54,17 +54,6 @@ public class Repo
         Name = name;
         Adapter = Adapter.WithBaseSettings(baseSettings);
         return _repoService.Update(this, cancellationToken);
-    }
-
-    public void CreateLocalInstance(string name, DynamicForm instanceSettings)
-    {
-        var instance = new LocalInstance(Adapter, this, name, instanceSettings);
-        LocalInstances.Add(instance);
-    }
-
-    public void DeleteLocalInstance(LocalInstance instance)
-    {
-        LocalInstances.Remove(instance);
     }
 
     public void Dispose()

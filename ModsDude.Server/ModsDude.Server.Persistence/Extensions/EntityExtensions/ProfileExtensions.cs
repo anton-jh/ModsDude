@@ -22,19 +22,19 @@ public static class ProfileExtensions
     }
 
     /// <summary>
-    /// Loads a profile with each dependency's <see cref="ModDependency.ModVersion"/> and its owning
-    /// <see cref="Mod"/> populated. Every domain operation on a dependency navigates through them —
+    /// Loads a profile with each dependency's <see cref="ModDependency.ModVersion"/> populated.
+    /// Every domain operation on a dependency reads <c>(RepoId, ModId)</c> off it —
     /// <see cref="Profile.AddDependency"/>, <see cref="Profile.DeleteDependency(ModId)"/>,
     /// <see cref="Profile.HasDependencyOn"/>, <see cref="ModDependency.ChangeVersion"/> — so loading
-    /// the profile without them makes every one of those throw. <see cref="GetAsync"/> is fine for
-    /// anything that only touches the profile itself.
+    /// the profile without it makes every one of those throw. The navigation is one hop now that
+    /// <see cref="ModVersion"/> has no parent, but it is still not auto-included.
+    /// <see cref="GetAsync"/> is fine for anything that only touches the profile itself.
     /// </summary>
     public static Task<Profile?> GetWithModDependenciesAsync(this DbSet<Profile> dbSet, RepoId repoId, ProfileId profileId, CancellationToken cancellationToken)
     {
         return dbSet
             .Include(x => x.ModDependencies)
                 .ThenInclude(x => x.ModVersion)
-                .ThenInclude(x => x.Mod)
             .FirstOrDefaultAsync(x => x.RepoId == repoId && x.Id == profileId, cancellationToken);
     }
 

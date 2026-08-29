@@ -19,26 +19,26 @@ public class Profile(
     public DateTime Created { get; } = created;
 
 
-    public ModDependency AddDependency(ModVersion modVersion, bool lockVersion)
+    public ModDependency AddDependency(ModVersion modVersion, bool locked)
     {
-        if (modVersion.Mod.RepoId != RepoId)
+        if (modVersion.RepoId != RepoId)
         {
-            throw new InvalidOperationException($"Cannot add dependency to mod with id '{modVersion.Mod.Id}'. Mod belongs to another repo");
+            throw new InvalidOperationException($"Cannot add dependency to mod with id '{modVersion.ModId}'. Mod belongs to another repo");
         }
 
-        if (_modDependencies.Any(x => x.ModVersion.Mod == modVersion.Mod))
+        if (_modDependencies.Any(x => x.ModVersion.ModId == modVersion.ModId))
         {
-            throw new InvalidOperationException($"Dependency to mod with id '{modVersion.Mod.Id}' already exists");
+            throw new InvalidOperationException($"Dependency to mod with id '{modVersion.ModId}' already exists");
         }
 
         var newDependency = new ModDependency()
         {
             ModVersion = modVersion,
-            LockVersion = lockVersion
+            Locked = locked
         };
 
         _modDependencies.Add(newDependency);
-        
+
         return newDependency;
     }
 
@@ -46,7 +46,7 @@ public class Profile(
     {
         if (!_modDependencies.Contains(dependency))
         {
-            throw DependencyNotFoundThrowHelper(dependency.ModVersion.Mod.Id);
+            throw DependencyNotFoundThrowHelper(dependency.ModVersion.ModId);
         }
 
         _modDependencies.Remove(dependency);
@@ -54,15 +54,15 @@ public class Profile(
 
     public void DeleteDependency(ModId modId)
     {
-        var dependency = _modDependencies.FirstOrDefault(x => x.ModVersion.Mod.Id == modId)
+        var dependency = _modDependencies.FirstOrDefault(x => x.ModVersion.ModId == modId)
             ?? throw DependencyNotFoundThrowHelper(modId);
 
         _modDependencies.Remove(dependency);
     }
 
     public bool HasDependencyOn(ModId modId)
-        => _modDependencies.Any(x => x.ModVersion.Mod.Id == modId);
-        
+        => _modDependencies.Any(x => x.ModVersion.ModId == modId);
+
 
 
     private InvalidOperationException DependencyNotFoundThrowHelper(ModId modId)

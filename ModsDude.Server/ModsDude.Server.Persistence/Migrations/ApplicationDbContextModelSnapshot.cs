@@ -18,29 +18,10 @@ namespace ModsDude.Server.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("ModsDude.Server.Domain.Mods.Mod", b =>
-                {
-                    b.Property<Guid>("RepoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("Created")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("Updated")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("RepoId", "Id");
-
-                    b.ToTable("Mods");
-                });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>
                 {
@@ -51,6 +32,10 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("Created")
@@ -64,15 +49,21 @@ namespace ModsDude.Server.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("Locked")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("SequenceNumber")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("Updated")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("RepoId", "ModId", "Id");
 
                     b.HasIndex("RepoId", "ModId", "SequenceNumber")
                         .IsUnique();
 
-                    b.ToTable("ModVersion");
+                    b.ToTable("ModVersions");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Profiles.Profile", b =>
@@ -129,7 +120,7 @@ namespace ModsDude.Server.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.ComplexProperty<Dictionary<string, object>>("AdapterData", "ModsDude.Server.Domain.Repos.Repo.AdapterData#AdapterData", b1 =>
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "AdapterData", "ModsDude.Server.Domain.Repos.Repo.AdapterData#AdapterData", b1 =>
                         {
                             b1.IsRequired();
 
@@ -176,21 +167,12 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("ModsDude.Server.Domain.Mods.Mod", b =>
+            modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>
                 {
                     b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
                         .WithMany()
                         .HasForeignKey("RepoId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>
-                {
-                    b.HasOne("ModsDude.Server.Domain.Mods.Mod", "Mod")
-                        .WithMany("Versions")
-                        .HasForeignKey("RepoId", "ModId")
-                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.OwnsMany("ModsDude.Server.Domain.Mods.ModAttribute", "Attributes", b1 =>
@@ -225,9 +207,49 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .HasForeignKey("ModVersionRepoId", "ModVersionModId", "ModVersionId");
                         });
 
+                    b.OwnsMany("ModsDude.Server.Domain.Mods.ModImageReference", "Images", b1 =>
+                        {
+                            b1.Property<Guid>("ModVersionRepoId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("ModVersionModId")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ModVersionId")
+                                .HasColumnType("text");
+
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("Id"));
+
+                            b1.Property<string>("FileName")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Hash")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("ModVersionRepoId", "ModVersionModId", "ModVersionId", "Id");
+
+                            b1.ToTable("ModImageReference");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ModVersionRepoId", "ModVersionModId", "ModVersionId");
+                        });
+
                     b.Navigation("Attributes");
 
-                    b.Navigation("Mod");
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Profiles.Profile", b =>
@@ -240,10 +262,10 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.OwnsMany("ModsDude.Server.Domain.Profiles.ModDependency", "ModDependencies", b1 =>
                         {
-                            b1.Property<Guid>("ProfileId")
+                            b1.Property<Guid>("RepoId")
                                 .HasColumnType("uuid");
 
-                            b1.Property<Guid>("RepoId")
+                            b1.Property<Guid>("ProfileId")
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("ModId")
@@ -252,14 +274,15 @@ namespace ModsDude.Server.Persistence.Migrations
                             b1.Property<string>("ModVersionId")
                                 .HasColumnType("text");
 
-                            b1.Property<bool>("LockVersion")
+                            b1.Property<bool>("Locked")
                                 .HasColumnType("boolean");
 
-                            b1.HasKey("ProfileId", "RepoId", "ModId", "ModVersionId");
-
-                            b1.HasIndex("RepoId", "ProfileId");
+                            b1.HasKey("RepoId", "ProfileId", "ModId", "ModVersionId");
 
                             b1.HasIndex("RepoId", "ModId", "ModVersionId");
+
+                            b1.HasIndex("RepoId", "ProfileId", "ModId")
+                                .IsUnique();
 
                             b1.ToTable("ModDependency");
 
@@ -291,11 +314,6 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("ModsDude.Server.Domain.Mods.Mod", b =>
-                {
-                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Repos.Repo", b =>

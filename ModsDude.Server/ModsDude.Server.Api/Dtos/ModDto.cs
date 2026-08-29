@@ -2,39 +2,34 @@
 
 namespace ModsDude.Server.Api.Dtos;
 
+/// <summary>
+/// One DTO per version, with no parent. Nesting versions under a mod would only make the client
+/// re-group on receipt, which is exactly what its flat model exists to avoid.
+/// </summary>
 public record ModDto(
-    string Id,
-    IEnumerable<ModVersionDto> Versions,
-    DateTimeOffset Created,
-    DateTimeOffset Updated)
-{
-    public static ModDto FromModel(Mod model)
-    {
-        return new ModDto(
-            model.Id.Value,
-            model.Versions.Select(ModVersionDto.FromModel),
-            model.Created,
-            model.Updated);
-    }
-}
-
-
-public record ModVersionDto(
+    string ModId,
     string VersionId,
     int SequenceNumber,
     string DisplayName,
     string Description,
+    string ContentHash,
+    bool Locked,
     IEnumerable<ModAttributeDto> Attributes,
-    DateTimeOffset Created)
+    DateTimeOffset Created,
+    DateTimeOffset Updated)
 {
-    public static ModVersionDto FromModel(ModVersion model)
+    public static ModDto FromModel(ModVersion model)
     {
-        return new ModVersionDto(
+        return new ModDto(
+            model.ModId.Value,
             model.Id.Value,
             model.SequenceNumber,
             model.DisplayName,
             model.Description,
+            model.ContentHash,
+            model.Locked,
             model.Attributes.Select(ModAttributeDto.FromModel),
-            model.Created);
+            model.Created,
+            model.Updated);
     }
 }

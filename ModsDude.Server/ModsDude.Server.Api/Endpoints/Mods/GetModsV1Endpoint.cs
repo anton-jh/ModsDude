@@ -36,11 +36,11 @@ public class GetModsV1Endpoint : IEndpoint
             return authResult;
         }
 
-        var mods = await dbContext.Mods
+        var modVersions = await dbContext.ModVersions
             .Where(x => x.RepoId == new RepoId(repoId))
             .ToListAsync(cancellationToken);
 
-        var dtos = mods.Select(ModDto.FromModel);
+        var dtos = modVersions.Select(ModDto.FromModel);
 
         return TypedResults.Ok(dtos);
     }

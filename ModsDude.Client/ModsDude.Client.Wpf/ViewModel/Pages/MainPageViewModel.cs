@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
+using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -20,6 +21,7 @@ public partial class MainPageViewModel
     public MainPageViewModel(
         RepoRepository repoService,
         RepoPageViewModel.Factory repoPageViewModelFactory,
+        IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
         IDialogService dialogService,
@@ -27,7 +29,8 @@ public partial class MainPageViewModel
     {
         MenuItems = [
             new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
-            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
+            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService)),
+            new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
         ];
 
         Repos = [];

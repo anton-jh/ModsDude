@@ -20,13 +20,13 @@ public partial class CreateRepoPageViewModel(
     private string _name = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BaseSettingsEditor))]
     private IGameAdapter? _selectedGameAdapter;
 
+    // Held rather than derived: the editor owns the values the user is typing, so handing out a new
+    // one per binding read would submit an empty form.
+    [ObservableProperty]
+    private DynamicFormViewModel? _baseSettingsEditor;
 
-    public DynamicFormViewModel? BaseSettingsEditor => SelectedGameAdapter?.GetBaseSettingsTemplate() is DynamicForm template
-        ? new(editing: false, template, dialogService)
-        : null;
 
     public bool IsValid =>
         !string.IsNullOrWhiteSpace(Name) &&
@@ -53,13 +53,14 @@ public partial class CreateRepoPageViewModel(
         await repoRepository.CreateRepo(
             Name,
             SelectedGameAdapter.Id.ToString(),
-            BaseSettingsEditor,
+            BaseSettingsEditor.ExtractResults(),
             cancellationToken);
     }
 
     public void Dispose()
     {
         navigationLockService.ReleaseLock(this);
+        BaseSettingsEditor?.Dispose();
     }
 
 
@@ -88,6 +89,11 @@ public partial class CreateRepoPageViewModel(
 
     partial void OnSelectedGameAdapterChanged(IGameAdapter? value)
     {
+        BaseSettingsEditor?.Dispose();
+        BaseSettingsEditor = value?.GetBaseSettingsTemplate() is DynamicForm template
+            ? new DynamicFormViewModel(editing: false, template, dialogService)
+            : null;
+
         navigationLockService.AcquireLock(this);
     }
 }

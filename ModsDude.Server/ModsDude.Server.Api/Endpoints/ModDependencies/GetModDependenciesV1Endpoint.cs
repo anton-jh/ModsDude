@@ -37,22 +37,22 @@ public class GetModDependenciesV1Endpoint : IEndpoint
             return authResult;
         }
 
-        // Projected rather than materialized: ModDependencyDto needs the mod id, which lives behind
-        // ModVersion.Mod, and materializing that navigation would drag in every version of every
-        // mod the profile depends on via Mod.Versions' auto-include.
+        // Projected rather than materialized: materializing ModVersion would drag in its owned
+        // attribute and image collections for four columns.
         var modDependencies = await dbContext.Profiles
             .Where(x => x.RepoId == new RepoId(repoId) && x.Id == new ProfileId(profileId))
             .SelectMany(x => x.ModDependencies)
             .Select(x => new
             {
-                ModId = x.ModVersion.Mod.Id,
+                x.ModVersion.ModId,
                 ModVersionId = x.ModVersion.Id,
-                x.LockVersion
+                x.ModVersion.ContentHash,
+                x.Locked
             })
             .ToListAsync(cancellationToken);
 
         var dtos = modDependencies
-            .Select(x => new ModDependencyDto(x.ModId.Value, x.ModVersionId.Value, x.LockVersion));
+            .Select(x => new ModDependencyDto(x.ModId.Value, x.ModVersionId.Value, x.ContentHash, x.Locked));
 
         return TypedResults.Ok(dtos);
     }

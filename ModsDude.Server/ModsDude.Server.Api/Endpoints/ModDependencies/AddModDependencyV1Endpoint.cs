@@ -45,29 +45,23 @@ public class AddModDependencyV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var mod = await dbContext.Mods.GetAsync(new RepoId(repoId), new ModId(request.ModId), cancellationToken);
-        if (mod is null)
-        {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No mod '{request.ModId}' found in repo '{repoId}'"));
-        }
-
-        var modVersion = mod.GetVersionById(new ModVersionId(request.VersionId));
+        var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(repoId), new ModId(request.ModId), new ModVersionId(request.VersionId), cancellationToken);
         if (modVersion is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No version '{request.VersionId}' of mod '{request.ModId}' found in repo '{repoId}'"));
         }
 
-        if (profile.ModDependencies.Any(x => x.ModVersion.Mod == modVersion.Mod))
+        if (profile.HasDependencyOn(modVersion.ModId))
         {
-            return TypedResults.BadRequest(Problems.ModDependencyExists(profile, modVersion.Mod));
+            return TypedResults.BadRequest(Problems.ModDependencyExists(profile, modVersion.ModId));
         }
 
-        var modDependency = profile.AddDependency(modVersion, request.LockVersion);
+        var modDependency = profile.AddDependency(modVersion, request.Locked);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ModDependencyDto.FromModel(modDependency));
     }
 
 
-    public record AddModDependencyRequest(string ModId, string VersionId, bool LockVersion);
+    public record AddModDependencyRequest(string ModId, string VersionId, bool Locked);
 }

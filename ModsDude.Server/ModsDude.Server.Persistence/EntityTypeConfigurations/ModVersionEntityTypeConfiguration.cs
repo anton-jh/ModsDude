@@ -8,30 +8,17 @@ internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModV
 {
     public void Configure(EntityTypeBuilder<ModVersion> builder)
     {
-        builder.Property<RepoId>(ModVersionShadowProperties.RepoId);
-        builder.Property<ModId>(ModVersionShadowProperties.ModId);
+        builder.HasKey(x => new { x.RepoId, x.ModId, x.Id });
 
-        builder.HasKey(
-            ModVersionShadowProperties.RepoId,
-            ModVersionShadowProperties.ModId,
-            nameof(ModVersion.Id));
-
-        builder.HasOne(x => x.Mod).WithMany(x => x.Versions).HasForeignKey(
-            ModVersionShadowProperties.RepoId,
-            ModVersionShadowProperties.ModId);
+        builder.HasOne<Repo>().WithMany().HasForeignKey(x => x.RepoId).OnDelete(DeleteBehavior.Restrict);
 
         builder.OwnsMany(x => x.Attributes);
 
-        builder.HasIndex(
-            ModVersionShadowProperties.RepoId,
-            ModVersionShadowProperties.ModId,
-            nameof(ModVersion.SequenceNumber))
-            .IsUnique();
-    }
-}
+        builder.OwnsMany(x => x.Images, image =>
+        {
+            image.Property(x => x.Kind).HasConversion<string>();
+        });
 
-internal static class ModVersionShadowProperties
-{
-    public const string RepoId = "RepoId";
-    public const string ModId = "ModId";
+        builder.HasIndex(x => new { x.RepoId, x.ModId, x.SequenceNumber }).IsUnique();
+    }
 }

@@ -64,6 +64,9 @@
             <DataTemplate DataType="{x:Type pvm:RepoModsImportPageViewModel}">
                 <p:RepoModsImportPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:SettingsPageViewModel}">
+                <p:SettingsPage />
+            </DataTemplate>
 
             <DataTemplate DataType="{x:Type vm:ModalViewModel}">
                 <uc:Dialog />

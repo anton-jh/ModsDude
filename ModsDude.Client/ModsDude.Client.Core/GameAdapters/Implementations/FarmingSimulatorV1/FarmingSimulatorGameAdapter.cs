@@ -7,10 +7,7 @@ public class FarmingSimulatorGameAdapter : IGameAdapter
 {
     public GameAdapterId Id { get; } = new("_farming_simulator", 1);
     public string DisplayName { get; } = "Farming Simulator";
-    public string Description { get; } = "For Farming Simulator 25.";
-    public bool CanSupportMods { get; } = true;
-
-    public bool CanSupportSavegames { get; } = true;
+    public string Description { get; } = "For Farming Simulator 22 and 25.";
 
 
     public DynamicForm GetBaseSettingsTemplate()
@@ -54,6 +51,20 @@ public class FarmingSimulatorBaseGameAdapter(
     public FarmingSimulatorBaseSettings BaseSettings { get; } = settings;
     DynamicForm IBaseGameAdapter.BaseSettings => BaseSettings;
 
+    public bool CanSupportMods { get; } = true;
+    public bool CanSupportSavegames { get; } = true;
+
+    /// <summary>
+    /// One adapter serves both Farming Simulator 22 and 25, and their mod folders are not
+    /// interchangeable sync targets, so the adapter id alone would offer an FS22 folder to an FS25
+    /// repo.
+    /// </summary>
+    public InstanceScope Scope => new(Id.Id, BaseSettings.GameVersion switch
+    {
+        { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
+        null => throw new InvalidOperationException("Base settings without a game version cannot produce an instance scope.")
+    });
+
 
     public DynamicForm DeserializeInstanceSettings(string serializedInstanceSettings)
     {
@@ -72,7 +83,8 @@ public class FarmingSimulatorBaseGameAdapter(
 
     public DynamicForm GetInstanceSettingsTemplate()
     {
-        return new FarmingSimulatorInstanceSettings();
+        return FarmingSimulatorInstanceSettings.CreateTemplate(BaseSettings.GameVersion
+            ?? throw new InvalidOperationException("Base settings without a game version cannot produce an instance settings template."));
     }
 
     public IInstanceGameAdapter WithInstanceSettings(string serializedInstanceSettings)
@@ -100,9 +112,10 @@ public class FarmingSimulatorInstanceGameAdapter(
     FarmingSimulatorInstanceSettings instanceSettings)
     : FarmingSimulatorBaseGameAdapter(baseSettings), IInstanceGameAdapter
 {
-    private readonly List<Func<object>> _capabilities = [
-        () => new FarmingSimulatorInstanceModAdapter(instanceSettings),
-        () => new FarmingSimulatorInstanceSavegameAdapter()
+    // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
+    private readonly List<object> _capabilities = [
+        new Func<IInstanceModAdapter>(() => new FarmingSimulatorInstanceModAdapter(instanceSettings)),
+        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter())
         ];
 
 
