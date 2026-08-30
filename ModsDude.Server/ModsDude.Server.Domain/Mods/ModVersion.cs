@@ -35,15 +35,21 @@ public class ModVersion
 
 
     /// <summary>
-    /// Whether a set of references describes a coherent gallery: one icon at most, and no two images
-    /// of a kind claiming the same position. A version's imagery is arrived at by several
-    /// independent uploaders — the importer, and any client that opportunistically backfills — so
-    /// the ordering is only meaningful if it cannot be self-contradictory.
+    /// Whether a set of references describes a coherent gallery: one icon at most per rendition, and
+    /// no two images of a kind claiming the same rendition at the same position. A version's imagery
+    /// is arrived at by several independent uploaders — the importer, and any client that
+    /// opportunistically backfills — so the ordering is only meaningful if it cannot be
+    /// self-contradictory.
     /// </summary>
+    /// <remarks>
+    /// Per rendition rather than outright, because an icon is stored as a thumbnail and a full like
+    /// every other image. The uniqueness rule does not subsume it: two icons at different positions
+    /// would collide with nothing, and there is no second icon for a position to distinguish.
+    /// </remarks>
     public static bool CheckImagesAreValid(IReadOnlyCollection<ModImageReference> images)
     {
-        return images.Count(x => x.Kind == ModImageKind.Icon) <= 1
-            && !images.GroupBy(x => (x.Kind, x.Position)).Any(x => x.Count() > 1);
+        return images.Where(x => x.Kind == ModImageKind.Icon).GroupBy(x => x.Rendition).All(x => x.Count() <= 1)
+            && !images.GroupBy(x => (x.Kind, x.Rendition, x.Position)).Any(x => x.Count() > 1);
     }
 
     /// <summary>
@@ -56,7 +62,7 @@ public class ModVersion
     {
         if (!CheckImagesAreValid(images))
         {
-            throw new InvalidOperationException($"Cannot set images on version '{Id.Value}' of mod '{ModId.Value}'. The set has more than one icon, or two images of a kind at the same position");
+            throw new InvalidOperationException($"Cannot set images on version '{Id.Value}' of mod '{ModId.Value}'. The set has more than one icon of a rendition, or two images of a kind at the same rendition and position");
         }
 
         _images.Clear();

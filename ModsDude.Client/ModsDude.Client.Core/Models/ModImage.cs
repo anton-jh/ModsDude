@@ -26,7 +26,8 @@ public record ModImage(string Name, string CacheKey, Func<CancellationToken, Tas
     /// <summary>
     /// The same picture at full resolution, where <see cref="Load"/> reads a smaller rendition.
     /// Null when there is nothing larger to show - a local image is loaded whole and downscaled on
-    /// the way to the screen, and an icon has no larger rendition stored at all.
+    /// the way to the screen, and a server image whose full rendition has not been published yet has
+    /// only the thumbnail to draw from.
     /// </summary>
     public ModImage? FullSize { get; init; }
 }

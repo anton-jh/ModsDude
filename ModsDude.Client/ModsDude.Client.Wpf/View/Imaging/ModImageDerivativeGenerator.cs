@@ -26,7 +26,7 @@ internal static class ModImageDerivativeGenerator
         {
             var decoded = ModImageDecoder.DecodeToPixels(data);
 
-            var renditions = ModImageReferenceLayout.GetDerivatives(kind)
+            var renditions = ModImageRenditions.All
                 .Select(x => Encode(decoded, x))
                 .ToList();
 
@@ -35,13 +35,13 @@ internal static class ModImageDerivativeGenerator
     }
 
 
-    private static GeneratedRendition Encode(DecodedImage decoded, ModImageDerivative derivative)
+    private static GeneratedRendition Encode(DecodedImage decoded, ModImageRendition rendition)
     {
-        var (width, height) = ModImageDerivatives.GetTargetSize(decoded.Width, decoded.Height, derivative);
+        var (width, height) = ModImageRenditions.GetTargetSize(decoded.Width, decoded.Height, rendition);
 
         var bytes = WebPCodec.Encode(decoded.Bgra, decoded.Width, decoded.Height, width, height);
 
-        return new GeneratedRendition(derivative, ModImageHashing.Compute(bytes), bytes);
+        return new GeneratedRendition(rendition, ModImageHashing.Compute(bytes), bytes);
     }
 }
 
@@ -49,4 +49,4 @@ internal static class ModImageDerivativeGenerator
 internal record GeneratedModImage(ModImageKind Kind, int Index, string FileName, IReadOnlyList<GeneratedRendition> Renditions);
 
 /// <param name="Hash">The address these bytes belong at, which is a hash of the bytes themselves.</param>
-internal record GeneratedRendition(ModImageDerivative Derivative, string Hash, byte[] Bytes);
+internal record GeneratedRendition(ModImageRendition Rendition, string Hash, byte[] Bytes);

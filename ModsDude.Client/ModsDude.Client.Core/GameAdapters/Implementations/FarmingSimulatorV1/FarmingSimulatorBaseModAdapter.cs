@@ -88,6 +88,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
                 FilePath = path,
                 FileLength = new FileInfo(path).Length,
                 Author = desc.Element("author")?.Value.Trim(),
+                Locked = DeclaresMaps(desc),
                 Icon = GetIcon(zip, path, desc),
                 Images = GetImages(zip, path)
             };
@@ -131,6 +132,17 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
         using var reader = XmlReader.Create(xmlStream, settings);
         var document = XDocument.Load(reader);
         return Maybe.From(document.Element("modDesc"));
+    }
+
+    /// <summary>
+    /// Whether the mod adds a map, which is what makes a Farming Simulator mod version-sensitive:
+    /// changing map versions partway through a save can corrupt it, and the damage shows up long
+    /// after the change that caused it. Every version of a map mod declares its maps here, so the
+    /// answer is the same for all of them without anything having to store it.
+    /// </summary>
+    private static bool DeclaresMaps(XElement desc)
+    {
+        return desc.Element("maps")?.Elements("map").Any() ?? false;
     }
 
     private static Maybe<string> GetEnglishOrFallback(XElement element, string fallback)

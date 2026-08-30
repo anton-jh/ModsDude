@@ -71,9 +71,6 @@
             <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
                 <p:RepoModsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoModsImportPageViewModel}">
-                <p:RepoModsImportPage />
-            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:SettingsPageViewModel}">
                 <p:SettingsPage />
             </DataTemplate>
@@ -86,6 +83,12 @@
                  above and render as a confirmation dialog. -->
             <DataTemplate DataType="{x:Type vm:ModDetailsModalViewModel}">
                 <uc:ModDetailsDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ModVersionArbitrationModalViewModel}">
+                <uc:ModVersionArbitrationDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ModVersionReorderModalViewModel}">
+                <uc:ModVersionReorderDialog />
             </DataTemplate>
 
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,
@@ -102,6 +105,7 @@
             </DataTemplate>
 
             <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
+            <vc:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
 
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />

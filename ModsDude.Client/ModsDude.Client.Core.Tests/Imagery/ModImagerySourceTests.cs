@@ -11,6 +11,8 @@ public class ModImagerySourceTests
     private const string _serverIconHash = "1111111111111111111111111111111111111111111111111111111111111111";
     private const string _serverStoreFullHash = "2222222222222222222222222222222222222222222222222222222222222222";
     private const string _serverStoreThumbnailHash = "3333333333333333333333333333333333333333333333333333333333333333";
+    private const string _serverIconFullHash = "4444444444444444444444444444444444444444444444444444444444444444";
+    private const string _secondStoreThumbnailHash = "5555555555555555555555555555555555555555555555555555555555555555";
 
 
     [Fact]
@@ -57,6 +59,62 @@ public class ModImagerySourceTests
 
         Assert.Equal(_serverStoreThumbnailHash, image.CacheKey);
         Assert.Equal(_serverStoreFullHash, image.FullSize?.CacheKey);
+    }
+
+    [Fact]
+    public void An_icon_carries_a_full_rendition_like_any_other_image()
+    {
+        // The list row still draws the 128 px thumbnail; what the full buys is a details dialog for
+        // a mod that ships no store images, which used to enlarge the thumbnail instead.
+        var version = CreateVersion(isOnServer: true, withLocalFile: false) with { ServerImages = CreateReferences() };
+
+        var icon = CreateSource().Get(version).Icon;
+
+        Assert.Equal(_serverIconHash, icon?.CacheKey);
+        Assert.Equal(_serverIconFullHash, icon?.FullSize?.CacheKey);
+    }
+
+    [Fact]
+    public void Whichever_rendition_arrived_stands_in_for_the_one_that_did_not()
+    {
+        // Imagery arrives late, incomplete, and possibly from more than one uploader, so a subset
+        // has to decode to the same gallery the whole set would - one entry short of sharpness
+        // rather than one entry short.
+        var version = CreateVersion(isOnServer: true, withLocalFile: false) with
+        {
+            ServerImages =
+            [
+                new ModImageReference(_serverIconFullHash, ModImageKind.Icon, ModImageRendition.Full, 0, "icon.dds"),
+                new ModImageReference(_serverStoreThumbnailHash, ModImageKind.StoreImage, ModImageRendition.Thumbnail, 0, "store_01.dds")
+            ]
+        };
+
+        var imagery = CreateSource().Get(version);
+
+        Assert.Equal(_serverIconFullHash, imagery.Icon?.CacheKey);
+        Assert.Null(imagery.Icon?.FullSize);
+        Assert.Equal(_serverStoreThumbnailHash, Assert.Single(imagery.Images).CacheKey);
+    }
+
+    [Fact]
+    public void Position_orders_the_gallery_and_pairs_the_renditions_of_one_image()
+    {
+        // Position is the image's place in the mod's own list, so the two renditions of one image
+        // share it and no arithmetic is needed to tell entries apart.
+        var version = CreateVersion(isOnServer: true, withLocalFile: false) with
+        {
+            ServerImages =
+            [
+                new ModImageReference(_secondStoreThumbnailHash, ModImageKind.StoreImage, ModImageRendition.Thumbnail, 1, "store_02.dds"),
+                new ModImageReference(_serverStoreThumbnailHash, ModImageKind.StoreImage, ModImageRendition.Thumbnail, 0, "store_01.dds"),
+                new ModImageReference(_serverStoreFullHash, ModImageKind.StoreImage, ModImageRendition.Full, 0, "store_01.dds")
+            ]
+        };
+
+        var images = CreateSource().Get(version).Images;
+
+        Assert.Equal([_serverStoreThumbnailHash, _secondStoreThumbnailHash], images.Select(x => x.CacheKey));
+        Assert.Equal(_serverStoreFullHash, images[0].FullSize?.CacheKey);
     }
 
     [Fact]
@@ -120,11 +178,10 @@ public class ModImagerySourceTests
     {
         return
         [
-            new ModImageReference(_serverIconHash, ModImageKind.Icon, 0, "icon.dds"),
-            new ModImageReference(_serverStoreFullHash, ModImageKind.StoreImage,
-                ModImageReferenceLayout.GetPosition(0, ModImageDerivative.Full), "store_01.dds"),
-            new ModImageReference(_serverStoreThumbnailHash, ModImageKind.StoreImage,
-                ModImageReferenceLayout.GetPosition(0, ModImageDerivative.Thumbnail), "store_01.dds")
+            new ModImageReference(_serverIconHash, ModImageKind.Icon, ModImageRendition.Thumbnail, 0, "icon.dds"),
+            new ModImageReference(_serverIconFullHash, ModImageKind.Icon, ModImageRendition.Full, 0, "icon.dds"),
+            new ModImageReference(_serverStoreFullHash, ModImageKind.StoreImage, ModImageRendition.Full, 0, "store_01.dds"),
+            new ModImageReference(_serverStoreThumbnailHash, ModImageKind.StoreImage, ModImageRendition.Thumbnail, 0, "store_01.dds")
         ];
     }
 

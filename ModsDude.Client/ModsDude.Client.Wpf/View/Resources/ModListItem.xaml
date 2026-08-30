@@ -32,117 +32,238 @@
                 </Style>
             </Border.Style>
 
-            <Grid ColumnDefinitions="auto auto * auto auto">
+            <Grid>
 
-                <CheckBox Grid.Column="0"
-                          Margin="12 0 0 0"
-                          VerticalAlignment="Center"
-                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                          Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <Grid ColumnDefinitions="auto auto * auto auto auto auto">
 
-                <Border Grid.Column="1"
-                        Width="56" Height="56"
-                        Margin="4 0 0 0"
-                        CornerRadius="4"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}">
-                    <Grid>
-                        <!-- Shows through until the icon has decoded, and stays for mods without one. -->
-                        <TextBlock Text="{Binding Initials}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                    <CheckBox Grid.Column="0"
+                              Margin="12 0 0 0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                              Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Border Grid.Column="1"
+                            Width="56" Height="56"
+                            Margin="4 0 0 0"
+                            CornerRadius="4"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}">
+                        <Grid>
+                            <!-- Shows through until the icon has decoded, and stays for mods without one. -->
+                            <TextBlock Text="{Binding Initials}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+
+                    <!-- The name gets the star column so it ellipsizes instead of shoving the version
+                         off the row. That parks the version chip against the right edge of the text
+                         area, where it lines up into a column of its own down the list. -->
+                    <Grid Grid.Column="2" Margin="16 0 12 0" VerticalAlignment="Center"
+                          RowDefinitions="auto auto" ColumnDefinitions="* auto">
+
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Style="{DynamicResource BodyStrongTextBlockStyle}"
+                                   ToolTip="{Binding Name}"
+                                   ToolTipService.InitialShowDelay="400" />
+
+                        <!-- Right aligned so the chip hugs the version instead of stretching to
+                             whatever width the sources below it need. -->
+                        <Border Grid.Row="0" Grid.Column="1"
+                                Margin="8 0 0 0"
+                                Padding="6 1"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                CornerRadius="3"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                            <TextBlock Text="{Binding Version}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Style="{DynamicResource CaptionTextBlockStyle}" />
+                        </Border>
+
+                        <!-- The import's own words for this row while it runs, and the reason it did
+                             not finish afterwards. Falls back to the mod's description, which is what
+                             the row says when no import has touched it. -->
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                   Margin="0 2 0 0"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="{Binding ShortDescription}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasImportMessage}" Value="True">
+                                            <Setter Property="Text" Value="{Binding ImportMessage}" />
+                                            <Setter Property="ToolTip" Value="{Binding ImportMessage}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ImportState}" Value="Failed">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Sits under the version chip, so the sources line up into a column of
+                             their own down the list. Hidden when only one source is enabled, where
+                             naming it on every row says nothing. -->
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Margin="8 2 0 0"
+                                   MaxWidth="220"
+                                   Text="{Binding Sources}"
+                                   ToolTip="{Binding Sources}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   TextAlignment="Right"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   Style="{DynamicResource BodyStrongTextBlockStyle}" />
-
-                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                   Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibilityConverter}}" />
                     </Grid>
-                </Border>
 
-                <!-- The name gets the star column so it ellipsizes instead of shoving the version
-                     off the row. That parks the version chip against the right edge of the text
-                     area, where it lines up into a column of its own down the list. -->
-                <Grid Grid.Column="2" Margin="16 0 12 0" VerticalAlignment="Center"
-                      RowDefinitions="auto auto" ColumnDefinitions="* auto">
-
-                    <TextBlock Grid.Row="0" Grid.Column="0"
-                               Text="{Binding Name}"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap"
+                    <!-- The adapter's determination, not a setting: it is re-derived from every
+                         archive, so there is nothing here to toggle. -->
+                    <TextBlock Grid.Column="3"
+                               Margin="0 0 8 0"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Style="{DynamicResource BodyStrongTextBlockStyle}"
-                               ToolTip="{Binding Name}"
-                               ToolTipService.InitialShowDelay="400" />
+                               Text="&#xE72E;"
+                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               ToolTip="Version-sensitive. Batch updates leave this mod alone."
+                               Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <!-- Right aligned so the chip hugs the version instead of stretching to
-                         whatever width the instances below it need. -->
-                    <Border Grid.Row="0" Grid.Column="1"
-                            Margin="8 0 0 0"
-                            Padding="6 1"
-                            HorizontalAlignment="Right"
+                    <Border Grid.Column="4"
+                            Margin="0 0 8 0"
+                            Padding="8 2"
                             VerticalAlignment="Center"
                             CornerRadius="3"
-                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                        <TextBlock Text="{Binding Version}"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            ToolTip="{Binding SourceConflictTooltip}"
+                            Background="{DynamicResource SystemFillColorCautionBrush}"
+                            Visibility="{Binding HasSourceConflict, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="Conflict"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0"
-                               Margin="0 2 0 0"
-                               Text="{Binding ShortDescription}"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <!-- One chip, showing the import while it is happening and the presence status
+                         otherwise. A running import is the more urgent of the two, and stacking them
+                         would make every row two chips wide for the sake of one moment. -->
+                    <Border Grid.Column="5"
+                            Margin="0 0 8 0"
+                            Padding="8 2"
+                            VerticalAlignment="Center"
+                            CornerRadius="3">
 
-                    <!-- Sits under the version chip, so the instances line up into a column of
-                         their own down the list. Hidden when the repo only has one to name. -->
-                    <TextBlock Grid.Row="1" Grid.Column="1"
-                               Margin="8 2 0 0"
-                               MaxWidth="220"
-                               Text="{Binding Instances}"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap"
-                               TextAlignment="Right"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Visibility="{Binding HasInstances, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasStatus}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="New">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasImportState}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ImportState}" Value="Running">
+                                        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ImportState}" Value="Succeeded">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                    </DataTrigger>
+                                    <!-- Skipped and failed are deliberately different colours: one is
+                                         waiting on a decision, the other went wrong. -->
+                                    <DataTrigger Binding="{Binding ImportState}" Value="Skipped">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ImportState}" Value="Failed">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <!-- The choice between the two is made in the view model rather than by a
+                             trigger, so the chip can keep the theme's caption style. -->
+                        <TextBlock Text="{Binding ChipText}"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                    </Border>
+
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+
+                        <Button Style="{DynamicResource SubtleIconButton}"
+                                Content="&#xE712;"
+                                ToolTip="Details"
+                                Command="{Binding ShowDetailsCommand}" />
+
+                        <Grid Margin="0 0 12 0"
+                              Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <ToggleButton x:Name="RowActionsButton"
+                                          Style="{DynamicResource SubtleIconToggleButton}"
+                                          Content="&#xE10C;"
+                                          ToolTip="Manage this mod" />
+
+                            <!-- Declared inline so it inherits the row's data context; a context menu
+                                 would not, and every action here needs the row it was opened on. -->
+                            <Popup IsOpen="{Binding IsChecked, ElementName=RowActionsButton, Mode=TwoWay}"
+                                   PlacementTarget="{Binding ElementName=RowActionsButton}"
+                                   Placement="Bottom"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True"
+                                   HorizontalOffset="-160">
+
+                                <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        Padding="4">
+                                    <StackPanel Width="200">
+                                        <Button Content="Reorder versions…"
+                                                HorizontalContentAlignment="Left"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding Actions.ReorderVersions}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Content="Delete this version"
+                                                HorizontalContentAlignment="Left"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding Actions.DeleteVersion}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Content="Delete the whole mod"
+                                                HorizontalContentAlignment="Left"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding Actions.DeleteMod}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </StackPanel>
                 </Grid>
 
-                <Border Grid.Column="3"
-                        Margin="0 0 8 0"
-                        Padding="8 2"
-                        VerticalAlignment="Center"
-                        CornerRadius="3"
-                        Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Status}" Value="New">
-                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
-                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Style="{DynamicResource CaptionTextBlockStyle}" />
-                </Border>
-
-                <Button Grid.Column="4"
-                        Margin="0 0 12 0"
-                        VerticalAlignment="Center"
-                        Style="{DynamicResource SubtleIconButton}"
-                        Content="&#xE712;"
-                        ToolTip="Details"
-                        Command="{Binding ShowDetailsCommand}" />
-
+                <!-- Along the bottom edge rather than in the row, so a list mid-import reads as a
+                     column of bars rather than as a column of numbers nobody can scan. -->
+                <ProgressBar Height="3"
+                             VerticalAlignment="Bottom"
+                             Minimum="0" Maximum="1"
+                             Value="{Binding ImportProgress, Mode=OneWay}"
+                             Visibility="{Binding IsUploading, Converter={StaticResource BoolToVisibilityConverter}}" />
             </Grid>
         </Border>
     </DataTemplate>

@@ -160,7 +160,7 @@ public static class Problems
     {
         Type = ProblemType.InvalidImageSet,
         Title = "The image references do not describe a coherent gallery",
-        Detail = $"The images offered for version '{modVersionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' contain more than one icon, or two images of a kind at the same position."
+        Detail = $"The images offered for version '{modVersionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' contain more than one icon of a rendition, or two images of a kind at the same rendition and position."
     };
 
     public static CustomProblemDetails BatchTooLarge(int size, int maximum) => new()

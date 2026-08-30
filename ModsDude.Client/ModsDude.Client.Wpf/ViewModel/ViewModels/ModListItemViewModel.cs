@@ -2,9 +2,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Imagery;
+using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Text.RegularExpressions;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -54,6 +56,27 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     public string? Author => Mod.Author;
     public string ShortDescription { get; }
 
+    public bool IsOnServer => Mod.IsOnServer;
+    public bool IsLocal => Mod.IsLocal;
+
+    /// <summary>
+    /// Version-sensitive, as the adapter derived it from the archive. Shown rather than editable:
+    /// an adapter re-derives this from every file, so there is nothing here for a user to override.
+    /// The per-profile lock is a different decision on a different page.
+    /// </summary>
+    public bool IsLocked => Mod.Locked;
+
+    /// <summary>
+    /// Two sources hold files claiming this mod and version and disagreeing about them. Surfaced on
+    /// the row because the catalog already withholds the stream, so an import would refuse anyway -
+    /// a row that looked importable would just spend a round trip to say so.
+    /// </summary>
+    public bool HasSourceConflict => Mod.HasSourceConflict;
+
+    public string SourceConflictTooltip => "Two sources hold different files for this mod and version. "
+        + "Only one can be registered, so disable a source to choose between them:"
+        + string.Concat(Mod.FoundIn.Select(x => $"\n{x.Source.Name} - {x.FilePath} ({x.FileLength:N0} bytes)"));
+
     /// <summary>Stands in for the icon while it loads, and for mods that ship without one.</summary>
     public string Initials { get; }
 
@@ -72,18 +95,30 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     /// unset where naming them would say nothing, such as a single enabled source.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasInstances))]
-    private string? _instances;
+    [NotifyPropertyChangedFor(nameof(HasSources))]
+    private string? _sources;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
     private ModDisplayStatus _status = ModDisplayStatus.None;
+
+    /// <summary>
+    /// What a managing page lets this row do. The actions need the mod's siblings and the page's own
+    /// refresh, so they belong to the page rather than to the row; null leaves the row read-only,
+    /// which is what every other list wants.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActions))]
+    private ModRowActions? _actions;
 
 
     public bool HasStatus => Status is not ModDisplayStatus.None;
 
-    public bool HasInstances => string.IsNullOrWhiteSpace(Instances) is false;
+    public bool HasSources => string.IsNullOrWhiteSpace(Sources) is false;
+
+    public bool HasActions => Actions is not null;
 
     public string StatusText => Status switch
     {
@@ -92,6 +127,124 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
         ModDisplayStatus.AlreadyInRepo => "In repo",
         _ => string.Empty
     };
+
+    /// <summary>
+    /// What the row's one chip says: the import, while it has anything to say, and the presence
+    /// status otherwise. Stacking the two would make every row two chips wide for the sake of one
+    /// moment, and the running import is the more urgent of them.
+    /// </summary>
+    public string ChipText => HasImportState ? ImportStateText : StatusText;
+
+
+    #region Import
+
+    /// <summary>
+    /// Where this row is in the import that is running. Null once it is over - what the import
+    /// concluded is <see cref="ImportOutcome"/>, which outlives the run.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ImportState))]
+    [NotifyPropertyChangedFor(nameof(ImportStateText))]
+    [NotifyPropertyChangedFor(nameof(ChipText))]
+    [NotifyPropertyChangedFor(nameof(HasImportState))]
+    [NotifyPropertyChangedFor(nameof(IsUploading))]
+    private ModImportPhase? _importPhase;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ImportState))]
+    [NotifyPropertyChangedFor(nameof(ImportStateText))]
+    [NotifyPropertyChangedFor(nameof(ChipText))]
+    [NotifyPropertyChangedFor(nameof(HasImportState))]
+    private ModImportStatus? _importOutcome;
+
+    /// <summary>Zero to one, and only while uploading - the one phase whose length is knowable.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ImportStateText))]
+    [NotifyPropertyChangedFor(nameof(ChipText))]
+    private double _importProgress;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasImportMessage))]
+    private string? _importMessage;
+
+
+    /// <summary>
+    /// Four states rather than a bool, because a mod that failed and a mod that was skipped are
+    /// different situations: one is worth retrying and one needs a decision first. Rendering them
+    /// the same is what makes a two-thousand-row import unreadable.
+    /// </summary>
+    public ModImportRowState ImportState => ImportOutcome switch
+    {
+        ModImportStatus.Registered or ModImportStatus.AlreadyRegistered => ModImportRowState.Succeeded,
+        ModImportStatus.Failed => ModImportRowState.Failed,
+        not null => ModImportRowState.Skipped,
+        null => ImportPhase is null ? ModImportRowState.None : ModImportRowState.Running
+    };
+
+    public bool HasImportState => ImportState is not ModImportRowState.None;
+
+    public bool HasImportMessage => string.IsNullOrWhiteSpace(ImportMessage) is false;
+
+    public bool IsUploading => ImportPhase is ModImportPhase.Uploading;
+
+    public string ImportStateText => ImportOutcome switch
+    {
+        ModImportStatus.Registered => "Imported",
+        ModImportStatus.AlreadyRegistered => "In repo",
+        ModImportStatus.SourceConflict => "Source conflict",
+        ModImportStatus.ContentMismatch => "Different file stored",
+        ModImportStatus.NeedsArbitration => "Order not settled",
+        ModImportStatus.NoLocalFile => "No local file",
+        ModImportStatus.Failed => "Failed",
+        _ => ImportPhase switch
+        {
+            ModImportPhase.Queued => "Queued",
+            ModImportPhase.Linking => "Preparing",
+            ModImportPhase.Uploading => $"Uploading {ImportProgress:P0}",
+            ModImportPhase.Registering => "Registering",
+            ModImportPhase.PublishingImagery => "Publishing images",
+            ModImportPhase.Completed => "Done",
+            ModImportPhase.Failed => "Failed",
+            ModImportPhase.Skipped => "Skipped",
+            _ => string.Empty
+        }
+    };
+
+
+    public void Apply(ModImportProgress progress)
+    {
+        ImportPhase = progress.Phase;
+        ImportProgress = progress.TotalBytes > 0
+            ? (double)progress.BytesTransferred / progress.TotalBytes
+            : 0;
+
+        if (progress.Error is not null)
+        {
+            ImportMessage = progress.Error;
+        }
+    }
+
+    public void Apply(ModImportItemResult result)
+    {
+        ImportOutcome = result.Status;
+        ImportPhase = null;
+
+        if (result.Message is not null)
+        {
+            ImportMessage = result.Message;
+        }
+    }
+
+    /// <summary>Clears what the last import said, so a second run does not read as the first one.</summary>
+    public void ResetImportState()
+    {
+        ImportPhase = null;
+        ImportOutcome = null;
+        ImportProgress = 0;
+        ImportMessage = null;
+    }
+
+    #endregion
 
 
     public bool Matches(string? searchTerm)
@@ -200,4 +353,32 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
         public ModListItemViewModel Create(Guid repoId, CatalogModVersion mod)
             => ActivatorUtilities.CreateInstance<ModListItemViewModel>(serviceProvider, repoId, mod);
     }
+}
+
+
+/// <summary>
+/// What a page lets a row do to the repo. Each command takes the row it was invoked on, so one set
+/// serves every row rather than being rebuilt per item.
+/// </summary>
+public sealed record ModRowActions(
+    ICommand ReorderVersions,
+    ICommand DeleteVersion,
+    ICommand DeleteMod);
+
+
+/// <summary>
+/// How a row reads during and after an import. Deliberately coarser than
+/// <see cref="ModImportStatus"/>: the row needs to be scannable down a list of two thousand, and the
+/// exact reason belongs in the message.
+/// </summary>
+public enum ModImportRowState
+{
+    None,
+    Running,
+    Succeeded,
+
+    /// <summary>Nothing was registered, and something has to be decided before it can be.</summary>
+    Skipped,
+
+    Failed
 }

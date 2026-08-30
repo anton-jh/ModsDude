@@ -32,4 +32,13 @@ public record LocalMod(ModKey Id, ModVersionKey Version, string Name, string Des
     public IReadOnlyList<ModImage> Images { get; init; } = [];
 
     public string? Author { get; init; }
+
+    /// <summary>
+    /// Whether the mod is version-sensitive, as the archive itself declares it. Re-derived from
+    /// every file rather than carried forward from the last one: what makes a mod version-sensitive
+    /// is declared in every version of it, so derivation comes out consistent without anything
+    /// having to remember an answer - and without a prompt at import.
+    /// See docs/09-mod-catalog.md#the-adapter-sets-it-once-at-registration.
+    /// </summary>
+    public bool Locked { get; init; }
 }

@@ -63,15 +63,42 @@ public class ModVersionImagesTests
     }
 
     [Fact]
-    public void Two_icons_are_rejected()
+    public void An_icon_may_be_stored_at_both_renditions()
     {
-        Assert.False(ModVersion.CheckImagesAreValid([Icon("icon.webp"), Icon("other.webp")]));
+        // The whole point of the rendition field: an icon is drawn at 64 px in a list row and large
+        // in a details dialog that has no store images to show instead.
+        Assert.True(ModVersion.CheckImagesAreValid([Icon(), Icon(ModImageRendition.Full)]));
     }
 
     [Fact]
-    public void Two_store_images_at_the_same_position_are_rejected()
+    public void Two_icons_of_a_rendition_are_rejected()
+    {
+        Assert.False(ModVersion.CheckImagesAreValid(
+            [Icon(fileName: "icon.webp"), Icon(fileName: "other.webp")]));
+    }
+
+    [Fact]
+    public void Two_icons_at_different_positions_are_still_two_icons()
+    {
+        // Uniqueness on (Kind, Rendition, Position) does not catch this on its own, which is why the
+        // icon rule is a rule of its own rather than folded into it.
+        Assert.False(ModVersion.CheckImagesAreValid(
+            [Icon(fileName: "icon.webp"), Icon(fileName: "other.webp", position: 1)]));
+    }
+
+    [Fact]
+    public void Two_store_images_of_a_rendition_at_the_same_position_are_rejected()
     {
         Assert.False(ModVersion.CheckImagesAreValid([Store(0, "one.webp"), Store(0, "two.webp")]));
+    }
+
+    [Fact]
+    public void The_two_renditions_of_one_store_image_share_a_position()
+    {
+        // They are one image, and sharing a position is what says so. Splitting them across two
+        // positions is the arithmetic this field exists to replace.
+        Assert.True(ModVersion.CheckImagesAreValid(
+            [Store(0, "one.webp"), Store(0, "one.webp", ModImageRendition.Full)]));
     }
 
     [Fact]
@@ -87,14 +114,15 @@ public class ModVersionImagesTests
         var version = Version();
         version.SetImages([Store(0, "kept.webp")], _later);
 
-        Assert.Throws<InvalidOperationException>(() => version.SetImages([Icon("a.webp"), Icon("b.webp")], _later));
+        Assert.Throws<InvalidOperationException>(() => version.SetImages(
+            [Icon(fileName: "a.webp"), Icon(fileName: "b.webp")], _later));
         Assert.Equal(["kept.webp"], version.Images.Select(x => x.FileName));
     }
 
     [Fact]
     public void A_reference_to_something_that_is_not_a_hash_is_rejected()
     {
-        Assert.Throws<DomainValidationException>(() => new ModImageReference("not-a-hash", ModImageKind.Icon, 0, "icon.webp"));
+        Assert.Throws<DomainValidationException>(() => new ModImageReference("not-a-hash", ModImageKind.Icon, ModImageRendition.Thumbnail, 0, "icon.webp"));
     }
 
 
@@ -113,9 +141,11 @@ public class ModVersionImagesTests
         Updated = _registered
     };
 
-    private static ModImageReference Icon(string fileName = "icon.webp")
-        => new(_hash, ModImageKind.Icon, 0, fileName);
+    private static ModImageReference Icon(
+        ModImageRendition rendition = ModImageRendition.Thumbnail, string fileName = "icon.webp", int position = 0)
+        => new(_hash, ModImageKind.Icon, rendition, position, fileName);
 
-    private static ModImageReference Store(int position, string fileName)
-        => new(_hash, ModImageKind.StoreImage, position, fileName);
+    private static ModImageReference Store(
+        int position, string fileName, ModImageRendition rendition = ModImageRendition.Thumbnail)
+        => new(_hash, ModImageKind.StoreImage, rendition, position, fileName);
 }

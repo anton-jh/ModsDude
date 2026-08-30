@@ -30,7 +30,7 @@ public record ModDto(
             model.ContentHash,
             model.Locked,
             model.Attributes.Select(ModAttributeDto.FromModel),
-            model.Images.OrderBy(x => x.Kind).ThenBy(x => x.Position).Select(ModImageReferenceDto.FromModel),
+            model.Images.OrderBy(x => x.Kind).ThenBy(x => x.Position).ThenBy(x => x.Rendition).Select(ModImageReferenceDto.FromModel),
             model.Created,
             model.Updated);
     }

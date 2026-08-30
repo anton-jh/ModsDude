@@ -84,18 +84,21 @@ public class ModImagerySource(
             return ModVersionImagery.None;
         }
 
-        var icon = references.FirstOrDefault(x => x.Kind is ModImageKind.Icon) is ModImageReference reference
-            ? CreateImage(reference)
-            : null;
+        // An icon is one image with the same two renditions as any other, so it decodes the same way
+        // - which is what gives a details dialog for a mod that ships no store images something
+        // larger than 128 px to draw.
+        var iconRenditions = references.Where(x => x.Kind is ModImageKind.Icon).ToList();
 
         var images = references
             .Where(x => x.Kind is ModImageKind.StoreImage)
-            .GroupBy(x => ModImageReferenceLayout.GetIndex(x.Position))
+            .GroupBy(x => x.Position)
             .OrderBy(x => x.Key)
             .Select(CreateGalleryImage)
             .ToList();
 
-        return new ModVersionImagery(icon, images);
+        return new ModVersionImagery(
+            iconRenditions.Count > 0 ? CreateGalleryImage(iconRenditions) : null,
+            images);
     }
 
     /// <summary>
@@ -105,10 +108,10 @@ public class ModImagerySource(
     /// </summary>
     private ModImage CreateGalleryImage(IEnumerable<ModImageReference> renditions)
     {
-        var byDerivative = renditions.ToLookup(x => ModImageReferenceLayout.GetDerivative(x.Position));
+        var byRendition = renditions.ToLookup(x => x.Rendition);
 
-        var thumbnail = byDerivative[ModImageDerivative.Thumbnail].FirstOrDefault();
-        var full = byDerivative[ModImageDerivative.Full].FirstOrDefault();
+        var thumbnail = byRendition[ModImageRendition.Thumbnail].FirstOrDefault();
+        var full = byRendition[ModImageRendition.Full].FirstOrDefault();
 
         var small = CreateImage(thumbnail ?? full!);
 

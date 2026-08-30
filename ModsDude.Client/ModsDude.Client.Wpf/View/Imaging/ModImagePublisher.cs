@@ -47,8 +47,8 @@ public class ModImagePublisher(
             var references = generated
                 .SelectMany(image => image.Renditions
                     .Where(rendition => stored.Contains(rendition.Hash))
-                    .Select(rendition => ModImageReferenceLayout.CreateReference(
-                        image.Kind, image.Index, rendition.Derivative, rendition.Hash, image.FileName)))
+                    .Select(rendition => new ModImageReference(
+                        rendition.Hash, image.Kind, rendition.Rendition, image.Index, image.FileName)))
                 .ToList();
 
             if (references.Count == 0)

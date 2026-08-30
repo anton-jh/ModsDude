@@ -1,0 +1,79 @@
+﻿<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.ModVersionReorderDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="560" MaxHeight="640"
+             d:DataContext="{d:DesignInstance Type=vm:ModVersionReorderModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <TextBlock Text="{Binding Title}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <TextBlock Text="{Binding ModName}"
+                           Margin="0 4 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <local:ModVersionOrderEditor DataContext="{Binding Order}" />
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid RowDefinitions="auto auto" Margin="24 16 24 20">
+
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding SaveUnavailableReason}"
+                               TextWrapping="Wrap"
+                               Margin="0 0 0 12"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+
+                    <Grid Grid.Row="1" ColumnDefinitions="* *">
+                        <Button Grid.Column="0"
+                                Margin="0 0 4 0"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Save order"
+                                HorizontalAlignment="Stretch"
+                                IsEnabled="{Binding CanSave}" />
+
+                        <Button Grid.Column="1"
+                                Margin="4 0 0 0"
+                                Content="Close"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding CloseCommand}" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Esc" Command="{Binding CloseCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

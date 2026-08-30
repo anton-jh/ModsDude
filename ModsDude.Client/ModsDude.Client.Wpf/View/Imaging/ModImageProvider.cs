@@ -15,7 +15,7 @@ public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposa
     /// Images at or below this width are small enough to keep around - a thousand of them is a
     /// handful of megabytes. Anything larger is loaded on demand and dropped again.
     /// </summary>
-    private const int _maxCachedWidth = ModImageDerivatives.ThumbnailMaxEdge;
+    private const int _maxCachedWidth = ModImageRenditions.ThumbnailMaxEdge;
 
     private readonly ConcurrentDictionary<string, Lazy<Task<ImageSource?>>> _cache = new();
 

@@ -1,29 +1,322 @@
 ﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.RepoModsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
-      mc:Ignorable="d" 
+      mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:RepoModsPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoModsPage">
 
-    <Grid ColumnDefinitions="200 *">
+    <Grid RowDefinitions="*, auto">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
+        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+            <Grid RowDefinitions="auto auto auto auto *">
 
-            <ListView Grid.Row="0"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+                <TextBlock Grid.Row="0"
+                           Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding RepoName}" />
+                <TextBlock Grid.Row="1"
+                           Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="Mods"
+                           Margin="0 8 0 24" />
+
+                <Grid Grid.Row="2" Margin="0 0 0 12" ColumnDefinitions="280 * auto auto">
+
+                    <Grid Grid.Column="0">
+                        <!-- Right padding keeps the text from running under the clear button. The
+                             rest matches the theme's own TextBox padding. -->
+                        <TextBox x:Name="SearchBox"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                                 Padding="10 5 32 6"
+                                 VerticalAlignment="Center" />
+
+                        <!-- Watches the box rather than the view model: the binding above delays
+                             pushing the text through, so anything driven off SearchText stays a
+                             beat behind what has actually been typed. -->
+                        <TextBlock x:Name="SearchPlaceholder"
+                                   Text="Search by name, id or author"
+                                   Margin="12 0 0 0"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Watches the box for the same reason the placeholder does, so it turns
+                             up on the keystroke rather than 150ms later. -->
+                        <Button x:Name="ClearSearchButton"
+                                Width="24" Height="24"
+                                FontSize="12"
+                                Margin="0 0 4 0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Content="&#xE10A;"
+                                ToolTip="Clear search"
+                                Command="{Binding ClearSearchCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                    <!-- The three-state presence value is derived here, from the two facts the
+                         version carries, and never stored. -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16 0 0 0" VerticalAlignment="Center">
+                        <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="All"
+                                     IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
+                        <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="In repo"
+                                     IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=InRepo}" />
+                        <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="On disk only"
+                                     IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=OnDiskOnly}" />
+                        <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="Unused"
+                                     ToolTip="Registered here, and pinned by none of this repo's profiles."
+                                     IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unused}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="2"
+                               Margin="16 0 12 0"
+                               VerticalAlignment="Center"
+                               Text="{Binding CountText}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasMods, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <ToggleButton Grid.Column="3"
+                                  Content="Select"
+                                  Padding="14 5"
+                                  ToolTip="Pick mods to import"
+                                  IsChecked="{Binding IsSelectionMode, Mode=TwoWay}" />
+                </Grid>
+
+                <!-- Kept until the user asks for a fresh list, so the per-row results of an import
+                     are still on screen to read rather than being replaced by a rescan. -->
+                <Border Grid.Row="3"
+                        Margin="0 0 0 12"
+                        Padding="12 8"
+                        CornerRadius="4"
+                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                        Visibility="{Binding HasImportSummary, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid ColumnDefinitions="* auto">
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding ImportSummary}"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Button Grid.Column="1" Content="Refresh list" Command="{Binding RefreshCommand}" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="4" ColumnDefinitions="* 280">
+
+                    <Border Grid.Column="0"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <Grid>
+
+                            <!-- One row per mod, rendered by the implicit ModListItemViewModel template
+                                 in App.xaml. Virtualized with recycling: a mod folder can easily hold a
+                                 few thousand archives. -->
+                            <ItemsControl ItemsSource="{Binding ModsView}"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.Template>
+                                    <ControlTemplate TargetType="ItemsControl">
+                                        <ScrollViewer CanContentScroll="True"
+                                                      Focusable="False"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsPresenter />
+                                        </ScrollViewer>
+                                    </ControlTemplate>
+                                </ItemsControl.Template>
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <TextBlock Text="Reading the repo and scanning the sources…"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <TextBlock Text="Nothing in the repo, and nothing in the enabled sources.&#x0a;Add a folder on the right, or install some mods."
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <TextBlock Text="No mods match the search and filter."
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsLoading}" Value="False" />
+                                                    <Condition Binding="{Binding HasMods}" Value="True" />
+                                                    <Condition Binding="{Binding HasVisibleMods}" Value="False" />
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                        </Grid>
+                    </Border>
+
+                    <!-- The sources, with the checkbox that takes each one in or out of the merged
+                         list. Disabling an instance here says nothing about syncing to it. -->
+                    <Grid Grid.Column="1" Margin="16 0 0 0" RowDefinitions="auto * auto">
+
+                        <Grid Grid.Row="0" ColumnDefinitions="* auto" Margin="0 0 0 8">
+                            <TextBlock Grid.Column="0"
+                                       Text="Sources"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                            <Button Grid.Column="1"
+                                    Style="{DynamicResource SubtleIconButton}"
+                                    Content="&#xE72C;"
+                                    ToolTip="Rescan every source"
+                                    Command="{Binding RescanAllCommand}" />
+                        </Grid>
+
+                        <Border Grid.Row="1"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                <ItemsControl ItemsSource="{Binding Sources}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:ModSourceViewModel}">
+                                            <Grid Margin="6 6" ColumnDefinitions="auto * auto">
+
+                                                <CheckBox Grid.Column="0"
+                                                          VerticalAlignment="Top"
+                                                          Margin="0 2 0 0"
+                                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+
+                                                <StackPanel Grid.Column="1" ToolTip="{Binding Path}">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextWrapping="NoWrap"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                    <TextBlock Text="{Binding KindText}"
+                                                               Style="{DynamicResource CaptionTextBlockStyle}"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                                                    <!-- One unreadable folder marks one source bad
+                                                         rather than failing the whole list, which is
+                                                         why the catalog reports this per source. -->
+                                                    <TextBlock Text="{Binding CountText}"
+                                                               ToolTip="{Binding Error}">
+                                                        <TextBlock.Style>
+                                                            <!-- Sized here rather than through the
+                                                                 theme's caption style, which cannot
+                                                                 be a BasedOn from this dictionary. -->
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="FontSize" Value="12" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasFailed}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                                                    <Button Style="{DynamicResource SubtleIconButton}"
+                                                            Width="28"
+                                                            Content="&#xE72C;"
+                                                            ToolTip="Rescan this source"
+                                                            Command="{Binding DataContext.RescanSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Style="{DynamicResource SubtleIconButton}"
+                                                            Width="28"
+                                                            Content="&#xE711;"
+                                                            ToolTip="Remove this folder"
+                                                            Visibility="{Binding IsAdHoc, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+
+                        <Button Grid.Row="2"
+                                Margin="0 8 0 0"
+                                HorizontalAlignment="Stretch"
+                                Content="Add a folder…"
+                                ToolTip="Scanned for this session only, and never written to disk"
+                                Command="{Binding AddSourceCommand}" />
+                    </Grid>
+                </Grid>
+
+            </Grid>
+        </Border>
+
+        <!-- The import footer, revealed by the selection mode rather than living on a page of its
+             own. -->
+        <Grid Grid.Row="1"
+              ColumnDefinitions="auto auto auto * auto"
+              Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+                    Content="{Binding ImportButtonText}" Command="{Binding ImportCommand}" />
+
+            <Button Grid.Column="1" Margin="4 24 4 24" Content="Select all" Command="{Binding SelectAllCommand}" />
+            <Button Grid.Column="2" Margin="4 24 4 24" Content="Select none" Command="{Binding SelectNoneCommand}" />
+
+            <Button Grid.Column="4" Margin="4 24 32 24"
+                    Content="Stop import"
+                    Command="{Binding ImportCancelCommand}"
+                    Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibilityConverter}}" />
         </Grid>
 
-        <Frame
-            Grid.Column="1"
-            Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
 </Page>

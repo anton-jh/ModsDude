@@ -57,6 +57,7 @@ public sealed class ModCatalog : IDisposable
 
     private Task<IReadOnlyList<ModDto>>? _registeredLoad;
     private DateTime? _registeredThrough;
+    private Task<IReadOnlyDictionary<ModVersionIdentity, int>>? _usageLoad;
 
 
     public ModCatalog(
@@ -220,6 +221,19 @@ public sealed class ModCatalog : IDisposable
             _registeredLoad = null;
             _registeredThrough = null;
             _registered.Clear();
+            _usageLoad = null;
+        }
+    }
+
+    /// <summary>
+    /// Drops which profiles depend on what. There is no delta form to lean on - a dependency carries
+    /// no timestamp of its own - so this is a full refetch, which the endpoint is shaped for.
+    /// </summary>
+    public void RefreshUsage()
+    {
+        lock (_lock)
+        {
+            _usageLoad = null;
         }
     }
 
@@ -228,6 +242,11 @@ public sealed class ModCatalog : IDisposable
     {
         RescanAll();
         RefreshRegisteredMods();
+
+        // Registering a version does not make a profile depend on it, but the import surface is also
+        // where deletes happen, and re-reading a small listing costs less than reasoning about when
+        // it is safe not to.
+        RefreshUsage();
     }
 
     /// <summary>
@@ -241,8 +260,9 @@ public sealed class ModCatalog : IDisposable
 
         var scans = enabled.Select(GetOrStartScan).ToList();
         var registered = GetOrStartRegisteredLoad();
+        var usage = GetOrStartUsageLoad();
 
-        var pending = new List<Task>(scans) { registered };
+        var pending = new List<Task>(scans) { registered, usage };
 
         // A failing source is reported rather than thrown, so only a failure to reach the server can
         // fault this.
@@ -257,7 +277,7 @@ public sealed class ModCatalog : IDisposable
                 : new ModSourceStatus(x, false, 0, null))
             .ToList();
 
-        return new ModCatalogSnapshot(Merge(results, registered.Result), statuses);
+        return new ModCatalogSnapshot(Merge(results, registered.Result, usage.Result), statuses);
     }
 
     /// <summary>
@@ -364,9 +384,50 @@ public sealed class ModCatalog : IDisposable
         }
     }
 
+    private Task<IReadOnlyDictionary<ModVersionIdentity, int>> GetOrStartUsageLoad()
+    {
+        lock (_lock)
+        {
+            return _usageLoad ??= LoadUsageAsync();
+        }
+    }
+
+    /// <summary>
+    /// Which registered versions the repo's profiles pin, and how many pin each.
+    /// </summary>
+    /// <remarks>
+    /// Read to exhaustion before it is used, deliberately: absence from the listing is what makes a
+    /// version unused, and a half-read listing would call a version unused that a teammate's profile
+    /// picked up on the next page. Deleting on that view is exactly the hazard the endpoint exists
+    /// to remove. See docs/09-mod-catalog.md#manage.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, int>> LoadUsageAsync()
+    {
+        var usage = new Dictionary<ModVersionIdentity, int>();
+        string? cursor = null;
+
+        do
+        {
+            var page = await _modsClient.GetModUsageV1Async(_repo.Id, cursor, null, _cancellation.Token);
+
+            foreach (var entry in page.Usage)
+            {
+                // Normalized on the way in for the same reason the mod list is: the server holds
+                // whatever casing was registered, and an un-normalized id silently misses its row.
+                usage[new ModVersionIdentity(ModKey.From(entry.ModId), ModVersionKey.From(entry.VersionId))] = entry.ProfileCount;
+            }
+
+            cursor = page.NextCursor;
+        }
+        while (string.IsNullOrEmpty(cursor) is false);
+
+        return usage;
+    }
+
     private static IReadOnlyList<CatalogModVersion> Merge(
         IReadOnlyList<SourceScan> scans,
-        IReadOnlyList<ModDto> registered)
+        IReadOnlyList<ModDto> registered,
+        IReadOnlyDictionary<ModVersionIdentity, int> usage)
     {
         // Deduplication is on (ModId, VersionId); every source a version turned up in is kept, so a
         // row can say where it came from and two sources disagreeing about the bytes stays visible.
@@ -396,7 +457,14 @@ public sealed class ModCatalog : IDisposable
         {
             var identity = GetIdentity(dto);
 
-            versions.Add(Create(identity, dto, local.GetValueOrDefault(identity), occurrences.GetValueOrDefault(identity)));
+            versions.Add(Create(
+                identity,
+                dto,
+                local.GetValueOrDefault(identity),
+                occurrences.GetValueOrDefault(identity),
+                // Absent from the usage listing means no profile pins it, which is only true because
+                // the listing was read whole.
+                usage.GetValueOrDefault(identity)));
         }
 
         var registeredIdentities = registered.Select(GetIdentity).ToHashSet();
@@ -405,7 +473,8 @@ public sealed class ModCatalog : IDisposable
         {
             if (registeredIdentities.Contains(identity) is false)
             {
-                versions.Add(Create(identity, null, mod, occurrences.GetValueOrDefault(identity)));
+                // No usage: a version the repo does not hold has no dependency that could name it.
+                versions.Add(Create(identity, null, mod, occurrences.GetValueOrDefault(identity), null));
             }
         }
 
@@ -416,7 +485,8 @@ public sealed class ModCatalog : IDisposable
         ModVersionIdentity identity,
         ModDto? dto,
         LocalMod? local,
-        List<ModOccurrence>? occurrences)
+        List<ModOccurrence>? occurrences,
+        int? usedByProfiles)
     {
         // The registered record is the shared truth, so it wins where both exist - two members
         // looking at the same registered version should read the same thing. That extends to
@@ -430,7 +500,11 @@ public sealed class ModCatalog : IDisposable
             dto?.Description ?? local?.Description ?? string.Empty,
             IsLocal: occurrences is { Count: > 0 },
             IsOnServer: dto is not null,
-            Locked: dto?.Locked ?? false)
+            // An unregistered version answers from its own archive, which is what lets a row show
+            // the lock before anything is imported and what registration then sends. A registered
+            // one answers from the repo, so two members reading the same version read the same
+            // lock state even where only one of them holds the file.
+            Locked: dto?.Locked ?? local?.Locked ?? false)
         {
             Author = local?.Author,
             Icon = local?.Icon,
@@ -438,7 +512,8 @@ public sealed class ModCatalog : IDisposable
             ServerImages = dto is null ? [] : [.. dto.Images.Select(ModImageReference.FromDto)],
             FoundIn = occurrences ?? [],
             ContentHash = dto?.ContentHash,
-            SequenceNumber = dto?.SequenceNumber
+            SequenceNumber = dto?.SequenceNumber,
+            UsedByProfiles = usedByProfiles
         };
     }
 

@@ -67,6 +67,21 @@ public record CatalogModVersion(
     public int? SequenceNumber { get; init; }
 
     /// <summary>
+    /// How many of the repo's profiles pin this version. Null for a version the repo does not hold,
+    /// which has no dependency that could name it.
+    /// </summary>
+    /// <remarks>
+    /// Comes from the server rather than from whichever profiles this client happens to have loaded:
+    /// dependencies arrive one profile at a time, and deleting on a partial view risks removing a
+    /// version a teammate's profile just picked up. Advisory even so - the delete endpoints re-ask
+    /// the database at the moment it matters. See docs/09-mod-catalog.md#manage.
+    /// </remarks>
+    public int? UsedByProfiles { get; init; }
+
+    /// <summary>Registered, and nothing in the repo depends on it - so a delete would be accepted.</summary>
+    public bool IsUnused => IsOnServer && UsedByProfiles is 0;
+
+    /// <summary>
     /// True when two sources hold a file claiming this mod and version but disagreeing on its size -
     /// typically a re-uploaded build the author did not renumber. Only one can ever be registered,
     /// so the user picks the source rather than the catalog picking silently.

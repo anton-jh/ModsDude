@@ -66,6 +66,15 @@ public partial class ConfirmationDialogViewModel(
             "Sure");
     }
 
+    /// <summary>
+    /// Something that was refused, and why. Both buttons dismiss: the dialog has two, and there is
+    /// nothing here to decide, so making them differ would imply a choice that is not on offer.
+    /// </summary>
+    public static ConfirmationDialogViewModel Refusal(string title, string message)
+    {
+        return new ConfirmationDialogViewModel(title, message, IconKind.Warning, "Ok", "Ok");
+    }
+
     public static ConfirmationDialogViewModel Error(UserFriendlyException exception)
     {
         var message = $"{exception.Message}.\n\nThis might not help:\n\n{exception.DeveloperMessage}";

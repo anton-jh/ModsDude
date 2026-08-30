@@ -61,6 +61,32 @@ public static class ProfileExtensions
             .AnyAsync(x => x.ModVersion.ModId == modId, cancellationToken);
     }
 
+    /// <summary>
+    /// How many of the repo's profiles pin each version, for the versions at least one profile pins.
+    /// Ordered by <c>(ModId, VersionId)</c> and windowed, because a repo's dependency rows are its
+    /// profile count times its profile sizes — thousands of mods each — and nothing that renders a
+    /// catalog may issue a query without a bound.
+    /// </summary>
+    /// <remarks>
+    /// Sparse on purpose. The rows that are missing are the answer "no profile pins this", so the
+    /// result is proportional to what is actually used rather than to the size of the catalog, and
+    /// it collapses every profile's copy of a dependency into one row per version.
+    /// </remarks>
+    public static Task<List<ModVersionUsage>> GetModUsageAsync(this DbSet<Profile> dbSet, RepoId repoId, int skip, int take, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId)
+            .SelectMany(x => x.ModDependencies)
+            .GroupBy(x => new { x.ModVersion.ModId, VersionId = x.ModVersion.Id })
+            // A strongly-typed id has no comparison the provider can translate, so the window is an
+            // offset rather than the keyset tuple the ordering would otherwise allow.
+            .OrderBy(x => x.Key.ModId).ThenBy(x => x.Key.VersionId)
+            .Select(x => new ModVersionUsage(x.Key.ModId, x.Key.VersionId, x.Count()))
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, CancellationToken cancellationToken)
     {
         return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);
@@ -82,3 +108,11 @@ public static class ProfileExtensions
             .AnyAsync(x => x.Name == name && x.Id != except, cancellationToken);
     }
 }
+
+
+/// <summary>
+/// One registered version and how many of its repo's profiles pin it. A count rather than the
+/// profiles themselves: the row is read for a whole catalog at once, and what the Manage page needs
+/// of it is whether the number is zero.
+/// </summary>
+public record ModVersionUsage(ModId ModId, ModVersionId VersionId, int ProfileCount);

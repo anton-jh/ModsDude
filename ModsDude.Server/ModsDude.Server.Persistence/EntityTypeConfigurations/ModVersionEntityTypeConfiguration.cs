@@ -17,6 +17,7 @@ internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModV
         builder.OwnsMany(x => x.Images, image =>
         {
             image.Property(x => x.Kind).HasConversion<string>();
+            image.Property(x => x.Rendition).HasConversion<string>();
         });
 
         builder.HasIndex(x => new { x.RepoId, x.ModId, x.SequenceNumber }).IsUnique();
