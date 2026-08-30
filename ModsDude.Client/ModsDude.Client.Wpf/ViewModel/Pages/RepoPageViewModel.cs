@@ -22,7 +22,7 @@ public partial class RepoPageViewModel
     private readonly LastSelectionRepository _lastSelectionRepository;
     private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
-    private readonly EditLocalInstancePageViewModel.Factory _editLocalInstancePageViewModelFactory;
+    private readonly InstancePageViewModel.Factory _instancePageViewModelFactory;
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
@@ -36,7 +36,7 @@ public partial class RepoPageViewModel
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
-        EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory,
+        InstancePageViewModel.Factory instancePageViewModelFactory,
         CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         ProfileService profileService,
@@ -52,7 +52,7 @@ public partial class RepoPageViewModel
         _lastSelectionRepository = lastSelectionRepository;
         _createLocalInstancePageViewModelFactory = createLocalInstancePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
-        _editLocalInstancePageViewModelFactory = editLocalInstancePageViewModelFactory;
+        _instancePageViewModelFactory = instancePageViewModelFactory;
 
         var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo));
         MenuItems = [
@@ -180,7 +180,7 @@ public partial class RepoPageViewModel
 
     private InstanceItemViewModel MapInstanceToVm(LocalInstance instance)
     {
-        return new InstanceItemViewModel(_repo, instance, _editLocalInstancePageViewModelFactory);
+        return new InstanceItemViewModel(_repo, instance, _instancePageViewModelFactory);
     }
 
 

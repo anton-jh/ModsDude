@@ -1,0 +1,76 @@
+name: CI
+
+# Two jobs rather than one because the solution cannot be built in one place. The persistence tests
+# need a real PostgreSQL, and GitHub only runs service containers on Linux runners; the WPF client
+# only builds on Windows, and ModsDude.Client.Core's content store is Windows P/Invoke — hardlinks
+# and the Recycle Bin — so running its tests anywhere else would prove nothing.
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the API
+        run: dotnet build ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj
+
+      - name: Domain tests
+        run: dotnet test ModsDude.Server/ModsDude.Server.Domain.Tests/ModsDude.Server.Domain.Tests.csproj
+
+      # A database of the suite's own, because DatabaseFixture drops and recreates whatever it is
+      # pointed at before every run.
+      - name: Persistence tests
+        env:
+          MODSDUDE_TEST_DATABASE: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=modsdude-tests
+        run: dotnet test ModsDude.Server/ModsDude.Server.Persistence.Tests/ModsDude.Server.Persistence.Tests.csproj
+
+      # Fails when the server describes something the checked-in document does not — which is the only
+      # warning anyone gets that ModsDude.Client.Core's Generated.cs is behind the API. The script
+      # starts the API itself, and the API migrates a database at startup, so it gets one.
+      - name: OpenAPI document is current
+        env:
+          ConnectionStrings__Database: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=modsdude-openapi
+        run: pwsh scripts/openapi.ps1
+
+  client:
+    name: Client
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # The whole solution, which is the only place the WPF project is built at all.
+      - name: Build the solution
+        run: dotnet build ModsDude.sln
+
+      # Not `dotnet test ModsDude.sln`: that would sweep in the persistence tests, and there is no
+      # PostgreSQL on this runner. The server's tests belong to the job that has one.
+      - name: Client tests
+        run: dotnet test ModsDude.Client/ModsDude.Client.Core.Tests/ModsDude.Client.Core.Tests.csproj --no-build

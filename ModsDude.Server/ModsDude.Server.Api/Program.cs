@@ -1,8 +1,12 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Endpoints;
+using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Api.Maintenance;
+using ModsDude.Server.Api.Middleware.ErrorHandling;
 using ModsDude.Server.Api.Middleware.UserLoading;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
@@ -89,6 +93,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<UserLoadingMiddleware>();
+builder.Services.AddScoped<NotAuthenticatedMiddleware>();
+
+builder.Services
+    .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
+builder.Services.AddHostedService<BlobReclamationService>();
 
 builder.Services
     .AddSingleton<ITimeService, TimeService>();
@@ -125,14 +134,22 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseMiddleware<NotAuthenticatedMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseMiddleware<UserLoadingMiddleware>();
 
+// The 401 is declared once here rather than in every endpoint's Results<...> union, because the
+// endpoints that can produce it include the ones that return a bare Ok<T> and have no union.
 app.MapGroup("api/v{v:apiVersion}")
     .WithApiVersionSet(apiVersionSet)
     .RequireAuthorization()
+    .WithMetadata(new ProducesResponseTypeMetadata(
+        StatusCodes.Status401Unauthorized,
+        typeof(CustomProblemDetails),
+        ["application/json"]))
     .MapAllEndpointsFromAssembly(typeof(Program).Assembly);
 
 

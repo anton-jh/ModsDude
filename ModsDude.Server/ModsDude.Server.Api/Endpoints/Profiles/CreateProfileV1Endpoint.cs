@@ -23,7 +23,7 @@ public class CreateProfileV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>>> Create(
+    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Create(
         Guid repoId,
         CreateProfileRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -35,7 +35,7 @@ public class CreateProfileV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

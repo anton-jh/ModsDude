@@ -32,7 +32,7 @@ public class GetModVersionsV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<GetModVersionsResponse>, BadRequest<CustomProblemDetails>>> GetVersions(
+    private static async Task<Results<Ok<GetModVersionsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetVersions(
         Guid repoId, string modId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -41,7 +41,7 @@ public class GetModVersionsV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

@@ -38,7 +38,7 @@ public class MoveModVersionV1Endpoint : IEndpoint
     /// recomputes and retries, a hand-authored order is a human's answer to a question the server
     /// cannot re-answer, so the client refetches and asks again.
     /// </summary>
-    private static async Task<Results<Ok<MoveModVersionResponse>, BadRequest<CustomProblemDetails>>> Move(
+    private static async Task<Results<Ok<MoveModVersionResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Move(
         Guid repoId, string modId, string versionId,
         MoveModVersionRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -50,7 +50,7 @@ public class MoveModVersionV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

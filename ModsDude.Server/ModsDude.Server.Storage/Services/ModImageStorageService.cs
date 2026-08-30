@@ -4,6 +4,7 @@ using Azure.Storage.Blobs.Models;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Mods;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace ModsDude.Server.Storage.Services;
 
@@ -64,6 +65,26 @@ internal class ModImageStorageService(
         {
             return null;
         }
+    }
+
+
+    public async IAsyncEnumerable<StoredBlob> ListStoredImages([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var container = blobServiceClient.GetBlobContainerClient(_imagesContainerName);
+
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
+        {
+            // See ModStorageService.ListStoredMods on the missing timestamp.
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue);
+        }
+    }
+
+    public async Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken)
+    {
+        await blobServiceClient
+            .GetBlobContainerClient(_imagesContainerName)
+            .GetBlobClient(blobName)
+            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
     }
 
 

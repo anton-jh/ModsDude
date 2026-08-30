@@ -31,7 +31,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
     public record CreateModUploadLinkResponse(string Link, string ContentHashMetadataKey);
 
 
-    public async Task<Results<Ok<CreateModUploadLinkResponse>, BadRequest<CustomProblemDetails>>> CreateModUploadLink(
+    public async Task<Results<Ok<CreateModUploadLinkResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateModUploadLink(
         CreateModUploadLinkRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -41,7 +41,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

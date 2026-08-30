@@ -23,7 +23,7 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<ModDependencyDto>, BadRequest<CustomProblemDetails>>> Update(
+    private static async Task<Results<Ok<ModDependencyDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Update(
         Guid repoId, Guid profileId, string modId, UpdateModDependencyRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -33,7 +33,7 @@ public class UpdateModDependencyV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

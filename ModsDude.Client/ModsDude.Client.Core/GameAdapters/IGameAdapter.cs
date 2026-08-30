@@ -62,6 +62,20 @@ public interface IInstanceGameAdapter : IBaseGameAdapter
 
 public interface IBaseModAdapter
 {
+    /// <summary>
+    /// Whether this game's mod files are safe to hardlink into the content store.
+    /// </summary>
+    /// <remarks>
+    /// False when the game or its updater may <b>rewrite a mod file in place</b>, which through a
+    /// hardlink would corrupt the store blob shared with every other repo and instance on that
+    /// volume. False also means "nobody has checked yet", which is why it is the default: the
+    /// failure is silent, the blast radius is every repo on the disk, and a slow sync is visible and
+    /// recoverable where a corrupted store is neither. Setting it true is an opt-in that means
+    /// somebody tested this game's updater.
+    /// See docs/07-mod-sync-design.md#hardlink-support-is-an-adapter-property.
+    /// </remarks>
+    bool SupportsHardlinks => false;
+
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
     IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings);
     IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings);
@@ -76,6 +90,26 @@ public interface IInstanceModAdapter : IBaseModAdapter
     string ModFolder { get; }
 
     Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Where a mod version's file belongs, and what it is called. The write side of the adapter -
+    /// where a file goes is game knowledge, and nothing else can answer it.
+    /// </summary>
+    /// <remarks>
+    /// A path rather than an <c>InstallMod</c> taking a stream, deliberately. Materialising is a
+    /// hardlink on one disk and a copy on another, and that decision depends on the store assignment
+    /// and the filesystem rather than on the game - so it belongs in the sync engine, once, instead
+    /// of in every adapter. Adapters supply paths; the engine performs the filesystem operations.
+    /// See docs/07-mod-sync-design.md#fitting-it-into-the-client.
+    /// </remarks>
+    string GetModFilePath(ModKey modId, ModVersionKey versionId);
+
+    /// <summary>
+    /// The file to remove when uninstalling a mod that is currently installed. The uninstall half of
+    /// the same contract, separate from <see cref="GetModFilePath"/> because what is on disk is not
+    /// necessarily where this adapter version would put it.
+    /// </summary>
+    string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 }
 
 public interface IBaseSavegameAdapter

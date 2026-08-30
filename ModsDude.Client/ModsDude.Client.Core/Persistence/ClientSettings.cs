@@ -60,8 +60,20 @@ public class ClientSettings
 
 public class ContentStoreSettings
 {
+    /// <summary>
+    /// What an unconfigured volume gets. A store has to have some ceiling before the first sync
+    /// writes to it, and refusing to sync until somebody has visited a page to accept a number would
+    /// be a worse answer than starting from the one the settings page offers.
+    /// </summary>
+    public const long DefaultMaxSizeBytes = 100L * 1024 * 1024 * 1024;
+
+
     public required string Path { get; set; }
     public required long MaxSizeBytes { get; set; }
+
+
+    public static string GetDefaultPath(string volumeRoot)
+        => System.IO.Path.Combine(volumeRoot, "ModsDude", "store");
 }
 
 public class ImageCacheSettings

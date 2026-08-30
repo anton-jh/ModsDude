@@ -21,7 +21,7 @@ public class UpdateRepoV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>>> UpdateRepo(
+    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> UpdateRepo(
         Guid repoId,
         UpdateRepoRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -32,7 +32,7 @@ public class UpdateRepoV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

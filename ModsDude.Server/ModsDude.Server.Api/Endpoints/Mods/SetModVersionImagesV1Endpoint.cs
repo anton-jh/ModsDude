@@ -36,7 +36,7 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
     public record SetModVersionImagesRequest(IEnumerable<ModImageReferenceDto> Images);
 
 
-    private static async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>>> SetImages(
+    private static async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> SetImages(
         Guid repoId, string modId, string versionId,
         SetModVersionImagesRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -49,7 +49,7 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

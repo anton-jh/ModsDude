@@ -25,6 +25,27 @@ public static class FluentAuthorizationBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Creating a repo, and the name check that exists only to support it, are gated on
+    /// <see cref="User.IsTrusted"/> — a flag granted by hand against the database. Expressed through
+    /// the same builder as everything else so that both endpoints refuse in one shape, at one status,
+    /// with one problem body.
+    /// </summary>
+    public static FluentAuthorizationBuilder CreateRepo(this FluentAuthorizationBuilder builder)
+    {
+        if (builder.Result is not null)
+        {
+            return builder;
+        }
+
+        if (!builder.User.IsTrusted)
+        {
+            builder.Result = new AuthorizationResult.NotTrusted();
+        }
+
+        return builder;
+    }
+
     public static FluentAuthorizationBuilder GrantAccessToRepo(this FluentAuthorizationBuilder builder,
         RepoId repoId, RepoMembershipLevel level)
     {

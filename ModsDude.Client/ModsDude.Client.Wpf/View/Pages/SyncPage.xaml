@@ -1,0 +1,117 @@
+﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.SyncPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=pvm:SyncPageViewModel, IsDesignTimeCreatable=False}"
+      Title="SyncPage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Grid RowDefinitions="auto auto * auto">
+
+            <StackPanel Grid.Row="0" Orientation="Vertical">
+                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding InstanceName}" />
+                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="{Binding ProfileName}"
+                           Margin="0 8 0 24" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0 0 0 16">
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4" Padding="16"
+                        Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                               Text="{Binding Problem}" />
+                </Border>
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4" Padding="16"
+                        Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Summary}" />
+
+                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 8 0 0"
+                                   TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                                   Text="{Binding Status}" />
+
+                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 8 0 0"
+                                   TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                                   Text="{Binding DriftNote}" />
+
+                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 8 0 0"
+                                   TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                                   Text="{Binding MaterializationNote}" />
+
+                        <TextBlock Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}" Margin="0 8 0 0"
+                                   TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                                   Text="{Binding MaterializationWarning}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+
+            <Border Grid.Row="2"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="4" Padding="16"
+                    Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibilityConverter}}">
+                <GroupBox Header="What would change" Padding="0 16 0 0">
+                    <ListView ItemsSource="{Binding Rows}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListView.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ModSyncRowViewModel}">
+                                <Grid ColumnDefinitions="180 *" Margin="0 4 0 4">
+                                    <TextBlock Grid.Column="0" FontWeight="SemiBold" Text="{Binding Action}" />
+                                    <StackPanel Grid.Column="1" Orientation="Vertical">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </GroupBox>
+            </Border>
+
+            <StackPanel Grid.Row="3" Orientation="Vertical">
+
+                <StackPanel Orientation="Vertical" Margin="0 16 0 0"
+                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding ProgressText}" />
+                    <ProgressBar Height="6" Margin="0 8 0 0" Minimum="0" Maximum="100" Value="{Binding ProgressValue}" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
+                    <Button Width="250" Margin="0 0 8 0" Style="{DynamicResource AccentButtonStyle}"
+                            Content="Apply this profile"
+                            Command="{Binding ApplyCommand}" />
+
+                    <Button Width="150" Margin="0 0 8 0"
+                            Content="Re-check"
+                            Command="{Binding RefreshCommand}"
+                            Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Width="150"
+                            Content="Stop"
+                            Command="{Binding ApplyCancelCommand}"
+                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+
+            </StackPanel>
+
+        </Grid>
+    </Border>
+</Page>

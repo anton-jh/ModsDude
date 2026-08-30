@@ -17,7 +17,6 @@ public partial class SettingsPageViewModel
     : PageViewModel, IDisposable
 {
     private const long _bytesPerGigabyte = 1024L * 1024 * 1024;
-    private const double _defaultStoreSizeGigabytes = 100;
 
     private readonly ClientSettingsRepository _settingsRepository;
     private readonly NavigationLockService _navigationLockService;
@@ -166,8 +165,8 @@ public partial class SettingsPageViewModel
 
                 store = new ContentStoreViewModel(
                     volume,
-                    configured?.Path ?? Path.Combine(volume, "ModsDude", "store"),
-                    configured is null ? _defaultStoreSizeGigabytes : configured.MaxSizeBytes / (double)_bytesPerGigabyte,
+                    configured?.Path ?? ContentStoreSettings.GetDefaultPath(volume),
+                    (configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes) / (double)_bytesPerGigabyte,
                     _dialogService);
 
                 store.Modified += OnStoreModified;

@@ -50,7 +50,7 @@ public class UpgradeModDependenciesV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<UpgradeModDependenciesResponse>, BadRequest<CustomProblemDetails>>> Upgrade(
+    private static async Task<Results<Ok<UpgradeModDependenciesResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Upgrade(
         Guid repoId, Guid profileId,
         UpgradeModDependenciesRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -61,7 +61,7 @@ public class UpgradeModDependenciesV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

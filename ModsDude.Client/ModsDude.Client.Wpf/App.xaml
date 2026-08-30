@@ -68,6 +68,12 @@
             <DataTemplate DataType="{x:Type pvm:EditLocalInstancePageViewModel}">
                 <p:EditLocalInstancePage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:InstancePageViewModel}">
+                <p:InstancePage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:SyncPageViewModel}">
+                <p:SyncPage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
                 <p:RepoModsPage />
             </DataTemplate>

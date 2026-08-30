@@ -58,6 +58,20 @@ public static class Problems
         Detail = $"You are not authorized to perform this operation."
     };
 
+    /// <summary>
+    /// Returned at 401, and only ever for a caller the server cannot identify — a token carrying no
+    /// usable <c>sub</c>, or one whose subject has no user row. Everything reached through
+    /// <see cref="AuthorizationResultExtensions.MapToForbidden(Application.Authorization.AuthorizationResult?)"/>
+    /// is a 403 instead: the endpoint group requires authentication, so a request that reaches a
+    /// handler at all has already proved who it is and can only be refused for what it may do.
+    /// </summary>
+    public static CustomProblemDetails NotAuthenticated => new()
+    {
+        Type = ProblemType.NotAuthenticated,
+        Title = "Not authenticated",
+        Detail = "The request carries no identity this server can act on."
+    };
+
     public static CustomProblemDetails CannotDemoteOnlyAdmin => new()
     {
         Type = ProblemType.CannotDemoteOnlyAdmin,
@@ -227,6 +241,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "not-authorized")]
         [JsonStringEnumMemberName(_typeBaseUri + "not-authorized")]
         NotAuthorized,
+
+        [EnumMember(Value = _typeBaseUri + "not-authenticated")]
+        [JsonStringEnumMemberName(_typeBaseUri + "not-authenticated")]
+        NotAuthenticated,
 
         [EnumMember(Value = _typeBaseUri + "cannot-kick-only-admin")]
         [JsonStringEnumMemberName(_typeBaseUri + "cannot-kick-only-admin")]

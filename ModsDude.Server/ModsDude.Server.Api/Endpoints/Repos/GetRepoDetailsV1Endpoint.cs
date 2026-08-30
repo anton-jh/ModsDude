@@ -22,7 +22,7 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
     }
 
 
-    private async Task<Results<Ok<RepoDetailsDto>, BadRequest<CustomProblemDetails>>> GetRepoDetails(
+    private async Task<Results<Ok<RepoDetailsDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetRepoDetails(
         [FromRoute] Guid repoId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -31,7 +31,7 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

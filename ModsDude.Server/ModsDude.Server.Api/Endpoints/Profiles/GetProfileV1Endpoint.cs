@@ -22,7 +22,7 @@ public class GetProfileV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>>> GetSingle(
+    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetSingle(
         Guid repoId,
         Guid profileId,
         ClaimsPrincipal claimsPrincipal,
@@ -32,7 +32,7 @@ public class GetProfileV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

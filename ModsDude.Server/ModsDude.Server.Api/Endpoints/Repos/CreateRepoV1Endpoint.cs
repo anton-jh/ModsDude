@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Repos;
@@ -21,7 +21,7 @@ public class CreateRepoV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>>> CreateRepo(
+    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateRepo(
         CreateRepoRequest request,
         IUnitOfWork unitOfWork,
         ITimeService timeService,
@@ -30,12 +30,14 @@ public class CreateRepoV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = httpContext.User.GetUserId();
-        var isTrusted = (await dbContext.Users
-            .FirstAsync(x => x.Id == userId, cancellationToken))
-            .IsTrusted;
-        if (!isTrusted)
+
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
+            .CheckIsAllowedTo(x => x
+                .CreateRepo())
+            .MapToForbidden();
+        if (authResult is not null)
         {
-            return TypedResults.BadRequest(Problems.NotAuthorized);
+            return authResult;
         }
 
         if (await dbContext.Repos.CheckNameIsTaken(new RepoName(request.Name), cancellationToken))

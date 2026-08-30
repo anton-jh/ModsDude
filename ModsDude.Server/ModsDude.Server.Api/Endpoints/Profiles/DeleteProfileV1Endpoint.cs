@@ -21,7 +21,7 @@ public class DeleteProfileV1Endpoint : IEndpoint
     }
 
     
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Delete(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Delete(
         Guid repoId, Guid profileId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -31,7 +31,7 @@ public class DeleteProfileV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

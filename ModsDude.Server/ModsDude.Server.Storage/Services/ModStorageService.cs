@@ -5,6 +5,7 @@ using Azure.Storage.Sas;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
+using System.Runtime.CompilerServices;
 
 namespace ModsDude.Server.Storage.Services;
 internal class ModStorageService(
@@ -60,6 +61,26 @@ internal class ModStorageService(
     public async Task DeleteMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
     {
         await GetBlobClient(repoId, modId, versionId).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    }
+
+    public async IAsyncEnumerable<StoredBlob> ListStoredMods([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var container = blobServiceClient.GetBlobContainerClient(_modsContainerName);
+
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
+        {
+            // A blob storage does not date is treated as written this instant, so the sweep's grace
+            // period retains it. Erring the other way would delete on missing information.
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue);
+        }
+    }
+
+    public async Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken)
+    {
+        await blobServiceClient
+            .GetBlobContainerClient(_modsContainerName)
+            .GetBlobClient(blobName)
+            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
     }
 
 

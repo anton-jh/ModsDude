@@ -21,7 +21,7 @@ public class AddMemberV1Endpoint : IEndpoint
     }
 
 
-    private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> AddMember(
+    private async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> AddMember(
         Guid repoId, AddMemberRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -32,7 +32,7 @@ public class AddMemberV1Endpoint : IEndpoint
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member)
                 .GrantAccessToRepo(new RepoId(repoId), request.MembershipLevel))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

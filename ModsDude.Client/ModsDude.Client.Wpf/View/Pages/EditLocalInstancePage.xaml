@@ -50,7 +50,7 @@
                         <StackPanel Orientation="Vertical">
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"
-                                       Text="The profile this game's mods should match. Nothing is applied yet - syncing arrives later." />
+                                       Text="The profile this game's mods should match. Applying it is on the Sync page, which says what would change before anything does." />
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"

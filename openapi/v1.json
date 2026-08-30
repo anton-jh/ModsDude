@@ -1,0 +1,3245 @@
+{
+  "components": {
+    "schemas": {
+      "AddMemberRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "membershipLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
+          },
+          "userId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AddModDependencyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CheckImagesExistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "hashes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CheckImagesExistResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "present": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CheckNameTakenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CheckNameTakenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "isTaken": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CreateModDownloadLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "modId": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateModDownloadLinkResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "link": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateModUploadLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "modId": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateModUploadLinkResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHashMetadataKey": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateRepoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "adapterConfiguration": {
+            "type": "string"
+          },
+          "adapterId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomProblemDetails": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProblemDetails"
+          },
+          {
+            "additionalProperties": {
+              "nullable": true
+            },
+            "properties": {
+              "contentHash": {
+                "nullable": true,
+                "type": "string"
+              },
+              "type": {
+                "$ref": "#/components/schemas/ProblemType"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "GetModUsageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          },
+          "usage": {
+            "items": {
+              "$ref": "#/components/schemas/ModUsageDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetModVersionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ModDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetModsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "mods": {
+            "items": {
+              "$ref": "#/components/schemas/ModDto"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModAttributeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModDependencyDto": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "modVersionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModDependencyUpgradeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "fromVersionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lockedByMod": {
+            "type": "boolean"
+          },
+          "lockedInProfile": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ModDependencyUpgradeOutcome"
+          },
+          "toVersionId": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModDependencyUpgradeOutcome": {
+        "description": "",
+        "enum": [
+          "Upgraded",
+          "AlreadyLatest",
+          "SkippedLocked",
+          "NotInProfile"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Upgraded",
+          "AlreadyLatest",
+          "SkippedLocked",
+          "NotInProfile"
+        ]
+      },
+      "ModDto": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/ModAttributeDto"
+            },
+            "type": "array"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ModImageReferenceDto"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "sequenceNumber": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModImageKind": {
+        "description": "",
+        "enum": [
+          "Icon",
+          "StoreImage"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Icon",
+          "StoreImage"
+        ]
+      },
+      "ModImageReferenceDto": {
+        "additionalProperties": false,
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModImageKind"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rendition": {
+            "$ref": "#/components/schemas/ModImageRendition"
+          }
+        },
+        "type": "object"
+      },
+      "ModImageRendition": {
+        "description": "",
+        "enum": [
+          "Thumbnail",
+          "Full"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Thumbnail",
+          "Full"
+        ]
+      },
+      "ModUsageDto": {
+        "additionalProperties": false,
+        "properties": {
+          "modId": {
+            "type": "string"
+          },
+          "profileCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModVersionPlacement": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "nullable": true,
+            "type": "string"
+          },
+          "before": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MoveModVersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "placement": {
+            "$ref": "#/components/schemas/ModVersionPlacement"
+          }
+        },
+        "type": "object"
+      },
+      "MoveModVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "versionIdsInOrder": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "additionalProperties": {
+          "nullable": true
+        },
+        "properties": {
+          "detail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "instance": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "title": {
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemType": {
+        "description": "",
+        "enum": [
+          "https://server.modsdude.com/api/problems/name-taken",
+          "https://server.modsdude.com/api/problems/not-found",
+          "https://server.modsdude.com/api/problems/mod-dependency-exists",
+          "https://server.modsdude.com/api/problems/insufficient-repo-access",
+          "https://server.modsdude.com/api/problems/not-authorized",
+          "https://server.modsdude.com/api/problems/not-authenticated",
+          "https://server.modsdude.com/api/problems/cannot-kick-only-admin",
+          "https://server.modsdude.com/api/problems/cannot-demote-only-admin",
+          "https://server.modsdude.com/api/problems/already-exists",
+          "https://server.modsdude.com/api/problems/file-not-found",
+          "https://server.modsdude.com/api/problems/user-already-member",
+          "https://server.modsdude.com/api/problems/repo-not-empty",
+          "https://server.modsdude.com/api/problems/version-placement-conflict",
+          "https://server.modsdude.com/api/problems/file-already-present",
+          "https://server.modsdude.com/api/problems/already-registered",
+          "https://server.modsdude.com/api/problems/mod-in-use",
+          "https://server.modsdude.com/api/problems/cannot-delete-only-mod-version",
+          "https://server.modsdude.com/api/problems/hash-mismatch",
+          "https://server.modsdude.com/api/problems/invalid-hash",
+          "https://server.modsdude.com/api/problems/invalid-image-set",
+          "https://server.modsdude.com/api/problems/batch-too-large",
+          "https://server.modsdude.com/api/problems/invalid-cursor"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "NameTaken",
+          "NotFound",
+          "ModDependencyExists",
+          "InsufficientRepoAccess",
+          "NotAuthorized",
+          "NotAuthenticated",
+          "CannotKickOnlyAdmin",
+          "CannotDemoteOnlyAdmin",
+          "AlreadyExists",
+          "FileNotFound",
+          "UserAlreadyMember",
+          "RepoNotEmpty",
+          "VersionPlacementConflict",
+          "FileAlreadyPresent",
+          "AlreadyRegistered",
+          "ModInUse",
+          "CannotDeleteOnlyModVersion",
+          "HashMismatch",
+          "InvalidHash",
+          "InvalidImageSet",
+          "BatchTooLarge",
+          "InvalidCursor"
+        ]
+      },
+      "ProfileDto": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "guid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RegisterModRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/ModAttributeDto"
+            },
+            "type": "array"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "placement": {
+            "$ref": "#/components/schemas/ModVersionPlacement"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RepoDetailsDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RepoDto"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "members": {
+                "items": {
+                  "$ref": "#/components/schemas/RepoMemberDto"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "RepoDto": {
+        "additionalProperties": false,
+        "properties": {
+          "adapterConfiguration": {
+            "type": "string"
+          },
+          "adapterId": {
+            "type": "string"
+          },
+          "id": {
+            "format": "guid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RepoMemberDto": {
+        "additionalProperties": false,
+        "properties": {
+          "membershipLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "type": "object"
+      },
+      "RepoMembershipDto": {
+        "additionalProperties": false,
+        "properties": {
+          "membershipLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoDto"
+          }
+        },
+        "type": "object"
+      },
+      "RepoMembershipLevel": {
+        "description": "",
+        "enum": [
+          "Guest",
+          "Member",
+          "Admin"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Guest",
+          "Member",
+          "Admin"
+        ]
+      },
+      "SearchUserResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "user": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserDto"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SetModVersionImagesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ModImageReferenceDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateMembershipRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "newLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateModDependencyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "type": "boolean"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateRepoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "adapterConfiguration": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpgradeModDependenciesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "modIds": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpgradeModDependenciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ModDependencyUpgradeDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UserDto": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "EntraExternalId": {
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/authorize",
+            "refreshUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/token",
+            "scopes": {
+              "api://modsdude-server/act_as_user": "ModsDude Server default user scope",
+              "offline_access": "Offline access",
+              "openid": "OpenID"
+            },
+            "tokenUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/token"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
+  },
+  "info": {
+    "title": "ModsDude Server",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/files/createModDownloadLink": {
+      "post": {
+        "operationId": "CreateModDownloadLinkV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModDownloadLinkRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateModDownloadLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/createModUploadLink": {
+      "post": {
+        "operationId": "CreateModUploadLinkV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModUploadLinkRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateModUploadLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/images/checkExisting": {
+      "post": {
+        "operationId": "CheckImagesExistV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckImagesExistRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckImagesExistResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Images"
+        ]
+      }
+    },
+    "/api/v1/images/{hash}": {
+      "get": {
+        "operationId": "GetImageV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Images"
+        ]
+      },
+      "post": {
+        "operationId": "UploadImageV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "image": {
+                    "format": "binary",
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Images"
+        ]
+      }
+    },
+    "/api/v1/repo/{repoId}": {
+      "delete": {
+        "operationId": "DeleteRepoV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      },
+      "get": {
+        "operationId": "GetRepoDetailsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      },
+      "put": {
+        "operationId": "UpdateRepoV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRepoRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos": {
+      "get": {
+        "operationId": "GetMyReposV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepoMembershipDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos/check-name-taken": {
+      "post": {
+        "operationId": "CheckNameTakenV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckNameTakenRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckNameTakenResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos/create": {
+      "post": {
+        "operationId": "CreateRepoV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRepoRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/members": {
+      "post": {
+        "operationId": "AddMemberV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMemberRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Members"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/members/{userId}": {
+      "delete": {
+        "operationId": "KickMemberV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Members"
+        ]
+      },
+      "put": {
+        "operationId": "UpdateMembershipV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMembershipRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Members"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods": {
+      "get": {
+        "operationId": "GetModsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "query",
+            "name": "updatedAfter",
+            "schema": {
+              "format": "date-time",
+              "nullable": true,
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            },
+            "x-position": 3
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetModsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      },
+      "post": {
+        "operationId": "RegisterModV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterModRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/usage": {
+      "get": {
+        "operationId": "GetModUsageV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetModUsageResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}": {
+      "delete": {
+        "operationId": "DeleteModV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}/versions": {
+      "get": {
+        "operationId": "GetModVersionsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetModVersionsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}/versions/{versionId}": {
+      "delete": {
+        "operationId": "DeleteModVersionV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}/versions/{versionId}/images": {
+      "put": {
+        "operationId": "SetModVersionImagesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetModVersionImagesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 4
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}/versions/{versionId}/placement": {
+      "put": {
+        "operationId": "MoveModVersionV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveModVersionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 4
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveModVersionResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profile/{profileId}": {
+      "get": {
+        "operationId": "GetProfileV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles": {
+      "get": {
+        "operationId": "GetProfilesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "post": {
+        "operationId": "CreateProfileV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}": {
+      "delete": {
+        "operationId": "DeleteProfileV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "put": {
+        "operationId": "UpdateProfileV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies": {
+      "get": {
+        "operationId": "GetModDependenciesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModDependencyDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModDependencies"
+        ]
+      },
+      "post": {
+        "operationId": "AddModDependencyV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddModDependencyRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDependencyDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModDependencies"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies/upgrade": {
+      "post": {
+        "operationId": "UpgradeModDependenciesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeModDependenciesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeModDependenciesResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModDependencies"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies/{modId}": {
+      "delete": {
+        "operationId": "DeleteModDependencyV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModDependencies"
+        ]
+      },
+      "put": {
+        "operationId": "UpdateModDependencyV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateModDependencyRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 4
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDependencyDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModDependencies"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "GetUsersV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/search": {
+      "get": {
+        "operationId": "SearchUserV1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchUserResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5267"
+    }
+  ],
+  "x-generator": "NSwag v14.6.2.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))"
+}

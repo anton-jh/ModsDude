@@ -22,7 +22,7 @@ public class UpdateProfileV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>>> Update(
+    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Update(
         Guid repoId, Guid profileId,
         UpdateProfileRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -33,7 +33,7 @@ public class UpdateProfileV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

@@ -23,7 +23,7 @@ public class RegisterModV1Endpoint : IEndpoint
     }
 
 
-    public async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>>> RegisterMod(
+    public async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> RegisterMod(
         Guid repoId,
         RegisterModRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -36,7 +36,7 @@ public class RegisterModV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

@@ -12,10 +12,14 @@ public static class EndpointMappingExtensions
 {
     public static IEndpointRouteBuilder MapAllEndpointsFromAssembly(this IEndpointRouteBuilder builder, Assembly assembly)
     {
+        // Ordered by name because the OpenAPI document is checked in and diffed in CI: registration
+        // order decides the order of paths and schemas in it, and Assembly.GetTypes() promises no
+        // order at all, so an undecided one would show up as spurious drift.
         var types = assembly
             .GetTypes()
             .Except([typeof(IEndpoint)])
-            .Where(x => x.IsAssignableTo(typeof(IEndpoint)));
+            .Where(x => x.IsAssignableTo(typeof(IEndpoint)))
+            .OrderBy(x => x.FullName, StringComparer.Ordinal);
 
         foreach (var type in types)
         {

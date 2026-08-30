@@ -14,6 +14,16 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     private static readonly string[] _imageExtensions = [".dds", ".png", ".jpg", ".jpeg"];
 
 
+    /// <summary>
+    /// Declared false rather than inherited, to say that the answer is unknown rather than assumed.
+    /// Farming Simulator downloads and updates mods from inside the game, and whether that updater
+    /// rewrites an archive in place - which through a hardlink would corrupt a store blob shared
+    /// with every repo on the volume - has not been tested against the real game. That costs the
+    /// main game its fast path for now, which is the right way round.
+    /// </summary>
+    public bool SupportsHardlinks => false;
+
+
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
         // Each file gets its own archive handle, so reading them in parallel is safe, and a mod
@@ -295,5 +305,20 @@ public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings
     public Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
     {
         return GetModsFromFolder(ModFolder, cancellationToken);
+    }
+
+    /// <summary>
+    /// One archive per mod, named after the mod id - which is where the id came from in the first
+    /// place, so the version never appears in the filename. Installing a different version replaces
+    /// the same file.
+    /// </summary>
+    /// <remarks>
+    /// The name comes out lower-cased, because <see cref="ModKey"/> is. That is what makes two
+    /// members' folders identical rather than differing by whatever casing each one's original
+    /// download happened to have, and the game reads the folder case-insensitively either way.
+    /// </remarks>
+    public string GetModFilePath(ModKey modId, ModVersionKey versionId)
+    {
+        return Path.Combine(ModFolder, $"{modId.Value}.zip");
     }
 }

@@ -71,7 +71,7 @@
                     <GroupBox Header="Sync" Padding="0 16 0 16">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                   Text="Nothing syncs yet. When it does, how far each instance above has drifted from this profile and the time it last synced will be shown here." />
+                                   Text="Applying this profile happens on an instance's own Sync page, which shows what would change before anything does. How far each instance above has drifted, and when it last synced, will be summarised here." />
                     </GroupBox>
                 </Border>
 

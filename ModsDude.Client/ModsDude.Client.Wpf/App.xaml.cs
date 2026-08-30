@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.View.Imaging;
@@ -83,6 +84,8 @@ public partial class App : Application
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
         services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
         services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
+        services.AddSingleton<InstancePageViewModel.Factory>();
+        services.AddSingleton<SyncPageViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
@@ -112,6 +115,10 @@ public partial class App : Application
         services.AddSingleton<ProfileService>();
         services.AddSingleton<MembershipService>();
         services.AddSingleton<LocalInstanceRepository>();
+
+        // Sync's store eviction has to spare what other instances are running, and the instance list
+        // is the only thing that knows which folders those are.
+        services.AddSingleton<IInstanceModFolders>(sp => sp.GetRequiredService<LocalInstanceRepository>());
         services.AddSingleton<ClientSettingsRepository>();
         // A catalog is created per surface and disposed with it, so its per-source scan cache lives
         // exactly as long as the page whose checkboxes recompose from it.

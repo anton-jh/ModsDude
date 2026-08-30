@@ -24,7 +24,7 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
     public record CreateModDownloadLinkResponse(string Link);
 
 
-    public async Task<Results<Ok<CreateModDownloadLinkResponse>, BadRequest<CustomProblemDetails>>> CreateModDownloadLink(
+    public async Task<Results<Ok<CreateModDownloadLinkResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateModDownloadLink(
         CreateModDownloadLinkRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -36,7 +36,7 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Guest))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

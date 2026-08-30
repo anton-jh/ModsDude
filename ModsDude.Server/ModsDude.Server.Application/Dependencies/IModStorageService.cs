@@ -21,4 +21,17 @@ public interface IModStorageService
     Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
     Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
     Task DeleteMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every mod blob there is, streamed rather than returned whole so that the reclamation sweep
+    /// does not have to hold a container listing in memory before it can start.
+    /// </summary>
+    IAsyncEnumerable<StoredBlob> ListStoredMods(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes by the exact name storage reported, which is what the sweep must use: re-deriving a
+    /// path from a parsed address would put a parsing bug between deciding what is garbage and
+    /// deleting it.
+    /// </summary>
+    Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken);
 }

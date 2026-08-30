@@ -1,0 +1,4 @@
+# The OpenAPI document is compared byte for byte against what the running API serves, so its line
+# endings must not depend on which machine checked it out. Without this, core.autocrlf=true hands a
+# Windows working tree CRLF and scripts/openapi.ps1 reports drift that is not there.
+openapi/*.json text eol=lf

@@ -4,19 +4,22 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Sync;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 
-public class LocalInstanceRepository
+public class LocalInstanceRepository : IInstanceModFolders
 {
     private readonly StateStore _store;
+    private readonly SyncManifestStore _manifestStore;
     private readonly LocalState _state;
 
 
-    public LocalInstanceRepository(StateStore store)
+    public LocalInstanceRepository(StateStore store, SyncManifestStore manifestStore)
     {
         _store = store;
+        _manifestStore = manifestStore;
         _state = store.Get();
 
         Instances = new(_state.Instances.Values.Select(x => new LocalInstance(x)));
@@ -30,6 +33,17 @@ public class LocalInstanceRepository
     public IEnumerable<LocalInstance> GetByScope(InstanceScope scope)
     {
         return Instances.Where(x => x.Scope == scope);
+    }
+
+    /// <summary>
+    /// The folders sync's store eviction has to know about, across every scope: an instance on a
+    /// disk this store serves is relying on entries the sweep would otherwise drop.
+    /// </summary>
+    public IReadOnlyList<InstanceModFolder> GetAll()
+    {
+        return [.. Instances
+            .Where(x => x.ModFolder is not null)
+            .Select(x => new InstanceModFolder(x.Id, x.ModFolder!))];
     }
 
     public LocalInstance Create(IBaseGameAdapter baseAdapter, string name, DynamicForm instanceSettings)
@@ -78,6 +92,10 @@ public class LocalInstanceRepository
         _state.Instances.Remove(instance.Id);
         Instances.Remove(instance);
         _store.Save();
+
+        // Nothing reads a manifest for an instance that no longer exists, and leaving one behind
+        // would keep a few hundred kilobytes per disconnected game folder forever.
+        _manifestStore.Delete(instance.Id);
     }
 
     /// <summary>

@@ -37,7 +37,7 @@ public class GetModsV1Endpoint : IEndpoint
     /// <param name="cursor">
     /// Opaque, from a previous response's <c>NextCursor</c>.
     /// </param>
-    public async Task<Results<Ok<GetModsResponse>, BadRequest<CustomProblemDetails>>> GetAll(
+    public async Task<Results<Ok<GetModsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetAll(
         Guid repoId,
         DateTimeOffset? updatedAfter,
         string? cursor,
@@ -49,7 +49,7 @@ public class GetModsV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

@@ -1,4 +1,6 @@
-﻿namespace ModsDude.Server.Application.Dependencies;
+﻿using ModsDude.Server.Domain.Mods;
+
+namespace ModsDude.Server.Application.Dependencies;
 
 public interface IModImageStorageService
 {
@@ -16,6 +18,17 @@ public interface IModImageStorageService
     /// returned stream.
     /// </summary>
     Task<StoredModImage?> Download(string hash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every stored image, for the reclamation sweep. See
+    /// <see cref="IModStorageService.ListStoredMods"/>.
+    /// </summary>
+    IAsyncEnumerable<StoredBlob> ListStoredImages(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// See <see cref="IModStorageService.DeleteStoredBlob"/>.
+    /// </summary>
+    Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken);
 }
 
 

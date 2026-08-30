@@ -55,7 +55,7 @@ public class GetModUsageV1Endpoint : IEndpoint
 
 
     /// <param name="cursor">Opaque, from a previous response's <c>NextCursor</c>.</param>
-    public async Task<Results<Ok<GetModUsageResponse>, BadRequest<CustomProblemDetails>>> Get(
+    public async Task<Results<Ok<GetModUsageResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
         Guid repoId,
         string? cursor,
         int? limit,
@@ -66,7 +66,7 @@ public class GetModUsageV1Endpoint : IEndpoint
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToBadRequest();
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;

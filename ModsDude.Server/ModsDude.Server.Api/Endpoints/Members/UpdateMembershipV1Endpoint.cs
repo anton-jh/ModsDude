@@ -21,7 +21,7 @@ public class UpdateMembershipV1Endpoint : IEndpoint
     }
 
 
-    private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> UpdateMembership(
+    private async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> UpdateMembership(
         Guid repoId, string userId,
         UpdateMembershipRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -29,6 +29,21 @@ public class UpdateMembershipV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        // See KickMemberV1Endpoint: ChangeOthersMembership is a function of the subject's level and
+        // so cannot precede the load, but the floor it can never fall below can — and that is what
+        // stops a non-member probing for repo ids and memberships.
+        var user = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken);
+
+        var authResult = user
+            .CheckIsAllowedTo(x => x
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member)
+                .GrantAccessToRepo(new RepoId(repoId), request.NewLevel))
+            .MapToForbidden();
+        if (authResult is not null)
+        {
+            return authResult;
+        }
+
         var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
@@ -41,11 +56,10 @@ public class UpdateMembershipV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Member '{userId}' not found"));
         }
 
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        authResult = user
             .CheckIsAllowedTo(x => x
-                .ChangeOthersMembership(subjectMembership)
-                .GrantAccessToRepo(new RepoId(repoId), request.NewLevel))
-            .MapToBadRequest();
+                .ChangeOthersMembership(subjectMembership))
+            .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;
