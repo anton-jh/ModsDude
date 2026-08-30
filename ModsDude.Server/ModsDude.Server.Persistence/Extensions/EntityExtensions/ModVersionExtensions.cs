@@ -32,4 +32,33 @@ public static class ModVersionExtensions
             .Where(x => x.RepoId == repoId && x.ModId == modId)
             .ToListAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// The newest version of each of the named mods, tracked, so that a dependency can be pointed at
+    /// one. What a batch upgrade needs: it reads one row per mod rather than the whole sibling set of
+    /// each, which for a profile holding two thousand mods is the difference between a query and a
+    /// materialization of the repo.
+    /// </summary>
+    /// <remarks>
+    /// Expressed as "no sibling sits after it" rather than as a grouped maximum, because a grouped
+    /// maximum projects and a dependency can only be moved to an entity.
+    /// </remarks>
+    public static async Task<Dictionary<ModId, ModVersion>> GetLatestVersionOfEachAsync(
+        this DbSet<ModVersion> dbSet,
+        RepoId repoId,
+        IReadOnlyCollection<ModId> modIds,
+        CancellationToken cancellationToken)
+    {
+        if (modIds.Count == 0)
+        {
+            return [];
+        }
+
+        var latest = await dbSet
+            .Where(x => x.RepoId == repoId && modIds.Contains(x.ModId))
+            .Where(x => !dbSet.Any(y => y.RepoId == x.RepoId && y.ModId == x.ModId && y.SequenceNumber > x.SequenceNumber))
+            .ToListAsync(cancellationToken);
+
+        return latest.ToDictionary(x => x.ModId);
+    }
 }

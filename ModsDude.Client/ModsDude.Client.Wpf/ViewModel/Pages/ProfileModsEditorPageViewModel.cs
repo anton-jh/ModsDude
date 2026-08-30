@@ -1,28 +1,1045 @@
-﻿using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Import;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.ModVersions;
+using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.ViewModel.Services;
+using ModsDude.Client.Wpf.ViewModel.ViewModels;
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Data;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public partial class ProfileModsEditorPageViewModel(
-    ProfileDto profile)
-    : PageViewModel
+/// <summary>
+/// The profile's mod list: everything available on the left, everything the profile pins on the
+/// right.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The left list is the <em>union</em> of what the repo has registered and what the enabled sources
+/// hold, so a mod can be added to a profile and imported in one action rather than requiring a
+/// detour to the management page first. It carries the same source list as that page, because adding
+/// a mod straight out of Downloads while building a profile is the point of having sources at all.
+/// </para>
+/// <para>
+/// <b>Updates render on the right.</b> A mod already in the profile never appears on the left, so an
+/// available newer version shows as an affordance on the row that already exists rather than putting
+/// the same mod on both sides at once.
+/// </para>
+/// <para>
+/// <b>Nothing is uploaded until Save.</b> A local-only mod moved rightwards is a pending row; Save
+/// imports the files and then writes the dependencies. Importing on the way in would make Cancel
+/// meaningless and litter the repo with mods nobody kept.
+/// See docs/09-mod-catalog.md#profile-mod-list-editor.
+/// </para>
+/// </remarks>
+public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 {
-    public string Name { get; } = profile.Name;
+    private readonly Repo _repo;
+    private readonly ProfileDto _profile;
+    private readonly ModCatalog _catalog;
+    private readonly ModListItemViewModel.Factory _itemFactory;
+    private readonly ModImportService _importService;
+    private readonly IModDependenciesClient _dependenciesClient;
+    private readonly IModalService _modalService;
+    private readonly IDialogService _dialogService;
+    private readonly NavigationLockService _navigationLock;
 
-    public List<string> Items { get; } = ["test 1", "test 2", "test 3", "test 4"];
+    private readonly CancellationTokenSource _cancellation = new();
 
+    /// <summary>Every known version of every known mod, oldest first, per mod.</summary>
+    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> _versionsByMod =
+        new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+
+    /// <summary>The same set, restricted to what the repo holds - the only thing "newer" may read.</summary>
+    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> _registered =
+        new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+
+    /// <summary>What the profile held when it was last read from the server. Save diffs against it.</summary>
+    private IReadOnlyList<ProfileModPin> _original = [];
+
+    private IReadOnlyList<ModListItemViewModel> _available = [];
+    private ProfileModUpdatePlan _updates = ProfileModUpdatePlan.Empty;
+
+    /// <summary>What the left list has to hide, kept as a set because it is asked once per row.</summary>
+    private HashSet<ModKey> _pinnedIds = [];
+
+    /// <summary>
+    /// Set while the lists are being rebuilt from the server. Every add into <see cref="Pinned"/>
+    /// would otherwise recount against a draft that is half the old profile and half the new one.
+    /// </summary>
+    private bool _publishing;
+
+
+    public ProfileModsEditorPageViewModel(
+        Repo repo,
+        ProfileDto profile,
+        ModCatalog.Factory catalogFactory,
+        ModListItemViewModel.Factory itemFactory,
+        ModImportService importService,
+        IModDependenciesClient dependenciesClient,
+        IModalService modalService,
+        IDialogService dialogService,
+        NavigationLockService navigationLock)
+    {
+        _repo = repo;
+        _profile = profile;
+        _itemFactory = itemFactory;
+        _importService = importService;
+        _dependenciesClient = dependenciesClient;
+        _modalService = modalService;
+        _dialogService = dialogService;
+        _navigationLock = navigationLock;
+
+        // The page owns the catalog and disposes it, so the per-source scan cache lives exactly as
+        // long as the checkboxes that recompose from it.
+        _catalog = catalogFactory.Create(repo);
+
+        ProfileName = profile.Name;
+
+        PinnedView = CollectionViewSource.GetDefaultView(Pinned);
+        PinnedView.SortDescriptions.Add(new SortDescription(nameof(ProfileModRowViewModel.Name), ListSortDirection.Ascending));
+
+        Pinned.CollectionChanged += (_, _) => OnPinnedChanged();
+    }
+
+
+    public string ProfileName { get; }
+
+    public ObservableCollection<ModSourceViewModel> Sources { get; } = [];
+
+    /// <summary>The profile's pinned mods, one per mod - the domain allows no more than that.</summary>
+    public ObservableCollection<ProfileModRowViewModel> Pinned { get; } = [];
+
+    public ICollectionView PinnedView { get; }
+
+    /// <summary>What is not in the profile yet, registered or merely on disk.</summary>
+    [ObservableProperty]
+    private ICollectionView? _availableView;
+
+    [ObservableProperty]
+    private bool _isLoading = true;
+
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AvailableCountText))]
+    private int _availableCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinnedCountText))]
+    [NotifyPropertyChangedFor(nameof(HasPinnedMods))]
+    private int _pinnedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PendingText))]
+    [NotifyPropertyChangedFor(nameof(HasPending))]
+    private int _pendingCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    [NotifyPropertyChangedFor(nameof(HasUpdates))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    private int _updateCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkippedText))]
+    [NotifyPropertyChangedFor(nameof(HasSkippedUpdates))]
+    [NotifyPropertyChangedFor(nameof(ApplyUpdatesText))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    private int _skippedUpdateCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApplyUpdatesText))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    private int _applicableUpdateCount;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    private bool _hasUnsavedChanges;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    private bool _isSaving;
+
+    /// <summary>What the last save did, kept until something changes again.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveSummary))]
+    private string? _saveSummary;
+
+
+    public bool HasPinnedMods => PinnedCount > 0;
+    public bool HasPending => PendingCount > 0;
+    public bool HasUpdates => UpdateCount > 0;
+    public bool HasSkippedUpdates => SkippedUpdateCount > 0;
+    public bool HasSaveSummary => SaveSummary is not null;
+
+    public string AvailableCountText => AvailableCount == 1 ? "1 mod" : $"{AvailableCount} mods";
+
+    public string PinnedCountText => PinnedCount == 1 ? "1 mod" : $"{PinnedCount} mods";
+
+    public string PendingText => PendingCount == 1
+        ? "1 mod will be imported when you save"
+        : $"{PendingCount} mods will be imported when you save";
+
+    public string UpdateCountText => UpdateCount == 1 ? "1 update available" : $"{UpdateCount} updates available";
+
+    public string ApplyUpdatesText => ApplicableUpdateCount == 1 ? "Update 1 mod" : $"Update {ApplicableUpdateCount} mods";
+
+    /// <summary>
+    /// A link rather than a footnote: it opens the same dialog the per-row change opens, reached
+    /// deliberately instead of fired at every save.
+    /// </summary>
+    public string SkippedText => SkippedUpdateCount == 1 ? "1 locked, skipped" : $"{SkippedUpdateCount} locked, skipped";
+
+
+    #region Moving mods between the lists
 
     [RelayCommand]
-    public async Task SaveChanges(CancellationToken cancellationToken)
+    private void Add(ModListItemViewModel? row)
     {
+        if (row is null || Pinned.Any(x => x.ModId == row.Mod.ModId))
+        {
+            return;
+        }
 
+        var versions = _versionsByMod.TryGetValue(row.Mod.ModId, out var known) ? known : [row.Mod];
+
+        Pinned.Add(CreatePinnedRow(versions, row.Mod, lockedByProfile: false));
+    }
+
+    [RelayCommand]
+    private void Remove(ProfileModRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        row.PropertyChanged -= OnPinnedRowChanged;
+
+        Pinned.Remove(row);
+    }
+
+    #endregion
+
+
+    #region Updates
+
+    /// <summary>
+    /// Applies every update the profile is allowed to take, and says how many it left. Locked mods
+    /// are not candidates rather than candidates the save asks about, so the save that follows cannot
+    /// contain an unintended version change and needs no prompt at all.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApplyAllUpdates))]
+    private void ApplyAllUpdates()
+    {
+        foreach (var update in _updates.Available)
+        {
+            FindPinned(update.ModId)?.SetVersion(update.To);
+        }
+    }
+
+    private bool CanApplyAllUpdates() => ApplicableUpdateCount > 0 && IsSaving is false;
+
+    /// <summary>
+    /// One row's update. Locked here means the move is a deliberate act on this row, carrying the
+    /// reason the lock is there.
+    /// </summary>
+    [RelayCommand]
+    private async Task UpdateOne(ProfileModRowViewModel? row)
+    {
+        if (row?.UpdateTo is not ModVersionKey target)
+        {
+            return;
+        }
+
+        if (row.Versions.FirstOrDefault(x => x.Version.VersionId == target) is not ProfileModVersionOption option)
+        {
+            return;
+        }
+
+        if (row.IsLocked && await ConfirmLockedVersionChangeAsync(row, option) is false)
+        {
+            return;
+        }
+
+        row.SetVersion(target);
+    }
+
+    /// <summary>
+    /// The locked mods the batch left alone, with an unchecked box each. For someone who genuinely
+    /// does mean to move them, rather than the standing cost of the common action.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowSkippedUpdates()
+    {
+        if (_updates.Skipped.Count == 0)
+        {
+            return;
+        }
+
+        var modal = new ProfileLockedUpdatesModalViewModel([.. _updates.Skipped
+            .Select(x => new ProfileLockedUpdateViewModel(FindPinned(x.ModId)?.Name ?? x.ModId.Value, x))]);
+
+        await _modalService.Show(modal);
+
+        foreach (var modId in modal.Result)
+        {
+            if (_updates.Skipped.FirstOrDefault(x => x.ModId == modId) is ProfileModUpdate update)
+            {
+                FindPinned(modId)?.SetVersion(update.To);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carries why the mod is locked, because that is the part that decides the answer - and words
+    /// the profile lock as being about this profile, which is the only scope it has.
+    /// </summary>
+    private async Task<bool> ConfirmLockedVersionChangeAsync(ProfileModRowViewModel row, ProfileModVersionOption target)
+    {
+        var reason = row.Lock.Source switch
+        {
+            ProfileModLockSource.Adapter =>
+                "The game adapter reads it as version-sensitive - a map, typically - so changing its version "
+                    + "partway through a save can corrupt that save, and the damage tends to show up long after.",
+            ProfileModLockSource.Profile =>
+                "You locked it in this profile. Other profiles are not affected either way.",
+            _ =>
+                "The game adapter reads it as version-sensitive and you have locked it in this profile as well. "
+                    + "Changing its version partway through a save can corrupt that save.",
+        };
+
+        var confirmation = new ConfirmationDialogViewModel(
+            "This mod is locked",
+            $"'{row.Name}' is pinned at {row.SelectedVersion.Version.VersionId} and locked.\n\n"
+                + $"{reason}\n\n"
+                + $"Move this profile to {target.Version.VersionId}?",
+            IconKind.Warning,
+            "Change the version",
+            "Leave it alone");
+
+        await _modalService.Show(confirmation);
+
+        return confirmation.Result;
+    }
+
+    #endregion
+
+
+    #region Saving
+
+    /// <summary>
+    /// Imports whatever is pending, then writes the dependencies - in that order, because a mod is
+    /// never registered before its file is in storage and a dependency can only name a registered
+    /// version.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSave), IncludeCancelCommand = true)]
+    private async Task SaveChanges(CancellationToken cancellationToken)
+    {
+        IsSaving = true;
+        SaveSummary = null;
+
+        try
+        {
+            var imported = await ImportPendingAsync(cancellationToken);
+
+            // A mod whose file never made it is left in the list as pending rather than written as a
+            // dependency the repo cannot resolve.
+            var unfinished = Pinned
+                .Where(x => x.IsPending && imported.Contains(x.SelectedVersion.Version.Identity) is false)
+                .ToList();
+
+            var desired = Pinned
+                .Except(unfinished)
+                .Select(x => x.Pin)
+                .ToList();
+
+            var changes = ProfileModListDiff.Compute(_original, desired);
+
+            await ApplyDependencyChangesAsync(changes, cancellationToken);
+
+            // What the profile holds now, so that anything left over is the only thing still unsaved.
+            _original = desired;
+
+            if (unfinished.Count == 0)
+            {
+                await ReloadAsync();
+            }
+            else
+            {
+                // Deliberately not reloaded: a reload would rebuild both lists from the server, and
+                // the rows that could not be imported are not on the server - they would vanish from
+                // the profile without the user being told which ones, having just been told that
+                // something went wrong. They stay put instead, still pending, each carrying its own
+                // reason.
+                Recount();
+            }
+
+            SaveSummary = Describe(changes, unfinished.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            SaveSummary = "Save stopped. Anything already registered stayed registered.";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private bool CanSave() => HasUnsavedChanges && IsSaving is false;
+
+    /// <summary>
+    /// Uploads and registers the rows that are still only on disk, and reports which of them the repo
+    /// now holds.
+    /// </summary>
+    private async Task<HashSet<ModVersionIdentity>> ImportPendingAsync(CancellationToken cancellationToken)
+    {
+        var pending = Pinned.Where(x => x.IsPending).ToList();
+
+        if (pending.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
+
+        foreach (var item in rows.Values)
+        {
+            item.ResetImportState();
+        }
+
+        var request = new ModImportRequest(
+            _repo.Id,
+            [.. pending.Select(x => x.SelectedVersion.Version)],
+            _repo.Adapter.VersionComparer)
+        {
+            Progress = new RowProgressReporter(rows),
+            ResolveArbitration = ResolveArbitrationAsync
+        };
+
+        // The overload that invalidates the catalog afterwards: a partly failed import still
+        // registered something, and a catalog that kept claiming otherwise would offer those versions
+        // for import all over again.
+        var result = await _importService.ImportAsync(_catalog, request, cancellationToken);
+
+        foreach (var item in result.Items)
+        {
+            if (rows.TryGetValue(item.Identity, out var row))
+            {
+                row.Apply(item);
+            }
+        }
+
+        return [.. result.Succeeded.Select(x => x.Identity)];
+    }
+
+    /// <summary>
+    /// One dialog for the whole save, and only for the mods whose version ordering the comparer could
+    /// not settle. Everything it settled is already registering by the time this is asked.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>?> ResolveArbitrationAsync(
+        IReadOnlyList<ModVersionArbitrationItem> items,
+        CancellationToken cancellationToken)
+    {
+        // The import runs off the UI thread, and everything from here down is view models a
+        // dispatcher-bound modal is about to render.
+        return await Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            var modal = new ModVersionArbitrationModalViewModel(items);
+
+            await _modalService.Show(modal);
+
+            return modal.Result;
+        }).Task.Unwrap();
+    }
+
+    /// <summary>
+    /// The profile's own writes, last and on their own - a dependency can only name a version the
+    /// repo already holds.
+    /// </summary>
+    private async Task ApplyDependencyChangesAsync(ProfileModListChanges changes, CancellationToken cancellationToken)
+    {
+        foreach (var modId in changes.Removed)
+        {
+            try
+            {
+                await _dependenciesClient.DeleteModDependencyV1Async(_repo.Id, _profile.Id, modId.Value, cancellationToken);
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NotFound)
+            {
+                // Somebody else took it out first, which is the state this was asking for anyway.
+            }
+        }
+
+        foreach (var pin in await UpgradeInBatchAsync(changes.Changed, cancellationToken))
+        {
+            var request = new UpdateModDependencyRequest
+            {
+                VersionId = pin.VersionId.Value,
+                Locked = pin.Lock.ByProfile
+            };
+
+            await _dependenciesClient.UpdateModDependencyV1Async(_repo.Id, _profile.Id, pin.ModId.Value, request, cancellationToken);
+        }
+
+        foreach (var pin in changes.Added)
+        {
+            var request = new AddModDependencyRequest
+            {
+                ModId = pin.ModId.Value,
+                VersionId = pin.VersionId.Value,
+                Locked = pin.Lock.ByProfile
+            };
+
+            try
+            {
+                await _dependenciesClient.AddModDependencyV1Async(_repo.Id, _profile.Id, request, cancellationToken);
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ModDependencyExists)
+            {
+                // A teammate added the same mod while this list was open. One dependency per mod is
+                // the rule, so what this page wanted is an update rather than a second row.
+                var update = new UpdateModDependencyRequest
+                {
+                    VersionId = pin.VersionId.Value,
+                    Locked = pin.Lock.ByProfile
+                };
+
+                await _dependenciesClient.UpdateModDependencyV1Async(_repo.Id, _profile.Id, pin.ModId.Value, update, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends the plain "move to the newest version" changes as one batch, and returns whatever is
+    /// left for the per-dependency endpoint to write.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The batch form exists for exactly this shape, and a profile can hold a couple of thousand
+    /// mods - one request beats one per mod by a wide margin. It only expresses that one shape,
+    /// though: a lock toggled, a version that is not the newest, or a locked mod the user moved
+    /// deliberately are all things it would refuse or ignore, so those stay individual writes.
+    /// </para>
+    /// <para>
+    /// Its per-dependency outcomes are read rather than assumed. A mod a teammate locked or
+    /// registered a newer version of between the plan and the request comes back as something other
+    /// than upgraded, and falls through to a write that says exactly what this page meant.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<ProfileModPin>> UpgradeInBatchAsync(
+        IReadOnlyList<ProfileModPin> changed,
+        CancellationToken cancellationToken)
+    {
+        var batched = changed.Where(IsPlainUpgradeToNewest).ToList();
+
+        if (batched.Count == 0)
+        {
+            return changed;
+        }
+
+        var request = new UpgradeModDependenciesRequest
+        {
+            ModIds = [.. batched.Select(x => x.ModId.Value)]
+        };
+
+        var response = await _dependenciesClient.UpgradeModDependenciesV1Async(_repo.Id, _profile.Id, request, cancellationToken);
+
+        var moved = response.Results
+            .Where(x => x.Outcome is ModDependencyUpgradeOutcome.Upgraded && x.ToVersionId is not null)
+            .ToDictionary(x => ModKey.From(x.ModId), x => ModVersionKey.From(x.ToVersionId!));
+
+        return [.. changed.Where(x => moved.TryGetValue(x.ModId, out var version) is false || version != x.VersionId)];
+    }
+
+    /// <summary>
+    /// Moving an unlocked pin to the newest version the repo holds, and nothing else - which is the
+    /// only thing the batch endpoint does.
+    /// </summary>
+    private bool IsPlainUpgradeToNewest(ProfileModPin pin)
+    {
+        if (pin.Lock.IsLocked || _registered.TryGetValue(pin.ModId, out var versions) is false)
+        {
+            return false;
+        }
+
+        return versions[^1].VersionId == pin.VersionId;
+    }
+
+    private static string Describe(ProfileModListChanges changes, int unfinished)
+    {
+        if (changes.IsEmpty && unfinished == 0)
+        {
+            return "Nothing to save.";
+        }
+
+        var parts = new List<string>();
+
+        if (changes.Added.Count > 0)
+        {
+            parts.Add($"{changes.Added.Count} added");
+        }
+
+        if (changes.Changed.Count > 0)
+        {
+            parts.Add($"{changes.Changed.Count} changed");
+        }
+
+        if (changes.Removed.Count > 0)
+        {
+            parts.Add($"{changes.Removed.Count} removed");
+        }
+
+        if (unfinished > 0)
+        {
+            // Still in the list and still pending, so the reason is on the row rather than in here.
+            parts.Add($"{unfinished} could not be imported");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// Throws the draft away. This is what makes importing on save rather than on drag worth doing:
+    /// nothing pending has been uploaded, so there is nothing in the repo to clean up.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDiscard))]
+    private async Task DiscardChanges()
+    {
+        var confirmation = new ConfirmationDialogViewModel(
+            "Discard changes?",
+            "The mods waiting to be imported have not been uploaded, so nothing in the repo changes.",
+            IconKind.Question,
+            "Discard",
+            "Keep editing");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private bool CanDiscard() => HasUnsavedChanges && IsSaving is false;
+
+    #endregion
+
+
+    #region Sources
+
+    [RelayCommand]
+    private async Task Refresh()
+        => await ReloadAsync();
+
+    [RelayCommand]
+    private async Task RescanAll()
+    {
+        _catalog.RescanAll();
+
+        await ReloadAsync();
+    }
+
+    [RelayCommand]
+    private async Task RescanSource(ModSourceViewModel? source)
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        _catalog.Rescan(source.Source.Id);
+
+        await ReloadAsync();
+    }
+
+    /// <summary>
+    /// Adds a folder for this session only. Someone building a profile out of a USB stick should not
+    /// have that folder haunting the list for months, so nothing about it is written to disk.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddSource()
+    {
+        if (_dialogService.PickFolder(null) is not string path)
+        {
+            return;
+        }
+
+        _catalog.AddAdHocSource(path);
+
+        await ReloadAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveSource(ModSourceViewModel? source)
+    {
+        if (source is null || source.IsAdHoc is false)
+        {
+            return;
+        }
+
+        _catalog.RemoveAdHocSource(source.Source.Id);
+
+        await ReloadAsync();
+    }
+
+    [RelayCommand]
+    private void ClearSearch()
+        => SearchText = string.Empty;
+
+    #endregion
+
+
+    public void Dispose()
+    {
+        _navigationLock.ReleaseLock(this);
+
+        // Deliberately not disposed: the wait may still be inside the token's registration, and
+        // disposing a source out from under that is not safe. Nothing here holds a wait handle.
+        _cancellation.Cancel();
+        _catalog.Dispose();
+    }
+
+    /// <summary>
+    /// A cancelled scan is the expected outcome of navigating away, not something to show the user an
+    /// error modal about.
+    /// </summary>
+    protected override void OnInitFailed(Exception ex)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return;
+        }
+
+        base.OnInitFailed(ex);
+    }
+
+    protected override Task InitAsync()
+        => LoadAsync();
+
+
+    private async Task ReloadAsync()
+    {
+        IsLoading = true;
+
+        try
+        {
+            await LoadAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away mid-reload.
+        }
+        finally
+        {
+            // Publish clears this on the way through; the finally is for the paths that never reach
+            // it, so a failed reload does not leave the list claiming to still be reading.
+            IsLoading = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var dependencies = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, _cancellation.Token);
+        var snapshot = await _catalog.GetAsync(_cancellation.Token);
+
+        // Everything from here down is WPF-facing, and this may well have arrived on a thread-pool
+        // thread.
+        await Application.Current.Dispatcher.InvokeAsync(() => Publish(snapshot, dependencies));
+    }
+
+    private void Publish(ModCatalogSnapshot snapshot, ICollection<ModDependencyDto> dependencies)
+    {
+        _publishing = true;
+
+        try
+        {
+            Sources.Clear();
+
+            foreach (var status in snapshot.Sources)
+            {
+                Sources.Add(new ModSourceViewModel(status, OnSourceEnabledChanged));
+            }
+
+            _versionsByMod = OrderVersions(snapshot.Versions);
+            _registered = ProfileModUpdates.Registered(snapshot.Versions);
+
+            foreach (var row in Pinned)
+            {
+                row.PropertyChanged -= OnPinnedRowChanged;
+            }
+
+            Pinned.Clear();
+
+            foreach (var dependency in dependencies)
+            {
+                var modId = ModKey.From(dependency.ModId);
+                var versionId = ModVersionKey.From(dependency.ModVersionId);
+                var versions = _versionsByMod.GetValueOrDefault(modId, []);
+                var selected = versions.FirstOrDefault(x => x.VersionId == versionId);
+
+                if (selected is null)
+                {
+                    // The repo no longer holds the version this profile names. It stays in the row's
+                    // selector - at the front, so it cannot read as the newest - because a row that
+                    // silently vanished would leave the profile pinned to it with no way to say so.
+                    selected = Placeholder(modId, versionId);
+                    versions = [selected, .. versions];
+                }
+
+                Pinned.Add(CreatePinnedRow(versions, selected, dependency.Locked));
+            }
+
+            _original = [.. Pinned.Select(x => x.Pin)];
+
+            // With a single source every row would name the same one, which is just noise.
+            var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
+
+            _available = [.. _versionsByMod.Values
+                // The newest known version stands for the mod on the left. Picking a different one
+                // is a decision that belongs to the row it becomes on the right.
+                .Select(x => x[^1])
+                .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Select(x => CreateAvailableRow(x, showSources))];
+
+            // Rebuilt rather than refreshed, because the list behind it is replaced wholesale -
+            // adding a couple of thousand rows to a bound collection one at a time is a couple of
+            // thousand layout passes.
+            var view = CollectionViewSource.GetDefaultView(_available);
+            view.Filter = x => x is ModListItemViewModel mod && Passes(mod);
+
+            AvailableView = view;
+            IsLoading = false;
+        }
+        finally
+        {
+            _publishing = false;
+        }
+
+        Recount();
+    }
+
+    /// <summary>
+    /// Every version of a mod in one order, so the selector can offer what is on disk alongside what
+    /// the repo holds.
+    /// </summary>
+    /// <remarks>
+    /// The repo's own order is handed in as settled and never re-derived: it was arbitrated once and
+    /// stored server-side, and clients on different adapter versions recomputing it would disagree
+    /// about what an update is. Only the unregistered versions are placed here, which is the one part
+    /// the repo has no answer for yet.
+    /// </remarks>
+    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> OrderVersions(
+        IReadOnlyList<CatalogModVersion> versions)
+    {
+        var result = new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+
+        foreach (var group in versions.GroupBy(x => x.ModId))
+        {
+            // The catalog deduplicates on (ModId, VersionId), so this cannot collide.
+            var byVersion = group.ToDictionary(x => x.VersionId);
+
+            var settled = group
+                .Where(x => x.SequenceNumber is not null)
+                .OrderBy(x => x.SequenceNumber)
+                .Select(x => x.VersionId)
+                .ToList();
+
+            var ordering = ModVersionPartialOrder.Derive(
+                [.. byVersion.Keys],
+                _repo.Adapter.VersionComparer,
+                settled);
+
+            result[group.Key] = [.. ordering.Order.Select(x => byVersion[x])];
+        }
+
+        return result;
+    }
+
+    private ModListItemViewModel CreateAvailableRow(CatalogModVersion version, bool showSources)
+    {
+        var item = _itemFactory.Create(_repo.Id, version);
+
+        item.Status = version.GetImportStatus();
+        item.IsSelectable = false;
+
+        if (showSources && version.FoundIn.Count > 0)
+        {
+            item.Sources = string.Join(", ", version.FoundIn.Select(source => source.Source.Name));
+        }
+
+        return item;
+    }
+
+    private ProfileModRowViewModel CreatePinnedRow(
+        IReadOnlyList<CatalogModVersion> versions,
+        CatalogModVersion selected,
+        bool lockedByProfile)
+    {
+        var row = new ProfileModRowViewModel(
+            _repo.Id,
+            versions,
+            selected,
+            lockedByProfile,
+            _itemFactory,
+            ConfirmLockedVersionChangeAsync);
+
+        row.PropertyChanged += OnPinnedRowChanged;
+
+        return row;
+    }
+
+    /// <summary>
+    /// Stands in for a pinned version the catalog has no record of - a mod deleted from the repo
+    /// while this profile still names it. Rendering it as a row keeps it removable, which a row that
+    /// silently vanished would not be.
+    /// </summary>
+    private static CatalogModVersion Placeholder(ModKey modId, ModVersionKey versionId)
+        => new(modId, versionId, modId.Value, string.Empty, IsLocal: false, IsOnServer: true, Locked: false);
+
+    private ProfileModRowViewModel? FindPinned(ModKey modId)
+        => Pinned.FirstOrDefault(x => x.ModId == modId);
+
+    private bool Passes(ModListItemViewModel mod)
+        => mod.Matches(SearchText) && _pinnedIds.Contains(mod.Mod.ModId) is false;
+
+
+    private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
+    {
+        _catalog.SetEnabled(source.Source, enabled);
+
+        // Recomposes from the scans already in memory, so this is instant for a source that has been
+        // read once - which is the whole reason the catalog caches per source.
+        RefreshCommand.Execute(null);
+    }
+
+    private void OnPinnedRowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Only the two things a row can change about the profile. Everything else it raises - its
+        // nested list row, the lock wording, the update marker this very method sets - either says
+        // nothing about what is pinned or would recount from inside the recount that set it.
+        if (e.PropertyName is nameof(ProfileModRowViewModel.SelectedVersion)
+            or nameof(ProfileModRowViewModel.LockedByProfile))
+        {
+            Recount();
+        }
+    }
+
+    private void OnPinnedChanged()
+    {
+        if (_publishing)
+        {
+            return;
+        }
+
+        Recount();
+    }
+
+    partial void OnSearchTextChanged(string value)
+    {
+        AvailableView?.Refresh();
+
+        AvailableCount = _available.Count(Passes);
+    }
+
+    private void Recount()
+    {
+        _pinnedIds = [.. Pinned.Select(x => x.ModId)];
+
+        PinnedCount = Pinned.Count;
+        PendingCount = Pinned.Count(x => x.IsPending);
+
+        // The left list hides what the right one holds, so it re-filters whenever that changes -
+        // which is also what keeps a mod off both sides at once.
+        AvailableView?.Refresh();
+        AvailableCount = _available.Count(Passes);
+
+        _updates = ProfileModUpdates.Plan(Pinned.Select(x => x.Pin), _registered);
+
+        var byMod = _updates.Available.Concat(_updates.Skipped).ToDictionary(x => x.ModId);
+
+        foreach (var row in Pinned)
+        {
+            row.UpdateTo = byMod.TryGetValue(row.ModId, out var update) ? update.To : null;
+        }
+
+        UpdateCount = _updates.Count;
+        ApplicableUpdateCount = _updates.Available.Count;
+        SkippedUpdateCount = _updates.Skipped.Count;
+
+        HasUnsavedChanges = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin)).IsEmpty is false;
+
+        if (HasUnsavedChanges)
+        {
+            SaveSummary = null;
+            _navigationLock.AcquireLock(this);
+        }
+        else
+        {
+            _navigationLock.ReleaseLock(this);
+        }
+    }
+
+
+    /// <summary>
+    /// Per row, not per save: an import of a few hundred mods needs to say which of them is moving.
+    /// </summary>
+    /// <remarks>
+    /// Byte counts arrive thousands of times per file, on whatever thread is doing the upload, so
+    /// anything finer than a whole percent is redraw nobody can see. WPF marshals the property
+    /// changes themselves, which is why this does not dispatch.
+    /// </remarks>
+    private sealed class RowProgressReporter(IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows)
+        : IProgress<ModImportProgress>
+    {
+        private readonly ConcurrentDictionary<ModVersionIdentity, int> _lastPercent = new();
+
+
+        public void Report(ModImportProgress value)
+        {
+            if (rows.TryGetValue(value.Identity, out var row) is false)
+            {
+                return;
+            }
+
+            if (value.Phase is ModImportPhase.Uploading && row.IsUploading)
+            {
+                var percent = value.TotalBytes > 0
+                    ? (int)(value.BytesTransferred * 100 / value.TotalBytes)
+                    : 0;
+
+                if (_lastPercent.TryGetValue(value.Identity, out var last) && last == percent)
+                {
+                    return;
+                }
+
+                _lastPercent[value.Identity] = percent;
+            }
+
+            row.Apply(value);
+        }
     }
 
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileModsEditorPageViewModel Create(ProfileDto profile)
-            => ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, profile);
+        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile)
+            => ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
     }
 }

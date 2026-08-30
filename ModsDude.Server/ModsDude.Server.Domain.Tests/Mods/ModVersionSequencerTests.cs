@@ -102,6 +102,174 @@ public class ModVersionSequencerTests
 
 
     [Fact]
+    public void Moving_a_version_later_pulls_the_versions_it_passes_down()
+    {
+        var siblings = Siblings("a", "b", "c", "d");
+
+        Move(siblings, "a", after: Version("c"), before: Version("d"));
+
+        AssertOrder(siblings, "b", "c", "a", "d");
+    }
+
+    [Fact]
+    public void Moving_a_version_earlier_pushes_the_versions_it_passes_up()
+    {
+        var siblings = Siblings("a", "b", "c", "d");
+
+        Move(siblings, "d", after: Version("a"), before: Version("b"));
+
+        AssertOrder(siblings, "a", "d", "b", "c");
+    }
+
+    [Fact]
+    public void Moving_a_version_to_the_front_shifts_everything_ahead_of_it_up()
+    {
+        var siblings = Siblings("a", "b", "c");
+
+        Move(siblings, "c", after: null, before: Version("a"));
+
+        AssertOrder(siblings, "c", "a", "b");
+    }
+
+    [Fact]
+    public void Moving_a_version_to_the_end_shifts_everything_behind_it_down()
+    {
+        var siblings = Siblings("a", "b", "c");
+
+        Move(siblings, "a", after: Version("c"), before: null);
+
+        AssertOrder(siblings, "b", "c", "a");
+    }
+
+    [Fact]
+    public void Moving_a_version_where_it_already_sits_changes_nothing()
+    {
+        // The neighbours are named in the ordering without the moved version, which is why a and c
+        // are the right answer here even though b sits between them: taking b out is what makes them
+        // adjacent.
+        var siblings = Siblings("a", "b", "c");
+
+        Move(siblings, "b", after: Version("a"), before: Version("c"));
+
+        AssertOrder(siblings, "a", "b", "c");
+        Assert.All(siblings, x => Assert.Equal(default(DateTimeOffset), x.Updated));
+    }
+
+    [Fact]
+    public void Moving_the_only_version_of_a_mod_is_a_no_op()
+    {
+        var siblings = Siblings("a");
+
+        Move(siblings, "a", after: null, before: null);
+
+        AssertOrder(siblings, "a");
+        Assert.All(siblings, x => Assert.Equal(default(DateTimeOffset), x.Updated));
+    }
+
+    [Fact]
+    public void A_move_stamps_only_the_versions_that_actually_shifted()
+    {
+        var siblings = Siblings("a", "b", "c", "d");
+
+        Move(siblings, "c", after: null, before: Version("a"));
+
+        // Everything from where it landed to where it left moved; d sat past the range and did not.
+        Assert.Equal(_timestamp, siblings.Single(x => x.Id == Version("c")).Updated);
+        Assert.Equal(_timestamp, siblings.Single(x => x.Id == Version("a")).Updated);
+        Assert.Equal(_timestamp, siblings.Single(x => x.Id == Version("b")).Updated);
+        Assert.Equal(default, siblings.Single(x => x.Id == Version("d")).Updated);
+    }
+
+    [Fact]
+    public void A_move_that_lands_a_version_where_it_already_sits_reports_no_change()
+    {
+        var siblings = Siblings("a", "b", "c");
+        var moved = siblings.Single(x => x.Id == Version("b"));
+
+        Assert.False(ModVersionSequencer.CheckMoveChangesTheOrder(siblings, moved, after: Version("a"), before: Version("c")));
+    }
+
+    [Fact]
+    public void A_move_that_lands_a_version_somewhere_else_reports_a_change()
+    {
+        var siblings = Siblings("a", "b", "c");
+        var moved = siblings.Single(x => x.Id == Version("c"));
+
+        Assert.True(ModVersionSequencer.CheckMoveChangesTheOrder(siblings, moved, after: null, before: Version("a")));
+    }
+
+    [Fact]
+    public void Vacating_frees_the_slot_the_version_sat_in_and_lands_it_past_the_end()
+    {
+        var siblings = Siblings("a", "b", "c");
+        var moved = siblings.Single(x => x.Id == Version("a"));
+
+        ModVersionSequencer.VacateForMove(siblings, moved, _timestamp);
+
+        Assert.Equal(3, moved.SequenceNumber);
+        Assert.DoesNotContain(0, siblings.Select(x => x.SequenceNumber));
+    }
+
+    [Fact]
+    public void A_vacated_version_lands_where_it_would_have_landed_without_the_parking()
+    {
+        // The parking exists for the database's benefit; it must not be visible in the result.
+        var siblings = Siblings("a", "b", "c", "d");
+        var moved = siblings.Single(x => x.Id == Version("a"));
+
+        ModVersionSequencer.VacateForMove(siblings, moved, _timestamp);
+        ModVersionSequencer.MoveTo(siblings, moved, after: Version("c"), before: Version("d"), _timestamp);
+
+        AssertOrder(siblings, "b", "c", "a", "d");
+    }
+
+    [Fact]
+    public void A_move_whose_neighbours_are_no_longer_adjacent_is_rejected()
+    {
+        // Someone else inserted b between a and c since the move was computed. Asserting both
+        // neighbours is the whole point: against a alone this would still look placeable.
+        var siblings = Siblings("a", "b", "c", "d");
+        var moved = siblings.Single(x => x.Id == Version("d"));
+
+        Assert.False(ModVersionSequencer.CheckMoveIsValid(siblings, moved, after: Version("a"), before: Version("c")));
+    }
+
+    [Fact]
+    public void A_move_naming_the_moved_version_as_its_own_neighbour_is_rejected()
+    {
+        var siblings = Siblings("a", "b", "c");
+        var moved = siblings.Single(x => x.Id == Version("b"));
+
+        Assert.False(ModVersionSequencer.CheckMoveIsValid(siblings, moved, after: Version("b"), before: Version("c")));
+    }
+
+    [Fact]
+    public void A_move_of_a_version_that_is_not_among_the_siblings_is_rejected()
+    {
+        var siblings = Siblings("a", "b");
+        var stranger = Siblings("c").Single();
+
+        Assert.Throws<InvalidOperationException>(
+            () => ModVersionSequencer.MoveTo(siblings, stranger, after: Version("a"), before: Version("b"), _timestamp));
+
+        AssertOrder(siblings, "a", "b");
+    }
+
+    [Fact]
+    public void A_rejected_move_leaves_the_ordering_untouched()
+    {
+        var siblings = Siblings("a", "b", "c", "d");
+        var moved = siblings.Single(x => x.Id == Version("d"));
+
+        Assert.Throws<InvalidOperationException>(
+            () => ModVersionSequencer.MoveTo(siblings, moved, after: Version("a"), before: Version("c"), _timestamp));
+
+        AssertOrder(siblings, "a", "b", "c", "d");
+        Assert.All(siblings, x => Assert.Equal(default(DateTimeOffset), x.Updated));
+    }
+
+
+    [Fact]
     public void A_placement_naming_no_neighbours_is_rejected_against_a_non_empty_set()
     {
         var siblings = Siblings("a", "b");
@@ -212,6 +380,15 @@ public class ModVersionSequencerTests
 
     private static List<ModVersion> Siblings(params string[] versionIds) =>
         [.. versionIds.Select((versionId, index) => CreateVersion(versionId, index))];
+
+    private static void Move(List<ModVersion> siblings, string versionId, ModVersionId? after, ModVersionId? before)
+    {
+        var moved = siblings.Single(x => x.Id == Version(versionId));
+
+        Assert.True(ModVersionSequencer.CheckMoveIsValid(siblings, moved, after, before));
+
+        ModVersionSequencer.MoveTo(siblings, moved, after, before, _timestamp);
+    }
 
     private static void Insert(List<ModVersion> siblings, string versionId, ModVersionId? after, ModVersionId? before)
     {

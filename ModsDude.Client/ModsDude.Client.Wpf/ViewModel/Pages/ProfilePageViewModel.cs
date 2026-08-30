@@ -20,7 +20,7 @@ public class ProfilePageViewModel : PageViewModel, IDisposable
         NavManager = navigationManager;
         MenuItems = [
             new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
-            new MenuItemViewModel("Mods", () => profileModsEditorPageViewModelFactory.Create(profile)),
+            new MenuItemViewModel("Mods", () => profileModsEditorPageViewModelFactory.Create(repo, profile)),
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
         ];
 

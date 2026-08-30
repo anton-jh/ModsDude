@@ -47,11 +47,14 @@
 
                 <Grid RowDefinitions="auto auto" Margin="24 16 24 20">
 
+                    <!-- Only ever present when the order changed underneath the dialog, which is the
+                         one thing the user has to be told before their answer means anything. -->
                     <TextBlock Grid.Row="0"
-                               Text="{Binding SaveUnavailableReason}"
+                               Text="{Binding Notice}"
                                TextWrapping="Wrap"
                                Margin="0 0 0 12"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding HasNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <Grid Grid.Row="1" ColumnDefinitions="* *">
                         <Button Grid.Column="0"
@@ -59,7 +62,7 @@
                                 Style="{DynamicResource AccentButtonStyle}"
                                 Content="Save order"
                                 HorizontalAlignment="Stretch"
-                                IsEnabled="{Binding CanSave}" />
+                                Command="{Binding SaveCommand}" />
 
                         <Button Grid.Column="1"
                                 Margin="4 0 0 0"

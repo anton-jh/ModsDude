@@ -1,0 +1,109 @@
+﻿<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.ProfileLockedUpdatesDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="620" MaxHeight="680"
+             d:DataContext="{d:DesignInstance Type=vm:ProfileLockedUpdatesModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <TextBlock Text="{Binding Title}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                <TextBlock Text="{Binding Warning}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ProfileLockedUpdateViewModel}">
+
+                            <!-- One box per mod, and every one of them starts unchecked: dismissing
+                                 this dialog has to change nothing. -->
+                            <Grid Margin="0 6" ColumnDefinitions="auto * auto">
+
+                                <CheckBox Grid.Column="0"
+                                          VerticalAlignment="Top"
+                                          Margin="0 2 8 0"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                    <TextBlock Text="{Binding Consequence}"
+                                               Margin="0 2 0 0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+
+                                <Border Grid.Column="2"
+                                        Margin="12 0 0 0"
+                                        Padding="8 2"
+                                        VerticalAlignment="Top"
+                                        CornerRadius="3"
+                                        Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                    <TextBlock Text="{Binding VersionText}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Style="{DynamicResource CaptionTextBlockStyle}" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid Margin="24 16 24 20" ColumnDefinitions="* *">
+                    <Button Grid.Column="0"
+                            Margin="0 0 4 0"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="{Binding ConfirmText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding ConfirmCommand}" />
+
+                    <Button Grid.Column="1"
+                            Margin="4 0 0 0"
+                            Content="Leave them alone"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding CancelCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Esc" Command="{Binding CancelCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

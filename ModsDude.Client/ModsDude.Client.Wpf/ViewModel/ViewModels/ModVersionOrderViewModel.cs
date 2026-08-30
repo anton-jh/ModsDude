@@ -39,6 +39,29 @@ public partial class ModVersionOrderViewModel : ObservableObject
     public bool HasUnplaceableEntries => Entries.Any(x => x.IsUnplaceable);
 
 
+    /// <summary>
+    /// Replaces the list with a freshly read order, discarding whatever the user had arranged.
+    /// </summary>
+    /// <remarks>
+    /// What a dialog does when it is told the order changed underneath it: the arrangement on screen
+    /// was an answer about an order that no longer exists, so merging it into the new one would
+    /// silently reinterpret a decision the user made about something else.
+    /// </remarks>
+    public void Reset(IEnumerable<ModVersionOrderEntry> entries)
+    {
+        Entries.Clear();
+
+        foreach (var entry in entries)
+        {
+            Entries.Add(new ModVersionOrderEntryViewModel(entry));
+        }
+
+        UpdateMovability();
+
+        OnPropertyChanged(nameof(HasUnplaceableEntries));
+    }
+
+
     [RelayCommand]
     private void MoveUp(ModVersionOrderEntryViewModel? entry)
     {

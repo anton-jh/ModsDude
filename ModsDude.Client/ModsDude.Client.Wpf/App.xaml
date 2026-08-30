@@ -90,6 +90,9 @@
             <DataTemplate DataType="{x:Type vm:ModVersionReorderModalViewModel}">
                 <uc:ModVersionReorderDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ProfileLockedUpdatesModalViewModel}">
+                <uc:ProfileLockedUpdatesDialog />
+            </DataTemplate>
 
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,
                  merged above. -->

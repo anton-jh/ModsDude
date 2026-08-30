@@ -344,7 +344,14 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             .Select(x => x.Mod.VersionId)
             .ToList();
 
-        await _modalService.Show(new ModVersionReorderModalViewModel(row.Name, versions));
+        var modal = new ModVersionReorderModalViewModel(row.Name, _repo.Id, row.Mod.ModId, versions, _modsClient);
+
+        await _modalService.Show(modal);
+
+        if (modal.Saved)
+        {
+            await ReloadAfterServerChangeAsync();
+        }
     }
 
     [RelayCommand]

@@ -99,11 +99,4 @@ public class RegisterModV1Endpoint : IEndpoint
         bool Locked,
         ModVersionPlacement Placement,
         IEnumerable<ModAttributeDto> Attributes);
-
-    /// <summary>
-    /// Insert the version between these two, both of which are asserted against the ordering as it
-    /// stands. The client computes the position with its own adapter's comparer — the server has no
-    /// adapters and cannot parse a version string.
-    /// </summary>
-    public record ModVersionPlacement(string? After, string? Before);
 }

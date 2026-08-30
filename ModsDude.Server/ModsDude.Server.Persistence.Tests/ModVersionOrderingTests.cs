@@ -57,6 +57,44 @@ public class ModVersionOrderingTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task Moving_a_version_later_renumbers_the_range_it_passes_without_violating_the_unique_ordering()
+    {
+        // A move is the case the insert and the removal do not cover between them: it shifts a range
+        // rather than everything past a point, and the rows in that range move the opposite way to
+        // the row being moved. Both directions are asserted because the update order that keeps the
+        // unique index satisfied is not the same one in each.
+        var (repoId, modId) = await GivenAMod("1.9.0", "1.10.0", "1.11.0", "1.12.0");
+
+        await WhenAVersionIsMoved(repoId, modId, "1.9.0", after: "1.11.0", before: "1.12.0");
+
+        await ThenTheOrderingIs(repoId, modId, "1.10.0", "1.11.0", "1.9.0", "1.12.0");
+    }
+
+    [Fact]
+    public async Task Moving_a_version_earlier_renumbers_the_range_it_passes_without_violating_the_unique_ordering()
+    {
+        var (repoId, modId) = await GivenAMod("1.9.0", "1.10.0", "1.11.0", "1.12.0");
+
+        await WhenAVersionIsMoved(repoId, modId, "1.12.0", after: "1.9.0", before: "1.10.0");
+
+        await ThenTheOrderingIs(repoId, modId, "1.9.0", "1.12.0", "1.10.0", "1.11.0");
+    }
+
+    [Fact]
+    public async Task Moving_the_last_version_of_many_to_the_front_stays_contiguous_across_batch_boundaries()
+    {
+        // Past the provider's maximum batch size, so the renumbering is split over several round
+        // trips and the ordering has to hold between them as well as within them.
+        var versionIds = Enumerable.Range(0, 1200).Select(_ => Guid.NewGuid().ToString()).ToArray();
+
+        var (repoId, modId) = await GivenAMod(versionIds);
+
+        await WhenAVersionIsMoved(repoId, modId, versionIds[^1], after: null, before: versionIds[0]);
+
+        await ThenTheOrderingIs(repoId, modId, [.. versionIds[..^1].Prepend(versionIds[^1])]);
+    }
+
+    [Fact]
     public async Task Removing_a_version_closes_the_gap_it_leaves_without_violating_the_unique_ordering()
     {
         var (repoId, modId) = await GivenAMod("1.9.0", "1.10.0", "1.11.0");
@@ -113,6 +151,37 @@ public class ModVersionOrderingTests(DatabaseFixture fixture)
         dbContext.ModVersions.Add(CreateVersion(repoId, modId, versionId, sequenceNumber));
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Two writes in one transaction, exactly as the endpoint does it. A move is a rotation, and no
+    /// order of row writes takes a rotation through the unique index without two rows briefly
+    /// sharing a sequence number — EF refuses to even try, reporting a circular dependency. Parking
+    /// the moved version past the end and persisting that first is what breaks the cycle into the
+    /// chain EF can sort, which is the same guarantee the insert relies on.
+    /// </summary>
+    private async Task WhenAVersionIsMoved(RepoId repoId, ModId modId, string versionId, string? after, string? before)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(repoId, modId, CancellationToken.None);
+        var moved = siblings.Single(x => x.Id == new ModVersionId(versionId));
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken.None);
+
+        ModVersionSequencer.VacateForMove(siblings, moved, _timestamp);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        ModVersionSequencer.MoveTo(
+            siblings,
+            moved,
+            after is null ? null : new ModVersionId(after),
+            before is null ? null : new ModVersionId(before),
+            _timestamp);
+
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        await transaction.CommitAsync(CancellationToken.None);
     }
 
     private async Task ThenTheOrderingIs(RepoId repoId, ModId modId, params string[] expectedVersionIds)

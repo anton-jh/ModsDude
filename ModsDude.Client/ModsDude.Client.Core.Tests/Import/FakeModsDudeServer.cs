@@ -195,6 +195,12 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     public Task<GetModUsageResponse> GetModUsageV1Async(Guid repoId, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 
+    public Task<GetModVersionsResponse> GetModVersionsV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public Task<MoveModVersionResponse> MoveModVersionV1Async(Guid repoId, string modId, string versionId, MoveModVersionRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
 
     private ModDto Apply(ModVersionIdentity identity, string contentHash, ModVersionKey? after, ModVersionKey? before, bool assertPlacement)
     {
