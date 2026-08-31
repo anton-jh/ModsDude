@@ -157,6 +157,77 @@ public class InstanceDriftServiceTests
     }
 
 
+    [Fact]
+    public void A_locked_mod_the_game_replaced_is_named_rather_than_counted()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"), ("fs25_a.zip", "two", false, "A Trailer"));
+
+        // What an in-game update-all does to a map. The profile's dependencies are not in hand here -
+        // this is the startup path - so the lock comes off the manifest.
+        fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
+        fixture.Folder.WriteFile("fs25_a.zip", "and this");
+
+        var report = fixture.Check();
+
+        var locked = Assert.Single(report.LockedDrift);
+
+        Assert.Equal(ModKey.From("fs25_map"), locked.ModId);
+        Assert.Equal("Great Plains 16x", locked.DisplayName);
+        Assert.Equal("1.0.0", locked.AppliedVersion);
+        Assert.Equal(LockedDriftReason.FileChanged, locked.Reason);
+    }
+
+    [Fact]
+    public void An_unlocked_mod_at_the_wrong_version_is_untidy_and_not_called_out()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "two", false, "A Trailer"));
+
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        var report = fixture.Check();
+
+        Assert.Equal(InstanceDriftStatus.Drifted, report.Status);
+        Assert.Empty(report.LockedDrift);
+    }
+
+    [Fact]
+    public void A_locked_mod_that_left_the_folder_is_named_with_that_reason()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"));
+
+        File.Delete(fixture.Folder.Combine("fs25_map.zip"));
+
+        var locked = Assert.Single(fixture.Check().LockedDrift);
+
+        Assert.Equal(LockedDriftReason.FileRemoved, locked.Reason);
+    }
+
+    [Fact]
+    public void One_locked_mod_gone_wrong_two_ways_is_still_one_problem()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"));
+
+        fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
+
+        var report = fixture.Service.Check(
+            fixture.InstanceId,
+            new ActiveProfile(_repoId, _profileId),
+            fixture.Folder.Path,
+            profileDependencies: [
+                new DesiredMod(ModKey.From("fs25_map"), ModVersionKey.From("2.0.0"), HashOf("something else"), Locked: true)]);
+
+        var locked = Assert.Single(report.LockedDrift);
+
+        // The file is the half already on disk, so that is the one reported.
+        Assert.Equal(LockedDriftReason.FileChanged, locked.Reason);
+        Assert.Equal([ModKey.From("fs25_map")], report.LockedMods);
+    }
+
+
     private static string HashOf(string content)
         => ModContentHasher.Format(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
@@ -181,10 +252,13 @@ public class InstanceDriftServiceTests
 
         /// <summary>Writes the files and the manifest that says they are what was installed.</summary>
         public void Sync(params (string Name, string Content)[] files)
+            => Sync([.. files.Select(x => (x.Name, x.Content, false, (string?)null))]);
+
+        public void Sync(params (string Name, string Content, bool Locked, string? DisplayName)[] files)
         {
             var entries = new List<SyncManifestEntry>();
 
-            foreach (var (name, content) in files)
+            foreach (var (name, content, locked, displayName) in files)
             {
                 var path = Folder.WriteFile(name, content);
                 var info = new FileInfo(path);
@@ -195,7 +269,11 @@ public class InstanceDriftServiceTests
                     HashOf(content),
                     name,
                     info.Length,
-                    info.LastWriteTimeUtc));
+                    info.LastWriteTimeUtc)
+                {
+                    Locked = locked,
+                    DisplayName = displayName
+                });
             }
 
             Manifests.Write(new SyncManifest

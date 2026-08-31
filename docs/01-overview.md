@@ -23,9 +23,10 @@ to read a mod's name out of an archive — lives in a **game adapter** on the cl
 
 ```
 User ──member of──▶ Repo ──has──▶ Profile ──pins──▶ ModVersion
-                     │                                  │
-                     ├──contains──▶ Mod ────has────────▶ ┘
-                     │
+                     │                                  ▲
+                     ├──contains────────────────────────┘
+                     │                      (one row per version; a "mod"
+                     │                       is the rows sharing a ModId)
                      └──configured by──▶ Game adapter (base settings)
 
                                               ▲
@@ -65,6 +66,11 @@ at a time, from one repo**.
 | Client core | `ModsDude.Client.Core` | Game adapters, server client, local state, models. UI-framework agnostic |
 | Client WPF | `ModsDude.Client.Wpf` | The desktop app: views, view models, navigation, imaging |
 | Shared | `ModsDude.Shared` | Small helpers used by both sides of the client |
+
+Three test projects sit alongside them: `ModsDude.Server.Domain.Tests` (pure, no
+infrastructure), `ModsDude.Server.Persistence.Tests` (a real PostgreSQL, for the invariants only
+a database can show), and `ModsDude.Client.Core.Tests`. See
+[03 — Server](03-server.md#tests) and the [README](../README.md).
 
 ## Where work happens
 
@@ -145,6 +151,6 @@ decisions should assume:
 
 This is why mod imagery is decoded lazily and cached to disk, why folder scanning is
 parallelised, and why the sync design in [07](07-mod-sync-design.md) avoids copying file
-bytes wherever it can. It is also why the current `GET /repos/{id}/mods` endpoint, which
-returns every mod and every version in one unpaged response, is flagged as a scaling
-problem.
+bytes wherever it can. It is also why `GET repos/{repoId}/mods` carries **both** a page cursor
+and an `updatedAfter` delta: pagination bounds any single response, the delta bounds the steady
+state, and neither substitutes for the other.

@@ -121,6 +121,35 @@ public partial class RepoPageViewModel
     }
 
     /// <summary>
+    /// Selects a profile and hands back the page it opened, for a deep link from outside the sidebar.
+    /// </summary>
+    /// <returns>
+    /// Null where the profile is gone, or where the page in front of the user refused to be navigated
+    /// away from.
+    /// </returns>
+    public async Task<ProfilePageViewModel?> TrySelectProfileAsync(Guid profileId)
+    {
+        // A repo opened a moment ago has its profile list still on the way, so a deep link arriving
+        // first has to wait for it rather than concluding the profile does not exist.
+        if (FindProfile(profileId) is null)
+        {
+            await LoadProfilesCommand.ExecuteAsync(null);
+        }
+
+        if (FindProfile(profileId) is not ProfileItemViewModel entry)
+        {
+            return null;
+        }
+
+        if (ReferenceEquals(NavManager.Selected, entry) is false)
+        {
+            NavManager.Selected = entry;
+        }
+
+        return NavManager.CurrentPage as ProfilePageViewModel;
+    }
+
+    /// <summary>
     /// Only on the first load, and only once the repo is actually usable - being pushed at "Connect
     /// game" matters more than coming back to where you were.
     /// </summary>
@@ -172,6 +201,9 @@ public partial class RepoPageViewModel
             profile.RefreshTitle();
         }
     }
+
+    private ProfileItemViewModel? FindProfile(Guid profileId)
+        => Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId);
 
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
     {

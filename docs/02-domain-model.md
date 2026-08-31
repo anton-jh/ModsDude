@@ -88,31 +88,29 @@ Membership is also navigable from `User.RepoMemberships`, auto-included by EF. T
 makes the fluent authorization builder cheap — one `Users.GetAsync` load brings the whole
 membership set with it.
 
-## Mod and ModVersion
+## ModVersion
 
 `ModsDude.Server.Domain/Mods/`
 
-> **Planned change: these collapse into one entity.** `Mod` currently *contains* an ordered set
-> of `ModVersion`, which is backwards — a mod record is really *of* a version. Nearly all the
-> data already lives on the version, and the last mod-scoped field, `Locked`, is moving there
-> too. See [Flattening](#flattening) at the end of this section. The description below is the
-> code as it stands.
+There is **one entity**, `ModVersion`, keyed `(RepoId, ModId, Id)`. There is no `Mod`: a "mod"
+is not a row, it is the set of rows sharing a `ModId`. See [Flattening](#flattening) at the end
+of this section for why, and what it removed.
 
-A `Mod` is identified by the composite key `(RepoId, ModId)`. **`ModId` is supplied by the
-game, not minted by us** — for Farming Simulator it is the archive filename without its
-extension, which is how the game itself identifies a mod. This means the same conceptual
-mod in two different repos is two different rows, and `Mod.RepoId` carries a `TODO` asking
-whether it should exist at all.
-
-A `Mod` owns an ordered set of `ModVersion`:
+**`ModId` and the version id are supplied by the game, not minted by us** — for Farming
+Simulator, the archive filename without its extension and the `modDesc/version` string, which is
+how the game itself identifies a mod. The same conceptual mod in two different repos is
+therefore two different sets of rows.
 
 | Field | Notes |
 | --- | --- |
-| `Id` | `ModVersionId(string)` — again game-supplied; the version string from the mod |
+| `RepoId`, `ModId`, `Id` | The composite key. `Id` is `ModVersionId(string)` |
 | `SequenceNumber` | Position in the upgrade order. Unique per `(RepoId, ModId)` |
 | `DisplayName`, `Description` | Per-version, because mods rename themselves between releases |
+| `ContentHash` | SHA-256 of the mod file. See [Content hash](#content-hash) |
+| `Locked` | The mod is version-sensitive. See [Locking, in two places](#locking-in-two-places) |
 | `Attributes` | An owned collection of free-form `(Key, Value?)` pairs |
-| `Created` | |
+| `Images` | An ordered collection of `ModImageReference`. See [Images](#images) |
+| `Created`, `Updated` | `Updated` is what the mod list's delta form is keyed on |
 
 `Attributes` is for **tags and categories** — free-form labels an adapter attaches for
 searching and filtering. Nothing populates it beyond what the registering client sends.
@@ -125,30 +123,26 @@ below, both of which were briefly and wrongly proposed as attributes.
 
 ### Version ordering
 
-`SequenceNumber` is the source of truth for "which version is newer". `GetLatestVersion()`
-returns the highest. The entity exposes three mutations:
+`SequenceNumber` is the source of truth for "which version is newer", and it is kept
+**contiguous**. With no parent entity left to hang it on, the logic lives in a static
+`ModVersionSequencer` that takes the sibling set — every version sharing one `(RepoId, ModId)` —
+as a parameter:
 
-- `AddVersion` — appends at the end.
-- `InsertVersion(..., before:)` — back-fills an older release that was uploaded late,
-  shifting everything from `before` onwards up by one.
-- `RemoveVersion` — deletes and closes the gap by shifting later versions down.
+- `CheckPlacementIsValid` / `MakeRoomAt` — validate a placement and shift the siblings that
+  follow it up by one, returning the sequence number the new version takes.
+- `CheckMoveIsValid` / `CheckMoveChangesTheOrder` / `VacateForMove` / `MoveTo` — the same for an
+  already-registered version being moved.
+- `CloseGap` — closes the hole a removed version leaves.
 
-**Nothing curates it today.** `RegisterModRequest` carries no placement, so `RegisterMod` always
-appends and `InsertVersion` is unreachable from the API. The ordering a repo has is therefore
-registration order — which, for a repo built by bulk-importing an existing install, is folder
-scan order. Anything that reasons about "newer" (`CanBeUpgraded`, "apply all updates") is
-reasoning about that until the comparer lands.
-
-**This is a curated ordering, and it is going to change.** The intended model is that order
-derives from the mod's own version string, compared by a comparer the adapter supplies —
-Farming Simulator's `1.2.3.4` and another game's `v2-beta` do not compare the same way.
+**Order derives from the mod's own version string**, compared by a comparer the adapter
+supplies — Farming Simulator's `1.2.3.4` and another game's `v2-beta` do not compare the same
+way. The comparison runs **client-side**: the server has no adapters and cannot parse a version
+string, so registration carries a placement and the server validates and stores it.
 
 The comparer is best-effort and allowed to **abstain**: `modDesc/version` is free text, and
 cases like `v1` against `1.0` are genuinely undecidable from the strings alone. Where it
 abstains, the user arbitrates in a single batched dialog and the answer is persisted — ordering
-is a repo-level fact every member shares. So `SequenceNumber` survives as the stored ordering,
-with the comparer filling it in automatically wherever it can, and `InsertVersion` becomes the
-mechanism arbitration writes through. See [PLAN.md](PLAN.md).
+is a repo-level fact every member shares.
 
 Because the comparer may abstain, ordering a set of versions is a **partial order plus a
 topological sort**, not a call to `OrderBy` — and an abstention only becomes a question when
@@ -156,57 +150,90 @@ nothing else settles the pair transitively. An import can also introduce several
 one mod at once, which shifts already-registered rows. See
 [09 — Mod catalog](09-mod-catalog.md#ordering-a-set-is-a-partial-order-not-a-sort).
 
-`InsertVersion` captures the target position into a local and materialises the shift query
-before mutating anything. That is deliberate: the predicate reads a sequence number the loop
-body changes, over a `HashSet` whose iteration order is unspecified, so leaving the query
-lazy made the result depend on enumeration order.
+`MakeRoomAt` and `MoveTo` capture the target position into a local and materialise the shift
+query before mutating anything. That is deliberate: the predicate reads a sequence number the
+loop body changes, so leaving the query lazy made the result depend on enumeration order.
+
+#### A move is a rotation, and a rotation cannot be renumbered in place
+
+Worth knowing before touching `MoveTo`, because it is not obvious and only a real database shows
+it. An insert or a removal is a *chain* of row writes — each row takes the slot of its
+neighbour, and there is an order in which no two rows ever hold the same sequence number at
+once, which EF finds. A move is a *cycle*: everything between where the version left and where
+it lands shifts by one, and the moved version takes the slot at the far end. **No order of
+single-row writes takes a cycle through the unique index on `(RepoId, ModId, SequenceNumber)`**
+— PostgreSQL rejects it as a circular dependency.
+
+So a move is two writes. `VacateForMove` parks the moved version past the end of the ordering
+and that write reaches the database first, breaking the cycle into a chain; `MoveTo` then
+renumbers the rest. The halfway state is non-contiguous, so the two belong in one transaction,
+which is what makes it unobservable.
 
 ### Content hash
 
-`ModVersion` needs a **`ContentHash`** property — a SHA-256 of the mod file — which does not
-exist yet. It is what makes the local content store safe to share between repos, and it is a
-first-class property rather than a `ModAttribute`, because the system depends on it for
-correctness rather than merely storing it on an adapter's behalf. See
+`ModVersion.ContentHash` is a SHA-256 of the mod file, computed by the client while it uploads
+and sent with registration. It is what makes the local content store safe to share between
+repos, and it is a first-class property rather than a `ModAttribute`, because the system depends
+on it for correctness rather than merely storing it on an adapter's behalf. See
 [07 — Mod sync design](07-mod-sync-design.md#content-hashing).
+
+The server does not verify it. The guarantee comes from verification on the *download* side —
+see [Cache isolation](07-mod-sync-design.md#cache-isolation) — and from the upload recording the
+same hash as blob metadata, so an orphaned blob can be identified before anything is registered
+against it.
 
 ### Images
 
-*Planned.* `ModVersion` also gains an **ordered collection of image references** — hash, kind
-(icon or store image), position, original filename — so a mod nobody has locally still renders
-with its real artwork.
+`ModVersion` carries an **ordered collection of `ModImageReference`** — hash, kind (icon or
+store image), **rendition** (thumbnail or full), position, original filename — so a mod nobody
+has locally still renders with its real artwork.
+
+**`Rendition` is the field the original design did not have**, and its absence showed. Every
+image is stored as two derivatives; with only kind and position to distinguish references, an
+icon could have at most one of them, and store images had to smuggle the rendition into
+`Position` as arithmetic. `Position` now means only where the source image sits in the mod's own
+list, the two renditions of one image share it — which is what identifies them as one image,
+including when only one of the pair made it up — and `CheckImagesAreValid` enforces at most one
+icon *per rendition* and no two images of a kind at the same rendition and position. See
+[09 — Mod catalog](09-mod-catalog.md#two-sizes).
 
 References, not blobs: the images live in blob storage keyed by content hash, so versions that
 reuse the same artwork share one copy, which is the normal case when a release changes only a
 script. Deleting a version drops its references; a blob is collectable once nothing points at
 it.
 
+`SetImages` replaces the whole set rather than adding to it. Imagery is uploaded best-effort
+after registration, so it arrives late, in unknown completeness, and possibly more than once
+when a client retries or a backfill fires — a replace is the only shape of that which is
+idempotent.
+
 Structural, so **not `ModAttribute`s** — the system dereferences these to decide what to render.
 See [09 — Mod catalog](09-mod-catalog.md#mod-imagery).
 
 ### Flattening
 
-*Planned.* `Mod` disappears. There is one entity, keyed `(RepoId, ModId, VersionId)`, holding
-everything: display name, description, attributes, ordering, `ContentHash`, image references,
-`Locked`, created. A "mod" stops being a row and becomes what it always was in practice — a
-group of version rows sharing a `ModId`.
+`Mod` used to *contain* an ordered set of `ModVersion`. It is gone. There is one entity, keyed
+`(RepoId, ModId, Id)`, holding everything: display name, description, attributes, ordering,
+`ContentHash`, image references, `Locked`, both timestamps. A "mod" stopped being a row and
+became what it always was in practice — a group of version rows sharing a `ModId`.
 
 The containment was the wrong way round. A record about a mod is really a record *of a version*
 of it, and the data had already migrated accordingly: `Mod` was left holding identity, two
 timestamps and a collection.
 
-What this removes:
+What this removed:
 
 - The create-or-append branch in `RegisterModV1Endpoint` — every registration is one insert.
 - The shadow FK properties and owned-collection mapping in the EF configuration.
-- `Navigation(x => x.Versions).AutoInclude()`, which is part of why
-  `GET repos/{id}/mods` materialises every mod, every version and every attribute at once.
+- `Navigation(x => x.Versions).AutoInclude()`, which was part of why
+  `GET repos/{id}/mods` materialised every mod, every version and every attribute at once.
 - The `Mod.RepoId` `TODO`, by answering it.
 - Two entities where the wire format, the adapter output and the UI rows are all per-version
   anyway.
 
-**Ordering stays contiguous.** `SequenceNumber` keeps working exactly as it does now:
-`InsertVersion` shifts later rows up, `RemoveVersion` closes the gap, and the unique index on
-`(RepoId, ModId, SequenceNumber)` enforces it.
+**Ordering stays contiguous.** `SequenceNumber` works as it did: a placement shifts later rows
+up, a removal closes the gap, and the unique index on `(RepoId, ModId, SequenceNumber)` enforces
+it.
 
 A sparse key with gaps was considered, to make every insert a single row. It is not worth it.
 The shift touches one mod's versions — tens of rows, found by an indexed query, mutated in
@@ -218,22 +245,24 @@ Gaps would also introduce an exhaustion case to reason about — halving a 1024 
 ten consecutive back-fills between the same pair — in exchange for solving nothing. Contiguous
 numbering has no such case, and keeps the values readable when someone is looking at the table.
 
-The logic itself is unchanged; it just moves off the `Mod` entity to wherever registration
-happens, since there is no longer a parent to hang it on.
+The logic itself is unchanged; it moved off the `Mod` entity into `ModVersionSequencer`, since
+there is no longer a parent to hang it on.
 
-**`Locked` moves to the version.** It is set by the adapter from the mod file, and since every
+**`Locked` moved to the version.** It is set by the adapter from the mod file, and since every
 version of a map mod declares its maps, the adapter's answer is the same each time — consistent
-by derivation rather than by being stored once. The trade is that there is no longer a repo-wide
+by derivation rather than by being stored once. The trade is that there is no repo-wide
 *user* override: someone who disagrees unlocks on the `ModDependency` instead, which is
 per-profile and survives version changes. See [Locking, in two places](#locking-in-two-places).
 
-**Two domain methods lose their navigation.** `ModDependency.CanBeUpgraded()` and `Upgrade()`
-reach the sibling versions through `ModVersion.Mod.Versions`. Without a parent they need the
-candidate set passed in, or the operation moves up to the endpoint that already has to query for
-it. That is the real cost of flattening, and it is small.
+**Two domain methods lost their navigation.** `ModDependency.CanBeUpgraded()` and `Upgrade()`
+reached the sibling versions through `ModVersion.Mod.Versions`. They now take the candidate set
+as a parameter, supplied by the endpoint that has to query for it anyway. That was the real cost
+of flattening, and it is small.
 
-Worth doing **early**: there is one migration and no real data, so this is nearly free now and a
-data migration later — the same argument as normalising mod-id casing.
+It was done **early**, in one migration against an empty database — the same argument as
+normalising mod-id casing.
+
+## Profile
 
 `ModsDude.Server.Domain/Profiles/`
 
@@ -253,19 +282,16 @@ public class ModDependency
 Two rules make this work as a coordination mechanism:
 
 1. **A profile may depend on a mod at exactly one version.** `AddDependency` throws if a
-   dependency on that `Mod` already exists. This is what makes a profile unambiguous — it
-   is not a set of constraints to be solved, it is a pinned list.
+   dependency on that `ModId` already exists, and the unique index on
+   `(RepoId, ProfileId, ModId)` enforces the same rule underneath it. This is what makes a
+   profile unambiguous — it is not a set of constraints to be solved, it is a pinned list.
 2. **`Locked` decides whether the pin may move.** `Upgrade()` jumps the dependency to the
-   mod's latest version; `CanBeUpgraded()` reports whether a newer one exists. A locked
+   latest of the sibling versions it is handed; `CanBeUpgraded()` reports whether a newer one
+   exists among them. A locked
    dependency is one the group has decided to hold, typically because a newer release broke
    something.
 
-> `LockVersion` is the current name in the code. It becomes `Locked` to match the property of
-> the same meaning on `Mod`, below.
-
 ### Locking, in two places
-
-*Planned — neither property exists yet.*
 
 Locking stops version-sensitive mods being bumped by accident. The motivating case is a
 Farming Simulator map: changing map versions partway through a save can corrupt it, and the
@@ -300,22 +326,25 @@ flattening `Mod` away.
 An adapter can never set `ModDependency.Locked`. Profile-level locking is a human decision about
 a human's profile.
 
-`AddDependency` also refuses a `ModVersion` whose `Mod.RepoId` differs from the profile's —
+`AddDependency` also refuses a `ModVersion` whose `RepoId` differs from the profile's —
 mods do not cross repo boundaries.
 
-**Every one of these operations reaches the `Mod` through `ModVersion`**, which is what makes the
-domain readable — and what makes the navigation mandatory rather than optional. A profile loaded
+**Every one of these operations reads the mod's identity off `ModVersion`**, which is what makes
+the navigation mandatory rather than optional. A profile loaded
 without it has dependencies whose `ModVersion` is `null`, and `AddDependency`,
 `DeleteDependency`, `HasDependencyOn` and `ChangeVersion` all throw. See
 [03 — Server](03-server.md#persistence).
 
-[Flattening](#flattening) shortens that chain rather than removing the requirement: with no
+[Flattening](#flattening) shortened that chain rather than removing the requirement: with no
 `Mod` to hop to, the operations read `(RepoId, ModId)` straight off the version and the include
-becomes one level instead of two. `ModDependency.ModVersion` still has to be loaded, and loading
+is one level instead of two. `ModDependency.ModVersion` still has to be loaded, and loading
 it is still not automatic.
 
-Note that `Upgrade()` and `CanBeUpgraded()` are not reachable from any endpoint yet; the
-API only offers `ChangeVersion` via `PUT .../modDependencies/{modId}`.
+`Upgrade()` and `CanBeUpgraded()` are reachable through
+`POST repos/{repoId}/profiles/{profileId}/modDependencies/upgrade`, which is a **batch**: a
+profile holds one to two thousand mods, and one round trip per mod is the wrong shape. It skips
+locked dependencies entirely and reports each one as skipped, distinguishing the profile's lock
+from the mod's, so the client can say why without asking again.
 
 ## Client-side models
 
@@ -323,11 +352,18 @@ The client does not reuse the server's entities. It has its own, in
 `ModsDude.Client.Core/Models/`:
 
 - **`Repo`** — wraps `RepoMembershipDto`, resolves the game adapter from `AdapterId` and
-  hydrates it with the stored base settings, and owns the machine's `LocalInstance` list for
-  that repo. Disposable, because it holds a collection synchronizer.
-- **`Mod` / `Mod.Version`** — a view over `ModDto` that pre-splits latest from older
-  versions. **Dead code**: nothing references it but `ModFakers`. It goes away with the
-  flattening rather than being kept and renamed.
+  hydrates it with the stored base settings, and exposes the `LocalInstance` list matching its
+  `InstanceScope`. Disposable, because it holds a collection synchronizer.
+- **`ModKey` / `ModVersionKey`** — the join keys, and the reason mod-id casing can no longer
+  leak. `ModKey.From` normalizes, and the type has no other representable form, so nothing can
+  hand raw casing to blob storage. See
+  [09 — Mod catalog](09-mod-catalog.md#the-casing-trap).
+- **`CatalogModVersion`** — the merged model the catalog, the management list and the profile
+  editor all render: **one record per version, no parent**, carrying `IsLocal` and `IsOnServer`
+  as independent facts. There is no client-side `Mod`; the wrapper that pre-split latest from
+  older versions was deleted with the flattening, and grouping is a `ToLookup(x => x.ModId)`
+  built where it is needed. Full reasoning in
+  [09 — Mod catalog](09-mod-catalog.md#a-merged-model).
 - **`LocalInstance`** — **one mod folder** on this machine: a sync target. Holds the
   deserialized `DynamicForm` instance settings and the adapter instance built from them.
   **Never sent to the server**; persisted in `state.json` (see [05 — Client](05-client.md)).
@@ -342,11 +378,15 @@ The client does not reuse the server's entities. It has its own, in
 
   Because sync makes a folder match a profile exactly, an instance has **one active profile
   at a time, from one repo**, recorded as a `(RepoId, ProfileId)` pair. Ownership is
-  therefore explicit; the current repo-scoped model has several instances silently believing
-  they own the same directory.
-
-  > This is a change from the code as it stands, where `PersistedLocalInstance` carries a
-  > `RepoId`. See [PLAN.md](PLAN.md#settled-architecture-decisions).
-- **`LocalMod` / `LocalModImage`** — a mod as found on disk, with lazy `Func` accessors for
+  explicit: the persisted instance also records the folder its adapter says it owns, so the
+  no-two-instances-own-one-folder check can run across every scope — including for an instance
+  whose scope no repo on this machine serves, which cannot hydrate an adapter and still owns its
+  folder.
+- **`LocalMod` / `ModImage`** — a mod as found on disk, with lazy `Func` accessors for
   the file stream and image bytes. Everything is deferred: at two thousand mods per folder,
-  eagerly reading icons would mean unpacking every archive.
+  eagerly reading icons would mean unpacking every archive. `ModImage` says nothing about where
+  bytes come from, which is what lets a server-backed derivative be the same record with an HTTP
+  fetch in its loader.
+- **`ModSource`** — somewhere to look for mods: an instance's mod folder, the system Downloads
+  folder, or a folder added for the session. See
+  [09 — Mod catalog](09-mod-catalog.md#mod-sources).

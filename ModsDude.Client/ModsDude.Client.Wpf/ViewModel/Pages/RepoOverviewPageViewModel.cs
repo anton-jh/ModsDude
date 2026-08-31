@@ -3,24 +3,25 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// What the repo looks like from here: the game instances it offers, the profiles it holds, and the
-/// caller's standing in it. Drift and last sync belong on this page too - see
-/// docs/PLAN.md#phase-4--make-drift-unmissable - but nothing produces either yet, so the page says
-/// so rather than showing a number with no source behind it.
+/// What the repo looks like from here: the game instances it offers, whether each still matches its
+/// profile, the profiles it holds, and the caller's standing in it.
 /// </summary>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileService _profileService;
     private readonly MembershipService _membershipService;
+    private readonly InstanceDriftMonitor _driftMonitor;
 
     private int? _fetchedMemberCount;
 
@@ -28,17 +29,20 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     public RepoOverviewPageViewModel(
         Repo repo,
         ProfileService profileService,
-        MembershipService membershipService)
+        MembershipService membershipService,
+        InstanceDriftMonitor driftMonitor)
     {
         _repo = repo;
         _profileService = profileService;
         _membershipService = membershipService;
+        _driftMonitor = driftMonitor;
 
         Instances = [];
 
         _repo.PropertyChanged += OnRepoPropertyChanged;
         _repo.LocalInstances.CollectionChanged += OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
+        _driftMonitor.Changed += OnDriftChanged;
 
         RefreshInstances();
     }
@@ -77,6 +81,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo.PropertyChanged -= OnRepoPropertyChanged;
         _repo.LocalInstances.CollectionChanged -= OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged -= OnSourceCollectionChanged;
+        _driftMonitor.Changed -= OnDriftChanged;
     }
 
 
@@ -116,13 +121,24 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(ProfileSummary));
     }
 
+    private void OnDriftChanged(object? sender, EventArgs e)
+    {
+        // The monitor checks off the UI thread, and these rows are bound.
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshInstances);
+    }
+
     private void RefreshInstances()
     {
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Instance.InstanceId, x => x.Report);
+
         Instances.Clear();
 
         foreach (var instance in _repo.LocalInstances)
         {
-            Instances.Add(new InstanceOverviewViewModel(instance, DescribeActiveProfile(instance)));
+            Instances.Add(new InstanceOverviewViewModel(
+                instance,
+                DescribeActiveProfile(instance),
+                drifted.GetValueOrDefault(instance.Id)));
         }
 
         OnPropertyChanged(nameof(HasInstances));

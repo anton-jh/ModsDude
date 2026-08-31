@@ -9,14 +9,73 @@
       d:DataContext="{d:DesignInstance Type=pvm:InstancePageViewModel, IsDesignTimeCreatable=False}"
       Title="InstancePage">
 
-    <Grid ColumnDefinitions="200 *">
+    <Grid ColumnDefinitions="260 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto">
+        <Grid Grid.Column="0" RowDefinitions="auto auto *">
 
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+            <!-- The instance's own state, on its own page: which profile it follows, whether the
+                 folder still matches, and the one action that fixes it. -->
+            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="12 16 12 0">
+
+                <TextBlock Text="Active profile"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                <ComboBox Margin="0 4 0 0"
+                          ItemsSource="{Binding Profiles}"
+                          DisplayMemberPath="Label"
+                          SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
+
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           Text="The profile this instance followed is gone - it was deleted, or you were removed from its repo. Pick another one."
+                           Visibility="{Binding HasDanglingActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <Button Margin="0 8 0 0"
+                        HorizontalAlignment="Stretch"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="{Binding ActivationLabel}"
+                        Command="{Binding ApplyCommand}" />
+
+                <TextBlock Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding DriftStatus}" />
+
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           Text="{Binding LockedWarning}"
+                           Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="{Binding ApplyStatus}"
+                           Visibility="{Binding HasApplyStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <Button Margin="0 8 0 0"
+                        HorizontalAlignment="Left"
+                        Style="{DynamicResource SubtleMenuButton}"
+                        Content="Re-check"
+                        Command="{Binding RecheckCommand}" />
+
+                <TextBlock Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Text="{Binding ModFolder}" />
+            </StackPanel>
         </Grid>
 
         <Frame

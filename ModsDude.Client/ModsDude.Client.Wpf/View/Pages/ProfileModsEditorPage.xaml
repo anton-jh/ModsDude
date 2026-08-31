@@ -402,26 +402,111 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="auto auto * auto">
+        <StackPanel Grid.Row="1" Orientation="Vertical">
 
-            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
-                    Content="Save changes" Command="{Binding SaveChangesCommand}" />
+            <!-- Read-only, and only from two instances upwards. The targets of a re-apply are
+                 derived, so this discloses them rather than offering a choice. -->
+            <Border Margin="32 0 32 0"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    Visibility="{Binding ShowApplyTargetList, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Vertical">
+                    <TextBlock Text="Saving applies to these game instances:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding ApplyTargets}" Margin="0 4 0 0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
 
-            <Button Grid.Column="1" Margin="4 24 4 24"
-                    Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
+            <Border Margin="32 8 32 0"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    Visibility="{Binding HasApplyStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock Text="{Binding ApplyStatus}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Border>
 
-            <TextBlock Grid.Column="2"
-                       Margin="16 0"
-                       VerticalAlignment="Center"
-                       Text="{Binding PendingText}"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <!-- The onboarding case. A mode change with a chosen target does not belong inside a
+                 save, so it is offered afterwards and can be waved away. -->
+            <Border Margin="32 8 32 0"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    Visibility="{Binding HasActivationOffer, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding ActivationOffer}"
+                               VerticalAlignment="Center"
+                               Margin="0 0 12 0"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-            <Button Grid.Column="3" Margin="4 24 32 24"
-                    Content="Stop saving"
-                    Command="{Binding SaveChangesCancelCommand}"
-                    Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />
-        </Grid>
+                    <ComboBox Width="200" Margin="0 0 8 0"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding ActivationCandidates}"
+                              DisplayMemberPath="Name"
+                              SelectedItem="{Binding ActivationCandidate, Mode=TwoWay}"
+                              Visibility="{Binding HasActivationChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Content="Use it" Margin="0 0 8 0" Command="{Binding AcceptActivationOfferCommand}" />
+                    <Button Content="Not now" Command="{Binding DismissActivationOfferCommand}" />
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="auto auto auto * auto">
+
+                <!-- Split button: the primary action is one click, and the variant costs opening the
+                     dropdown. A checkbox would be persistent visible state, and one left ticked turns
+                     a per-save decision into a standing mode. -->
+                <Button Grid.Column="0" Width="250" Margin="32 24 0 24" Style="{DynamicResource AccentButtonStyle}"
+                        Content="{Binding SaveActionText}" Command="{Binding SaveChangesCommand}" />
+
+                <Button x:Name="SaveVariantButton"
+                        Grid.Column="1" Width="32" Margin="1 24 4 24"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                        Content="&#xE70D;"
+                        ToolTip="Other ways to save"
+                        Click="OpenSaveVariants"
+                        Visibility="{Binding HasApplyTargets, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Command="{Binding SaveOnlyCommand}">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Vertical" MaxWidth="420">
+                                        <TextBlock Text="Save only" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding SaveOnlyDescription}"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+
+                <Button Grid.Column="2" Margin="4 24 4 24"
+                        Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
+
+                <TextBlock Grid.Column="3"
+                           Margin="16 0"
+                           VerticalAlignment="Center"
+                           Text="{Binding PendingText}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <Button Grid.Column="4" Margin="4 24 32 24"
+                        Content="Stop saving"
+                        Command="{Binding SaveChangesCancelCommand}"
+                        Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </Grid>
+
+        </StackPanel>
 
     </Grid>
 

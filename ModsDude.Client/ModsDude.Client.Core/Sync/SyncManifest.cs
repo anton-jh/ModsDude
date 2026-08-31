@@ -24,7 +24,12 @@ public sealed record SyncManifest
     /// Bumped when the shape changes. There is no migration and none is needed: a manifest that
     /// cannot be read is a manifest that is absent, which costs a full reconcile.
     /// </summary>
-    public const int CurrentVersion = 1;
+    /// <remarks>
+    /// Bumped to 2 for <see cref="SyncManifestEntry.Locked"/>. A version 1 manifest would deserialize
+    /// with every entry unlocked, which reads as "no locked mod drifted" - the one thing the drift
+    /// notice exists to say loudly. Discarding it costs a reconcile; believing it costs a savegame.
+    /// </remarks>
+    public const int CurrentVersion = 2;
 
 
     public int Version { get; init; } = CurrentVersion;
@@ -34,6 +39,13 @@ public sealed record SyncManifest
     /// <summary>Which profile was applied, so a manifest can be recognised as describing another one.</summary>
     public required Guid RepoId { get; init; }
     public required Guid ProfileId { get; init; }
+
+    /// <summary>
+    /// What the profile was called when it was applied. Recorded rather than looked up so the drift
+    /// notice can name it at startup, offline, and for a repo whose profile list has not been read
+    /// yet - which is every repo but the one the user happens to be standing in.
+    /// </summary>
+    public string? ProfileName { get; init; }
 
     public required DateTimeOffset SyncedAt { get; init; }
 
@@ -68,4 +80,15 @@ public sealed record SyncManifestEntry(
     string ContentHash,
     string FileName,
     long Size,
-    DateTimeOffset ModifiedUtc);
+    DateTimeOffset ModifiedUtc)
+{
+    /// <summary>
+    /// Whether the profile locked this mod when it was applied. Recorded so the cheap check can name
+    /// the dangerous case - a locked map the game updated underneath the profile - without the
+    /// profile's current dependencies in hand, which at startup nothing has.
+    /// </summary>
+    public bool Locked { get; init; }
+
+    /// <summary>For saying which mod, in a notice that has no mod list to look the name up in.</summary>
+    public string? DisplayName { get; init; }
+}

@@ -26,9 +26,8 @@ The reason for the split is the repo/instance divide from
 [01 — Overview](01-overview.md):
 
 - **Base settings** are stored on the server in `Repo.AdapterData.Configuration` and are the
-  same for every member. Things the group agrees on — for Farming Simulator, the game version
-  the repo targets, which is also what its [instance scope](#instance-scope) keys on. Empty in
-  the code as it stands.
+  same for every member. Things the group agrees on — for Farming Simulator, the `GameVersion`
+  the repo targets, which is also what its [instance scope](#instance-scope) keys on.
 - **Instance settings** are per-machine and never leave it. For Farming Simulator, the path
   to the game data folder.
 
@@ -50,49 +49,58 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 
 | Capability | Base stage | Instance stage |
 | --- | --- | --- |
-| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `IInstanceModAdapter.GetInstalledMods(ct)` |
+| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `IInstanceModAdapter` — `GetInstalledMods(ct)`, plus `ModFolder`, `GetModFilePath` and `GetInstalledModPath` |
 | Savegames | `IBaseSavegameAdapter` | `IInstanceSavegameAdapter` — both currently empty |
 
-`IGameAdapter` also carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
+`IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
-adapter to find out.
-
-> **Planned: those two move to `IBaseGameAdapter`.** They sit on the catalogue stage, before
-> base settings exist, which assumes the answer cannot depend on how a repo configured the
-> adapter. For a scripted adapter it plainly can — one script implements savegames and another
-> does not. Nothing reads either flag today, so moving them is free now and a breaking interface
-> change once the UI starts consulting them. It is the same layering mistake as keying instances
-> on the adapter id, one stage further up; see [Instance scope](#instance-scope).
+instance adapter to find out. They sit on the **base** stage, not the catalogue stage, because
+the answer can depend on how a repo configured the adapter: for a scripted adapter, one script
+implements savegames and another does not. That is the same layering mistake as keying instances
+on the adapter id, one stage further up; see [Instance scope](#instance-scope).
 
 The capability adapters mirror the same base-then-instance shape: `IBaseModAdapter` can scan
 an arbitrary folder, and `WithInstanceSettings` turns it into an `IInstanceModAdapter` that
 knows the folder the game actually uses.
 
-## Two flags the sync engine reads
-
-*Planned.*
+The instance stage is where the **write side** lives, and it is deliberately only paths:
 
 ```csharp
-bool SupportsHardlinks { get; }   // default false
+string ModFolder { get; }                                   // no two instances may own the same one
+string GetModFilePath(ModKey modId, ModVersionKey versionId);
+string GetInstalledModPath(LocalMod installed) => installed.FilePath;
+```
+
+There is no `InstallMod` taking a stream. Materialising is a hardlink on one disk and a copy on
+another, and that decision depends on the store assignment and the filesystem rather than on the
+game — so it belongs in the sync engine, once, instead of in every adapter. Adapters supply
+paths; the engine performs the filesystem operations. `GetInstalledModPath` is separate from
+`GetModFilePath` because what is already on disk is not necessarily where this adapter version
+would put it.
+
+## What the sync engine and registration read off an adapter
+
+```csharp
+bool SupportsHardlinks { get; }   // on IBaseModAdapter, default false
 ```
 
 Whether the game's mod files are safe to hardlink into the content store. False when the game
 or its updater may **rewrite a mod file in place**, which through a hardlink would corrupt the
 store blob shared with every other repo and instance on that volume. False also means "nobody
 has checked yet" — it is deliberately the default, because the failure is silent and the
-blast radius is every repo on the disk. See
+blast radius is every repo on the disk. `_farming_simulator@1` declares `false` explicitly, to
+say the answer is unknown rather than assumed. See
 [07 — Mod sync design](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
 The adapter is also responsible for deciding whether a newly registered mod is
-**version-sensitive**, setting `ModVersion.Locked` at registration — a Farming Simulator map mod
-declares its maps in `modDesc`, which the adapter is parsing anyway. It re-derives the answer
+**version-sensitive**, setting `LocalMod.Locked` — which becomes `ModVersion.Locked` at
+registration. A Farming Simulator map mod declares its maps in `modDesc`, which the adapter is
+parsing anyway. It re-derives the answer
 from each file rather than inheriting it, which comes out consistent because every version of a
 map mod declares maps. It never sets `ModDependency.Locked`; profile-level locking is a human
 decision. See [02 — Domain model](02-domain-model.md#locking-in-two-places).
 
 ## Version ordering
-
-*Planned — see [PLAN.md](PLAN.md).*
 
 Deciding whether one mod version is newer than another is game knowledge, so it belongs here.
 But most games write versions the same handful of ways, so it is an **optional override** with
@@ -114,6 +122,15 @@ The contract is **three-way and allowed to abstain**: ordered, equal, or *cannot
 confidently*. Abstaining is a normal outcome, not a failure. A game whose versions are dates,
 or build numbers, or anything the shared parser would mangle, overrides; an adapter that
 overrides is still expected to abstain rather than guess.
+
+Where `DefaultModVersionComparer` draws that line is worth knowing, because it is not "abstain
+whenever the notation differs": **numbers decide wherever both strings carry them, and notation
+only gets a vote once the numbers tie.** So `v1.2` against `1.3` orders, while `v1` against
+`1.0` does not — there the numbers agree once the trailing zero is padded away, leaving only a
+change of notation, and an author who changes notation is as likely to have done it for the next
+release as for a rewrite of the same one. Leading segments of wildly different magnitude — a
+date-like `2024.03` beside a semantic `1.4` — are two schemes rather than two thousand releases,
+so those abstain too; one digit of difference stays decidable, because that is `9` against `10`.
 
 **Ordering is computed client-side and sent to the server.** The server has no adapters and
 cannot parse a version string — see [Where the comparison runs](#where-the-comparison-runs)
@@ -149,8 +166,6 @@ from any future third-party ones.
 
 ## Instance scope
 
-*Planned — see [PLAN.md](PLAN.md#settled-architecture-decisions).*
-
 An instance is not scoped to a repo. One Farming Simulator installation should be configured
 once and offered under every Farming Simulator repo you belong to, which is why instances move
 out from under repos. The obvious key for that is the adapter id — and it is not quite right,
@@ -179,7 +194,11 @@ game says nothing and gets the adapter id alone. One serving several overrides.
 
 ```csharp
 // FarmingSimulatorBaseGameAdapter
-public InstanceScope Scope => new(Id.Id, _baseSettings.GameVersion.ToString());
+public InstanceScope Scope => new(Id.Id, BaseSettings.GameVersion switch
+{
+    { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
+    null => throw new InvalidOperationException("...")
+});
 ```
 
 `InstanceScope` is a record struct over `(AdapterId, Discriminator?)`, rendering as
@@ -192,7 +211,7 @@ Note `Id.Id`, not `Id`: **the compatibility version is deliberately not part of 
 repo on `_farming_simulator@2` still matches instances created under `@1`, which is the standing
 rule that a newer adapter must be able to read settings authored by an older one.
 
-### What it changes
+### What it changed
 
 | | Keyed on the adapter | Keyed on the scope |
 | --- | --- | --- |
@@ -239,14 +258,16 @@ adapter costs more than an override.
 
 **Folder collision has to be checked globally.** Adapter scope was what stopped two instances
 claiming the same directory; splitting it by game reopens the possibility, since two scopes can
-name the same folder. The check has to run across all instances regardless of scope, which needs
-the adapter to answer *which folder does this instance own* — something the sync engine wants
-anyway.
+name the same folder. The check runs across all instances regardless of scope, using
+`IInstanceModAdapter.ModFolder` — and the answer is also recorded on the persisted instance, so
+an instance whose scope no repo on this machine serves still participates in the check even
+though it cannot hydrate an adapter to be asked.
 
 **The instance settings template genuinely varies with base settings now.**
-`FarmingSimulatorInstanceSettings` probes `My Documents\My Games\FarmingSimulator2025` in its
-constructor; with a `GameVersion` in base settings it probes for the year the repo actually
-targets. The shape does not change, only a default value — which is worth noticing, because the
+`FarmingSimulatorInstanceSettings` used to probe `My Documents\My Games\FarmingSimulator2025`
+with the year hardcoded; `CreateTemplate(gameVersion)` now probes for the year the repo actually
+targets, trying both spellings the installer has used. The shape does not change, only a default
+value — which is worth noticing, because the
 mechanism gets exercised by the dullest possible case before anything exotic depends on it.
 `GetInstanceSettingsTemplate()` and `DeserializeInstanceSettings()` have always been on
 `IBaseGameAdapter` rather than `IGameAdapter`, so the interface allowed this all along; nothing
@@ -327,10 +348,10 @@ the only one that exists.
 | `FarmingSimulatorGameAdapter` | Catalogue entry, `_farming_simulator@1` |
 | `FarmingSimulatorBaseGameAdapter` | + base settings, exposes base capability factories |
 | `FarmingSimulatorInstanceGameAdapter` | + instance settings, exposes instance capability factories |
-| `FarmingSimulatorBaseSettings` | Empty today. Planned: `GameVersion`, which feeds the [instance scope](#instance-scope) |
-| `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected |
-| `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods |
-| `FarmingSimulatorInstanceModAdapter` | Scans `{GameDataFolder}/mods` |
+| `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [instance scope](#instance-scope) |
+| `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
+| `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => false` |
+| `FarmingSimulatorInstanceModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
 | `FarmingSimulator*SavegameAdapter` | Placeholders, no members |
 
 ### How a mod is read
@@ -340,16 +361,20 @@ archive in the folder and extracts:
 
 | From | To |
 | --- | --- |
-| Filename without extension | `LocalMod.Id` — this becomes the server's `ModId` |
-| `modDesc/version` | `LocalMod.Version` — becomes `ModVersionId` |
+| Filename without extension | `LocalMod.Id`, a `ModKey` — this becomes the server's `ModId` |
+| `modDesc/version` | `LocalMod.Version`, a `ModVersionKey` — becomes `ModVersionId` |
 | `modDesc/title/en` (or first child, or filename) | `Name` |
 | `modDesc/description/en` (or first child) | `Description`, normalised |
 | `modDesc/author` | `Author` |
+| Whether `modDesc` declares maps | `Locked` — the mod is version-sensitive |
 | `modDesc/iconFilename`, or any `icon_*` image | `Icon` |
 | Any `store_*` image | `Images` |
 
 Several details in this code are load-bearing and worth preserving if you touch it:
 
+- **The mod id is normalized here, where it is produced**, not at each use site — which is how
+  one gets missed. `ModKey.From` is the only way to build one. Before it, a mod found as
+  `FS25_Foo` and `fs25_foo` was one file on disk and two mods on the server.
 - **Parallelism is capped at `Environment.ProcessorCount`.** Each archive gets its own handle
   so parallel reads are safe, but the work is disk-bound — a handful at a time is as fast as
   hundreds, and one work item per file would hand the whole shared thread pool to the scan.
@@ -365,10 +390,14 @@ Several details in this code are load-bearing and worth preserving if you touch 
   runs of blank lines.
 - **Images are lazy and identified by a stable cache key** —
   `{modPath}|{entryName}|{length}|{crc32}`. The archive handle is closed before the image is
-  ever needed, so `LocalModImage.Load` reopens the file. The CRC in the key means the key
+  ever needed, so `ModImage.Load` reopens the file. The CRC in the key means the key
   changes whenever the underlying file does, which is what makes the disk image cache safe.
-- **An unreadable archive is skipped, not reported.** `InvalidDataException` returns `null`;
-  a folder with a stray non-zip file still scans cleanly.
+- **An unreadable archive is skipped, not reported**, and its file handle is closed. Both
+  matter once a source can be any folder the user points at: `ZipArchive` checks the central
+  directory lazily rather than in its constructor, so a malformed archive used to fail the whole
+  source scan, and `leaveOpen: false` only starts applying once the archive exists, so a throwing
+  constructor leaked a handle per non-zip — which in a Downloads folder is most of the files.
+  Both surfaced the first time a real Downloads folder was scanned.
 
 ## Adding a new game
 
@@ -381,14 +410,20 @@ Several details in this code are load-bearing and worth preserving if you touch 
    inheritance chain (`Instance : Base : Catalogue`) is what makes the stage subtyping work.
 4. Implement `IBaseModAdapter.GetModsFromFolder` to produce `LocalMod` records, and
    `IInstanceModAdapter.GetInstalledMods` to point it at the game's actual mod folder.
-   Respect the cancellation token — the import page cancels the scan when the user navigates
-   away.
-5. Register the capability factories in the base and instance adapters' `_capabilities`
+   Respect the cancellation token — `ModCatalog` cancels the scan when the page goes away.
+   Build every id through `ModKey.From` / `ModVersionKey.From`.
+5. Implement the write side — `ModFolder` and `GetModFilePath` — or sync has nowhere to put a
+   file.
+6. Register the capability factories in the base and instance adapters' `_capabilities`
    lists.
-6. Nothing else. Registration is by reflection, and the UI is driven by the dynamic forms.
+7. Nothing else. Registration is by reflection, and the UI is driven by the dynamic forms.
 
 Set `CanSupportSavegames = false` unless you implement it — the flag is what the UI checks
 before offering the feature.
+
+Leave `SupportsHardlinks` alone unless somebody has actually tested what the game's updater does
+to a mod file. The default is `false` because the failure is silent and takes every repo on the
+volume with it.
 
 Override `VersionComparer` only if the shared parser genuinely cannot read your game's version
 strings. Most cannot benefit from an override, and an incorrect one silently mis-orders

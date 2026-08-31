@@ -123,6 +123,10 @@ public sealed record ModSyncPlan
     public required Guid RepoId { get; init; }
     public required Guid ProfileId { get; init; }
     public required Guid InstanceId { get; init; }
+
+    /// <summary>Carried only so the manifest can record it. See <see cref="ModSyncRequest.ProfileName"/>.</summary>
+    public string? ProfileName { get; init; }
+
     public required string ModFolder { get; init; }
     public required IReadOnlyList<ModSyncItem> Items { get; init; }
     public required ModMaterialization Materialization { get; init; }

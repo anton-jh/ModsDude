@@ -5,19 +5,53 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
-      mc:Ignorable="d" 
+      mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:ProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="ProfilePage">
 
     <Grid ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
+        <Grid Grid.Column="0" RowDefinitions="auto * auto">
 
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+            <!-- On the shell rather than on Overview, so applying this profile to an instance is
+                 reachable from every sub-page. -->
+            <StackPanel Grid.Row="2"
+                        Orientation="Vertical"
+                        Margin="12 16 12 16"
+                        Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                <ComboBox Margin="0 0 0 8"
+                          ItemsSource="{Binding Instances}"
+                          DisplayMemberPath="Name"
+                          SelectedItem="{Binding SelectedInstance, Mode=TwoWay}"
+                          ToolTip="Which game instance to use this profile on"
+                          Visibility="{Binding HasInstanceChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <Button HorizontalAlignment="Stretch"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="{Binding ActivationLabel}"
+                        ToolTip="{Binding ActivationDescription}"
+                        Command="{Binding ActivateCommand}" />
+
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding ActivationDescription}" />
+
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="{Binding ActivationStatus}"
+                           Visibility="{Binding HasActivationStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
         </Grid>
 
         <Frame

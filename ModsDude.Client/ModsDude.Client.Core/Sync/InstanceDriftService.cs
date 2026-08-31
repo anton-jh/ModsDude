@@ -31,6 +31,22 @@ public enum InstanceDriftStatus
     FolderUnreachable
 }
 
+/// <summary>Why a locked mod is being named. The wording differs because the remedy does.</summary>
+public enum LockedDriftReason
+{
+    /// <summary>Its file is not the one that was installed - an in-game update-all looks like this.</summary>
+    FileChanged,
+
+    /// <summary>Its file is gone from the mod folder entirely.</summary>
+    FileRemoved,
+
+    /// <summary>The profile now pins a different version than the one applied here.</summary>
+    ProfileMoved
+}
+
+/// <param name="AppliedVersion">What the last sync put there, which is the version the save was built against.</param>
+public sealed record DriftedLockedMod(ModKey ModId, string DisplayName, string? AppliedVersion, LockedDriftReason Reason);
+
 /// <param name="Added">Names in the folder that the last sync did not put there.</param>
 /// <param name="Removed">Names the last sync installed that are no longer in the folder.</param>
 /// <param name="Changed">Names whose size or modification time no longer match - a mod was replaced or updated.</param>
@@ -51,11 +67,15 @@ public sealed record InstanceDriftReport(
     public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + ProfileChangedMods.Count;
 
     /// <summary>
-    /// Whether a mod the profile locks is among the differences. An unlocked mod at the wrong version
-    /// is untidy; a locked map at the wrong version is a damaged savegame waiting to happen, so it is
-    /// named rather than folded into a count.
+    /// The locked mods among the differences, named. An unlocked mod at the wrong version is untidy;
+    /// a locked map at the wrong version is a damaged savegame waiting to happen, so it is named -
+    /// with the consequence - rather than folded into a count.
     /// </summary>
-    public IReadOnlyList<ModKey> LockedMods { get; init; } = [];
+    public IReadOnlyList<DriftedLockedMod> LockedDrift { get; init; } = [];
+
+    public IReadOnlyList<ModKey> LockedMods => [.. LockedDrift.Select(x => x.ModId)];
+
+    public bool HasLockedDrift => LockedDrift.Count > 0;
 }
 
 
@@ -144,7 +164,56 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
             ? InstanceDriftStatus.Drifted
             : InstanceDriftStatus.InSync;
 
-        return new InstanceDriftReport(status, added, removed, changed, profileChanged) { LockedMods = locked };
+        return new InstanceDriftReport(status, added, removed, changed, profileChanged)
+        {
+            // One entry per mod. A locked map whose file the game replaced and whose pin somebody
+            // then moved is one problem, and the file is the half that is already on disk.
+            LockedDrift = [.. NameLockedFiles(manifest, removed, changed).Concat(locked).DistinctBy(x => x.ModId)]
+        };
+    }
+
+
+    /// <summary>
+    /// The locked mods behind the changed and removed file names. The manifest carries the lock, so
+    /// this needs neither the profile's current dependencies nor a single archive opened - which is
+    /// what lets the startup check say "your map moved" rather than "3 files differ".
+    /// </summary>
+    private static List<DriftedLockedMod> NameLockedFiles(
+        SyncManifest manifest,
+        IReadOnlyList<string> removed,
+        IReadOnlyList<string> changed)
+    {
+        var byName = manifest.Entries
+            .Where(x => x.Locked)
+            .ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
+
+        if (byName.Count == 0)
+        {
+            return [];
+        }
+
+        var result = new List<DriftedLockedMod>();
+
+        foreach (var (names, reason) in new[]
+        {
+            (changed, LockedDriftReason.FileChanged),
+            (removed, LockedDriftReason.FileRemoved)
+        })
+        {
+            foreach (var name in names)
+            {
+                if (byName.TryGetValue(name, out var entry))
+                {
+                    result.Add(new DriftedLockedMod(
+                        ModKey.From(entry.ModId),
+                        entry.DisplayName ?? entry.ModId,
+                        entry.VersionId,
+                        reason));
+                }
+            }
+        }
+
+        return result;
     }
 
 
@@ -191,7 +260,7 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
     /// The mod set that was applied against what the profile pins now. Any difference means somebody
     /// edited the shared profile since this instance synced.
     /// </summary>
-    private static (List<ModKey> Changed, List<ModKey> Locked) CompareProfile(
+    private static (List<ModKey> Changed, List<DriftedLockedMod> Locked) CompareProfile(
         SyncManifest manifest,
         IReadOnlyCollection<DesiredMod>? dependencies)
     {
@@ -200,20 +269,24 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
             return ([], []);
         }
 
-        var applied = manifest.Entries.ToDictionary(x => ModKey.From(x.ModId), x => x.ContentHash);
+        var applied = manifest.Entries.ToDictionary(x => ModKey.From(x.ModId));
         var changed = new List<ModKey>();
-        var locked = new List<ModKey>();
+        var locked = new List<DriftedLockedMod>();
 
         foreach (var dependency in dependencies)
         {
-            if (applied.Remove(dependency.ModId, out var hash) is false ||
-                ModContentHasher.Matches(hash, dependency.ContentHash) is false)
+            if (applied.Remove(dependency.ModId, out var entry) is false ||
+                ModContentHasher.Matches(entry.ContentHash, dependency.ContentHash) is false)
             {
                 changed.Add(dependency.ModId);
 
                 if (dependency.Locked)
                 {
-                    locked.Add(dependency.ModId);
+                    locked.Add(new DriftedLockedMod(
+                        dependency.ModId,
+                        dependency.DisplayName ?? entry?.DisplayName ?? dependency.ModId.Value,
+                        entry?.VersionId,
+                        LockedDriftReason.ProfileMoved));
                 }
             }
         }

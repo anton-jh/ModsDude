@@ -91,6 +91,11 @@ public partial class App : Application
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
 
+        // One notice for the whole app, and one way in to it from outside the sidebar.
+        services.AddSingleton<ShellNavigationService>();
+        services.AddSingleton<ProfileApplyService>();
+        services.AddSingleton<DriftNotificationViewModel>();
+
         services.AddSingleton<ModListItemViewModel.Factory>();
 
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
@@ -119,6 +124,9 @@ public partial class App : Application
         // Sync's store eviction has to spare what other instances are running, and the instance list
         // is the only thing that knows which folders those are.
         services.AddSingleton<IInstanceModFolders>(sp => sp.GetRequiredService<LocalInstanceRepository>());
+
+        // The drift monitor asks the same list for the folder and the standing intent behind each one.
+        services.AddSingleton<IDriftCandidateSource>(sp => sp.GetRequiredService<LocalInstanceRepository>());
         services.AddSingleton<ClientSettingsRepository>();
         // A catalog is created per surface and disposed with it, so its per-source scan cache lives
         // exactly as long as the page whose checkboxes recompose from it.

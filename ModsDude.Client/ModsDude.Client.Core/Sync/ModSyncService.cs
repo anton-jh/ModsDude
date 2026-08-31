@@ -9,7 +9,14 @@ using ModsDude.Client.Core.Services;
 namespace ModsDude.Client.Core.Sync;
 
 /// <param name="Adapter">Already hydrated with the instance's settings; it is what knows the mod folder.</param>
-public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter, Guid RepoId, Guid ProfileId);
+public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter, Guid RepoId, Guid ProfileId)
+{
+    /// <summary>
+    /// What the profile is called, carried into the manifest so a later drift notice can name it
+    /// without a repo's profile list to hand. Optional: sync itself has no use for it.
+    /// </summary>
+    public string? ProfileName { get; init; }
+}
 
 
 /// <summary>The mod folders on this machine, which is what eviction needs to know to spare them.</summary>
@@ -89,6 +96,7 @@ public sealed class ModSyncService(
         {
             RepoId = request.RepoId,
             ProfileId = request.ProfileId,
+            ProfileName = request.ProfileName,
             InstanceId = request.InstanceId,
             ModFolder = modFolder,
             Items = items,
@@ -460,7 +468,11 @@ public sealed class ModSyncService(
                 item.DesiredHash!,
                 info.Name,
                 info.Length,
-                info.LastWriteTimeUtc));
+                info.LastWriteTimeUtc)
+            {
+                Locked = item.Locked,
+                DisplayName = item.DisplayName
+            });
         }
 
         manifestStore.Write(new SyncManifest
@@ -468,6 +480,7 @@ public sealed class ModSyncService(
             InstanceId = plan.InstanceId,
             RepoId = plan.RepoId,
             ProfileId = plan.ProfileId,
+            ProfileName = plan.ProfileName,
             SyncedAt = DateTimeOffset.UtcNow,
             ModFolder = plan.ModFolder,
             Entries = entries,

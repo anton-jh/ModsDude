@@ -7,10 +7,12 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Data;
@@ -39,6 +41,14 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// meaningless and litter the repo with mods nobody kept.
 /// See docs/09-mod-catalog.md#profile-mod-list-editor.
 /// </para>
+/// <para>
+/// <b>Save re-applies by default.</b> The user came here to fold what the game did into the profile;
+/// the re-apply is what actually reverts an auto-updated locked map, and separating it into a second
+/// deliberate action is precisely how it gets forgotten. The targets are derived rather than asked -
+/// see <see cref="ProfileApplyTargets"/> - and <em>Save only</em> costs a second click through the
+/// dropdown, because a control that can be left in the dangerous position turns a per-save decision
+/// into a standing mode.
+/// </para>
 /// </remarks>
 public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 {
@@ -51,8 +61,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IModalService _modalService;
     private readonly IDialogService _dialogService;
     private readonly NavigationLockService _navigationLock;
+    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly ProfileApplyService _applyService;
+    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftNotificationViewModel _driftNotification;
+    private readonly ActiveProfile _activeProfile;
 
     private readonly CancellationTokenSource _cancellation = new();
+
+    /// <summary>
+    /// Set by <em>Save only</em> for exactly one save and cleared as that save reads it. A control the
+    /// user could leave switched on would convert a per-save decision into a standing mode, which is
+    /// the opposite of what it is for.
+    /// </summary>
+    private bool _skipApplyOnce;
 
     /// <summary>Every known version of every known mod, oldest first, per mod.</summary>
     private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> _versionsByMod =
@@ -72,6 +94,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private HashSet<ModKey> _pinnedIds = [];
 
     /// <summary>
+    /// Tracked rather than re-derived from the repo, so an instance dropped from its list is still
+    /// unsubscribed from.
+    /// </summary>
+    private readonly List<LocalInstance> _watchedInstances = [];
+
+    /// <summary>
     /// Set while the lists are being rebuilt from the server. Every add into <see cref="Pinned"/>
     /// would otherwise recount against a draft that is half the old profile and half the new one.
     /// </summary>
@@ -87,7 +115,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IModDependenciesClient dependenciesClient,
         IModalService modalService,
         IDialogService dialogService,
-        NavigationLockService navigationLock)
+        NavigationLockService navigationLock,
+        LocalInstanceRepository localInstanceRepository,
+        ProfileApplyService applyService,
+        InstanceDriftMonitor driftMonitor,
+        DriftNotificationViewModel driftNotification)
     {
         _repo = repo;
         _profile = profile;
@@ -97,6 +129,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _modalService = modalService;
         _dialogService = dialogService;
         _navigationLock = navigationLock;
+        _localInstanceRepository = localInstanceRepository;
+        _applyService = applyService;
+        _driftMonitor = driftMonitor;
+        _driftNotification = driftNotification;
+        _activeProfile = new ActiveProfile(repo.Id, profile.Id);
 
         // The page owns the catalog and disposes it, so the per-source scan cache lives exactly as
         // long as the checkboxes that recompose from it.
@@ -108,6 +145,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         PinnedView.SortDescriptions.Add(new SortDescription(nameof(ProfileModRowViewModel.Name), ListSortDirection.Ascending));
 
         Pinned.CollectionChanged += (_, _) => OnPinnedChanged();
+
+        _repo.LocalInstances.CollectionChanged += OnLocalInstancesChanged;
+        RefreshApplyTargets();
+
+        // The one place the app-level drift notice is suppressed: somebody already looking at the
+        // drifted profile's mod list does not need to be told about it.
+        _driftNotification.SuppressFor(_activeProfile);
     }
 
 
@@ -178,6 +222,56 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(HasSaveSummary))]
     private string? _saveSummary;
 
+
+    /// <summary>
+    /// The instances this save re-applies to: read-only, and only rendered from two upwards. With one
+    /// the word "instance" never appears at all, which is the common case for most games.
+    /// </summary>
+    public ObservableCollection<LocalInstance> ApplyTargets { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveActionText))]
+    [NotifyPropertyChangedFor(nameof(HasApplyTargets))]
+    [NotifyPropertyChangedFor(nameof(ShowApplyTargetList))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
+    private int _applyTargetCount;
+
+    /// <summary>What the last save's apply did, per instance.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasApplyStatus))]
+    private string? _applyStatus;
+
+    /// <summary>
+    /// Offered after a save that had nothing to apply to, rather than folded into the save itself:
+    /// activation is a mode change with a chosen target, which is a different operation.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActivationOffer))]
+    private string? _activationOffer;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActivationChoice))]
+    [NotifyCanExecuteChangedFor(nameof(AcceptActivationOfferCommand))]
+    private LocalInstance? _activationCandidate;
+
+    public ObservableCollection<LocalInstance> ActivationCandidates { get; } = [];
+
+    public bool HasActivationOffer => ActivationOffer is not null;
+    public bool HasActivationChoice => ActivationCandidates.Count > 1;
+
+    public bool HasApplyTargets => ApplyTargetCount > 0;
+    public bool ShowApplyTargetList => ApplyTargetCount > 1;
+    public bool HasApplyStatus => ApplyStatus is not null;
+
+    public string SaveActionText => ProfileApplyTargets.DescribeSaveAction(ApplyTargetCount);
+
+    /// <summary>
+    /// Worded with the consequence rather than as a caution. Someone reading only the label has to be
+    /// able to tell what it leaves behind.
+    /// </summary>
+    public string SaveOnlyDescription =>
+        "Saves the profile but leaves your installed mods untouched. Your locked mods stay at the versions " +
+        "the game updated them to. Only if you know exactly what you are doing.";
 
     public bool HasPinnedMods => PinnedCount > 0;
     public bool HasPending => PendingCount > 0;
@@ -349,8 +443,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanSave), IncludeCancelCommand = true)]
     private async Task SaveChanges(CancellationToken cancellationToken)
     {
+        // Read and cleared here, so the decision cannot outlive the save that carried it.
+        var apply = _skipApplyOnce is false;
+        _skipApplyOnce = false;
+
         IsSaving = true;
         SaveSummary = null;
+        ApplyStatus = null;
+        ActivationOffer = null;
 
         try
         {
@@ -389,6 +489,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             }
 
             SaveSummary = Describe(changes, unfinished.Count);
+
+            if (apply)
+            {
+                await ApplyToTargetsAsync(cancellationToken);
+            }
+            else
+            {
+                ApplyStatus = "Saved without applying. Your installed mods are untouched.";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -401,6 +510,122 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanSave() => HasUnsavedChanges && IsSaving is false;
+
+    /// <summary>
+    /// The variant, one click further in than the primary and only offered where there is something
+    /// to skip. It arms the flag and runs the same save, so there is no second code path and nothing
+    /// left switched on afterwards.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSaveOnly))]
+    private Task SaveOnly()
+    {
+        _skipApplyOnce = true;
+
+        return SaveChangesCommand.ExecuteAsync(null);
+    }
+
+    private bool CanSaveOnly() => CanSave() && HasApplyTargets;
+
+    /// <summary>
+    /// Re-applies to the derived targets. An instance that cannot be applied to right now - a
+    /// dedicated server mid-session, a folder a running game holds - is reported and left drifted,
+    /// which the app-level notice already covers. That is a "not now", not a "not this one".
+    /// </summary>
+    private async Task ApplyToTargetsAsync(CancellationToken cancellationToken)
+    {
+        if (ApplyTargets.Count == 0)
+        {
+            OfferActivation();
+
+            return;
+        }
+
+        var messages = new List<string>();
+
+        foreach (var instance in ApplyTargets.ToList())
+        {
+            ApplyStatus = $"Applying to '{instance.Name}'...";
+
+            var outcome = await _applyService.ApplyAsync(
+                _repo,
+                instance,
+                _profile.Id,
+                _profile.Name,
+                confirmPlan: false,
+                progress: null,
+                cancellationToken);
+
+            messages.Add(outcome.Message);
+        }
+
+        ApplyStatus = string.Join(" ", messages);
+
+        await _driftMonitor.CheckAsync();
+    }
+
+    /// <summary>
+    /// The onboarding case: a profile nothing is using yet. Naming the instance because here that
+    /// genuinely is a choice, and offered afterwards rather than folded into the save.
+    /// </summary>
+    private void OfferActivation()
+    {
+        ActivationCandidates.Clear();
+
+        foreach (var instance in _repo.LocalInstances)
+        {
+            ActivationCandidates.Add(instance);
+        }
+
+        OnPropertyChanged(nameof(HasActivationChoice));
+
+        ActivationCandidate = ActivationCandidates.FirstOrDefault();
+
+        ActivationOffer = ActivationCandidate is LocalInstance candidate
+            ? ActivationCandidates.Count == 1
+                ? $"No instance is using this profile. Use it on '{candidate.Name}'?"
+                : "No instance is using this profile. Use it on one of these?"
+            : null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAcceptActivationOffer))]
+    private async Task AcceptActivationOffer(CancellationToken cancellationToken)
+    {
+        if (ActivationCandidate is not LocalInstance instance)
+        {
+            return;
+        }
+
+        ActivationOffer = null;
+
+        var outcome = await _applyService.ApplyAsync(
+            _repo,
+            instance,
+            _profile.Id,
+            _profile.Name,
+            // A mode change, not a re-apply: what the previous profile put in that folder comes back
+            // out, so the reconciler's plan is the confirmation.
+            confirmPlan: true,
+            progress: null,
+            cancellationToken);
+
+        if (outcome.Status is not ProfileApplyStatus.Declined)
+        {
+            _localInstanceRepository.SetActiveProfile(instance, _activeProfile);
+            RefreshApplyTargets();
+        }
+
+        ApplyStatus = outcome.Message;
+
+        await _driftMonitor.CheckAsync();
+    }
+
+    private bool CanAcceptActivationOffer() => ActivationCandidate is not null;
+
+    [RelayCommand]
+    private void DismissActivationOffer()
+    {
+        ActivationOffer = null;
+    }
 
     /// <summary>
     /// Uploads and registers the rows that are still only on disk, and reports which of them the repo
@@ -709,11 +934,64 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _navigationLock.ReleaseLock(this);
+        _driftNotification.Release(_activeProfile);
+
+        _repo.LocalInstances.CollectionChanged -= OnLocalInstancesChanged;
+
+        foreach (var instance in _watchedInstances)
+        {
+            instance.PropertyChanged -= OnInstanceChanged;
+        }
+
+        _watchedInstances.Clear();
 
         // Deliberately not disposed: the wait may still be inside the token's registration, and
         // disposing a source out from under that is not safe. Nothing here holds a wait handle.
         _cancellation.Cancel();
         _catalog.Dispose();
+    }
+
+
+    private void OnLocalInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RefreshApplyTargets();
+    }
+
+    private void OnInstanceChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalInstance.ActiveProfile))
+        {
+            RefreshApplyTargets();
+        }
+    }
+
+    /// <summary>
+    /// Derived from the instances' own standing intent, every time it could have moved. The count is
+    /// what the primary button says, so being a step behind would mislabel it.
+    /// </summary>
+    private void RefreshApplyTargets()
+    {
+        foreach (var instance in _watchedInstances)
+        {
+            instance.PropertyChanged -= OnInstanceChanged;
+        }
+
+        _watchedInstances.Clear();
+
+        foreach (var instance in _repo.LocalInstances)
+        {
+            instance.PropertyChanged += OnInstanceChanged;
+            _watchedInstances.Add(instance);
+        }
+
+        ApplyTargets.Clear();
+
+        foreach (var instance in _localInstanceRepository.GetInstancesUsing(_activeProfile))
+        {
+            ApplyTargets.Add(instance);
+        }
+
+        ApplyTargetCount = ApplyTargets.Count;
     }
 
     /// <summary>

@@ -24,8 +24,9 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly LocalInstance _instance;
     private readonly ModSyncService _syncService;
     private readonly InstanceDriftService _driftService;
+    private readonly InstanceDriftMonitor _driftMonitor;
     private readonly ProfileService _profileService;
-    private readonly IModalService _modalService;
+    private readonly ProfileApplyService _applyService;
 
     private ModSyncPlan? _plan;
     private IInstanceModAdapter? _adapter;
@@ -36,15 +37,17 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         LocalInstance instance,
         ModSyncService syncService,
         InstanceDriftService driftService,
+        InstanceDriftMonitor driftMonitor,
         ProfileService profileService,
-        IModalService modalService)
+        ProfileApplyService applyService)
     {
         _repo = repo;
         _instance = instance;
         _syncService = syncService;
         _driftService = driftService;
+        _driftMonitor = driftMonitor;
         _profileService = profileService;
-        _modalService = modalService;
+        _applyService = applyService;
 
         InstanceName = instance.Name;
         Rows = [];
@@ -126,7 +129,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        if (plan.Unrecognised.Count > 0 && await ConfirmUnrecognisedAsync(plan) is false)
+        if (plan.Unrecognised.Count > 0 && await _applyService.ConfirmUnrecognisedAsync(plan) is false)
         {
             return;
         }
@@ -144,6 +147,9 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
             // The plan describes a folder that has just changed, so it is stale whatever happened.
             await LoadPlanAsync(CancellationToken.None);
+
+            // And so is the app-level notice, which may be up about exactly this instance.
+            await _driftMonitor.CheckAsync();
         }
         catch (OperationCanceledException)
         {
@@ -217,7 +223,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         try
         {
             var plan = await _syncService.PlanAsync(
-                new ModSyncRequest(_instance.Id, adapter, _repo.Id, active.ProfileId),
+                new ModSyncRequest(_instance.Id, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
                 cancellationToken);
 
             await Application.Current.Dispatcher.InvokeAsync(() => Publish(plan));
@@ -280,25 +286,6 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             InstanceDriftStatus.InSync => "The mod folder still matches what was last applied here.",
             _ => null
         };
-    }
-
-    private async Task<bool> ConfirmUnrecognisedAsync(ModSyncPlan plan)
-    {
-        var names = plan.Unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
-        var more = plan.Unrecognised.Count > 10 ? $"\n  ...and {plan.Unrecognised.Count - 10} more" : "";
-
-        var modal = new ConfirmationDialogViewModel(
-            "These are not in the repo",
-            $"{plan.Unrecognised.Count} installed files are not registered in this repo, so nothing else has a copy of them:\n\n" +
-            $"{string.Join('\n', names)}{more}\n\n" +
-            "They will be moved to the Windows Recycle Bin, where you can restore them. Nothing is deleted.",
-            IconKind.Warning,
-            "Apply the profile",
-            "Cancel");
-
-        await _modalService.Show(modal);
-
-        return modal.Result;
     }
 
     private void Report(ModSyncProgress progress)

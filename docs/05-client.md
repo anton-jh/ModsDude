@@ -3,9 +3,14 @@
 Two projects:
 
 - **`ModsDude.Client.Core`** — game adapters, the generated server client, local state,
-  domain models. No UI framework reference. This is where a future CLI or a different
-  shell would plug in.
+  domain models, and the three services that do the real work: `ModCatalog`,
+  `ModImportService` and `ModSyncService`. No UI framework reference. This is where a future CLI
+  or a different shell would plug in.
 - **`ModsDude.Client.Wpf`** — the desktop app. Views, view models, navigation, imaging.
+
+`ModsDude.Client.Core.Tests` covers the parts with no UI in them — the version comparer and the
+partial order, import, imagery, the content store, the sync planner and drift. It is Windows-only
+in CI, because the content store's hardlinks and Recycle Bin are P/Invoke.
 
 ## MVVM conventions
 
@@ -51,8 +56,9 @@ lifetimes worth knowing:
 | Registration | Lifetime | Why |
 | --- | --- | --- |
 | `MainWindow`, `MainWindowViewModel` | Singleton | The shell |
-| `RepoRepository`, `ProfileService`, `LocalInstanceRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
-| `IModImageProvider` | Singleton | So decoded thumbnails survive navigating away and back |
+| `RepoRepository`, `ProfileService`, `MembershipService`, `LocalInstanceRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
+| `IModImageProvider`, `ModImageCache`, `IModImageStore`, `IModImagerySource` | Singleton | So decoded thumbnails survive navigating away and back, and one disk cache serves the machine |
+| `ModImagePublisher` | Singleton, and registered as both `IModImagePublisher` and `IModImageBackfill` | One object, two roles: publishing at import and backfilling on demand |
 | `NavigationLockService` | Singleton | One global "there are unsaved changes" flag |
 | `NavigationManager` | **Transient** | Each nesting level owns its own |
 | `AuthenticationService` | Singleton, and registered as `IAccessTokenAccessor` | |
@@ -71,11 +77,17 @@ The app is a sidebar app, nested up to three levels deep:
 
 ```
 MainWindow
-└─ MainPage                    Home │ Create repo │ ...repos
+└─ MainPage                    Home │ Create repo │ Settings │ ...repos
    └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Create profile │ Connect game │ ...profiles │ ...instances
-      ├─ RepoModsPage          Import │ Manage
-      └─ ProfilePage           Overview │ Mods │ Manage
+      ├─ RepoModsPage          (one page — the catalog)
+      ├─ ProfilePage           Overview │ Mods │ Manage
+      └─ InstancePage          Sync │ Manage
 ```
+
+`RepoModsPage` used to be a shell over Import and Manage. They were sibling pages showing
+overlapping data under different rules, which is the main thing about that area that confused;
+they are now one list with presence filters, and importing is a *selection mode* over it rather
+than a separate destination. See [09 — Mod catalog](09-mod-catalog.md#manage).
 
 **Both the profile list and the instance list belong to `RepoPageViewModel`**, so they only
 appear once a repo is selected and everything in them is scoped to that repo — and therefore to
@@ -102,24 +114,26 @@ selection has to be *refusable*:
    deciding nothing changed.
 3. Otherwise dispose the outgoing page, set the new one, and call `TriggerInit()`.
 
-**Disposing the outgoing page matters.** Dragging the mouse down the sidebar constructs and
-discards one page per item it passes over; without disposal each of those keeps its
-initialization running. `RepoModsPageViewModel.Dispose` exists solely to propagate disposal
-to the sub-page its own `NavigationManager` owns.
+**Disposing the outgoing page matters.** A page constructed and then navigated away from keeps
+its initialization running unless it is disposed. `ProfilePageViewModel.Dispose` and
+`InstancePageViewModel.Dispose` exist solely to propagate disposal to the sub-page their own
+`NavigationManager` owns.
 
-### Drag-selection is a `ListBox` default, not a feature
+### Drag-selection was a `ListBox` default, not a feature
 
-That page-per-item behaviour is not deliberate. A WPF `ListBox` extends selection to whatever
+A WPF `ListBox` extends selection to whatever
 the pointer passes over while the button is held, and since selection drives navigation here,
-dragging through the sidebar navigates to every item on the way. The 150 ms scan delay in the
-import page and the dispose-on-navigate discipline both exist to make that survivable.
+dragging through the sidebar navigated to every item on the way — constructing and discarding a
+page each time. The `DragSelection` behavior suppresses it.
 
-Suppressing it is worth doing on its own — nothing wants "navigate to eight pages in
-half a second" — and it is also the prerequisite for any drag gesture in the sidebar. Once a
-drag passes the threshold and `DragDrop.DoDragDrop` captures the mouse, the `ListBox` stops
-receiving the move events and selection stops following. Distinguishing a click from a drag
-means the usual `PreviewMouseMove` plus `SystemParameters.MinimumHorizontalDragDistance` /
-`MinimumVerticalDragDistance` check.
+The 150 ms scan delay in `ModCatalog` and the dispose-on-navigate discipline both predate that
+fix and both stay: the delay because a page nobody stopped on should still never touch the disk,
+and disposal because it is correct regardless.
+
+Suppressing pointer-following selection is also the prerequisite for any drag *gesture* in the
+sidebar — once a drag passes the threshold and `DragDrop.DoDragDrop` captures the mouse, the
+`ListBox` stops receiving move events and selection stops following. Nothing uses that yet; see
+[PLAN.md](PLAN.md#phase-5--fill-in-the-shell).
 
 ### The navigation lock
 
@@ -152,11 +166,11 @@ Task.Run(async () =>
 | `OnInitFailed(ex)` | UI thread | Defaults to rethrowing on the dispatcher, which reaches the global handler and shows the error modal |
 
 The three-part split exists because of `ICollectionView`: it must be created on the UI
-thread, but only after the collection it wraps is complete. `RepoModsImportPageViewModel`
-scans in `InitAsync` and builds the view in `OnInitCompleted`.
+thread, but only after the collection it wraps is complete. `RepoModsPageViewModel`
+pulls the catalog in `InitAsync` and builds the view once the rows exist.
 
-Overriding `OnInitFailed` without calling `base` suppresses the modal — the import page does
-exactly this for `OperationCanceledException`, because a cancelled scan is the *expected*
+Overriding `OnInitFailed` without calling `base` suppresses the modal — `RepoModsPageViewModel`
+does exactly this for `OperationCanceledException`, because a cancelled scan is the *expected*
 result of navigating away, not an error.
 
 ## Local state
@@ -166,38 +180,24 @@ app data directory. `StateStore` is `Store<LocalState>` over `state.json`.
 
 ```
 LocalState
-├─ Version                 schema version, currently 1
-├─ LastSelectedRepos       declared, not yet used
-├─ LastSelectedProfiles    declared, not yet used
-└─ Repos: { repoId → LocalRepoState { LocalInstances } }
-```
-
-### Where this is going
-
-Two changes are planned, both described in [PLAN.md](PLAN.md#settled-architecture-decisions):
-
-```
-LocalState
-├─ Version
-├─ Settings                              NEW — machine-wide, not per repo or adapter
+├─ Version                 schema version, currently 2
+├─ LastSelectedRepos       restores which repo you were on
+├─ LastSelectedProfiles    and which profile
+├─ Settings                machine-wide, not per repo, instance or adapter
 │   ├─ Stores: { volumeRoot → { Path, MaxSizeBytes } }
-│   ├─ ImageCache: { Path, MaxSizeBytes } one per machine, not per volume
-│   └─ DisabledSources: { sourceId }     mod sources the user switched off
-├─ Instances: { instanceId → { InstanceScope, GameAdapterId, Name,
-│                              AdapterInstanceSettings,
-│                              ActiveProfile: (RepoId, ProfileId)? } }
-└─ Repos: { repoId → LocalRepoState }
+│   ├─ StoreAssignments: { volumeRoot → servingVolumeRoot }
+│   ├─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
+│   └─ DisabledSources: { sourceId }        mod sources the user switched off
+└─ Instances: { instanceId → { Scope, GameAdapterId, Name,
+                               AdapterInstanceSettings,
+                               ModFolder,
+                               ActiveProfile: (RepoId, ProfileId)? } }
 
-manifests/{instanceId}.json            NEW — what the last sync installed
+manifests/{instanceId}.json                 what the last sync installed
 ```
 
-`ActiveProfile` has to be persisted: a mod folder cannot tell you which profile it was meant to
-match, so nothing can reconstruct it once the contents change. The sync manifest is a separate
-file per instance rather than part of `LocalState`, which is loaded eagerly and rewritten on
-every instance change — a manifest for 2,000 mods is a few hundred kilobytes. See
-[07](07-mod-sync-design.md#what-sync-records-and-why-it-has-to).
-
-**Instances move out from under repos** and key on an `InstanceScope` instead, so one game
+There is no `LocalRepoState` and nothing is keyed by repo. **Instances moved out from under
+repos** and key on an `InstanceScope`, so one game
 installation is configured once and listed under every repo targeting the same game. The scope
 is the adapter id plus — for an adapter serving more than one game — a discriminator its base
 settings decide: `_farming_simulator#fs25`. A repo offers the instances whose scope equals its
@@ -207,12 +207,23 @@ the repo's adapter has to be able to read settings authored by the older one, wh
 compatibility versions are for. See
 [04 — Game adapters](04-game-adapters.md#instance-scope).
 
+`ModFolder` is recorded rather than asked of the adapter every time, because the
+no-two-instances-own-one-folder check has to run across *every* scope — including an instance
+whose scope no repo on this machine serves, which cannot hydrate an adapter and still owns its
+folder.
+
+`ActiveProfile` has to be persisted: a mod folder cannot tell you which profile it was meant to
+match, so nothing can reconstruct it once the contents change. The sync manifest is a separate
+file per instance rather than part of `LocalState`, which is loaded eagerly and rewritten on
+every instance change — a manifest for 2,000 mods is a few hundred kilobytes. See
+[07](07-mod-sync-design.md#what-sync-records-and-why-it-has-to).
+
 **Content store settings are machine-wide.** The store is content-addressed, so it does not
 care which game or which repo a file belongs to — a Farming Simulator archive and a BeamNG
 archive are both just bytes at an address. Keeping the configuration out of instance and
 repo settings is what stops the "same thing configured in several places, then drifting"
-problem from reappearing. `LocalState.Settings` is a new concept: the first genuinely global
-client setting.
+problem from reappearing. `LocalState.Settings` was the first genuinely global client setting;
+`SettingsPage`, reached from the top-level sidebar, is where it is edited.
 
 There is no migration. The system has no users yet, so `Version` gets bumped and old state
 is discarded. `Store<T>` takes an optional compatibility predicate for exactly this, and
@@ -224,11 +235,14 @@ Neither a corrupt file nor an incompatible one is fatal: both move the file asid
 rather than the ability to launch. Saves go through a temp file and an atomic move, so an
 interrupted write cannot be the thing that produces a corrupt file in the first place.
 
-`LocalInstanceRepository` hands out the `ObservableCollection<PersistedLocalInstance>` for a
-repo and subscribes `store.Save()` to its `CollectionChanged` — **adding or removing an
-instance persists automatically**, with no explicit save call anywhere in the UI. Note that
-this fires on add/remove only; editing an existing instance's fields does not trigger a save
-by itself.
+`LocalInstanceRepository` owns one `ObservableCollection<LocalInstance>` for the whole machine,
+across every scope, and each mutating method — create, update, set the active profile, delete —
+saves explicitly. It used to hand out a per-repo collection and subscribe `store.Save()` to
+`CollectionChanged`, which persisted adds and removes but silently dropped an edit to an
+existing instance's fields.
+
+It also implements `IInstanceModFolders`, which is how store eviction learns which blobs a live
+mod folder is relying on — across *every* scope, since a store serves a disk rather than a game.
 
 Alongside `state.json` in the same directory sits `msal_cache.dat`, MSAL's encrypted token
 cache, configured in `AuthenticationService.ConfigureTokenCacheAsync`.
@@ -248,26 +262,33 @@ the synchronizer can subscribe to `PropertyChanged` on each target and re-sort w
 property changes. Renaming a repo moves it to its new alphabetical position with no
 intervention.
 
-`Repo` uses it in the other direction too, with `targetAlreadyInitialized: true`: the source
-is the live `LocalInstance` list and the target is the persisted models, so mutating the UI
-collection writes through to `state.json`.
+`Repo` uses it to project the machine's instances down to the ones matching its own
+`InstanceScope`, so the sidebar lists them under each repo without any repo owning them.
+
+Re-sorting **moves** a row rather than removing and reinserting it, and the synchronizer disposes
+the target view models it created — `MenuItemViewModel` subscribes to its source's
+`PropertyChanged` through the base constructor's title tracking, and nothing else would ever
+unsubscribe it.
 
 Every holder of a synchronizer must dispose it — it subscribes to `CollectionChanged` on a
 long-lived source, and a leaked subscription keeps a whole page graph alive.
 
 ## Server communication
 
-`RepoRepository` and `ProfileService` are the two service-layer objects. Both follow the same
-shape: hold an `ObservableCollection` of the current data, and after any mutation call
-`Refresh*` and then raise a `*OfInterestChanged` event carrying the id that just changed.
-Pages listen for that event and select the matching sidebar item — which is why creating a
-repo lands you on the new repo's page.
+`RepoRepository`, `ProfileService` and `MembershipService` are the service-layer objects. They
+hold an `ObservableCollection` of the current data, and after a mutation **apply the returned DTO
+to the existing collection** rather than clearing and refetching the lot. The full-list refresh
+they used to do discarded and rebuilt every view model, losing selection and scroll position and
+costing a round trip for a one-field change — which is why a `*OfInterestChanged` selection dance
+had to exist to undo the damage.
 
 They translate `ApiException<CustomProblemDetails>` into `UserFriendlyException` for the cases
-they know about, branching on `ex.Result.Type` rather than on the HTTP status code — the
-status is `400` for every typed problem, so it carries no information. A problem type the
-generated client does not know about cannot be matched, so adding one on the server means
-regenerating.
+they know about, branching on `ex.Result.Type` rather than on the HTTP status code. A problem
+type the generated client does not know about cannot be matched, so adding one on the server
+means regenerating — see [03 — Server](03-server.md#regenerating-the-client).
+
+`LastSelectionRepository` restores which repo and profile the user was last on, from
+`LocalState`.
 
 `ModsDudeClientBase` attaches the bearer token to every outgoing request by calling
 `IAccessTokenAccessor.Get`, so token refresh is transparent to callers.
@@ -302,8 +323,10 @@ modal per row would be unusable.
 - A `ConcurrentDictionary<string, Lazy<Task<ImageSource?>>>` memory cache, keyed
   `{image.CacheKey}|{maxWidth}`. Only images at or below 128px wide are cached — a thousand
   of those is a few megabytes; larger ones are loaded on demand and dropped.
-- A PNG disk cache under `LocalAppData/ModsDude/image-cache`, named by a truncated SHA-256 of
-  the key, written via a temp file and atomic move.
+- The disk cache, `ModImageCache` in `Client.Core`, configured in `LocalState.Settings` with its
+  own path and size cap, evicting least-recently-used. Windows does not maintain last-access time
+  by default and this cache is hot, so last-write stands in for last-used and a hit only
+  re-stamps an entry once the timestamp has gone stale.
 - A `SemaphoreSlim` throttle at `ProcessorCount / 2`. Scrolling a long list fast queues far
   more decode work than it consumes; bounding it keeps the machine responsive.
 
@@ -311,34 +334,59 @@ The cache deliberately does **not** pass the caller's cancellation token into th
 task — one row scrolling out of view must not cancel the decode for every other row waiting
 on the same image.
 
+A **downloaded derivative skips the derive-and-cache path entirely.** It arrives already at the
+size it will be drawn at and already sits in the cache under its own hash, so re-deriving it
+would store the same picture twice under a key that can invalidate. That is the difference the
+`IsPreSized` flag marks: a local image's key is `{modPath}|{entryName}|{length}|{crc32}|{width}`
+and falls out of use when the file changes; a server image's key is the hash and can never
+invalidate, so each one crosses the wire once per machine, ever.
+
+**`ModImagerySource`** decides which of those a version gets, and the rule is keyed on
+`IsOnServer` rather than on whether the file happens to be on this machine. A registered version
+renders from the repo's derivatives even when the mod file is right there; only an unregistered
+import candidate is read out of its archive. A registered version with no derivatives whose file
+*is* here gets them generated and uploaded — once per version per session — rather than falling
+back locally. Full reasoning in
+[09 — Mod catalog](09-mod-catalog.md#registration-decides-where-imagery-comes-from).
+
 **`ModImageDecoder`.** Tries the Windows WIC codecs first, which handle the legacy FourCC DDS
 formats (every mod icon observed so far is DXT1). WIC refuses BC7, which most *store* images
-use, so those fall through to a managed block decoder. Anything that fails entirely yields
-the placeholder initials instead.
+use, so those fall through to a managed block decoder — measured at 60% of a real 2,656-image
+set. Server derivatives arrive as WebP, which WIC only reads where an optional Windows extension
+happens to be installed, so they go through the codec the app ships with. Anything that fails
+entirely yields the placeholder initials instead.
+
+**`ModImageDerivativeGenerator`** produces the two renditions at import: a 128 px thumbnail and a
+full capped at 1024 px, encoded as WebP, resized from the full-resolution pixels rather than from
+something already reduced.
 
 ## Page inventory
 
-Status: **Working** · **Partial** — usable but incomplete · **Stub** — placeholder content.
+Status: **Working** · **Partial** — usable but incomplete · **Stub** — placeholder content. Read
+off the view models rather than off a running app: "Working" here means the page is wired to a
+real service and has no placeholder left in it, not that anyone has clicked every button.
 
 | Page | Status | What it does |
 | --- | --- | --- |
 | `LoginPage` | Working | Shown while not authenticated |
-| `MainPage` | Working | Shell: Home, Create repo, and the repo list |
+| `MainPage` | Working | Shell: Home, Create repo, Settings, and the repo list |
+| `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |
+| `RepoOverviewPage` | Working | Instance status and profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, delete repo |
-| `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance and blocks duplicates |
-| `EditLocalInstancePage` | Working | Edit or delete an instance. Planned to grow into the instance's real page — active profile, drift status, Re-apply — see [07](07-mod-sync-design.md#which-instances-does-apply-target) |
+| `RepoMembersPage` | Working | Member list, add by username search, change level, kick |
+| `RepoModsPage` | Working | The catalog: one list over local and registered versions, presence filters, the source list, import as a selection mode, per-row reorder and delete |
+| `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
+| `InstancePage` | Working | Instance shell over Sync and Manage. Opens on Sync |
+| `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
+| `EditLocalInstancePage` | Working | Name, instance settings, active profile, delete. Phase 4 grows this into the instance's full page — see [PLAN.md](PLAN.md#phase-4--make-drift-unmissable) |
 | `CreateProfilePage` | Working | |
+| `ProfilePage` | Working | Profile shell over Overview, Mods, Manage |
+| `ProfileOverviewPage` | Working | |
+| `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save |
 | `EditProfilePage` | Working | Rename or delete a profile |
-| `RepoModsPage` | Partial | Shell over Import and Manage — the two are planned to merge into one list, see [09](09-mod-catalog.md#manage) |
-| `RepoModsImportPage` | **Partial** | Scans, dedupes, searches, selects — but `ImportAsync` is an empty `TODO`. Nothing uploads |
-| `ProfilePage` | Partial | Shell over Overview, Mods, Manage |
-| `ProfileModsEditorPage` | **Stub** | Hardcoded `["test 1", ...]`, empty `SaveChanges` |
-| Repo → Members | **Stub** | `ExamplePageViewModel` |
-| All Overview pages | **Stub** | `ExamplePageViewModel` |
-| Mods → Manage | **Stub** | `ExamplePageViewModel` |
-| `ExamplePage` | — | The placeholder itself |
+| `ExamplePage` | — | The placeholder. Still the Home page's content |
 
 Dialogs and shared views:
 
@@ -347,6 +395,9 @@ Dialogs and shared views:
 | `Dialog` / `ModalViewModel` | Modals are awaited: `IModalService.Show` returns a `Task` completed by the modal's `Done` flag |
 | `ConfirmationDialogViewModel` | Factory methods for `ConfirmDelete`, `ValidationErrors` (truncated past five), and `Error` |
 | `ModDetailsDialog` | Full mod description plus the lazily-decoded store-image strip |
+| `ModVersionArbitrationDialog` | One dialog per import, covering every mod whose ordering the comparer could not settle. Dismissing it skips only those mods |
+| `ModVersionReorderDialog` | Reordering one mod's registered versions by hand, through the placement endpoint |
+| `ProfileLockedUpdatesDialog` | The locked mods a batch update skipped, one unchecked checkbox each, reached deliberately rather than fired at every save |
 | `DynamicFormEditor` | Renders any `DynamicForm` from its attributes; raises `Modified`, which pages use to take the navigation lock |
 | `ModListItem.xaml` | The standard mod row, applied as an implicit template — any items control fed `ModListItemViewModel` renders identically |
 | `SidebarHeader` | |
@@ -354,5 +405,8 @@ Dialogs and shared views:
 `ModListItemViewModel` is worth a look as the model for list rows: it precomputes a short
 description (first line of the mod's own description that is not just the mod's name again)
 and initials for the icon placeholder, exposes a `Matches(searchTerm)` used for filtering, and
-carries a `ModStatus` (`New` / `UpdateAvailable` / `AlreadyInRepo`) that nothing sets yet — it
-is there for the import flow to fill in.
+carries a `ModDisplayStatus`. That last is deliberately *not* the old `ModStatus`, which mixed
+the fact "already in the repo" with the context-dependent judgments "new" and "update
+available" — the facts are now `IsLocal` and `IsOnServer` on `CatalogModVersion`, and the
+display status is computed per context from them. See
+[09 — Mod catalog](09-mod-catalog.md#one-identity-two-facts).

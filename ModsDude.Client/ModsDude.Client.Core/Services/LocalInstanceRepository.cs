@@ -9,7 +9,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 
-public class LocalInstanceRepository : IInstanceModFolders
+public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSource
 {
     private readonly StateStore _store;
     private readonly SyncManifestStore _manifestStore;
@@ -44,6 +44,25 @@ public class LocalInstanceRepository : IInstanceModFolders
         return [.. Instances
             .Where(x => x.ModFolder is not null)
             .Select(x => new InstanceModFolder(x.Id, x.ModFolder!))];
+    }
+
+    /// <summary>
+    /// Every instance the drift check has to look at, across every scope. An instance whose scope no
+    /// repo on this machine serves still owns its folder and still has a standing intent, and the
+    /// check runs off both without hydrating an adapter.
+    /// </summary>
+    public IReadOnlyList<DriftCandidate> GetDriftCandidates()
+    {
+        return [.. Instances.Select(x => new DriftCandidate(x.Id, x.Name, x.ModFolder, x.ActiveProfile))];
+    }
+
+    /// <summary>
+    /// The instances a save on this profile re-applies to. See <see cref="ProfileApplyTargets"/> for
+    /// why this is derived rather than chosen.
+    /// </summary>
+    public IReadOnlyList<LocalInstance> GetInstancesUsing(ActiveProfile profile)
+    {
+        return ProfileApplyTargets.Derive(Instances, profile);
     }
 
     public LocalInstance Create(IBaseGameAdapter baseAdapter, string name, DynamicForm instanceSettings)

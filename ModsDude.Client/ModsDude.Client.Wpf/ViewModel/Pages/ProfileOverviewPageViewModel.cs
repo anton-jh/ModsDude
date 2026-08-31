@@ -3,22 +3,24 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// What the profile looks like from here: how many mods it pins, and which game instances on this
-/// machine are set to match it. Drift against those instances and the time each last synced belong
-/// here as well - see docs/PLAN.md#phase-4--make-drift-unmissable - but neither has a source yet.
+/// What the profile looks like from here: how many mods it pins, which game instances on this
+/// machine are set to match it, and whether each of them still does.
 /// </summary>
 public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
     private readonly ProfileService _profileService;
+    private readonly InstanceDriftMonitor _driftMonitor;
 
     private int? _fetchedModCount;
 
@@ -26,16 +28,19 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     public ProfileOverviewPageViewModel(
         Repo repo,
         ProfileDto profile,
-        ProfileService profileService)
+        ProfileService profileService,
+        InstanceDriftMonitor driftMonitor)
     {
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
+        _driftMonitor = driftMonitor;
 
         Instances = [];
 
         _profileService.ProfileUpdated += OnProfileUpdated;
         _repo.LocalInstances.CollectionChanged += OnInstancesChanged;
+        _driftMonitor.Changed += OnDriftChanged;
 
         RefreshInstances();
     }
@@ -56,6 +61,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         _profileService.ProfileUpdated -= OnProfileUpdated;
         _repo.LocalInstances.CollectionChanged -= OnInstancesChanged;
+        _driftMonitor.Changed -= OnDriftChanged;
     }
 
 
@@ -88,19 +94,30 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         RefreshInstances();
     }
 
+    private void OnDriftChanged(object? sender, EventArgs e)
+    {
+        // The monitor checks off the UI thread, and these rows are bound.
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshInstances);
+    }
+
     /// <summary>
     /// Only the instances actually set to this profile. An instance the repo offers but that points
     /// somewhere else is the repo overview's business, not this page's.
     /// </summary>
     private void RefreshInstances()
     {
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Instance.InstanceId, x => x.Report);
+
         Instances.Clear();
 
         var active = new ActiveProfile(_repo.Id, _profile.Id);
 
         foreach (var instance in _repo.LocalInstances.Where(x => x.ActiveProfile == active))
         {
-            Instances.Add(new InstanceOverviewViewModel(instance, "Set to this profile"));
+            Instances.Add(new InstanceOverviewViewModel(
+                instance,
+                "Set to this profile",
+                drifted.GetValueOrDefault(instance.Id)));
         }
 
         OnPropertyChanged(nameof(HasInstances));

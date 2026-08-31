@@ -2,14 +2,20 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
+/// <summary>
+/// The instance's name and adapter settings, and disconnecting it.
+/// </summary>
+/// <remarks>
+/// The active profile used to be here too. It is on <see cref="InstancePageViewModel"/> now, beside
+/// the drift status and the Re-apply it belongs with - and only there, because two places to set one
+/// thing is how they come to disagree.
+/// </remarks>
 public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
@@ -24,7 +30,6 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         Repo repo,
         LocalInstance subject,
         LocalInstanceRepository localInstanceRepository,
-        ProfileService profileService,
         IDialogService dialogService,
         IModalService modalService,
         NavigationLockService navigationLockService)
@@ -48,9 +53,6 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
         InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
 
-        AvailableProfiles = new(profileService.Profiles);
-        _selectedProfile = AvailableProfiles.FirstOrDefault(x => subject.ActiveProfile == new ActiveProfile(repo.Id, x.Id));
-
         var _ = IsValid;
     }
 
@@ -60,24 +62,9 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name;
 
-    /// <summary>
-    /// The profile this instance's mod folder is meant to match. Phase 4 grows this page into the
-    /// instance's own, where the choice sits beside drift status and Re-apply.
-    /// </summary>
-    [ObservableProperty]
-    private ProfileDto? _selectedProfile;
-
     public string RepoName { get; }
 
     public string OriginalName { get; }
-
-    public ObservableCollection<ProfileDto> AvailableProfiles { get; }
-
-    /// <summary>
-    /// An instance matches one profile from one repo at a time, so one belonging to another repo is
-    /// worth saying out loud - picking here replaces it.
-    /// </summary>
-    public bool HasActiveProfileInAnotherRepo => _subject.ActiveProfile is ActiveProfile activeProfile && activeProfile.RepoId != _repo.Id;
 
     public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && InstanceSettingsEditor.IsValid && FindFolderConflict() is null;
 
@@ -100,11 +87,6 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         _navigationLockService.ReleaseLock(this);
 
         _localInstanceRepository.Update(_subject, _repo.Adapter, Name, instanceSettings);
-        _localInstanceRepository.SetActiveProfile(_subject, SelectedProfile is ProfileDto profile
-            ? new ActiveProfile(_repo.Id, profile.Id)
-            : null);
-
-        OnPropertyChanged(nameof(HasActiveProfileInAnotherRepo));
     }
 
     [RelayCommand]
@@ -176,11 +158,6 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
     }
 
     partial void OnNameChanged(string value)
-    {
-        _navigationLockService.AcquireLock(this);
-    }
-
-    partial void OnSelectedProfileChanged(ProfileDto? value)
     {
         _navigationLockService.AcquireLock(this);
     }

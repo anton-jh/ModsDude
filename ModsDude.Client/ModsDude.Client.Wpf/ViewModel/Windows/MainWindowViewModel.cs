@@ -16,12 +16,23 @@ public partial class MainWindowViewModel
 
     public MainWindowViewModel(
         AuthenticationService authService,
-        IFactory<MainPageViewModel> mainPageViewModelFactory)
+        IFactory<MainPageViewModel> mainPageViewModelFactory,
+        DriftNotificationViewModel driftNotification)
     {
         _authService = authService;
         _mainPageViewModelFactory = mainPageViewModelFactory;
         _authService.LoggedInChanged += OnSessionLoggedInChanged;
+
+        DriftNotification = driftNotification;
+        DriftNotification.Start();
     }
+
+
+    /// <summary>
+    /// Beside the modal slot below and pointedly not in it: the drift notice has to be visible from
+    /// every view without stopping the user working.
+    /// </summary>
+    public DriftNotificationViewModel DriftNotification { get; }
 
 
     [ObservableProperty]
@@ -41,6 +52,15 @@ public partial class MainWindowViewModel
     public Task Logout(CancellationToken cancellationToken)
     {
         return _authService.ForceRelogin(cancellationToken);
+    }
+
+    /// <summary>
+    /// The primary drift check runs from here, because the manifest comparison is the only mechanism
+    /// that works in the normal case - the game updating mods while ModsDude is closed.
+    /// </summary>
+    public void NotifyWindowActivated()
+    {
+        DriftNotification.NotifyWindowActivated();
     }
 
 

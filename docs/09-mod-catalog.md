@@ -1,6 +1,7 @@
 # Mod representation and the catalog
 
-**Status: designed, not implemented.**
+**Status: implemented.** Kept as the reasoning behind the shape rather than rewritten into a
+description of it; where the implementation diverged, the divergence is stated.
 
 A mod can be on disk, in the repo, or both, and three different pages need to reason about
 that. This document is the design for how it is represented and where the merging happens.
@@ -43,11 +44,15 @@ return $"{repoId.Value}/{modId.Value}/{versionId.Value}";
 system. Normalize once, at the adapter boundary, and carry the result in a key type rather
 than `(string, string)` tuples so no code path can bypass the normalization.
 
+That is `ModKey` and `ModVersionKey`. `ModKey.From` is the only way to build one and it
+normalizes, so the type's only representable form is the normalized one — a rule the compiler
+enforces rather than one every use site has to remember.
+
 ## A merged model
 
-`ModListItemViewModel` currently takes a `LocalMod` and delegates `Id`/`Name`/`Version`/
-`Author` to it. That is the thing that will hurt: the profile editor's available-mods list is
-a *mixed* set that has to sort, filter and select uniformly, and two row types force
+`ModListItemViewModel` used to take a `LocalMod` and delegate `Id`/`Name`/`Version`/
+`Author` to it. That is the thing that would have hurt: the profile editor's available-mods list
+is a *mixed* set that has to sort, filter and select uniformly, and two row types force
 `IEnumerable<object>` plus duplicated templates.
 
 One core model, in `Client.Core`, **flat — one record per version, no parent**:
@@ -57,16 +62,24 @@ public record CatalogModVersion(
     ModKey ModId, ModVersionKey VersionId, string Name, string Description,
     bool IsLocal, bool IsOnServer, bool Locked)
 {
+    public ModVersionIdentity Identity => new(ModId, VersionId);
     public string? Author { get; init; }
-    public ModImage? Icon { get; init; }
-    public Func<Stream>? OpenStream { get; init; }   // null for server-only
+
+    public ModImage? Icon { get; init; }                          // from the archive
+    public IReadOnlyList<ModImage> Images { get; init; } = [];    // from the archive
+    public IReadOnlyList<ModImageReference> ServerImages { get; init; } = [];
+
     public IReadOnlyList<ModSource> FoundIn { get; init; } = [];
 }
 ```
 
-Flat matches everything around it. The server entity is flattening to one row per version, so
+The two image collections are not redundant. The archive's own are what derivatives are
+*generated from*; `ServerImages` is what a registered version *renders*. See
+[Registration decides where imagery comes from](#registration-decides-where-imagery-comes-from).
+
+Flat matches everything around it. The server entity is one row per version, so
 the wire format is flat and nothing has to be re-nested on receipt. `LocalMod` — the adapter's
-output — is already one record per file, which is to say per version. And a row view model wraps
+output — is one record per file, which is to say per version. And a row view model wraps
 exactly one version. A `CatalogMod` parent would be a shape invented in the middle of a pipeline
 that is per-version at both ends.
 
@@ -76,28 +89,34 @@ profile editor's version selector, and working out whether a newer version exist
 model that has to be rebuilt every time the flat set changes — and it changes often, since
 `ModCatalog` recomposes whenever a source checkbox is toggled.
 
-The lazy-image design generalizes for free. `LocalModImage` is
-`(Name, CacheKey, Func<CancellationToken, Task<byte[]>>)` and says nothing about zip archives —
+The lazy-image design generalized for free. `LocalModImage` was
+`(Name, CacheKey, Func<CancellationToken, Task<byte[]>>)` and said nothing about zip archives —
 a server-backed version hands back the same record with an HTTP fetch in `Load`, and
-`IModImageProvider` keeps working untouched. Rename it `ModImage`.
+`IModImageProvider` kept working untouched. It is now `ModImage`.
 
-The client-side `Mod` that wraps `ModDto` — the one that pre-splits latest from older versions —
-is **deleted rather than renamed**. Nothing references it but `ModFakers`, and its only job was
+The client-side `Mod` that wrapped `ModDto` — the one that pre-split latest from older versions —
+was **deleted rather than renamed**, along with `ModFakers` and the Bogus reference that existed
+only for it. Its only job was
 the grouping that the lookup above now does on demand. `LocalMod` keeps its name, because it
 genuinely is "what was found on disk".
 
-`ModStatus` should be split. It currently mixes fact (`AlreadyInRepo`) with context-dependent
-judgment (`New`, `UpdateAvailable`), and "New" means different things on the import page than
-in the profile editor. Facts live in the two bools; display status is computed per context.
+`ModStatus` was split. It mixed fact (`AlreadyInRepo`) with context-dependent
+judgment (`New`, `UpdateAvailable`), and "New" means different things on the management page than
+in the profile editor. The facts are the two bools on `CatalogModVersion`; `ModDisplayStatus` is
+computed per context from them.
 
-### What the server cannot supply yet
+### What the server could not supply
 
-- **No imagery of any kind.** A server-only row falls back to `Initials` forever, and its
-  details dialog is empty — in exactly the list where the user is choosing between a local row
+All three of these are now closed:
+
+- **No imagery of any kind.** A server-only row fell back to `Initials` forever, and its
+  details dialog was empty — in exactly the list where the user is choosing between a local row
   and a server row of the same mod. See [Mod imagery](#mod-imagery) below.
-- **No description.** `ModVersionDto` carries `Description`, but the client's `Mod.Version`
-  drops it on the floor, so a details modal on a server-only mod would be blank.
-- **No usage information.** See [Manage](#manage) below.
+- **No description.** The client's `Mod.Version` dropped `Description` on the floor, so a details
+  modal on a server-only mod would have been blank. That type is gone; `CatalogModVersion` carries
+  the description whatever the version's origin.
+- **No usage information.** `GET repos/{repoId}/mods/usage` supplies it. See
+  [Manage](#manage) below.
 
 ## Mod imagery
 
@@ -124,15 +143,38 @@ percent**. And that art is *small* — half-K squares, never above 1024 px.
 Storing originals would therefore be entirely affordable: well under a gigabyte for a repo of
 this size, before dedupe.
 
+#### And what the derivatives came out at
+
+The figures below are **measurements, not estimates.** The derivative pipeline was run over the
+same machine's mods — 2,656 images across 541 mods — with every one decoded, resized, encoded,
+hashed and verified:
+
+| | Source | Thumbnail (128 px) | Full (≤1024 px) |
+| --- | --- | --- | --- |
+| Median | — | **2.7 KB** | **21.4 KB** |
+| Total | 594.7 MB of DDS | **7.2 MB** | **58.0 MB** |
+
+Longest edge in the source set: median **512 px**, max **1024 px** — which confirms the sizing
+argument below. **60% of the images needed the managed BC7 path**, because WIC refuses BC7.
+
+Both derivatives came in at **roughly half** the ~6 KB and ~50 KB this design was originally
+written against, so every figure derived from those estimates is conservative. A cold 540-row
+list drawing icons is on the order of 1.5 MB rather than the ~3 MB estimated, against ~27 MB of
+fulls or far more of shipped DDS.
+
 ### Store derivatives anyway — for transfer and decode
 
 Cheap to store is not the same as cheap to use. A cold list of 540 rows pulls one icon each,
 which as shipped DDS is tens of megabytes, and every one of them has to be decoded — for BC7,
 through the managed path, because WIC refuses it — and then thrown away down to 64 px.
 
-Re-encoded to WebP, that same list is a few megabytes of natively-decodable images. Roughly an
-order of magnitude less data and far less CPU, for pixels that render identically at the size
-they are actually shown.
+Re-encoded to WebP, that same list is a couple of megabytes of decodable images — decodable
+through the codec the app ships with, since WIC only reads WebP where an optional Windows
+extension happens to be installed. Roughly an order of magnitude less data and far less CPU, for
+pixels that render identically at the size they are actually shown.
+
+The measurement bears out the CPU half too: **60% of the 2,656 images needed the managed BC7
+path**, so the decode being avoided is the expensive one rather than the cheap one.
 
 Note what this means for sizing: since sources top out at 1024 px, the larger derivative is
 **not** a downscale. It is a re-encode. DDS to WebP is where the saving comes from, not
@@ -163,9 +205,11 @@ crosses the wire once per machine ever and lives in the disk cache afterwards.
 
 Three things follow:
 
-- **Better cache keys.** A server image is keyed by its hash — stable across machines and
-  unaffected by the mod file moving. The local key is
-  `{modPath}|{entryName}|{length}|{crc32}`, which changes when the file does.
+- **Better cache keys.** A server image is keyed by its hash — stable across machines,
+  unaffected by the mod file moving, and carrying no size suffix because a derivative arrives
+  pre-sized, so it can never invalidate. The local key is
+  `{modPath}|{entryName}|{length}|{crc32}` plus the width it was decoded at, which changes when
+  the file does.
 - **Uniform presentation.** Every row in a list renders through the same pipeline, rather than
   some from originals and some from derivatives with visibly different sharpness.
 - **The content store is never an image source.** It holds mod files for sync and nothing reads
@@ -188,26 +232,42 @@ person who looks at the mod while holding it, which is the most likely thing to 
 
 Store **two derivatives per image**, matching the two ways they are actually consumed:
 
-| Derivative | Bound | Typical size | Consumed by |
+| Derivative | Bound | Measured median | Consumed by |
 | --- | --- | --- | --- |
-| Thumbnail | 128 px longest edge | ~6 KB | List rows (64 px) and the details strip (96 px) |
-| Full | native, capped at 1024 px | ~50 KB | Someone opening one image to look at it |
+| Thumbnail | 128 px longest edge | 2.7 KB | List rows (64 px) and the details strip (96 px) |
+| Full | native, capped at 1024 px | 21.4 KB | Someone opening one image to look at it |
 
 One small size covers both small uses, since the client downscales and caches per size already.
 The cap is a safety net rather than a working limit — no image in the measured set reaches it.
 
-The thumbnail is what earns its keep. Without it, a cold 540-row list pulls ~27 MB of fulls to
-draw 64 px icons; with it, ~3 MB. Roughly a tenfold difference on the single most common
-operation in the app.
+The thumbnail is what earns its keep. Without it, a cold 540-row list pulls tens of megabytes of
+fulls to draw 64 px icons; with it, under two. Roughly a tenfold difference on the single most
+common operation in the app.
 
-At those sizes the whole thing is small: ~2,650 images for 540 mods is around 150 MB of
-derivatives, and dedupe across versions of the same mod pushes the per-version cost far below
-that.
+At those sizes the whole thing is small: the measured 2,656 images for 541 mods came to 58.0 MB
+of fulls and 7.2 MB of thumbnails, and dedupe across versions of the same mod pushes the
+per-version cost far below that.
+
+**Every image is published at both renditions, icons included.** That is a correction to an
+earlier shape which gave icons a thumbnail and nothing else: a details dialog for a mod that
+ships no store images then had to draw a 128 px image large. Storing an icon only as a full
+would have been worse the other way — ~21 KB behind every row of a cold list, which is the
+tenfold difference the thumbnail exists to buy.
+
+**Which forced a `Rendition` field onto the reference.** The original model — hash, kind,
+position, filename — could not express two derivatives of one image: it allowed at most one
+`Icon` reference, and store images had to smuggle the rendition into `Position` as arithmetic
+standing in for a missing field. `ModImageReference.Rendition` now says which of the two it is,
+`Position` goes back to meaning where the source image sits in the mod's own list, and **the two
+renditions of one image share a position** — which is what identifies them as one image,
+including when only one of the pair made it up. A partial set still resolves: whichever rendition
+arrived stands in for the one that did not. See
+[02 — Domain model](02-domain-model.md#images).
 
 **The client generates them at import.** It already decodes DDS — including the managed BC7 path
-that WIC refuses — and has the bytes open. The server cannot decode DDS without taking on an
-image stack, and it has no business inspecting mod files anyway. Encode to WebP or PNG on the
-way up.
+that WIC refuses, which the measurement puts at 60% of images — and has the bytes open. The
+server cannot decode DDS without taking on an image stack, and it has no business inspecting mod
+files anyway. They are encoded as WebP.
 
 ### Content-addressed, like the mod files
 
@@ -222,15 +282,17 @@ a script ships the same thirty store images as the one before it — so keying b
 that to one copy. It also dedupes across mods and repos where artwork is shared.
 
 Rough shape for a repo of 3,000 versions across ~600 distinct mods, at the measured ~4.9 images
-per mod: ~15,000 references collapsing to ~3,000 distinct blobs, so on the order of **150 MB of
-fulls and 20 MB of thumbnails**. Small enough that server-side storage is not a constraint on
-this design at all — the argument for derivatives is entirely about transfer and decode.
+per mod: ~15,000 references collapsing to ~3,000 distinct blobs. At the measured derivative sizes
+that is on the order of **65 MB of fulls and 8 MB of thumbnails** — half what the original
+estimates implied, and small enough that server-side storage is not a constraint on
+this design at all. The argument for derivatives is entirely about transfer and decode.
 
 ### The database holds references
 
-`ModVersion` gains an ordered collection of image references — hash, kind (icon or store),
-position, original filename. **Not `ModAttribute`s.** Which images a version has is structural:
-it drives what renders, and the system dereferences it. Attributes are tags.
+`ModVersion` carries an ordered collection of image references — hash, kind (icon or store),
+rendition, position, original filename. **Not `ModAttribute`s.** Which images a version has is
+structural: it drives what renders, and the system dereferences it. Attributes are tags. The
+same rule applies to `Rendition`, which decides what is drawn at what size.
 
 The blob itself is shared, so the reference is a pointer, not ownership. Deleting a version
 removes its references; a blob is only collectable once nothing references it.
@@ -241,9 +303,14 @@ removes its references; a blob is only collectable once nothing references it.
 the opposite treatment.** They are decoration, and an import of 2,000 mods must not fail — or
 worse, half-fail — because an image upload timed out.
 
-So: register the mod, then upload imagery best-effort, and let the opportunistic backfill above
-pick up whatever did not make it. A version with no images renders with initials, exactly as a
-local mod without an icon does today.
+So: register the mod, then upload imagery best-effort through
+`PUT repos/{repoId}/mods/{modId}/versions/{versionId}/images`, and let the opportunistic backfill
+above pick up whatever did not make it. A version with no images renders with initials, exactly
+as a local mod without an icon does.
+
+That endpoint **replaces** the whole reference set rather than adding to it. Imagery arrives
+late, in unknown completeness, and possibly more than once — a retry, or a backfill firing on
+another machine — and a replace is the only shape of that which is idempotent.
 
 Uploading needs a **batch existence check** — "which of these hashes do you already have?" —
 before uploading anything. After the first import into a repo most images are already present,
@@ -286,9 +353,10 @@ never re-derives. The blast radius is decoration rather than mod files, which is
 cheap check rather than an architectural problem — but it is the same check, and skipping it
 would be an unexplained inconsistency rather than a decision.
 
-Server-side verification on upload is the stronger version and is worth it if the derivative
-upload endpoint is doing work anyway: it is a hash of a small blob, and it stops a bad address
-being created at all rather than being detected by each reader in turn.
+Server-side verification on upload is the stronger version and is what shipped, alongside the
+client's: `POST images/{hash}` hashes the bytes and refuses them unless they hash to the address
+they were sent to. It stops a bad address being created at all rather than being detected by each
+reader in turn, and it costs a hash of a few kilobytes.
 
 That last point does most of the work. `ModImageProvider` already keeps a PNG disk cache keyed
 by `CacheKey`, and for a server image the hash *is* the cache key — one that can never
@@ -301,11 +369,17 @@ come from — a server-backed image is the same record with an HTTP fetch in `Lo
 
 ### The client-side image cache
 
-`ModImageProvider` already keeps a disk cache at `{LocalAppData}/ModsDude/image-cache`, written
-as PNG and named by a hash of `{cacheKey}|{maxWidth}`. Server imagery slots into it with one
+The disk cache — `ModImageCache`, defaulting to `{LocalAppData}/ModsDude/image-cache` — is named
+by a hash of `{cacheKey}|{maxWidth}`. Server imagery slots into it with one
 simplification: a downloaded derivative is already the right size, so it is cached by **its own
 hash** with no size suffix, and never needs re-deriving. The decode-and-downscale path stays for
-local images, keyed as it is today.
+local images, keyed as before.
+
+Eviction approximates least-recently-used by last-write time. Windows does not maintain
+last-access time by default and a cache this hot cannot afford a metadata write per read, so a
+hit only refreshes the timestamp once it has already gone stale — and sweeps are spaced by how
+much has been written rather than run per write, since walking the directory costs the same
+whether one file or a thousand were added since.
 
 **One cache per machine, not per volume.** The content store is per-volume because hardlinks
 cannot cross volumes; images are always copies, so that constraint does not apply and splitting
@@ -316,10 +390,11 @@ them per volume would just duplicate them. It is configured alongside the stores
 binding — and the separation is what keeps *"the content store is never an image source"* true,
 which is the property that removes a whole class of lookup logic.
 
-Sizing it is not a worry. At ~6 KB a thumbnail, caching every icon in a 3,000-version repo is
-around 20 MB; fulls are only fetched when somebody opens an image. A few hundred megabytes is
-the realistic ceiling across several repos. Everything in it is re-downloadable, so eviction
-never has to ask the user anything.
+Sizing it is not a worry. At the measured 2.7 KB a thumbnail, caching every icon in a
+3,000-version repo is under 10 MB; fulls are only fetched when somebody opens an image. A few
+hundred megabytes is the realistic ceiling across several repos, and the default cap is 512 MB.
+Everything in it is re-downloadable or re-derivable, so eviction never has to ask the user
+anything.
 
 ## Mod sources
 
@@ -393,21 +468,29 @@ in them.
 
 ### Same mod, several sources
 
-Deduplication is on `(ModId, VersionId)`, and `FoundIn` records every source a version turned up
-in, so a row can say where it came from. With a single enabled source, naming it on every row is
-noise; show it once more than one is active.
+Deduplication is on `(ModId, VersionId)`, and `FoundIn` records **every occurrence** — one per
+source, with the path and length it was found at — rather than collapsing to the first. So a row
+can say where it came from, and two sources disagreeing about the bytes stays visible. With a
+single enabled source, naming it on every row is noise; show it once more than one is active.
 
-Once `ContentHash` exists, a sharper case becomes detectable: **two files claiming the same mod
-id and version but hashing differently** — typically a re-uploaded build the author did not
-renumber. Since only one can be registered, surface the conflict on the row and let the user
-choose the source rather than picking silently. Without hashing this is invisible and whichever
-source is scanned first wins.
+That makes the sharper case detectable: **two files claiming the same mod id and version but
+holding different bytes** — typically a re-uploaded build the author did not renumber. Since only
+one can be registered, the conflict is surfaced on the row and `OpenStream` returns `null`, so
+the version is **withheld from import** until the user picks a source rather than the catalog
+picking silently. Without this, whichever source was scanned first would win.
+
+The check compares **file lengths**, not hashes, so it **under-reports rather than over-reports**:
+equal sizes are not proof of equal bytes, and proving it would mean hashing every archive in every
+source on every scan. Two builds that differ and happen to be the same size import the first one
+found — which is exactly what would have happened anyway, and no worse.
 
 ## The `ModCatalog` service
 
-`RepoModsImportPageViewModel.InitAsync` currently does the folder scan, the dedupe and the
-instance-source dictionary inline. The profile editor needs all three. Extract a repo-scoped
-`ModCatalog` into `Client.Core/Services`, merging the source scans with `GET repos/{id}/mods`.
+The import page used to do the folder scan, the dedupe and the
+instance-source dictionary inline in `InitAsync`. The profile editor needs all three, so it is a
+repo-scoped `ModCatalog` in `Client.Core/Services`, merging the source scans with
+`GET repos/{repoId}/mods` — walked a page at a time, since the stated target is thousands of
+registered versions per repo.
 
 - **Cache per source, and compose on demand.** Not one cached catalog: a
   `Task<SourceScan>` per source, with the merged view built from the enabled ones. This is what
@@ -418,35 +501,51 @@ instance-source dictionary inline. The profile editor needs all three. Extract a
 - **Invalidate explicitly** — on import, and on instance-settings change. Never silently. A
   stale catalog that quietly refreshes mid-interaction is worse than one the user re-triggers,
   so expose a Rescan action, per source and for all.
-- **Move the 150 ms scan delay and the cancellation behaviour into the service**, unchanged.
-  They exist so that dragging down the sidebar never touches the disk; that reasoning is not
-  specific to the import page.
+- **The 150 ms scan delay and the cancellation behaviour moved into the service**, unchanged.
+  They exist so that a page nobody stopped on never touches the disk; that reasoning is not
+  specific to the import page. Note the delay predates the sidebar's drag-selection fix and stays
+  on its own merits.
 - **Report per-source progress and failure.** A source can vanish or be unreadable — an
-  unplugged drive, a folder the user deleted. That should mark one source as failed in the
-  list, not fail the whole catalog.
+  unplugged drive, a folder the user deleted. That marks one source as failed in the
+  list rather than failing the whole catalog.
 
 ## Pages
 
 ### Manage
 
-**Merge Import into Manage.** They are currently sibling menu items in `RepoModsPageViewModel`
-showing overlapping data under different rules, which is the main thing that will confuse. One
-list, presence filter chips (All / In repo / On disk only / Unused), and bulk import becomes a
-*selection mode* that reveals the footer bar the import page already has. Same rows, same
+**Import was merged into Manage.** They were sibling menu items under `RepoModsPage`
+showing overlapping data under different rules, which was the main thing about that area that
+confused. One
+list, presence filter chips (All / In repo / On disk only / Unused), and bulk import is a
+*selection mode* that reveals the footer bar. Same rows, same
 templates, one service.
 
 The page carries the source list described above — instance folders, Downloads, anything the
 user adds for the session — each with its checkbox, so the set of local candidates is
 adjustable in place rather than being a fixed consequence of the repo's instances.
 
-Two things this needs that do not exist:
+Two things this needed, and both now exist:
 
-- **"Unused" cannot be computed client-side safely.** `GetModsV1Endpoint` returns mods with no
+- **"Unused" cannot be computed client-side safely.** The mod list carries no
   usage information, and profile dependencies arrive one profile at a time. Deleting on a
-  partial client view risks removing a version a teammate's profile just picked up. Add usage
-  to `ModDto`, or a dedicated endpoint — the server-side join is cheap.
-- **There is no delete endpoint**, and `Mod.RemoveVersion` refuses the last version, so
-  "remove whole mod" needs its own path rather than a loop of version deletes.
+  partial client view risks removing a version a teammate's profile just picked up.
+
+  It got **its own endpoint**, `GET repos/{repoId}/mods/usage`, rather than a field on `ModDto`.
+  The reason is the mod list's delta form: it is keyed on `ModVersion.Updated`, and usage changes
+  when a *profile* is edited, not when a version is. Folding usage into the mod list would have
+  meant either serving stale usage to every client that syncs incrementally, or restamping
+  `Updated` on every version a profile save touches — two thousand rows a save, and a delta the
+  size of a full listing. Two facts with different lifetimes, so two resources.
+
+  The response is **sparse**: a version that does not appear is unused. Which means absence is
+  only an answer once the whole listing has been read, so a client must exhaust the cursor before
+  acting on it — acting on a partial view is the hazard the endpoint exists to remove. It is
+  advisory in any case; the delete endpoints re-ask the database when it matters, and the
+  dependency foreign key refuses underneath them.
+- **There was no delete endpoint**, and the per-version delete refuses the last version, so
+  "remove whole mod" needed its own path rather than a loop of version deletes. Both exist, and
+  both delete the blob as well as the row — the database commit first, since a stranded blob is
+  recoverable and a registration whose blob is gone is not.
 
 ### Profile mod list editor
 
@@ -544,7 +643,10 @@ bounds the orphan set to at most one blob rather than the whole remaining batch.
 Do not run it strictly serially, though — 200 mods at two round trips each will crawl. Run a
 handful of mods concurrently, each doing its own link → upload → register in sequence. The
 *per-mod* ordering is what protects the invariant; batching across mods is independent of it.
-This is network-bound, so a fixed 4–6, not the `ProcessorCount` the scanner uses.
+This is network-bound, so a fixed count — five — not the `ProcessorCount` the scanner uses.
+
+The slot is held for **a whole mod**, not a single version, which is what makes the sequential
+registration below fall out for free.
 
 ### Importing several versions of one mod at once
 
@@ -597,10 +699,20 @@ A spurious rejection is possible — someone appending v5 while you insert v2 in
 assertion that would have been harmless. Retries are cheap and this is rare; precision is not
 worth the complexity of narrowing it.
 
-**Keep a manual reorder as the backstop.** Optimistic concurrency handles races, but ordering can
+**A manual reorder is the backstop.** Optimistic concurrency handles races, but ordering can
 also simply be wrong — a comparer that guessed badly, or an arbitration someone regrets. The
-Manage page should be able to reorder a mod's versions by hand, which is the same operation
-arbitration already performs.
+management page reorders a mod's versions by hand through
+`PUT repos/{repoId}/mods/{modId}/versions/{versionId}/placement`, which asserts both neighbours
+exactly as registration does, and returns the resulting order — because rewriting a hand-authored
+order takes one move per version that actually shifted, and each of those placements has to be
+computed against the order the previous move left behind. Unlike an import, which recomputes and
+retries, a rejected move is a human's answer to a question the server cannot re-answer, so the
+client refetches and asks again.
+
+Note the non-obvious part, which only a real database shows: **a move cannot be done as a plain
+renumber**, because it is a rotation and no order of single-row writes takes a rotation through
+the unique index. See
+[02 — Domain model](02-domain-model.md#a-move-is-a-rotation-and-a-rotation-cannot-be-renumbered-in-place).
 
 That adds one constraint to the concurrency rule above: **versions of the same mod register
 sequentially**, because each insert depends on the previous having landed. Concurrency stays at
@@ -640,26 +752,20 @@ a specific moment:
 
 ### Retry is impossible without splitting the problem type
 
-`CreateModUploadLinkV1Endpoint` has two guards that return **the same** problem type:
-
-```csharp
-if (mod is not null && mod.CheckHasVersion(...))     → ModVersionAlreadyExists
-if (await modStorageService.CheckIfModExists(...))   → ModVersionAlreadyExists
-```
-
-The second fires on exactly the orphan a failed import just created. So retrying that mod can
-never obtain an upload link again — and because both return `ProblemType.AlreadyExists`, the
-client cannot tell which case it hit.
+`CreateModUploadLinkV1Endpoint` used to have two guards returning **the same** problem type,
+`ProblemType.AlreadyExists`: one for a registered version, one for an existing blob. The second
+fires on exactly the orphan a failed import just created. So retrying that mod could
+never obtain an upload link again, and the client could not tell which case it had hit.
 
 The two cases need opposite responses. An orphaned blob is *recoverable*: `RegisterMod` only
 requires the blob to exist, and it does, so the correct move is to skip the upload and register
-anyway. Give them distinct problem types and the per-mod flow becomes idempotent, making a
-retry a no-op over everything already done:
+anyway. With distinct problem types the per-mod flow is idempotent, and a retry is a no-op over
+everything already done:
 
 | Link response | Action |
 | --- | --- |
 | `200` | Upload, then register |
-| `FileAlreadyPresent` + the blob's hash | Hash matches ours — skip the upload, register. Differs — this is an id/version collision, not our orphan; report it and register nothing |
+| `FileAlreadyPresent` + the blob's hash | Hash matches ours — skip the upload, register. Differs — this is an id/version collision, not our orphan; report it and register nothing. `null` — nothing is established, so register nothing |
 | `AlreadyRegistered` | Skip both, count as success |
 
 **`FileAlreadyPresent` has to carry the blob's hash.** Registering against a blob whose contents
@@ -679,19 +785,20 @@ eventually, but the import flow does not have to solve it.
 One thing to get right on the upload itself: a torn upload must not leave a visible blob, or
 `CheckIfModExists` starts lying about completeness. Block-staged uploads only become visible on
 commit, so this holds by default — just do not invent a resume scheme that commits partial
-content.
+content. `BlockBlobModFileUploader` stages blocks and commits once, with the content hash written
+as metadata in the same commit.
 
 ## A note on "update available"
 
-On the import and management pages, "this local version is not registered yet" is the right
+On the management page, "this local version is not registered yet" is the right
 definition, and it needs no version-string parsing at all — a local version either has a server
 counterpart or it does not.
 
 That is separate from `ModDependency.CanBeUpgraded()`, which asks whether a profile pins an
 older *registered* version than the newest one, and therefore depends on how the server orders
-versions. See [02 — Domain model](02-domain-model.md#version-ordering) and
-[PLAN.md](PLAN.md) — ordering is moving from a curated `SequenceNumber` to something derived
-from the version string, via a comparer the adapter supplies.
+versions. See [02 — Domain model](02-domain-model.md#version-ordering): ordering derives from the
+version string, via a comparer the adapter supplies, and is stored in `SequenceNumber` rather
+than recomputed on read.
 
 The two positions reconcile: an earlier design pass argued against parsing version strings at
 all, because `modDesc/version` is free-form. The settled design parses **best-effort and

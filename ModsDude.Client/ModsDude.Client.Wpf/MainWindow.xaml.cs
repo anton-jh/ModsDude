@@ -18,5 +18,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Fires on every alt-tab, which the monitor throttles. It is worth hooking anyway: coming
+        // back from a play session is exactly the moment the answer has to be fresh.
+        Activated += (_, _) => (DataContext as ViewModel.Windows.MainWindowViewModel)?.NotifyWindowActivated();
     }
 }

@@ -62,6 +62,10 @@
                                                        Text="{Binding ModFolder}" />
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding ActiveProfileSummary}" />
+                                            <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding DriftSummary}"
+                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

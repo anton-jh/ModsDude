@@ -12,6 +12,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      LocalInstance is constructed by its repository and nothing else, which is right - and leaves the
+      tests unable to build one. Opened to the test assembly rather than made public, so the rule that
+      instances come from state.json still holds everywhere that is not a test.
+    -->
+    <InternalsVisibleTo Include="ModsDude.Client.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />

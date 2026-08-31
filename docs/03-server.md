@@ -4,10 +4,13 @@
 
 ```
 ModsDude.Server.Api          ASP.NET Core host — endpoints, DTOs, middleware, problem details
-ModsDude.Server.Application  Authorization primitives, ITimeService, IUnitOfWork, IModStorageService
+ModsDude.Server.Application  Authorization primitives, ITimeService, IUnitOfWork, the storage abstractions
 ModsDude.Server.Domain       Entities and invariants. No framework references
 ModsDude.Server.Persistence  EF Core / PostgreSQL — DbContext, entity configuration, migrations
-ModsDude.Server.Storage      Azure Blob Storage — SAS issuance
+ModsDude.Server.Storage      Azure Blob Storage — SAS issuance, image blobs
+
+ModsDude.Server.Domain.Tests       xUnit over the domain. No infrastructure
+ModsDude.Server.Persistence.Tests  xUnit over a real PostgreSQL. See Tests, below
 ```
 
 The dependency direction is Api → Application → Domain, with Persistence and Storage
@@ -28,7 +31,9 @@ public class GetModsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
         => builder.MapGet("repos/{repoId:guid}/mods", GetAll).WithTags("Mods");
 
-    public async Task<Results<Ok<IEnumerable<ModDto>>, BadRequest<CustomProblemDetails>>> GetAll(...)
+    public async Task<Results<Ok<GetModsResponse>,
+                              BadRequest<CustomProblemDetails>,
+                              Forbidden<CustomProblemDetails>>> GetAll(...)
 }
 ```
 
@@ -48,25 +53,34 @@ All endpoints are mapped into a single group in `Program.cs`:
 app.MapGroup("api/v{v:apiVersion}")
    .WithApiVersionSet(apiVersionSet)
    .RequireAuthorization()
+   .WithMetadata(new ProducesResponseTypeMetadata(
+       StatusCodes.Status401Unauthorized, typeof(CustomProblemDetails), ["application/json"]))
    .MapAllEndpointsFromAssembly(typeof(Program).Assembly);
 ```
 
 so **authentication is on by default** for everything. Versioning is by URL segment via
 `Asp.Versioning`, currently only v1.
 
+The 401 is declared once on the group rather than in every endpoint's `Results<...>` union,
+because the endpoints that can produce it include the ones returning a bare `Ok<T>` with no union
+to put it in — see [Two statuses](#two-statuses-and-which-is-which).
+
 ## Request pipeline
 
 ```
 HTTPS redirect
   └─ Swagger UI (Development only)
-      └─ Authentication  (JWT bearer, Microsoft.Identity.Web)
-          └─ Authorization
-              └─ UserLoadingMiddleware
-                  └─ api/v1/... endpoints
+      └─ NotAuthenticatedMiddleware
+          └─ Authentication  (JWT bearer, Microsoft.Identity.Web)
+              └─ Authorization
+                  └─ UserLoadingMiddleware
+                      └─ api/v1/... endpoints
 ```
 
 Migrations are applied at startup, after the pipeline is built, by resolving
 `ApplicationDbContext` in a scope and calling `Database.Migrate()`.
+
+A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage).
 
 ### Authentication
 
@@ -86,32 +100,35 @@ request:
 
 1. No authenticated identity or no `sub` claim → pass through untouched.
 2. User row exists → refresh `LastSeen` if it is more than an hour stale, then continue.
-3. User row does not exist → create it from `sub` + `name` and save.
+3. User row does not exist → provision it from `sub` + a resolved username.
 
-There is no signup endpoint; **first authenticated request is the signup**. The middleware
-throws a bare `Exception` if the `name` claim is missing or already taken by another user —
-see [08 — Known issues](08-known-issues.md), because Entra display names are not unique.
+There is no signup endpoint; **first authenticated request is the signup**.
+
+The username needs care, because it is the string one member types to add another to a repo and
+so has to identify exactly one person — while the Entra `name` claim is a display name and
+nothing makes it unique. Provisioning is automatic, so there is no form on which to report a
+collision and no second chance to ask. `UsernameAllocator` therefore resolves it without the
+user: the display name first, then `"{name} (2)"`, `"{name} (3)"` and so on, with
+`"Unnamed user"` standing in for a missing or blank claim. The unique index settles a race
+between two requests resolving the same name, and provisioning retries; a subject that turns out
+to have been provisioned by a concurrent request is detached rather than inserted twice.
+
+Nothing here can reach another user's row: the insert carries this subject as its key, and the
+identity is `sub` in any case.
 
 ## Authorization
 
-Two independent mechanisms.
+`Application/Authorization/`, and it is the only mechanism. Scope policies asserting a `scope`
+claim used to exist unreferenced beside it; they were deleted rather than wired up, because no
+token anywhere carries those scopes and activating them would have denied every request.
 
-### ASP.NET policies — defined but unused
-
-`Api/Authorization/AuthorizationOptionsExtensions.cs` builds policies that assert a scope is
-present in the token's `scope` claim, and `Scopes.Repo.Create` names one. **Neither is wired
-up** — `Program.cs` calls plain `AddAuthorization()` and never calls
-`AddApplicationPolicies()`. Repo creation is instead gated on `User.IsTrusted`.
-
-### The fluent authorization builder — the real mechanism
-
-`Application/Authorization/`. Every endpoint that touches a repo starts the same way:
+Every endpoint that touches a repo starts the same way:
 
 ```csharp
 var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
     .CheckIsAllowedTo(x => x
         .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-    .MapToBadRequest();
+    .MapToForbidden();
 if (authResult is not null)
 {
     return authResult;
@@ -123,19 +140,40 @@ and returns `null` on success or an `AuthorizationResult` on the first failure. 
 short-circuits: once `Result` is set, later checks are no-ops, so the caller sees the first
 thing that went wrong.
 
-Three checks exist:
+Four checks exist:
 
 | Check | Meaning |
 | --- | --- |
 | `AccessRepoAtLevel(repoId, level)` | Caller's membership in that repo is at least `level` |
+| `CreateRepo()` | Caller carries `User.IsTrusted`, the manually granted flag |
 | `GrantAccessToRepo(repoId, level)` | Caller may hand out `level` — currently identical logic: you must hold at least the level you are granting |
 | `ChangeOthersMembership(subjectMembership)` | Modifying a Guest needs Member; modifying a Member or an Admin needs Admin |
 
 `ChangeOthersMembership` is the interesting one — the level you need depends on the level of
-the person you are acting on, which is what stops a Member from kicking an Admin.
+the person you are acting on, which is what stops a Member from kicking an Admin. It also cannot
+run first, since it needs the subject's level to know what it needs; the two membership
+endpoints therefore authorize to the floor that check can never fall below *before* loading
+anything, so a non-member learns nothing from the responses.
 
-Failures are mapped to a `400` carrying `CustomProblemDetails`. **Note that authorization
-failures return 400, not 401/403.**
+`CreateRepo()` exists so that repo creation refuses in the same shape, at the same status, with
+the same problem body as everything else. `POST repos/check-name-taken` is gated on it too:
+repo names are unique system-wide, so answering it for anyone signed in would be an existence
+oracle over every repo name there is, and its only purpose is naming a repo you are about to
+create.
+
+### Two statuses, and which is which
+
+**Authorization failures are `403`**, mapped by `MapToForbidden`. Always 403, never 401: every
+endpoint group requires authentication, so a request that reaches a handler has already
+established who it is and an `AuthorizationResult` can only mean it may not do this.
+
+The caller the server cannot *identify* — a token with no usable `sub`, or a subject with no
+user row — is a `401`, and it is produced centrally by `NotAuthenticatedMiddleware` catching
+`NotAuthenticatedException`. Centrally, because it is thrown from inside `CheckIsAllowedTo` and
+`GetUserId`, below the handler where there is no result to return, and because the endpoints
+most able to raise it (`GET users`, `GET repos`) return a bare `Ok<T>` with no `Results<...>`
+union to put it in. The 401 is declared once on the endpoint group for the same reason. Until
+the middleware existed, every one of those cases answered 500.
 
 ### Error responses
 
@@ -158,39 +196,42 @@ just the first, the OpenAPI document advertises URIs while the server sends bare
 and no generated client can match the two. Adding a problem type means adding both attributes.
 
 The client branches on `CustomProblemDetails.Type`, so a newly added problem type stays
-invisible to it until `Generated.cs` is regenerated. Authorization failures still return `400`
-rather than `401`/`403` — see [08 — Known issues](08-known-issues.md).
+invisible to it until `Generated.cs` is regenerated — which is what the checked-in OpenAPI
+document and its CI diff exist to notice. See [Regenerating the client](#regenerating-the-client).
 
 ## Persistence
 
-`ApplicationDbContext` exposes `Users`, `Repos`, `RepoMemberships`, `Profiles`, `Mods` and
-implements `IUnitOfWork` (`CommitAsync` → `SaveChangesAsync`).
+`ApplicationDbContext` exposes `Users`, `Repos`, `RepoMemberships`, `Profiles`, `ModVersions`
+and implements `IUnitOfWork` (`CommitAsync` → `SaveChangesAsync`).
 
 Notable configuration:
 
-> **`Mod` and `ModVersion` are being collapsed into one entity** keyed
-> `(RepoId, ModId, VersionId)`, which removes the shadow FK properties, the owned-collection
-> mapping and the `Versions` auto-include described below. See
-> [02 — Domain model](02-domain-model.md#flattening).
-
-- **Composite keys everywhere.** `Mod` is `(RepoId, ModId)`; `Profile` is `(RepoId, ProfileId)`;
-  `RepoMembership` is `(UserId, RepoId)`. Repo scoping is baked into the primary key rather
-  than being a filter you can forget.
-- **`ModVersion` uses shadow FK properties** (`RepoId`, `ModId`) and is keyed
-  `(RepoId, ModId, VersionId)`, with a unique index on `(RepoId, ModId, SequenceNumber)`.
-- **`ModDependency` is an owned collection** of `Profile`, with an FK to `ModVersion`. Its
-  key order carries a `TODO` about putting `RepoId` first, and the unique index on
-  `(RepoId, ProfileId, ModId)` that would enforce "one version per mod per profile" at the
-  database level is **missing** — the rule is only enforced in the domain.
+- **Composite keys everywhere.** `ModVersion` is `(RepoId, ModId, Id)`; `Profile` is
+  `(RepoId, ProfileId)`; `RepoMembership` is `(UserId, RepoId)`. Repo scoping is baked into the
+  primary key rather than being a filter you can forget.
+- **`ModVersion` carries two indexes that are load-bearing rather than decorative.** The unique
+  one on `(RepoId, ModId, SequenceNumber)` is what keeps ordering contiguous — and what makes a
+  move a two-write operation, since a rotation cannot pass through it in any row order; see
+  [02 — Domain model](02-domain-model.md#a-move-is-a-rotation-and-a-rotation-cannot-be-renumbered-in-place).
+  The other, `(RepoId, Updated, ModId, Id)`, backs the mod list's delta form, which orders by
+  `Updated` inside a repo and resumes from a timestamp.
+- **`ModVersion.Attributes` and `ModVersion.Images` are owned collections**, so they are
+  materialised whenever a `ModVersion` entity is.
+- **`ModDependency` is an owned collection** of `Profile`, with an FK to `ModVersion`. The FK is
+  **`Restrict`**, not the cascade EF would infer: deleting a version a profile pins would
+  otherwise silently drop the mod out of a teammate's profile, which the delete endpoints refuse.
+  Restrict makes the database enforce the same rule, so a dependency added between an endpoint's
+  check and its commit fails loudly rather than being swept away. The unique index on
+  `(RepoId, ProfileId, ModId)` backs the one-version-per-mod rule the domain enforces.
 
   Two consequences worth knowing before touching anything that loads a `Profile`:
 
   - `ModDependency.ModVersion` is **not** auto-included, and every domain operation on a
-    dependency navigates through it to reach the `Mod`. Loading a profile with
+    dependency reads the mod's identity off it. Loading a profile with
     `Profiles.GetAsync` and then calling `AddDependency`, `DeleteDependency`,
     `HasDependencyOn` or `ChangeVersion` throws. Use
-    `Profiles.GetWithModDependenciesAsync`, which includes `ModDependencies → ModVersion → Mod`
-    (one hop shorter once the flattening above lands, but still not automatic).
+    `Profiles.GetWithModDependenciesAsync`, which includes `ModDependencies → ModVersion` — one
+    hop since the flattening, but still not automatic.
   - Because the collection is *owned*, it is materialised whenever a `Profile` entity is,
     wanted or not — thousands of rows per profile at the target volumes. Read endpoints that
     do not need dependencies project instead of materialising.
@@ -198,14 +239,32 @@ Notable configuration:
   that throws at model-build time if the field is renamed, so EF cannot silently fall back
   to a shadow property.
 - `Repo.AdapterData` is an EF **complex property**, flattened into the repo row.
-- Auto-included navigations: `Mod.Versions`, `Repo._memberships`, `User.RepoMemberships`.
+- Auto-included navigations: `Repo._memberships`, `User.RepoMemberships`.
   These make the authorization pattern above a single round trip, at the cost of always
   paying for them.
 - Entity extension methods in `Persistence/Extensions/EntityExtensions/` provide the small
-  query vocabulary the endpoints use — `GetAsync`, `CheckNameIsTaken`, `GetByUsernameAsync`.
+  query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`,
+  `GetLatestVersionOfEachAsync`, `GetModUsageAsync`, `CheckNameIsTaken`, `GetByUsernameAsync`.
 
-There is exactly one migration, `20250717173302_MoveToPostgres`, which squashes the
-pre-Postgres history.
+Four migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
+`FlattenModModel`, `ModImageReferencesAndModListDelta` and `ModImageRendition`.
+
+## Tests
+
+`ModsDude.Server.Domain.Tests` is plain xUnit over the entities — version sequencing, membership
+transitions, the dependency rules — with named regressions for the sequencing bugs listed in
+[PLAN.md](PLAN.md#phase-0--unblock).
+
+`ModsDude.Server.Persistence.Tests` runs against a **real PostgreSQL**, migrated from the same
+migrations the API runs, because it covers behaviour the database decides rather than the model:
+that the shift-on-insert renumber is collision-free only because EF orders those updates from
+the unique index declared in the model, and that a move cannot be a single renumber. An
+in-memory or SQLite substitute would answer for itself instead of for PostgreSQL, which is the
+whole point.
+
+`DatabaseFixture` **drops and recreates** whatever database it is pointed at before every run,
+so it targets one of its own. Point it elsewhere with `MODSDUDE_TEST_DATABASE`; the default is
+`Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=modsdude-tests`.
 
 ## Storage
 
@@ -219,18 +278,48 @@ Mod files live in the `mods` container at:
 {repoId}/{modId}/{versionId}
 ```
 
-`ModStorageService` offers exactly two operations:
+`ModStorageService`:
 
 - `CheckIfModExists` — a blob existence check.
 - `GetUploadLink` — mints a **user-delegation SAS** with `Create | Write` permission, valid
-  for 30 minutes, scoped to that one blob.
+  for 30 minutes, scoped to that one blob. `Write` is what lets the client stamp the content
+  hash into blob metadata as it uploads.
+- `GetDownloadLink` — the same with `Read`. Guest-level, because a Guest who can see a profile
+  must be able to apply it.
+- `GetRecordedContentHash` — reads back the `sha256` metadata entry the upload wrote. Azure's
+  built-in content hash is MD5, so the SHA-256 has to be recorded explicitly; without it,
+  adopting an orphaned blob would register a digest describing bytes nobody has, which no
+  download can satisfy and no upload link can repair, since the blob's existence means no link
+  can be minted for it again.
+- `DeleteMod`, `ListStoredMods`, `DeleteStoredBlob` — for the delete endpoints and the
+  reclamation sweep.
 
 The user-delegation key is derived from the server's own managed identity, so the SAS
 inherits the server's permissions and can be revoked centrally. **The API never handles mod
-bytes.** The client uploads straight to blob storage.
+bytes.** The client uploads and downloads straight to blob storage.
 
-**There is no download link operation.** This is the single missing piece that blocks profile
-sync — see [07 — Mod sync design](07-mod-sync-design.md).
+### Image blobs
+
+`ModImageStorageService` holds derivative images in a second container, `mod-images`, at
+`{hash[0..2]}/{hash}`. The address carries no repo and cannot: content addressing is what makes
+dedupe across versions, mods and repos work at all. These the API *does* handle bytes for —
+they are small and fetched in bulk, which inverts the trade-off that sends mod files over a SAS.
+See [09 — Mod catalog](09-mod-catalog.md#serving-them-back).
+
+Blob storage has no batch existence call, so `CheckWhichExist` is a bounded parallel fan-out; the
+batch is a batch to the *client*, which is where the round trips that matter are.
+
+### Blob reclamation
+
+`BlobReclamationService` is a hosted service sweeping orphaned blobs — import orphans, and the
+residue of deleted versions and repos. Two rules make it safe:
+
+- **List blobs before reading registrations, never the reverse.** A registration written between
+  the two reads is then already covered by a blob the listing had.
+- **Ignore anything younger than a grace period** well past the upload SAS lifetime. An import
+  uploads and then registers; a sweep that did not wait would delete the bytes in between.
+
+A blob name that does not parse is reported, never deleted.
 
 ## Endpoint reference
 
@@ -279,28 +368,85 @@ Same singular/plural inconsistency on the single-profile GET.
 
 ### Mod dependencies
 
-| Method | Route | Level |
-| --- | --- | --- |
-| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest |
-| POST | `repos/{repoId}/profiles/{profileId}/modDependencies` | Member |
-| PUT | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member |
-| DELETE | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member |
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | Each carries `ContentHash`, so sync never has to pull the mod list to resolve it |
+| POST | `repos/{repoId}/profiles/{profileId}/modDependencies` | Member | |
+| PUT | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member | Version and/or `Locked` |
+| DELETE | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member | |
+| POST | `repos/{repoId}/profiles/{profileId}/modDependencies/upgrade` | Member | "Apply all updates", batched. **Skips locked dependencies entirely** and reports each as skipped, distinguishing the profile's lock from the mod's |
 
 The dependency is addressed by `modId`, not by a dependency id — a direct consequence of the
 one-version-per-mod rule.
+
+The upgrade is a batch because a profile holds one to two thousand mods; omitting `ModIds` means
+the whole profile. A named mod the profile does not depend on is reported rather than ignored,
+so a client working from a stale list can see which of its rows are gone.
 
 ### Mods
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/mods` | Guest | **Every mod with every version, unpaged** |
-| POST | `repos/{repoId}/mods` | Member | Register a version. Verifies the blob exists first |
+| GET | `repos/{repoId}/mods` | Guest | Paginated **and** delta. See below |
+| GET | `repos/{repoId}/mods/usage` | Guest | Which registered versions the repo's profiles pin, and how many. Paginated |
+| GET | `repos/{repoId}/mods/{modId}/versions` | Guest | One mod's versions, oldest first. Unpaged deliberately — bounded by how many releases one mod has had, not by the repo |
+| POST | `repos/{repoId}/mods` | Member | Register a version. Verifies the blob exists first, and asserts the placement |
+| PUT | `repos/{repoId}/mods/{modId}/versions/{versionId}/placement` | Member | Move an already-registered version. Returns the resulting order |
+| PUT | `repos/{repoId}/mods/{modId}/versions/{versionId}/images` | Member | Replace a version's image references |
+| DELETE | `repos/{repoId}/mods/{modId}/versions/{versionId}` | Member | Deletes the blob too. Refuses the last version, and one a profile pins |
+| DELETE | `repos/{repoId}/mods/{modId}` | Member | The whole mod, blobs included. Refuses if a profile pins any of its versions |
+
+`GET repos/{repoId}/mods` returns **one entry per version, with no parent** — nesting would only
+make the client re-group on receipt. It takes `updatedAfter`, `cursor` and `limit` (default 100,
+maximum 500) and answers with a `NextCursor` that is `null` once the listing is exhausted.
+
+Two properties of it are worth knowing before relying on it:
+
+- **The cursor is a timestamp plus a count**, not a keyset tuple, because the ids are value
+  objects and a provider cannot translate a comparison on one. Ordering by `Updated` also gives
+  the delta the property it needs: a row written during a listing gets a newer `Updated` and
+  moves ahead of the cursor, so it may be seen twice and can never be skipped.
+- **A delta reports what changed, never what was deleted.** A client that has to notice removals
+  refetches without `updatedAfter`.
+
+`GET repos/{repoId}/mods/usage` is a resource of its own rather than a field on `ModDto`, and
+the reason is the delta form above: usage changes when a *profile* is edited, not when a version
+is. Carrying it on the version would mean either serving stale usage to every client that syncs
+incrementally, or restamping `Updated` on every version a profile save touches — two thousand
+rows a save, and a delta the size of a full listing. Two facts with different lifetimes, so two
+resources. The response is sparse: a version that does not appear is unused, but **only once the
+whole listing has been read**, so a client must exhaust the cursor before treating an absence as
+an answer. It is advisory; the delete endpoints re-ask the database when it matters.
 
 ### Files
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| POST | `files/createModUploadLink` | Member | 30-minute write SAS. Refuses if the version is already registered or the blob already exists |
+| POST | `files/createModUploadLink` | Member | 30-minute `Create\|Write` SAS, plus the metadata key to write the SHA-256 into. Refuses with `already-registered` or `file-already-present` |
+| POST | `files/createModDownloadLink` | Guest | 30-minute `Read` SAS |
+
+The two upload-link refusals are **distinct problem types on purpose.** There is nothing left to
+do for a registered version, while an unregistered blob is the orphan a failed import left behind
+and is finished by registering without re-uploading. Answering both with one problem made a
+failed import unretryable. `file-already-present` carries the blob's recorded hash — matching it
+means this is the client's own orphan, differing means an id/version collision to report rather
+than register over, and `null` means the blob predates the metadata and nothing has been
+established.
+
+### Images
+
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| GET | `images/{hash}` | Authenticated | Streams the blob, `immutable` and cacheable for a year, with the hash as its entity tag |
+| POST | `images/{hash}` | Authenticated | One derivative, as a form file. **Refused unless the bytes hash to the address** |
+| POST | `images/checkExisting` | Authenticated | "Which of these do you already have?", up to 1,000 hashes |
+
+**"Authenticated" is not an oversight.** The route carries no `repoId` and cannot — content
+addressing is what makes the dedupe work, and it leaves no repo in the address to scope against.
+It is a real widening compared to the rest of the server, stated rather than hidden behind a
+Guest label that would imply a scoping the route does not have. What is behind an address is mod
+store art, already public on the sites the mods come from, and it reveals nothing about who is in
+which repo. See [09 — Mod catalog](09-mod-catalog.md#what-authorized-means-for-a-global-address).
 
 ## Configuration
 
@@ -312,6 +458,7 @@ one-version-per-mod rule.
 | `Storage:StorageAccountName` | Azure Storage account name; the URL is derived |
 | `EntraExternalId:*` | Instance, Domain, ClientId, Audience, Authority, and the token/authorization endpoints used by the Swagger UI |
 | `SwaggerAuthentication:ClientId` | Separate app registration for the Swagger UI |
+| `BlobReclamation:*` | `Enabled`, `Interval`, and `MinimumBlobAge` — the grace period an unreferenced blob must survive before the sweep may delete it |
 
 ## Running locally
 
@@ -333,5 +480,23 @@ The typed client is generated from the **running** API:
 
 Output goes to `ModsDude.Client.Core/ModsDudeServer/Generated.cs`. The generated clients
 derive from `ModsDudeClientBase`, which attaches the bearer token by calling
-`IAccessTokenAccessor.Get` for every request. The generated `BaseUrl` is hardcoded to
-`http://localhost:5267` — see [08 — Known issues](08-known-issues.md).
+`IAccessTokenAccessor.Get` for every request. Each generated client also hardcodes a localhost
+`BaseUrl`; since the file is regenerated wholesale, the configured one is applied in
+`AddModsDudeClient` instead of being edited in.
+
+**Then update the checked-in OpenAPI document.** `openapi/v1.json` exists so that a server change
+the generated client has not caught up with shows as a diff rather than as nothing at all:
+
+```bash
+pwsh scripts/openapi.ps1 -Update     # rewrite it
+pwsh scripts/openapi.ps1             # verify it — what CI runs
+```
+
+The script builds and starts the API itself (it migrates a database at startup, so it needs a
+connection string), fetches the document, and rewrites it into a canonical form — keys in ordinal
+order, two-space indentation, LF, no BOM — so the file records what the API says rather than
+which machine asked it. Commit it alongside the change.
+
+Note the limit of this check: it fails when the *document* is behind the server, which is the
+only warning anyone gets that `Generated.cs` is behind too. Nothing compares the generated client
+against the document.

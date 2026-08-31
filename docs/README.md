@@ -12,9 +12,9 @@ concentrates on the things the code does not tell you.
 | [04 — Game adapters](04-game-adapters.md) | The three-stage adapter model, dynamic forms, and how to add a game |
 | [05 — Client](05-client.md) | WPF architecture, navigation, page lifecycle, local state, mod imagery, page inventory |
 | [06 — Flows](06-flows.md) | End-to-end walkthroughs of every flow the system supports today |
-| [07 — Mod sync design](07-mod-sync-design.md) | The designed-but-unbuilt core feature: applying a profile to a game install |
-| [08 — Known issues](08-known-issues.md) | Bugs, stubs, dead code, and scaling limits found in the current tree |
-| [09 — Mod representation and the catalog](09-mod-catalog.md) | Local vs registered mods, the merged model, the import/manage/profile-editor pages, and the import protocol |
+| [07 — Mod sync design](07-mod-sync-design.md) | The core feature: the content store, reconciliation, uninstall rules and drift |
+| [08 — Known issues](08-known-issues.md) | What is still wrong or unbuilt in the current tree |
+| [09 — Mod representation and the catalog](09-mod-catalog.md) | Local vs registered mods, the merged model, mod imagery, the sources, and the import protocol |
 | [PLAN](PLAN.md) | Roadmap, phased |
 
 ## Conventions used here

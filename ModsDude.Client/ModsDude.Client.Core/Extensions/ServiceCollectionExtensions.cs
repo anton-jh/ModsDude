@@ -33,6 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<InstanceDriftService>();
         services.AddSingleton<ModSyncService>();
 
+        // One per app: the drift answer is app-level, and every view reads the same one.
+        services.AddSingleton<InstanceDriftMonitor>();
+
         return services;
     }
 }

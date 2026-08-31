@@ -17,6 +17,7 @@ public partial class MainPageViewModel
     private readonly RepoRepository _repoService;
     private readonly LastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
+    private readonly ShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
     private bool _selectionRestored;
@@ -29,6 +30,7 @@ public partial class MainPageViewModel
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
+        ShellNavigationService shellNavigationService,
         IDialogService dialogService,
         IModalService modalService)
     {
@@ -48,10 +50,13 @@ public partial class MainPageViewModel
         _repoService = repoService;
         _lastSelectionRepository = lastSelectionRepository;
         _repoPageViewModelFactory = repoPageViewModelFactory;
+        _shellNavigationService = shellNavigationService;
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
 
         repoService.RepoCreated += OnRepoCreated;
         NavManager.PropertyChanged += OnNavigationChanged;
+
+        _shellNavigationService.Register(this);
     }
 
 
@@ -69,11 +74,40 @@ public partial class MainPageViewModel
 
     public void Dispose()
     {
+        _shellNavigationService.Unregister(this);
+
         _repoService.RepoCreated -= OnRepoCreated;
         NavManager.PropertyChanged -= OnNavigationChanged;
 
         _reposSynchronizer.Dispose();
         NavManager.Dispose();
+    }
+
+    /// <summary>
+    /// Selects a repo and hands back the page it opened, for a deep link from outside the sidebar.
+    /// </summary>
+    /// <returns>
+    /// Null where the repo is not one of this account's, or where the page in front of the user
+    /// refused to be navigated away from.
+    /// </returns>
+    public async Task<RepoPageViewModel?> TrySelectRepoAsync(Guid repoId)
+    {
+        if (FindRepo(repoId) is null)
+        {
+            await LoadReposCommand.ExecuteAsync(null);
+        }
+
+        if (FindRepo(repoId) is not RepoItemViewModel entry)
+        {
+            return null;
+        }
+
+        if (ReferenceEquals(NavManager.Selected, entry) is false)
+        {
+            NavManager.Selected = entry;
+        }
+
+        return NavManager.CurrentPage as RepoPageViewModel;
     }
 
 
@@ -124,6 +158,9 @@ public partial class MainPageViewModel
             NavManager.Selected = repo;
         }
     }
+
+    private RepoItemViewModel? FindRepo(Guid repoId)
+        => Repos.OfType<RepoItemViewModel>().FirstOrDefault(x => x.Id == repoId);
 
     private RepoItemViewModel MapRepoToVm(Repo repo)
     {

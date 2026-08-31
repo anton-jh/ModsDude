@@ -1,10 +1,13 @@
 # Mod sync design
 
-**Status: designed, not implemented.**
+**Status: implemented.** The exceptions are called out where they occur, and the largest of them
+is that [hardlinking is switched off](#hardlink-support-is-an-adapter-property) until somebody
+tests what Farming Simulator's in-game updater does to a mod file.
 
-Applying a profile to a game installation is the reason ModsDude exists, and it is the one
-flow that does not work. This document is the design to build against. Everything here is a
-decision, not a survey — where a decision has a real cost, the cost is stated.
+Applying a profile to a game installation is the reason ModsDude exists. This document is the
+design the implementation was built against, and it is kept as the reasoning rather than
+rewritten into a description of the code — everything here is a decision, not a survey, and
+where a decision has a real cost, the cost is stated.
 
 ## Goal
 
@@ -16,51 +19,44 @@ The scale that shapes everything below: **1,000–2,000 mods in a profile, thous
 versions registered per repo, several instances per machine.** A design that copies file
 bytes on every profile switch is not viable; at ~40 MB average that is 40–80 GB per switch.
 
-## What is missing today
+## Where each piece lives
 
-| Piece | State |
+| Piece | Where |
 | --- | --- |
-| `ModVersion.ContentHash` | **Missing.** Nothing identifies a mod file by its content |
-| Download link endpoint | **Missing.** `IModStorageService` has `GetUploadLink` but no counterpart |
-| Local content store | **Missing** |
-| Reconciliation engine | **Missing** |
-| `IInstanceModAdapter` write side | **Missing.** The adapter can read installed mods but cannot install or uninstall one |
-| Upload half of import | `RepoModsImportPageViewModel.ImportAsync` is an empty `TODO` |
+| `ModVersion.ContentHash` | On the entity, on `ModDto`, and on `ModDependencyDto` |
+| Download link endpoint | `POST files/createModDownloadLink`, Guest level |
+| Local content store | `Client.Core/Sync/ContentStore.cs`, one per volume via `ContentStoreProvider` |
+| Reconciliation engine | `ModSyncPlanner` plans, `ModSyncService` executes |
+| `IInstanceModAdapter` write side | `ModFolder`, `GetModFilePath`, `GetInstalledModPath` — paths only |
+| Upload half of import | `ModImportService` |
+| Drift | `InstanceDriftService`, `SyncManifest`, `SyncManifestStore` |
+| The UI | `SyncPage`, under the instance's own `InstancePage` |
 
 ## Content hashing
 
-Every `ModVersion` carries a **SHA-256 of its file** as a first-class domain property:
-
-```csharp
-public required ContentHash ContentHash { get; init; }
-
-public readonly record struct ContentHash(string Value);   // lowercase hex
-```
+Every `ModVersion` carries a **SHA-256 of its file** as a first-class domain property, lowercase
+hex.
 
 Not a `ModAttribute`. Attributes are opaque adapter-supplied metadata the server stores and
 never interprets; the content hash is a property the system itself depends on for
 correctness and isolation. It belongs in the schema.
 
-The client computes it while uploading and sends it with registration. **The server does not
-need to verify it**, for the reason set out under [Cache isolation](#cache-isolation) below —
+The client computes it while uploading — off the same buffer the upload blocks are cut from, so
+the file is read once — and sends it with registration. **The server does not
+verify it**, for the reason set out under [Cache isolation](#cache-isolation) below —
 the guarantee comes from verification on the *download* side, not from trusting the
 publisher.
-
-`ModVersionDto` must expose it, since sync is the consumer.
 
 ### It has to reach the reconciler without a full mod list
 
 The reconciler's *Desired* set is `(modId, versionId, contentHash)`, and it gets its input from
-`GET repos/{id}/profiles/{id}/modDependencies` — which returns `ModDependencyDto`, today
-`(ModId, ModVersionId, LockVersion)` and no hash. Resolving hashes from `ModVersionDto` instead
-means pulling `GET repos/{id}/mods`, the unpaged endpoint that returns every mod and every
-version, on every sync.
+`GET repos/{id}/profiles/{id}/modDependencies`. Resolving hashes from the mod list instead would
+mean walking `GET repos/{id}/mods` — every version in the repo — on every sync.
 
 So **`ModDependencyDto` carries the content hash too**, and the same request is what the plan
-preview reads display names from. Do it in the same change that adds `ContentHash` to the
-schema, not later: it is the same DTO pass, and doing it later means sync ships depending on the
-endpoint [08 — Known issues](08-known-issues.md#get-reposrepoidmods-returns-everything-unpaged)
-flags as a scaling problem, whose fix is sequenced after sync.
+preview reads display names from. It went in with the same schema change that added
+`ContentHash`, which is what kept sync from shipping on top of a mod-list endpoint that was at
+the time unpaged.
 
 ### Hostile or wrong hashes have to be unregisterable, not just undownloadable
 
@@ -81,13 +77,17 @@ Adopting an orphan therefore has to establish what the blob actually contains. E
 - the client re-downloads the orphan blob and hashes it before registering, which is correct but
   costs a download on a path taken precisely because the upload already happened; or
 - the upload records the hash against the blob — Azure's `Content-MD5` is the wrong algorithm,
-  so this means blob metadata written at upload time or a server-side `x-ms-meta-sha256` — and
+  so this means blob metadata written at upload time — and
   the link endpoint returns it, so the client can compare without transferring anything.
 
-The second is better and is what the split problem types should carry: `FileAlreadyPresent`
-should return the hash of the blob that is already there. A client whose file hashes differently
-then knows it is looking at a genuine id/version collision rather than its own failed upload,
-and can say so instead of poisoning the registration.
+The second is what shipped. The upload link response names the metadata key the client must
+write the SHA-256 into (`sha256`, sent as `x-ms-meta-sha256`), named in the response rather than
+agreed by convention because the server is the only party that reads it back and a silent
+mismatch would surface only as an unrepairable registration much later. `FileAlreadyPresent`
+returns the hash of the blob that is already there. A client whose file hashes differently
+knows it is looking at a genuine id/version collision rather than its own failed upload,
+and says so instead of poisoning the registration; a `null` — a blob predating the metadata —
+means nothing has been established and it must not register either.
 
 ## The content store
 
@@ -98,7 +98,8 @@ The local store is content-addressed. Files are named by their hash, never by mo
 ```
 {storeRoot}/
   blobs/{hash[0..2]}/{hash}
-  quarantine/{timestamp}/...
+  tmp/...                      staging, so a torn write is never visible at an address
+  quarantine/{timestamp}/...   only where the Recycle Bin is unavailable
 ```
 
 The two-character prefix keeps directory sizes sane; thousands of registered versions in one
@@ -184,6 +185,10 @@ Volumes appear in the settings as instances are configured on them; there is no 
 create a store on a drive with no mod folders. A store on `D:` may serve `D:` by hardlink and
 `C:` by copy at the same time.
 
+**An unconfigured volume gets those defaults rather than a refusal.** A store has to have a
+ceiling before the first sync writes to it, and refusing to sync until somebody has visited a
+page to accept a number would be a worse answer than starting from the one that page offers.
+
 ### Materialising into a mod folder
 
 | Strategy | When | Cost |
@@ -209,17 +214,23 @@ Two caveats the implementation must handle:
   exFAT, a network path, a filesystem without hardlink support — is a misconfiguration worth
   surfacing, because the user is paying the copy cost while believing they are not.
 - **Both names are the same file.** Under hardlinking, anything that rewrites an archive in
-  the mod folder rewrites the stored copy, which is now shared across repos. Mark stored
-  blobs read-only, and treat a size or mtime anomaly as grounds to re-verify. Mod archives
-  are read-only in practice, so this is a guard rail rather than a live problem. Copy-served
-  disks are unaffected — the mod folder holds its own bytes.
+  the mod folder rewrites the stored copy, which is now shared across repos. Marking stored
+  blobs read-only would turn that from silent corruption into a loud failure — but it would also
+  stop an in-game updater working at all, and whether that updater rewrites in place is
+  [still an open question](#hardlink-support-is-an-adapter-property). **Blobs are therefore left
+  writable**, and the safety is carried instead by `SupportsHardlinks` defaulting to false, which
+  means nothing is hardlinked until somebody has tested the game. Copy-served
+  disks are unaffected either way — the mod folder holds its own bytes.
 
 ### Ingestion
 
 Four paths put bytes into a store, and only one is a download:
 
-1. **Import.** A mod uploaded from an instance's mod folder is placed into the store as it
-   goes. The user already has the bytes; fetching them back is absurd.
+1. **Import.** A mod uploaded from an instance's mod folder should be placed into the store as it
+   goes. The user already has the bytes; fetching them back is absurd. **Not implemented:**
+   `ModImportService` writes nothing into a store, so the first import after a fresh install
+   leaves a cold one and the first sync re-downloads bytes the machine already has. See
+   [PLAN.md](PLAN.md#phase-1--the-mod-catalog-and-the-upload-loop).
 2. **Uninstall.** A registered mod being uninstalled is moved into the store — but only if
    **no store on the machine** already holds that hash. If any other disk's store has it, the
    bytes are already recoverable without a download and the mod folder's copy is simply
@@ -229,8 +240,8 @@ Four paths put bytes into a store, and only one is a download:
    copied across rather than downloaded. See *Install* below.
 4. **Download**, for anything the first three did not supply.
 
-The practical effect is that a member who imports their existing 2,000-mod install ends up
-with a fully warm store having downloaded nothing.
+The practical effect, once path 1 exists, is that a member who imports their existing 2,000-mod
+install ends up with a fully warm store having downloaded nothing.
 
 On the uninstall path, prefer checking whether some store already holds the expected hash over
 hashing the file — one usually does, and rehashing 2,000 archives to discover that is minutes
@@ -345,12 +356,23 @@ be fetched again. If **no store on the machine** holds the hash, sync moves the 
 serving store first; if any store already has it, the mod folder's copy is simply deleted.
 Where it arrived by hardlink the move is already satisfied and the delete is genuinely free.
 
+**Recoverability is a property of the bytes, not of the version id.** A file wearing a registered
+version id while containing something else cannot be re-fetched, so it is treated as
+unrecoverable — which is why the planner's *Registered* set is keyed by hash rather than by
+`(modId, versionId)`.
+
 **A mod version not registered in the repo is not recoverable.** It is a file the user put
 there and nothing else has a copy. These are never deleted. They go to the **Windows Recycle
 Bin**, so recovery uses a mechanism the user already understands and there is no
 ModsDude-specific quarantine to manage, garbage-collect, or explain. Where the Recycle Bin is
-unavailable — a drive with it disabled, a network path — fall back to
-`{storeRoot}/quarantine/{timestamp}/` and say so in the UI.
+unavailable — a drive with it disabled, a network path — it falls back to
+`{storeRoot}/quarantine/{timestamp}/` and the UI says so.
+
+One shell detail is load-bearing. `FOF_NOCONFIRMATION` alone lets the shell **permanently
+destroy** a file it cannot recycle — most often because it is larger than the bin's quota, which
+a mod archive easily is. `FOF_WANTNUKEWARNING` partially overrides it so the shell asks first;
+declining aborts, which is reported as a failure and sends the file to quarantine instead.
+Without that flag the exact outcome these rules exist to prevent happens silently.
 
 **The user is warned either way.** Before executing a plan that uninstalls anything
 unrecognised, show a dialog listing the affected mods by name, stating plainly where they are
@@ -376,10 +398,18 @@ if one of the bumped mods is a locked map, hosting that save can corrupt it.
 
 The user's remedy is to come back to ModsDude, import the new versions, add whatever they want
 to the profile, and re-apply so the locked mods revert. The re-apply is the step that actually
-protects the save, and it is the easiest one to forget, because **nothing anywhere tells the
-user their instance has drifted.** It is a manual remedy for an invisible problem.
+protects the save, and it is the easiest one to forget, because **nothing anywhere told the
+user their instance had drifted.** It was a manual remedy for an invisible problem.
 
 Reminding people harder is not the fix. Making the drift visible is.
+
+> **What is built, and what is not.** All of this is implemented: `InstanceDriftService` answers
+> from a directory listing against the manifest, `InstanceDriftMonitor` runs that check at startup
+> and on window activation, and the surfacing described from [Surfacing it](#surfacing-it) through
+> [When to check](#when-to-check) — the app-level notification, save-and-apply, activation from
+> either end — is in the shell.
+> [Hardlink support](#hardlink-support-is-an-adapter-property) is the exception: an open question
+> that needs the real game.
 
 ### What sync records, and why it has to
 
@@ -485,14 +515,20 @@ watchers miss events across sleep, and on network paths.
 
 ### Surfacing it
 
+> Everything from here to
+> [Hardlink support is an adapter property](#hardlink-support-is-an-adapter-property) is built.
+> Drift is checked at startup and on window activation — throttled, since `Window.Activated`
+> fires on every alt-tab — and surfaced in the shell rather than on one page.
+
 Drift status belongs wherever the instance appears: the instance row in the sidebar, and the
-repo and profile overview pages, which are currently `ExamplePageViewModel` placeholders looking
-for a purpose. *"3 mods differ from Season 4"* with a Re-apply action.
+repo and profile overview pages. *"3 mods differ from Season 4"* with a Re-apply action.
 
 **Drift on a locked mod is the dangerous case and deserves different treatment.** An unlocked mod
 sitting at the wrong version is untidy; a locked map at the wrong version is a corrupted save
 waiting to happen. Say so specifically — *"Your map is at 1.4, the profile pins 1.2. Hosting
 this save may damage it."* — rather than folding it into a count.
+`InstanceDriftReport.LockedMods` and `ModSyncItem.Locked` both carry the fact already; nothing
+renders it, so the user currently gets the count.
 
 ### Turning the chore into something useful
 
@@ -576,9 +612,10 @@ saving, offer activation as a **follow-up** rather than folding it into the save
 *"No instance is using this profile. Use it on Farming Simulator?"* — dismissible, and naming
 the instance because here that genuinely is a choice.
 
-Activation itself belongs on the instance's own page. `EditLocalInstancePage` is currently just
-a name and settings form; it should become the instance's real page — name, settings, active
-profile, drift status, Re-apply.
+Activation itself belongs on the instance's own page. `InstancePage` is that page — active
+profile, drift status and Re-apply — and the profile picker was removed from
+`EditLocalInstancePage`, which now carries name, settings and disconnect only. Two pickers for
+one fact is one too many.
 
 **Instances that cannot be applied to right now** — a dedicated server mid-session, a folder
 locked by a running game — are reported and left drifted rather than being something the user
@@ -695,7 +732,14 @@ neither.
 Marking store blobs read-only is a complementary guard: an in-place rewrite then fails loudly
 rather than corrupting silently. It also stops the in-game updater working at all, which users
 may not want, so it is a separate decision from `SupportsHardlinks` and best made after the same
-testing.
+testing. **It was left alone for exactly that reason** — blobs are writable, and the safety is
+carried entirely by the flag defaulting to false.
+
+> **Both of these are still open, and answering them needs the real game.** Nobody has watched
+> what Farming Simulator's updater does to a mod file, so `SupportsHardlinks` is false, blobs are
+> writable, and **every install and replace is a full copy** — tens of gigabytes for a 2,000-mod
+> profile where it could have been seconds of directory operations. That is the cost of an
+> unanswered question, and it is the right way to be wrong.
 
 One consequence for the store assignment UI: for an adapter without hardlink support, same-disk
 and cross-disk both copy, so the choice becomes a plain speed-versus-space trade — a same-disk
@@ -719,38 +763,41 @@ POST api/v1/files/createModDownloadLink
 
 A profile of 2,000 mods means 2,000 SAS mints on a cold store. If that proves slow, add a
 batch form taking a list — the user-delegation key is fetched once per call today and could
-be fetched once per batch.
+be fetched once per batch. Nothing has needed it yet.
 
-`ModDependencyDto` gains `ContentHash`, per [above](#it-has-to-reach-the-reconciler-without-a-full-mod-list).
+`ModDependencyDto` carries `ContentHash`, per [above](#it-has-to-reach-the-reconciler-without-a-full-mod-list).
 
 `CreateModUploadLink`'s `FileAlreadyPresent` response returns the existing blob's hash, per
 [above](#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable), which means
-the upload path has to record it — blob metadata written at upload time, since Azure's built-in
+the upload path records it — blob metadata written at upload time, since Azure's built-in
 content hash is MD5.
 
 ## Fitting it into the client
 
-**`IInstanceModAdapter` gains a write side.** Reading installed mods is not enough; the
-adapter has to say where a mod file belongs and what it should be called, because that is
-game knowledge:
+**`IInstanceModAdapter` has a write side**, and it is deliberately only paths. Reading installed
+mods is not enough; the adapter has to say where a mod file belongs and what it should be called,
+because that is game knowledge:
 
 ```csharp
-Task<string> GetModFilePath(string modId, string versionId);  // where it would live
-Task InstallMod(LocalMod mod, Stream content, CancellationToken ct);
-Task UninstallMod(string modId, CancellationToken ct);
+string ModFolder { get; }
+string GetModFilePath(ModKey modId, ModVersionKey versionId);
+string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 ```
 
-The link-versus-copy decision belongs in a shared service, not in each adapter — adapters
-supply paths, the sync engine performs the filesystem operations.
+There is no `InstallMod` taking a stream, and that is the point: the link-versus-copy decision
+depends on the store assignment and the filesystem rather than on the game, so it belongs in a
+shared service and not in each adapter. Adapters supply paths, the sync engine performs the
+filesystem operations. `GetInstalledModPath` is separate because what is on disk is not
+necessarily where this adapter version would put it.
 
-**A `ModSyncService` in `Client.Core`** owns the plan/execute cycle and reports progress. It
-must be cancellable and report per-mod progress: 2,000 files is minutes of work even on the
-fast path, and a frozen progress bar is indistinguishable from a hang.
+**`ModSyncPlanner` and `ModSyncService` in `Client.Core`** split the cycle: the planner does no
+I/O beyond hashing the few files whose stat no longer matches the manifest and changes nothing;
+the service executes and reports per-mod progress. Cancellable, because 2,000 files is minutes
+of work even on the fast path and a frozen progress bar is indistinguishable from a hang.
 
-**A sync page** showing the plan (install / replace / uninstall / quarantine counts), the
-confirmation for anything unrecognised, and live progress.
-`ModListItemViewModel.ModStatus` already has `New` / `UpdateAvailable` / `AlreadyInRepo` and
-nothing sets it — it exists for exactly this.
+**`SyncPage`**, under the instance's own `InstancePage`, shows the plan (install / replace /
+uninstall / quarantine counts), the confirmation naming anything unrecognised, drift status, and
+live progress.
 
 ## Things this design deliberately does not do
 

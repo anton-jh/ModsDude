@@ -55,6 +55,10 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding ModFolder}"
                                                        Text="{Binding ModFolder}" />
+                                            <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding DriftSummary}"
+                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

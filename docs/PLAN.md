@@ -10,34 +10,38 @@ public onboarding. What it *does* have to do is work reliably at real data volum
 what a Farming Simulator install actually looks like.
 
 The organising principle: **finish one vertical slice end to end before widening.** The
-system today has a broad, shallow surface — most screens exist, few of them do anything.
-The value arrives the first time someone can point a game install at a profile and have it
-come out right.
+system had a broad, shallow surface — most screens existed, few of them did anything. The
+value arrived the first time someone could point a game install at a profile and have it come
+out right; that slice is now closed end to end.
 
 ## Where it stands
 
 | Area | State |
 | --- | --- |
-| Identity, users, memberships | Working |
+| Identity, users, memberships | Working, with a members UI |
 | Repos, adapters, base settings | Working |
-| Local instances | Working |
+| Local instances | Working, scoped to a game and carrying an active profile |
 | Profiles (create/rename/delete) | Working |
-| Mod dependencies | Server works, no UI. Every endpoint threw until recently — treat as unproven |
-| Mod upload | Server complete, client wired up, import does not call it yet |
-| Mod download | **Does not exist** |
-| Profile → instance sync | **Does not exist** |
+| Mod dependencies | Server and the profile mod list editor both work |
+| Mod catalog, import, imagery | Working — sources, merged catalog, real import, server-side derivatives |
+| Mod upload / download | Working, both directions, straight to blob storage |
+| Profile → instance sync | Working — content store, plan, execute, manifest |
+| Drift | Detected at startup and on window activation, surfaced app-wide, re-appliable in one click |
 | Savegames | Placeholder interfaces only |
-| Tests, CI, deployment | None |
+| Tests | Three projects: server domain, server persistence (needs PostgreSQL), client core |
+| CI | Two jobs — Linux for the server and the OpenAPI diff, Windows for the client |
+| Deployment | None |
 
 ---
 
 ## Settled architecture decisions
 
-Decisions taken after the initial write-up. All are prerequisites for Phase 3.
+Decisions taken after the initial write-up. All were prerequisites for Phase 3, and all have
+since been implemented; they are kept here as the record of why the shape is what it is.
 
 ### Instances are scoped to a game, and an instance is one mod folder
 
-`LocalInstance` is currently scoped to a **repo**, which breaks as soon as someone joins more
+`LocalInstance` was scoped to a **repo**, which breaks as soon as someone joins more
 than one repo for the same game: a member of three Farming Simulator repos has one
 installation but must configure it three times, and all three instances believe they own the
 same mods folder.
@@ -72,14 +76,14 @@ materialising by hardlink, or a store on another disk, materialising by copy. Th
 trades sync time for space on the constrained disk, and is a legitimate choice rather than a
 fallback — the drive with the game on it is frequently not the drive with room on it.
 
-The assignment, store path and maximum size therefore live in a **new machine-wide settings
-bag on `LocalState`**, keyed by volume, and stay out of both instance and repo settings. See
+The assignment, store path and maximum size therefore live in a **machine-wide settings bag on
+`LocalState`**, keyed by volume, and stay out of both instance and repo settings. See
 [07 — Mod sync design](07-mod-sync-design.md#where-the-store-lives).
 
 ### No migration
 
-The system has no users. `LocalState.Version` gets bumped and old state is discarded rather
-than migrated. `Store<T>` now takes a compatibility predicate so that the bump actually
+The system has no users. `LocalState.Version` was bumped to 2 and old state is discarded rather
+than migrated. `Store<T>` takes a compatibility predicate so that the bump actually
 discards rather than deserializing old JSON into the new shape.
 
 ### One schema pass, before any real data exists
@@ -93,6 +97,9 @@ So treat them as **one schema change made up front**, not four spread across thr
 phases below still describe the behaviour each one unlocks, but none of the columns should be
 added late. The moment somebody bulk-imports two thousand mods, every one of them becomes a
 migration with a data-repair step.
+
+That is what happened: the flattening, `ContentHash`, `Locked`, the image references and the
+mod-id casing normalization all landed together while the database was empty.
 
 ---
 
@@ -120,68 +127,71 @@ afternoon.
 - [x] Project the two profile read endpoints. `ModDependencies` is owned, so materializing a
       `Profile` read its whole dependency set for a DTO that does not carry it.
 - [x] Atomic writes and a compatibility gate in `Store<T>`.
-- [ ] **Flatten `Mod` and `ModVersion` into one entity** keyed `(RepoId, ModId, VersionId)`. A
+- [x] **Flatten `Mod` and `ModVersion` into one entity** keyed `(RepoId, ModId, VersionId)`. A
       mod record is really *of* a version, not a container of them, and nearly all the data was
       already on the version. Removes the create-or-append branch in registration, the shadow FK
       properties and owned-collection mapping, the `Versions` auto-include that makes
       `GET repos/{id}/mods` so heavy, and the `Mod.RepoId` TODO. Full reasoning in
       [02](02-domain-model.md#flattening).
-- [ ] **Flatten the wire format with the entity.** `ModDto` currently nests
-      `ModVersionDto[]`; it becomes one DTO per version. Leaving the response nested would make
+- [x] **Flatten the wire format with the entity.** `ModDto` nested `ModVersionDto[]`; it is now
+      one DTO per version. Leaving the response nested would make
       the client re-group on receipt — exactly the shape the flat client model exists to avoid.
-- [ ] Keep `SequenceNumber` **contiguous**, with the existing shift-on-insert and close-on-remove
-      logic — just moved off the entity, since there is no parent left to hang it on. A sparse
+- [x] Keep `SequenceNumber` **contiguous**, with the existing shift-on-insert and close-on-remove
+      logic — just moved off the entity into `ModVersionSequencer`, since there is no parent left
+      to hang it on. A sparse
       key was considered and rejected: the shift is tens of rows for one mod, mutated in memory
       and written by one atomic `SaveChanges`, so it was never the problem the aggregate was
       solving. Gaps would only add an exhaustion case to reason about in exchange for nothing.
-- [ ] `ModDependency.CanBeUpgraded()` / `Upgrade()` lose their `ModVersion.Mod.Versions`
-      navigation; pass the candidate versions in, or move the operation to the endpoint that has
-      to query for them anyway. The `GetWithModDependenciesAsync` include and the
-      `ModVersion.Mod.Id` projection above simplify with them.
-- [ ] Do the flattening **before** anything registers mods in earnest — one migration and no real
-      data makes it nearly free now, a data migration later. Same argument as the casing fix.
-- [ ] **Regenerate `Generated.cs`** — it already predates `ProblemType.RepoNotEmpty`, so the
-      client cannot parse that problem, and the flattened DTOs will need it again. Needs a
-      running API; see [03 — Server](03-server.md#regenerating-the-client).
-- [ ] Add `ModVersion.ContentHash` (SHA-256, a first-class property — not a `ModAttribute`),
-      populate it on registration, and expose it on **both** `ModVersionDto` and
+- [x] `ModDependency.CanBeUpgraded()` / `Upgrade()` lose their `ModVersion.Mod.Versions`
+      navigation; both now take the sibling versions as a parameter, supplied by the endpoint that
+      had to query for them anyway.
+- [x] Do the flattening **before** anything registers mods in earnest — one migration and no real
+      data made it nearly free, a data migration later. Same argument as the casing fix.
+- [x] **Regenerate `Generated.cs`** — it predated `ProblemType.RepoNotEmpty`, so the
+      client could not parse that problem. The checked-in `nswag-config.nswag` also had to be
+      fixed first: it pinned runtime `Net80` and named no output path, so it failed twice over
+      against the .NET 10 toolchain. See [03 — Server](03-server.md#regenerating-the-client).
+- [x] Add `ModVersion.ContentHash` (SHA-256, a first-class property — not a `ModAttribute`),
+      populate it on registration, and expose it on **both** `ModDto` and
       `ModDependencyDto`. Sync reads the profile's dependencies, not the repo's mod list; without
-      the hash there, every sync would have to pull the unpaged `GET repos/{id}/mods` to resolve
+      the hash there, every sync would have to pull the whole `GET repos/{id}/mods` to resolve
       it. Everything in Phase 3 depends on this, and adding it later means a backfill.
-- [ ] **Record the uploaded file's hash against the blob** (blob metadata — Azure's built-in
-      content hash is MD5), so `CreateModUploadLink` can return it with `FileAlreadyPresent`.
+- [x] **Record the uploaded file's hash against the blob** — blob metadata under the key
+      `CreateModUploadLink` names in its response, since Azure's built-in content hash is MD5 — so
+      that `FileAlreadyPresent` can return it.
       Without it, adopting an orphaned blob registers a hash describing a file nobody has, which
       no download can ever satisfy and no upload link can ever repair. See
       [07](07-mod-sync-design.md#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable).
-- [ ] Move the server base URL into the WPF `appsettings.json` and apply it in
-      `AddModsDudeClient` ([known issue](08-known-issues.md#the-clients-server-url-is-hardcoded-to-localhost)).
-      Blocks ever running against a deployed server.
-- [ ] Add a test project for `ModsDude.Server.Domain` and cover version sequencing,
-      membership transitions, and the dependency rules. The two fixes above would each have
-      been one test.
+- [x] Move the server base URL into the WPF `appsettings.json` and apply it in
+      `AddModsDudeClient`. Blocked ever running against a deployed server.
+- [x] Add a test project for `ModsDude.Server.Domain` and cover version sequencing,
+      membership transitions, and the dependency rules, including named regressions for the two
+      sequencing bugs above. A second project, `ModsDude.Server.Persistence.Tests`, covers what
+      only a real PostgreSQL can answer.
 
 ## Phase 1 — The mod catalog and the upload loop
 
 Make the import page actually import, on top of a representation the profile editor can reuse.
 Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
 
-- [ ] **Normalize mod id casing at the adapter boundary** and carry it in a key type
-      ([known issue](08-known-issues.md#mod-ids-are-case-sensitive-in-blob-storage-and-case-preserving-on-disk)).
-      Do this before anything registers mods in anger — afterwards it is a data migration.
-- [ ] `IsLocal` / `IsOnServer` per **version**, not per mod. Derived three-state where a page
-      needs it, never stored. Split `ModStatus` into these facts plus a per-context display
-      status.
-- [ ] A merged **flat** `CatalogModVersion` in `Client.Core` — one record per version, no
+- [x] **Normalize mod id casing at the adapter boundary** and carry it in a key type — `ModKey`,
+      whose only representable form is the normalized one, so no path can hand raw casing to blob
+      storage. Done before anything registered mods in anger; afterwards it is a data migration.
+- [x] `IsLocal` / `IsOnServer` per **version**, not per mod. Derived three-state where a page
+      needs it, never stored. `ModStatus` split into these facts plus a per-context
+      `ModDisplayStatus`.
+- [x] A merged **flat** `CatalogModVersion` in `Client.Core` — one record per version, no
       parent — so one row view model serves local, server and both. Flat all the way through:
       the server entity is flat, `LocalMod` is already one record per file, and a row view model
       wraps one version, so a parent would be a shape invented mid-pipeline. Grouping for the
       version selector and update detection is a `ToLookup(x => x.ModId)` built where needed,
       which beats maintaining a nested model that must be rebuilt every time a source checkbox
       recomposes the set.
-- [ ] Rename `LocalModImage` → `ModImage`. **Delete** the client-side `Mod` that wraps `ModDto`
-      rather than renaming it — nothing references it but `ModFakers`, and its only job was the
-      latest-versus-older grouping the lookup now does on demand.
-- [ ] **Mod sources.** Scan a set of sources rather than a fixed folder: every instance's mod
+- [x] Rename `LocalModImage` → `ModImage`. **Delete** the client-side `Mod` that wraps `ModDto`
+      rather than renaming it — nothing referenced it but `ModFakers`, and its only job was the
+      latest-versus-older grouping the lookup now does on demand. Both are gone, and the Bogus
+      package reference that existed only for the fakers with them.
+- [x] **Mod sources.** Scan a set of sources rather than a fixed folder: every instance's mod
       folder, the system Downloads folder, plus folders the user adds for the session with the
       folder browser. List them all, each with an enable/disable checkbox. **Disabled standing
       sources persist**, machine-wide in `LocalState.Settings` keyed by source id — not per repo,
@@ -192,149 +202,163 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
       relocated Downloads is common, so `%USERPROFILE%\Downloads` is a fallback, not the first
       try. `GetModsFromFolder` already takes an arbitrary path and already skips non-mods, so
       the adapter contract needs nothing new.
-- [ ] Extract a repo-scoped `ModCatalog` service: merge the source scans with
+- [x] Extract a repo-scoped `ModCatalog` service: merge the source scans with
       `GET repos/{id}/mods`, **caching per source and composing the merged view on demand** so
       that toggling a checkbox is instant and adding a source scans only that folder. Cache the
       **`Task`** rather than the result so concurrent callers join one scan. Invalidate
       explicitly on import and on instance-settings change, expose Rescan per source and for
       all, and report per-source failure so an unplugged drive marks one source bad rather than
       failing the catalog. Move the 150 ms delay and the cancellation behaviour in unchanged.
-- [ ] **Split the upload-link problem types** into `FileAlreadyPresent` and `AlreadyRegistered`
-      ([known issue](08-known-issues.md#the-two-upload-link-rejections-are-indistinguishable)).
+- [x] **Split the upload-link problem types** into `FileAlreadyPresent` and `AlreadyRegistered`.
       Without this a mod whose import failed after upload can never be retried.
       `FileAlreadyPresent` carries the existing blob's hash: matching it means this is our own
       orphan and registering is safe, differing means an id/version collision to report rather
-      than register over. Both are new problem types, so the client needs regenerating with them.
-- [ ] Implement import: per mod, link → upload → register, 4–6 mods concurrently. Per-mod
+      than register over — and a blob predating the metadata answers `null`, which the client
+      treats as "nothing established, do not register".
+- [x] Implement import: per mod, link → upload → register, five mods concurrently. Per-mod
       ordering protects the never-register-before-upload invariant; concurrency across mods
-      does not weaken it. Treat both "already present" responses as success, which makes retry
+      does not weaken it. `AlreadyRegistered` counts as success, which makes retry
       idempotent and covers a teammate importing the same version concurrently.
-- [ ] Handle **several new versions of one mod in a single import** — one from a mod folder, one
+- [x] Handle **several new versions of one mod in a single import** — one from a mod folder, one
       from Downloads. Compute positions against the final intended order, then register in
       ascending order as *insert before the next known version*, so each step is individually
       valid and no batch-placement API is needed. Versions of the same mod must register
       **sequentially**, since each insert depends on the previous; concurrency stays across
       distinct mods. Note this can move an already-registered version's sequence number.
-- [ ] **The version comparer and the arbitration dialog are prerequisites of this**, not Phase 7
-      work — placing several incoming versions needs them. See the note on Phase 7.
-- [ ] **Assert both neighbours when placing a version**, not just the one to insert before.
+- [x] **The version comparer and the arbitration dialog are prerequisites of this**, not Phase 7
+      work — placing several incoming versions needs them. They landed here. See the note on
+      Phase 7.
+- [x] **Assert both neighbours when placing a version**, not just the one to insert before.
       *Insert v2 between v1 and v4*, rejected if v4 no longer immediately follows v1. Relative
       placement alone stops collisions but still permits a silently wrong order when two members
       insert against a state neither has seen the other change — which offers a downgrade as an
       upgrade. Optimistic concurrency using only what the client already computed, retried
       through the refetch loop import already has.
-- [ ] Per-row progress and error state. At two thousand mods a single global spinner cannot
+- [x] Per-row progress and error state — a per-row phase, and a failure distinguished from a
+      skip. At two thousand mods a single global spinner cannot
       distinguish a working import from a hung one.
-- [ ] Compute the SHA-256 while uploading and send it with registration.
-- [ ] Write imported files into the content store as they go so importing an existing install
-      leaves the store warm. **This pulls the store forward out of Phase 3** — it needs the
-      per-volume store, the store assignment and `LocalState.Settings`, which are otherwise
-      Phase 2.5 and 3 work. Either bring those three items forward with it, or accept that the
-      first imports leave a cold store and drop this bullet; what does not work is leaving it
-      here as written.
-- [ ] **Store the icon and every store image server-side**, so a mod nobody has locally still
+- [x] Compute the SHA-256 while uploading and send it with registration. It comes off the same
+      buffer the upload blocks are cut from, so the file is read once.
+- [ ] **Not done: write imported files into the content store as they go**, so importing an
+      existing install leaves the store warm. This was written when the store did not exist and
+      the bullet asked to pull it forward; the store landed in Phase 3 instead, and `ModImportService`
+      still writes nothing into it. The first import after a fresh install therefore leaves a cold
+      store, and the first sync re-downloads bytes the machine already has. `ModImportService` names
+      the seam this attaches to.
+- [x] **Store the icon and every store image server-side**, so a mod nobody has locally still
       renders with its artwork instead of initials and an empty details dialog. Full design in
       [09](09-mod-catalog.md#mod-imagery).
-- [ ] Two derivatives per image — a 128 px thumbnail (~6 KB) and a full at native resolution
-      capped at 1024 px (~50 KB), as WebP — generated **client-side at import**, since only the
+- [x] Two derivatives per image — a 128 px thumbnail and a full at native resolution
+      capped at 1024 px, as WebP — generated **client-side at import**, since only the
       client can decode DDS (including the managed BC7 path) and the server has no business
-      opening mod files. Measured over 540 real mods, store art is only 1.2% of archive bytes
+      opening mod files. Store art is only 1.2% of archive bytes
       and tops out at 1024 px, so the full derivative is a **re-encode, not a downscale**; the
       saving is DDS to WebP. The thumbnail is what matters: it turns a cold 540-row list from
-      ~27 MB into ~3 MB.
-- [ ] No separate storage of originals — they are already inside the mod blob. The case against
+      tens of megabytes into a few. Both derivatives came in at roughly half the estimates this
+      was written against — the measured figures are in
+      [09](09-mod-catalog.md#what-the-volumes-actually-are).
+- [x] No separate storage of originals — they are already inside the mod blob. The case against
       shipping them is transfer and decode (roughly an order of magnitude more bytes, plus a
       managed BC7 decode, to render the same 64 px), not storage, which measurement shows would
       have been affordable.
-- [ ] **Registration decides the imagery source, not local availability.** Registered versions
+- [x] **Registration decides the imagery source, not local availability.** Registered versions
       always render from the server's derivatives, even when the mod file is on this machine;
       only unregistered import candidates are extracted from their archive. Hunting for the local
       file to gain resolution nobody wants in a 96 px strip costs exactly the work derivatives
       exist to avoid. It also gives stable hash cache keys, uniform presentation across a list,
       and means nothing ever reads images out of the content store.
-- [ ] **Opportunistic backfill.** Since imagery never blocks registration, a version can exist
+- [x] **Opportunistic backfill.** Since imagery never blocks registration, a version can exist
       with no derivatives. A client about to render one while holding the mod file should
       generate and upload them rather than fall back locally — closing the gap for everyone, and
       removing the need for a separate backfill sweep.
-- [ ] Content-address the image blobs in their own container, `mod-images/{hash[0..2]}/{hash}`.
+- [x] Content-address the image blobs in their own container, `mod-images/{hash[0..2]}/{hash}`.
       Versions overwhelmingly reuse artwork between releases, so dedupe collapses ~15,000
-      references to ~3,000 blobs for a 3,000-version repo — on the order of 150 MB of fulls and
-      20 MB of thumbnails. Server storage is not a constraint here; transfer and decode are.
-- [ ] **A machine-wide client image cache**, configured in `LocalState.Settings` beside the
+      references to ~3,000 blobs for a 3,000-version repo. Server storage is not a constraint
+      here; transfer and decode are.
+- [x] **A machine-wide client image cache**, configured in `LocalState.Settings` beside the
       stores with its own path, size cap and LRU. One per machine, not per volume — images are
       always copies, so the hardlink constraint that makes stores per-volume does not apply.
       Keep it distinct from the content store, which is what keeps "nothing reads images out of
       the content store" true. Cache server derivatives by their own hash, with no size suffix,
       since they arrive pre-sized.
-- [ ] `ModVersion` gains an **ordered collection of image references** (hash, kind, position,
-      filename) — structural, so not `ModAttribute`s. References, not ownership: a blob is
-      collectable once nothing points at it.
-- [ ] **Imagery must never block registration.** The mod file is verified before metadata is
+- [x] `ModVersion` gains an **ordered collection of image references** (hash, kind, **rendition**,
+      position, filename) — structural, so not `ModAttribute`s. References, not ownership: a blob is
+      collectable once nothing points at it. `Rendition` is not in the list above because the
+      original model had no field for it; see
+      [09](09-mod-catalog.md#two-sizes) for why one was needed.
+- [x] **Imagery must never block registration.** The mod file is verified before metadata is
       written; images get the opposite treatment, uploaded best-effort after the fact and picked
       up by the opportunistic backfill above. An import of 2,000 mods cannot half-fail over a
       timed-out thumbnail.
-- [ ] A **batch existence check** before uploading — "which of these hashes do you have?" After
+- [x] A **batch existence check** before uploading — "which of these hashes do you have?" After
       the first import most images are already present, and 2,000 mods x 20 images is 40,000
       uploads that mostly need not happen.
-- [ ] Serve them through the API — `GET images/{hash}`, redirecting to a SAS or streaming —
+- [x] Serve them through the API — `GET images/{hash}`, redirecting to a SAS or streaming —
       rather than per-image SAS minting, which inverts the mod-file trade-off for files that are
       small and fetched in bulk. Affordable because a content-addressed image is immutable and so
       cacheable forever; the client's existing disk cache then fetches each one once per machine,
       ever. The route has no `repoId` and cannot have one, so the check is **authenticated user**,
       not Guest of a repo — document that widening rather than implying a scoping it lacks.
-- [ ] **Verify image bytes on ingest**, client-side at minimum. The image blobs are one globally
+- [x] **Verify image bytes on ingest**, client-side at minimum. The image blobs are one globally
       shared address space cached permanently by hash, which is exactly the shape
       [07](07-mod-sync-design.md#cache-isolation) says is only safe when every ingest is
-      verified. Skipping it for images would be an unexplained inconsistency, and it is a hash of
-      a 6 KB file.
-- [ ] Stop dropping `Description` when mapping `ModVersionDto`
-      ([known issue](08-known-issues.md#the-client-drops-description-from-server-mod-versions)).
+      verified. Done on both sides: the upload endpoint refuses bytes that do not hash to the
+      address they were sent to, and the client verifies what it downloads before caching it.
+- [x] Stop dropping `Description` when mapping the server's mod DTO. The client-side `Mod` that
+      dropped it is deleted; `CatalogModVersion` carries the description for local and registered
+      versions alike.
 
 ## Phase 2 — Profile contents and mod management
 
-The profile is currently a name with nothing in it, and Import and Manage are separate pages
+A profile was a name with nothing in it, and Import and Manage were separate pages
 showing overlapping data under different rules.
 
-- [ ] **Merge Import into Manage.** One list over the catalog, presence filter chips
+- [x] **Merge Import into Manage.** One list over the catalog, presence filter chips
       (All / In repo / On disk only / Unused), bulk import as a selection mode that reveals the
       footer bar the import page already has.
-- [ ] Put the source list with its checkboxes on both Manage and the profile editor. Show which
+- [x] Put the source list with its checkboxes on both Manage and the profile editor. Show which
       source a row came from only when more than one is enabled — with a single source it is
       noise on every row.
-- [ ] Add profile-usage information to `ModDto` or a dedicated endpoint. "Unused" cannot be
+- [x] Add profile-usage information to `ModDto` or a dedicated endpoint. "Unused" cannot be
       computed client-side safely — deleting on a partial view risks removing a version a
-      teammate's profile just picked up.
-- [ ] **Reorder a mod's versions by hand** from Manage — the backstop for an ordering that is
+      teammate's profile just picked up. **It got its own endpoint**, `GET repos/{repoId}/mods/usage`:
+      usage changes when a *profile* is edited and not when a version is, so folding it into the
+      mod list would have meant either serving stale usage to every client syncing incrementally,
+      or restamping `Updated` on every version a profile save touches — two thousand rows a save,
+      and a delta the size of a full listing.
+- [x] **Reorder a mod's versions by hand** from Manage — the backstop for an ordering that is
       wrong for reasons optimistic concurrency cannot catch: a comparer that guessed badly, or an
       arbitration someone regrets. Same operation the arbitration dialog already performs.
-- [ ] Add delete endpoints for a mod version and for a whole mod
-      ([known issue](08-known-issues.md#no-delete-endpoint-for-mods-or-versions)). "Remove whole
-      mod" needs its own path, since `RemoveVersion` refuses the last one. **They delete the blob
-      too** — nothing anywhere reclaims blob storage today, and adding a second way to strand
+- [x] Add delete endpoints for a mod version and for a whole mod. "Remove whole
+      mod" needs its own path, since the per-version delete refuses the last one. **They delete the
+      blob too** — nothing anywhere reclaimed blob storage, and adding a second way to strand
       bytes before there is a way to reclaim them makes the problem worse rather than deferring
-      it. This is also what unblocks `DELETE repo/{repoId}`, which now refuses a repo that still
-      has mods and therefore cannot be used at all until a repo can be emptied.
-- [ ] Replace the `ProfileModsEditorPage` stub with the two-list editor over
+      it. This is also what unblocks `DELETE repo/{repoId}`, which refuses a repo that still
+      has mods and therefore could not be used at all until a repo could be emptied. A version a
+      profile pins is refused rather than cascaded, and the dependency foreign key is `Restrict` so
+      the database enforces the same rule; the database commit precedes the blob delete, because a
+      stranded blob is recoverable and a registration whose blob is gone is not.
+- [x] Replace the `ProfileModsEditorPage` stub with the two-list editor over
       `GET/POST/PUT/DELETE .../modDependencies`. The left list is the union of registered and
       local mods, so a mod can be added *and imported* without a detour to another page.
-- [ ] **Updates render on the right, not the left** — an in-profile mod with a newer version
+- [x] **Updates render on the right, not the left** — an in-profile mod with a newer version
       shows an update affordance on its own row, plus an "N updates available" batch action.
       Putting it on the left would place the same mod on both sides at once.
-- [ ] Right-hand rows carry a version selector and a `Locked` toggle, since the list is
+- [x] Right-hand rows carry a version selector and a `Locked` toggle, since the list is
       keyed by `ModId` and moving a mod rightward means choosing a version.
-- [ ] **Import-on-save, not import-on-drag.** A local-only mod moving right is marked pending;
+- [x] **Import-on-save, not import-on-drag.** A local-only mod moving right is marked pending;
       Save uploads and registers, then updates the dependencies last in one request. Uploading
       on drag makes Cancel meaningless and litters the repo with mods nobody kept.
-- [ ] **`ModVersion.Locked`** — a new domain property and column, alongside the existing
+- [x] **`ModVersion.Locked`** — a new domain property and column, alongside the existing
       per-profile flag. Rename `ModDependency.LockVersion` → `Locked` to match, and add
       `IsEffectivelyLocked => Locked || ModVersion.Locked` so the rule lives in one place.
-- [ ] **The adapter sets `ModVersion.Locked` at every registration**, re-derived from the file
+- [x] **The adapter sets `ModVersion.Locked` at every registration**, re-derived from the file
       rather than inherited — a Farming Simulator map mod declares its maps in `modDesc`, which
       the adapter is already parsing, so the answer comes out the same for every version. No
       prompt at import. An adapter can never set `ModDependency.Locked`.
-- [ ] **`RegisterModRequest` grows a `Locked` field** — the adapter's determination has no way
+- [x] **`RegisterModRequest` grows a `Locked` field** — the adapter's determination has no way
       to reach the server otherwise.
-- [ ] Accept the consequence: **no repo-wide user override.** Someone who disagrees with the
+- [x] Accept the consequence: **no repo-wide user override.** Someone who disagrees with the
       adapter unlocks on the dependency, which is per-profile and survives version changes since
       `ChangeVersion` does not touch it. "Unlock" means "in my profile", not "in this repo" —
       the price of collapsing `Mod` into the version.
@@ -343,56 +367,58 @@ showing overlapping data under different rules.
       would be the obvious companion to a repo-wide, user-editable flag, and there is no endpoint
       that mutates a `Mod` today — but with `Locked` on the version and the override living on
       the dependency, `PUT .../modDependencies/{modId}` already carries it.
-- [ ] **Not a `ModAttribute`.** Attributes are tags and categories and the system must never
+- [x] **Not a `ModAttribute`.** Attributes are tags and categories and the system must never
       depend on one — `Locked` changes what a batch update is allowed to touch, so it is a real
       property. Same rule that put `ContentHash` in the schema.
-- [ ] **Decide what "newer" means before shipping the update actions.** Everything below reads
-      `SequenceNumber`, which until Phase 7 is registration order — folder scan order, for a repo
+- [x] **Decide what "newer" means before shipping the update actions.** Everything below reads
+      `SequenceNumber`, which would otherwise be registration order — folder scan order, for a repo
       built by bulk-importing an install. "Apply all updates" would then move mods to whatever
       happened to be registered last, confidently and in bulk, on the exact action the locking
-      design exists to make safe. Either pull Phase 7's comparer forward to here, or ship these
-      actions per-row only and label the batch one as unavailable until ordering is real.
-- [ ] Expose `ModDependency.Upgrade` / `CanBeUpgraded`, which exist on the domain and have no
-      endpoint. **"Apply all updates" skips locked mods entirely** and reports what it skipped
+      design exists to make safe. Resolved by pulling Phase 7's comparer forward into Phase 1, so
+      `SequenceNumber` is a derived ordering by the time any update action reads it.
+- [x] Expose `ModDependency.Upgrade` / `CanBeUpgraded`, which existed on the domain with no
+      endpoint. It is a **batch** — `POST .../modDependencies/upgrade` — since a profile holds one
+      to two thousand mods and N round trips is the wrong shape.
+      **"Apply all updates" skips locked mods entirely** and reports what it skipped
       ("Update 47 mods · 3 locked, skipped"). Save then cannot contain an unintended version
       change and needs no prompt at all. Sweeping locked mods in and prompting at save re-asks a
       question the user already answered, every time — which is how a safety prompt turns into
       noise people learn to dismiss.
-- [ ] Changing a locked version is a deliberate per-row act with its own confirmation, carrying
+- [x] Changing a locked version is a deliberate per-row act with its own confirmation, carrying
       the reason it is locked. For bulk, make the skipped-count a link to a modal listing the
       locked mods with an **unchecked checkbox each** and the consequence spelled out per mod —
       the same dialog, reached deliberately rather than fired at every save.
-- [ ] Add the unique index on `(RepoId, ProfileId, ModId)`
-      ([known issue](08-known-issues.md#no-unique-index-backing-the-one-version-per-mod-rule)).
+- [x] Add the unique index on `(RepoId, ProfileId, ModId)`, so the one-version-per-mod rule is
+      enforced by the database and not only by `Profile.AddDependency`.
 
 ## Phase 2.5 — Rework instances and add global settings
 
 Client-only, no server changes. Small, but it has to land before sync, because sync needs to
 know which profile owns a folder and where the store lives.
 
-- [ ] Add `InstanceScope` and `IBaseGameAdapter.Scope`, defaulting to the adapter id alone. An
+- [x] Add `InstanceScope` and `IBaseGameAdapter.Scope`, defaulting to the adapter id alone. An
       adapter serving more than one game overrides it from its base settings — see
       [04 — Game adapters](04-game-adapters.md#instance-scope).
-- [ ] Give `FarmingSimulatorBaseSettings` a `GameVersion`, required and not `[CanBeModified]`,
+- [x] Give `FarmingSimulatorBaseSettings` a `GameVersion`, required and not `[CanBeModified]`,
       and read it in both `FarmingSimulatorBaseGameAdapter.Scope` and the game-data-folder probe
-      in `FarmingSimulatorInstanceSettings`, which hardcodes `2025` today.
-- [ ] Move `CanSupportMods` / `CanSupportSavegames` from `IGameAdapter` to `IBaseGameAdapter`.
+      in `FarmingSimulatorInstanceSettings`, which had hardcoded `2025`.
+- [x] Move `CanSupportMods` / `CanSupportSavegames` from `IGameAdapter` to `IBaseGameAdapter`.
       Same layering mistake one stage up: for a scripted adapter the answer depends on base
       settings. Nothing reads either flag yet, so it is free now and breaking later.
-- [ ] Move instances out from under repos in `LocalState`: key by instance id, carry
+- [x] Move instances out from under repos in `LocalState`: key by instance id, carry
       `InstanceScope` and `GameAdapterId` instead of `RepoId`. Bump `LocalState.CurrentVersion`;
       `StateStore`'s compatibility predicate already discards anything older.
-- [ ] `Repo` offers the instances whose `InstanceScope` equals its own, rather than owning a
+- [x] `Repo` offers the instances whose `InstanceScope` equals its own, rather than owning a
       list. The sidebar keeps listing them under each repo exactly as it does now.
-- [ ] Refuse a second instance pointing at a folder another instance already owns, **across all
+- [x] Refuse a second instance pointing at a folder another instance already owns, **across all
       scopes**. Adapter scope used to make this impossible; splitting it by game does not. Needs
       the adapter to be able to answer which folder an instance owns.
-- [ ] Add `ActiveProfile: (RepoId, ProfileId)?` to the persisted instance.
-- [ ] Add `LocalState.Settings` — the first machine-wide client setting — holding, per volume,
+- [x] Add `ActiveProfile: (RepoId, ProfileId)?` to the persisted instance.
+- [x] Add `LocalState.Settings` — the first machine-wide client setting — holding, per volume,
       which store serves it, that store's path, and its maximum size.
-- [ ] A settings page. There is no such page today; the app has nowhere to put a global
-      setting.
-- [ ] Rework `CreateLocalInstancePage` / `EditLocalInstancePage` accordingly. The name
+- [x] A settings page — reached from the top-level sidebar. There was no such page, so the app had
+      nowhere to put a global setting.
+- [x] Rework `CreateLocalInstancePage` / `EditLocalInstancePage` accordingly. The name
       uniqueness check moves from per-repo to per-adapter. Phase 4 reworks `EditLocalInstancePage`
       again into the instance's real page — worth doing as one piece of work rather than touching
       the same page twice.
@@ -401,11 +427,11 @@ know which profile owns a folder and where the store lives.
 
 The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md).
 
-- [ ] `POST api/v1/files/createModDownloadLink` — Guest-level, read SAS, mirroring the upload
+- [x] `POST api/v1/files/createModDownloadLink` — Guest-level, read SAS, mirroring the upload
       endpoint.
-- [ ] The content store: `{storeRoot}/blobs/{hash[0..2]}/{hash}`, **per volume**, shared by
+- [x] The content store: `{storeRoot}/blobs/{hash[0..2]}/{hash}`, **per volume**, shared by
       every repo and instance it serves, with a configurable location and maximum size.
-- [ ] **Per-disk store assignment.** For each disk holding mod folders, let the user choose
+- [x] **Per-disk store assignment.** For each disk holding mod folders, let the user choose
       between a store on that same disk (hardlink) and a store on another disk (copy). The
       disk with the game on it is often not the disk with room on it: mods on a small `C:`
       served by a store on a roomy `D:` means `C:` holds only the active profile while the
@@ -413,147 +439,166 @@ The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md)
       install and replace becomes a cross-volume copy. Present both sides of that trade-off in
       the settings UI, and treat cross-disk as a deliberate choice, not a misconfiguration to
       warn about.
-- [ ] **Verify on ingest.** Hash every download and compare it against what the server
+- [x] **Verify on ingest.** Hash every download and compare it against what the server
       declared before storing. This single check is what makes a shared store safe between
       repos; without it the whole isolation argument collapses.
-- [ ] Materialisation: hardlink where a disk is served by its own store, copy otherwise.
+- [x] Materialisation: hardlink where a disk is served by its own store, copy otherwise.
       Warn only when a same-disk assignment silently falls back to copying — exFAT, a network
       path — since that is the case where the user is paying the cost without having chosen
       it.
-- [ ] **Install looks across stores before downloading.** Serving store first, then any other
+- [x] **Install looks across stores before downloading.** Serving store first, then any other
       disk's store — copying the blob into the serving store — and only then the network. Safe
       because every store is content-addressed, so a blob at address `H` is content that
       hashes to `H` wherever it sits. Hash it as it streams past during the copy; the bytes
       are already in memory, so verification is nearly free.
-- [ ] **Uninstall keeps a copy only when nothing else has one.** If any store on the machine
+- [x] **Uninstall keeps a copy only when nothing else has one.** If any store on the machine
       already holds the hash, delete the mod folder's file outright. Move it into the serving
       store only when no store has it at all — otherwise a mod that lives on `D:` gets
       needlessly duplicated onto `C:` just to be uninstalled.
-- [ ] LRU eviction of store blobs against the size limit, counting only entries the store
+- [x] LRU eviction of store blobs against the size limit, counting only entries the store
       uniquely holds (link count 1), since anything hardlinked into a live mod folder reclaims
       nothing. Never evict what an active profile needs.
-- [ ] Extend `IInstanceModAdapter` with the write side: where a mod file belongs, what it
+- [x] Extend `IInstanceModAdapter` with the write side: where a mod file belongs, what it
       should be called, install, uninstall. Filesystem operations stay in the sync engine;
-      adapters only supply paths.
-- [ ] **Classify on bytes, not just on version id.** `GetInstalledMods` reads the version out of
+      adapters only supply paths. It came out as paths **only** — `GetModFilePath` and
+      `GetInstalledModPath`, with no `InstallMod`/`UninstallMod` taking a stream. Materialising is
+      a hardlink on one disk and a copy on another, which depends on the store assignment and the
+      filesystem rather than on the game, so it belongs in the engine once instead of in every
+      adapter.
+- [x] **Classify on bytes, not just on version id.** `GetInstalledMods` reads the version out of
       the mod's own metadata, so two builds both calling themselves `1.0.0` look identical to it
       — the case [09](09-mod-catalog.md#same-mod-several-sources) says happens in practice. Use
       the sync manifest's recorded hash, falling back to rehashing only files whose size or mtime
       no longer match it. Without this, content addressing protects the store and does nothing
       for the mod folder.
-- [ ] `ModSyncService` in `Client.Core`: plan, then execute. Populate the serving store with
+- [x] `ModSyncService` in `Client.Core`: plan, then execute. Populate the serving store with
       everything **this profile** needs first — not the repo's full mod set — so the
       destructive phase only ever runs against a complete store.
-- [ ] **Uninstall rules, exactly as designed.** A version registered in the repo is
+- [x] **Uninstall rules, exactly as designed.** A version registered in the repo is
       recoverable — make sure some store has it, then delete. Anything unrecognised goes to
       the Recycle Bin, never to `delete`. Warn before executing, list what is affected by name,
       and say where it is going. This is the rule that makes the tool trustworthy; it is not
       negotiable for a shortcut.
-- [ ] A sync page: plan summary (install / replace / uninstall / quarantine), the
+- [x] A sync page: plan summary (install / replace / uninstall / quarantine), the
       confirmation, per-mod progress, cancellation.
-- [ ] **Write a sync manifest** on completion — installed files with hash, size and mtime — so
+- [x] **Write a sync manifest** on completion — installed files with hash, size and mtime — so
       drift detection is a directory listing rather than opening 2,000 archives. One file per
       instance at `manifests/{instanceId}.json`, beside `state.json`: not inline in `LocalState`,
       which is loaded eagerly and rewritten on every instance change, and not in the game's own
       folder, which an in-game updater rewrites.
-- [ ] Keep the two records distinct. `ActiveProfile` is a **source of truth** — a folder cannot
+- [x] Keep the two records distinct. `ActiveProfile` is a **source of truth** — a folder cannot
       tell you which profile it was meant to be, so losing it loses the intent irrecoverably. The
       manifest is an **optimisation** — reconciliation works without it, straight from folder
       contents against the profile, so losing it costs a scan and nothing more.
-- [ ] Comparing the manifest's mod set against the profile's current dependencies also catches
+- [x] Comparing the manifest's mod set against the profile's current dependencies also catches
       **someone else having edited the shared profile** since this instance synced — no revision
       number on `Profile` required, which is just as well since it has none.
-- [ ] Handle a **dangling `ActiveProfile`** (profile deleted, or the user removed from the repo):
+- [x] Handle a **dangling `ActiveProfile`** (profile deleted, or the user removed from the repo):
       say so and offer to pick another, rather than failing or reporting drift against something
       unreachable. And `ActiveProfile` with no manifest — fresh install, discarded state — falls
       back to a full reconcile.
-- [ ] **Drift detection and a Re-apply affordance**, on the instance row and the repo/profile
-      overviews. In Farming Simulator mods are updated *inside the game*, which silently leaves
-      the instance not matching its profile; today nothing anywhere would tell the user, and the
+- [x] **Drift detection**, and a Re-apply affordance. In Farming Simulator mods are updated
+      *inside the game*, which silently leaves
+      the instance not matching its profile; nothing anywhere told the user, and the
       re-apply that protects their save is the step easiest to forget. Detect and offer — never
-      revert silently, which would undo updates the user deliberately made.
-- [ ] **Call out drift on a locked mod specifically.** An unlocked mod at the wrong version is
+      revert silently, which would undo updates the user deliberately made. `InstanceDriftService`
+      answers from a directory listing against the manifest, and the instance's Sync page shows the
+      result with re-apply as the same button that applies. Phase 4 carried it to the repo and
+      profile overviews and to the app-level notification.
+- [x] **Call out drift on a locked mod specifically.** An unlocked mod at the wrong version is
       untidy; a locked map at the wrong version is a damaged savegame waiting to happen. Name the
-      consequence rather than folding it into a count.
-- [ ] Let the drift notice double as an import prompt — the drifted files are by definition
+      consequence rather than folding it into a count. Delivered with Phase 4's notification,
+      which also drove `SyncManifest` to version 2: a v1 manifest records no `Locked` flag and
+      would read as "nothing locked", which is the false negative this bullet exists to prevent.
+- [x] Let the drift notice double as an import prompt — the drifted files are by definition
       versions the user now has and the repo may not, so "the game updated 6 mods, import them?"
       is the next step of the flow they were about to perform anyway.
-- [ ] **Test whether the in-game updater rewrites mod files in place or renames over them.**
-      In-place rewriting through a hardlink corrupts the shared store blob; rename-over breaks
-      the link harmlessly. Decide the read-only-blobs trade-off after finding out — read-only
-      fails loudly instead of corrupting, but also stops the in-game updater working.
+- [ ] **Deliberately open: test whether the in-game updater rewrites mod files in place or renames
+      over them.** In-place rewriting through a hardlink corrupts the shared store blob; rename-over
+      breaks the link harmlessly. Answering it needs the real game, which no amount of reading the
+      code substitutes for, so it was left alone — and with it the read-only-blobs trade-off, which
+      depends on the answer: read-only fails loudly instead of corrupting, but also stops the
+      in-game updater working. Until then `FarmingSimulatorBaseModAdapter.SupportsHardlinks` stays
+      `false` and store blobs stay writable, which costs the main game its fast path and is the
+      right way round.
 
 **Done means:** two people on two machines pick the same profile and end up with byte-identical
 mod folders, and neither loses a file they cannot get back.
 
 ## Phase 4 — Make drift unmissable
 
+> **Done.** Detection was already in place from Phase 3; this phase is the surfacing, the
+> re-apply flow and activation. One consequence worth knowing: `SyncManifest.CurrentVersion`
+> went to 2, because a v1 manifest records no `Locked` flag and would deserialize as "nothing
+> locked" — precisely the false negative the phase exists to prevent. A discarded manifest
+> costs one reconcile.
+
 The flow this exists for: the user launches the game themselves, installs mods and runs
 update-all from the game's own menus, and comes back. ModsDude was never in the path, so
 launching the game from it does not help. What matters is what the user sees on returning.
 
-- [ ] **An app-level notification, visible from every view** — not a banner belonging to one
+- [x] **An app-level notification, visible from every view** — not a banner belonging to one
       page. States that installed mods no longer match the applied profile, and persists until
       handled or dismissed. Lives in the shell beside the modal slot `MainWindowViewModel`
       already owns, but is **not** modal: the user must be able to keep working.
-- [ ] Suppress it in exactly one place: the drifted profile's own mod list editor.
-- [ ] Two actions — open that profile's mod list editor, or **re-apply the profile directly in
+- [x] Suppress it in exactly one place: the drifted profile's own mod list editor.
+- [x] Two actions — open that profile's mod list editor, or **re-apply the profile directly in
       one click**. Most of the time nothing needs changing and the user only wants their locked
       versions back.
-- [ ] Dismissal lasts until the drift set changes or the app restarts, never permanently. A
+- [x] Dismissal lasts until the drift set changes or the app restarts, never permanently. A
       dismissed warning that never returns is a savegame silently at risk.
-- [ ] **Save in the mod list editor re-applies by default.** The re-apply is what actually
+- [x] **Save in the mod list editor re-applies by default.** The re-apply is what actually
       reverts an auto-updated locked map; making it a separate deliberate step is exactly how it
       gets forgotten. Applies to whichever instances have that profile active.
-- [ ] *Save and apply* is the primary button at **one click**; *Save only* costs **at least one
+- [x] *Save and apply* is the primary button at **one click**; *Save only* costs **at least one
       more**. Prefer a **split button** with the variant in its dropdown over a checkbox that
       retargets the main button: a checkbox is persistent visible state, and someone who ticks it
       once and leaves it ticked has silently turned a per-save decision into a standing mode. If
       a checkbox is used anyway it must reset after every save.
-- [ ] Word it with the consequence, not just a caution — *"saves the profile but leaves your
+- [x] Word it with the consequence, not just a caution — *"saves the profile but leaves your
       installed mods untouched; your locked mods stay at the versions the game updated them to.
       Only if you know exactly what you are doing."*
-- [ ] **Derive the apply targets; never ask.** They are exactly the instances whose
+- [x] **Derive the apply targets; never ask.** They are exactly the instances whose
       `ActiveProfile` is the one being saved. No checklist, no dropdown, no pre-selection — those
       all come from confusing *re-apply* (target determined) with *activate* (target chosen). A
       drifted instance is already in the derived set by definition.
-- [ ] Scale the UI with the count: one instance shows nothing at all — the word "instance" never
+- [x] Scale the UI with the count: one instance shows nothing at all — the word "instance" never
       appears, which is the common case for most games. Two or more shows *Save and apply to N
       instances* with a read-only disclosure listing them. Zero shows plain *Save*.
-- [ ] Offer activation as a **follow-up** when nothing is using the profile — *"No instance is
+- [x] Offer activation as a **follow-up** when nothing is using the profile — *"No instance is
       using this profile. Use it on X?"* — rather than folding a mode change into a save.
-- [ ] Move activation onto the instance itself. `EditLocalInstancePage` becomes the instance's
+- [x] Move activation onto the instance itself. `EditLocalInstancePage` becomes the instance's
       real page: name, settings, active profile as a dropdown, drift status, Re-apply.
-- [ ] **Activation from the profile side too**, on the profile *shell* so it is present on every
+- [x] **Activation from the profile side too**, on the profile *shell* so it is present on every
       sub-page rather than just Overview — `ProfilePageViewModel` already owns that
       sub-navigation. A dropdown to pick the instance when the adapter has more than one, and a
       plain button when it has one. Eligibility is by matching `InstanceScope`.
-- [ ] Label the control for what it will do: *Re-apply* when the instance is already on this
+- [x] Label the control for what it will do: *Re-apply* when the instance is already on this
       profile, *Activate* when it is on another or none. Activation re-syncs the folder and
       uninstalls what the previous profile put there, so use the reconciler's plan preview as the
       confirmation rather than a bare "are you sure".
-- [ ] While the mod list editor holds unsaved changes, disable the shell-level control and point
+- [x] While the mod list editor holds unsaved changes, disable the shell-level control and point
       at *Save and apply* — otherwise it silently applies the last-saved profile behind the
       user's pending edits.
-- [ ] An instance that cannot be applied to right now — a dedicated server mid-session, a folder
+- [x] An instance that cannot be applied to right now — a dedicated server mid-session, a folder
       held by a running game — is reported and left drifted, which the drift notification already
       covers. That is a "not now", not a "not this one", so it needs no pre-selection.
-- [ ] **The manifest comparison is the primary mechanism**, at startup and on window activation
+- [x] **The manifest comparison is the primary mechanism**, at startup and on window activation
       (debounced — `Window.Activated` fires on every alt-tab). It is the only one that works when
       ModsDude is closed while the game runs, which is the normal case. `FileSystemWatcher` is a
       latency optimisation on top, for when the app happens to be open; the design must not
       depend on having been running.
-- [ ] The manifest is **frozen between syncs** — written on completion, never updated to follow
+- [x] The manifest is **frozen between syncs** — written on completion, never updated to follow
       the folder. A manifest that tracked the folder could not detect anything, since drift is
       the difference between the two.
-- [ ] Write it **only on success**, atomically. A half-finished sync leaves the previous manifest
+- [x] Write it **only on success**, atomically. A half-finished sync leaves the previous manifest
       and the next check reports drift, which is true; a partial manifest would claim a state
       that never existed.
-- [ ] The cheap check is a **directory listing**, not opening archives: name, size and mtime from
+- [x] The cheap check is a **directory listing**, not opening archives: name, size and mtime from
       one non-recursive `EnumerateFiles` catches additions, removals and replacements. Open
       archives only for entries that actually differ. The recorded hashes are not read on this
       path — they are there so an uninstall knows which store blob a file matches.
-- [ ] An unreachable folder — unplugged drive, offline network path — is **unknown, not
+- [x] An unreachable folder — unplugged drive, offline network path — is **unknown, not
       drifted**. Say so quietly rather than warning about mods that may be fine.
 
 Sequenced right after sync, ahead of the cosmetic work below: it closes the one failure mode
@@ -564,17 +609,17 @@ that silently damages savegames.
 Everything the sidebar promises and does not deliver. Cheap individually, and worth doing
 only once the core works.
 
-- [ ] Repo → Members: the member list, add by username search, change level, kick. The server
+- [x] Repo → Members: the member list, add by username search, change level, kick. The server
       is complete.
-- [ ] Overview pages for repo and profile — currently `ExamplePageViewModel`. What belongs
+- [x] Overview pages for repo and profile, which were `ExamplePageViewModel`. What belongs
       here is whatever the sync flow turns out to need at a glance: instance status, drift
       from the profile, last sync.
-- [ ] Use `LocalState.LastSelectedRepos` / `LastSelectedProfiles`, which are declared and
+- [x] Use `LocalState.LastSelectedRepos` / `LastSelectedProfiles`, which were declared and
       never read, to restore where the user was.
-- [ ] **Stop the sidebar navigating on drag.** A `ListBox` extends selection to whatever the
+- [x] **Stop the sidebar navigating on drag.** A `ListBox` extends selection to whatever the
       pointer passes over while the button is held, and selection drives navigation, so dragging
-      through the menu visits every item on the way. Nobody asked for that; it is why the import
-      page needs its 150 ms delay. Worth fixing on its own merits.
+      through the menu visits every item on the way. Nobody asked for that; it is why the catalog
+      keeps its 150 ms scan delay. Worth fixing on its own merits.
 - [ ] *Nice to have:* **drag a profile onto an instance in the sidebar to activate it.** Depends
       on the fix above — once a drag passes the threshold and `DragDrop.DoDragDrop` captures the
       mouse, selection stops following, which is exactly what makes the gesture possible. No
@@ -586,107 +631,127 @@ only once the core works.
 
 Driven by the stated volumes, not by generic good practice.
 
-- [ ] Give `GET repos/{repoId}/mods` **both** pagination and a delta form keyed on
-      `Mod.Updated` ([known issue](08-known-issues.md#get-reposrepoidmods-returns-everything-unpaged)).
+- [x] Give `GET repos/{repoId}/mods` **both** pagination and a delta form keyed on
+      `ModVersion.Updated`.
       They solve different problems: pagination bounds any single response, the delta bounds
       the steady state. Paginate the delta too — a first sync against an established repo
       returns everything. **Phase 1's `ModCatalog` merges source scans with this endpoint**, so
-      it meets the stated volumes long before this phase; either pull it forward or accept that
-      the catalog is slow until here.
-- [ ] **A blob reclamation sweep** — nothing anywhere deletes a blob today
-      ([known issue](08-known-issues.md#nothing-ever-reclaims-blob-storage)). Import orphans,
-      deleted versions and deleted repos all strand bytes permanently. A sweep over the `mods`
+      it meets the stated volumes long before this phase; it was pulled forward, and the catalog
+      walks the listing a page at a time.
+- [x] **A blob reclamation sweep** — nothing anywhere deleted a blob. Import orphans,
+      deleted versions and deleted repos all stranded bytes permanently. A sweep over the `mods`
       container against registered `(repoId, modId, versionId)` triples is the whole job; the
-      same applies to `mod-images` against the reference table.
-- [ ] Stop full-list refreshing after every mutation
-      ([known issue](08-known-issues.md#full-list-refresh-after-every-mutation)) — apply the
+      same applies to `mod-images` against the reference table. It runs as a hosted service, lists
+      blobs *before* reading registrations rather than the reverse, and ignores anything younger
+      than a grace period well past the upload SAS lifetime, so an in-flight import cannot have
+      its bytes swept between upload and registration. A name it cannot parse is reported, never
+      deleted.
+- [x] Stop full-list refreshing after every mutation — apply the
       returned DTO to the existing collection instead. Removes the need for the
       `*OfInterestChanged` selection dance.
-- [ ] Return 401/403 for authorization failures rather than 400
-      ([known issue](08-known-issues.md#authorization-failures-return-400)). The client already
-      branches on `CustomProblemDetails.Type` rather than status code, so this is free on that
-      side — but `MapToBadRequest` and every endpoint's `Results<...>` signature name the status,
-      so it is a wider change than it looks.
-- [ ] Fix the duplicate-username crash
-      ([known issue](08-known-issues.md#a-second-user-with-the-same-display-name-breaks-signup)).
-      One collision and a real person cannot use the app.
-- [ ] Authorize before loading in the membership endpoints
-      ([known issue](08-known-issues.md#membership-endpoints-authorize-after-loading)).
-- [ ] Either wire up the scope policies or delete them
-      ([known issue](08-known-issues.md#scope-policies-are-defined-and-never-applied)).
+- [x] Return 401/403 for authorization failures rather than 400. The client already
+      branches on `CustomProblemDetails.Type` rather than status code, so this was free on that
+      side — but `MapToBadRequest` and every endpoint's `Results<...>` signature named the status,
+      so it was a wider change than it looked. `MapToForbidden` replaces it, and the 401 is handled
+      centrally by `NotAuthenticatedMiddleware`, because it is thrown below the handlers and the
+      endpoints most able to raise it return a bare `Ok<T>` with no union to carry it — those
+      previously answered 500.
+- [x] Fix the duplicate-username crash. One collision and a real person could not use the app.
+      Provisioning is automatic, so there is no form on which to report the collision: the name is
+      disambiguated with a numeric suffix the user still recognises as themselves.
+- [x] Authorize before loading in the membership endpoints — to the floor the real check can never
+      fall below, since `ChangeOthersMembership` needs the subject's level and therefore cannot run
+      first. `POST repos/check-name-taken` is gated on exactly what creating a repo is gated on,
+      rather than answering an existence oracle over every repo name to anyone signed in.
+- [x] Either wire up the scope policies or delete them. **Deleted.** No token anywhere carries
+      those scopes, so activating the policies would have denied every request; repo creation is
+      gated on `User.IsTrusted`, expressed through the same fluent builder as everything else.
 - [x] Delete the empty and duplicate projects — `ModsDude.Server.Services`,
       `ModsDude.Server.Common`, the `ModsDude.Client.Cli` directory — fix the stale `slnLaunch`
       entry, and drop the unused MediatR registration and package references.
 - [x] A real README: what it is, what it needs, how to run it.
-- [ ] CI in the empty `.github/workflows/`: build and test on push. One file.
-- [ ] **Something that notices when `Generated.cs` is stale.** Every problem type, DTO field and
+- [x] CI in the empty `.github/workflows/`: build and test on push. One file — but two jobs, since
+      the persistence tests need a PostgreSQL service container, which GitHub only runs on Linux,
+      and the WPF client only builds on Windows.
+- [x] **Something that notices when `Generated.cs` is stale.** Every problem type, DTO field and
       route added on the server is invisible to the client until somebody remembers to
-      regenerate, and nothing warns. Checking in the OpenAPI document and diffing it in CI is the
-      cheap version.
+      regenerate, and nothing warned. The OpenAPI document is checked in at `openapi/v1.json` and
+      `scripts/openapi.ps1` regenerates or verifies it; CI runs the verify. Note what this does and
+      does not catch: it fails when the *document* is behind the server, which is the only warning
+      anyone gets that the generated client is behind too — nothing compares `Generated.cs` against
+      the document itself.
 
 ## Phase 7 — Version ordering from version strings
 
-> **This is sequenced wrong and most of it belongs in Phase 1.** Import can bring in several
+> **This was sequenced wrong and most of it belonged in Phase 1, which is where it landed.**
+> Import can bring in several
 > versions of one mod at once — one from a mod folder, one from Downloads — and placing them
-> needs the comparer. Without it Phase 1 can only append, so an out-of-order import writes a
-> wrong ordering from the first day and Phase 7 inherits bad data to repair. The comparer, the
-> partial-order sort and the arbitration dialog should land with import; what genuinely remains
-> here is backfilling existing rows, which is nothing while there is no real data.
+> needs the comparer. Without it Phase 1 could only append, so an out-of-order import would have
+> written a wrong ordering from the first day and Phase 7 would have inherited bad data to repair.
+> The comparer, the partial-order sort and the arbitration dialog shipped with import; what
+> genuinely remained here is backfilling existing rows, which is nothing while there is no real
+> data.
 
-A design change, deliberately sequenced late because it touches the domain and the sync engine
+A design change, originally sequenced late because it touches the domain and the sync engine
 depends on stable ordering.
 
-Today `ModVersion.SequenceNumber` is a curated position that a human sets, with `InsertVersion`
-to back-fill an out-of-order upload. The intended model is that ordering **derives from the
-mod's own version string**, compared by a comparer the game adapter supplies — `1.2.3.4` and
-`v2-beta` do not compare the same way, and only the adapter knows which applies.
+`ModVersion.SequenceNumber` was a curated position that a human sets, with an insert-before
+placement to back-fill an out-of-order upload. The model now shipped is that ordering **derives
+from the mod's own version string**, compared by a comparer the game adapter supplies — `1.2.3.4`
+and `v2-beta` do not compare the same way, and only the adapter knows which applies.
 
 **Best-effort, with the user as the tie-breaker.** `modDesc/version` is free text and mod
 authors write whatever they like in it, so a parser that insists on succeeding will silently
 mis-order releases. The comparer should be confident or abstain — never guess.
 
-- [ ] A shared `DefaultModVersionComparer` covering common notation: dotted numerics of any
+- [x] A shared `DefaultModVersionComparer` covering common notation: dotted numerics of any
       depth (`1`, `1.2`, `1.2.3.4`), an optional `v`/`V` prefix, zero-padded segments, and
       pre-release suffixes (`-beta`, `-rc1`, `b2`). Compare segment-wise and numerically, so
       `1.10 > 1.9`. Returns a **three-way result**: ordered, equal, or *cannot compare
       confidently*. Abstaining is a first-class outcome, not an exception.
-- [ ] **Adapters can optionally override it.** A default interface member on `IGameAdapter`
+- [x] **Adapters can optionally override it.** A default interface member on `IGameAdapter`
       (`IModVersionComparer VersionComparer => DefaultModVersionComparer.Instance;`) so an
       adapter that says nothing gets the shared parser, and a game using dates or build numbers
       replaces it wholesale. An overriding adapter is still expected to abstain rather than
       guess.
-- [ ] **Abstain on mixed notation.** `v1` versus `1.0` is the canonical case: they are probably
+- [x] **Abstain on mixed notation.** `v1` versus `1.0` is the canonical case: they are probably
       the same release, or possibly adjacent ones, and nothing in the strings settles it.
       Likewise a date-like `2024.03` next to a semantic `1.4`. Guessing here produces a wrong
       order that nobody notices until a profile pins the wrong build.
-- [ ] **Order a set as a partial order, not a sort.** `OrderBy` assumes a total order and
+- [x] **Order a set as a partial order, not a sort.** `OrderBy` assumes a total order and
       misbehaves with an abstaining comparer. Build the partial order from pairwise comparisons
       over the union of registered and incoming versions, then topologically sort it — a few
       dozen versions makes all-pairs free. An abstention is only a *question* when nothing
       settles the pair transitively.
-- [ ] **Resolve ambiguity in one batched dialog, before registering.** Collect every pair left
+- [x] **Resolve ambiguity in one batched dialog, before registering.** Collect every pair left
       genuinely unordered and ask once, showing each mod's version list in the order that was
       derived with the unplaceable ones floating and draggable. One dialog per import, not one
       per mod. Unambiguous mods proceed immediately and never wait on it.
-- [ ] Cancelling that dialog **skips those mods and continues the import** — one unorderable mod
+- [x] Cancelling that dialog **skips those mods and continues the import** — one unorderable mod
       is not a reason to lose a two-thousand-mod batch.
-- [ ] Never register at a provisional position and fix it later: the newest version would be
+- [x] Never register at a provisional position and fix it later: the newest version would be
       wrong in the interim, and a version appended past the real newest would advertise itself as
       an update and offer everyone a downgrade.
-- [ ] Persist the resolution. Ordering is a **repo-level fact shared by every member**, so the
+- [x] Persist the resolution. Ordering is a **repo-level fact shared by every member**, so the
       answer is written to `SequenceNumber` server-side and nobody is asked again. Rows the
       comparer ordered on its own are written the same way.
-- [ ] **Send the position with the registration; do not compare on the server.** The server has
+- [x] **Send the position with the registration; do not compare on the server.** The server has
       no adapters and cannot parse a version string — `AdapterData.Configuration` is opaque to
       it by design, which is what lets a new game ship without a server deployment. So
       `RegisterModRequest` grows a placement: append, or insert before a named version. The
       client computes it with its own adapter's comparer. The server validates and stores.
       Because ordering is stored rather than recomputed on read, clients on different adapter
       compatibility versions cannot disagree after the fact — the first writer settles it.
-- [ ] **Keep `InsertVersion`** as the mechanism the resolution dialog writes through — it is
-      exactly "put this version at this position", which is what arbitration produces. Earlier
-      drafts of this plan proposed retiring it; it should stay.
-- [ ] Backfill existing rows, routing whatever the comparer cannot order into the same dialog.
+- [x] **Keep insert-before placement** as the mechanism the resolution dialog writes through — it
+      is exactly "put this version at this position", which is what arbitration produces. Earlier
+      drafts of this plan proposed retiring it; it stayed, and grew a companion:
+      `PUT repos/{repoId}/mods/{modId}/versions/{versionId}/placement` moves an
+      already-registered version, which is the backstop for an order that is wrong for reasons
+      concurrency control cannot catch.
+- [ ] **Not needed: backfill existing rows**, routing whatever the comparer cannot order into the
+      same dialog. There are no existing rows to repair — the comparer shipped with import, so no
+      registration was ever made in append-only order. The manual reorder covers the case this
+      bullet would have served.
 
 The division of labour: **the comparer proposes, `SequenceNumber` stores, the user arbitrates.**
 That keeps automatic ordering for the overwhelming majority of mods without ever inventing an
