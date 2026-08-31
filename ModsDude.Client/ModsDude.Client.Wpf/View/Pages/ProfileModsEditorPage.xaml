@@ -11,6 +11,115 @@
       Title="ProfileModsEditorPage"
       d:DataContext="{d:DesignInstance Type=pvm:ProfileModsEditorPageViewModel, IsDesignTimeCreatable=False}">
 
+    <Page.Resources>
+
+        <!-- The save button and its variant caret are one control, so the accent chrome lives here
+             once and is split down the seam: only the outer corners round, and the halves meet on a
+             hairline instead of the gap that made them read as two buttons. -->
+        <Style x:Key="SaveSplitPrimary" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="Padding" Value="16 7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Background"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                CornerRadius="4 0 0 4"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <!-- Drawn over the content rather than as the border's own stroke, so
+                                     taking focus does not nudge the label sideways. -->
+                                <Border x:Name="FocusRing"
+                                        Margin="-14 -5"
+                                        CornerRadius="4 0 0 4"
+                                        BorderThickness="0"
+                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
+                            </Trigger>
+                            <!-- With nothing to apply to there is no caret beside it, so it rounds
+                                 on both sides again. -->
+                            <DataTrigger Binding="{Binding HasApplyTargets}" Value="False">
+                                <Setter TargetName="Background" Property="CornerRadius" Value="4" />
+                                <Setter TargetName="FocusRing" Property="CornerRadius" Value="4" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The other half. A drawn chevron rather than a glyph: an icon font that is missing is not
+             an error, it just renders as a stray mark in the middle of the button. -->
+        <Style x:Key="SaveSplitCaret" TargetType="ToggleButton">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Background"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                CornerRadius="0 4 4 0">
+                            <Grid>
+                                <Rectangle Width="1" Margin="0 7"
+                                           HorizontalAlignment="Left"
+                                           Fill="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                           Opacity="0.3" />
+                                <Path x:Name="Chevron"
+                                      Data="M 0 0 L 4.5 4.5 L 9 0"
+                                      Stroke="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                      StrokeThickness="1.4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Border x:Name="FocusRing"
+                                        CornerRadius="0 4 4 0"
+                                        BorderThickness="0"
+                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <!-- Held down for as long as the menu it opened is up. -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
+                                <Setter TargetName="Chevron" Property="Stroke" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Page.Resources>
+
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
@@ -458,49 +567,72 @@
                 </StackPanel>
             </Border>
 
-            <Grid ColumnDefinitions="auto auto auto * auto">
+            <Grid ColumnDefinitions="auto auto * auto">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the
                      dropdown. A checkbox would be persistent visible state, and one left ticked turns
                      a per-save decision into a standing mode. -->
-                <Button Grid.Column="0" Width="250" Margin="32 24 0 24" Style="{DynamicResource AccentButtonStyle}"
-                        Content="{Binding SaveActionText}" Command="{Binding SaveChangesCommand}" />
+                <StackPanel x:Name="SaveSplitButton"
+                            Grid.Column="0" Orientation="Horizontal" Margin="32 24 4 24">
 
-                <Button x:Name="SaveVariantButton"
-                        Grid.Column="1" Width="32" Margin="1 24 4 24"
-                        Style="{DynamicResource AccentButtonStyle}"
-                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                        Content="&#xE70D;"
-                        ToolTip="Other ways to save"
-                        Click="OpenSaveVariants"
-                        Visibility="{Binding HasApplyTargets, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Command="{Binding SaveOnlyCommand}">
-                                <MenuItem.Header>
-                                    <StackPanel Orientation="Vertical" MaxWidth="420">
-                                        <TextBlock Text="Save only" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding SaveOnlyDescription}"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
-                                </MenuItem.Header>
-                            </MenuItem>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
+                    <Button x:Name="SaveButton"
+                            MinWidth="200"
+                            Style="{StaticResource SaveSplitPrimary}"
+                            Content="{Binding SaveActionText}"
+                            Command="{Binding SaveChangesCommand}" />
 
-                <Button Grid.Column="2" Margin="4 24 4 24"
+                    <!-- Follows the primary half rather than carrying its own condition: everything
+                         behind the caret is a way of doing the save that is greyed out next to it, so
+                         a live caret over a dead menu would be an invitation to nothing. -->
+                    <ToggleButton x:Name="SaveVariantButton"
+                                  Style="{StaticResource SaveSplitCaret}"
+                                  ToolTip="Other ways to save"
+                                  IsEnabled="{Binding IsEnabled, ElementName=SaveButton}"
+                                  Visibility="{Binding HasApplyTargets, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- Opens upwards, because the button sits on the bottom edge of the page, and
+                         hangs off the pair rather than off the caret alone so a menu wider than the
+                         caret still starts at an edge that is there in the layout. Declared inline
+                         like the row menus, which is what keeps the data context. -->
+                    <Popup IsOpen="{Binding IsChecked, ElementName=SaveVariantButton, Mode=TwoWay}"
+                           PlacementTarget="{Binding ElementName=SaveSplitButton}"
+                           Placement="Top"
+                           VerticalOffset="-6"
+                           StaysOpen="False"
+                           AllowsTransparency="True">
+
+                        <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                Padding="4">
+                            <Button Width="320"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Command="{Binding SaveOnlyCommand}"
+                                    Click="CloseSaveVariants">
+                                <StackPanel Orientation="Vertical">
+                                    <TextBlock Text="Save only" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding SaveOnlyDescription}"
+                                               Margin="0 2 0 0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Button>
+                        </Border>
+                    </Popup>
+                </StackPanel>
+
+                <Button Grid.Column="1" Margin="4 24 4 24"
                         Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
 
-                <TextBlock Grid.Column="3"
+                <TextBlock Grid.Column="2"
                            Margin="16 0"
                            VerticalAlignment="Center"
                            Text="{Binding PendingText}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <Button Grid.Column="4" Margin="4 24 32 24"
+                <Button Grid.Column="3" Margin="4 24 32 24"
                         Content="Stop saving"
                         Command="{Binding SaveChangesCancelCommand}"
                         Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />

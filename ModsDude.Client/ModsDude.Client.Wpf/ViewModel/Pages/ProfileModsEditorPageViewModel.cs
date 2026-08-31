@@ -208,11 +208,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
     private bool _hasUnsavedChanges;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     private bool _isSaving;

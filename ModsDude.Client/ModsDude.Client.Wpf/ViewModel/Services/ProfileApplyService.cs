@@ -38,11 +38,19 @@ public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplySta
 /// one-click re-apply, the mod list editor's save, and the shell-level activation control.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The sync page stays as it is - it exists to show the plan and let the user read it before
 /// deciding. This is the other shape, where the decision has already been made and the plan is only
 /// worth interrupting for when it would destroy something the repo cannot put back.
+/// </para>
+/// <para>
+/// The modal host is taken lazily because it is the shell itself: the drift notice is built as part
+/// of <c>MainWindowViewModel</c>, which is what <see cref="IModalService"/> resolves to, so asking
+/// for it in the constructor closes a cycle the container never gets out of. Nothing here needs a
+/// dialog until the user applies something, which is long after the shell exists.
+/// </para>
 /// </remarks>
-public sealed class ProfileApplyService(ModSyncService syncService, IModalService modalService)
+public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalService> modalService)
 {
     /// <summary>
     /// Works out what would change. Returns null where the instance cannot be applied to right now,
@@ -177,7 +185,7 @@ public sealed class ProfileApplyService(ModSyncService syncService, IModalServic
             "Apply",
             "Cancel");
 
-        await modalService.Show(modal);
+        await modalService.Value.Show(modal);
 
         return modal.Result;
     }
@@ -200,7 +208,7 @@ public sealed class ProfileApplyService(ModSyncService syncService, IModalServic
             "Apply the profile",
             "Cancel");
 
-        await modalService.Show(modal);
+        await modalService.Value.Show(modal);
 
         return modal.Result;
     }

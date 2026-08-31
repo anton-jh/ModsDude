@@ -24,18 +24,11 @@ public partial class ProfileModsEditorPage : Page
 
 
     /// <summary>
-    /// WPF has no split button, so the variant lives in the caret's own context menu. Opening it on a
-    /// left click is what makes the pair read as one control rather than as two buttons.
+    /// The popup stays open through a click on its own content, so the item that runs the variant
+    /// has to put the caret back up itself.
     /// </summary>
-    private void OpenSaveVariants(object sender, RoutedEventArgs e)
+    private void CloseSaveVariants(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.ContextMenu is not ContextMenu menu)
-        {
-            return;
-        }
-
-        menu.PlacementTarget = button;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
-        menu.IsOpen = true;
+        SaveVariantButton.IsChecked = false;
     }
 }

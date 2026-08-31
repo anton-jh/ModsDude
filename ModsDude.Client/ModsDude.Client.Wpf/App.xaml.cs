@@ -99,6 +99,9 @@ public partial class App : Application
         services.AddSingleton<ModListItemViewModel.Factory>();
 
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
+        // The shell is the modal host, so anything the shell itself is built from has to ask for the
+        // host after the fact rather than as a constructor argument. See ProfileApplyService.
+        services.AddSingleton(sp => new Lazy<IModalService>(sp.GetRequiredService<IModalService>));
         services.AddSingleton<IDialogService, DialogService>();
 
         // Singleton so the decoded thumbnails survive navigating away from a page and back.
