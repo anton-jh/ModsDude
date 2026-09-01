@@ -47,6 +47,7 @@
                                                 <TextBlock VerticalAlignment="Center" Width="300"
                                                            FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                            Text="{Binding Name}" />
 
                                                 <TextBlock VerticalAlignment="Center" Width="160"

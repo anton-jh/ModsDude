@@ -36,7 +36,8 @@
                         CornerRadius="4" Padding="16"
                         Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibilityConverter}}">
                     <StackPanel Orientation="Vertical">
-                        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Summary}" />
+                        <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   TextWrapping="Wrap" Text="{Binding Summary}" />
 
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 8 0 0"
                                    TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
@@ -70,9 +71,12 @@
                         <ListView.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:ModSyncRowViewModel}">
                                 <Grid ColumnDefinitions="180 *" Margin="0 4 0 4">
-                                    <TextBlock Grid.Column="0" FontWeight="SemiBold" Text="{Binding Action}" />
+                                    <TextBlock Grid.Column="0" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Text="{Binding Action}" />
                                     <StackPanel Grid.Column="1" Orientation="Vertical">
-                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    TextWrapping="Wrap"
                                                    Text="{Binding Detail}" />

@@ -42,7 +42,8 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:VolumeAssignmentViewModel}">
                                             <StackPanel Orientation="Vertical" Margin="0 16 0 0">
-                                                <TextBlock FontWeight="SemiBold" Text="{Binding VolumeRoot}" />
+                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           Text="{Binding VolumeRoot}" />
                                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                            Text="{Binding InstanceSummary}" />
 
@@ -75,7 +76,8 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:ContentStoreViewModel}">
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding VolumeRoot}" />
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Text="{Binding VolumeRoot}" />
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding ServedSummary}" />
 

@@ -64,15 +64,21 @@
                     <Grid Grid.Column="2" Margin="16 0 12 0" VerticalAlignment="Center"
                           RowDefinitions="auto auto" ColumnDefinitions="* auto">
 
+                        <!-- The name is the way into the details, so the row needs no button of its
+                             own for them. The trimming lives on the TextBlock and the click on the
+                             link inside it, which is why the tooltip is still the full name. -->
                         <TextBlock Grid.Row="0" Grid.Column="0"
-                                   Text="{Binding Name}"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap"
                                    VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}"
                                    ToolTip="{Binding Name}"
-                                   ToolTipService.InitialShowDelay="400" />
+                                   ToolTipService.InitialShowDelay="400">
+                            <Hyperlink Style="{StaticResource TextLink}"
+                                       Command="{Binding ShowDetailsCommand}">
+                                <Run Text="{Binding Name}" />
+                            </Hyperlink>
+                        </TextBlock>
 
                         <!-- Right aligned so the chip hugs the version instead of stretching to
                              whatever width the sources below it need. -->
@@ -205,15 +211,12 @@
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
-                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Margin on the panel rather than on the grid inside it, so the row keeps its
+                         trailing gap for a member who has no actions to be offered. -->
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="0 0 12 0">
 
-                        <Button Style="{DynamicResource SubtleIconButton}"
-                                Content="&#xE712;"
-                                ToolTip="Details"
-                                Command="{Binding ShowDetailsCommand}" />
-
-                        <Grid Margin="0 0 12 0"
-                              Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">
 
                             <ToggleButton x:Name="RowActionsButton"
                                           Style="{DynamicResource SubtleIconToggleButton}"

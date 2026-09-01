@@ -92,6 +92,22 @@
         </Setter>
     </Style>
 
+    <!-- A name that is also the way into whatever the row is about. It reads as ordinary text until
+         the pointer is on it, so a list of them does not turn into a wall of links. A hyperlink
+         rather than a click handler on the text: the hit area is then the glyphs themselves rather
+         than the whole column they sit in, and it takes focus and the keyboard like any control. -->
+    <Style x:Key="TextLink" TargetType="Hyperlink">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- A presence filter chip. Radio buttons so the group enforces one active filter without any
          view model bookkeeping; the chrome is the button's, not the radio's. -->
     <Style x:Key="FilterChip" TargetType="RadioButton">

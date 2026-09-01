@@ -52,6 +52,7 @@
                                                             VerticalAlignment="Center">
                                                     <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
                                                                TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                                Text="{Binding DisplayName}" />
 
                                                     <!-- Only where somebody else in this list is called the
@@ -151,6 +152,7 @@
 
                                                     <TextBlock VerticalAlignment="Center" Width="180"
                                                                FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                                Text="{Binding Code}" />
 
                                                     <Button Content="Copy" Margin="8 0 0 0"

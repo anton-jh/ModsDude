@@ -26,7 +26,8 @@
                         Padding="16">
                     <GroupBox Header="This profile" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
-                            <TextBlock FontWeight="SemiBold" Text="{Binding RepoName}" />
+                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Text="{Binding RepoName}" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 4 0 0"
                                        Text="{Binding ModSummary}" />
                         </StackPanel>
@@ -50,7 +51,8 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:InstanceOverviewViewModel}">
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Text="{Binding Name}" />
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding ModFolder}"

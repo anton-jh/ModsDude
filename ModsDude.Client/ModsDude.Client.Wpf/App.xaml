@@ -109,16 +109,6 @@
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,
                  merged above. -->
 
-
-            <DataTemplate DataType="{x:Type vm:FolderPathDynamicFormFieldViewModel}">
-                <StackPanel>
-                    <TextBlock Text="{Binding Title}" />
-                    <TextBlock Text="{Binding Required}"/>
-                    <TextBlock Text="{Binding CanBeModified}" />
-                    <TextBlock Text="{Binding Value}" />
-                </StackPanel>
-            </DataTemplate>
-
             <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
             <vc:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
 
