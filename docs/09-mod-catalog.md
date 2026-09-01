@@ -308,6 +308,13 @@ So: register the mod, then upload imagery best-effort through
 above pick up whatever did not make it. A version with no images renders with initials, exactly
 as a local mod without an icon does.
 
+Best-effort is not the same as unrecorded. Every failure on that path is logged with the reason —
+an upload refused with a status code, an image that would not decode, how much of a batch went
+missing — and a mod whose imagery did not make it is counted into the shell's background-problem
+notice. Without that, a storage container that does not exist, an expired token and a mod that
+ships no pictures are the same event seen from outside: a row drawn with initials. See
+[05 — Client](05-client.md#absorbed-is-not-hidden).
+
 That endpoint **replaces** the whole reference set rather than adding to it. Imagery arrives
 late, in unknown completeness, and possibly more than once — a retry, or a backfill firing on
 another machine — and a replace is the only shape of that which is idempotent.

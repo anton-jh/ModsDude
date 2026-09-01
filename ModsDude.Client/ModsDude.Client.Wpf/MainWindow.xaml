@@ -20,68 +20,109 @@
                NavigationUIVisibility="Hidden"
                Margin="0 12 0 0"/>
 
-        <!-- Beside the modal slot, not in it. It has to be visible from every view and must not stop
-             the user working: the drift already happened while they were in the game. -->
-        <Border DataContext="{Binding DriftNotification}"
-                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                Margin="0 0 24 24"
-                MaxWidth="460"
-                Padding="20"
-                CornerRadius="6"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource SystemFillColorCautionBrush}">
+        <!-- Beside the modal slot, not in it. Both notices have to be visible from every view and
+             must not stop the user working: the drift already happened while they were in the game,
+             and the background failures are things the app chose to absorb. They stack rather than
+             share the corner, with drift on top - it is the one that can cost a savegame. -->
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0 0 24 24"
+                    MaxWidth="460">
 
-            <StackPanel Orientation="Vertical">
+            <Border DataContext="{Binding DriftNotification}"
+                    Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                    Margin="0 0 0 12"
+                    Padding="20"
+                    CornerRadius="6"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemFillColorCautionBrush}">
 
-                <TextBlock Text="{Binding Headline}"
-                           FontWeight="SemiBold"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <StackPanel Orientation="Vertical">
 
-                <TextBlock Text="{Binding Detail}"
-                           Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{Binding Headline}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                <!-- Its own line, in its own colour: a locked map at the wrong version is not a
-                     tidiness problem. -->
-                <TextBlock Text="{Binding LockedWarning}"
-                           Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                           Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding Detail}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                <TextBlock Text="{Binding ImportPrompt}"
-                           Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Visibility="{Binding HasImportPrompt, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <!-- Its own line, in its own colour: a locked map at the wrong version is not a
+                         tidiness problem. -->
+                    <TextBlock Text="{Binding LockedWarning}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <TextBlock Text="{Binding Status}"
-                           Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding ImportPrompt}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Visibility="{Binding HasImportPrompt, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <WrapPanel Orientation="Horizontal" Margin="0 16 0 0">
-                    <Button Content="Re-apply now"
-                            Margin="0 0 8 0"
-                            Style="{DynamicResource AccentButtonStyle}"
-                            Command="{Binding ReapplyCommand}" />
+                    <TextBlock Text="{Binding Status}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <Button Content="Review and import"
-                            Margin="0 0 8 0"
-                            Command="{Binding OpenModListCommand}" />
+                    <WrapPanel Orientation="Horizontal" Margin="0 16 0 0">
+                        <Button Content="Re-apply now"
+                                Margin="0 0 8 0"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Command="{Binding ReapplyCommand}" />
 
-                    <Button Content="Dismiss"
-                            Command="{Binding DismissCommand}" />
-                </WrapPanel>
+                        <Button Content="Review and import"
+                                Margin="0 0 8 0"
+                                Command="{Binding OpenModListCommand}" />
 
-            </StackPanel>
-        </Border>
+                        <Button Content="Dismiss"
+                                Command="{Binding DismissCommand}" />
+                    </WrapPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- The quiet one. No accent button and no fix to offer: it reports that something the app
+                 absorbed did in fact happen, and points at the log. -->
+            <Border DataContext="{Binding BackgroundProblems}"
+                    Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                    Padding="16"
+                    CornerRadius="6"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+
+                <StackPanel Orientation="Vertical">
+
+                    <TextBlock Text="{Binding Headline}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Text="{Binding Detail}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <WrapPanel Orientation="Horizontal" Margin="0 12 0 0">
+                        <Button Content="Open log folder"
+                                Margin="0 0 8 0"
+                                Command="{Binding OpenLogCommand}" />
+
+                        <Button Content="Dismiss"
+                                Command="{Binding DismissCommand}" />
+                    </WrapPanel>
+
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
 
         <Grid Background="{DynamicResource SmokeFillColorDefaultBrush}"
               Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"

@@ -21,6 +21,13 @@ internal class ModImageStorageService(
     private const int _existenceCheckConcurrency = 16;
 
 
+    public async Task EnsureContainerExists(CancellationToken cancellationToken)
+    {
+        await blobServiceClient
+            .GetBlobContainerClient(_imagesContainerName)
+            .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+    }
+
     public async Task<IReadOnlyCollection<string>> CheckWhichExist(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken)
     {
         var present = new ConcurrentBag<string>();

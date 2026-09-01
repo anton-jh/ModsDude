@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
@@ -7,8 +8,10 @@ using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.Diagnostics;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.View.Behaviors;
 using ModsDude.Client.Wpf.View.Imaging;
 using ModsDude.Client.Wpf.View.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
@@ -41,6 +44,11 @@ public partial class App : Application
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 
+        // The one thing the container cannot reach: an attached behaviour XAML constructs itself.
+        LazyLoad.UseDiagnostics(
+            _serviceProvider.GetRequiredService<ILogger<App>>(),
+            _serviceProvider.GetRequiredService<IBackgroundProblemReporter>());
+
         var window = _serviceProvider.GetRequiredService<MainWindow>();
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
         window.Show();
@@ -52,6 +60,11 @@ public partial class App : Application
     private async void Application_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
+
+        // The dialog tells the user what went wrong; the log is what tells anyone why. The wrapped
+        // exception loses the original stack, so this logs what actually arrived.
+        _serviceProvider.GetRequiredService<ILogger<App>>()
+            .LogError(e.Exception, "Unhandled exception reached the dispatcher.");
 
         var exception = e.Exception switch
         {
@@ -67,6 +80,21 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        // A WPF app has no console, so an ILogger with no file behind it is the same as no
+        // logger at all. Registered first, so everything composed below can ask for one.
+        services.AddLogging(builder =>
+        {
+            // Configurable so that chasing a quiet failure - imagery that publishes nothing, and
+            // says so only at Debug - is an appsettings edit rather than a rebuild.
+            builder.SetMinimumLevel(Enum.TryParse<LogLevel>(configuration["Logging:MinimumLevel"], out var level)
+                ? level
+                : LogLevel.Information);
+            // The typed clients log a line per request at Information, which would bury
+            // everything worth reading.
+            builder.AddFilter("System.Net.Http", LogLevel.Warning);
+            builder.AddProvider(new FileLoggerProvider());
+        });
+
         services.AddSingleton<MainWindow>();
         services.AddSingleton<MainWindowViewModel>();
 
@@ -97,6 +125,11 @@ public partial class App : Application
         services.AddSingleton<ShellNavigationService>();
         services.AddSingleton<ProfileApplyService>();
         services.AddSingleton<DriftNotificationViewModel>();
+
+        // Both faces of one object again: everything that absorbs a failure reports it through the
+        // interface, and the shell draws the notice those reports add up to.
+        services.AddSingleton<BackgroundProblemViewModel>();
+        services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<BackgroundProblemViewModel>());
 
         services.AddSingleton<ModListItemViewModel.Factory>();
 

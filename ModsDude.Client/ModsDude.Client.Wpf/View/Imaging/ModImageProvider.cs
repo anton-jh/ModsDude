@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -9,7 +10,11 @@ using System.Windows.Media.Imaging;
 namespace ModsDude.Client.Wpf.View.Imaging;
 
 /// <inheritdoc cref="IModImageProvider"/>
-public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposable
+public class ModImageProvider(
+    ModImageCache cache,
+    ILogger<ModImageProvider> logger,
+    IBackgroundProblemReporter problems)
+    : IModImageProvider, IDisposable
 {
     /// <summary>
     /// Images at or below this width are small enough to keep around - a thousand of them is a
@@ -100,11 +105,20 @@ public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposa
 
             return await Task.Run(() => ModImageDecoder.Decode(data, maxWidth), cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A mod with an unreadable image just shows the placeholder. Nothing here is worth
             // interrupting the user over. That covers a derivative whose bytes did not hash to the
-            // address they came from, which is refused rather than drawn.
+            // address they came from, which is refused rather than drawn. Not worth interrupting
+            // over is not the same as not worth mentioning: it is counted into the shell notice and
+            // named here.
+            logger.LogWarning(
+                exception,
+                "Could not load image {Name} ({CacheKey}) at width {MaxWidth}; the placeholder will be drawn instead.",
+                image.Name, image.CacheKey, maxWidth);
+
+            problems.Report(BackgroundProblem.ImageDisplay);
+
             return null;
         }
         finally
@@ -113,7 +127,7 @@ public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposa
         }
     }
 
-    private static ImageSource? TryDecodeCached(byte[] data)
+    private ImageSource? TryDecodeCached(byte[] data)
     {
         try
         {
@@ -124,9 +138,13 @@ public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposa
 
             return frame;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // A corrupt or half-written cache entry is not worth reporting - decode from the mod.
+            // A corrupt or half-written cache entry costs nothing but a re-decode from the mod, so
+            // it stays out of the notice - but a cache that is corrupt every time is worth being
+            // able to see in the log.
+            logger.LogDebug(exception, "Discarding an unreadable image cache entry.");
+
             return null;
         }
     }
@@ -143,9 +161,11 @@ public class ModImageProvider(ModImageCache cache) : IModImageProvider, IDisposa
 
             await cache.WriteAsync(key, buffer.ToArray(), CancellationToken.None);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // The cache is an optimization. Losing a write costs a re-decode, nothing more.
+            // The cache is an optimization. Losing a write costs a re-decode, nothing more - so no
+            // notice, but a full disk should not be invisible either.
+            logger.LogDebug(exception, "Could not write image cache entry {Key}.", key);
         }
     }
 }

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -25,6 +26,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     private readonly IModImageProvider _imageProvider;
     private readonly IModImagerySource _imagerySource;
     private readonly IModalService _modalService;
+    private readonly ILogger<ModListItemViewModel> _logger;
+    private readonly IBackgroundProblemReporter _problems;
 
     private Task<ModVersionImagery>? _imagery;
     private bool _thumbnailRequested;
@@ -35,13 +38,17 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
         CatalogModVersion mod,
         IModImageProvider imageProvider,
         IModImagerySource imagerySource,
-        IModalService modalService)
+        IModalService modalService,
+        ILogger<ModListItemViewModel> logger,
+        IBackgroundProblemReporter problems)
     {
         Mod = mod;
         _repoId = repoId;
         _imageProvider = imageProvider;
         _imagerySource = imagerySource;
         _modalService = modalService;
+        _logger = logger;
+        _problems = problems;
 
         ShortDescription = BuildShortDescription(mod.Name, mod.Description);
         Initials = BuildInitials(mod.Name);
@@ -309,10 +316,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
             {
                 return await _imagerySource.GetAsync(_repoId, Mod, CancellationToken.None);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 // There is no user action to suggest and an error per row would be unusable, so a
-                // row whose imagery could not be reached renders as initials.
+                // row whose imagery could not be reached renders as initials - and says so once, in
+                // the shell notice, however many rows it happened to.
+                _logger.LogWarning(
+                    exception,
+                    "Could not resolve imagery for {ModId} {VersionId}; the row will render as initials.",
+                    Mod.ModId.Value, Mod.VersionId.Value);
+
+                _problems.Report(BackgroundProblem.ImageDisplay);
+
                 return ModVersionImagery.None;
             }
         }

@@ -5,6 +5,14 @@ namespace ModsDude.Server.Application.Dependencies;
 public interface IModImageStorageService
 {
     /// <summary>
+    /// Creates the image container if it is not there. Called once at startup, because every other
+    /// method here fails against a container that does not exist - and the client absorbs those
+    /// failures by design, so a fresh storage account would otherwise present as imagery that
+    /// silently never appears rather than as anything anybody could act on.
+    /// </summary>
+    Task EnsureContainerExists(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Which of <paramref name="hashes"/> are already stored. A batch because after the first import
     /// into a repo almost every image is already present, and asking one at a time turns a 2,000-mod
     /// import into tens of thousands of round trips before a single byte is uploaded.

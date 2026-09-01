@@ -157,6 +157,20 @@ using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
         .Database.Migrate();
+
+    // Not fatal, unlike the migration above: the API serves every metadata route perfectly well
+    // without it, and a storage account that is momentarily unreachable is not a reason to refuse
+    // to start. Logged as an error because uploads will fail until it succeeds, and the client
+    // absorbs those failures by design.
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<IModImageStorageService>()
+            .EnsureContainerExists(CancellationToken.None);
+    }
+    catch (Exception exception)
+    {
+        app.Logger.LogError(exception, "Could not ensure the mod image container exists. Image uploads will fail until it does.");
+    }
 }
 
 

@@ -24,6 +24,7 @@ The folder split inside the WPF project is by role, not by feature:
 View/          XAML, behaviors, imaging, value converters, WPF-only services
 ViewModel/     Pages, ViewModels, Windows, and the interfaces the View layer implements
 Services/      AuthenticationService (MSAL)
+Diagnostics/   The file log sink
 ```
 
 `ViewModel/Services` holds **interfaces** (`IDialogService`, `IModalService`,
@@ -71,7 +72,60 @@ UI is up while MSAL possibly opens a browser.
 
 `Application_DispatcherUnhandledException` is the global net: it marks the exception handled,
 wraps anything that is not already a `UserFriendlyException`, and shows an error modal. This
-is why view models can let exceptions propagate rather than try/catching everywhere.
+is why view models can let exceptions propagate rather than try/catching everywhere. It logs
+first: the wrapping loses the original stack, so what reaches the log is what actually arrived.
+
+## Diagnostics
+
+A WPF app has no console, so an `ILogger` with nothing behind it is the same as no logger at all.
+`ConfigureServices` registers `FileLoggerProvider` before anything that might want one.
+
+**The log.** One file per day at `%LocalAppData%\ModsDude\logs\client-yyyyMMdd.log`, appended
+under a lock, files older than fourteen days dropped at startup. A write that fails is dropped:
+logging must never be the thing that takes the app down. The minimum level comes from
+`Logging:MinimumLevel` in `appsettings.json` and defaults to `Information`, so chasing something
+that only speaks at `Debug` is an edit rather than a rebuild. `System.Net.Http` is held at
+`Warning` — the typed clients log a line per request and would bury everything worth reading.
+
+It is a few dozen lines, not a logging framework. A desktop client writing a few hundred lines a
+session does not need one, and a dependency that has to be configured before it works is a
+dependency that ships misconfigured.
+
+### Absorbed is not hidden
+
+Several paths swallow failures on purpose, and the reasoning is sound in every case: an error
+modal per row during an import of 2,000 mods is unusable, and imagery is decoration. What does
+not follow is that the user should never find out. Absorbed failures are logged, and the ones
+with a consequence somebody can see are counted into a shell notice.
+
+| Site | Log | Notice |
+| --- | --- | --- |
+| `ModImagePublisher` — a version's imagery did not reach the server | `Error`, or `Warning` with the HTTP status for a refused upload | `ImageUpload` |
+| `ModImagePublisher` — the archive yielded no readable imagery | `Debug` | — |
+| `ModImageProvider` — an image will not load or decode | `Warning` | `ImageDisplay` |
+| `ModImageProvider` — unreadable cache entry, or a cache write that failed | `Debug` | — |
+| `ModListItemViewModel` — a row's imagery could not be resolved | `Warning` | `ImageDisplay` |
+| `LazyLoad` — a deferred load threw | `Warning` | `DeferredLoad` |
+| `AccountViewModel` — the identity fetch behind the tag and avatar colour | `Debug` | — |
+
+The `Debug` rows are the ones that cost nothing: a re-decode, or a label that was already correct.
+They stay out of the notice deliberately, and a mod that simply ships no pictures has to be
+distinguishable in the log from one whose upload failed — which is the whole reason it is logged
+at all.
+
+**`BackgroundProblemViewModel`** is the notice, and `IBackgroundProblemReporter` is what the
+absorbing sites talk to; the container registers one object under both. It counts reports by kind
+and draws one card in the shell, under the drift notice and deliberately quieter than it — drift
+risks a savegame and offers to fix it, this one has nothing to offer but the truth and a button
+that opens the log folder. Aggregated rather than raised per failure: a storage container that
+does not exist is one problem seen 2,000 times, not 2,000 problems. Dismissal starts a
+ten-minute cooldown rather than silencing the session; counting continues underneath, so a
+problem that is still happening comes back with the full total.
+
+`LazyLoad` is the one service-locator seam in the app: an attached behaviour is constructed by
+XAML and has no constructor for the container to reach, so `App.OnStartup` hands it a logger and
+the reporter through `LazyLoad.UseDiagnostics`. Both are null in a designer, and every use is
+conditional.
 
 ## Navigation
 
@@ -425,8 +479,9 @@ attached with `b:LazyLoad.Source="{Binding}"` on the item template root. Because
 containers, the same visual is handed a new item as it scrolls, which surfaces here as an
 ordinary property change; so the behavior covers both first realization and every reuse.
 `LoadAsync` must therefore be safe to call repeatedly, and implementations guard with a
-`_requested` flag. Failures are swallowed: there is no user action to suggest, and an error
-modal per row would be unusable.
+`_requested` flag. Failures are absorbed rather than raised: there is no user action to suggest,
+and an error modal per row would be unusable. They are logged and counted into the shell notice
+all the same — see [Absorbed is not hidden](#absorbed-is-not-hidden).
 
 **`ModImageProvider`.** A singleton with three layers:
 

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Services;
@@ -30,18 +31,21 @@ public partial class AccountViewModel : ObservableObject
     private readonly CurrentUserService _currentUserService;
     private readonly NavigationLockService _navigationLockService;
     private readonly Lazy<IModalService> _modalService;
+    private readonly ILogger<AccountViewModel> _logger;
 
 
     public AccountViewModel(
         AuthenticationService authenticationService,
         CurrentUserService currentUserService,
         NavigationLockService navigationLockService,
-        Lazy<IModalService> modalService)
+        Lazy<IModalService> modalService,
+        ILogger<AccountViewModel> logger)
     {
         _authenticationService = authenticationService;
         _currentUserService = currentUserService;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
+        _logger = logger;
 
         _displayName = Describe(authenticationService.CurrentAccount);
 
@@ -138,11 +142,13 @@ public partial class AccountViewModel : ObservableObject
             IsTrusted = user.IsTrusted;
             Tag = user.Tag;
         }
-        catch
+        catch (Exception exception)
         {
             // Swallowed on purpose. The name is already on screen and is the one the server has;
             // what is missing is decoration, and a label is not worth the app's error modal on the
-            // way in.
+            // way in. It stays out of the background-problem notice for the same reason, and lands
+            // in the log so that a tag which never arrives can still be accounted for.
+            _logger.LogDebug(exception, "Could not fetch the signed-in user's identity; tag and avatar colour stay unset.");
         }
     }
 

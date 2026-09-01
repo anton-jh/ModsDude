@@ -134,6 +134,10 @@ No Dockerfile, no Bicep/Terraform, no publish profile, no client installer confi
 Storage and identity are configured for real Azure resources (`modsdudedev`, a live CIAM
 tenant), so the deployment exists somewhere but is not described in the repository.
 
+The `mod-images` container is the one piece that does not depend on this: the API creates it at
+startup if it is missing. The `mods` container does not, and a storage account provisioned from
+nothing would still need it created by hand.
+
 ### The API is reached over plain HTTP on localhost
 
 `Program.cs` calls `UseHttpsRedirection()` while the client's configured base URL is

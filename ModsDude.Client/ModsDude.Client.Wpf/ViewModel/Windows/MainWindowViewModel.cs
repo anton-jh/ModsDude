@@ -18,7 +18,8 @@ public partial class MainWindowViewModel
         AuthenticationService authService,
         IFactory<MainPageViewModel> mainPageViewModelFactory,
         IEnumerable<IUserScopedState> userScopedState,
-        DriftNotificationViewModel driftNotification)
+        DriftNotificationViewModel driftNotification,
+        BackgroundProblemViewModel backgroundProblems)
     {
         _mainPageViewModelFactory = mainPageViewModelFactory;
         _userScopedState = userScopedState.ToList();
@@ -27,6 +28,8 @@ public partial class MainWindowViewModel
 
         DriftNotification = driftNotification;
         DriftNotification.Start();
+
+        BackgroundProblems = backgroundProblems;
     }
 
 
@@ -35,6 +38,12 @@ public partial class MainWindowViewModel
     /// every view without stopping the user working.
     /// </summary>
     public DriftNotificationViewModel DriftNotification { get; }
+
+    /// <summary>
+    /// Under the drift notice, and quieter: what it reports never risks anything, but it did happen
+    /// and the user is entitled to know it did.
+    /// </summary>
+    public BackgroundProblemViewModel BackgroundProblems { get; }
 
 
     [ObservableProperty]
