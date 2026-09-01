@@ -442,6 +442,33 @@ public sealed class ModSyncService(
     }
 
     /// <summary>
+    /// Records a folder that already matches its profile, without touching a file in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Nothing to do" and "nothing to record" are not the same thing. A mod dropped into the folder
+    /// by hand and then imported and pinned leaves the folder correct and the <em>manifest</em>
+    /// stale: the file is not in it, so every drift check goes on reporting it as added. Applying the
+    /// profile is exactly when the user has said the folder is what they want, so that is when the
+    /// record catches up - otherwise the notice can never be cleared by the button it offers.
+    /// </para>
+    /// <para>
+    /// Only for a plan with no work in it. A plan that has work has to be executed, and executing it
+    /// writes the manifest itself.
+    /// </para>
+    /// </remarks>
+    public void RecordAlreadyMatched(ModSyncPlan plan)
+    {
+        if (plan.HasWork)
+        {
+            throw new InvalidOperationException(
+                "A plan with work in it has to be executed; executing it is what records the result.");
+        }
+
+        WriteManifest(plan);
+    }
+
+    /// <summary>
     /// Records what is now installed, so the next drift check is a directory listing rather than
     /// 2,000 archives opened.
     /// </summary>

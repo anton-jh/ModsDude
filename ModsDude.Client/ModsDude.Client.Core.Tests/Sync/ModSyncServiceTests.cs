@@ -324,6 +324,54 @@ public class ModSyncServiceTests
     }
 
 
+    /// <summary>
+    /// The sequence that made the drift notice unclearable: a mod dropped into the folder by hand,
+    /// then imported and pinned. The folder is right and the manifest is not, so re-applying finds
+    /// nothing to do - and if that path records nothing, the notice reports an addition for ever
+    /// while the same notice's own status line says the folder already matches.
+    /// </summary>
+    [Fact]
+    public async Task A_mod_added_by_hand_and_then_pinned_stops_being_drift_once_the_match_is_recorded()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+
+        // The user drops a mod into the folder from outside, which is what the game itself does.
+        fixture.Install("fs25_b.zip", Mod("2.0.0", "b"));
+
+        var drifted = fixture.CheckDrift();
+        Assert.Equal(InstanceDriftStatus.Drifted, drifted.Status);
+        Assert.Equal(["fs25_b.zip"], drifted.Added);
+
+        // ...then imports it and pins it to the profile, which is what the notice sent them to do.
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.False(plan.HasWork);
+        Assert.Equal(2, plan.KeepCount);
+
+        fixture.Service.RecordAlreadyMatched(plan);
+
+        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+    }
+
+    [Fact]
+    public async Task Recording_a_match_is_refused_for_a_plan_that_has_work()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.True(plan.HasWork);
+        Assert.Throws<InvalidOperationException>(() => fixture.Service.RecordAlreadyMatched(plan));
+    }
+
+
     private static string Mod(string version, string build) => SyncTestContent.File(version, build);
 
 

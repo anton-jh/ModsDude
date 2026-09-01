@@ -487,6 +487,15 @@ Two rules keep it trustworthy:
 - **An unreachable folder is unknown, not drifted.** An unplugged drive or an offline network
   path should say so quietly, not raise a warning about mods that may be perfectly fine.
 
+And one that is easy to miss: **"nothing to do" is not "nothing to record."** Apply a profile to a
+folder that already matches it and no file changes, but the manifest may still be out of date —
+the case being a mod dropped in by hand and then imported and pinned, which is precisely the
+journey the drift notice sends people on. The folder ends up right, the plan comes back with no
+work, and the manifest still does not mention the file. `ModSyncService.RecordAlreadyMatched` is
+what closes that: applying is the moment the user has said the folder is what they want, so it is
+the moment the record catches up. Without it the notice reports an addition that its own re-apply
+button can never clear, while the status line underneath says the folder already matches.
+
 ### Detecting it cheaply
 
 Reconciliation already computes drift properly — desired versus actual, a plan computed and not

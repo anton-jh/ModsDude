@@ -125,6 +125,12 @@ public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalS
 
         if (plan.HasWork is false)
         {
+            // Nothing to change, but possibly plenty to record: a mod put in the folder by hand and
+            // then imported and pinned makes the folder right and the manifest wrong, and drift is
+            // measured against the manifest. Without this the notice reports an addition that
+            // re-applying can never clear, while telling the user the folder already matches.
+            syncService.RecordAlreadyMatched(plan);
+
             return new ProfileApplyOutcome(instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches.");
         }
 
