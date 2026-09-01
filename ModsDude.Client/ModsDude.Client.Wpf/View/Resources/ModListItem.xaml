@@ -238,16 +238,19 @@
                                         <Button Content="Reorder versions…"
                                                 HorizontalContentAlignment="Left"
                                                 Style="{DynamicResource SubtleMenuButton}"
+                                                ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"
                                                 Command="{Binding Actions.ReorderVersions}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Delete this version"
                                                 HorizontalContentAlignment="Left"
                                                 Style="{DynamicResource SubtleMenuButton}"
+                                                ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"
                                                 Command="{Binding Actions.DeleteVersion}"
                                                 CommandParameter="{Binding}" />
                                         <Button Content="Delete the whole mod"
                                                 HorizontalContentAlignment="Left"
                                                 Style="{DynamicResource SubtleMenuButton}"
+                                                ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"
                                                 Command="{Binding Actions.DeleteMod}"
                                                 CommandParameter="{Binding}" />
                                     </StackPanel>

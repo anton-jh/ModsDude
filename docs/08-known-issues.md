@@ -60,6 +60,16 @@ bytes that were on the machine the whole time. The design calls this out as one 
 paths; it is the one that is missing. See
 [07](07-mod-sync-design.md#ingestion).
 
+### A drift notice can outlive the account that could act on it
+
+Instances and their active profiles are machine state and survive a **Switch user** — correctly,
+since the mod folders on disk did not change. But `InstanceDrift` names a repo and a profile, and
+the new user may be in neither. `DriftNotificationViewModel` degrades rather than breaks: **Review
+and import** reports that the profile could not be opened, and **Re-apply now** finds no matching
+`Repo` and quietly does nothing. So the notice is still shown, still correct about the drift, and
+both of its buttons are dead. Nothing narrows the drift set to repos the signed-in user can
+actually reach. See [05](05-client.md#authentication) for what a switch does clear.
+
 ### Savegames are placeholder interfaces
 
 `IBaseSavegameAdapter` and `IInstanceSavegameAdapter` have no members, and
@@ -128,6 +138,27 @@ tenant), so the deployment exists somewhere but is not described in the reposito
 
 `Program.cs` calls `UseHttpsRedirection()` while the client's configured base URL is
 `http://localhost:5267`, which is also what `scripts/openapi.ps1` drives.
+
+### Invite codes are stored in the clear
+
+`RepoInvite.Code` is a plain column, not a hash. It has to be: the admin page shows the code and
+offers to copy it, which is impossible if the server cannot read it back. Sixty bits of entropy,
+a revoke button and optional caps are what stand in for hashing. Anybody with read access to the
+database can join any repo — but anybody with that access can insert a membership row directly
+anyway, so the code is not what is guarding it.
+
+### Two users with one name can also share a tag
+
+`UserTag` is four digits, so two people called Anton collide once in ten thousand. The member
+list would then show two identical rows, distinguishable only by their avatar colour, which is
+derived from the same four digits and so is identical too. Widening the tag for a group whose
+members share a name is the fix if it ever happens; nothing detects it today.
+
+### `GET users` has no caller
+
+It returns everyone who shares a repo with you, and nothing in the client asks for it. It existed
+to feed the add-a-member flow, which invites replaced. It is harmless — every user it returns is
+already visible in a member list — but it is unused surface.
 
 ## API surface inconsistencies
 

@@ -12,6 +12,7 @@
         d:DataContext="{d:DesignInstance Type=wvm:MainWindowViewModel, IsDesignTimeCreatable=False}"
         Title="ModsDude" Width="1600" Height="900"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         FontSize="14">
 
     <Grid>

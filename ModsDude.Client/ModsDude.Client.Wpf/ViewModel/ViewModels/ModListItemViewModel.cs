@@ -363,7 +363,15 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 public sealed record ModRowActions(
     ICommand ReorderVersions,
     ICommand DeleteVersion,
-    ICommand DeleteMod);
+    ICommand DeleteMod,
+    string? Restriction = null)
+{
+    /// <summary>
+    /// Why all three are refused, shown on the buttons themselves. Null where they are allowed - the
+    /// commands are then enabled and there is nothing to explain.
+    /// </summary>
+    public bool HasRestriction => Restriction is not null;
+}
 
 
 /// <summary>

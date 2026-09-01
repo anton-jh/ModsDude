@@ -27,8 +27,13 @@ public sealed class ShellNavigationService
         }
     }
 
+    /// <param name="driftedInstanceId">
+    /// The instance whose mod folder went out of step, so the editor can open with that folder
+    /// already being scanned. It is the whole reason the user is being sent there - the versions the
+    /// game downloaded are sitting in it, waiting to be imported.
+    /// </param>
     /// <returns>False where the shell is not up yet, the target is gone, or navigation was refused.</returns>
-    public async Task<bool> GoToProfileModsAsync(Guid repoId, Guid profileId)
+    public async Task<bool> GoToProfileModsAsync(Guid repoId, Guid profileId, Guid driftedInstanceId)
     {
         if (_shell is not MainPageViewModel shell)
         {
@@ -45,6 +50,6 @@ public sealed class ShellNavigationService
             return false;
         }
 
-        return profilePage.TrySelectMods();
+        return profilePage.TrySelectMods(driftedInstanceId);
     }
 }

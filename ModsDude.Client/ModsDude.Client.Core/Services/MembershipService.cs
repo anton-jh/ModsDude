@@ -7,50 +7,19 @@ namespace ModsDude.Client.Core.Services;
 /// Who is in a repo and at what level. Unlike repos and profiles this holds no live collection: the
 /// member list is read by one page and is not part of the shell, so the page owns it.
 /// </summary>
+/// <remarks>
+/// Nothing here adds anybody. A member arrives by redeeming an invite - see
+/// <see cref="InviteService"/> - so what is left to do to one is change their level or remove them.
+/// </remarks>
 public class MembershipService(
     IReposClient reposClient,
-    IMembersClient membersClient,
-    IUsersClient usersClient)
+    IMembersClient membersClient)
 {
     public async Task<IReadOnlyList<RepoMemberDto>> GetMembers(Guid repoId, CancellationToken cancellationToken)
     {
         var details = await reposClient.GetRepoDetailsV1Async(repoId, cancellationToken);
 
         return [.. details.Members];
-    }
-
-    /// <summary>The user with exactly this username, or null. The server matches the whole name, not a prefix.</summary>
-    public async Task<UserDto?> FindUser(string username, CancellationToken cancellationToken)
-    {
-        var response = await usersClient.SearchUserV1Async(username, cancellationToken);
-
-        return response.User;
-    }
-
-    public async Task AddMember(Guid repoId, string userId, RepoMembershipLevel level, CancellationToken cancellationToken)
-    {
-        var request = new AddMemberRequest()
-        {
-            UserId = userId,
-            MembershipLevel = level
-        };
-
-        try
-        {
-            await membersClient.AddMemberV1Async(repoId, request, cancellationToken);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.UserAlreadyMember)
-        {
-            throw new UserFriendlyException("Already a member", ex.Result.Detail, ex);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NotFound)
-        {
-            throw new UserFriendlyException("No such user", ex.Result.Detail, ex);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InsufficientRepoAccess)
-        {
-            throw new UserFriendlyException("You cannot grant that level", ex.Result.Detail, ex);
-        }
     }
 
     public async Task UpdateMembership(Guid repoId, string userId, RepoMembershipLevel level, CancellationToken cancellationToken)

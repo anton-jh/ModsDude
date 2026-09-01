@@ -91,7 +91,7 @@ public class ModVersionDeltaQueryTests(DatabaseFixture fixture)
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        dbContext.Users.Add(new User(userId, new Username(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
         dbContext.Repos.Add(repo);
 
         foreach (var group in versions.GroupBy(x => x.ModId))

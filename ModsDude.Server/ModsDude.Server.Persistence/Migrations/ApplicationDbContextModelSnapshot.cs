@@ -23,6 +23,57 @@ namespace ModsDude.Server.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ModsDude.Server.Domain.Invites.RepoInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantedLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MaximumUses")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Uses")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("RepoId");
+
+                    b.ToTable("RepoInvites");
+                });
+
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>
                 {
                     b.Property<Guid>("RepoId")
@@ -148,6 +199,10 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsTrusted")
                         .HasColumnType("boolean");
 
@@ -157,16 +212,18 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime>("ProfileLastUpdated")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("Username")
-                        .IsUnique();
-
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Invites.RepoInvite", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Mods.ModVersion", b =>

@@ -1,4 +1,5 @@
-﻿using ModsDude.Server.Domain.Mods;
+﻿using ModsDude.Server.Domain.Invites;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
@@ -205,6 +206,52 @@ public static class Problems
         Detail = $"The requested placement for a version of mod '{modId.Value}' in repo '{repoId.Value}' no longer matches the version order. Refetch the mod's versions, recompute the placement and retry."
     };
 
+    public static CustomProblemDetails InviteNotFound => new()
+    {
+        Type = ProblemType.InviteNotFound,
+        Title = "No such invite",
+        Detail = "No invite has that code."
+    };
+
+    public static CustomProblemDetails InviteNotUsable(InviteStatus status)
+    {
+        var reason = status switch
+        {
+            InviteStatus.Expired => "This invite has expired.",
+            InviteStatus.Exhausted => "This invite has been used as many times as it was meant for.",
+            InviteStatus.Revoked => "This invite has been revoked.",
+            _ => throw new UnreachableException("An active invite is usable")
+        };
+
+        return new()
+        {
+            Type = ProblemType.InviteNotUsable,
+            Title = "Invite no longer works",
+            Detail = reason + " Ask for a new one."
+        };
+    }
+
+    public static CustomProblemDetails InviteRedemptionConflict => new()
+    {
+        Type = ProblemType.InviteRedemptionConflict,
+        Title = "The invite changed while you were joining",
+        Detail = "Somebody else used or revoked this invite at the same moment. Try again."
+    };
+
+    public static CustomProblemDetails InviteCannotGrantAdmin => new()
+    {
+        Type = ProblemType.InviteCannotGrantAdmin,
+        Title = "An invite cannot grant Admin",
+        Detail = "A code can travel further than it was meant to. Invite at Member or Guest, then promote the person once they are in."
+    };
+
+    public static CustomProblemDetails InvalidInviteLimits(string detail) => new()
+    {
+        Type = ProblemType.InvalidInviteLimits,
+        Title = "Invite limits do not make sense",
+        Detail = detail
+    };
+
     public static CustomProblemDetails RepoNotEmpty(RepoId repoId) => new()
     {
         Type = ProblemType.RepoNotEmpty,
@@ -309,5 +356,25 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invalid-cursor")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-cursor")]
         InvalidCursor,
+
+        [EnumMember(Value = _typeBaseUri + "invite-not-found")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invite-not-found")]
+        InviteNotFound,
+
+        [EnumMember(Value = _typeBaseUri + "invite-not-usable")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invite-not-usable")]
+        InviteNotUsable,
+
+        [EnumMember(Value = _typeBaseUri + "invite-redemption-conflict")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invite-redemption-conflict")]
+        InviteRedemptionConflict,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-invite-limits")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-invite-limits")]
+        InvalidInviteLimits,
+
+        [EnumMember(Value = _typeBaseUri + "invite-cannot-grant-admin")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invite-cannot-grant-admin")]
+        InviteCannotGrantAdmin,
     }
 }

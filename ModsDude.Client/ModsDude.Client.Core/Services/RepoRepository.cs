@@ -10,6 +10,7 @@ public class RepoRepository(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
     LocalInstanceRepository localInstanceRepository)
+    : IUserScopedState
 {
     public delegate void RepoCreatedEventHandler(Guid repoId);
 
@@ -81,6 +82,22 @@ public class RepoRepository(
         RepoCreated?.Invoke(repo.Id);
     }
 
+    /// <summary>
+    /// Puts a repo the user has just joined into the list, so the shell can navigate to it without
+    /// waiting for a refresh. Ignored where the repo is already there - redeeming a code twice is
+    /// allowed, and must not produce two of the same repo.
+    /// </summary>
+    public void AddJoinedRepo(RepoMembershipDto membership)
+    {
+        if (FindRepo(membership.Repo.Id) is not null)
+        {
+            return;
+        }
+
+        Repos.Add(MapRepoModel(membership));
+        RepoCreated?.Invoke(membership.Repo.Id);
+    }
+
     public async Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         var request = new UpdateRepoRequest()
@@ -101,6 +118,18 @@ public class RepoRepository(
         }
 
         repo.Apply(updated);
+    }
+
+    /// <summary>
+    /// Every repo here came out of one account's memberships, so a different user starts from an
+    /// empty list rather than from one the next refresh would have to contradict.
+    /// </summary>
+    public void ClearUserState()
+    {
+        for (var i = Repos.Count - 1; i >= 0; i--)
+        {
+            Remove(Repos[i]);
+        }
     }
 
     public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)

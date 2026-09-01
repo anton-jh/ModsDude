@@ -16,6 +16,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IUsersClient, UsersClient>()
             .AddTypedClient<IUsersClient>((http, sp) => new UsersClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 
+        services.AddHttpClient<IInvitesClient, InvitesClient>()
+            .AddTypedClient<IInvitesClient>((http, sp) => new InvitesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+
         services.AddHttpClient<IMembersClient, MembersClient>()
             .AddTypedClient<IMembersClient>((http, sp) => new MembersClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 

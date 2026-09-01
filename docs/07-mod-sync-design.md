@@ -558,6 +558,11 @@ So the requirement is about what they see on returning:
 - **Two actions**: go to that profile's mod list editor, or re-apply the profile directly.
   Re-applying without opening anything has to be one click, because most of the time there is
   nothing to change and the user just wants their locked versions back.
+- **The editor opens already scanning the drifted folder.** Mod sources are off by default so
+  that navigating never reads a disk, but this navigation is the user asking about one specific
+  folder — the versions the game downloaded are in it. The instance id rides through
+  `GoToProfileModsAsync` to `ScanInstance`. It is the only pre-enabled source anywhere; see
+  [09 — Mod catalog](09-mod-catalog.md#the-source-list).
 
 Dismissal should last until the drift set changes or the app restarts — not forever. A dismissed
 warning that never returns is a savegame silently at risk.

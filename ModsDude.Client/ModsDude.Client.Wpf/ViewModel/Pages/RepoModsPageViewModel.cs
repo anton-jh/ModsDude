@@ -68,7 +68,15 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         // long as the checkboxes that recompose from it.
         _catalog = catalogFactory.Create(repo);
 
-        _rowActions = new ModRowActions(ReorderVersionsCommand, DeleteVersionCommand, DeleteModCommand);
+        // A guest can read the catalog - every GET here is theirs - but everything that writes to the
+        // repo needs Member. The commands refuse, and the note is what the refused buttons say.
+        CanModify = repo.MembershipLevel >= RepoMembershipLevel.Member;
+        ModifyRestriction = CanModify
+            ? null
+            : "Guests cannot change a repo's mods. Ask an admin for a higher membership level.";
+
+        _rowActions = new ModRowActions(
+            ReorderVersionsCommand, DeleteVersionCommand, DeleteModCommand, ModifyRestriction);
 
         RepoName = repo.Name;
     }
@@ -77,6 +85,16 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     public string RepoName { get; }
 
     public ObservableCollection<ModSourceViewModel> Sources { get; } = [];
+
+    /// <summary>
+    /// Whether this user may write to the repo's mods. The page itself is open to a guest - browsing
+    /// the catalog, searching it, filtering it and rescanning their own disks are all theirs - and
+    /// only importing, reordering and deleting are refused.
+    /// </summary>
+    public bool CanModify { get; }
+
+    /// <summary>Why those are refused, shown on the controls that carry them. Null where they are not.</summary>
+    public string? ModifyRestriction { get; }
 
     [ObservableProperty]
     private ICollectionView? _modsView;
@@ -271,7 +289,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanImport()
-        => IsSelectionMode && IsImporting is false && SelectedCount > 0;
+        => CanModify && IsSelectionMode && IsImporting is false && SelectedCount > 0;
 
     private static string Describe(ModImportResult result)
     {
@@ -330,7 +348,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// concurrency cannot catch, such as a comparer that guessed badly or an arbitration someone
     /// regrets. The same control the arbitration dialog uses, over the same operation.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanModify))]
     private async Task ReorderVersions(ModListItemViewModel? row)
     {
         if (row is null)
@@ -354,7 +372,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanModify))]
     private async Task DeleteVersion(ModListItemViewModel? row)
     {
         if (row is null || row.IsOnServer is false)
@@ -401,7 +419,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         await ReloadAfterServerChangeAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanModify))]
     private async Task DeleteMod(ModListItemViewModel? row)
     {
         if (row is null || row.IsOnServer is false)
@@ -582,6 +600,14 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     private bool Passes(ModListItemViewModel mod)
     {
+        // A guest sees the repo's mods and nothing else. An unregistered file on their disk is only
+        // ever interesting as something to import, which they cannot do - so it is filtered out
+        // here rather than left for a chip to hide, and "All" means all of the repo's.
+        if (CanModify is false && mod.Mod.IsOnServer is false)
+        {
+            return false;
+        }
+
         return mod.Matches(SearchText) && PresenceFilter switch
         {
             ModPresenceFilter.InRepo => mod.Mod.IsOnServer,

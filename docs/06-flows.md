@@ -13,15 +13,43 @@ content store, the uninstall rules, drift — lives in
 3. If a cached account exists, `AcquireTokenSilent`; on `MsalUiRequiredException` it falls
    back to `AcquireTokenInteractive`, which opens a browser against the CIAM `susi_1` user
    flow. With no cached account it goes straight to interactive.
-4. `IsLoggedIn` flips, `LoggedInChanged` fires, and `MainWindowViewModel` swaps
-   `LoginPageViewModel` for a `MainPageViewModel`.
+4. `AuthenticationService` adopts the account it acquired for, `AccountChanged` fires, and
+   `MainWindowViewModel` swaps `LoginPageViewModel` for a `MainPageViewModel`. The account
+   panel shows the token's `name` claim immediately, then calls `GET api/v1/users/me` for the
+   tag and the avatar colour it cannot derive itself — see [05](05-client.md#authentication).
 5. `MainPage.Init` runs `LoadReposCommand` → `GET api/v1/repos`.
 6. **Server side, on that first request:** `UserLoadingMiddleware` finds no `User` row for
-   the `sub` claim and provisions one from `sub` plus a username resolved from the `name` claim.
-   There is no signup step — the first authenticated call *is* the signup. Display names are not
-   unique and there is no form on which to report a collision, so a taken name is
-   disambiguated with a numeric suffix rather than refused; see
-   [03 — Server](03-server.md#user-provisioning).
+   the `sub` claim and provisions one from `sub` plus the `name` claim, stored verbatim.
+   There is no signup step — the first authenticated call *is* the signup. Nothing is resolved
+   against other users: display names are not unique, and a second person of the same name keeps
+   it. See [03 — Server](03-server.md#user-provisioning).
+
+## Switching user
+
+There is no sign-out, so this is the whole of the account story after the first launch. A
+shared PC is the case it exists for: two people, one machine, one set of game folders.
+
+1. Sidebar footer → **Switch user**. If something holds the navigation lock, the same
+   discard-your-changes dialog a navigation would raise comes up first, and **Stay** ends it
+   here.
+2. `AuthenticationService.SwitchUser` runs `AcquireTokenInteractive` with
+   `Prompt.SelectAccount`. Cancelling the browser leaves everything as it was — the old
+   account has not been touched yet, which is the point of doing it in this order.
+3. On success, every *other* account is removed from the token cache, so the next
+   `AcquireTokenSilent` cannot pick up the user who just left.
+4. Picking the account already signed in is a no-op: `AccountChanged` only fires for a
+   genuinely different `HomeAccountId`.
+5. Otherwise `MainWindowViewModel` disposes the current page, empties every
+   `IUserScopedState` — `RepoRepository` and `ProfileService` — and builds a new
+   `MainPageViewModel`, which loads the new user's repos from step 5 of the launch flow
+   above.
+6. **What survives:** local instances, content stores, the image cache, and the synced mod
+   folders themselves. Those describe this PC, not this account. **What does not:** the repo
+   and profile lists, and every page built from them.
+
+The server side is the same as any other first request from an account: if the new user has
+never used ModsDude, `UserLoadingMiddleware` provisions the row and they see an empty repo
+list.
 
 ## Creating a repo
 
@@ -69,10 +97,14 @@ Repo → **Mods**. This is the most performance-sensitive path in the app.
 
 1. `RepoModsPageViewModel` builds a repo-scoped `ModCatalog`, which resolves `IBaseModAdapter`
    from the repo's adapter and throws a user-friendly error if the game does not support mods.
-2. The catalog waits **150 ms** before touching the disk. A page nobody stopped on never opens a
-   file.
+2. **Nothing is scanned until a source is switched on.** Sources start off every time — the set is
+   never persisted — so opening the page reads the repo's mod list and no disk at all; tick a
+   source in the Sources panel and that folder is walked. The 150 ms delay before touching the
+   disk still stands behind that, so a page nobody stopped on never opens a file even once sources
+   are enabled.
 3. Its **sources** are every instance's mod folder in this scope, the system Downloads folder,
-   and anything the user adds for the session. Each is scanned by
+   and anything the user adds for the session — the last of those enabled on the spot, since
+   picking a folder is the act of asking for it to be read. Each is scanned by
    `GetModsFromFolder` — every `.zip` opened in parallel, capped at `ProcessorCount`, reading
    `modDesc.xml` out of each. Scans are cached **per source** and the merged view composed on
    demand, so toggling a source's checkbox recomposes from memory and adding one scans only the
@@ -197,16 +229,35 @@ Profile → **Mods**. Two lists: available on the left, pinned on the right.
    through `ModImportService` and then writes the dependencies. Uploading on drag would make
    Cancel meaningless and litter the repo with mods nobody kept.
 
+## Letting somebody into a repo
+
+Nobody is added. They join, with a code they were handed.
+
+1. Repo → **Members** → Invites. A Member or Admin picks the level the code grants — Guest or
+   Member, never Admin, because a code can travel further than it was meant to — optionally an
+   expiry and optionally a cap on joins, and `POST repos/{repoId}/invites` mints one. The caller
+   must hold at least the level being granted — you cannot mint an Admin unless you are one.
+2. The code is shown as `ABCD-EFGH-JKMN`, with a **Copy** button. It is meant to be sent over
+   whatever the group already uses, or read out loud.
+3. The recipient opens **Join repo** in the shell, pastes it, and `POST invites/redeem` adds
+   *them* to the repo. Casing, spacing and the letters people type instead of digits are all
+   accepted. The repo appears in their sidebar immediately — `RepoRepository.AddJoinedRepo` puts
+   it there and the shell navigates to it.
+4. The invite list shows every code the repo has ever had with its join count and status, so a
+   code that expired, filled up or was revoked is still a record of who came in through it.
+   **Revoke** stops one for good; there is no un-revoking, because a code that has been out in
+   the world cannot be finished retiring twice.
+
+Why not look somebody up by name: a search makes every guessable name reachable by a stranger and
+lets a person be added to a repo they never agreed to join. It is also what forced display names
+to be unique, and therefore what produced `Anton (2)`. Removing it fixes all three.
+
 ## Managing members
 
-1. Find the user: `GET users/search?username=` for an exact match, or `GET users` for
-   everyone who already shares a repo with you.
-2. `POST repos/{repoId}/members` with a level. The caller must be at least Member **and** hold
-   at least the level being granted — you cannot mint an Admin unless you are one.
-3. `PUT .../members/{userId}` changes a level. Authorization runs `ChangeOthersMembership`
+1. `PUT .../members/{userId}` changes a level. Authorization runs `ChangeOthersMembership`
    (Member to touch a Guest, Admin to touch a Member or Admin) *and* the grant check on the
    new level.
-4. `DELETE .../members/{userId}` kicks, refusing the last Admin at both the endpoint and the
+2. `DELETE .../members/{userId}` kicks, refusing the last Admin at both the endpoint and the
    entity. **Demotion is refused too** — kicking the last Admin was always refused, but demoting
    them reached the membership directly and bypassed the entity, so a repo could be left with
    nobody able to administer it and no way back.
@@ -214,6 +265,22 @@ Profile → **Mods**. Two lists: available on the left, pinned on the right.
 Repo → **Members** is the UI. Both membership endpoints authorize to the floor
 `ChangeOthersMembership` can never fall below *before* loading anything, so a non-member learns
 nothing about which repos or memberships exist.
+
+Rows carry an avatar coloured from the member's tag, and the tag itself appears only where two
+members of *this* repo share a name — on both of them, never on one. See
+[05 — Client](05-client.md#telling-two-users-with-one-name-apart).
+
+**The level picker does not save.** It marks the row *unsaved* and the card's **Save levels**
+button sends every changed row, with **Discard** to put them all back. A dropdown that committed
+on selection fired on every level it passed through when opened with a keyboard, and offered no
+way to change your mind between picking and sending.
+
+**Your own row says Leave, not Remove** — it is the same `DELETE`, so it is the same button, and
+the only honest difference is what it is about to do to you. It warns that getting back in needs a
+new invite. On success the shell's repo list is refreshed rather than the page reloaded: the repo
+has stopped existing for you, and reloading it would only earn a 403. The last-admin refusal is
+the disabled button's tooltip rather than a line under the row, so the explanation sits on the
+control it explains.
 
 ## Applying a profile to an instance
 

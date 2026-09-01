@@ -153,7 +153,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId) is false)
+        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Instance.InstanceId) is false)
         {
             Status = "That profile could not be opened from here - pick it in the sidebar.";
         }

@@ -1,18 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AddMemberRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "membershipLevel": {
-            "$ref": "#/components/schemas/RepoMembershipLevel"
-          },
-          "userId": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "AddModDependencyRequest": {
         "additionalProperties": false,
         "properties": {
@@ -66,6 +54,25 @@
         "properties": {
           "isTaken": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CreateInviteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "maximumUses": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "membershipLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
           }
         },
         "type": "object"
@@ -147,6 +154,24 @@
         },
         "type": "object"
       },
+      "CurrentUserDto": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isTrusted": {
+            "type": "boolean"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CustomProblemDetails": {
         "allOf": [
           {
@@ -212,6 +237,22 @@
           }
         },
         "type": "object"
+      },
+      "InviteStatus": {
+        "description": "",
+        "enum": [
+          "Active",
+          "Expired",
+          "Exhausted",
+          "Revoked"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Active",
+          "Expired",
+          "Exhausted",
+          "Revoked"
+        ]
       },
       "ModAttributeDto": {
         "additionalProperties": false,
@@ -484,7 +525,12 @@
           "https://server.modsdude.com/api/problems/invalid-hash",
           "https://server.modsdude.com/api/problems/invalid-image-set",
           "https://server.modsdude.com/api/problems/batch-too-large",
-          "https://server.modsdude.com/api/problems/invalid-cursor"
+          "https://server.modsdude.com/api/problems/invalid-cursor",
+          "https://server.modsdude.com/api/problems/invite-not-found",
+          "https://server.modsdude.com/api/problems/invite-not-usable",
+          "https://server.modsdude.com/api/problems/invite-redemption-conflict",
+          "https://server.modsdude.com/api/problems/invalid-invite-limits",
+          "https://server.modsdude.com/api/problems/invite-cannot-grant-admin"
         ],
         "type": "string",
         "x-enumNames": [
@@ -509,7 +555,12 @@
           "InvalidHash",
           "InvalidImageSet",
           "BatchTooLarge",
-          "InvalidCursor"
+          "InvalidCursor",
+          "InviteNotFound",
+          "InviteNotUsable",
+          "InviteRedemptionConflict",
+          "InvalidInviteLimits",
+          "InviteCannotGrantAdmin"
         ]
       },
       "ProfileDto": {
@@ -524,6 +575,15 @@
           },
           "repoId": {
             "format": "guid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RedeemInviteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
             "type": "string"
           }
         },
@@ -600,6 +660,43 @@
         },
         "type": "object"
       },
+      "RepoInviteDto": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "guid",
+            "type": "string"
+          },
+          "maximumUses": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "membershipLevel": {
+            "$ref": "#/components/schemas/RepoMembershipLevel"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InviteStatus"
+          },
+          "uses": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RepoMemberDto": {
         "additionalProperties": false,
         "properties": {
@@ -637,20 +734,6 @@
           "Member",
           "Admin"
         ]
-      },
-      "SearchUserResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "user": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UserDto"
-              }
-            ]
-          }
-        },
-        "type": "object"
       },
       "SetModVersionImagesRequest": {
         "additionalProperties": false,
@@ -734,10 +817,13 @@
       "UserDto": {
         "additionalProperties": false,
         "properties": {
+          "displayName": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
-          "username": {
+          "tag": {
             "type": "string"
           }
         },
@@ -1076,6 +1162,63 @@
         ],
         "tags": [
           "Images"
+        ]
+      }
+    },
+    "/api/v1/invites/redeem": {
+      "post": {
+        "operationId": "RedeemInviteV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemInviteRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoMembershipDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Invites"
         ]
       }
     },
@@ -1443,9 +1586,67 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/members": {
+    "/api/v1/repos/{repoId}/invites": {
+      "get": {
+        "operationId": "GetInvitesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepoInviteDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Invites"
+        ]
+      },
       "post": {
-        "operationId": "AddMemberV1",
+        "operationId": "CreateInviteV1",
         "parameters": [
           {
             "in": "path",
@@ -1462,7 +1663,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddMemberRequest"
+                "$ref": "#/components/schemas/CreateInviteRequest"
               }
             }
           },
@@ -1470,6 +1671,83 @@
           "x-name": "request",
           "x-position": 2
         },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoInviteDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Invites"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/invites/{inviteId}": {
+      "delete": {
+        "operationId": "RevokeInviteV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "inviteId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -1511,7 +1789,7 @@
           }
         ],
         "tags": [
-          "Members"
+          "Invites"
         ]
       }
     },
@@ -3189,26 +3467,15 @@
         ]
       }
     },
-    "/api/v1/users/search": {
+    "/api/v1/users/me": {
       "get": {
-        "operationId": "SearchUserV1",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "username",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "x-position": 1
-          }
-        ],
+        "operationId": "GetCurrentUserV1",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SearchUserResponse"
+                  "$ref": "#/components/schemas/CurrentUserDto"
                 }
               }
             },

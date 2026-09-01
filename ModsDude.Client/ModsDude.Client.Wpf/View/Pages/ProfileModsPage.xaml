@@ -1,0 +1,82 @@
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.ProfileModsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=pvm:ProfileModsPageViewModel, IsDesignTimeCreatable=False}"
+      Title="ProfileModsPage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical">
+
+                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding ProfileName}" />
+                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="Mods"
+                           Margin="0 8 0 36" />
+
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           Text="What this profile pins, and what syncing it puts in your mod folder. Guests cannot change the list - ask an admin for a higher membership level to edit it." />
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0">
+                    <GroupBox Header="Pinned mods" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                       Visibility="{Binding HasNoMods, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="This profile pins no mods yet. Syncing it would empty the mod folder." />
+
+                            <ItemsControl ItemsSource="{Binding Mods}"
+                                          Visibility="{Binding HasMods, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:PinnedModViewModel}">
+                                        <StackPanel Orientation="Vertical" Margin="0 0 0 12">
+                                            <StackPanel Orientation="Horizontal">
+
+                                                <TextBlock VerticalAlignment="Center" Width="300"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{Binding Name}" />
+
+                                                <TextBlock VerticalAlignment="Center" Width="160"
+                                                           FontFamily="Consolas"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding Version}" />
+
+                                                <TextBlock VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           ToolTip="{Binding LockNote}" ToolTipService.InitialShowDelay="200"
+                                                           Text="&#xE72E;" FontFamily="Segoe Fluent Icons" />
+                                            </StackPanel>
+
+                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Margin="0 4 0 0"
+                                                       TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"
+                                                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                       Text="{Binding Note}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Page>

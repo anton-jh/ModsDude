@@ -20,6 +20,8 @@ public partial class MainPageViewModel
     private readonly ShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
+    private readonly MenuItemViewModel _createRepoMenuItem;
+
     private bool _selectionRestored;
 
 
@@ -27,18 +29,31 @@ public partial class MainPageViewModel
         RepoRepository repoService,
         LastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
+        JoinRepoPageViewModel.Factory joinRepoPageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
         ShellNavigationService shellNavigationService,
+        AccountViewModel account,
         IDialogService dialogService,
         IModalService modalService)
     {
+        Account = account;
+
+        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService));
+
         MenuItems = [
             new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
-            new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService)),
+            _createRepoMenuItem,
+            new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create),
             new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
         ];
+
+        // Not a membership level: creating repos is gated on User.IsTrusted, a flag granted by hand
+        // in the database. It arrives with the account's own record a moment after sign-in, so the
+        // entry starts open and closes only once the answer is actually no.
+        Account.PropertyChanged += OnAccountChanged;
+        ApplyTrust();
 
         Repos = [];
 
@@ -60,6 +75,11 @@ public partial class MainPageViewModel
     }
 
 
+    /// <summary>
+    /// Outlives this page rather than belonging to it: switching user is what replaces the shell.
+    /// </summary>
+    public AccountViewModel Account { get; }
+
     public NavigationManager NavManager { get; }
 
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
@@ -76,6 +96,7 @@ public partial class MainPageViewModel
     {
         _shellNavigationService.Unregister(this);
 
+        Account.PropertyChanged -= OnAccountChanged;
         _repoService.RepoCreated -= OnRepoCreated;
         NavManager.PropertyChanged -= OnNavigationChanged;
 
@@ -149,6 +170,25 @@ public partial class MainPageViewModel
         {
             _lastSelectionRepository.RecordRepo(repo.Id);
         }
+    }
+
+    private void OnAccountChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AccountViewModel.IsTrusted))
+        {
+            ApplyTrust();
+        }
+    }
+
+    /// <summary>
+    /// Null means the answer has not arrived; only an explicit false closes the entry, so a slow
+    /// round trip never briefly tells a trusted user they cannot create repos.
+    /// </summary>
+    private void ApplyTrust()
+    {
+        _createRepoMenuItem.RestrictIf(
+            Account.IsTrusted is false,
+            "Creating repos is granted by hand. Ask whoever runs this server to enable it for your account.");
     }
 
     private void OnRepoCreated(Guid repoId)

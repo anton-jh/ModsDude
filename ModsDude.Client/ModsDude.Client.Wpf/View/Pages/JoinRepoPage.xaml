@@ -1,0 +1,50 @@
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.JoinRepoPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=pvm:JoinRepoPageViewModel, IsDesignTimeCreatable=False}"
+      Title="JoinRepoPage">
+
+    <Grid RowDefinitions="*, auto">
+
+        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+            <StackPanel Orientation="Vertical">
+
+                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="ModsDude" />
+                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                           Text="Join repo"
+                           Margin="0 8 0 36" />
+
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                           Text="Paste the invite code somebody sent you. Dashes, spaces and capitals do not matter." />
+
+                <TextBox Width="300" Margin="0 16 0 0" HorizontalAlignment="Left"
+                         FontFamily="Consolas" FontSize="16"
+                         Text="{Binding Code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Margin="0 16 0 0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                           Visibility="{Binding HasJoined, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Run Text="You are a member of" />
+                    <Run Text="{Binding JoinedRepoName, Mode=OneWay}" FontWeight="SemiBold" />
+                    <Run Text="- it is in the list on the left." />
+                </TextBlock>
+
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal">
+            <Button Content="Join" Command="{Binding JoinCommand}"
+                    Style="{DynamicResource AccentButtonStyle}"
+                    Width="250" Margin="32 24" />
+        </StackPanel>
+
+    </Grid>
+</Page>

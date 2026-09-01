@@ -87,7 +87,10 @@
                                      IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
                         <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="In repo"
                                      IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=InRepo}" />
+                        <!-- Nothing a guest can see is on disk only, so the chip would select an
+                             always-empty list. -->
                         <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="On disk only"
+                                     Visibility="{Binding CanModify, Converter={StaticResource BoolToVisibilityConverter}}"
                                      IsChecked="{Binding PresenceFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=OnDiskOnly}" />
                         <RadioButton GroupName="Presence" Style="{StaticResource FilterChip}" Content="Unused"
                                      ToolTip="Registered here, and pinned by none of this repo's profiles."
@@ -125,7 +128,9 @@
                     </Grid>
                 </Border>
 
-                <Grid Grid.Row="4" ColumnDefinitions="* 280">
+                <!-- The sources column is Auto rather than a fixed 280 so that collapsing it for a
+                     guest gives the width back to the list instead of leaving a gap. -->
+                <Grid Grid.Row="4" ColumnDefinitions="* auto">
 
                     <Border Grid.Column="0"
                             CornerRadius="6"
@@ -203,8 +208,13 @@
                     </Border>
 
                     <!-- The sources, with the checkbox that takes each one in or out of the merged
-                         list. Disabling an instance here says nothing about syncing to it. -->
-                    <Grid Grid.Column="1" Margin="16 0 0 0" RowDefinitions="auto * auto">
+                         list. Disabling an instance here says nothing about syncing to it.
+
+                         Hidden entirely from a guest: sources exist to feed an import, and a guest
+                         cannot import. Leaving them would be a panel of controls whose only purpose
+                         is an action that is refused. -->
+                    <Grid Grid.Column="1" Width="280" Margin="16 0 0 0" RowDefinitions="auto * auto"
+                          Visibility="{Binding CanModify, Converter={StaticResource BoolToVisibilityConverter}}">
 
                         <Grid Grid.Row="0" ColumnDefinitions="* auto" Margin="0 0 0 8">
                             <TextBlock Grid.Column="0"
@@ -307,6 +317,7 @@
               Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibilityConverter}}">
 
             <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+                    ToolTip="{Binding ModifyRestriction}" ToolTipService.ShowOnDisabled="True"
                     Content="{Binding ImportButtonText}" Command="{Binding ImportCommand}" />
 
             <Button Grid.Column="1" Margin="4 24 4 24" Content="Select all" Command="{Binding SelectAllCommand}" />

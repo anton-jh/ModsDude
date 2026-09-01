@@ -2,7 +2,7 @@
 
 All server entities live in `ModsDude.Server.Domain` and have no framework dependencies.
 Identity is expressed with strongly-typed record structs (`RepoId`, `ModId`,
-`ModVersionId`, `ProfileId`, `UserId`, `Username`, `ProfileName`) so that a `Guid` from one
+`ModVersionId`, `ProfileId`, `UserId`, `DisplayName`, `ProfileName`, `InviteCode`) so that a `Guid` from one
 aggregate cannot be passed where another is expected. EF maps these through a convention
 registered in `ModelConfigurationBuilderExtensions.ConfigureValueObjectConversionsFromAssembly`,
 and ASP.NET binds them through `StronglyTypedIdModelBinder`.
@@ -14,7 +14,7 @@ and ASP.NET binds them through `StronglyTypedIdModelBinder`.
 | Field | Notes |
 | --- | --- |
 | `Id` | `UserId(string)` — the `sub` claim from Entra. Not a Guid we mint |
-| `Username` | The `name` claim. **Unique across the system** |
+| `DisplayName` | The `name` claim, verbatim. **Not unique** — re-read from the token on every request, so a rename at the identity provider propagates |
 | `Created`, `LastSeen`, `ProfileLastUpdated` | `LastSeen` is refreshed at most once an hour |
 | `IsTrusted` | Gates repo creation. Private setter — **there is no code path that sets it to true** |
 
@@ -25,6 +25,28 @@ creates the row on the user's first authenticated request. See
 `IsTrusted` is deliberately flipped by hand in the database. For a group of this size that
 is the intended process, not an oversight — but it means a brand new user cannot create a
 repo until someone runs an `UPDATE`.
+
+### Names are not unique, and nothing tries to make them
+
+Two people called Anton are both called Anton. Nothing here appends a suffix, and no index
+forbids the second one: `DisplayName` is a label, `UserId` is the identity, and the only
+lookup anybody does is by invite code.
+
+What separates them is `UserTag` — four digits derived from the subject id by SHA-256:
+
+```csharp
+UserTag.For(new UserId("...")) // "4821"
+```
+
+Derived from the id rather than from arrival order, so of two Antons neither is the
+original and neither is the copy. It is the same four digits everywhere, it survives a
+rename at the identity provider, and it is not an identifier — nothing looks a user up by
+one. It exists to be read, which is why four digits is enough: it only has to separate the
+handful of people in front of a reader.
+
+`UserDto` carries `DisplayName` and `Tag` separately, and the client decides per rendered
+list whether the tag is worth the space. See
+[05 — Client](05-client.md#telling-two-users-with-one-name-apart).
 
 ## Repo
 
@@ -87,6 +109,48 @@ the exact per-endpoint requirements:
 Membership is also navigable from `User.RepoMemberships`, auto-included by EF. That is what
 makes the fluent authorization builder cheap — one `Users.GetAsync` load brings the whole
 membership set with it.
+
+## RepoInvite
+
+`ModsDude.Server.Domain/Invites/RepoInvite.cs`
+
+The only way a membership is ever created after a repo's first Admin. A Member or Admin
+mints a code; whoever holds it joins with it themselves.
+
+| Field | Notes |
+| --- | --- |
+| `Code` | `InviteCode(string)` — twelve Crockford base32 characters, unique by index |
+| `GrantedLevel` | What the redeemer joins as. Capped at the creator's own level, and **never Admin** — see below |
+| `ExpiresAt`, `MaximumUses` | Either, both, or neither. Null means unlimited |
+| `Uses` | Successful joins only |
+| `IsRevoked` | One-way. A code that has been out in the world cannot be un-retired |
+
+**An invite can never grant Admin**, however senior the person minting it. A code is a secret
+that travels, and the limits above are an admission that one can end up somewhere it was not
+meant to go. Everything a leaked Guest or Member code costs is recoverable by an admin — kick
+the stranger, revoke the code. A leaked Admin code hands over the power to do that, which
+nothing can take back. Admin is granted deliberately, to a named person already in the repo.
+The constructor refuses it and `CreateInviteV1Endpoint` reports it as
+`invite-cannot-grant-admin`; the client simply does not offer it in the picker.
+
+`GetStatus(now)` folds the three limits into `Active | Expired | Exhausted | Revoked`,
+reporting revocation ahead of the other two because it is the one somebody chose. `Redeem`
+refuses anything but `Active`, and the row carries Postgres' `xmin` as a concurrency token
+so two people racing for the last use of a capped invite cannot both win.
+
+Codes are read aloud and typed back in, so the alphabet excludes `I`, `L`, `O` and `U`;
+`InviteCodes.TryParse` folds the first three into the digits they resemble and accepts any
+casing or spacing. `InviteCodes.Format` prints them in threes of four — `ABCD-EFGH-JKMN`.
+Twelve characters is sixty bits, which is not a password but is not guessable in any number
+of attempts a server will answer either.
+
+### Why invites rather than a user search
+
+Searching for a user by name is an enumeration surface: it makes every person with a
+guessable name reachable by a stranger, and it lets somebody be added to a repo without ever
+agreeing to it. An invite inverts both. There is no directory to walk, a user is reachable
+only through a code they were handed, and joining is an act by the person joining. That is
+also what makes non-unique display names safe — no lookup depends on a name being unique.
 
 ## ModVersion
 

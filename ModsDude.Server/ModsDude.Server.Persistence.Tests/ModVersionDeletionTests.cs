@@ -115,7 +115,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        dbContext.Users.Add(new User(userId, new Username(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
         dbContext.Repos.Add(repo);
         dbContext.ModVersions.AddRange(versionIds.Select((versionId, index) => CreateVersion(repo.Id, versionId, index)));
 

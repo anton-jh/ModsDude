@@ -40,6 +40,9 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     private ProfileModsEditorPageViewModel? _openModsEditor;
 
+    /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
+    private Guid? _scanInstanceIdOnce;
+
 
     public ProfilePageViewModel(
         Repo repo,
@@ -50,7 +53,8 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         InstanceDriftMonitor driftMonitor,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
-        ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory)
+        ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
+        ProfileModsPageViewModel.Factory profileModsPageViewModelFactory)
     {
         _repo = repo;
         _profile = profile;
@@ -58,13 +62,31 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         _applyService = applyService;
         _driftMonitor = driftMonitor;
 
-        _modsMenuItem = new MenuItemViewModel("Mods", () => profileModsEditorPageViewModelFactory.Create(repo, profile));
+        // One entry, two pages. Editing a profile's mod list needs Member, but *seeing* it needs
+        // only Guest - and a guest is precisely the person who syncs this profile without curating
+        // it, so "what is in it?" is their question to ask. Closing the entry would have answered it
+        // with silence; the read-only page answers it.
+        var canEditMods = repo.MembershipLevel >= RepoMembershipLevel.Member;
+
+        _modsMenuItem = new MenuItemViewModel("Mods", () =>
+        {
+            if (canEditMods is false)
+            {
+                return profileModsPageViewModelFactory.Create(repo, profile);
+            }
+
+            var scanInstanceId = _scanInstanceIdOnce;
+            _scanInstanceIdOnce = null;
+
+            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanInstanceId);
+        });
 
         NavManager = navigationManager;
         MenuItems = [
             new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
             _modsMenuItem,
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
+                .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];
 
         Instances = [];
@@ -201,11 +223,27 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
-    public bool TrySelectMods()
+    /// <param name="scanInstanceId">
+    /// An instance whose mod folder the editor should open already scanning. Sources are off by
+    /// default because opening a page must not read a disk - but arriving here from a drift notice
+    /// <em>is</em> the user asking about that folder's contents, so the one it is about is on.
+    /// </param>
+    public bool TrySelectMods(Guid? scanInstanceId = null)
     {
+        // Read and cleared by the menu item's factory, so it applies to the page this call opens and
+        // not to the next one somebody reaches through the sidebar.
+        _scanInstanceIdOnce = scanInstanceId;
+
         if (ReferenceEquals(NavManager.Selected, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
+        }
+        else if (scanInstanceId is not null)
+        {
+            // Already open, so selecting it again constructs nothing and the factory never runs.
+            // Enable the folder on the page the user is looking at instead.
+            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanInstance(scanInstanceId.Value);
+            _scanInstanceIdOnce = null;
         }
 
         return ReferenceEquals(NavManager.Selected, _modsMenuItem);

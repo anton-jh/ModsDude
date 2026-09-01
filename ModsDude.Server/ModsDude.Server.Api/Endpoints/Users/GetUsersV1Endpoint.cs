@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Application.Exceptions;
+using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using System.Security.Claims;
 
@@ -38,11 +39,11 @@ public class GetUsersV1Endpoint : IEndpoint
             .Select(x => new
             {
                 x.Id,
-                x.Username
+                x.DisplayName
             })
             .ToListAsync(cancellationToken);
 
-        var dtos = otherUsers.Select(x => new UserDto(x.Id.Value, x.Username.Value));
+        var dtos = otherUsers.Select(x => new UserDto(x.Id.Value, x.DisplayName.Value, UserTag.For(x.Id)));
 
         return TypedResults.Ok(dtos);
     }

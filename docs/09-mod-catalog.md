@@ -429,16 +429,31 @@ Every currently available source is listed, each with an enable/disable checkbox
 removes its mods from the merged list without removing the source, so a user can narrow to "just
 what is in Downloads" without losing their instance sources.
 
-**Disabling a standing source persists.** Someone who never wants Downloads scanned should not
-have to say so every session. Ad-hoc sources remain view-scoped, as above — there is nothing to
-persist about a folder that stops existing when the page closes.
+**Every source starts switched off, every time.** The enabled set lives in the `ModCatalog`
+itself and **nothing about it is persisted**: opening a page must never read a disk, and a folder
+somebody looked in last week is not a standing instruction to look in it again today. `GetAsync`
+only starts a scan for sources that pass `IsEnabled`, so with nothing enabled there is no file
+access whatsoever — the catalog is the registered mod list and nothing else.
 
-The disabled set lives **machine-wide**, in `LocalState.Settings`, keyed by source id — the
-instance id for an instance folder, a well-known constant for Downloads. Not per repo: "do not
-look for mods in this folder" is a fact about the folder, not about which repo happens to be
-open, and an instance is already shared across every repo using its adapter. This is the same
-reasoning that keeps the content store's settings machine-wide — one place to configure a
-thing, so there is nothing to drift.
+There is deliberately no remembered preference here. "Always scan Downloads" would be a
+convenience that costs the guarantee above, and the guarantee is the point: navigating cannot
+touch the filesystem, so no amount of clicking around the sidebar can.
+
+Two things switch a source on, and both are the user asking for that folder specifically:
+
+- **Adding an ad-hoc source.** Picking a folder is itself the act of asking for it to be read, so
+  it is enabled as it is added. It stays view-scoped — there is nothing to persist about a folder
+  that stops existing when the page closes.
+- **Arriving from the drift notice.** `ShellNavigationService.GoToProfileModsAsync` carries the
+  drifted instance's id through to `ProfileModsEditorPageViewModel.ScanInstance`, which enables
+  that instance's mod folder. The versions the game downloaded are sitting in it and looking at
+  them is the whole reason the user was sent there; making them find and tick the source first
+  would be answering a question with a chore. Nothing else pre-enables anything — navigating to
+  Repo → Mods or opening the editor from the sidebar scans nothing.
+
+Because the list otherwise starts empty, the profile editor's **Sources** pane is expanded by
+default: a collapsed pane would hide the one control that explains why the left-hand list has
+nothing in it.
 
 Disabling an instance as a *source* has no effect on syncing to it. The two roles are
 independent; see below.

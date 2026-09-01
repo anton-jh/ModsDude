@@ -268,7 +268,9 @@
 
                         <!-- The sources feed this list and nothing else, so they sit under it.
                              Disabling an instance here says nothing about syncing to it. -->
-                        <Expander Grid.Row="2" Margin="0 8 0 0" Header="Sources">
+                        <!-- Open by default. Sources start switched off, so a collapsed pane would
+                             hide the one control that explains why the left list is empty. -->
+                        <Expander Grid.Row="2" Margin="0 8 0 0" Header="Sources" IsExpanded="True">
                             <Grid RowDefinitions="auto auto" Margin="0 8 0 0">
 
                                 <Border Grid.Row="0"

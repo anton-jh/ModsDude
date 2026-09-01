@@ -56,12 +56,14 @@ lifetimes worth knowing:
 | Registration | Lifetime | Why |
 | --- | --- | --- |
 | `MainWindow`, `MainWindowViewModel` | Singleton | The shell |
-| `RepoRepository`, `ProfileService`, `MembershipService`, `LocalInstanceRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
+| `RepoRepository`, `ProfileService`, `MembershipService`, `InviteService`, `LocalInstanceRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
 | `IModImageProvider`, `ModImageCache`, `IModImageStore`, `IModImagerySource` | Singleton | So decoded thumbnails survive navigating away and back, and one disk cache serves the machine |
 | `ModImagePublisher` | Singleton, and registered as both `IModImagePublisher` and `IModImageBackfill` | One object, two roles: publishing at import and backfilling on demand |
 | `NavigationLockService` | Singleton | One global "there are unsaved changes" flag |
 | `NavigationManager` | **Transient** | Each nesting level owns its own |
 | `AuthenticationService` | Singleton, and registered as `IAccessTokenAccessor` | |
+| `AccountViewModel` | Singleton | Switching user replaces the shell it is drawn in |
+| `IUserScopedState` | Two singleton aliases, onto `RepoRepository` and `ProfileService` | What the shell drops when the signed-in user changes |
 | `IModalService` | Resolves to `MainWindowViewModel` | The shell owns the modal slot |
 
 `OnStartup` shows the window first and only then awaits the first token acquisition, so the
@@ -77,7 +79,7 @@ The app is a sidebar app, nested up to three levels deep:
 
 ```
 MainWindow
-└─ MainPage                    Home │ Create repo │ Settings │ ...repos
+└─ MainPage                    Home │ Create repo │ Join repo │ Settings │ ...repos
    └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Create profile │ Connect game │ ...profiles │ ...instances
       ├─ RepoModsPage          (one page — the catalog)
       ├─ ProfilePage           Overview │ Mods │ Manage
@@ -142,6 +144,12 @@ Pages acquire it from their `OnXChanged` partial methods and release it on save.
 a second page tries to acquire while another holds it — an assertion that only one editor can
 be dirty at a time, which the nesting model guarantees.
 
+"Unsaved changes" is not only a text box. `RepoMembersPageViewModel` takes the lock while any
+member's level picker shows something the server has not been told about, and releases it the
+moment nothing is pending — which a save, a **Discard** and a reload all reach through the same
+`RecountPendingLevelChanges`. Without it, picking a new level and clicking to another repo threw
+the change away silently.
+
 ## Page lifecycle
 
 `PageViewModel.TriggerInit()` starts two independent initializations:
@@ -186,8 +194,7 @@ LocalState
 ├─ Settings                machine-wide, not per repo, instance or adapter
 │   ├─ Stores: { volumeRoot → { Path, MaxSizeBytes } }
 │   ├─ StoreAssignments: { volumeRoot → servingVolumeRoot }
-│   ├─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
-│   └─ DisabledSources: { sourceId }        mod sources the user switched off
+│   └─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
 └─ Instances: { instanceId → { Scope, GameAdapterId, Name,
                                AdapterInstanceSettings,
                                ModFolder,
@@ -298,11 +305,114 @@ means regenerating — see [03 — Server](03-server.md#regenerating-the-client)
 `AuthenticationService` is an MSAL public client against the Entra External ID CIAM
 authority, with the `susi_1` (sign-up/sign-in) user flow and `http://localhost` as the
 redirect. `Get()` tries silent acquisition first and falls back to interactive on
-`MsalUiRequiredException`. `ForceRelogin()` clears every cached account and prompts for
-account selection — this is what the app's "logout" does.
+`MsalUiRequiredException`.
 
-`IsLoggedIn` raises `LoggedInChanged`, which `MainWindowViewModel` uses to swap between the
-login page and the main page.
+**There is no signing out.** Every surface in the client is a server call, so a signed-out
+app has nothing to show and no page to show it on. The only account control is
+`SwitchUser()`, surfaced as the sidebar's **Switch user** button: it prompts with
+`Prompt.SelectAccount` and, *only once that sign-in has succeeded*, removes every other
+account from the token cache. Cancelling the prompt is therefore free — the current user is
+still signed in, because nothing was cleared on the way in.
+
+`CurrentAccount` (MSAL's home account identifier plus the username to display) raises
+`AccountChanged` when it becomes a *different* account. `Get()` runs on every outgoing
+request and adopts the account it acquired for, so the common case raises nothing. The event
+is always delivered on the UI thread; MSAL finishes wherever it likes and every listener
+rebuilds bound state.
+
+Two things listen. `AccountViewModel` — a singleton, because the shell it is drawn in is what
+the switch replaces — shows the name and owns the command, and asks the same
+discard-your-changes question a navigation would if `NavigationLockService` holds a lock.
+The name it shows is the token's `name` claim — free, instant, and exactly what the server
+stores, because the server keeps that claim and rewrites nothing. MSAL's `IAccount.Username` is
+the account's *identifier at the provider*, which for this CIAM tenant is an email address and
+not a name anybody chose, so it is never shown. What the round trip to `CurrentUserService` →
+`GET users/me` is for is the **tag** and the avatar colour built from it, which are derived from
+the subject id on the server and cannot be worked out here. The avatar is held back until that
+answer arrives rather than drawn in a colour about to change, and the tag itself is only in the
+tooltip: there is one user in this panel, so there is nobody to tell them apart from. A failed
+fetch is swallowed — the name is already up and correct, what is missing is decoration.
+`MainWindowViewModel` treats signing in and switching as one transition: it disposes the
+current page, clears every `IUserScopedState`, and builds a fresh `MainPageViewModel`.
+
+`IUserScopedState` is the line between what belongs to the account and what belongs to the
+machine. `RepoRepository` and `ProfileService` implement it and are emptied on a switch; local
+instances, content stores and the image cache describe the game installations on this PC and
+deliberately do not.
+
+## What a level closes, and how it says so
+
+The server refuses what a membership level does not allow, but a 403 arriving after a form has
+been filled in is a poor way to learn. Three shapes, chosen by how much of a page is gated:
+
+**The whole page → the sidebar entry is disabled, not hidden.** `MenuItemViewModel.Restrict`
+sets `IsAvailable` and the sentence to show instead. The shared `SidebarList` style binds
+`ListViewItem.IsEnabled` to it, which refuses mouse and keyboard, and puts the explanation in
+the container's tooltip.
+
+Two details are load-bearing. WPF **suppresses tooltips on disabled elements**, so
+`ToolTipService.ShowOnDisabled="True"` is required or the explanation is unreachable; and
+Fluent's `ListViewItem` has **no disabled appearance of its own**, so a `DataTrigger` dims the
+row to `Opacity 0.4` — without it a closed entry looks exactly like an open one. Hiding the
+entry was the alternative and was rejected: a guest who cannot see **Members** has no way to
+learn that a level exists to ask for.
+
+It is an affordance, not a guard. A disabled container still accepts `SelectedItem` set from
+code, so the pages keep their own checks and the server remains the only authority.
+
+| Entry | Closed below |
+| --- | --- |
+| Main → **Create repo** | `User.IsTrusted` — not a level, and the reason `users/me` carries the flag |
+| Repo → **Admin** | Admin |
+| Repo → **Members** | Member |
+| Repo → **Create profile** | Member |
+| Profile → **Manage** | Member |
+
+**Part of a page → the control is disabled, the page stays open.** Only `RepoModsPage`: every
+read on it is Guest-level, so browsing, searching and filtering all work, and just Import,
+Reorder versions, Delete version and Delete mod are refused. `CanModify` drives their
+`CanExecute`, and `ModifyRestriction` is the tooltip — carried to the row menu through
+`ModRowActions.Restriction`, since that template is shared.
+
+The **Sources** panel is the exception that is hidden rather than disabled: sources exist to feed
+an import and nothing else, so for a guest it would be a column of controls serving one refused
+action. Its grid column is `Auto` with the width on the panel itself, so collapsing it gives the
+space to the list instead of leaving a 280px hole.
+
+The list itself is filtered to the repo's own mods for a guest — the floor is in `Passes`, not in
+a chip, so "All" means all of the repo's — and the **On disk only** chip is hidden, since it
+would select a list that is now always empty. An unregistered file on a guest's disk is only ever
+interesting as something to import, which they cannot do.
+
+**A different page for the same entry.** Profile → **Mods** resolves to
+`ProfileModsEditorPageViewModel` for a member and `ProfileModsPageViewModel` for a guest. The
+menu item holds a `Func<PageViewModel>`, so this is a branch in `ProfilePageViewModel` and
+nothing else changes. Closing the entry would have been wrong: a guest can sync the profile, so
+what it contains is precisely their question, and the read-only page answers it without the
+editor's drag surface having to be switched off control by control.
+
+## Telling two users with one name apart
+
+Display names are not unique — see
+[02 — Domain model](02-domain-model.md#names-are-not-unique-and-nothing-tries-to-make-them).
+Two members of a repo can both be called Anton, and both keep the name they chose. The client is
+what makes that legible, in `Core/Users/UserDisplay.cs`:
+
+| | |
+| --- | --- |
+| `FindAmbiguous(users)` | The ids of the users in *this set* who share a name with somebody else in it |
+| `ColorFor(tag)` | The avatar colour, hue walked by the golden angle so consecutive tags land far apart |
+| `InitialFor(displayName)` | The character on the avatar — the first rune worth drawing, or none |
+
+The important part is that ambiguity is a property of **the list, not the person**, so it is
+decided at the moment of rendering. `RepoMembersPageViewModel.Publish` computes it over the rows
+it is about to build, exactly as it computes who the only Admin is. A repo where no two members
+share a name shows no tags at all — even if the server knows of other people by those names. A
+repo where two Antons meet shows the tag on *both* of them, because neither is the Anton and the
+other one the duplicate.
+
+The avatar is drawn either way. It is an identity, not a warning, and it is the same colour for
+the same person in the member list and in their own account panel.
 
 ## Mod imagery
 
@@ -368,15 +478,16 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 
 | Page | Status | What it does |
 | --- | --- | --- |
-| `LoginPage` | Working | Shown while not authenticated |
-| `MainPage` | Working | Shell: Home, Create repo, Settings, and the repo list |
+| `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
+| `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account panel with **Switch user** |
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
+| `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |
 | `RepoOverviewPage` | Working | Instance status and profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, delete repo |
-| `RepoMembersPage` | Working | Member list, add by username search, change level, kick |
-| `RepoModsPage` | Working | The catalog: one list over local and registered versions, presence filters, the source list, import as a selection mode, per-row reorder and delete |
+| `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
+| `RepoModsPage` | Working | The catalog: one list over local and registered versions, presence filters, the source list, import as a selection mode, per-row reorder and delete. Browsing is open to a guest; the three writing actions are disabled with a reason |
 | `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
 | `InstancePage` | Working | Instance shell over Sync and Manage. Opens on Sync |
 | `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
@@ -384,7 +495,8 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `CreateProfilePage` | Working | |
 | `ProfilePage` | Working | Profile shell over Overview, Mods, Manage |
 | `ProfileOverviewPage` | Working | |
-| `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save |
+| `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
+| `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, each row with its version and why it is locked |
 | `EditProfilePage` | Working | Rename or delete a profile |
 | `ExamplePage` | — | The placeholder. Still the Home page's content |
 

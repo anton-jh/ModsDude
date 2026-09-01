@@ -21,90 +21,188 @@
                            Text="Members"
                            Margin="0 8 0 36" />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding CanInvite, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <GroupBox Header="Add a member" Padding="0 16 0 16">
-                        <StackPanel Orientation="Vertical">
-
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="Look somebody up by the exact username they signed up with." />
-
-                            <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
-                                <TextBox Width="300"
-                                         Text="{Binding SearchTerm, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button Content="Search" Margin="8 0 0 0" Command="{Binding SearchCommand}" />
-                            </StackPanel>
-
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Margin="0 12 0 0"
-                                       Visibility="{Binding HasSearchMessage, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="{Binding SearchMessage}" />
-
-                            <StackPanel Orientation="Horizontal" Margin="0 12 0 0"
-                                        Visibility="{Binding CanAddMember, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="{Binding AddableUser.Username}" />
-                                <ComboBox Width="140" Margin="16 0 0 0"
-                                          ItemsSource="{Binding GrantableLevels}"
-                                          SelectedItem="{Binding NewMemberLevel, Mode=TwoWay}" />
-                                <Button Content="Add" Margin="8 0 0 0" Style="{DynamicResource AccentButtonStyle}"
-                                        Command="{Binding AddMemberCommand}" />
-                            </StackPanel>
-
-                        </StackPanel>
-                    </GroupBox>
-                </Border>
-
                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                            Visibility="{Binding IsHiddenFromMe, Converter={StaticResource BoolToVisibilityConverter}}"
-                           Text="Guests cannot see who else is in a repo. Ask an admin for a higher membership level." />
+                           Text="Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level." />
 
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16"
-                        Margin="0 16 0 0"
                         Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Members" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
-
                             <ItemsControl ItemsSource="{Binding Members}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:RepoMemberViewModel}">
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Width="240"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding Username}" />
+
+                                                <!-- Theirs everywhere, and the same colour as their tag.
+                                                     Always drawn: it is an avatar, not a warning. -->
+                                                <Border Width="28" Height="28" CornerRadius="14"
+                                                        VerticalAlignment="Center"
+                                                        Background="{Binding AvatarColor}">
+                                                    <TextBlock Text="{Binding Initial}"
+                                                               Foreground="White" FontWeight="SemiBold"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+
+                                                <StackPanel Orientation="Horizontal" Width="212" Margin="12 0 0 0"
+                                                            VerticalAlignment="Center">
+                                                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Text="{Binding DisplayName}" />
+
+                                                    <!-- Only where somebody else in this list is called the
+                                                         same. Both of them get one; neither is the original. -->
+                                                    <TextBlock VerticalAlignment="Center" Margin="6 0 0 0"
+                                                               FontFamily="Consolas"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding ShowTag, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                               Text="{Binding Tag}" />
+                                                </StackPanel>
 
                                                 <ComboBox Width="140"
                                                           ItemsSource="{Binding AvailableLevels}"
                                                           SelectedItem="{Binding Level, Mode=TwoWay}"
-                                                          IsEnabled="{Binding CanChangeLevel}" />
+                                                          IsEnabled="{Binding CanChangeLevel}"
+                                                          ToolTip="{Binding LevelRestriction}"
+                                                          ToolTipService.ShowOnDisabled="True" />
 
-                                                <Button Content="Remove" Margin="8 0 0 0"
+                                                <!-- An unsaved pick is marked rather than sent. The card's
+                                                     Save button is what commits it. -->
+                                                <TextBlock VerticalAlignment="Center" Margin="8 0 0 0"
+                                                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding HasPendingLevelChange, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="unsaved" />
+
+                                                <!-- Leaving is the same call as being removed, so it is the
+                                                     same button, saying which one it is about to do. -->
+                                                <Button Content="{Binding KickLabel}" Margin="8 0 0 0"
+                                                        ToolTip="{Binding KickRestriction}"
+                                                        ToolTipService.ShowOnDisabled="True"
                                                         Command="{Binding RequestKickCommand}" />
                                             </StackPanel>
-
-                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Margin="0 4 0 0"
-                                                       Visibility="{Binding HasRestriction, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Text="{Binding Restriction}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <Button Content="Refresh" HorizontalAlignment="Left" Margin="0 8 0 0"
-                                    Command="{Binding RefreshCommand}" />
+                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                <Button Content="Save levels" Style="{DynamicResource AccentButtonStyle}"
+                                        Command="{Binding SaveLevelsCommand}" />
+                                <Button Content="Discard" Margin="8 0 0 0"
+                                        Command="{Binding DiscardLevelsCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0"
+                        Visibility="{Binding CanManageInvites, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Invites" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                       Text="An invite code is the only way into this repo. Send one to somebody and they join with it themselves, under Join repo." />
+
+                            <StackPanel Orientation="Horizontal" Margin="0 16 0 0" VerticalAlignment="Bottom">
+                                <StackPanel Orientation="Vertical">
+                                    <Label Content="Joins as" />
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding GrantableLevels}"
+                                              SelectedItem="{Binding NewInviteLevel, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Vertical" Margin="12 0 0 0">
+                                    <Label Content="Expires" />
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding ExpiryOptions}"
+                                              SelectedItem="{Binding NewInviteExpiry, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Vertical" Margin="12 0 0 0">
+                                    <Label Content="Max joins" />
+                                    <TextBox Width="100"
+                                             Text="{Binding NewInviteMaximumUses, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <Button Content="Create invite" Margin="12 0 0 0" VerticalAlignment="Bottom"
+                                        Style="{DynamicResource AccentButtonStyle}"
+                                        Command="{Binding CreateInviteCommand}" />
+                            </StackPanel>
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0 8 0 0"
+                                       Text="Leave max joins blank for no limit." />
+
+                            <ItemsControl ItemsSource="{Binding Invites}" Margin="0 20 0 0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:RepoInviteViewModel}">
+                                        <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                                CornerRadius="4" Padding="12" Margin="0 0 0 8">
+                                            <StackPanel Orientation="Vertical">
+                                                <StackPanel Orientation="Horizontal">
+
+                                                    <TextBlock VerticalAlignment="Center" Width="180"
+                                                               FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
+                                                               Text="{Binding Code}" />
+
+                                                    <Button Content="Copy" Margin="8 0 0 0"
+                                                            Command="{Binding CopyCommand}" />
+
+                                                    <TextBlock VerticalAlignment="Center" Width="80" Margin="16 0 0 0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Level}" />
+
+                                                    <TextBlock VerticalAlignment="Center" Width="110"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Uses}" />
+
+                                                    <TextBlock VerticalAlignment="Center" Width="150"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Limit}" />
+
+                                                    <Button Content="Revoke" Margin="8 0 0 0"
+                                                            Visibility="{Binding CanRevoke, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding RequestRevokeCommand}" />
+                                                </StackPanel>
+
+                                                <TextBlock Margin="0 6 0 0"
+                                                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding IsCopied, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="Copied to the clipboard." />
+                                            </StackPanel>
+
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <!-- Spent invites stay in the list for their join count,
+                                                             but they are history rather than something to hand out. -->
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                            <Setter Property="Opacity" Value="0.5" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                         </StackPanel>
                     </GroupBox>
                 </Border>
+
+                <Button Content="Refresh" HorizontalAlignment="Left" Margin="0 16 0 0"
+                        Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Command="{Binding RefreshCommand}" />
 
             </StackPanel>
         </ScrollViewer>

@@ -1,12 +1,19 @@
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 public class ProfileService(
     IProfilesClient profileClient,
-    IModDependenciesClient modDependencyClient)
+    IModDependenciesClient modDependencyClient,
+    IModsClient modsClient)
+    : IUserScopedState
 {
+    /// <summary>Only ever walked to the end, so the page size is a round-trip count, not a UI concern.</summary>
+    private const int _modPageSize = 200;
+
     public delegate void ProfileCreatedEventHandler(Guid profileId);
     public delegate void ProfileUpdatedEventHandler(Guid profileId);
 
@@ -51,6 +58,15 @@ public class ProfileService(
                 Profiles.Add(dto);
             }
         }
+    }
+
+    /// <summary>
+    /// The collection is handed from repo to repo as the user navigates, so on a user change it is
+    /// simply handed to nobody.
+    /// </summary>
+    public void ClearUserState()
+    {
+        Profiles.Clear();
     }
 
     public async Task CreateProfile(Guid repoId, string name, CancellationToken cancellationToken)
@@ -117,6 +133,71 @@ public class ProfileService(
         var dependencies = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, cancellationToken);
 
         return dependencies.Count;
+    }
+
+    /// <summary>
+    /// What the profile pins, with each version resolved to the name its mod calls itself.
+    /// </summary>
+    /// <remarks>
+    /// Two reads and a join, and deliberately not a <c>ModCatalog</c>: the catalog exists to merge
+    /// the repo's mods with what is on this machine's disks, and a reader who cannot edit the profile
+    /// has no use for the local half and should not pay a scan for it. Both routes are readable at
+    /// Guest, which is the level this is for.
+    /// </remarks>
+    public async Task<IReadOnlyList<PinnedMod>> GetPinnedMods(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    {
+        var dependencies = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, cancellationToken);
+
+        if (dependencies.Count == 0)
+        {
+            return [];
+        }
+
+        var registered = await GetRegisteredVersions(repoId, cancellationToken);
+
+        return
+        [
+            .. dependencies
+                .Select(dependency =>
+                {
+                    var modId = ModKey.From(dependency.ModId);
+                    var versionId = ModVersionKey.From(dependency.ModVersionId);
+
+                    // The adapter's flag lives on the version, the user's on the dependency. A pin
+                    // whose version the repo no longer has can only report the half it still holds.
+                    return registered.TryGetValue((modId, versionId), out var version)
+                        ? new PinnedMod(
+                            modId,
+                            versionId,
+                            version.DisplayName,
+                            new ProfileModLock(version.Locked, dependency.Locked),
+                            IsRegistered: true)
+                        : PinnedMod.Unresolved(modId, versionId, new ProfileModLock(false, dependency.Locked));
+                })
+                .OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+        ];
+    }
+
+    private async Task<Dictionary<(ModKey, ModVersionKey), ModDto>> GetRegisteredVersions(
+        Guid repoId, CancellationToken cancellationToken)
+    {
+        var byKey = new Dictionary<(ModKey, ModVersionKey), ModDto>();
+        string? cursor = null;
+
+        do
+        {
+            var page = await modsClient.GetModsV1Async(repoId, null, cursor, _modPageSize, cancellationToken);
+
+            foreach (var mod in page.Mods)
+            {
+                byKey[(ModKey.From(mod.ModId), ModVersionKey.From(mod.VersionId))] = mod;
+            }
+
+            cursor = page.NextCursor;
+        }
+        while (string.IsNullOrEmpty(cursor) is false);
+
+        return byKey;
     }
 
 

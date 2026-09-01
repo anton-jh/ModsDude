@@ -1,5 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -10,18 +10,20 @@ namespace ModsDude.Client.Wpf.ViewModel.Windows;
 public partial class MainWindowViewModel
     : ObservableObject, IModalService
 {
-    private readonly AuthenticationService _authService;
     private readonly IFactory<MainPageViewModel> _mainPageViewModelFactory;
+    private readonly IReadOnlyList<IUserScopedState> _userScopedState;
 
 
     public MainWindowViewModel(
         AuthenticationService authService,
         IFactory<MainPageViewModel> mainPageViewModelFactory,
+        IEnumerable<IUserScopedState> userScopedState,
         DriftNotificationViewModel driftNotification)
     {
-        _authService = authService;
         _mainPageViewModelFactory = mainPageViewModelFactory;
-        _authService.LoggedInChanged += OnSessionLoggedInChanged;
+        _userScopedState = userScopedState.ToList();
+
+        authService.AccountChanged += OnAccountChanged;
 
         DriftNotification = driftNotification;
         DriftNotification.Start();
@@ -36,9 +38,6 @@ public partial class MainWindowViewModel
 
 
     [ObservableProperty]
-    private bool _loggedIn = false;
-
-    [ObservableProperty]
     private PageViewModel _currentPage = new LoginPageViewModel();
 
     [ObservableProperty]
@@ -47,12 +46,6 @@ public partial class MainWindowViewModel
 
     public bool IsModalVisible => Modal is not null;
 
-
-    [RelayCommand]
-    public Task Logout(CancellationToken cancellationToken)
-    {
-        return _authService.ForceRelogin(cancellationToken);
-    }
 
     /// <summary>
     /// The primary drift check runs from here, because the manifest comparison is the only mechanism
@@ -64,17 +57,24 @@ public partial class MainWindowViewModel
     }
 
 
-    private void OnSessionLoggedInChanged(object? sender, bool e)
+    /// <summary>
+    /// Signing in and switching to somebody else are the same transition: the shell and everything
+    /// under it was built from the previous account, so it goes, and a new one is built from
+    /// scratch. <see cref="ShellNavigationService"/> exists because of this - a shell that is
+    /// replaced cannot be handed out at composition time.
+    /// </summary>
+    private void OnAccountChanged(object? sender, SignedInAccount account)
     {
-        LoggedIn = e;
-    }
+        (CurrentPage as IDisposable)?.Dispose();
 
+        // Before the new shell is built, so it never draws the previous account's repos on its way
+        // to a refresh that would have removed them.
+        foreach (var state in _userScopedState)
+        {
+            state.ClearUserState();
+        }
 
-    partial void OnLoggedInChanged(bool value)
-    {
-        CurrentPage = value
-            ? _mainPageViewModelFactory.Create()
-            : new LoginPageViewModel();
+        CurrentPage = _mainPageViewModelFactory.Create();
         CurrentPage.TriggerInit();
     }
 

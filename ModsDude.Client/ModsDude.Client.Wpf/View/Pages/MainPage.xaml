@@ -14,7 +14,7 @@
 
     <Grid ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto *">
+        <Grid Grid.Column="0" RowDefinitions="auto auto * auto">
 
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
@@ -29,6 +29,53 @@
                       ItemsSource="{Binding Path=Repos}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                       />
+
+            <!-- The only account control there is. Signing out has no state worth reaching, so the
+                 panel says who you are and offers to be somebody else instead. -->
+            <Border Grid.Row="3"
+                    DataContext="{Binding Account}"
+                    Margin="8 12 8 8"
+                    Padding="12"
+                    CornerRadius="4"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+
+                <StackPanel Orientation="Vertical">
+
+                    <TextBlock Text="Signed in as"
+                               FontSize="12"
+                               Opacity="0.7"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+
+                        <!-- The same colour their teammates see beside their name. Held back until
+                             the server has answered, rather than drawn in a colour about to change. -->
+                        <Border Width="24" Height="24" CornerRadius="12"
+                                VerticalAlignment="Center"
+                                Background="{Binding AvatarColor}"
+                                Visibility="{Binding HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="{Binding Initial}"
+                                       Foreground="White" FontWeight="SemiBold" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+
+                        <TextBlock Text="{Binding DisplayName}"
+                                   Margin="8 0 0 0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   ToolTip="{Binding Description}" ToolTipService.InitialShowDelay="200"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </StackPanel>
+
+                    <Button Content="Switch user"
+                            Margin="0 12 0 0"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SwitchUserCommand}" />
+
+                </StackPanel>
+            </Border>
         </Grid>
 
         <Frame Grid.Column="1"

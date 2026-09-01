@@ -26,6 +26,9 @@
             <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
                 <p:CreateRepoPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:JoinRepoPageViewModel}">
+                <p:JoinRepoPage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:LoginPageViewModel}">
                 <p:LoginPage />
             </DataTemplate>
@@ -61,6 +64,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:ProfileModsEditorPageViewModel}">
                 <p:ProfileModsEditorPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:ProfileModsPageViewModel}">
+                <p:ProfileModsPage />
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:CreateLocalInstancePageViewModel}">
                 <p:CreateLocalInstancePage />
@@ -122,6 +128,20 @@
                 <Setter Property="b:DragSelection.Suppressed" Value="True" />
                 <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
                 <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                <!-- The tooltip and the enabled state live on the container rather than on the row's
+                     own TextBlock, because WPF suppresses a tooltip on anything disabled unless
+                     ShowOnDisabled says otherwise - and a closed entry whose explanation cannot be
+                     read is worse than no explanation at all. -->
+                <Setter Property="ItemContainerStyle">
+                    <Setter.Value>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                            <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                            <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+                            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+                            <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
+                        </Style>
+                    </Setter.Value>
+                </Setter>
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate DataType="{x:Type vm:MenuItemViewModel}">
@@ -130,8 +150,20 @@
                                            Padding="12 8"
                                            Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
                                            TextTrimming="CharacterEllipsis"
-                                           TextWrapping="NoWrap"
-                                           ToolTip="{Binding Path=Title}" ToolTipService.InitialShowDelay="200" />
+                                           TextWrapping="NoWrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <!-- Fluent's ListViewItem has no disabled appearance of
+                                                     its own, so a closed entry would otherwise be
+                                                     indistinguishable from an open one. -->
+                                                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                    <Setter Property="Opacity" Value="0.4" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </Grid>
                         </DataTemplate>
                     </Setter.Value>

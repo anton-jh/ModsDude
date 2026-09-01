@@ -933,6 +933,30 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #endregion
 
 
+    /// <summary>
+    /// Switches on the mod folder of one instance, for a page opened <i>at</i> that folder rather
+    /// than merely opened - which today means arriving from the drift notice.
+    /// </summary>
+    /// <remarks>
+    /// Sources are off by default because navigating must not read a disk. Coming here from a drift
+    /// notice is not navigating in that sense: the versions the game downloaded are sitting in that
+    /// folder and looking at them is the entire reason the user was sent here, so leaving it switched
+    /// off would make them find and tick it before the page could answer the question it opened with.
+    /// Called before the page is shown, and again if the page is already open when the notice is
+    /// clicked - enabling an already-enabled source is a no-op.
+    /// </remarks>
+    public void ScanInstance(Guid instanceId)
+    {
+        _catalog.SetEnabled(ModSourceId.ForInstance(instanceId), true);
+
+        // Only reloads where the page is already up; during construction there is nothing to reload
+        // and the initial load reads the flag on its way through.
+        if (IsLoading is false)
+        {
+            _ = ReloadAsync();
+        }
+    }
+
     public void Dispose()
     {
         _navigationLock.ReleaseLock(this);
@@ -1319,7 +1343,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile)
-            => ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
+        /// <param name="scanInstanceId">
+        /// An instance whose mod folder should be scanned from the start. Null for an ordinary
+        /// navigation, which reads no disk at all until the user ticks a source.
+        /// </param>
+        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, Guid? scanInstanceId = null)
+        {
+            var page = ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
+
+            // Set before the page is handed back, so it is on by the time TriggerInit reads it. Done
+            // here rather than through the constructor because a nullable Guid does not survive
+            // ActivatorUtilities' positional matching.
+            if (scanInstanceId is Guid instanceId)
+            {
+                page.ScanInstance(instanceId);
+            }
+
+            return page;
+        }
     }
 }

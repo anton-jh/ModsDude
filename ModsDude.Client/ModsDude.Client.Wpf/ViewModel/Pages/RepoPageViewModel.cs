@@ -55,12 +55,22 @@ public partial class RepoPageViewModel
         _instancePageViewModelFactory = instancePageViewModelFactory;
 
         var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo));
+
+        // Every entry whose page is gated end to end is closed here rather than left to fail at the
+        // server. Mods is absent from this list on purpose: a guest can read the catalog, and only
+        // the actions on it are refused - see RepoModsPageViewModel.
+        var isGuest = repo.MembershipLevel < RepoMembershipLevel.Member;
+        var isNotAdmin = repo.MembershipLevel < RepoMembershipLevel.Admin;
+
         MenuItems = [
             new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo)),
-            new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo)),
-            new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo)),
+            new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo))
+                .RestrictIf(isNotAdmin, "Only an admin can rename this repo, change its game settings or delete it."),
+            new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo))
+                .RestrictIf(isGuest, "Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level."),
             new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo)),
-            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo)),
+            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+                .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."),
             connectGameMenuItem
         ];
 

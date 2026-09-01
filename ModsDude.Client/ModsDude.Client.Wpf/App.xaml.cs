@@ -76,12 +76,14 @@ public partial class App : Application
         services.AddSingleton<RepoAdminPageViewModel.Factory>();
         services.AddSingleton<RepoOverviewPageViewModel.Factory>();
         services.AddSingleton<RepoMembersPageViewModel.Factory>();
+        services.AddSingleton<JoinRepoPageViewModel.Factory>();
         services.AddSingleton<RepoPageViewModel.Factory>();
         services.AddSingleton<CreateProfilePageViewModel.Factory>();
         services.AddSingleton<ProfilePageViewModel.Factory>();
         services.AddSingleton<ProfileOverviewPageViewModel.Factory>();
         services.AddSingleton<EditProfilePageViewModel.Factory>();
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
+        services.AddSingleton<ProfileModsPageViewModel.Factory>();
         services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
         services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
         services.AddSingleton<InstancePageViewModel.Factory>();
@@ -97,6 +99,9 @@ public partial class App : Application
         services.AddSingleton<DriftNotificationViewModel>();
 
         services.AddSingleton<ModListItemViewModel.Factory>();
+
+        // Singleton because switching user is what replaces the shell it is drawn in.
+        services.AddSingleton<AccountViewModel>();
 
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
         // The shell is the modal host, so anything the shell itself is built from has to ask for the
@@ -122,6 +127,8 @@ public partial class App : Application
         services.AddSingleton<RepoRepository>();
         services.AddSingleton<ProfileService>();
         services.AddSingleton<MembershipService>();
+        services.AddSingleton<InviteService>();
+        services.AddSingleton<CurrentUserService>();
         services.AddSingleton<LocalInstanceRepository>();
 
         // Sync's store eviction has to spare what other instances are running, and the instance list
@@ -135,6 +142,11 @@ public partial class App : Application
         // exactly as long as the page whose checkboxes recompose from it.
         services.AddSingleton<ModCatalog.Factory>();
         services.AddSingleton<LastSelectionRepository>();
+
+        // What the shell drops when the signed-in user changes. Everything else the client holds
+        // describes this machine's game installations and survives the switch - see IUserScopedState.
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<RepoRepository>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ProfileService>());
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

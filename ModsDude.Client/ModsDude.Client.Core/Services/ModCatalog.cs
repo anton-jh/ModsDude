@@ -43,14 +43,19 @@ public sealed class ModCatalog : IDisposable
     private readonly Repo _repo;
     private readonly IBaseModAdapter _modAdapter;
     private readonly IModsClient _modsClient;
-    private readonly ClientSettingsRepository _settings;
 
     private readonly CancellationTokenSource _cancellation = new();
     private readonly object _lock = new();
 
     private readonly Dictionary<ModSourceId, Task<SourceScan>> _scans = [];
     private readonly List<ModSource> _adHocSources = [];
-    private readonly HashSet<ModSourceId> _disabledAdHocSources = [];
+    /// <summary>
+    /// The sources this page is scanning. Starts empty and is never persisted: opening a page must
+    /// not read a disk, and a folder somebody looked in last week is not a standing instruction to
+    /// look in it again today. Ad-hoc sources are added on the way in - picking a folder is itself
+    /// the act of asking for it to be read, which navigating to a page is not.
+    /// </summary>
+    private readonly HashSet<ModSourceId> _enabledSources = [];
 
     /// <summary>Registered versions accumulated across delta fetches, keyed by their join key.</summary>
     private readonly Dictionary<ModVersionIdentity, ModDto> _registered = [];
@@ -62,12 +67,10 @@ public sealed class ModCatalog : IDisposable
 
     public ModCatalog(
         Repo repo,
-        IModsClient modsClient,
-        ClientSettingsRepository settings)
+        IModsClient modsClient)
     {
         _repo = repo;
         _modsClient = modsClient;
-        _settings = settings;
         _modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke()
             ?? throw UserFriendlyException.RepoNoModSupport();
     }
@@ -109,20 +112,15 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
-    /// Whether a source is scanned. Standing sources answer from machine-wide settings; an ad-hoc
-    /// source answers from this catalog, since it stops existing when the page does.
+    /// Whether a source is scanned. Answered entirely from this catalog, which lives and dies with
+    /// the page - nothing about it is persisted.
     /// </summary>
     public bool IsEnabled(ModSource source)
     {
-        if (source.Kind is ModSourceKind.AdHoc)
+        lock (_lock)
         {
-            lock (_lock)
-            {
-                return _disabledAdHocSources.Contains(source.Id) is false;
-            }
+            return _enabledSources.Contains(source.Id);
         }
-
-        return _settings.IsSourceDisabled(source.Id) is false;
     }
 
     /// <summary>
@@ -132,24 +130,26 @@ public sealed class ModCatalog : IDisposable
     /// </summary>
     public void SetEnabled(ModSource source, bool enabled)
     {
-        if (source.Kind is ModSourceKind.AdHoc)
+        SetEnabled(source.Id, enabled);
+    }
+
+    /// <summary>
+    /// The same, by id, for a source that has not been listed yet - the one caller being a page
+    /// opened <i>at</i> a particular folder rather than merely opened.
+    /// </summary>
+    public void SetEnabled(ModSourceId sourceId, bool enabled)
+    {
+        lock (_lock)
         {
-            lock (_lock)
+            if (enabled)
             {
-                if (enabled)
-                {
-                    _disabledAdHocSources.Remove(source.Id);
-                }
-                else
-                {
-                    _disabledAdHocSources.Add(source.Id);
-                }
+                _enabledSources.Add(sourceId);
             }
-
-            return;
+            else
+            {
+                _enabledSources.Remove(sourceId);
+            }
         }
-
-        _settings.SetSourceDisabled(source.Id, enabled is false);
     }
 
     /// <summary>
@@ -169,6 +169,7 @@ public sealed class ModCatalog : IDisposable
 
             var source = new ModSource(id, GetFolderDisplayName(path), path, ModSourceKind.AdHoc);
             _adHocSources.Add(source);
+            _enabledSources.Add(id);
 
             return source;
         }
@@ -179,7 +180,7 @@ public sealed class ModCatalog : IDisposable
         lock (_lock)
         {
             _adHocSources.RemoveAll(x => x.Id == sourceId);
-            _disabledAdHocSources.Remove(sourceId);
+            _enabledSources.Remove(sourceId);
             _scans.Remove(sourceId);
         }
     }
@@ -533,10 +534,9 @@ public sealed class ModCatalog : IDisposable
 
 
     public class Factory(
-        IModsClient modsClient,
-        ClientSettingsRepository settings)
+        IModsClient modsClient)
     {
-        public ModCatalog Create(Repo repo) => new(repo, modsClient, settings);
+        public ModCatalog Create(Repo repo) => new(repo, modsClient);
     }
 }
 

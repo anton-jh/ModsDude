@@ -88,7 +88,7 @@ Configured from the `EntraExternalId` configuration section. Two details worth k
 
 - `MapInboundClaims = false` — claims keep their original JWT names, so the code reads
   `sub` and `name` rather than the long WS-Federation URIs.
-- `NameClaimType = "name"`, which is what `UserLoadingMiddleware` uses as the username.
+- `NameClaimType = "name"`, which is what `UserLoadingMiddleware` uses as the display name.
 
 The Swagger UI in Development is wired for the authorization-code + PKCE flow against the
 same tenant, using a separate `SwaggerAuthentication:ClientId`.
@@ -99,22 +99,25 @@ same tenant, using a separate `SwaggerAuthentication:ClientId`.
 request:
 
 1. No authenticated identity or no `sub` claim → pass through untouched.
-2. User row exists → refresh `LastSeen` if it is more than an hour stale, then continue.
-3. User row does not exist → provision it from `sub` + a resolved username.
+2. User row exists → re-read the `name` claim, and write if it changed or if `LastSeen` is
+   more than an hour stale.
+3. User row does not exist → provision it from `sub` + the `name` claim.
 
 There is no signup endpoint; **first authenticated request is the signup**.
 
-The username needs care, because it is the string one member types to add another to a repo and
-so has to identify exactly one person — while the Entra `name` claim is a display name and
-nothing makes it unique. Provisioning is automatic, so there is no form on which to report a
-collision and no second chance to ask. `UsernameAllocator` therefore resolves it without the
-user: the display name first, then `"{name} (2)"`, `"{name} (3)"` and so on, with
-`"Unnamed user"` standing in for a missing or blank claim. The unique index settles a race
-between two requests resolving the same name, and provisioning retries; a subject that turns out
-to have been provisioned by a concurrent request is detached rather than inserted twice.
+The display name is stored verbatim, with `"Unnamed user"` standing in for a missing or blank
+claim. Nothing resolves it against other users, because nothing needs it to be unique: the
+identity is `sub`, and the only lookup anybody does is by invite code. That is also why it is
+re-read on every request rather than frozen at provisioning — a rename at the identity provider
+propagates here, and there is no other user's name it could be in the way of.
 
-Nothing here can reach another user's row: the insert carries this subject as its key, and the
-identity is `sub` in any case.
+Rows still carrying a `" (2)"` suffix from the era when the name *was* unique repair themselves
+on their owner's next request. The migration deliberately does not rewrite them: it could not
+tell a resolved collision from somebody whose name genuinely ends that way.
+
+Nothing here can reach another user's row: the insert carries this subject as its key, and a
+subject that turns out to have been provisioned by a concurrent request is detached rather than
+inserted twice.
 
 ## Authorization
 
@@ -244,10 +247,11 @@ Notable configuration:
   paying for them.
 - Entity extension methods in `Persistence/Extensions/EntityExtensions/` provide the small
   query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`,
-  `GetLatestVersionOfEachAsync`, `GetModUsageAsync`, `CheckNameIsTaken`, `GetByUsernameAsync`.
+  `GetLatestVersionOfEachAsync`, `GetModUsageAsync`, `CheckNameIsTaken`, `GetByCodeAsync`.
 
-Four migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
-`FlattenModModel`, `ModImageReferencesAndModListDelta` and `ModImageRendition`.
+Five migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
+`FlattenModModel`, `ModImageReferencesAndModListDelta`, `ModImageRendition` and
+`DisplayNamesAndRepoInvites`.
 
 ## Tests
 
@@ -330,8 +334,12 @@ level required.
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `users` | — | Every user who shares at least one repo with the caller |
-| GET | `users/search?username=` | — | Exact username match, returns `{ user: null }` if absent |
+| GET | `users` | — | Every user who shares at least one repo with the caller, **excluding the caller** |
+| GET | `users/me` | — | The caller's own `CurrentUserDto` — `UserDto` plus `IsTrusted`. The only route that returns either: `users` deliberately leaves the caller out, the client cannot derive its `Tag` from the token, and whether somebody may create repos is not their teammates' business |
+
+There is **no user search**. Looking somebody up by name would make every guessable name
+reachable by a stranger and let a person be added to a repo without agreeing to it; joining goes
+through an invite instead.
 
 ### Repos
 
@@ -350,9 +358,29 @@ Note the inconsistency: the collection is `repos`, the single resource is `repo`
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| POST | `repos/{repoId}/members` | Member + may grant the requested level | |
 | PUT | `repos/{repoId}/members/{userId}` | `ChangeOthersMembership` + may grant the new level | |
 | DELETE | `repos/{repoId}/members/{userId}` | `ChangeOthersMembership` | Refuses the last Admin |
+
+There is no route that adds a member. A membership is created by its own owner, by redeeming an
+invite.
+
+### Invites
+
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| GET | `repos/{repoId}/invites` | Member | Every invite the repo has ever had, each with its `Status` and join count |
+| POST | `repos/{repoId}/invites` | Member + may grant the requested level | `{ membershipLevel, maximumUses?, expiresAt? }`. Both limits optional and independent |
+| DELETE | `repos/{repoId}/invites/{inviteId}` | Member | Revokes for good. An invite belonging to another repo is reported as absent |
+| POST | `invites/redeem` | — | `{ code }`. Joins the caller to whichever repo the code belongs to, and returns that `RepoMembershipDto` |
+
+`invites/redeem` takes the code in the body rather than the path, because a path is written down
+by every proxy and access log between the client and here. Redeeming a code for a repo the caller
+is already in is not an error and does not spend a use — the membership they already had is
+returned. Anything else that is not `Active` comes back as `invite-not-usable`, and a race with
+another redemption as `invite-redemption-conflict`.
+
+Any Member may revoke any of the repo's invites, including one an Admin made: revoking only ever
+takes access away, and a loose code wants stopping by whoever notices it.
 
 ### Profiles
 
