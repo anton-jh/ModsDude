@@ -276,6 +276,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             }
 
             ImportSummary = Describe(result);
+
+            // One dialog for the run, once every row has been marked - so what it names is already
+            // findable in the list behind it.
+            if (ModImportProblems.Build(result, id => NameOf(rows, id)) is ConfirmationDialogViewModel problems)
+            {
+                await _modalService.Show(problems);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -290,6 +297,15 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     private bool CanImport()
         => CanModify && IsSelectionMode && IsImporting is false && SelectedCount > 0;
+
+    /// <summary>
+    /// The row's own name, falling back to the mod's id for a version that is somehow no longer in
+    /// the list - a name the user will not recognise beats a blank in a list of what went wrong.
+    /// </summary>
+    private static string NameOf(IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows, ModVersionIdentity id)
+    {
+        return rows.TryGetValue(id, out var row) ? row.Name : id.ModId.Value;
+    }
 
     private static string Describe(ModImportResult result)
     {

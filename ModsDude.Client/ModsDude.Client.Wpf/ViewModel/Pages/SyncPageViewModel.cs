@@ -27,9 +27,19 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly ProfileService _profileService;
     private readonly ProfileApplyService _applyService;
+    private readonly ModListItemViewModel.Factory _itemFactory;
 
     private ModSyncPlan? _plan;
     private IInstanceModAdapter? _adapter;
+
+    /// <summary>
+    /// The repo's record for every version this profile pins, by identity. It is what lets a plan row
+    /// render as the same list row as everywhere else - the real name, the icon, the description -
+    /// none of which a dependency carries. Left empty where the fetch failed, which costs the rows
+    /// their icons and nothing else.
+    /// </summary>
+    private IReadOnlyDictionary<ModVersionIdentity, CatalogModVersion> _pinned =
+        new Dictionary<ModVersionIdentity, CatalogModVersion>();
 
 
     public SyncPageViewModel(
@@ -39,7 +49,8 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         InstanceDriftService driftService,
         InstanceDriftMonitor driftMonitor,
         ProfileService profileService,
-        ProfileApplyService applyService)
+        ProfileApplyService applyService,
+        ModListItemViewModel.Factory itemFactory)
     {
         _repo = repo;
         _instance = instance;
@@ -48,6 +59,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         _driftMonitor = driftMonitor;
         _profileService = profileService;
         _applyService = applyService;
+        _itemFactory = itemFactory;
 
         InstanceName = instance.Name;
         Rows = [];
@@ -65,6 +77,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanApply))]
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    [NotifyPropertyChangedFor(nameof(HasChanges))]
     private bool _hasPlan;
 
     [ObservableProperty]
@@ -99,6 +112,13 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private double _progressValue;
 
     public bool CanApply => HasPlan && IsRunning is false;
+
+    /// <summary>
+    /// Whether the preview has anything to list. False for a plan of nothing but keeps, where the
+    /// summary already says so and an empty card would only leave the user wondering what is missing.
+    /// </summary>
+    public bool HasChanges => HasPlan && Rows.Count > 0;
+
     public bool IsIdle => IsRunning is false;
     public bool HasProblem => Problem is not null;
 
@@ -181,6 +201,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             Rows.Clear();
+            OnPropertyChanged(nameof(HasChanges));
         });
 
         if (_instance.ActiveProfile is not ActiveProfile active)
@@ -226,6 +247,8 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
                 new ModSyncRequest(_instance.Id, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
                 cancellationToken);
 
+            _pinned = await LoadPinnedAsync(active.ProfileId, cancellationToken);
+
             await Application.Current.Dispatcher.InvokeAsync(() => Publish(plan));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -242,15 +265,49 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// The repo's record for what the profile pins, for the rows to render from. Never fatal: the
+    /// plan is already worked out by this point, and a row with no record still says what will happen
+    /// to the file - it just says it without an icon.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, CatalogModVersion>> LoadPinnedAsync(
+        Guid profileId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var pinned = await _profileService.GetPinnedMods(_repo.Id, profileId, cancellationToken);
+
+            return pinned.ToDictionary(x => x.Version.Identity, x => x.Version);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new Dictionary<ModVersionIdentity, CatalogModVersion>();
+        }
+    }
+
     private void Publish(ModSyncPlan plan)
     {
         _plan = plan;
         HasPlan = true;
 
-        foreach (var item in plan.Items.OrderBy(x => x.Action).ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+        // Keeps are left out on purpose: they are what the summary counts, and on a re-apply they are
+        // nearly the whole list. A preview headed "What would change" listing what would not is the
+        // fastest way to hide the two lines that matter.
+        var changing = plan.Items
+            .Where(x => x.Action is not ModSyncAction.Keep)
+            .OrderBy(x => x.Action)
+            .ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var item in changing)
         {
-            Rows.Add(new ModSyncRowViewModel(item));
+            Rows.Add(new ModSyncRowViewModel(item, CreateItem(item)));
         }
+
+        OnPropertyChanged(nameof(HasChanges));
 
         Summary = plan.HasWork
             ? $"{plan.InstallCount} to install, {plan.ReplaceCount} to replace, " +
@@ -272,6 +329,36 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             : null;
 
         ShowDrift(_driftService.Check(_instance.Id, _instance.ActiveProfile, plan.ModFolder));
+    }
+
+    /// <summary>
+    /// The shared list row for one plan item, so a mod about to be installed looks exactly as it does
+    /// on the repo's mod list and on the profile's.
+    /// </summary>
+    /// <remarks>
+    /// A pinned version is registered, so the repo's record answers everything the row renders. The
+    /// rest of the list is files the profile does not pin - an uninstall, an unrecognised file heading
+    /// for the Recycle Bin - which no catalog record describes at all, and those fall back to what the
+    /// adapter read off the file itself: a local-only version, which renders as initials and asks the
+    /// server for nothing.
+    /// </remarks>
+    private ModListItemViewModel CreateItem(ModSyncItem item)
+    {
+        var version = item.DesiredVersion is ModVersionKey desired
+            && _pinned.TryGetValue(new ModVersionIdentity(item.ModId, desired), out var registered)
+            ? registered
+            : new CatalogModVersion(
+                item.ModId,
+                // A file that blocks an install is named rather than versioned, so there is no version
+                // to show and the row's chip stays empty.
+                item.DesiredVersion ?? item.InstalledVersion ?? default,
+                item.DisplayName,
+                string.Empty,
+                IsLocal: true,
+                IsOnServer: false,
+                Locked: item.Locked);
+
+        return _itemFactory.Create(_repo.Id, version);
     }
 
     private void ShowDrift(InstanceDriftReport report)

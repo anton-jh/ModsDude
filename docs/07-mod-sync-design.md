@@ -53,10 +53,16 @@ The reconciler's *Desired* set is `(modId, versionId, contentHash)`, and it gets
 `GET repos/{id}/profiles/{id}/modDependencies`. Resolving hashes from the mod list instead would
 mean walking `GET repos/{id}/mods` — every version in the repo — on every sync.
 
-So **`ModDependencyDto` carries the content hash too**, and the same request is what the plan
-preview reads display names from. It went in with the same schema change that added
-`ContentHash`, which is what kept sync from shipping on top of a mod-list endpoint that was at
-the time unpaged.
+So **`ModDependencyDto` carries the content hash too**. It went in with the same schema change
+that added `ContentHash`, which is what kept sync from shipping on top of a mod-list endpoint
+that was at the time unpaged.
+
+The rule is about the reconciler, not about the page. Planning still needs nothing but
+dependencies; the plan *preview* renders each row with the same list row as the repo's mod list
+and a profile's, and the icon, the description and the real display name only exist on the mod
+list. So the page fetches it — after the plan, never as an input to it, and on a failure the
+rows fall back to what the plan itself carries. What is being applied is decided without the mod
+list either way.
 
 ### Hostile or wrong hashes have to be unregisterable, not just undownloadable
 

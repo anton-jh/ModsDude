@@ -59,27 +59,75 @@
 
             </StackPanel>
 
+            <!-- Only what changes gets a row, so a plan of nothing but keeps has no card at all -
+                 the summary above already says the folder matches. -->
             <Border Grid.Row="2"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="4" Padding="16"
-                    Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibilityConverter}}">
+                    Visibility="{Binding HasChanges, Converter={StaticResource BoolToVisibilityConverter}}">
                 <GroupBox Header="What would change" Padding="0 16 0 0">
+
+                    <!-- The same row as the repo's mod list and a profile's, rendered by the implicit
+                         ModListItemViewModel template - so a mod about to be installed looks the way
+                         it does everywhere else, icon and all. What this page adds to the end of the
+                         row is the one thing those pages cannot say: what applying would do to it. -->
                     <ListView ItemsSource="{Binding Rows}"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                                <!-- The row draws its own hover and divider, and nothing here is
+                                     selectable, so the container is only in the way. -->
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:ModSyncRowViewModel}">
-                                <Grid ColumnDefinitions="180 *" Margin="0 4 0 4">
-                                    <TextBlock Grid.Column="0" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               Text="{Binding Action}" />
-                                    <StackPanel Grid.Column="1" Orientation="Vertical">
-                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                <Grid ColumnDefinitions="* auto">
+
+                                    <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                    <StackPanel Grid.Column="1" Orientation="Vertical"
+                                                Width="320" Margin="0 0 12 0"
+                                                VerticalAlignment="Center">
+
+                                        <!-- Coloured like the row's own status chip, and by the same
+                                             rule: what is being added reads as success, what leaves
+                                             the folder as something to look at twice. -->
+                                        <Border Padding="8 2"
+                                                CornerRadius="3"
+                                                HorizontalAlignment="Left">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Install">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Replace">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Quarantine">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding ActionText}"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}" />
+                                        </Border>
+
+                                        <!-- Wrapped rather than trimmed: the Recycle Bin lines are the
+                                             ones the user has to be able to read before applying. -->
+                                        <TextBlock Margin="0 4 0 0"
                                                    TextWrapping="Wrap"
-                                                   Text="{Binding Detail}" />
+                                                   Text="{Binding Detail}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}" />
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>

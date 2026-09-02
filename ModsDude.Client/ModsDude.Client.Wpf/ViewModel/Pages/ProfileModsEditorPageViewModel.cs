@@ -38,7 +38,8 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <para>
 /// <b>Nothing is uploaded until Save.</b> A local-only mod moved rightwards is a pending row; Save
 /// imports the files and then writes the dependencies. Importing on the way in would make Cancel
-/// meaningless and litter the repo with mods nobody kept.
+/// meaningless and litter the repo with mods nobody kept. A save whose import does not fully succeed
+/// writes nothing at all - see <see cref="SaveChanges"/> for why that has to be decided there.
 /// See docs/09-mod-catalog.md#profile-mod-list-editor.
 /// </para>
 /// <para>
@@ -438,10 +439,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #region Saving
 
     /// <summary>
-    /// Imports whatever is pending, then writes the dependencies - in that order, because a mod is
-    /// never registered before its file is in storage and a dependency can only name a registered
-    /// version.
+    /// Imports whatever is pending, then writes the dependencies, then re-applies - in that order,
+    /// because a mod is never registered before its file is in storage and a dependency can only
+    /// name a registered version.
     /// </summary>
+    /// <remarks>
+    /// <b>An import that does not fully succeed stops the save.</b> The steps after it are written
+    /// against the mods the repo now holds, so carrying on with a short list quietly turns "these
+    /// files failed to upload" into a profile that never mentions them and an apply that treats them
+    /// as unrecognised - which sends the very files the user was importing to the Recycle Bin, one
+    /// confirmation click away. Nothing downstream can tell that apart from a folder full of junk,
+    /// so the only place it can be caught is here, before anything is written.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanSave), IncludeCancelCommand = true)]
     private async Task SaveChanges(CancellationToken cancellationToken)
     {
@@ -456,16 +465,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var imported = await ImportPendingAsync(cancellationToken);
+            var import = await ImportPendingAsync(cancellationToken);
 
-            // A mod whose file never made it is left in the list as pending rather than written as a
-            // dependency the repo cannot resolve.
             var unfinished = Pinned
-                .Where(x => x.IsPending && imported.Contains(x.SelectedVersion.Version.Identity) is false)
-                .ToList();
+                .Count(x => x.IsPending && import.Imported.Contains(x.SelectedVersion.Version.Identity) is false);
+
+            if (unfinished > 0)
+            {
+                await StopAtFailedImportAsync(unfinished, import.Problems);
+
+                return;
+            }
 
             var desired = Pinned
-                .Except(unfinished)
                 .Select(x => x.Pin)
                 .ToList();
 
@@ -476,21 +488,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // What the profile holds now, so that anything left over is the only thing still unsaved.
             _original = desired;
 
-            if (unfinished.Count == 0)
-            {
-                await ReloadAsync();
-            }
-            else
-            {
-                // Deliberately not reloaded: a reload would rebuild both lists from the server, and
-                // the rows that could not be imported are not on the server - they would vanish from
-                // the profile without the user being told which ones, having just been told that
-                // something went wrong. They stay put instead, still pending, each carrying its own
-                // reason.
-                Recount();
-            }
+            await ReloadAsync();
 
-            SaveSummary = Describe(changes, unfinished.Count);
+            SaveSummary = Describe(changes);
 
             if (apply)
             {
@@ -512,6 +512,31 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanSave() => HasUnsavedChanges && IsSaving is false;
+
+    /// <summary>
+    /// Leaves the save where the import stopped it: nothing written to the profile, nothing applied,
+    /// every row that did not make it still pending and marked, and the dialog that says why.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not reloaded, and the original list deliberately not moved on. A reload rebuilds
+    /// both lists from the server, and the rows that could not be imported are not on the server -
+    /// they would vanish from the profile without the user being told which ones, having just been
+    /// told that something went wrong. Leaving the draft where it is also keeps it unsaved, so Save
+    /// stays enabled and pressing it again once the cause is fixed is the whole recovery path.
+    /// </remarks>
+    private async Task StopAtFailedImportAsync(int unfinished, ConfirmationDialogViewModel? problems)
+    {
+        Recount();
+
+        // One line, because the dialog carries the reasons and this is only what is left on the page
+        // once it has been dismissed.
+        SaveSummary = $"{unfinished} could not be imported, so nothing was saved.";
+
+        if (problems is not null)
+        {
+            await _modalService.Show(problems);
+        }
+    }
 
     /// <summary>
     /// The variant, one click further in than the primary and only offered where there is something
@@ -631,15 +656,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Uploads and registers the rows that are still only on disk, and reports which of them the repo
-    /// now holds.
+    /// now holds - and, where some did not make it, the one dialog that says so.
     /// </summary>
-    private async Task<HashSet<ModVersionIdentity>> ImportPendingAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// The dialog is built here and shown by the caller: this is where the rows and their names are,
+    /// and the caller is where what the failures cost the save is known.
+    /// </remarks>
+    private async Task<PendingImport> ImportPendingAsync(CancellationToken cancellationToken)
     {
         var pending = Pinned.Where(x => x.IsPending).ToList();
 
         if (pending.Count == 0)
         {
-            return [];
+            return new PendingImport([], null);
         }
 
         var rows = pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
@@ -671,8 +700,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             }
         }
 
-        return [.. result.Succeeded.Select(x => x.Identity)];
+        // The profile keeps its draft when an import falls short, so the mods it names are still in
+        // the list the user is looking at.
+        var problems = ModImportProblems.Build(
+            result,
+            id => rows.TryGetValue(id, out var row) ? row.Name : id.ModId.Value,
+            "Nothing was saved.");
+
+        return new PendingImport([.. result.Succeeded.Select(x => x.Identity)], problems);
     }
+
+    /// <param name="Imported">What the repo holds now, which is what the save is allowed to pin.</param>
+    /// <param name="Problems">The dialog for what did not make it, or null when everything did.</param>
+    private sealed record PendingImport(
+        HashSet<ModVersionIdentity> Imported,
+        ConfirmationDialogViewModel? Problems);
 
     /// <summary>
     /// One dialog for the whole save, and only for the mods whose version ordering the comparer could
@@ -807,9 +849,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         return versions[^1].VersionId == pin.VersionId;
     }
 
-    private static string Describe(ProfileModListChanges changes, int unfinished)
+    private static string Describe(ProfileModListChanges changes)
     {
-        if (changes.IsEmpty && unfinished == 0)
+        if (changes.IsEmpty)
         {
             return "Nothing to save.";
         }
@@ -829,12 +871,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         if (changes.Removed.Count > 0)
         {
             parts.Add($"{changes.Removed.Count} removed");
-        }
-
-        if (unfinished > 0)
-        {
-            // Still in the list and still pending, so the reason is on the row rather than in here.
-            parts.Add($"{unfinished} could not be imported");
         }
 
         return string.Join(" · ", parts);

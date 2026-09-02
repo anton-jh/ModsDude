@@ -34,7 +34,7 @@
 
             <Grid>
 
-                <Grid ColumnDefinitions="auto auto * auto auto auto auto">
+                <Grid ColumnDefinitions="auto auto * auto auto auto auto auto">
 
                     <CheckBox Grid.Column="0"
                               Margin="12 0 0 0"
@@ -88,35 +88,22 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 CornerRadius="3"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibilityConverter}}">
                             <TextBlock Text="{Binding Version}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Style="{DynamicResource CaptionTextBlockStyle}" />
                         </Border>
 
-                        <!-- The import's own words for this row while it runs, and the reason it did
-                             not finish afterwards. Falls back to the mod's description, which is what
-                             the row says when no import has touched it. -->
+                        <!-- The mod's description, whatever the import is doing. What went wrong with
+                             an import is a chip and an icon on the row and a dialog behind that: an
+                             exception message rendered here is a line of clipped text nobody reads. -->
                         <TextBlock Grid.Row="1" Grid.Column="0"
                                    Margin="0 2 0 0"
+                                   Text="{Binding ShortDescription}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextTrimming="CharacterEllipsis"
-                                   TextWrapping="NoWrap">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="{Binding ShortDescription}" />
-                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasImportMessage}" Value="True">
-                                            <Setter Property="Text" Value="{Binding ImportMessage}" />
-                                            <Setter Property="ToolTip" Value="{Binding ImportMessage}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding ImportState}" Value="Failed">
-                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                                   TextWrapping="NoWrap" />
 
                         <!-- Sits under the version chip, so the sources line up into a column of
                              their own down the list. Hidden when only one source is enabled, where
@@ -160,10 +147,39 @@
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
+                    <!-- Marks the row the dialog was talking about, and says nothing the dialog did
+                         not: the import raises one of those for the whole run, and a row is not
+                         where a reason can be read. -->
+                    <TextBlock Grid.Column="5"
+                               Margin="0 0 8 0"
+                               VerticalAlignment="Center"
+                               Text="&#xE7BA;"
+                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                               ToolTip="{Binding ImportProblemTooltip}"
+                               ToolTipService.InitialShowDelay="400">
+                        <TextBlock.Style>
+                            <!-- Caution by default and critical for a failure - the same distinction
+                                 the chip beside it draws between waiting on a decision and going
+                                 wrong. -->
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasImportProblem}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ImportState}" Value="Failed">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
                     <!-- One chip, showing the import while it is happening and the presence status
                          otherwise. A running import is the more urgent of the two, and stacking them
                          would make every row two chips wide for the sake of one moment. -->
-                    <Border Grid.Column="5"
+                    <Border Grid.Column="6"
                             Margin="0 0 8 0"
                             Padding="8 2"
                             VerticalAlignment="Center"
@@ -213,7 +229,7 @@
 
                     <!-- Margin on the panel rather than on the grid inside it, so the row keeps its
                          trailing gap for a member who has no actions to be offered. -->
-                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
+                    <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="0 0 12 0">
 
                         <Grid Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">

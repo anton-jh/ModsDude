@@ -21,24 +21,31 @@
         <Grid RowDefinitions="* auto">
             <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 0">
 
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding Icon, Converter={StaticResource IconKindToStringConverter}}"
+                <!-- A grid rather than a horizontal stack: a stack hands the title infinite width,
+                     so a long one runs off the side of a dialog this wide instead of wrapping. -->
+                <Grid ColumnDefinitions="auto *">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Icon, Converter={StaticResource IconKindToStringConverter}}"
                                FontFamily="{StaticResource SymbolThemeFontFamily}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 32 12 24"
                                VerticalAlignment="Center" />
-                    
-                    <TextBlock Text="{Binding Title}"
-                               HorizontalAlignment="Stretch"
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Title}"
                                TextWrapping="Wrap"
+                               VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 32 0 24" />
-                </StackPanel>
+                </Grid>
 
+                <!-- Wrapped: a dialog is fixed width and some of what lands here is a sentence
+                     rather than a label. -->
                 <TextBlock Text="{Binding Message}"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           TextWrapping="Wrap"
                            Margin="0 0 0 24" />
 
             </StackPanel>

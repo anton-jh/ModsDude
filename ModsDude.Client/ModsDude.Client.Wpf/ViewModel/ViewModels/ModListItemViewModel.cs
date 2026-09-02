@@ -63,6 +63,13 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     public string? Author => Mod.Author;
     public string ShortDescription { get; }
 
+    /// <summary>
+    /// Whether the chip has anything to say. Every version out of the catalog does; a row standing in
+    /// for a file that is named rather than versioned - an unrecognised file in a mod folder - does
+    /// not, and an empty pill on it would read as a missing value.
+    /// </summary>
+    public bool HasVersion => string.IsNullOrEmpty(Version) is false;
+
     public bool IsOnServer => Mod.IsOnServer;
     public bool IsLocal => Mod.IsLocal;
 
@@ -154,6 +161,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     [NotifyPropertyChangedFor(nameof(ImportStateText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasImportState))]
+    [NotifyPropertyChangedFor(nameof(HasImportProblem))]
+    [NotifyPropertyChangedFor(nameof(ImportProblemTooltip))]
     [NotifyPropertyChangedFor(nameof(IsUploading))]
     private ModImportPhase? _importPhase;
 
@@ -162,6 +171,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     [NotifyPropertyChangedFor(nameof(ImportStateText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasImportState))]
+    [NotifyPropertyChangedFor(nameof(HasImportProblem))]
+    [NotifyPropertyChangedFor(nameof(ImportProblemTooltip))]
     private ModImportStatus? _importOutcome;
 
     /// <summary>Zero to one, and only while uploading - the one phase whose length is knowable.</summary>
@@ -169,10 +180,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     [NotifyPropertyChangedFor(nameof(ImportStateText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
     private double _importProgress;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasImportMessage))]
-    private string? _importMessage;
 
 
     /// <summary>
@@ -190,7 +197,15 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
 
     public bool HasImportState => ImportState is not ModImportRowState.None;
 
-    public bool HasImportMessage => string.IsNullOrWhiteSpace(ImportMessage) is false;
+    /// <summary>
+    /// Whether the row is marked as one the import did not finish. A mark rather than a sentence:
+    /// the reason is one line in the dialog the import raises when it is over, and text long enough
+    /// to be worth reading is text a 72-pixel row can only clip.
+    /// </summary>
+    public bool HasImportProblem => ImportState is ModImportRowState.Failed or ModImportRowState.Skipped;
+
+    /// <summary>Which mod the dialog was talking about, for whoever comes back to the list after it.</summary>
+    public string ImportProblemTooltip => ModImportProblems.DescribeRow(ImportOutcome);
 
     public bool IsUploading => ImportPhase is ModImportPhase.Uploading;
 
@@ -225,21 +240,33 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
             ? (double)progress.BytesTransferred / progress.TotalBytes
             : 0;
 
-        if (progress.Error is not null)
-        {
-            ImportMessage = progress.Error;
-        }
     }
 
+    /// <summary>
+    /// What the import concluded about this row - and, for anything it could not finish, the only
+    /// place the whole story is written down.
+    /// </summary>
+    /// <remarks>
+    /// The row gets a mark and the dialog gets a sentence, so an exception - message, inner
+    /// exceptions, stack - reaches nobody unless it is logged here. Logged as an error only where
+    /// something actually went wrong: a mod the import declined to touch is a decision waiting to be
+    /// made, and a mod the repo already held is not news at all.
+    /// </remarks>
     public void Apply(ModImportItemResult result)
     {
         ImportOutcome = result.Status;
         ImportPhase = null;
 
-        if (result.Message is not null)
+        if (result.IsSuccess)
         {
-            ImportMessage = result.Message;
+            return;
         }
+
+        _logger.Log(
+            result.Status is ModImportStatus.Failed ? LogLevel.Error : LogLevel.Information,
+            result.Exception,
+            "Import of {ModId} {VersionId} ended as {Status}: {Message}",
+            Mod.ModId.Value, Mod.VersionId.Value, result.Status, result.Message ?? "no message");
     }
 
     /// <summary>Clears what the last import said, so a second run does not read as the first one.</summary>
@@ -248,7 +275,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
         ImportPhase = null;
         ImportOutcome = null;
         ImportProgress = 0;
-        ImportMessage = null;
     }
 
     #endregion

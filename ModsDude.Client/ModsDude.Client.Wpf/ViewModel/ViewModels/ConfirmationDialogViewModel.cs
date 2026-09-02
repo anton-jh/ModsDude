@@ -77,8 +77,15 @@ public partial class ConfirmationDialogViewModel(
 
     public static ConfirmationDialogViewModel Error(UserFriendlyException exception)
     {
-        var message = $"{exception.Message}.\n\nThis might not help:\n\n{exception.DeveloperMessage}";
+        return Error($"{exception.Message}.\n\nThis might not help:\n\n{exception.DeveloperMessage}");
+    }
 
+    /// <summary>
+    /// The app's one error dialog. Anything that went wrong wears the same title and the same two
+    /// buttons, so only the middle of it has to be read.
+    /// </summary>
+    public static ConfirmationDialogViewModel Error(string message)
+    {
         return new ConfirmationDialogViewModel(
             "Oops!",
             message,
