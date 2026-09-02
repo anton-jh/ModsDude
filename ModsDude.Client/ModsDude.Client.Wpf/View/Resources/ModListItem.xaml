@@ -76,7 +76,7 @@
                                    ToolTipService.InitialShowDelay="400">
                             <Hyperlink Style="{StaticResource TextLink}"
                                        Command="{Binding ShowDetailsCommand}">
-                                <Run Text="{Binding Name}" />
+                                <Run Text="{Binding Name, Mode=OneWay}" />
                             </Hyperlink>
                         </TextBlock>
 
