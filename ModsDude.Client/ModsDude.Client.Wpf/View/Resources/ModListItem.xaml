@@ -197,6 +197,13 @@
                                         <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                     </DataTrigger>
+                                    <!-- Caution rather than the accent a pending import gets: this
+                                         one is a row about to lose something, and it matches the
+                                         count in the list's own header. -->
+                                    <DataTrigger Binding="{Binding Status}" Value="PendingRemoval">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>

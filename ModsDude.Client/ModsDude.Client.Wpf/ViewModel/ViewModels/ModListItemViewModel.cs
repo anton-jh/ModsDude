@@ -139,6 +139,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
         ModDisplayStatus.New => "New",
         ModDisplayStatus.UpdateAvailable => "Update",
         ModDisplayStatus.AlreadyInRepo => "In repo",
+        ModDisplayStatus.PendingRemoval => "Taken out",
         _ => string.Empty
     };
 

@@ -17,18 +17,25 @@ using System.Windows.Data;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The repo's mods: one list over the catalog, whether a version is on disk, in the repo, or both.
+/// The repo's mods: what the enabled sources hold on the left, what the repo holds on the right, and
+/// importing as the move between them.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Import and Manage used to be sibling pages showing overlapping data under different rules, which
-/// is the main thing about this area that confused. They are one list with presence filters, and
-/// importing is a <em>selection mode</em> over it rather than a separate destination - same rows,
-/// same template, one service. See docs/09-mod-catalog.md#manage.
+/// is the main thing about this area that confused. They are one page, laid out like the profile mod
+/// editor - the same two lists, the same source pane under the left one, the same "nothing is
+/// uploaded until you press the button" rule - because they are the same act: deciding what a
+/// collection should hold and then writing it. See docs/09-mod-catalog.md#manage.
 /// </para>
 /// <para>
-/// The source list lives here too, so which folders are searched is adjustable in place rather than
-/// being a fixed consequence of the repo's instances.
+/// <b>A mod is never on both sides at once.</b> The left list is what the sources hold and the repo
+/// does not; moving a row rightwards is a queued import, and the row it becomes is the very same row
+/// object, so its icon and its import marks carry across.
+/// </para>
+/// <para>
+/// The source list lives under the left list, so which folders are searched is adjustable in place
+/// rather than being a fixed consequence of the repo's instances.
 /// </para>
 /// </remarks>
 public partial class RepoModsPageViewModel : PageViewModel, IDisposable
@@ -44,8 +51,31 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly CancellationTokenSource _cancellation = new();
     private readonly ModRowActions _rowActions;
 
-    private IReadOnlyList<ModListItemViewModel> _mods = [];
-    private bool _suspendSelectionTracking;
+    /// <summary>Everything the sources hold that the repo does not, queued or not.</summary>
+    private IReadOnlyList<ModListItemViewModel> _local = [];
+
+    /// <summary>What the repo holds, rebuilt from the catalog and never added to by the user.</summary>
+    private IReadOnlyList<ModListItemViewModel> _registered = [];
+
+    /// <summary>
+    /// The right-hand list: the registered rows plus whatever has been queued for import. Replaced
+    /// wholesale where the whole list changes and mutated where one row moves, which is what keeps a
+    /// single click cheap without paying a couple of thousand collection events for a reload.
+    /// </summary>
+    private ObservableCollection<ModListItemViewModel> _repoMods = [];
+
+    /// <summary>
+    /// What has been moved rightwards, held as identities rather than rows: a rescan builds new rows
+    /// for the same files, and the queue has to survive that.
+    /// </summary>
+    private readonly HashSet<ModVersionIdentity> _queued = [];
+
+    /// <summary>
+    /// The newest version the repo holds of each mod it holds at all - what "an update" is measured
+    /// against, and the only thing on this page that needs the repo's version ordering.
+    /// </summary>
+    private IReadOnlyDictionary<ModKey, ModVersionKey> _newestRegistered =
+        new Dictionary<ModKey, ModVersionKey>();
 
 
     public RepoModsPageViewModel(
@@ -88,52 +118,92 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Whether this user may write to the repo's mods. The page itself is open to a guest - browsing
-    /// the catalog, searching it, filtering it and rescanning their own disks are all theirs - and
-    /// only importing, reordering and deleting are refused.
+    /// the catalog, searching it and filtering it are all theirs - and only importing, reordering and
+    /// deleting are refused. A guest gets the right-hand list alone, because the left one exists to
+    /// feed an import they cannot make.
     /// </summary>
     public bool CanModify { get; }
 
-    /// <summary>Why those are refused, shown on the controls that carry them. Null where they are not.</summary>
+    /// <summary>Why those are refused, shown on the page. Null where they are not.</summary>
     public string? ModifyRestriction { get; }
 
+    /// <summary>The sources' half: on disk, and not registered here.</summary>
     [ObservableProperty]
-    private ICollectionView? _modsView;
+    private ICollectionView? _localView;
+
+    /// <summary>The repo's half, plus the rows queued to join it.</summary>
+    [ObservableProperty]
+    private ICollectionView? _repoView;
 
     [ObservableProperty]
     private bool _isLoading = true;
 
+    /// <summary>Filters both lists, because a mod is only ever in one of them.</summary>
     [ObservableProperty]
     private string _searchText = string.Empty;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CountText))]
-    [NotifyPropertyChangedFor(nameof(HasMods))]
-    private int _totalCount;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CountText))]
-    [NotifyPropertyChangedFor(nameof(HasVisibleMods))]
-    private int _visibleCount;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ImportButtonText))]
-    [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
-    private int _selectedCount;
-
-    /// <summary>True once loading has finished and the sources and the repo turned up nothing.</summary>
-    [ObservableProperty]
-    private bool _isEmpty;
-
     /// <summary>
-    /// Bulk import as a mode rather than a page: turning it on reveals the checkboxes and the footer
-    /// bar, and turning it off puts the list back to something to read.
+    /// Narrows the right-hand list to what a delete would be accepted for. The one presence filter
+    /// worth keeping now that the lists say the rest: registered-or-not is which side a row is on.
     /// </summary>
     [ObservableProperty]
+    private bool _unusedOnly;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocalCountText))]
+    [NotifyPropertyChangedFor(nameof(HasVisibleLocalMods))]
+    private int _localCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocalCountText))]
+    [NotifyPropertyChangedFor(nameof(HasLocalMods))]
+    [NotifyCanExecuteChangedFor(nameof(QueueAllCommand))]
+    private int _localTotal;
+
+    /// <summary>
+    /// How many of the left list's rows are newer versions of mods the repo already holds. Counted
+    /// over the whole list rather than what the search is showing, because that is what the button
+    /// beside the count acts on.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateButtonText))]
+    [NotifyCanExecuteChangedFor(nameof(QueueAllUpdatesCommand))]
+    private int _updateCount;
+
+    /// <summary>
+    /// The wider set the same button's menu offers: every version of a mod the repo holds that it
+    /// does not have, whether or not the ordering makes it newer. A superset of
+    /// <see cref="UpdateCount"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnregisteredButtonText))]
+    [NotifyPropertyChangedFor(nameof(HasUnregisteredVersions))]
+    [NotifyCanExecuteChangedFor(nameof(QueueAllUnregisteredCommand))]
+    private int _unregisteredCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepoCountText))]
+    [NotifyPropertyChangedFor(nameof(HasVisibleRepoMods))]
+    private int _repoCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepoCountText))]
+    [NotifyPropertyChangedFor(nameof(HasRepoMods))]
+    private int _repoTotal;
+
+    /// <summary>How many rows on the right are waiting to be uploaded.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QueuedText))]
+    [NotifyPropertyChangedFor(nameof(HasQueued))]
+    [NotifyPropertyChangedFor(nameof(ImportButtonText))]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
-    private bool _isSelectionMode;
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    private int _queuedCount;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(QueueAllCommand))]
     private bool _isImporting;
 
     /// <summary>What the last import did, kept until the user asks for a fresh list.</summary>
@@ -141,33 +211,207 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(HasImportSummary))]
     private string? _importSummary;
 
-    [ObservableProperty]
-    private ModPresenceFilter _presenceFilter = ModPresenceFilter.All;
 
-
-    public bool HasMods => TotalCount > 0;
-    public bool HasVisibleMods => VisibleCount > 0;
+    public bool HasLocalMods => LocalTotal > 0;
+    public bool HasVisibleLocalMods => LocalCount > 0;
+    public bool HasRepoMods => RepoTotal > 0;
+    public bool HasVisibleRepoMods => RepoCount > 0;
+    public bool HasQueued => QueuedCount > 0;
     public bool HasImportSummary => ImportSummary is not null;
 
-    public string CountText => VisibleCount == TotalCount
-        ? $"{TotalCount} mods"
-        : $"{VisibleCount} of {TotalCount} mods";
+    public string LocalCountText => Describe(LocalCount, LocalTotal);
+    public string RepoCountText => Describe(RepoCount, RepoTotal);
 
-    public string ImportButtonText => SelectedCount switch
+    public string QueuedText => QueuedCount == 1
+        ? "1 mod will be imported when you press Import"
+        : $"{QueuedCount} mods will be imported when you press Import";
+
+    public string ImportButtonText => QueuedCount switch
     {
-        0 => "Import selected",
+        0 => "Import",
         1 => "Import 1 mod",
-        _ => $"Import {SelectedCount} mods"
+        _ => $"Import {QueuedCount} mods"
     };
 
+    /// <summary>The count lives on the button, which is the only place it would be acted on.</summary>
+    public string UpdateButtonText => UpdateCount switch
+    {
+        0 => "Add all updates",
+        1 => "Add 1 update",
+        _ => $"Add {UpdateCount} updates"
+    };
 
-    [RelayCommand]
-    private void SelectAll()
-        => SetSelectionOfVisible(true);
+    public bool HasUnregisteredVersions => UnregisteredCount > 0;
 
-    [RelayCommand]
-    private void SelectNone()
-        => SetSelectionOfVisible(false);
+    public string UnregisteredButtonText => UnregisteredCount switch
+    {
+        0 => "Add unregistered versions",
+        1 => "Add 1 unregistered version",
+        _ => $"Add {UnregisteredCount} unregistered versions"
+    };
+
+    /// <summary>
+    /// Worded with what it takes that the primary does not, because that is the whole difference
+    /// between the two - and an older version is a deliberate thing to want, not a mistake.
+    /// </summary>
+    public string UnregisteredDescription =>
+        "Every version the repo does not hold, of every mod it does - including ones older than its "
+            + "newest, and ones whose order this game's comparer could not settle.";
+
+
+    #region Moving mods between the lists
+
+    /// <summary>
+    /// Queues one mod for import. Nothing is uploaded here - the row simply changes sides, which is
+    /// what makes taking it back free.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanModify))]
+    private void Queue(ModListItemViewModel? row)
+    {
+        if (row is null || row.Mod.IsOnServer || _queued.Add(row.Mod.Identity) is false)
+        {
+            return;
+        }
+
+        InsertSorted(row);
+        RefreshLeft();
+    }
+
+    /// <summary>Takes one queued mod back, leaving the repo exactly as it was.</summary>
+    [RelayCommand(CanExecute = nameof(CanModify))]
+    private void Unqueue(ModListItemViewModel? row)
+    {
+        if (row is null || _queued.Remove(row.Mod.Identity) is false)
+        {
+            return;
+        }
+
+        row.ResetImportState();
+
+        _repoMods.Remove(row);
+        RefreshLeft();
+    }
+
+    /// <summary>
+    /// Everything the left list is currently showing, so a search is how a subset is picked. Rebuilds
+    /// the right-hand list rather than adding a couple of thousand rows to it one at a time.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanQueueAll))]
+    private void QueueAll()
+    {
+        foreach (var row in _local.Where(PassesLocal))
+        {
+            _queued.Add(row.Mod.Identity);
+        }
+
+        RebuildRepoMods();
+    }
+
+    private bool CanQueueAll() => CanModify && IsImporting is false && LocalTotal > 0;
+
+    /// <summary>
+    /// Every mod on the left that the repo already holds an older version of - the common errand,
+    /// which is otherwise picking a handful of rows out of a folder of five hundred. Not limited to
+    /// what the search is showing: an update is a fact about the repo, not about the view, and the
+    /// count on the button says the same.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanQueueAllUpdates))]
+    private void QueueAllUpdates()
+        => QueueEvery(IsUpdate);
+
+    private bool CanQueueAllUpdates() => CanModify && IsImporting is false && UpdateCount > 0;
+
+    /// <summary>
+    /// The wider version of the same errand, one click further in: every version of a mod the repo
+    /// holds that it does not have, older ones included.
+    /// </summary>
+    /// <remarks>
+    /// Behind the caret rather than beside it because the common case is catching up to what a mod
+    /// author has released, and that is what "update" means. Filling in the older versions is a real
+    /// thing to want - a profile can pin any of them, and a repo missing the version a teammate is
+    /// on cannot be joined - it is just not the thing anyone comes here for daily.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanQueueAllUnregistered))]
+    private void QueueAllUnregistered()
+        => QueueEvery(IsUnregisteredVersionOfKnownMod);
+
+    private bool CanQueueAllUnregistered() => CanModify && IsImporting is false && UnregisteredCount > 0;
+
+    private void QueueEvery(Func<CatalogModVersion, bool> predicate)
+    {
+        foreach (var row in _local.Where(x => _queued.Contains(x.Mod.Identity) is false && predicate(x.Mod)))
+        {
+            _queued.Add(row.Mod.Identity);
+        }
+
+        RebuildRepoMods();
+    }
+
+    /// <summary>
+    /// A version of a mod the repo holds, that the repo's own ordering puts after everything it
+    /// holds of it. The comparer abstains rather than guesses, so a version string it cannot place
+    /// is not an update - it is one of the versions behind the caret, and importing it is what asks
+    /// the user where it goes.
+    /// </summary>
+    private bool IsUpdate(CatalogModVersion version)
+    {
+        return IsUnregisteredVersionOfKnownMod(version)
+            && _repo.Adapter.VersionComparer.Compare(version.VersionId, _newestRegistered[version.ModId])
+                is ModVersionComparison.Later;
+    }
+
+    /// <summary>Any version the repo lacks, of a mod it already has - whatever the ordering says.</summary>
+    private bool IsUnregisteredVersionOfKnownMod(CatalogModVersion version)
+        => version.IsOnServer is false && _newestRegistered.ContainsKey(version.ModId);
+
+    /// <summary>
+    /// Throws the queue away. Only what is still waiting: a mod this page has already imported
+    /// belongs to the repo now, whatever the list still says about the run.
+    /// </summary>
+    /// <remarks>
+    /// Asked about rather than done, because a queue can be a couple of thousand rows deep and there
+    /// is no undo - and answered by pointing out that this is free, which is the whole reason nothing
+    /// is uploaded until Import.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanDiscardChanges))]
+    private async Task DiscardChanges()
+    {
+        var confirmation = new ConfirmationDialogViewModel(
+            "Discard changes?",
+            "The mods waiting to be imported have not been uploaded, so nothing in the repo changes.",
+            IconKind.Question,
+            "Discard",
+            "Keep them");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        foreach (var row in _repoMods.Where(IsPending))
+        {
+            row.ResetImportState();
+
+            _queued.Remove(row.Mod.Identity);
+        }
+
+        RebuildRepoMods();
+    }
+
+    private bool CanDiscardChanges() => IsImporting is false && QueuedCount > 0;
+
+    /// <summary>
+    /// Waiting to be uploaded: on the right, not in the repo, and not something a run has already
+    /// put there. Derived from the row rather than tracked separately, so a finished import cannot
+    /// leave the two disagreeing.
+    /// </summary>
+    private static bool IsPending(ModListItemViewModel row)
+        => row.Mod.IsOnServer is false && row.ImportState is not ModImportRowState.Succeeded;
+
+    #endregion
+
 
     [RelayCommand]
     private void ClearSearch()
@@ -183,19 +427,6 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private async Task RescanAll()
     {
         _catalog.RescanAll();
-
-        await ReloadAsync();
-    }
-
-    [RelayCommand]
-    private async Task RescanSource(ModSourceViewModel? source)
-    {
-        if (source is null)
-        {
-            return;
-        }
-
-        _catalog.Rescan(source.Source.Id);
 
         await ReloadAsync();
     }
@@ -236,16 +467,16 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanImport), IncludeCancelCommand = true)]
     private async Task Import(CancellationToken cancellationToken)
     {
-        var selected = _mods.Where(x => x.IsSelected).ToList();
+        var pending = _repoMods.Where(IsPending).ToList();
 
-        if (selected.Count == 0)
+        if (pending.Count == 0)
         {
             return;
         }
 
         var rows = new Dictionary<ModVersionIdentity, ModListItemViewModel>();
 
-        foreach (var row in selected)
+        foreach (var row in pending)
         {
             row.ResetImportState();
             rows[row.Mod.Identity] = row;
@@ -256,7 +487,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var request = new ModImportRequest(_repo.Id, [.. selected.Select(x => x.Mod)], _repo.Adapter.VersionComparer)
+            var request = new ModImportRequest(_repo.Id, [.. pending.Select(x => x.Mod)], _repo.Adapter.VersionComparer)
             {
                 Progress = new RowProgressReporter(rows),
                 ResolveArbitration = ResolveArbitrationAsync
@@ -292,11 +523,17 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         finally
         {
             IsImporting = false;
+
+            // Re-sorted exactly once, now that every row has its outcome: what did not make it comes
+            // to the top, where it can be read and tried again. What is still waiting is what the run
+            // did not finish, so the button now offers exactly that retry, and the rows that did land
+            // stay in the list, marked, until it is refreshed.
+            RebuildRepoMods();
         }
     }
 
     private bool CanImport()
-        => CanModify && IsSelectionMode && IsImporting is false && SelectedCount > 0;
+        => CanModify && IsImporting is false && QueuedCount > 0;
 
     /// <summary>
     /// The row's own name, falling back to the mod's id for a version that is somehow no longer in
@@ -372,8 +609,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var versions = _mods
-            .Where(x => x.Mod.ModId == row.Mod.ModId && x.Mod.IsOnServer)
+        var versions = _registered
+            .Where(x => x.Mod.ModId == row.Mod.ModId)
             .OrderBy(x => x.Mod.SequenceNumber)
             .Select(x => x.Mod.VersionId)
             .ToList();
@@ -443,7 +680,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var versionCount = _mods.Count(x => x.Mod.ModId == row.Mod.ModId && x.Mod.IsOnServer);
+        var versionCount = _registered.Count(x => x.Mod.ModId == row.Mod.ModId);
 
         var confirmation = new ConfirmationDialogViewModel(
             "Really?",
@@ -551,18 +788,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     {
         var snapshot = await _catalog.GetAsync(_cancellation.Token);
 
-        // The rows and the collection view are WPF-facing, and this may well have arrived on a
+        // The rows and the collection views are WPF-facing, and this may well have arrived on a
         // thread-pool thread.
         await Application.Current.Dispatcher.InvokeAsync(() => Publish(snapshot));
     }
 
     private void Publish(ModCatalogSnapshot snapshot)
     {
-        foreach (var mod in _mods)
-        {
-            mod.PropertyChanged -= OnModPropertyChanged;
-        }
-
         Sources.Clear();
 
         foreach (var status in snapshot.Sources)
@@ -573,33 +805,91 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         // With a single source every row would name the same one, which is just noise.
         var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
 
-        _mods = [.. snapshot.Versions
-            .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ThenBy(x => x.VersionId.Value, StringComparer.CurrentCultureIgnoreCase)
-            .Select(x => CreateRow(x, showSources))];
+        var registered = new List<CatalogModVersion>();
+        var local = new List<CatalogModVersion>();
 
-        // Rebuilt rather than refreshed, because the list behind it is replaced wholesale - adding
-        // a couple of thousand rows to a bound observable collection one at a time is a couple of
+        foreach (var version in Order(snapshot.Versions))
+        {
+            // A guest gets no left list at all, so the rows for it are not built either. Nothing they
+            // can see is on disk only - the import the left list feeds is refused - and a list whose
+            // every row offers a button that is not there would be a list of dead ends.
+            if (version.IsOnServer is false && CanModify is false)
+            {
+                continue;
+            }
+
+            (version.IsOnServer ? registered : local).Add(version);
+        }
+
+        // Read from the repo's own stored order rather than re-derived: it was arbitrated once and
+        // saved, and a client recomputing it would disagree with the repo about what the newest
+        // version is. Built before the rows, which ask it what counts as an update.
+        _newestRegistered = registered
+            .GroupBy(x => x.ModId)
+            .ToDictionary(x => x.Key, x => x.MaxBy(version => version.SequenceNumber)!.VersionId);
+
+        _registered = [.. registered.Select(x => CreateRow(x, showSources))];
+        _local = [.. local.Select(x => CreateRow(x, showSources))];
+
+        // A queue survives a rescan, but only for the versions the sources still hold: a file that
+        // has gone has nothing left to upload, and a row for it could only fail.
+        _queued.IntersectWith(local.Select(x => x.Identity));
+
+        // Rebuilt rather than refreshed, because the list behind it is replaced wholesale - adding a
+        // couple of thousand rows to a bound observable collection one at a time is a couple of
         // thousand layout passes.
-        var view = CollectionViewSource.GetDefaultView(_mods);
-        view.Filter = x => x is ModListItemViewModel mod && Passes(mod);
+        var localView = CollectionViewSource.GetDefaultView(_local);
+        localView.Filter = x => x is ModListItemViewModel row && PassesLocal(row);
 
-        ModsView = view;
-        TotalCount = _mods.Count;
-        // Respects anything typed into the search box while the scan was still running.
-        VisibleCount = _mods.Count(Passes);
-        IsEmpty = _mods.Count == 0;
+        LocalView = localView;
+
+        RebuildRepoMods();
+
         IsLoading = false;
+    }
 
-        RecountSelection();
+    /// <summary>
+    /// The right-hand list from scratch: what the repo holds, plus whatever is queued to join it, in
+    /// one order.
+    /// </summary>
+    private void RebuildRepoMods()
+    {
+        _repoMods = [.. _registered.Concat(_local.Where(x => _queued.Contains(x.Mod.Identity))).OrderBy(x => x, RowOrder)];
+
+        var view = CollectionViewSource.GetDefaultView(_repoMods);
+        view.Filter = x => x is ModListItemViewModel row && PassesRepo(row);
+
+        RepoView = view;
+
+        RefreshLists();
+    }
+
+    /// <summary>
+    /// Puts one queued row where a rebuild would have put it, so a single click costs one insert
+    /// rather than a new list and a new view - and, more to the point, leaves the scroll position
+    /// alone.
+    /// </summary>
+    private void InsertSorted(ModListItemViewModel row)
+    {
+        var index = 0;
+
+        while (index < _repoMods.Count && RowOrder.Compare(_repoMods[index], row) <= 0)
+        {
+            index++;
+        }
+
+        _repoMods.Insert(index, row);
     }
 
     private ModListItemViewModel CreateRow(CatalogModVersion version, bool showSources)
     {
         var item = _itemFactory.Create(_repo.Id, version);
 
-        item.Status = version.GetImportStatus();
-        item.IsSelectable = IsSelectionMode;
+        // Which side the row is on already says whether the repo holds it, so the presence chip would
+        // repeat the list it is in on every single row. The one thing neither list says is that a row
+        // is a newer version of something already in the repo, and Recount marks those.
+        item.Status = ModDisplayStatus.None;
+        item.IsSelectable = false;
 
         // Only a registered version has anything to reorder or delete.
         item.Actions = version.IsOnServer ? _rowActions : null;
@@ -609,29 +899,68 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             item.Sources = string.Join(", ", version.FoundIn.Select(source => source.Source.Name));
         }
 
-        item.PropertyChanged += OnModPropertyChanged;
-
         return item;
     }
 
-    private bool Passes(ModListItemViewModel mod)
-    {
-        // A guest sees the repo's mods and nothing else. An unregistered file on their disk is only
-        // ever interesting as something to import, which they cannot do - so it is filtered out
-        // here rather than left for a chip to hide, and "All" means all of the repo's.
-        if (CanModify is false && mod.Mod.IsOnServer is false)
-        {
-            return false;
-        }
+    private bool PassesLocal(ModListItemViewModel row)
+        => _queued.Contains(row.Mod.Identity) is false && row.Matches(SearchText);
 
-        return mod.Matches(SearchText) && PresenceFilter switch
-        {
-            ModPresenceFilter.InRepo => mod.Mod.IsOnServer,
-            ModPresenceFilter.OnDiskOnly => mod.Mod.IsLocal && mod.Mod.IsOnServer is false,
-            ModPresenceFilter.Unused => mod.Mod.IsUnused,
-            _ => true
-        };
+    private bool PassesRepo(ModListItemViewModel row)
+    {
+        // A queued row is never "unused" - the repo has no dependency that could name it - and hiding
+        // what was just moved across, while the button below counts it, would be the filter arguing
+        // with the button.
+        return row.Matches(SearchText)
+            && (UnusedOnly is false || row.Mod.IsUnused || row.Mod.IsOnServer is false);
     }
+
+    private static string Describe(int visible, int total)
+        => visible == total ? $"{total} mods" : $"{visible} of {total} mods";
+
+    private static IEnumerable<CatalogModVersion> Order(IEnumerable<CatalogModVersion> versions)
+        => versions
+            .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(x => x.VersionId.Value, StringComparer.CurrentCultureIgnoreCase);
+
+    /// <summary>
+    /// The order the right-hand list is held in, and the one an insert has to agree with: whatever
+    /// wants an answer first, then alphabetical.
+    /// </summary>
+    private static readonly IComparer<ModListItemViewModel> RowOrder =
+        Comparer<ModListItemViewModel>.Create((left, right) =>
+        {
+            var byRank = Rank(left).CompareTo(Rank(right));
+
+            if (byRank != 0)
+            {
+                return byRank;
+            }
+
+            var byName = string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+
+            return byName != 0
+                ? byName
+                : string.Compare(left.Version, right.Version, StringComparison.CurrentCultureIgnoreCase);
+        });
+
+    /// <summary>
+    /// How near the top a row belongs. What went wrong first, then what is still to happen, then the
+    /// repo itself - because the top of a two thousand row list is the only part of it anyone reads
+    /// after an import, and a failure buried at "S" is a failure nobody sees.
+    /// </summary>
+    /// <remarks>
+    /// Read only when the list is built, never live: rows changing rank mid-import would reshuffle
+    /// the list under the pointer while it is being watched. The import re-sorts once, when it is
+    /// over.
+    /// </remarks>
+    private static int Rank(ModListItemViewModel row) => row.ImportState switch
+    {
+        ModImportRowState.Failed => 0,
+        ModImportRowState.Skipped => 1,
+        ModImportRowState.Running => 2,
+        ModImportRowState.Succeeded => 4,
+        _ => row.Mod.IsOnServer ? 5 : 3
+    };
 
 
     private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
@@ -644,76 +973,53 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     partial void OnSearchTextChanged(string value)
-        => RefilterVisible();
+        => RefreshLists();
 
-    partial void OnPresenceFilterChanged(ModPresenceFilter value)
-        => RefilterVisible();
+    partial void OnUnusedOnlyChanged(bool value)
+        => RefreshLists();
 
-    partial void OnIsSelectionModeChanged(bool value)
+    private void RefreshLists()
     {
-        _suspendSelectionTracking = true;
+        RepoView?.Refresh();
 
-        try
-        {
-            foreach (var mod in _mods)
-            {
-                mod.IsSelectable = value;
-
-                if (value is false)
-                {
-                    mod.IsSelected = false;
-                }
-            }
-        }
-        finally
-        {
-            _suspendSelectionTracking = false;
-        }
-
-        RecountSelection();
-    }
-
-    private void RefilterVisible()
-    {
-        ModsView?.Refresh();
-        VisibleCount = _mods.Count(Passes);
-    }
-
-    private void OnModPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not nameof(ModListItemViewModel.IsSelected) || _suspendSelectionTracking)
-        {
-            return;
-        }
-
-        RecountSelection();
+        RefreshLeft();
     }
 
     /// <summary>
-    /// Only what the filters are currently showing, so "select all" can never pick up a mod the user
-    /// cannot see.
+    /// The left list alone, for a row that has changed sides. The right-hand collection is observable
+    /// and has already said what happened to it; refreshing its view as well would throw away the
+    /// scroll position for the sake of a single insert.
     /// </summary>
-    private void SetSelectionOfVisible(bool isSelected)
+    private void RefreshLeft()
     {
-        _suspendSelectionTracking = true;
+        LocalView?.Refresh();
 
-        try
-        {
-            foreach (var mod in _mods.Where(Passes))
-            {
-                mod.IsSelected = isSelected;
-            }
-        }
-        finally
-        {
-            _suspendSelectionTracking = false;
-        }
-
-        RecountSelection();
+        Recount();
     }
 
-    private void RecountSelection()
-        => SelectedCount = _mods.Count(x => x.IsSelected);
+    private void Recount()
+    {
+        // The left total is what is left to pick, so queueing a mod takes it out of both halves of
+        // the count rather than leaving a total nothing can reach.
+        LocalTotal = _local.Count(x => _queued.Contains(x.Mod.Identity) is false);
+        LocalCount = _local.Count(PassesLocal);
+        UpdateCount = _local.Count(x => _queued.Contains(x.Mod.Identity) is false && IsUpdate(x.Mod));
+        UnregisteredCount = _local.Count(x => _queued.Contains(x.Mod.Identity) is false && IsUnregisteredVersionOfKnownMod(x.Mod));
+
+        // Marked here rather than when the row is built, because a row that has changed sides has to
+        // drop the chip: on the right it would sit next to "Pending" saying the same thing twice.
+        foreach (var row in _local)
+        {
+            row.Status = _queued.Contains(row.Mod.Identity) is false && IsUpdate(row.Mod)
+                ? ModDisplayStatus.UpdateAvailable
+                : ModDisplayStatus.None;
+        }
+
+        RepoTotal = _repoMods.Count;
+        RepoCount = _repoMods.Count(PassesRepo);
+
+        QueuedCount = _repoMods.Count(IsPending);
+    }
 
 
     /// <summary>

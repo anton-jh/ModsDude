@@ -149,9 +149,9 @@
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
-                    <Grid Grid.Column="0" RowDefinitions="auto * auto">
+                    <Grid Grid.Column="0" RowDefinitions="auto * auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto auto">
 
                             <Grid Grid.Column="0">
                                 <!-- Right padding keeps the text from running under the clear
@@ -202,7 +202,18 @@
                                 </Button>
                             </Grid>
 
+                            <!-- Says why the top of this list is not alphabetical: what the draft has
+                                 taken out of the profile is back here, and looks exactly like a mod
+                                 that was never in it. -->
                             <TextBlock Grid.Column="1"
+                                       Margin="12 0 0 0"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding RemovalText}"
+                                       ToolTip="Taken out of the profile, and at the top of this list until you save."
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <TextBlock Grid.Column="2"
                                        Margin="12 0 0 0"
                                        VerticalAlignment="Center"
                                        Text="{Binding AvailableCountText}"
@@ -266,92 +277,109 @@
                             </Grid>
                         </Border>
 
+                        <!-- The bulk moves, against the list they read rather than in the save bar:
+                             what they take is what is on screen above them, and the search is how a
+                             subset of it is picked. -->
+                        <Grid Grid.Row="2" Margin="0 8 0 0" ColumnDefinitions="* *">
+                            <Button Grid.Column="0"
+                                    Margin="0 0 4 0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="Add all shown new"
+                                    ToolTip="Add every mod the list above is showing that this profile has never held"
+                                    Command="{Binding AddAllShownNewCommand}" />
+                            <Button Grid.Column="1"
+                                    Margin="4 0 0 0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="Restore removed"
+                                    ToolTip="Put back everything this draft has taken out, at the version and lock the profile still holds"
+                                    Command="{Binding RestoreRemovedCommand}" />
+                        </Grid>
+
                         <!-- The sources feed this list and nothing else, so they sit under it.
                              Disabling an instance here says nothing about syncing to it. -->
-                        <!-- Open by default. Sources start switched off, so a collapsed pane would
-                             hide the one control that explains why the left list is empty. -->
-                        <Expander Grid.Row="2" Margin="0 8 0 0" Header="Sources" IsExpanded="True">
-                            <Grid RowDefinitions="auto auto" Margin="0 8 0 0">
+                        <!-- Not collapsible. Sources start switched off, so the one control that
+                             explains why the left list is empty is exactly the one a collapsed pane
+                             would hide. -->
+                        <Grid Grid.Row="3" Margin="0 16 0 0" RowDefinitions="auto auto auto">
 
-                                <Border Grid.Row="0"
-                                        MaxHeight="200"
-                                        CornerRadius="6"
-                                        BorderThickness="1"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
-                                        <ItemsControl ItemsSource="{Binding Sources}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type vm:ModSourceViewModel}">
-                                                    <Grid Margin="6 6" ColumnDefinitions="auto * auto">
-
-                                                        <CheckBox Grid.Column="0"
-                                                                  VerticalAlignment="Top"
-                                                                  Margin="0 2 0 0"
-                                                                  IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
-
-                                                        <StackPanel Grid.Column="1" ToolTip="{Binding Path}">
-                                                            <TextBlock Text="{Binding Name}"
-                                                                       TextTrimming="CharacterEllipsis"
-                                                                       TextWrapping="NoWrap"
-                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                                                            <!-- One unreadable folder marks one
-                                                                 source bad rather than failing the
-                                                                 whole list. -->
-                                                            <TextBlock Text="{Binding CountText}"
-                                                                       ToolTip="{Binding Error}">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="FontSize" Value="12" />
-                                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding HasFailed}" Value="True">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                        </StackPanel>
-
-                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
-                                                            <Button Style="{DynamicResource SubtleIconButton}"
-                                                                    Width="28"
-                                                                    Content="&#xE72C;"
-                                                                    ToolTip="Rescan this source"
-                                                                    Command="{Binding DataContext.RescanSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                                    CommandParameter="{Binding}" />
-                                                            <Button Style="{DynamicResource SubtleIconButton}"
-                                                                    Width="28"
-                                                                    Content="&#xE711;"
-                                                                    ToolTip="Remove this folder"
-                                                                    Visibility="{Binding IsAdHoc, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                                    Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                                    CommandParameter="{Binding}" />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
-                                </Border>
-
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto">
-                                    <Button Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="Add a folder…"
-                                            ToolTip="Scanned for this session only, and never written to disk"
-                                            Command="{Binding AddSourceCommand}" />
-                                    <Button Grid.Column="1"
-                                            Margin="8 0 0 0"
-                                            Style="{DynamicResource SubtleIconButton}"
-                                            Content="&#xE72C;"
-                                            ToolTip="Rescan every source"
-                                            Command="{Binding RescanAllCommand}" />
-                                </Grid>
+                            <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="Sources"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                                <Button Grid.Column="1"
+                                        Style="{DynamicResource SubtleIconButton}"
+                                        Content="&#xE72C;"
+                                        ToolTip="Rescan every source"
+                                        Command="{Binding RescanAllCommand}" />
                             </Grid>
-                        </Expander>
+
+                            <Border Grid.Row="1"
+                                    MaxHeight="200"
+                                    CornerRadius="6"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <ItemsControl ItemsSource="{Binding Sources}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:ModSourceViewModel}">
+                                                <Grid Margin="6 6" ColumnDefinitions="auto * auto">
+
+                                                    <CheckBox Grid.Column="0"
+                                                              VerticalAlignment="Top"
+                                                              Margin="0 2 0 0"
+                                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+
+                                                    <StackPanel Grid.Column="1" ToolTip="{Binding Path}">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   TextWrapping="NoWrap"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                                                        <!-- One unreadable folder marks one
+                                                             source bad rather than failing the
+                                                             whole list. -->
+                                                        <TextBlock Text="{Binding CountText}"
+                                                                   ToolTip="{Binding Error}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="FontSize" Value="12" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasFailed}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+
+                                                    <Button Grid.Column="2"
+                                                            VerticalAlignment="Top"
+                                                            Style="{DynamicResource SubtleIconButton}"
+                                                            Width="28"
+                                                            Content="&#xE711;"
+                                                            ToolTip="Remove this folder"
+                                                            Visibility="{Binding IsAdHoc, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+
+                            <Button Grid.Row="2"
+                                    Margin="0 8 0 0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="Add a folder…"
+                                    ToolTip="Scanned for this session only, and never written to disk"
+                                    Command="{Binding AddSourceCommand}" />
+                        </Grid>
                     </Grid>
 
                     <!-- The profile itself. Updates live here rather than on the left, so a mod with
@@ -373,12 +401,15 @@
                         <!-- The batch action applies to unlocked mods only, and says how many it
                              left alone. The skipped count is a link to the same dialog the per-row
                              change opens, reached deliberately rather than fired at every save. -->
+                        <!-- Always on screen, including at zero. "Are there updates?" is a question
+                             people come to this page to answer, and a section that is absent when
+                             the answer is no never answers it - it just leaves them looking. It also
+                             keeps the list below from moving as the count changes. -->
                         <Border Grid.Row="1"
                                 Margin="0 0 0 8"
                                 Padding="12 8"
                                 CornerRadius="4"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                Visibility="{Binding HasUpdates, Converter={StaticResource BoolToVisibilityConverter}}">
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}">
                             <Grid ColumnDefinitions="auto * auto">
                                 <TextBlock Grid.Column="0"
                                            VerticalAlignment="Center"

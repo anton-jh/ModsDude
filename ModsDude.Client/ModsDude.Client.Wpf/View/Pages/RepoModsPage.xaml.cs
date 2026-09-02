@@ -21,4 +21,14 @@ public partial class RepoModsPage : Page
     {
         InitializeComponent();
     }
+
+
+    /// <summary>
+    /// The popup stays open through a click on its own content, so the item that runs the variant
+    /// has to put the caret back up itself.
+    /// </summary>
+    private void CloseAddVariants(object sender, RoutedEventArgs e)
+    {
+        AddUpdatesCaret.IsChecked = false;
+    }
 }

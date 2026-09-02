@@ -95,14 +95,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private HashSet<ModKey> _pinnedIds = [];
 
     /// <summary>
+    /// Mods the profile still holds on the server and this draft does not - taken out, and waiting
+    /// for a save to write that. They are back on the left, which is where they would be if they had
+    /// never been in the profile at all, so the sort is what tells the two apart.
+    /// </summary>
+    private HashSet<ModKey> _pendingRemovals = [];
+
+    /// <summary>
     /// Tracked rather than re-derived from the repo, so an instance dropped from its list is still
     /// unsubscribed from.
     /// </summary>
     private readonly List<LocalInstance> _watchedInstances = [];
 
     /// <summary>
-    /// Set while the lists are being rebuilt from the server. Every add into <see cref="Pinned"/>
-    /// would otherwise recount against a draft that is half the old profile and half the new one.
+    /// Set while the list is being rebuilt wholesale - from the server, or by a bulk add. Every add
+    /// into <see cref="Pinned"/> would otherwise recount against a draft that is only half written.
     /// </summary>
     private bool _publishing;
 
@@ -142,8 +149,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         ProfileName = profile.Name;
 
-        PinnedView = CollectionViewSource.GetDefaultView(Pinned);
-        PinnedView.SortDescriptions.Add(new SortDescription(nameof(ProfileModRowViewModel.Name), ListSortDirection.Ascending));
+        PinnedView = (ListCollectionView)CollectionViewSource.GetDefaultView(Pinned);
+        PinnedView.CustomSort = Comparer<ProfileModRowViewModel>.Create(ComparePinned);
 
         Pinned.CollectionChanged += (_, _) => OnPinnedChanged();
 
@@ -163,7 +170,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <summary>The profile's pinned mods, one per mod - the domain allows no more than that.</summary>
     public ObservableCollection<ProfileModRowViewModel> Pinned { get; } = [];
 
-    public ICollectionView PinnedView { get; }
+    public ListCollectionView PinnedView { get; }
 
     /// <summary>What is not in the profile yet, registered or merely on disk.</summary>
     [ObservableProperty]
@@ -179,6 +186,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(AvailableCountText))]
     private int _availableCount;
 
+    /// <summary>Of those, how many the profile has never held - what a bulk add would take.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddAllShownNewCommand))]
+    private int _newCount;
+
+    /// <summary>How many of the left list's rows are there because this draft took them out.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemovalText))]
+    [NotifyPropertyChangedFor(nameof(HasRemovals))]
+    [NotifyCanExecuteChangedFor(nameof(RestoreRemovedCommand))]
+    private int _removalCount;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PinnedCountText))]
     [NotifyPropertyChangedFor(nameof(HasPinnedMods))]
@@ -191,7 +210,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpdateCountText))]
-    [NotifyPropertyChangedFor(nameof(HasUpdates))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     private int _updateCount;
 
@@ -218,6 +236,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAllShownNewCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RestoreRemovedCommand))]
     private bool _isSaving;
 
     /// <summary>What the last save did, kept until something changes again.</summary>
@@ -277,12 +297,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         "the game updated them to. Only if you know exactly what you are doing.";
 
     public bool HasPinnedMods => PinnedCount > 0;
+    public bool HasRemovals => RemovalCount > 0;
     public bool HasPending => PendingCount > 0;
-    public bool HasUpdates => UpdateCount > 0;
     public bool HasSkippedUpdates => SkippedUpdateCount > 0;
     public bool HasSaveSummary => SaveSummary is not null;
 
     public string AvailableCountText => AvailableCount == 1 ? "1 mod" : $"{AvailableCount} mods";
+
+    /// <summary>
+    /// Says why the top of the left list is not alphabetical. Worded as what a save will do, because
+    /// until then the profile still holds them.
+    /// </summary>
+    public string RemovalText => RemovalCount == 1
+        ? "1 taken out"
+        : $"{RemovalCount} taken out";
 
     public string PinnedCountText => PinnedCount == 1 ? "1 mod" : $"{PinnedCount} mods";
 
@@ -290,9 +318,24 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ? "1 mod will be imported when you save"
         : $"{PendingCount} mods will be imported when you save";
 
-    public string UpdateCountText => UpdateCount == 1 ? "1 update available" : $"{UpdateCount} updates available";
+    /// <summary>
+    /// Reads at zero as well as above it. The section it heads is always on screen, so "none" is an
+    /// answer it has to be able to give - and it is the answer someone who came here to check for
+    /// updates was looking for.
+    /// </summary>
+    public string UpdateCountText => UpdateCount switch
+    {
+        0 => "No updates available",
+        1 => "1 update available",
+        _ => $"{UpdateCount} updates available"
+    };
 
-    public string ApplyUpdatesText => ApplicableUpdateCount == 1 ? "Update 1 mod" : $"Update {ApplicableUpdateCount} mods";
+    public string ApplyUpdatesText => ApplicableUpdateCount switch
+    {
+        0 => "Update all",
+        1 => "Update 1 mod",
+        _ => $"Update {ApplicableUpdateCount} mods"
+    };
 
     /// <summary>
     /// A link rather than a footnote: it opens the same dialog the per-row change opens, reached
@@ -314,6 +357,76 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var versions = _versionsByMod.TryGetValue(row.Mod.ModId, out var known) ? known : [row.Mod];
 
         Pinned.Add(CreatePinnedRow(versions, row.Mod, lockedByProfile: false));
+    }
+
+    /// <summary>
+    /// Every mod the left list is showing that this draft has not just taken out, so a search is how
+    /// a subset is picked. Putting a removal back is <see cref="RestoreRemoved"/>: it is an undo, and
+    /// it has a version and a lock to restore rather than a default to pick.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddAllShownNew))]
+    private void AddAllShownNew()
+    {
+        InBulk(() =>
+        {
+            foreach (var row in _available.Where(x => Passes(x) && IsPendingRemoval(x) is false).ToList())
+            {
+                Add(row);
+            }
+        });
+    }
+
+    private bool CanAddAllShownNew() => NewCount > 0 && IsSaving is false;
+
+    /// <summary>
+    /// Puts back everything this draft has taken out, at the version and lock the profile still holds
+    /// on the server - which is what makes it an undo rather than a re-add. Not limited to what the
+    /// search is showing: it undoes the removals, and a removal the user cannot currently see is
+    /// still one of them.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRestoreRemoved))]
+    private void RestoreRemoved()
+    {
+        InBulk(() =>
+        {
+            foreach (var pin in _original.Where(x => _pendingRemovals.Contains(x.ModId)).ToList())
+            {
+                var versions = _versionsByMod.GetValueOrDefault(pin.ModId, []);
+                var selected = versions.FirstOrDefault(x => x.VersionId == pin.VersionId);
+
+                if (selected is null)
+                {
+                    // The same stand-in a load builds for a pin this catalog has not heard of, and
+                    // for the same reason: the row has to be there to be removable again.
+                    selected = Placeholder(pin.ModId, pin.VersionId);
+                    versions = [selected, .. versions];
+                }
+
+                Pinned.Add(CreatePinnedRow(versions, selected, pin.Lock.ByProfile));
+            }
+        });
+    }
+
+    private bool CanRestoreRemoved() => RemovalCount > 0 && IsSaving is false;
+
+    /// <summary>
+    /// Runs a bulk change to the profile and recounts once. At a couple of thousand mods, recounting
+    /// per insert would re-plan every update and re-sort both lists two thousand times over.
+    /// </summary>
+    private void InBulk(Action change)
+    {
+        _publishing = true;
+
+        try
+        {
+            change();
+        }
+        finally
+        {
+            _publishing = false;
+        }
+
+        Recount();
     }
 
     [RelayCommand]
@@ -527,6 +640,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private async Task StopAtFailedImportAsync(int unfinished, ConfirmationDialogViewModel? problems)
     {
         Recount();
+
+        // Now that every row carries its outcome, and only now: what could not be imported comes to
+        // the top, where the dialog's list can be matched against it.
+        PinnedView.Refresh();
 
         // One line, because the dialog carries the reasons and this is only what is left on the page
         // once it has been dismissed.
@@ -919,19 +1036,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         await ReloadAsync();
     }
 
-    [RelayCommand]
-    private async Task RescanSource(ModSourceViewModel? source)
-    {
-        if (source is null)
-        {
-            return;
-        }
-
-        _catalog.Rescan(source.Source.Id);
-
-        await ReloadAsync();
-    }
-
     /// <summary>
     /// Adds a folder for this session only. Someone building a profile out of a USB stick should not
     /// have that folder haunting the list for months, so nothing about it is written to disk.
@@ -1162,8 +1266,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // Rebuilt rather than refreshed, because the list behind it is replaced wholesale -
             // adding a couple of thousand rows to a bound collection one at a time is a couple of
             // thousand layout passes.
-            var view = CollectionViewSource.GetDefaultView(_available);
+            var view = (ListCollectionView)CollectionViewSource.GetDefaultView(_available);
             view.Filter = x => x is ModListItemViewModel mod && Passes(mod);
+            view.CustomSort = Comparer<ModListItemViewModel>.Create(CompareAvailable);
 
             AvailableView = view;
             IsLoading = false;
@@ -1273,6 +1378,51 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool Passes(ModListItemViewModel mod)
         => mod.Matches(SearchText) && _pinnedIds.Contains(mod.Mod.ModId) is false;
 
+    /// <summary>
+    /// The left list's order: what this draft has taken out of the profile first, then alphabetical.
+    /// A removed mod looks exactly like one that was never in the profile, and the only thing that
+    /// can say otherwise is where it sits.
+    /// </summary>
+    private int CompareAvailable(ModListItemViewModel left, ModListItemViewModel right)
+    {
+        var byRemoval = IsPendingRemoval(right).CompareTo(IsPendingRemoval(left));
+
+        return byRemoval != 0
+            ? byRemoval
+            : string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private bool IsPendingRemoval(ModListItemViewModel row)
+        => _pendingRemovals.Contains(row.Mod.ModId);
+
+    /// <summary>
+    /// The right list's order: whatever wants an answer first, then alphabetical. The top of the list
+    /// is the part anyone reads after a save, and a mod that could not be imported buried at "S" is
+    /// one nobody sees.
+    /// </summary>
+    private static int ComparePinned(ProfileModRowViewModel left, ProfileModRowViewModel right)
+    {
+        var byRank = Rank(left).CompareTo(Rank(right));
+
+        return byRank != 0
+            ? byRank
+            : string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    /// <summary>
+    /// How near the top a pinned row belongs. Read when the list is sorted rather than as it changes:
+    /// rows reshuffling mid-import would move the list under the pointer that is watching it, so a
+    /// save that stops re-sorts once, at the end.
+    /// </summary>
+    private static int Rank(ProfileModRowViewModel row) => row.Item.ImportState switch
+    {
+        ModImportRowState.Failed => 0,
+        ModImportRowState.Skipped => 1,
+        ModImportRowState.Running => 2,
+        ModImportRowState.Succeeded => 4,
+        _ => row.IsPending ? 3 : 5
+    };
+
 
     private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
     {
@@ -1309,20 +1459,42 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         AvailableView?.Refresh();
 
+        RecountAvailable();
+    }
+
+    /// <summary>
+    /// What the left list is showing, and how much of that the profile has never held - the two the
+    /// bulk buttons are counted against, and they part company as soon as something is taken out.
+    /// </summary>
+    private void RecountAvailable()
+    {
         AvailableCount = _available.Count(Passes);
+        NewCount = _available.Count(x => Passes(x) && IsPendingRemoval(x) is false);
     }
 
     private void Recount()
     {
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
+        _pendingRemovals = [.. _original.Select(x => x.ModId).Where(x => _pinnedIds.Contains(x) is false)];
+
+        // The chip that says why a row is at the top of the left list, and the counterpart of the
+        // pending-import chip on the right. Marked here rather than when the row is built, because
+        // it is the draft that decides it and the draft changes under the same rows.
+        foreach (var row in _available)
+        {
+            row.Status = _pendingRemovals.Contains(row.Mod.ModId)
+                ? ModDisplayStatus.PendingRemoval
+                : row.Mod.GetImportStatus();
+        }
 
         PinnedCount = Pinned.Count;
+        RemovalCount = _pendingRemovals.Count;
         PendingCount = Pinned.Count(x => x.IsPending);
 
         // The left list hides what the right one holds, so it re-filters whenever that changes -
         // which is also what keeps a mod off both sides at once.
         AvailableView?.Refresh();
-        AvailableCount = _available.Count(Passes);
+        RecountAvailable();
 
         _updates = ProfileModUpdates.Plan(Pinned.Select(x => x.Pin), _registered);
 

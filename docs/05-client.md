@@ -142,8 +142,9 @@ MainWindow
 
 `RepoModsPage` used to be a shell over Import and Manage. They were sibling pages showing
 overlapping data under different rules, which is the main thing about that area that confused;
-they are now one list with presence filters, and importing is a *selection mode* over it rather
-than a separate destination. See [09 — Mod catalog](09-mod-catalog.md#manage).
+they are now one page laid out like the profile mod editor - what the sources hold on the left,
+what the repo holds on the right, and importing as the move between them rather than a separate
+destination. See [09 — Mod catalog](09-mod-catalog.md#manage).
 
 **Both the profile list and the instance list belong to `RepoPageViewModel`**, so they only
 appear once a repo is selected and everything in them is scoped to that repo — and therefore to
@@ -570,7 +571,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `RepoOverviewPage` | Working | Instance status and profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, delete repo |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
-| `RepoModsPage` | Working | The catalog: one list over local and registered versions, presence filters, the source list, import as a selection mode, per-row reorder and delete. Browsing is open to a guest; the three writing actions are disabled with a reason |
+| `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
 | `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
 | `InstancePage` | Working | Instance shell over Sync and Manage. Opens on Sync |
 | `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |

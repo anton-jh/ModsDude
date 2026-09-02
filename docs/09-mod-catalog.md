@@ -522,7 +522,9 @@ registered versions per repo.
   it rather than starting a second `Parallel.For` over a thousand archives.
 - **Invalidate explicitly** — on import, and on instance-settings change. Never silently. A
   stale catalog that quietly refreshes mid-interaction is worse than one the user re-triggers,
-  so expose a Rescan action, per source and for all.
+  so expose a Rescan action, per source and for all. The pages surface only the one that covers
+  every source — a per-source button is one more control on every row for something the whole-list
+  one already does, and the per-source call stays available for a caller that needs it.
 - **The 150 ms scan delay and the cancellation behaviour moved into the service**, unchanged.
   They exist so that a page nobody stopped on never touches the disk; that reasoning is not
   specific to the import page. Note the delay predates the sidebar's drag-selection fix and stays
@@ -537,14 +539,49 @@ registered versions per repo.
 
 **Import was merged into Manage.** They were sibling menu items under `RepoModsPage`
 showing overlapping data under different rules, which was the main thing about that area that
-confused. One
-list, presence filter chips (All / In repo / On disk only / Unused), and bulk import is a
-*selection mode* that reveals the footer bar. Same rows, same
-templates, one service.
+confused. Same rows, same templates, one service.
 
-The page carries the source list described above — instance folders, Downloads, anything the
-user adds for the session — each with its checkbox, so the set of local candidates is
-adjustable in place rather than being a fixed consequence of the repo's instances.
+**It is laid out like the profile mod editor**, and for the same reason: both pages are one act —
+deciding what a collection should hold, then writing it. Two lists. On the left, what the enabled
+sources hold and the repo does not; under it, the source pane described above — instance folders,
+Downloads, anything the user adds for the session — each with its checkbox, so the set of local
+candidates is adjustable in place rather than being a fixed consequence of the repo's instances. On
+the right, what the repo holds, plus whatever has been lined up to join it.
+
+A mod is **never on both sides at once**, and the row that moves rightwards is the same row object,
+so its icon and its per-row import marks come with it. Presence is therefore which list a row is in
+rather than a chip on it, which is why the filter chips are gone — all but *Unused*, which the
+lists cannot draw and a delete needs.
+
+**The bulk moves sit under the list they read**, not in the bar at the bottom of the page: what "add
+all shown" takes is what is on screen above it, and the search is how a subset of it is picked. The
+bar keeps the two actions that write — Import, and the discard that throws the queue away.
+
+Beside it, **"add N updates"** — the versions the repo's own ordering places after everything it
+holds of that mod, which is the errand this page exists for and is otherwise picking six rows out of
+a folder of five hundred. The count is on the button because that is the only place it would be
+acted on, and those rows carry the existing `UpdateAvailable` chip so the count is findable. It
+ignores the search: an update is a fact about the repo, not about the view.
+
+It is a **split button**, like the editor's save. Behind the caret: *add N unregistered versions* —
+every version the repo lacks of every mod it holds, including ones older than its newest and ones
+the comparer could not place. That is a real thing to want (a profile can pin any version, and a
+repo missing the one a teammate is on cannot be joined) but not the daily errand, so it costs the
+extra click. Neutral chrome rather than the editor's accent: the accent on this page belongs to
+Import. The caret carries **its own** enabled condition rather than following the primary, unlike
+the editor's — there can be older versions to add when there is not a single update, which is
+exactly when the menu is worth opening.
+
+**Nothing is uploaded until Import**, exactly as nothing is uploaded until Save in the editor. That
+is what makes taking a mod back free, and what the discard confirmation says rather than warns. What a run did not finish stays queued and marked, so the
+button is also the retry, and the summary keeps the per-row results on screen until the user asks
+for a fresh list.
+
+**The right list is ordered by what wants an answer**, not alphabetically: failed, then skipped,
+then still-queued, then what the repo already held. The top of a two thousand row list is the only
+part anyone reads after an import, and a failure buried at "S" is a failure nobody sees. It is
+ordered when the list is *built* and never live — rows changing rank mid-import would reshuffle the
+list under the pointer watching it — so the import re-sorts exactly once, when it is over.
 
 Two things this needed, and both now exist:
 
@@ -582,9 +619,29 @@ it on the left as "update available" puts the same mod on both sides at once. Re
 update affordance on the right-hand row, plus a "N updates available" batch action in the
 header. The left list stays a clean "not in the profile" set.
 
+**That section stays on screen at zero**, reading "No updates available". "Are there updates?" is a
+question people come to this page to answer, and a section that is absent when the answer is no
+never answers it — it just leaves them looking. It also stops the list below moving as the count
+changes.
+
 The right list is keyed by `ModId` — the domain enforces one `ModDependency` per mod — so
 moving a mod rightward also means choosing a version. That row needs a version selector and a
 `Locked` toggle.
+
+**The two bulk moves are split, and sit under the left list.** *Add all shown new* takes everything
+on screen the profile has never held; *Restore removed* is an undo, so it puts back what this draft
+took out at the version and lock the profile still holds rather than picking a default. One button
+doing both would silently re-add a removal at the newest version — which is a different pin from the
+one that was there.
+
+**Both lists lead with what the draft has done to them.** On the right, the same ranking as Manage:
+what could not be imported, then what is still pending, then the rest. On the left, mods this draft
+has *taken out* of the profile — they are back on the left looking exactly like a mod that was never
+in it, so they get a **"Taken out" chip**, the counterpart of the pending-import chip on the other
+side, plus a count in the header. Caution-coloured rather than the accent a pending import gets: one
+is a row about to gain something and the other a row about to lose it. It is a
+`ModDisplayStatus`, which is where a per-page judgment about a row belongs. Neither is a live sort; the left re-sorts on every recount, and the right when a save stops at
+a failed import.
 
 ## Version locking
 
