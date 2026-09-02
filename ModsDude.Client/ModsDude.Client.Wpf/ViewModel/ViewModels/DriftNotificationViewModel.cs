@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -21,9 +22,15 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// problem.
 /// </para>
 /// <para>
-/// Two actions, because most of the time nothing needs changing and the user only wants their locked
-/// versions back: open the drifted profile's mod list - which is also where the versions the game
-/// just downloaded get imported - or re-apply the profile where it stands, in one click.
+/// Two actions. Review opens the drifted profile's mod list, which is also where the versions the
+/// game just downloaded get imported, and it leads: what the folder now holds is usually what the
+/// user meant to end up with, and re-applying without looking throws it away. Re-apply is the second
+/// one, in one click, for when they only want their locked versions back.
+/// </para>
+/// <para>
+/// A guest gets one action. They cannot import, so the page Review would open is the read-only mod
+/// list - which is not an answer to "your mod folder has drifted" - and re-applying is the whole of
+/// what is theirs to do. See <see cref="CanReview"/>.
 /// </para>
 /// <para>
 /// Dismissal lasts until the drift set changes or the app restarts. There is no permanent form of it:
@@ -60,6 +67,12 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         _monitor.Changed += OnDriftChanged;
         _instanceRepository.Instances.CollectionChanged += OnInstancesChanged;
+
+        // Drift is detected from the manifest and the folder, so this notice can be up before the
+        // repo list has been fetched - it is raised from the window's constructor, and the repos are
+        // loaded by a command on the shell underneath it. Everything the notice says about
+        // membership is unknowable until they land, and nothing else would re-ask.
+        _repoRepository.Repos.CollectionChanged += OnReposChanged;
     }
 
 
@@ -96,6 +109,24 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ReapplyCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenModListCommand))]
     private bool _isBusy;
+
+    /// <summary>
+    /// Whether reviewing is a thing this user can do at all. A guest cannot import, and the mod list
+    /// they would land on is the read-only one - so the button is not offered rather than offered and
+    /// refused, and the prompt that sends them there is not written either. Re-applying is theirs,
+    /// which is why the notice still has something to do.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenModListCommand))]
+    [NotifyPropertyChangedFor(nameof(ReapplyIsPrimary))]
+    private bool _canReview;
+
+    /// <summary>
+    /// Whether re-applying is the notice's leading action. It is not, wherever Review is offered -
+    /// looking first is the better move, and re-applying is what discards what the game downloaded.
+    /// For a guest there is nothing else to offer, so it leads by being the only one.
+    /// </summary>
+    public bool ReapplyIsPrimary => CanReview is false;
 
     public bool HasLockedWarning => LockedWarning is not null;
     public bool HasImportPrompt => ImportPrompt is not null;
@@ -142,10 +173,11 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     {
         _monitor.Changed -= OnDriftChanged;
         _instanceRepository.Instances.CollectionChanged -= OnInstancesChanged;
+        _repoRepository.Repos.CollectionChanged -= OnReposChanged;
     }
 
 
-    [RelayCommand(CanExecute = nameof(CanAct))]
+    [RelayCommand(CanExecute = nameof(CanReviewNow))]
     private async Task OpenModList()
     {
         if (_subject?.Instance.ActiveProfile is not ActiveProfile active)
@@ -167,9 +199,17 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanAct), IncludeCancelCommand = true)]
     private async Task Reapply(CancellationToken cancellationToken)
     {
-        if (_subject?.Instance.ActiveProfile is not ActiveProfile active ||
-            FindRepo(active.RepoId) is not Repo repo)
+        if (_subject?.Instance.ActiveProfile is not ActiveProfile active)
         {
+            return;
+        }
+
+        if (FindRepo(active.RepoId) is not Repo repo)
+        {
+            // The same window the Review button is missing in: this notice can be up before the repo
+            // list has arrived. Saying so beats a button that does nothing when pressed.
+            Status = "The repo this instance follows has not loaded yet. Try again in a moment.";
+
             return;
         }
 
@@ -206,6 +246,8 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
     private bool CanAct() => IsBusy is false;
 
+    private bool CanReviewNow() => CanAct() && CanReview;
+
     [RelayCommand]
     private void Dismiss()
     {
@@ -216,6 +258,15 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     private void OnDriftChanged(object? sender, EventArgs e)
     {
         // The monitor runs its checks off the UI thread, and everything below is bound.
+        _ = Application.Current?.Dispatcher.InvokeAsync(Refresh);
+    }
+
+    /// <summary>
+    /// The repo list arriving, or being swapped for another account's. No drift check is needed - the
+    /// drift has not changed, only what is known about who the user is in the repo it belongs to.
+    /// </summary>
+    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
         _ = Application.Current?.Dispatcher.InvokeAsync(Refresh);
     }
 
@@ -252,9 +303,13 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             ? $"'{_subject.Instance.Name}' no longer matches {profile}"
             : $"{drifted.Count} game instances no longer match their profiles";
 
+        CanReview = _subject.Instance.ActiveProfile is ActiveProfile active
+            && FindRepo(active.RepoId) is Repo repo
+            && repo.MembershipLevel >= RepoMembershipLevel.Member;
+
         Detail = Describe(report, files);
         LockedWarning = DescribeLocked(report);
-        ImportPrompt = files > 0
+        ImportPrompt = files > 0 && CanReview
             ? "The versions now on disk may not be in the repo. Opening the mod list is where they get imported."
             : null;
 

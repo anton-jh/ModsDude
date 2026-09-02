@@ -108,6 +108,30 @@
         </Style.Triggers>
     </Style>
 
+    <!-- The pill a row wears to say what state it is in.
+         Background and foreground have to move together, because the theme's status fills are
+         bright: SystemFillColorCaution is #FCE100, and the primary text colour on it is white on
+         yellow - a chip whose text cannot be read at all. The pairs this app uses are
+           neutral    ControlFillColorSecondary  + TextFillColorPrimary   (the default, below)
+           success    SystemFillColorSuccess     + TextFillColorInverse
+           caution    SystemFillColorCaution     + TextFillColorInverse
+           critical   SystemFillColorCritical    + TextFillColorInverse
+           attention  AccentFillColorDefault     + TextOnAccentFillColorPrimary
+         Attention is the accent rather than SystemFillColorAttention deliberately: that one is
+         derived from whatever accent colour Windows is set to, so its brightness is unknowable and
+         no fixed text colour is safe on it, while the theme guarantees TextOnAccent against
+         AccentFillColorDefault - which is the pairing FilterChip below already relies on.
+         The foreground is set on the border and inherited, so a trigger that changes the fill can
+         change the text with it; none of the theme's TextBlock styles set a foreground of their
+         own, so nothing downstream overrides it. -->
+    <Style x:Key="StatusChip" TargetType="Border">
+        <Setter Property="Padding" Value="8 2" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    </Style>
+
     <!-- A presence filter chip. Radio buttons so the group enforces one active filter without any
          view model bookkeeping; the chrome is the button's, not the radio's. -->
     <Style x:Key="FilterChip" TargetType="RadioButton">

@@ -97,27 +97,28 @@
                                         <!-- Coloured like the row's own status chip, and by the same
                                              rule: what is being added reads as success, what leaves
                                              the folder as something to look at twice. -->
-                                        <Border Padding="8 2"
-                                                CornerRadius="3"
-                                                HorizontalAlignment="Left">
+                                        <Border HorizontalAlignment="Left">
                                             <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                                <!-- Each fill carries the text colour that can be
+                                                     read on it; see StatusChip in Controls.xaml. -->
+                                                <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Action}" Value="Install">
                                                             <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Replace">
-                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                                                            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Quarantine">
                                                             <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
                                             <TextBlock Text="{Binding ActionText}"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                        Style="{DynamicResource CaptionTextBlockStyle}" />
                                         </Border>
 

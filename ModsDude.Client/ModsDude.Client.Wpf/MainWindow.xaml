@@ -71,14 +71,29 @@
                                Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <WrapPanel Orientation="Horizontal" Margin="0 16 0 0">
+
+                        <!-- Review leads: what is in the folder now is usually what the user meant to
+                             end up with, and re-applying before looking throws it away. -->
+                        <Button Content="Review"
+                                Margin="0 0 8 0"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Command="{Binding OpenModListCommand}"
+                                Visibility="{Binding CanReview, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <!-- Declared twice because a WPF style cannot set the Style property, so the
+                             accent cannot be moved by a trigger. Exactly one is ever visible: the
+                             plain one beside Review, and the accent one for a guest, whose notice
+                             would otherwise have nothing on it that looks like the thing to do. -->
+                        <Button Content="Re-apply now"
+                                Margin="0 0 8 0"
+                                Command="{Binding ReapplyCommand}"
+                                Visibility="{Binding CanReview, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                         <Button Content="Re-apply now"
                                 Margin="0 0 8 0"
                                 Style="{DynamicResource AccentButtonStyle}"
-                                Command="{Binding ReapplyCommand}" />
-
-                        <Button Content="Review and import"
-                                Margin="0 0 8 0"
-                                Command="{Binding OpenModListCommand}" />
+                                Command="{Binding ReapplyCommand}"
+                                Visibility="{Binding ReapplyIsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                         <Button Content="Dismiss"
                                 Command="{Binding DismissCommand}" />

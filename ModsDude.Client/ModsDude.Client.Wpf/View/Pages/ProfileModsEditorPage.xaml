@@ -441,14 +441,12 @@
                                                          Save is what imports it, and Cancel is what
                                                          discards it. -->
                                                     <Border Margin="0 0 8 0"
-                                                            Padding="8 2"
-                                                            VerticalAlignment="Center"
-                                                            CornerRadius="3"
+                                                            Style="{StaticResource StatusChip}"
                                                             ToolTip="Not in the repo yet. Saving uploads and registers it first."
-                                                            Background="{DynamicResource SystemFillColorAttentionBrush}"
+                                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                            TextElement.Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
                                                             Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibilityConverter}}">
                                                         <TextBlock Text="Pending"
-                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                                                     </Border>
 

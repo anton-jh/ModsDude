@@ -136,14 +136,12 @@
 
                     <Border Grid.Column="4"
                             Margin="0 0 8 0"
-                            Padding="8 2"
-                            VerticalAlignment="Center"
-                            CornerRadius="3"
+                            Style="{StaticResource StatusChip}"
                             ToolTip="{Binding SourceConflictTooltip}"
                             Background="{DynamicResource SystemFillColorCautionBrush}"
+                            TextElement.Foreground="{DynamicResource TextFillColorInverseBrush}"
                             Visibility="{Binding HasSourceConflict, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock Text="Conflict"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
@@ -180,14 +178,12 @@
                          otherwise. A running import is the more urgent of the two, and stacking them
                          would make every row two chips wide for the sake of one moment. -->
                     <Border Grid.Column="6"
-                            Margin="0 0 8 0"
-                            Padding="8 2"
-                            VerticalAlignment="Center"
-                            CornerRadius="3">
+                            Margin="0 0 8 0">
 
                         <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                            <!-- Every fill here comes with the text colour that can be read on it;
+                                 see StatusChip in Controls.xaml for why they cannot be set apart. -->
+                            <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasStatus}" Value="True">
@@ -195,26 +191,32 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Status}" Value="New">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Running">
                                         <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Succeeded">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
                                     <!-- Skipped and failed are deliberately different colours: one is
                                          waiting on a decision, the other went wrong. -->
                                     <DataTrigger Binding="{Binding ImportState}" Value="Skipped">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Failed">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -223,7 +225,6 @@
                         <!-- The choice between the two is made in the view model rather than by a
                              trigger, so the chip can keep the theme's caption style. -->
                         <TextBlock Text="{Binding ChipText}"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
