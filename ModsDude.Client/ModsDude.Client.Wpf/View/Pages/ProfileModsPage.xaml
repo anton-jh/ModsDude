@@ -12,72 +12,107 @@
       FontSize="14">
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel Orientation="Vertical">
+        <Grid RowDefinitions="auto auto auto *">
 
-                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding ProfileName}" />
-                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="Mods"
-                           Margin="0 8 0 36" />
+            <TextBlock Grid.Row="0"
+                       Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding ProfileName}" />
+            <TextBlock Grid.Row="1"
+                       Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                       Text="Mods"
+                       Margin="0 8 0 24" />
 
-                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                           Text="What this profile pins, and what syncing it puts in your mod folder. Guests cannot change the list - ask an admin for a higher membership level to edit it." />
+            <TextBlock Grid.Row="2"
+                       Margin="0 0 0 12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                       Text="What this profile pins, and what syncing it puts in your mod folder. Guests cannot change the list - ask an admin for a higher membership level to edit it." />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
-                    <GroupBox Header="Pinned mods" Padding="0 16 0 16">
-                        <StackPanel Orientation="Vertical">
+            <Border Grid.Row="3"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <Grid>
 
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Visibility="{Binding HasNoMods, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="This profile pins no mods yet. Syncing it would empty the mod folder." />
+                    <!-- The same row as the repo's mod list and the editor, rendered by the implicit
+                         ModListItemViewModel template in App.xaml - so the name still opens the
+                         details dialog and the icon still loads the same way. What this page adds
+                         to the end of the row is what the editor puts there as controls and a
+                         reader can only be told. -->
+                    <ItemsControl ItemsSource="{Binding Mods}"
+                                  VirtualizingStackPanel.IsVirtualizing="True"
+                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="ItemsControl">
+                                <ScrollViewer CanContentScroll="True"
+                                              Focusable="False"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsPresenter />
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
 
-                            <ItemsControl ItemsSource="{Binding Mods}"
-                                          Visibility="{Binding HasMods, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:PinnedModViewModel}">
-                                        <StackPanel Orientation="Vertical" Margin="0 0 0 12">
-                                            <StackPanel Orientation="Horizontal">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:PinnedModViewModel}">
+                                <Grid ColumnDefinitions="* auto">
 
-                                                <TextBlock VerticalAlignment="Center" Width="300"
-                                                           FontWeight="SemiBold"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                           Text="{Binding Name}" />
+                                    <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
 
-                                                <TextBlock VerticalAlignment="Center" Width="160"
-                                                           FontFamily="Consolas"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Version}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                Margin="0 0 12 0">
 
-                                                <TextBlock VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                           ToolTip="{Binding LockNote}" ToolTipService.InitialShowDelay="200"
-                                                           Text="&#xE72E;" FontFamily="Segoe Fluent Icons" />
-                                            </StackPanel>
+                                        <!-- The profile's own lock, where the editor has its toggle.
+                                             The adapter's is a fact about the version and already
+                                             has its own icon inside the row. -->
+                                        <TextBlock Margin="0 0 4 0"
+                                                   VerticalAlignment="Center"
+                                                   Text="&#xE72E;"
+                                                   FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   ToolTip="{Binding LockNote}" ToolTipService.InitialShowDelay="200"
+                                                   Visibility="{Binding IsLockedByProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Margin="0 4 0 0"
-                                                       TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"
-                                                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Text="{Binding Note}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                    <TextBlock Text="Reading what this profile pins…"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        </StackPanel>
-                    </GroupBox>
-                </Border>
+                    <TextBlock Text="This profile pins no mods yet.&#x0a;Syncing it would empty the mod folder."
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsLoading}" Value="False" />
+                                            <Condition Binding="{Binding HasNoMods}" Value="True" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
 
-            </StackPanel>
-        </ScrollViewer>
+                </Grid>
+            </Border>
+
+        </Grid>
     </Border>
 </Page>

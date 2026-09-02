@@ -136,7 +136,8 @@ public class ProfileService(
     }
 
     /// <summary>
-    /// What the profile pins, with each version resolved to the name its mod calls itself.
+    /// What the profile pins, with each version resolved to the registered record behind it - which
+    /// is what the shared list row needs to render one.
     /// </summary>
     /// <remarks>
     /// Two reads and a join, and deliberately not a <c>ModCatalog</c>: the catalog exists to merge
@@ -163,17 +164,20 @@ public class ProfileService(
                     var modId = ModKey.From(dependency.ModId);
                     var versionId = ModVersionKey.From(dependency.ModVersionId);
 
-                    // The adapter's flag lives on the version, the user's on the dependency. A pin
-                    // whose version the repo no longer has can only report the half it still holds.
+                    // The adapter's flag lives on the version, the user's on the dependency.
                     return registered.TryGetValue((modId, versionId), out var version)
                         ? new PinnedMod(
-                            modId,
-                            versionId,
-                            version.DisplayName,
-                            new ProfileModLock(version.Locked, dependency.Locked),
-                            IsRegistered: true)
-                        : PinnedMod.Unresolved(modId, versionId, new ProfileModLock(false, dependency.Locked));
+                            CatalogModVersion.FromRegistered(version),
+                            new ProfileModLock(version.Locked, dependency.Locked))
+                        : null;
                 })
+                // A miss cannot mean "pinned at a version the repo lost": the dependency's foreign
+                // key onto ModVersions is required and Restrict, so that version could not have been
+                // deleted while this dependency named it. What it does mean is that these are two
+                // reads and the mod list is the later one - somebody unpinned the mod and then
+                // deleted the version in between. The pin is gone, so the row is too, which is what
+                // a refresh would show anyway.
+                .OfType<PinnedMod>()
                 .OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
         ];
     }

@@ -1100,9 +1100,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
                 if (selected is null)
                 {
-                    // The repo no longer holds the version this profile names. It stays in the row's
-                    // selector - at the front, so it cannot read as the newest - because a row that
-                    // silently vanished would leave the profile pinned to it with no way to say so.
+                    // This catalog has not heard of the version the profile names - which is a fact
+                    // about this client, not about the repo. It stays in the row's selector, at the
+                    // front so it cannot read as the newest, because a row that silently vanished
+                    // would leave the profile pinned to it with no way to say so.
                     selected = Placeholder(modId, versionId);
                     versions = [selected, .. versions];
                 }
@@ -1210,10 +1211,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Stands in for a pinned version the catalog has no record of - a mod deleted from the repo
-    /// while this profile still names it. Rendering it as a row keeps it removable, which a row that
-    /// silently vanished would not be.
+    /// Stands in for a pinned version this catalog has no record of. Rendering it as a row keeps it
+    /// removable, which a row that silently vanished would not be.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not "deleted from the repo": a <c>ModDependency</c>'s foreign key onto <c>ModVersions</c> is
+    /// required and <c>Restrict</c>, so a version a profile pins cannot be deleted at all. The
+    /// reachable cause is a catalog that is behind the server - the registered half is cached until
+    /// something invalidates it, while the dependencies are read fresh every load - so a teammate
+    /// registering a version and pinning it lands here until this client next refetches.
+    /// </para>
+    /// <para>
+    /// <c>IsOnServer</c> is therefore true, and load-bearing: the repo does hold this version, and a
+    /// row claiming otherwise would report as pending and be handed to the importer at save, which
+    /// has no file to import for it.
+    /// </para>
+    /// </remarks>
     private static CatalogModVersion Placeholder(ModKey modId, ModVersionKey versionId)
         => new(modId, versionId, modId.Value, string.Empty, IsLocal: false, IsOnServer: true, Locked: false);
 

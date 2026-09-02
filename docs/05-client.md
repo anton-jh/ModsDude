@@ -445,6 +445,34 @@ nothing else changes. Closing the entry would have been wrong: a guest can sync 
 what it contains is precisely their question, and the read-only page answers it without the
 editor's drag surface having to be switched off control by control.
 
+Different page, same rows. Both render `ModListItemViewModel` through the implicit template, so a
+mod looks the same to a guest as it does to a member, its icon loads the same way, and its name is
+still the link into the details dialog. What the editor's row carries as controls — the version
+selector, the lock toggle, the remove button — the reader's row carries as one report at the end of
+it: a lock icon when *this profile* holds the pin. The adapter's own lock is a fact about the
+version and is already inside the shared row, so it is not repeated.
+
+That is what `PinnedMod` carries a whole `CatalogModVersion` for. It comes from
+`CatalogModVersion.FromRegistered` — the registered half alone, no scan — which is exactly right
+here: a reader who cannot import has no use for the local half, and a registered version answers
+the row's name, description and imagery on its own.
+
+**There is no "pinned at a version the repo lost".** `ModDependency`'s foreign key onto
+`ModVersions` is required and `Restrict`
+([02 — Domain model](02-domain-model.md#locking-in-two-places) covers the entity;
+`ProfileEntityTypeConfiguration` has the mapping), so the version cannot be deleted while a profile
+names it — the delete endpoints refuse with `ModInUse`, and the database refuses underneath them.
+`GetPinnedMods` still joins two reads, so a pin can fail to resolve, but only one way round: the
+dependency itself was deleted between the dependency read and the later mod-list read. The mod is
+no longer in the profile, so the row is dropped rather than captioned.
+
+The editor is the case that looks the same and is not. Its catalog caches the registered half until
+something invalidates it, while dependencies are read fresh on every load, so a teammate registering
+a version and pinning it leaves this client with a pin it cannot resolve. `Placeholder` covers
+exactly that, and keeps the row removable. It is marked `IsOnServer: true` on purpose: the repo does
+hold the version, and a row claiming otherwise would read as pending and be handed to the importer
+at save with no file to import.
+
 ## Telling two users with one name apart
 
 Display names are not unique — see
@@ -551,7 +579,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `ProfilePage` | Working | Profile shell over Overview, Mods, Manage |
 | `ProfileOverviewPage` | Working | |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
-| `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, each row with its version and why it is locked |
+| `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |
 | `EditProfilePage` | Working | Rename or delete a profile |
 | `ExamplePage` | — | The placeholder. Still the Home page's content |
 

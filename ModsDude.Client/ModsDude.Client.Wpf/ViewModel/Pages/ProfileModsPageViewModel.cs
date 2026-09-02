@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -22,6 +23,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
     private readonly ProfileService _profileService;
+    private readonly ModListItemViewModel.Factory _itemFactory;
 
     private IReadOnlyList<PinnedMod> _fetched = [];
 
@@ -29,11 +31,13 @@ public partial class ProfileModsPageViewModel : PageViewModel
     public ProfileModsPageViewModel(
         Repo repo,
         ProfileDto profile,
-        ProfileService profileService)
+        ProfileService profileService,
+        ModListItemViewModel.Factory itemFactory)
     {
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
+        _itemFactory = itemFactory;
 
         Mods = [];
     }
@@ -43,6 +47,13 @@ public partial class ProfileModsPageViewModel : PageViewModel
     public string RepoName => _repo.Name;
 
     public ObservableCollection<PinnedModViewModel> Mods { get; }
+
+    /// <summary>
+    /// Held until the fetch lands, so an empty list reads as "nothing pinned" only once that is
+    /// actually known rather than for the moment before the answer arrives.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isLoading = true;
 
     public bool HasMods => Mods.Count > 0;
     public bool HasNoMods => Mods.Count == 0;
@@ -57,8 +68,10 @@ public partial class ProfileModsPageViewModel : PageViewModel
     {
         foreach (var mod in _fetched)
         {
-            Mods.Add(new PinnedModViewModel(mod));
+            Mods.Add(new PinnedModViewModel(mod, _repo.Id, _itemFactory));
         }
+
+        IsLoading = false;
 
         OnPropertyChanged(nameof(HasMods));
         OnPropertyChanged(nameof(HasNoMods));

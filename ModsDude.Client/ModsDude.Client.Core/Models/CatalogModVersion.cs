@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Imagery;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 
 namespace ModsDude.Client.Core.Models;
 
@@ -30,6 +31,29 @@ public record CatalogModVersion(
     bool IsOnServer,
     bool Locked)
 {
+    /// <summary>
+    /// A version the repo holds, with no local half at all - the shape for a reader who is never
+    /// going to import anything. The registered record is the whole truth for one of those, so not
+    /// paying for a disk scan to learn it is the point.
+    /// </summary>
+    public static CatalogModVersion FromRegistered(ModDto dto)
+    {
+        return new CatalogModVersion(
+            ModKey.From(dto.ModId),
+            ModVersionKey.From(dto.VersionId),
+            dto.DisplayName,
+            dto.Description,
+            IsLocal: false,
+            IsOnServer: true,
+            Locked: dto.Locked)
+        {
+            ServerImages = [.. dto.Images.Select(ModImageReference.FromDto)],
+            ContentHash = dto.ContentHash,
+            SequenceNumber = dto.SequenceNumber
+        };
+    }
+
+
     public ModVersionIdentity Identity => new(ModId, VersionId);
 
     public string? Author { get; init; }
