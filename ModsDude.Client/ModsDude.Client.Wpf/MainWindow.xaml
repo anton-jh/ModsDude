@@ -33,7 +33,7 @@
                     Margin="0 0 0 12"
                     Padding="20"
                     CornerRadius="6"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource SystemFillColorCautionBrush}">
 
@@ -93,7 +93,7 @@
                     Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
                     Padding="16"
                     CornerRadius="6"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
 
