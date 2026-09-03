@@ -275,7 +275,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     {
         try
         {
-            var pinned = await _profileService.GetPinnedMods(_repo.Id, profileId, cancellationToken);
+            var pinned = await _profileService.GetPinnedMods(_repo.Id, profileId, null, cancellationToken);
 
             return pinned.ToDictionary(x => x.Version.Identity, x => x.Version);
         }

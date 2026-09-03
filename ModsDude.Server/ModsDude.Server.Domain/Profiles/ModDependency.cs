@@ -2,10 +2,19 @@
 
 namespace ModsDude.Server.Domain.Profiles;
 
+/// <summary>
+/// One mod, pinned by one revision at one version.
+/// </summary>
+/// <remarks>
+/// Set once and never changed: it belongs to a <see cref="ProfileRevision"/>, and a revision is a
+/// snapshot. What used to move a pin - upgrading it, changing its version - is now a new revision
+/// carrying a different set, which is what makes "what did we run last week" a question with an
+/// answer.
+/// </remarks>
 public class ModDependency
 {
-    public required ModVersion ModVersion { get; set; }
-    public required bool Locked { get; set; }
+    public required ModVersion ModVersion { get; init; }
+    public required bool Locked { get; init; }
 
     /// <summary>
     /// A mod is held in a profile's mod list when either the profile pins it or the adapter marked
@@ -14,32 +23,5 @@ public class ModDependency
     public bool IsEffectivelyLocked => Locked || ModVersion.Locked;
 
 
-    /// <summary>
-    /// <paramref name="siblingVersions"/> is every version sharing this dependency's
-    /// <c>(RepoId, ModId)</c>. It is passed in because a version has no parent to reach them
-    /// through.
-    /// </summary>
-    public bool CanBeUpgraded(IReadOnlyCollection<ModVersion> siblingVersions)
-    {
-        return siblingVersions.Any(x => x.SequenceNumber > ModVersion.SequenceNumber);
-    }
-
-    /// <inheritdoc cref="CanBeUpgraded"/>
-    public void Upgrade(IReadOnlyCollection<ModVersion> siblingVersions)
-    {
-        var latest = siblingVersions.MaxBy(x => x.SequenceNumber)
-            ?? throw new InvalidOperationException($"Cannot upgrade dependency on mod '{ModVersion.ModId}'. No versions were supplied");
-
-        ChangeVersion(latest);
-    }
-
-    public void ChangeVersion(ModVersion newVersion)
-    {
-        if (newVersion.RepoId != ModVersion.RepoId || newVersion.ModId != ModVersion.ModId)
-        {
-            throw new InvalidOperationException($"Cannot change dependency on mod '{ModVersion.ModId}' to version '{newVersion.Id}' of mod '{newVersion.ModId}'. The version belongs to another mod");
-        }
-
-        ModVersion = newVersion;
-    }
+    public ProfileModPin ToPin() => new(ModVersion.ModId, ModVersion.Id, Locked);
 }

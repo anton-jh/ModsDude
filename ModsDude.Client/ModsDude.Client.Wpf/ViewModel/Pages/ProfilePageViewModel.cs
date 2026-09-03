@@ -54,7 +54,8 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
-        ProfileModsPageViewModel.Factory profileModsPageViewModelFactory)
+        ProfileModsPageViewModel.Factory profileModsPageViewModelFactory,
+        ProfileHistoryPageViewModel.Factory profileHistoryPageViewModelFactory)
     {
         _repo = repo;
         _profile = profile;
@@ -85,6 +86,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         MenuItems = [
             new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
             _modsMenuItem,
+
+            // Open to a guest, like the read-only mod list and for the same reason: somebody who
+            // syncs this profile without curating it is exactly the person who wants to know what
+            // changed under them. Restoring and branching are what a Member level buys, and the page
+            // hides those controls rather than closing the entry.
+            new MenuItemViewModel("History", () => profileHistoryPageViewModelFactory.Create(repo, profile)),
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
                 .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];

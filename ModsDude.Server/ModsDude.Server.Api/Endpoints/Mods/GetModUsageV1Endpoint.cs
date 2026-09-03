@@ -81,7 +81,7 @@ public class GetModUsageV1Endpoint : IEndpoint
         var pageSize = Math.Clamp(limit ?? _defaultLimit, 1, _maximumLimit);
         var taken = resumePoint?.Taken ?? 0;
 
-        var page = await dbContext.Profiles.GetModUsageAsync(new RepoId(repoId), taken, pageSize, cancellationToken);
+        var page = await dbContext.ProfileRevisions.GetModUsageAsync(new RepoId(repoId), taken, pageSize, cancellationToken);
 
         return TypedResults.Ok(new GetModUsageResponse(
             page.Select(ModUsageDto.FromModel),

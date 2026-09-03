@@ -222,12 +222,43 @@ Profile → **Mods**. Two lists: available on the left, pinned on the right.
    `ModId` and moving a mod rightward means choosing a version. The row shows the *effective*
    lock and which level it came from — the adapter's flag on the mod, or this profile's own —
    because those are different situations with different fixes.
-4. The batch update calls `POST .../modDependencies/upgrade`, which **skips locked mods entirely**
-   and reports what it skipped. The skipped count opens a dialog listing them with an unchecked
-   checkbox each, reached deliberately rather than fired at every save.
+4. The batch update moves the rows in the draft. Locked mods are **skipped entirely** and the
+   skipped count opens a dialog listing them with an unchecked checkbox each, reached
+   deliberately rather than fired at every save. Nothing is sent to the server: what an update is
+   is a question the client can answer from the mod list it already has.
 5. A local-only mod moved right is **pending**, not uploaded. Save imports the pending mods
-   through `ModImportService` and then writes the dependencies. Uploading on drag would make
-   Cancel meaningless and litter the repo with mods nobody kept.
+   through `ModImportService` and then writes the list. Uploading on drag would make Cancel
+   meaningless and litter the repo with mods nobody kept.
+6. **Save writes the whole list as one revision** —
+   `PUT repos/{repoId}/profiles/{profileId}/revisions`, carrying every pin and the revision the
+   page was built from. One save is one revision, which is why the boundary is the Save button
+   the user already presses rather than something extra to remember.
+
+If somebody else saved the profile in the meantime, the save is refused and the page asks which
+way to go: load theirs and lose this draft, or save over them. Both are safe — theirs is a
+revision either way, so saving over it does not destroy it, and it can be restored from the
+history. Before revisions the server could not even see the collision: writes went per mod, last
+write silently winning per mod, and the profile could end up as neither person's list.
+
+## Looking at a profile's history
+
+Profile → **History**. Every save the profile has had, newest first, with what the selected one
+pinned beside it.
+
+1. `GET repos/{repoId}/profiles/{profileId}/revisions` lists them — who saved it, when, what they
+   called it, and what it did to the one before (`12 added · 3 changed`). Those counts were
+   recorded when the revision was written; nothing diffs two two-thousand-mod snapshots to render
+   a line.
+2. Selecting one reads its mod list through
+   `GET .../modDependencies?revision=N`, rendered with the same row as everywhere else.
+3. **Restore** copies that revision's list back to the front as a new revision. Nothing in
+   between is deleted, so a restore is itself undoable — and the mod folder does not change until
+   the profile is applied.
+4. **Save as…** creates a new profile that starts as a copy of that revision. This is how a
+   profile is branched off: the same primitive as a restore, pointed at a new profile.
+
+Reading the history needs Guest; restoring and branching need Member, and the page hides those
+two controls rather than closing the entry.
 
 ## Letting somebody into a repo
 

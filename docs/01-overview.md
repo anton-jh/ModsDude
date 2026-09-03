@@ -14,6 +14,10 @@ the repo they define **profiles** — named, pinned mod lists ("Season 4 map", "
 lite"). Each member connects their own game installation as an **instance**, picks a
 profile, and the client makes the installation match it.
 
+A profile's mod list is **versioned**. Every save records a new revision, so what the group was
+running last week is still readable, an old revision can be put back, and one can be branched off
+into a profile of its own.
+
 The server never runs the game and never inspects a mod file. It stores metadata, decides
 who may do what, and hands out short-lived links to blob storage. All of the
 game-specific knowledge — what a mod file looks like, where the game keeps its mods, how
@@ -22,9 +26,9 @@ to read a mod's name out of an archive — lives in a **game adapter** on the cl
 ## Mental model
 
 ```
-User ──member of──▶ Repo ──has──▶ Profile ──pins──▶ ModVersion
-                     │                                  ▲
-                     ├──contains────────────────────────┘
+User ──member of──▶ Repo ──has──▶ Profile ──has──▶ Revision ──pins──▶ ModVersion
+                     │                        (head)    (a snapshot)      ▲
+                     ├──contains──────────────────────────────────────────┘
                      │                      (one row per version; a "mod"
                      │                       is the rows sharing a ModId)
                      └──configured by──▶ Game adapter (base settings)
@@ -86,8 +90,8 @@ sent up as a result.
 | | Server | Client |
 | --- | --- | --- |
 | Identity, membership, authorization | ● | |
-| Repos, profiles, mod dependencies | ● | |
-| Name uniqueness, one-dependency-per-mod | ● | |
+| Repos, profiles, revisions, mod dependencies | ● | |
+| Name uniqueness, one-dependency-per-mod-per-revision | ● | |
 | Mod version rows, sequence, `ContentHash`, `Locked`, image refs | ● stores | ● derives |
 | Blob storage and SAS issuance | ● | |
 | Verifying the blob exists before registering | ● | |

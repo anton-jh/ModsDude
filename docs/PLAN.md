@@ -21,8 +21,9 @@ out right; that slice is now closed end to end.
 | Identity, users, memberships | Working, with a members UI |
 | Repos, adapters, base settings | Working |
 | Local instances | Working, scoped to a game and carrying an active profile |
-| Profiles (create/rename/delete) | Working |
-| Mod dependencies | Server and the profile mod list editor both work |
+| Profiles (create/rename/delete) | Working. Creating one can branch off a revision of another |
+| Mod dependencies | Server and the profile mod list editor both work. A save is one revision |
+| Profile history | Working — every save is a revision, readable, restorable, branchable |
 | Mod catalog, import, imagery | Working — sources, merged catalog, real import, server-side derivatives |
 | Mod upload / download | Working, both directions, straight to blob storage |
 | Profile → instance sync | Working — content store, plan, execute, manifest |
@@ -309,6 +310,11 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
       versions alike.
 
 ## Phase 2 — Profile contents and mod management
+
+> **Superseded in part by [Phase 4.5](#phase-45--profile-revisions).** The mod list editor is
+> unchanged; the four per-dependency routes it wrote through are gone, replaced by one save of
+> the whole list. Items below that name `POST/PUT/DELETE .../modDependencies` or
+> `.../modDependencies/upgrade` describe what was built at the time, not what is there now.
 
 A profile was a name with nothing in it, and Import and Manage were separate pages
 showing overlapping data under different rules.
@@ -603,6 +609,64 @@ launching the game from it does not help. What matters is what the user sees on 
 
 Sequenced right after sync, ahead of the cosmetic work below: it closes the one failure mode
 that silently damages savegames.
+
+## Phase 4.5 — Profile revisions
+
+> **Done.** A profile's mod list is now a chain of immutable snapshots. Three things drove it:
+> an old list should stay readable, branching off one should be possible, and a rollback should
+> not require anybody to reconstruct a list by hand.
+
+The design decisions, and why they went the way they did, are in
+[02 — Domain model](02-domain-model.md#profile-revisions). The short version:
+
+- [x] **`ProfileRevision`, keyed `(RepoId, ProfileId, Number)`, holding a snapshot** — not a
+      changeset. The mod list *is* the profile, so an event log would make every read of history
+      a fold and turn the one-version-per-mod rule from an index into a hope. Rows are the cost:
+      two thousand narrow rows per revision, which at these volumes is the cheap half.
+- [x] **Read-only by having no address.** No route names a revision to write to; writes address
+      the profile and mean its head. No `IsReadOnly` column, and therefore no fifteen places that
+      have to check one.
+- [x] **One save is one revision**, which required the save to become atomic:
+      `PUT .../profiles/{profileId}/revisions` carrying the whole list replaces the four
+      per-dependency routes. Those went entirely, the batch upgrade included. It is also a better
+      shape on its own merits — one request instead of up to two thousand.
+- [x] **`BasedOn` makes concurrent edits safe.** A save names what it was built from and is
+      refused if that is no longer the head; the primary key on the revision number is what makes
+      that true rather than likely. The editor turns the refusal into a choice, and both answers
+      are safe because what is on the server is a revision either way.
+- [x] **Restoring copies forward**, never backwards and never by deleting. Revision 3 restored
+      onto head 8 becomes revision 9. Moving the head back would strand 4–8 and force a tree the
+      moment anybody saved; deleting them would destroy the record of what people ran.
+- [x] **Branching is the same primitive**: `POST .../profiles` with `CopyFrom` materializes a
+      revision as revision 1 of a new profile.
+- [x] The history page — revisions on the left, what the selected one pinned on the right.
+      Readable at Guest, actionable at Member.
+- [x] The sync manifest records which revision was applied.
+
+The consequence to keep in view: **a mod version that has been used can no longer be deleted**,
+because the revision that pinned it still pins it and the foreign key is `Restrict`. That is
+accepted rather than worked around — an old revision that is not reproducible is not worth
+keeping — but it is the thing most likely to surprise somebody later. See
+[02 — Domain model](02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more).
+
+What was deliberately left for later:
+
+- [ ] **Page the history.** `GET .../revisions` windows by `skip`/`limit`, and the page reads the
+      first fifty and says plainly that older ones exist. An offset rather than a keyset because
+      `RevisionNumber` is a value object and a provider cannot translate a comparison on one — the
+      same constraint the mod usage listing works around.
+- [ ] **Surface the applied revision in the drift notice** — "this folder is on revision 6, the
+      profile is at 8" instead of a bare "something differs". The manifest records the number
+      already; what it needs is the profile's head, which is a server fact the startup check
+      deliberately does not go and fetch.
+- [ ] **Compare two revisions.** The history says how many mods changed; saying *which* is a diff
+      of two snapshots, which is a query and a page rather than a stored fact.
+- [ ] **Name a save from the editor.** `Label` is carried end to end and only the restore path and
+      the API can set one; the editor sends none, because a required field on the save button
+      would be answered with "asdf" by the third save.
+- [ ] **Prune history on a policy** — keep the last N, anything labelled, and anything an
+      instance manifest references. Only worth building if storage ever actually bites; it is the
+      release valve for the deletion consequence above, not something to pre-emptively add.
 
 ## Phase 5 — Fill in the shell
 

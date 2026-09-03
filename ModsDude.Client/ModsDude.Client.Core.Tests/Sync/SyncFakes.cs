@@ -73,8 +73,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     public byte[] Blob(string link) => _blobs[link];
 
 
-    public Task<ICollection<ModDependencyDto>> GetModDependenciesV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default)
-        => Task.FromResult<ICollection<ModDependencyDto>>([.. _dependencies]);
+    /// <summary>The profile is always on revision 1 here: sync reads a mod list, not a history.</summary>
+    public Task<GetModDependenciesResponse> GetModDependenciesV1Async(Guid repoId, Guid profileId, int? revision = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(new GetModDependenciesResponse { Revision = 1, IsHead = true, Dependencies = [.. _dependencies] });
 
     public Task<GetModsResponse> GetModsV1Async(Guid repoId, DateTime? updatedAfter = null, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
         => Task.FromResult(new GetModsResponse { Mods = [.. _registered], NextCursor = null });
@@ -87,14 +88,6 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     }
 
 
-    public Task<ModDependencyDto> AddModDependencyV1Async(Guid repoId, Guid profileId, AddModDependencyRequest request, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
-    public Task DeleteModDependencyV1Async(Guid repoId, Guid profileId, string modId, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
-    public Task<ModDependencyDto> UpdateModDependencyV1Async(Guid repoId, Guid profileId, string modId, UpdateModDependencyRequest request, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
-    public Task<UpgradeModDependenciesResponse> UpgradeModDependenciesV1Async(Guid repoId, Guid profileId, UpgradeModDependenciesRequest request, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
     public Task DeleteModV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task DeleteModVersionV1Async(Guid repoId, string modId, string versionId, CancellationToken cancellationToken = default)

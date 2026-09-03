@@ -34,7 +34,7 @@ public partial class CreateProfilePageViewModel(
 
         navigationLockService.ReleaseLock(this);
 
-        await profileService.CreateProfile(_repo.Id, Name, cancellationToken);
+        await profileService.CreateProfile(_repo.Id, Name, cancellationToken: cancellationToken);
     }
 
     public void Dispose()

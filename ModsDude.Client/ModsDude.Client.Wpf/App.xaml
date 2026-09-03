@@ -68,6 +68,9 @@
             <DataTemplate DataType="{x:Type pvm:ProfileModsPageViewModel}">
                 <p:ProfileModsPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:ProfileHistoryPageViewModel}">
+                <p:ProfileHistoryPage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:CreateLocalInstancePageViewModel}">
                 <p:CreateLocalInstancePage />
             </DataTemplate>
@@ -104,6 +107,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ProfileLockedUpdatesModalViewModel}">
                 <uc:ProfileLockedUpdatesDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ProfileSaveAsModalViewModel}">
+                <uc:ProfileSaveAsDialog />
             </DataTemplate>
 
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,

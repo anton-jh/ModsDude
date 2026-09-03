@@ -5,7 +5,8 @@ A shared mod repository for moddable games.
 A group creates a **repo**, uploads mod files to it, and defines **profiles** — named,
 pinned mod lists. Each member connects their own game installation as an **instance** and
 syncs a profile into it, so everyone runs the same mods at the same versions without
-passing archives around by hand.
+passing archives around by hand. Every save of a profile's mod list is recorded as a
+revision, so an old list stays readable, restorable, and branchable.
 
 The server stores metadata and issues short-lived links to blob storage; it never inspects
 a mod file. Everything game-specific lives in a client-side **game adapter**, so supporting
@@ -13,8 +14,9 @@ another game means writing an adapter, not changing the system. Farming Simulato
 reference implementation.
 
 > **Status: in development.** The core loop works end to end — import mods, pin them in a
-> profile, sync that profile into a game's mod folder. Making drift unmissable is being built
-> now, and savegames are untouched. See [docs/PLAN.md](docs/PLAN.md).
+> profile, sync that profile into a game's mod folder — and drift from a profile is surfaced and
+> re-appliable. Profile history landed most recently. Savegames are untouched. See
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Documentation
 

@@ -47,6 +47,21 @@ public sealed record SyncManifest
     /// </summary>
     public string? ProfileName { get; init; }
 
+    /// <summary>
+    /// Which revision of the profile was applied, so a folder can say which version of the list it
+    /// was made to match - "this folder is on revision 6, the profile is at 8" rather than a bare
+    /// "something differs".
+    /// </summary>
+    /// <remarks>
+    /// Nullable, and <see cref="CurrentVersion"/> is deliberately <b>not</b> bumped for it. A
+    /// manifest written before revisions existed deserializes with this null, which reads as "which
+    /// revision this was is not recorded" - true, and harmless. The bump for
+    /// <see cref="SyncManifestEntry.Locked"/> was needed because the old data answered its question
+    /// <em>wrongly</em>; this one answers it not at all, and discarding a manifest costs a full
+    /// rescan for nothing.
+    /// </remarks>
+    public int? ProfileRevision { get; init; }
+
     public required DateTimeOffset SyncedAt { get; init; }
 
     /// <summary>

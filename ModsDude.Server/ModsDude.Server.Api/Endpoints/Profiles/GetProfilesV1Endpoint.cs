@@ -36,15 +36,14 @@ public class GetProfilesV1Endpoint : IEndpoint
             return authResult;
         }
 
-        // Projected rather than materialized: ModDependencies is an owned collection, so loading
-        // Profile entities would read every profile's entire dependency set only for ProfileDto to
-        // discard it — thousands of rows per profile at the volumes this targets.
+        // Projected rather than materialized, out of habit rather than necessity now: a profile row
+        // no longer carries its mod list, so this is four columns either way.
         var profiles = await dbContext.Profiles
             .Where(x => x.RepoId == new RepoId(repoId))
-            .Select(x => new { x.Id, x.RepoId, x.Name })
+            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision })
             .ToListAsync(cancellationToken);
 
-        var dtos = profiles.Select(x => new ProfileDto(x.Id.Value, x.RepoId.Value, x.Name.Value));
+        var dtos = profiles.Select(x => new ProfileDto(x.Id.Value, x.RepoId.Value, x.Name.Value, x.HeadRevision.Value));
 
         return TypedResults.Ok(dtos);
     }

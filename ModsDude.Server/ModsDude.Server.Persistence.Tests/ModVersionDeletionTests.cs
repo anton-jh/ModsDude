@@ -18,6 +18,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 {
     private static readonly DateTimeOffset _timestamp = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly ModId _modId = new("FS25_TestMod");
+    private static readonly UserId _author = new("author");
 
 
     [Fact]
@@ -28,7 +29,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.Profiles.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
+        Assert.True(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
     }
 
     [Fact]
@@ -39,7 +40,26 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.False(await dbContext.Profiles.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("2.0.0"), CancellationToken.None));
+        Assert.False(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("2.0.0"), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The consequence of keeping history: a version a profile has moved off is still pinned by the
+    /// revision that pinned it, so in practice a version that has ever been used cannot be deleted.
+    /// Reported so that the delete endpoint refuses it rather than the foreign key doing so behind
+    /// the endpoint's back.
+    /// </summary>
+    [Fact]
+    public async Task A_version_only_an_older_revision_pins_is_still_reported_as_depended_on()
+    {
+        var repoId = await GivenAModWithVersions("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenTheProfileMovesTo(repoId, profileId, "2.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        Assert.True(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
     }
 
     [Fact]
@@ -50,7 +70,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.Profiles.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
+        Assert.True(await dbContext.ProfileRevisions.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
     }
 
     [Fact]
@@ -60,7 +80,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.False(await dbContext.Profiles.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
+        Assert.False(await dbContext.ProfileRevisions.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
     }
 
     /// <summary>
@@ -124,15 +144,43 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
         return repo.Id;
     }
 
-    private async Task GivenAProfilePinning(RepoId repoId, string versionId)
+    private async Task<ProfileId> GivenAProfilePinning(RepoId repoId, string versionId)
     {
         using var dbContext = fixture.CreateDbContext();
 
         var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
 
-        profile.AddDependency(version!, locked: false);
+        var revision = profile.CreateRevision(
+            [new ModDependency { ModVersion = version!, Locked = false }],
+            [],
+            _author,
+            DateTime.UtcNow);
+
         dbContext.Profiles.Add(profile);
+        dbContext.ProfileRevisions.Add(revision);
+
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        return profile.Id;
+    }
+
+    /// <summary>Saves a further revision of a profile that already exists.</summary>
+    private async Task GivenTheProfileMovesTo(RepoId repoId, ProfileId profileId, string versionId)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
+        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
+        var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
+
+        var revision = profile.CreateRevision(
+            [new ModDependency { ModVersion = version!, Locked = false }],
+            previous,
+            _author,
+            DateTime.UtcNow);
+
+        dbContext.ProfileRevisions.Add(revision);
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }

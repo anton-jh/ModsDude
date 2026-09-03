@@ -12,50 +12,13 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
 
         builder.HasOne<Repo>().WithMany().HasForeignKey(x => x.RepoId);
 
-        builder.OwnsMany(x => x.ModDependencies, modDependency =>
-        {
-            modDependency.WithOwner().HasForeignKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId);
-
-            // Restrict, not the cascade EF would infer: deleting a version a profile pins would
-            // otherwise remove the mod from that profile without anyone asking, and the delete
-            // endpoints refuse exactly that case. Restrict makes the database enforce the same rule,
-            // so a dependency added between the endpoint's check and its commit fails loudly instead
-            // of being swept away.
-            modDependency.HasOne(x => x.ModVersion).WithMany().HasForeignKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modDependency.HasKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId,
-                ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId);
-
-            // Backs the one-version-per-mod rule that Profile.AddDependency enforces in the domain.
-            // Without it a concurrent double-add pins one mod at two versions, which the sync engine
-            // has no way to resolve.
-            modDependency.HasIndex(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId,
-                ModDependencyShadowProperties.ModId)
-                .IsUnique();
-        });
-
         builder.Property(x => x.Name);
         builder.Property(x => x.Created);
 
+        // A scalar, and there is deliberately no navigation to the revisions themselves - see
+        // Profile for why loading a profile must not be able to drag its history in with it.
+        builder.Property(x => x.HeadRevision);
+
         builder.HasIndex(x => new { x.RepoId, x.Name }).IsUnique();
     }
-}
-
-internal static class ModDependencyShadowProperties
-{
-    public const string ProfileId = "ProfileId";
-    public const string RepoId = "RepoId";
-    public const string ModId = "ModId";
-    public const string ModVersionId = "ModVersionId";
 }

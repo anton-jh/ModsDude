@@ -69,11 +69,20 @@ public class ProfileService(
         Profiles.Clear();
     }
 
-    public async Task CreateProfile(Guid repoId, string name, CancellationToken cancellationToken)
+    /// <param name="copyFrom">
+    /// A revision of another profile in the repo to branch off, or <c>null</c> for an empty profile.
+    /// The new profile's first revision pins exactly what that one pinned.
+    /// </param>
+    public async Task CreateProfile(
+        Guid repoId,
+        string name,
+        CopyProfileRevisionRequest? copyFrom = null,
+        CancellationToken cancellationToken = default)
     {
         var request = new CreateProfileRequest()
         {
-            Name = name
+            Name = name,
+            CopyFrom = copyFrom
         };
 
         ProfileDto profile;
@@ -130,9 +139,38 @@ public class ProfileService(
     /// <summary>How many mods the profile pins. Not held in <see cref="Profiles"/>: the DTO does not carry it.</summary>
     public async Task<int> GetModCount(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
-        var dependencies = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, cancellationToken);
+        var response = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, null, cancellationToken);
 
-        return dependencies.Count;
+        return response.Dependencies.Count;
+    }
+
+    /// <summary>
+    /// The profile's history, newest first, with the number of the revision that is current.
+    /// </summary>
+    public async Task<ProfileHistory> GetHistory(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    {
+        var response = await profileClient.GetProfileRevisionsV1Async(repoId, profileId, null, null, cancellationToken);
+
+        return new ProfileHistory([.. response.Revisions], response.HeadRevision, response.HasMore);
+    }
+
+    /// <summary>
+    /// Puts an older revision's mod list back by copying it to the front. Nothing is deleted, so the
+    /// revisions in between stay readable and this is itself undoable.
+    /// </summary>
+    public async Task<ProfileRevisionDto> RestoreRevision(Guid repoId, Guid profileId, int number, CancellationToken cancellationToken)
+    {
+        var restored = await profileClient.RestoreProfileRevisionV1Async(
+            repoId, profileId, number, new RestoreProfileRevisionRequest(), cancellationToken);
+
+        if (FindProfile(profileId) is ProfileDto existing)
+        {
+            existing.HeadRevision = restored.Number;
+
+            ProfileUpdated?.Invoke(profileId);
+        }
+
+        return restored;
     }
 
     /// <summary>
@@ -145,9 +183,15 @@ public class ProfileService(
     /// has no use for the local half and should not pay a scan for it. Both routes are readable at
     /// Guest, which is the level this is for.
     /// </remarks>
-    public async Task<IReadOnlyList<PinnedMod>> GetPinnedMods(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    /// <param name="revision">
+    /// Which revision to read, or <c>null</c> for the profile's current one. An older revision is
+    /// the same list rendered the same way - it is only read-only because nothing anywhere can write
+    /// to one.
+    /// </param>
+    public async Task<IReadOnlyList<PinnedMod>> GetPinnedMods(Guid repoId, Guid profileId, int? revision, CancellationToken cancellationToken)
     {
-        var dependencies = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, cancellationToken);
+        var response = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, revision, cancellationToken);
+        var dependencies = response.Dependencies;
 
         if (dependencies.Count == 0)
         {
@@ -212,13 +256,25 @@ public class ProfileService(
 
     private void Apply(ProfileDto target, ProfileDto source)
     {
-        if (target.Name == source.Name)
+        if (target.Name == source.Name && target.HeadRevision == source.HeadRevision)
         {
             return;
         }
 
         target.Name = source.Name;
 
+        // Kept in step so that a page holding this DTO saves against the revision the server is
+        // actually on. A save based on a stale number is refused, which is the right answer - but
+        // being refused for a number this client could have refreshed is not.
+        target.HeadRevision = source.HeadRevision;
+
         ProfileUpdated?.Invoke(target.Id);
     }
 }
+
+
+/// <param name="HasMore">
+/// Whether older revisions were left unread. The listing is windowed from the newest, and nothing
+/// yet asks for a second page - see docs/PLAN.md.
+/// </param>
+public sealed record ProfileHistory(IReadOnlyList<ProfileRevisionDto> Revisions, int HeadRevision, bool HasMore);

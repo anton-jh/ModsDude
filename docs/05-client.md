@@ -439,6 +439,20 @@ a chip, so "All" means all of the repo's — and the **On disk only** chip is hi
 would select a list that is now always empty. An unregistered file on a guest's disk is only ever
 interesting as something to import, which they cannot do.
 
+### Saving is one request, and one revision
+
+The editor is a draft until Save, and Save is now a single
+`PUT repos/{repoId}/profiles/{profileId}/revisions` carrying the whole list plus the revision the
+page was read at. `_basedOn` comes out of the same response the list came from rather than from
+the profile DTO, because that is the only form of it that cannot already be stale by the time it
+is used.
+
+A refused save — somebody else saved while this page was open — is a question rather than an
+error: **load theirs**, which reloads and discards this draft, or **save mine anyway**, which
+re-reads the head and retries on top of it. Both are safe, and that is a property of history
+rather than of the dialog: what is on the server is a revision either way, so saving over it does
+not destroy it.
+
 **A different page for the same entry.** Profile → **Mods** resolves to
 `ProfileModsEditorPageViewModel` for a member and `ProfileModsPageViewModel` for a guest. The
 menu item holds a `Func<PageViewModel>`, so this is a branch in `ProfilePageViewModel` and
@@ -577,10 +591,11 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
 | `EditLocalInstancePage` | Working | Name, instance settings, active profile, delete. Phase 4 grows this into the instance's full page — see [PLAN.md](PLAN.md#phase-4--make-drift-unmissable) |
 | `CreateProfilePage` | Working | |
-| `ProfilePage` | Working | Profile shell over Overview, Mods, Manage |
-| `ProfileOverviewPage` | Working | |
+| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage |
+| `ProfileOverviewPage` | Working | Mod count and current revision, plus the instances set to this profile |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |
+| `ProfileHistoryPage` | Working | The profile's revisions on the left, what the selected one pinned on the right. Restore and Save as… for a member; readable by a guest |
 | `EditProfilePage` | Working | Rename or delete a profile |
 | `ExamplePage` | — | The placeholder. Still the Home page's content |
 
@@ -594,6 +609,7 @@ Dialogs and shared views:
 | `ModVersionArbitrationDialog` | One dialog per import, covering every mod whose ordering the comparer could not settle. Dismissing it skips only those mods |
 | `ModVersionReorderDialog` | Reordering one mod's registered versions by hand, through the placement endpoint |
 | `ProfileLockedUpdatesDialog` | The locked mods a batch update skipped, one unchecked checkbox each, reached deliberately rather than fired at every save |
+| `ProfileSaveAsDialog` | Names the profile a revision is being branched off into. The name is the only thing there is to ask — which revision was decided by the row it was opened from |
 | `DynamicFormEditor` | Renders any `DynamicForm` from its attributes; raises `Modified`, which pages use to take the navigation lock |
 | `ModListItem.xaml` | The standard mod row, applied as an implicit template — any items control fed `ModListItemViewModel` renders identically |
 | `SidebarHeader` | |

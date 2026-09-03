@@ -127,6 +127,13 @@ public sealed record ModSyncPlan
     /// <summary>Carried only so the manifest can record it. See <see cref="ModSyncRequest.ProfileName"/>.</summary>
     public string? ProfileName { get; init; }
 
+    /// <summary>
+    /// Which revision of the profile this plan was built from - read with the dependencies, so it
+    /// describes the list that was planned rather than whatever the profile is on by the time the
+    /// plan runs. Recorded in the manifest.
+    /// </summary>
+    public int? ProfileRevision { get; init; }
+
     public required string ModFolder { get; init; }
     public required IReadOnlyList<ModSyncItem> Items { get; init; }
     public required ModMaterialization Materialization { get; init; }

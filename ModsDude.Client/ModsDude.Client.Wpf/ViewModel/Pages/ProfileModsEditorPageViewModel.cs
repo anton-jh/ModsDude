@@ -59,6 +59,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly ModImportService _importService;
     private readonly IModDependenciesClient _dependenciesClient;
+    private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
     private readonly IDialogService _dialogService;
     private readonly NavigationLockService _navigationLock;
@@ -87,6 +88,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     /// <summary>What the profile held when it was last read from the server. Save diffs against it.</summary>
     private IReadOnlyList<ProfileModPin> _original = [];
+
+    /// <summary>
+    /// The revision <see cref="_original"/> was read at, and what a save is based on. Taken from the
+    /// same response the list came out of rather than from the profile, because that is the only
+    /// form of it that cannot already be stale by the time it is used.
+    /// </summary>
+    private int _basedOn;
 
     private IReadOnlyList<ModListItemViewModel> _available = [];
     private ProfileModUpdatePlan _updates = ProfileModUpdatePlan.Empty;
@@ -121,6 +129,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ModListItemViewModel.Factory itemFactory,
         ModImportService importService,
         IModDependenciesClient dependenciesClient,
+        IProfilesClient profilesClient,
         IModalService modalService,
         IDialogService dialogService,
         NavigationLockService navigationLock,
@@ -134,6 +143,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _itemFactory = itemFactory;
         _importService = importService;
         _dependenciesClient = dependenciesClient;
+        _profilesClient = profilesClient;
         _modalService = modalService;
         _dialogService = dialogService;
         _navigationLock = navigationLock;
@@ -596,7 +606,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             var changes = ProfileModListDiff.Compute(_original, desired);
 
-            await ApplyDependencyChangesAsync(changes, cancellationToken);
+            if (await SaveRevisionAsync(desired, cancellationToken) is false)
+            {
+                return;
+            }
 
             // What the profile holds now, so that anything left over is the only thing still unsaved.
             _original = desired;
@@ -854,116 +867,81 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The profile's own writes, last and on their own - a dependency can only name a version the
-    /// repo already holds.
-    /// </summary>
-    private async Task ApplyDependencyChangesAsync(ProfileModListChanges changes, CancellationToken cancellationToken)
-    {
-        foreach (var modId in changes.Removed)
-        {
-            try
-            {
-                await _dependenciesClient.DeleteModDependencyV1Async(_repo.Id, _profile.Id, modId.Value, cancellationToken);
-            }
-            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NotFound)
-            {
-                // Somebody else took it out first, which is the state this was asking for anyway.
-            }
-        }
-
-        foreach (var pin in await UpgradeInBatchAsync(changes.Changed, cancellationToken))
-        {
-            var request = new UpdateModDependencyRequest
-            {
-                VersionId = pin.VersionId.Value,
-                Locked = pin.Lock.ByProfile
-            };
-
-            await _dependenciesClient.UpdateModDependencyV1Async(_repo.Id, _profile.Id, pin.ModId.Value, request, cancellationToken);
-        }
-
-        foreach (var pin in changes.Added)
-        {
-            var request = new AddModDependencyRequest
-            {
-                ModId = pin.ModId.Value,
-                VersionId = pin.VersionId.Value,
-                Locked = pin.Lock.ByProfile
-            };
-
-            try
-            {
-                await _dependenciesClient.AddModDependencyV1Async(_repo.Id, _profile.Id, request, cancellationToken);
-            }
-            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ModDependencyExists)
-            {
-                // A teammate added the same mod while this list was open. One dependency per mod is
-                // the rule, so what this page wanted is an update rather than a second row.
-                var update = new UpdateModDependencyRequest
-                {
-                    VersionId = pin.VersionId.Value,
-                    Locked = pin.Lock.ByProfile
-                };
-
-                await _dependenciesClient.UpdateModDependencyV1Async(_repo.Id, _profile.Id, pin.ModId.Value, update, cancellationToken);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Sends the plain "move to the newest version" changes as one batch, and returns whatever is
-    /// left for the per-dependency endpoint to write.
+    /// Writes the whole mod list as a new revision. Returns false when nothing was saved, having
+    /// already said why.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The batch form exists for exactly this shape, and a profile can hold a couple of thousand
-    /// mods - one request beats one per mod by a wide margin. It only expresses that one shape,
-    /// though: a lock toggled, a version that is not the newest, or a locked mod the user moved
-    /// deliberately are all things it would refuse or ignore, so those stay individual writes.
+    /// One request, carrying every pin. The profile's writes are last and on their own, after the
+    /// import - a dependency can only name a version the repo already holds.
     /// </para>
     /// <para>
-    /// Its per-dependency outcomes are read rather than assumed. A mod a teammate locked or
-    /// registered a newer version of between the plan and the request comes back as something other
-    /// than upgraded, and falls through to a write that says exactly what this page meant.
+    /// This used to be a delete, an upgrade batch and an add or update per changed mod, and it was
+    /// the diff that made that bearable. The diff is still computed, but only to describe the save
+    /// afterwards: what goes over the wire is the list itself, because a revision is a snapshot and
+    /// the server has to record exactly what the page shows.
     /// </para>
     /// </remarks>
-    private async Task<IReadOnlyList<ProfileModPin>> UpgradeInBatchAsync(
-        IReadOnlyList<ProfileModPin> changed,
-        CancellationToken cancellationToken)
+    private async Task<bool> SaveRevisionAsync(IReadOnlyList<ProfileModPin> desired, CancellationToken cancellationToken)
     {
-        var batched = changed.Where(IsPlainUpgradeToNewest).ToList();
-
-        if (batched.Count == 0)
+        var request = new SaveProfileRevisionRequest
         {
-            return changed;
-        }
-
-        var request = new UpgradeModDependenciesRequest
-        {
-            ModIds = [.. batched.Select(x => x.ModId.Value)]
+            BasedOn = _basedOn,
+            Mods = [.. desired.Select(x => new ProfileModPinRequest
+            {
+                ModId = x.ModId.Value,
+                VersionId = x.VersionId.Value,
+                Locked = x.Lock.ByProfile
+            })]
         };
 
-        var response = await _dependenciesClient.UpgradeModDependenciesV1Async(_repo.Id, _profile.Id, request, cancellationToken);
+        try
+        {
+            var saved = await _profilesClient.SaveProfileRevisionV1Async(_repo.Id, _profile.Id, request, cancellationToken);
 
-        var moved = response.Results
-            .Where(x => x.Outcome is ModDependencyUpgradeOutcome.Upgraded && x.ToVersionId is not null)
-            .ToDictionary(x => ModKey.From(x.ModId), x => ModVersionKey.From(x.ToVersionId!));
+            _basedOn = saved.Number;
+            _profile.HeadRevision = saved.Number;
 
-        return [.. changed.Where(x => moved.TryGetValue(x.ModId, out var version) is false || version != x.VersionId)];
+            return true;
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileRevisionStale)
+        {
+            return await ResolveStaleSaveAsync(desired, cancellationToken);
+        }
     }
 
     /// <summary>
-    /// Moving an unlocked pin to the newest version the repo holds, and nothing else - which is the
-    /// only thing the batch endpoint does.
+    /// Somebody else saved this profile while this list was open. The choice is theirs, and both
+    /// answers are safe: what is on the server is a revision either way, so saving over it does not
+    /// destroy it - it can be restored from the history.
     /// </summary>
-    private bool IsPlainUpgradeToNewest(ProfileModPin pin)
+    private async Task<bool> ResolveStaleSaveAsync(IReadOnlyList<ProfileModPin> desired, CancellationToken cancellationToken)
     {
-        if (pin.Lock.IsLocked || _registered.TryGetValue(pin.ModId, out var versions) is false)
+        var confirmation = new ConfirmationDialogViewModel(
+            "Somebody else saved this profile",
+            "Your list was built from an older revision. Saving anyway records yours as the newest one - theirs stays in the history and can be restored. Loading theirs discards what you have here.",
+            IconKind.Warning,
+            "Save mine anyway",
+            "Load theirs");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
         {
+            SaveSummary = "Loaded the newer list. Nothing of yours was saved.";
+
+            await ReloadAsync();
+
             return false;
         }
 
-        return versions[^1].VersionId == pin.VersionId;
+        // Re-read only the number, so the retry is based on what the server is actually on rather
+        // than on what the refusal happened to mention.
+        var current = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, null, cancellationToken);
+
+        _basedOn = current.Revision;
+
+        return await SaveRevisionAsync(desired, cancellationToken);
     }
 
     private static string Describe(ProfileModListChanges changes)
@@ -1200,20 +1178,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private async Task LoadAsync()
     {
-        var dependencies = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, _cancellation.Token);
+        var modList = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, null, _cancellation.Token);
         var snapshot = await _catalog.GetAsync(_cancellation.Token);
 
         // Everything from here down is WPF-facing, and this may well have arrived on a thread-pool
         // thread.
-        await Application.Current.Dispatcher.InvokeAsync(() => Publish(snapshot, dependencies));
+        await Application.Current.Dispatcher.InvokeAsync(() => Publish(snapshot, modList));
     }
 
-    private void Publish(ModCatalogSnapshot snapshot, ICollection<ModDependencyDto> dependencies)
+    private void Publish(ModCatalogSnapshot snapshot, GetModDependenciesResponse modList)
     {
         _publishing = true;
 
         try
         {
+            // Read from the response that carried the list, so the two cannot disagree about which
+            // revision this page is editing.
+            _basedOn = modList.Revision;
+
+            var dependencies = modList.Dependencies;
             Sources.Clear();
 
             foreach (var status in snapshot.Sources)

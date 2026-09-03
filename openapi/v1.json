@@ -1,21 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AddModDependencyRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "locked": {
-            "type": "boolean"
-          },
-          "modId": {
-            "type": "string"
-          },
-          "versionId": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "CheckImagesExistRequest": {
         "additionalProperties": false,
         "properties": {
@@ -54,6 +39,21 @@
         "properties": {
           "isTaken": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CopyProfileRevisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "revision": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -133,6 +133,18 @@
       "CreateProfileRequest": {
         "additionalProperties": false,
         "properties": {
+          "copyFrom": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CopyProfileRevisionRequest"
+              }
+            ]
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
           "name": {
             "type": "string"
           }
@@ -194,6 +206,25 @@
           }
         ]
       },
+      "GetModDependenciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ModDependencyDto"
+            },
+            "type": "array"
+          },
+          "isHead": {
+            "type": "boolean"
+          },
+          "revision": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "GetModUsageResponse": {
         "additionalProperties": false,
         "properties": {
@@ -234,6 +265,25 @@
           "nextCursor": {
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetProfileRevisionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "headRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileRevisionDto"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -284,48 +334,6 @@
           }
         },
         "type": "object"
-      },
-      "ModDependencyUpgradeDto": {
-        "additionalProperties": false,
-        "properties": {
-          "fromVersionId": {
-            "nullable": true,
-            "type": "string"
-          },
-          "lockedByMod": {
-            "type": "boolean"
-          },
-          "lockedInProfile": {
-            "type": "boolean"
-          },
-          "modId": {
-            "type": "string"
-          },
-          "outcome": {
-            "$ref": "#/components/schemas/ModDependencyUpgradeOutcome"
-          },
-          "toVersionId": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ModDependencyUpgradeOutcome": {
-        "description": "",
-        "enum": [
-          "Upgraded",
-          "AlreadyLatest",
-          "SkippedLocked",
-          "NotInProfile"
-        ],
-        "type": "string",
-        "x-enumNames": [
-          "Upgraded",
-          "AlreadyLatest",
-          "SkippedLocked",
-          "NotInProfile"
-        ]
       },
       "ModDto": {
         "additionalProperties": false,
@@ -530,7 +538,8 @@
           "https://server.modsdude.com/api/problems/invite-not-usable",
           "https://server.modsdude.com/api/problems/invite-redemption-conflict",
           "https://server.modsdude.com/api/problems/invalid-invite-limits",
-          "https://server.modsdude.com/api/problems/invite-cannot-grant-admin"
+          "https://server.modsdude.com/api/problems/invite-cannot-grant-admin",
+          "https://server.modsdude.com/api/problems/profile-revision-stale"
         ],
         "type": "string",
         "x-enumNames": [
@@ -560,12 +569,17 @@
           "InviteNotUsable",
           "InviteRedemptionConflict",
           "InvalidInviteLimits",
-          "InviteCannotGrantAdmin"
+          "InviteCannotGrantAdmin",
+          "ProfileRevisionStale"
         ]
       },
       "ProfileDto": {
         "additionalProperties": false,
         "properties": {
+          "headRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
           "id": {
             "format": "guid",
             "type": "string"
@@ -579,6 +593,104 @@
           }
         },
         "type": "object"
+      },
+      "ProfileModPinRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileRevisionChangesDto": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "changed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "removed": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileRevisionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "$ref": "#/components/schemas/ProfileRevisionChangesDto"
+          },
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/UserDto"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "modCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "number": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ProfileRevisionOrigin"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "sourceProfileId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "sourceRevision": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileRevisionOrigin": {
+        "description": "",
+        "enum": [
+          "Created",
+          "Saved",
+          "Restored",
+          "Copied"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Created",
+          "Saved",
+          "Restored",
+          "Copied"
+        ]
       },
       "RedeemInviteRequest": {
         "additionalProperties": false,
@@ -735,6 +847,36 @@
           "Admin"
         ]
       },
+      "RestoreProfileRevisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SaveProfileRevisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "basedOn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "mods": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileModPinRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "SetModVersionImagesRequest": {
         "additionalProperties": false,
         "properties": {
@@ -756,18 +898,6 @@
         },
         "type": "object"
       },
-      "UpdateModDependencyRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "locked": {
-            "type": "boolean"
-          },
-          "versionId": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "UpdateProfileRequest": {
         "additionalProperties": false,
         "properties": {
@@ -785,31 +915,6 @@
           },
           "name": {
             "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "UpgradeModDependenciesRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "modIds": {
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "UpgradeModDependenciesResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/ModDependencyUpgradeDto"
-            },
-            "type": "array"
           }
         },
         "type": "object"
@@ -3021,275 +3126,27 @@
               "type": "string"
             },
             "x-position": 2
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ModDependencyDto"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": ""
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
           {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "ModDependencies"
-        ]
-      },
-      "post": {
-        "operationId": "AddModDependencyV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
+            "in": "query",
+            "name": "revision",
             "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "profileId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddModDependencyRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-name": "request",
-          "x-position": 3
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModDependencyDto"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "ModDependencies"
-        ]
-      }
-    },
-    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies/upgrade": {
-      "post": {
-        "operationId": "UpgradeModDependenciesV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "profileId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpgradeModDependenciesRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-name": "request",
-          "x-position": 3
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpgradeModDependenciesResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "ModDependencies"
-        ]
-      }
-    },
-    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies/{modId}": {
-      "delete": {
-        "operationId": "DeleteModDependencyV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "profileId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          },
-          {
-            "in": "path",
-            "name": "modId",
-            "required": true,
-            "schema": {
-              "type": "string"
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
             },
             "x-position": 3
           }
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetModDependenciesResponse"
+                }
+              }
+            },
             "description": ""
           },
           "400": {
@@ -3330,10 +3187,196 @@
         ],
         "tags": [
           "ModDependencies"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/revisions": {
+      "get": {
+        "operationId": "GetProfileRevisionsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 3
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProfileRevisionsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
         ]
       },
       "put": {
-        "operationId": "UpdateModDependencyV1",
+        "operationId": "SaveProfileRevisionV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProfileRevisionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRevisionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/revisions/{number}/restore": {
+      "post": {
+        "operationId": "RestoreProfileRevisionV1",
         "parameters": [
           {
             "in": "path",
@@ -3357,10 +3400,11 @@
           },
           {
             "in": "path",
-            "name": "modId",
+            "name": "number",
             "required": true,
             "schema": {
-              "type": "string"
+              "format": "int32",
+              "type": "integer"
             },
             "x-position": 3
           }
@@ -3369,11 +3413,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateModDependencyRequest"
+                "$ref": "#/components/schemas/RestoreProfileRevisionRequest"
               }
             }
           },
-          "required": true,
           "x-name": "request",
           "x-position": 4
         },
@@ -3382,7 +3425,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ModDependencyDto"
+                  "$ref": "#/components/schemas/ProfileRevisionDto"
                 }
               }
             },
@@ -3425,7 +3468,7 @@
           }
         ],
         "tags": [
-          "ModDependencies"
+          "Profiles"
         ]
       }
     },

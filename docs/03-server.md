@@ -204,14 +204,15 @@ document and its CI diff exist to notice. See [Regenerating the client](#regener
 
 ## Persistence
 
-`ApplicationDbContext` exposes `Users`, `Repos`, `RepoMemberships`, `Profiles`, `ModVersions`
-and implements `IUnitOfWork` (`CommitAsync` → `SaveChangesAsync`).
+`ApplicationDbContext` exposes `Users`, `Repos`, `RepoMemberships`, `RepoInvites`, `Profiles`,
+`ProfileRevisions` and `ModVersions`, and implements `IUnitOfWork` (`CommitAsync` → `SaveChangesAsync`).
 
 Notable configuration:
 
 - **Composite keys everywhere.** `ModVersion` is `(RepoId, ModId, Id)`; `Profile` is
-  `(RepoId, ProfileId)`; `RepoMembership` is `(UserId, RepoId)`. Repo scoping is baked into the
-  primary key rather than being a filter you can forget.
+  `(RepoId, ProfileId)`; `ProfileRevision` is `(RepoId, ProfileId, Number)`; `RepoMembership` is
+  `(UserId, RepoId)`. Repo scoping is baked into the primary key rather than being a filter
+  you can forget.
 - **`ModVersion` carries two indexes that are load-bearing rather than decorative.** The unique
   one on `(RepoId, ModId, SequenceNumber)` is what keeps ordering contiguous — and what makes a
   move a two-write operation, since a rotation cannot pass through it in any row order; see
@@ -220,24 +221,37 @@ Notable configuration:
   `Updated` inside a repo and resumes from a timestamp.
 - **`ModVersion.Attributes` and `ModVersion.Images` are owned collections**, so they are
   materialised whenever a `ModVersion` entity is.
-- **`ModDependency` is an owned collection** of `Profile`, with an FK to `ModVersion`. The FK is
-  **`Restrict`**, not the cascade EF would infer: deleting a version a profile pins would
-  otherwise silently drop the mod out of a teammate's profile, which the delete endpoints refuse.
-  Restrict makes the database enforce the same rule, so a dependency added between an endpoint's
-  check and its commit fails loudly rather than being swept away. The unique index on
-  `(RepoId, ProfileId, ModId)` backs the one-version-per-mod rule the domain enforces.
+- **`ModDependency` is an owned collection of `ProfileRevision`**, keyed
+  `(RepoId, ProfileId, RevisionNumber, ModId, ModVersionId)`, with an FK to `ModVersion`. The FK
+  is **`Restrict`**, not the cascade EF would infer: deleting a version a revision pins would
+  otherwise rewrite history behind everyone's back, which the delete endpoints refuse. Restrict
+  makes the database enforce the same rule, so a dependency added between an endpoint's check and
+  its commit fails loudly rather than being swept away. See
+  [02 — Domain model](02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more) for what
+  that costs now that history holds every version a profile has ever pinned.
 
-  Two consequences worth knowing before touching anything that loads a `Profile`:
+  Three indexes on it, all load-bearing. The unique one on
+  `(RepoId, ProfileId, RevisionNumber, ModId)` backs the one-version-per-mod rule — **per
+  revision**, which is what lets a profile pin a version one of its earlier revisions already
+  used, i.e. every rollback. `(RepoId, ModId, ModVersionId)` is the FK's own index, and answers
+  "does any revision anywhere in this repo still pin this version?" without scanning profiles
+  times revisions times thousands of mods.
 
-  - `ModDependency.ModVersion` is **not** auto-included, and every domain operation on a
-    dependency reads the mod's identity off it. Loading a profile with
-    `Profiles.GetAsync` and then calling `AddDependency`, `DeleteDependency`,
-    `HasDependencyOn` or `ChangeVersion` throws. Use
-    `Profiles.GetWithModDependenciesAsync`, which includes `ModDependencies → ModVersion` — one
-    hop since the flattening, but still not automatic.
-  - Because the collection is *owned*, it is materialised whenever a `Profile` entity is,
-    wanted or not — thousands of rows per profile at the target volumes. Read endpoints that
-    do not need dependencies project instead of materialising.
+  Two consequences worth knowing before touching anything that loads a revision:
+
+  - `ModDependency.ModVersion` is **not** auto-included, and building a revision reads the mod's
+    identity off it. `ProfileRevisionWrites.ResolveAsync` is the one place versions are loaded
+    as entities, once per save.
+  - Because the collection is *owned*, it is materialised whenever a `ProfileRevision` entity is,
+    wanted or not — thousands of rows per revision, times however many revisions were loaded.
+    **Nothing but a save materialises one.** `ProfileRevisionExtensions` and
+    `ProfileRevisionReads` project, and `Profile` has no navigation to its revisions at all, so a
+    profile load cannot drag a history in with it.
+- **`ProfileRevision` is keyed `(RepoId, ProfileId, Number)`**, with a Cascade FK to `Profile`
+  so a deleted profile takes its history with it. Its `Changes` is an EF complex property, three
+  int columns on the revision's own row; `Origin` is stored as its name rather than an ordinal.
+  The primary key is also the concurrency control: two saves based on the same head compute the
+  same next number and exactly one commits.
 - **`Repo._memberships` is mapped through the private backing field**, with a runtime guard
   that throws at model-build time if the field is renamed, so EF cannot silently fall back
   to a shadow property.
@@ -246,23 +260,33 @@ Notable configuration:
   These make the authorization pattern above a single round trip, at the cost of always
   paying for them.
 - Entity extension methods in `Persistence/Extensions/EntityExtensions/` provide the small
-  query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`,
-  `GetLatestVersionOfEachAsync`, `GetModUsageAsync`, `CheckNameIsTaken`, `GetByCodeAsync`.
+  query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`, `GetVersionsAsync`,
+  `GetLatestVersionOfEachAsync`, `GetPinsAsync`, `GetDependencyRowsAsync`, `GetModUsageAsync`,
+  `CheckNameIsTaken`, `GetByCodeAsync`.
 
-Five migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
-`FlattenModModel`, `ModImageReferencesAndModListDelta`, `ModImageRendition` and
-`DisplayNamesAndRepoInvites`.
+Six migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
+`FlattenModModel`, `ModImageReferencesAndModListDelta`, `ModImageRendition`,
+`DisplayNamesAndRepoInvites` and `ProfileRevisions`.
+
+`ProfileRevisions` is the one migration here that carries hand-written SQL. EF's generated form
+adds the columns with zero defaults, which would leave every existing dependency row pointing at
+a revision that does not exist and the new foreign key refusing it; the added statements give
+each existing profile a revision 1 holding exactly what it holds now. Their author is recorded as
+`unknown` rather than invented — those lists were assembled before anything recorded who was
+assembling them, and no user id would be true.
 
 ## Tests
 
 `ModsDude.Server.Domain.Tests` is plain xUnit over the entities — version sequencing, membership
-transitions, the dependency rules — with named regressions for the sequencing bugs listed in
+transitions, the revision rules and what a save counts as a change — with named regressions for
+the sequencing bugs listed in
 [PLAN.md](PLAN.md#phase-0--unblock).
 
 `ModsDude.Server.Persistence.Tests` runs against a **real PostgreSQL**, migrated from the same
 migrations the API runs, because it covers behaviour the database decides rather than the model:
 that the shift-on-insert renumber is collision-free only because EF orders those updates from
-the unique index declared in the model, and that a move cannot be a single renumber. An
+the unique index declared in the model, that a move cannot be a single renumber, and that a
+profile revision answers with what it pinned rather than with what the profile pins now. An
 in-memory or SQLite substitute would answer for itself instead of for PostgreSQL, which is the
 whole point.
 
@@ -392,32 +416,61 @@ takes access away, and a loose code wants stopping by whoever notices it.
 
 ### Profiles
 
-| Method | Route | Level |
-| --- | --- | --- |
-| GET | `repos/{repoId}/profiles` | Guest |
-| GET | `repos/{repoId}/profile/{profileId}` | Guest |
-| POST | `repos/{repoId}/profiles` | Member |
-| PUT | `repos/{repoId}/profiles/{profileId}` | Member |
-| DELETE | `repos/{repoId}/profiles/{profileId}` | Member |
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| GET | `repos/{repoId}/profiles` | Guest | Each carries `HeadRevision` |
+| GET | `repos/{repoId}/profile/{profileId}` | Guest | |
+| POST | `repos/{repoId}/profiles` | Member | `CopyFrom` branches a revision of another profile off into this one |
+| PUT | `repos/{repoId}/profiles/{profileId}` | Member | Rename |
+| DELETE | `repos/{repoId}/profiles/{profileId}` | Member | Takes the whole history with it |
+| GET | `repos/{repoId}/profiles/{profileId}/revisions` | Guest | The history, newest first, windowed by `skip`/`limit` |
+| PUT | `repos/{repoId}/profiles/{profileId}/revisions` | Member | **Saves the mod list.** The whole list, based on a revision number |
+| POST | `repos/{repoId}/profiles/{profileId}/revisions/{number}/restore` | Member | Copies an older revision forward as a new one |
 
 Same singular/plural inconsistency on the single-profile GET.
+
+**The save is a `PUT` of the whole list, not a patch.** A revision is a snapshot, so the request
+carries every pin and the server records exactly that; anything absent is removed. The client
+already has the whole list in hand — it is the thing on screen — and one request of two thousand
+pins beats two thousand requests by a margin that needs no arguing.
+
+`BasedOn` names the revision the list was built from. A save whose `BasedOn` is no longer the
+head is refused with `profile-revision-stale`, carrying what the head is now, so a member
+editing a stale copy is told rather than silently overwriting somebody. **A save that changes
+nothing mints nothing** and answers with the head — opening a profile, looking at it and
+pressing Save is not an event, and a history that recorded it would bury the events that are.
+
+There is **no route that names a revision to write to**. Restore is the only thing that reaches
+an old one, and it reads: it produces a new revision at the front rather than reopening
+anything.
+
+Restore is Member, like any other save. It discards nothing, and the history makes it visible
+and reversible — which is a better guarantee than a permission level. Reading a history is Guest,
+because somebody who syncs a profile without curating it is exactly the person who needs to know
+what changed under them.
 
 ### Mod dependencies
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | Each carries `ContentHash`, so sync never has to pull the mod list to resolve it |
-| POST | `repos/{repoId}/profiles/{profileId}/modDependencies` | Member | |
-| PUT | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member | Version and/or `Locked` |
-| DELETE | `repos/{repoId}/profiles/{profileId}/modDependencies/{modId}` | Member | |
-| POST | `repos/{repoId}/profiles/{profileId}/modDependencies/upgrade` | Member | "Apply all updates", batched. **Skips locked dependencies entirely** and reports each as skipped, distinguishing the profile's lock from the mod's |
+| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | `?revision=N` for an older one, omitted for the current list. Each dependency carries `ContentHash`, so sync never has to pull the mod list to resolve it |
 
-The dependency is addressed by `modId`, not by a dependency id — a direct consequence of the
-one-version-per-mod rule.
+**There is only one, and it reads.** A profile's mod list is written through
+`PUT repos/{repoId}/profiles/{profileId}/revisions`, which addresses the profile and always
+means its head — see [Profiles](#profiles) above. That is what makes an old revision read-only
+without a flag anybody has to check: nothing can address one to write to it.
 
-The upgrade is a batch because a profile holds one to two thousand mods; omitting `ModIds` means
-the whole profile. A named mod the profile does not depend on is reported rather than ignored,
-so a client working from a stale list can see which of its rows are gone.
+The response says which revision answered, and whether that is the head. A client saving
+afterwards has to name what it was working from, and taking that number out of the same response
+it read the list from is the only form of it that cannot already be stale by the time it is
+used.
+
+Four routes are **gone** — `POST .../modDependencies`, `PUT` and `DELETE` on
+`.../modDependencies/{modId}`, and `POST .../modDependencies/upgrade`. With them, the server
+could not see a save at all: it saw a stream of per-mod writes, so every toggled lock would have
+been a revision of its own. The batch upgrade went with them — the client already computes what
+an update would be, and a whole-list save expresses "and these are now the newer versions"
+without a second endpoint that can only express one shape of change.
 
 ### Mods
 

@@ -75,7 +75,7 @@ public sealed class ModSyncService(
                 $"'{modFolder}' does not exist right now. An unplugged drive or an offline network path looks like this; nothing has been changed.");
         }
 
-        var desired = await GetDesiredAsync(request, cancellationToken);
+        var (desired, revision) = await GetDesiredAsync(request, cancellationToken);
         var installed = await GetInstalledAsync(request.Adapter, cancellationToken);
         var manifest = manifestStore.TryRead(request.InstanceId);
 
@@ -97,6 +97,7 @@ public sealed class ModSyncService(
             RepoId = request.RepoId,
             ProfileId = request.ProfileId,
             ProfileName = request.ProfileName,
+            ProfileRevision = revision,
             InstanceId = request.InstanceId,
             ModFolder = modFolder,
             Items = items,
@@ -508,6 +509,7 @@ public sealed class ModSyncService(
             RepoId = plan.RepoId,
             ProfileId = plan.ProfileId,
             ProfileName = plan.ProfileName,
+            ProfileRevision = plan.ProfileRevision,
             SyncedAt = DateTimeOffset.UtcNow,
             ModFolder = plan.ModFolder,
             Entries = entries,
@@ -570,17 +572,21 @@ public sealed class ModSyncService(
     }
 
 
-    private async Task<IReadOnlyList<DesiredMod>> GetDesiredAsync(ModSyncRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// What the profile pins now, and which revision that is - recorded in the manifest so a folder
+    /// can say which version of the list it was made to match.
+    /// </summary>
+    private async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(ModSyncRequest request, CancellationToken cancellationToken)
     {
-        var dependencies = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, cancellationToken);
+        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, null, cancellationToken);
 
         // Normalized where the ids enter the client, as everywhere else: the server holds whatever
         // casing was registered, and an un-normalized id would miss the file it belongs to.
-        return [.. dependencies.Select(x => new DesiredMod(
+        return ([.. response.Dependencies.Select(x => new DesiredMod(
             ModKey.From(x.ModId),
             ModVersionKey.From(x.ModVersionId),
             x.ContentHash,
-            x.Locked))];
+            x.Locked))], response.Revision);
     }
 
     private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(

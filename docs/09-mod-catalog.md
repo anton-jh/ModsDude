@@ -643,6 +643,26 @@ is a row about to gain something and the other a row about to lose it. It is a
 `ModDisplayStatus`, which is where a per-page judgment about a row belongs. Neither is a live sort; the left re-sorts on every recount, and the right when a save stops at
 a failed import.
 
+### Import on save
+
+Nothing is uploaded until Save. A local-only mod moved rightward is a **pending** row; Save
+imports the files through `ModImportService` and only then writes the list. Importing on the way
+in would make Cancel meaningless and litter the repo with mods nobody kept — and a save whose
+import does not fully succeed writes nothing at all, because a profile pinning versions that
+failed to upload is worse than a profile nobody saved.
+
+Then **one request writes the whole list**: `PUT .../profiles/{profileId}/revisions`, carrying
+every pin and the revision the page was read at. That used to be a delete, an upgrade batch and
+an add-or-update per changed mod, which is why `ProfileModListDiff` existed. The diff is still
+computed — but only to describe the save afterwards ("12 added · 3 changed"). What goes over the
+wire is the list itself, because a revision is a snapshot and the server has to record exactly
+what the page shows.
+
+The batch upgrade endpoint went with the per-dependency writes, and nothing was lost with it.
+What an update *is* is a question this page already answers from the mod list it has in hand, and
+a whole-list save expresses "and these are now the newer versions" without a second endpoint that
+can only express one shape of change.
+
 ## Version locking
 
 `Locked` exists to stop version-sensitive mods being bumped by accident. The motivating
@@ -760,8 +780,8 @@ A lands      insert v3 before v4   ->  v1, v3, v4
 B lands      insert v2 before v4   ->  v1, v3, v2, v4     <- wrong, and silent
 ```
 
-No constraint is violated. `CanBeUpgraded()` treats any higher sequence as newer, so a profile
-pinned to v3 would be offered v2 as an upgrade — a downgrade dressed as an update.
+No constraint is violated, and any higher sequence reads as newer — so a profile pinned to v3
+would be offered v2 as an upgrade: a downgrade dressed as an update.
 
 **So assert both neighbours, not one.** The client already knows where the version belongs in the
 order it computed, so it can say *insert v2 between v1 and v4* and the server can check that v4
@@ -873,9 +893,8 @@ On the management page, "this local version is not registered yet" is the right
 definition, and it needs no version-string parsing at all — a local version either has a server
 counterpart or it does not.
 
-That is separate from `ModDependency.CanBeUpgraded()`, which asks whether a profile pins an
-older *registered* version than the newest one, and therefore depends on how the server orders
-versions. See [02 — Domain model](02-domain-model.md#version-ordering): ordering derives from the
+That is separate from the profile editor's question — whether a profile pins an older
+*registered* version than the newest one — which depends on how the server orders versions. See [02 — Domain model](02-domain-model.md#version-ordering): ordering derives from the
 version string, via a comparer the adapter supplies, and is stored in `SequenceNumber` rather
 than recomputed on read.
 

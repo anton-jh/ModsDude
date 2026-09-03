@@ -17,6 +17,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<RepoMembership> RepoMemberships { get; init; }
     public required DbSet<RepoInvite> RepoInvites { get; init; }
     public required DbSet<Profile> Profiles { get; init; }
+    public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
 
 

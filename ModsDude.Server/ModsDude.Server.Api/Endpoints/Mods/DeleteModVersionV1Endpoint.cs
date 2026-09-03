@@ -55,7 +55,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.CannotDeleteOnlyModVersion(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId)));
         }
 
-        if (await dbContext.Profiles.CheckIfVersionIsDependedOn(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId), cancellationToken))
+        if (await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.ModVersionInUse(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId)));
         }

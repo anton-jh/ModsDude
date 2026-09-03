@@ -29,11 +29,23 @@ public static class Problems
         Detail = $"The requested resource does not exist."
     };
 
-    public static CustomProblemDetails ModDependencyExists(Profile profile, ModId modId) => new()
+    public static CustomProblemDetails ModPinnedTwice(ModId modId) => new()
     {
         Type = ProblemType.ModDependencyExists,
-        Title = "Profile already has a dependency on mod",
-        Detail = $"The profile '{profile.Id.Value}' already has a dependency on mod '{modId.Value}'."
+        Title = "A mod is pinned twice",
+        Detail = $"The mod list pins mod '{modId.Value}' more than once. A profile pins each mod at exactly one version."
+    };
+
+    /// <summary>
+    /// The save was based on a revision that is no longer the head - somebody else saved the profile
+    /// while this one was being edited. <paramref name="head"/> is carried so the client can say what
+    /// it is now rather than only that it is not what was sent.
+    /// </summary>
+    public static CustomProblemDetails ProfileRevisionStale(ProfileId profileId, RevisionNumber basedOn, RevisionNumber head) => new()
+    {
+        Type = ProblemType.ProfileRevisionStale,
+        Title = "The profile changed while you were editing it",
+        Detail = $"This save is based on revision {basedOn.Value} of profile '{profileId.Value}', which is now at revision {head.Value}. Reload the mod list and save again."
     };
 
     public static CustomProblemDetails InsufficientRepoAccess(RepoMembershipLevel minimumLevel)
@@ -376,5 +388,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invite-cannot-grant-admin")]
         [JsonStringEnumMemberName(_typeBaseUri + "invite-cannot-grant-admin")]
         InviteCannotGrantAdmin,
+
+        [EnumMember(Value = _typeBaseUri + "profile-revision-stale")]
+        [JsonStringEnumMemberName(_typeBaseUri + "profile-revision-stale")]
+        ProfileRevisionStale,
     }
 }

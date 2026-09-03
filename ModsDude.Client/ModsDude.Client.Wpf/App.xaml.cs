@@ -112,6 +112,7 @@ public partial class App : Application
         services.AddSingleton<EditProfilePageViewModel.Factory>();
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
         services.AddSingleton<ProfileModsPageViewModel.Factory>();
+        services.AddSingleton<ProfileHistoryPageViewModel.Factory>();
         services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
         services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
         services.AddSingleton<InstancePageViewModel.Factory>();

@@ -34,6 +34,33 @@ public static class ModVersionExtensions
     }
 
     /// <summary>
+    /// The named versions, tracked, so that a revision's dependencies can be built out of them.
+    /// </summary>
+    /// <remarks>
+    /// Two <c>IN</c> lists rather than one per pair, because a strongly-typed id has no tuple
+    /// comparison the provider can translate. That over-selects - a version of a requested mod that
+    /// happens to share a version id with another requested mod comes back too - so the caller
+    /// matches the pairs itself. The surplus is bounded by the request, which is what makes it
+    /// acceptable at a couple of thousand mods a save.
+    /// </remarks>
+    public static Task<List<ModVersion>> GetVersionsAsync(
+        this DbSet<ModVersion> dbSet,
+        RepoId repoId,
+        IReadOnlyCollection<ModId> modIds,
+        IReadOnlyCollection<ModVersionId> versionIds,
+        CancellationToken cancellationToken)
+    {
+        if (modIds.Count == 0)
+        {
+            return Task.FromResult(new List<ModVersion>());
+        }
+
+        return dbSet
+            .Where(x => x.RepoId == repoId && modIds.Contains(x.ModId) && versionIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// The newest version of each of the named mods, tracked, so that a dependency can be pointed at
     /// one. What a batch upgrade needs: it reads one row per mod rather than the whole sibling set of
     /// each, which for a profile holding two thousand mods is the difference between a query and a

@@ -49,7 +49,7 @@ public class DeleteModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No mod '{modId}' found in repo '{repoId}'"));
         }
 
-        if (await dbContext.Profiles.CheckIfModIsDependedOn(new RepoId(repoId), new ModId(modId), cancellationToken))
+        if (await dbContext.ProfileRevisions.CheckIfModIsDependedOn(new RepoId(repoId), new ModId(modId), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.ModInUse(new RepoId(repoId), new ModId(modId)));
         }

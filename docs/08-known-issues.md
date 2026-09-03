@@ -79,12 +79,33 @@ actually reach. See [05](05-client.md#authentication) for what a switch does cle
 
 ### Owned collections are always materialised
 
-Not a bug so much as a trap the model sets. `Profile.ModDependencies` is an owned
-collection, so **any** query that materialises `Profile` entities reads every dependency row
-with it — thousands per profile at the stated volumes — whether or not the caller wants them.
-The profile read endpoints project instead; anything new that loads profiles has to make the
+Not a bug so much as a trap the model sets. `ProfileRevision.ModDependencies` is an owned
+collection, so **any** query that materialises `ProfileRevision` entities reads every dependency
+row with it — thousands per revision at the stated volumes — whether or not the caller wants
+them. History multiplies it: a page of fifty revisions of a two-thousand-mod profile is a hundred
+thousand rows to render fifty summary lines.
+
+Everything that reads therefore projects — `ProfileRevisionExtensions`, `ProfileRevisionReads` —
+and the only revision ever materialised is a new one on its way in. `Profile` has no navigation
+to its revisions at all, which is the structural half of the same defence: a profile load cannot
+drag a history in with it even by accident. Anything new that touches revisions has to make the
 same choice deliberately. `ModVersion.Attributes` and `ModVersion.Images` are the same shape one
 entity over.
+
+### A mod version that has ever been pinned cannot be deleted
+
+The dependency foreign key onto `ModVersion` is `Restrict`, and dependencies live on revisions
+that are never rewritten — so a version any revision of any profile has ever pinned holds that
+version in place forever. In practice, a mod version that has been used is a mod version that
+cannot be deleted.
+
+This is a deliberate consequence of keeping history rather than an oversight, and the reasoning
+is in [02](02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more): an old revision that
+is not reproducible is not worth keeping. It is listed here because it is the thing about
+revisions most likely to surprise somebody who came looking for a delete that used to work.
+Blobs are shared by content hash, so the storage cost is bounded by distinct files rather than by
+pins; if it ever does bite, the release valve is pruning old revisions on a policy, which
+[PLAN.md](PLAN.md#phase-45--profile-revisions) leaves unbuilt on purpose.
 
 ### The usage cursor is an offset, and shifts under concurrent edits
 
@@ -175,7 +196,8 @@ depends on them:
   routes; `POST repos` would be the consistent form.
 - `CheckNameTakenV1Endpoint` and `CreateRepoV1Endpoint` call `.RequireAuthorization()`
   redundantly — the whole group already requires it.
-- `Profile.Created` is a `DateTime` while `ModVersion.Created`/`Updated` are `DateTimeOffset`.
+- `Profile.Created` and `ProfileRevision.Created` are `DateTime` while
+  `ModVersion.Created`/`Updated` are `DateTimeOffset`.
   `ITimeService.Now()` returns `DateTime` and the mod timestamps go through an implicit
   conversion. This is correct today only because `TimeService` returns `DateTime.UtcNow`,
   whose `Kind` is `Utc`; changing it to `DateTime.Now` would silently reinterpret every mod

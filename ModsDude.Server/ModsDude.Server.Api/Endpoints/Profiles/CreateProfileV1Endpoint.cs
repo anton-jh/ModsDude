@@ -14,6 +14,15 @@ using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
+/// <summary>
+/// Creates a profile, empty or as a copy of some revision of another one.
+/// </summary>
+/// <remarks>
+/// The copy is how a profile is branched off: pick a revision, name the result, and the new
+/// profile's first revision pins exactly what that one pinned. It is the same primitive as a
+/// restore - materialize an old snapshot as a new revision - pointed at a new profile instead of
+/// this one, which is why the two share <see cref="ProfileRevisionWrites"/>.
+/// </remarks>
 public class CreateProfileV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
@@ -32,7 +41,9 @@ public class CreateProfileV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var userId = claimsPrincipal.GetUserId();
+
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToForbidden();
@@ -46,13 +57,67 @@ public class CreateProfileV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
-        var profile = new Profile(new RepoId(repoId), new ProfileName(request.Name), timeService.Now());
+        IReadOnlyList<ProfileModPin> pins = [];
+        ProfileId? sourceProfileId = null;
+        RevisionNumber? sourceRevision = null;
+
+        if (request.CopyFrom is CopyProfileRevisionRequest copyFrom)
+        {
+            var source = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(copyFrom.ProfileId), cancellationToken);
+            if (source is null)
+            {
+                return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{copyFrom.ProfileId}' found in repo '{repoId}'"));
+            }
+
+            // Null means "whatever it holds now", so that copying the live profile does not require
+            // the caller to read its head first and race with a save while doing so.
+            sourceRevision = copyFrom.Revision is int requested ? new RevisionNumber(requested) : source.HeadRevision;
+            sourceProfileId = source.Id;
+
+            if (!await dbContext.ProfileRevisions.ExistsAsync(source.RepoId, source.Id, sourceRevision.Value, cancellationToken))
+            {
+                return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{copyFrom.ProfileId}' has no revision {sourceRevision.Value.Value}"));
+            }
+
+            pins = await dbContext.ProfileRevisions.GetPinsAsync(source.RepoId, source.Id, sourceRevision.Value, cancellationToken);
+        }
+
+        var resolved = await ProfileRevisionWrites.ResolveAsync(dbContext, new RepoId(repoId), pins, cancellationToken);
+        if (resolved.Problem is not null)
+        {
+            return TypedResults.BadRequest(resolved.Problem);
+        }
+
+        var now = timeService.Now();
+        var profile = new Profile(new RepoId(repoId), new ProfileName(request.Name), now);
+
+        // A profile is never without a revision: an empty mod list is revision 1 pinning nothing,
+        // rather than a fourth state every reader would have to handle.
+        var revision = profile.CreateRevision(
+            resolved.Dependencies!,
+            [],
+            userId,
+            now,
+            request.Label,
+            sourceProfileId is null ? ProfileRevisionOrigin.Created : ProfileRevisionOrigin.Copied,
+            sourceProfileId,
+            sourceRevision);
+
         dbContext.Profiles.Add(profile);
+        dbContext.ProfileRevisions.Add(revision);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));
     }
 
 
-    public record CreateProfileRequest(string Name);
+    /// <param name="CopyFrom">
+    /// Another profile in the same repo to branch off, or <c>null</c> for an empty profile.
+    /// </param>
+    /// <param name="Label">What to call the new profile's first revision. Optional.</param>
+    public record CreateProfileRequest(string Name, CopyProfileRevisionRequest? CopyFrom, string? Label);
+
+    /// <param name="Revision">Which revision of it to copy, or <c>null</c> for its current one.</param>
+    public record CopyProfileRevisionRequest(Guid ProfileId, int? Revision);
 }

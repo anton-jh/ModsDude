@@ -440,8 +440,17 @@ else, so it never needs to be authoritative, backed up, or repaired.
 
 Worth noting the manifest also catches drift from the other direction. It records the mod set
 that was applied, so comparing it against the profile's current dependencies detects **someone
-else having edited the shared profile** since this instance last synced — without needing a
-revision number on `Profile`, which does not have one.
+else having edited the shared profile** since this instance last synced.
+
+The manifest also records **which revision of the profile was applied**, read out of the same
+response the dependencies came from. That is what lets a folder eventually say "this is on
+revision 6, the profile is at 8" rather than a bare "something differs" — though nothing reads it
+yet, because the cheap startup check deliberately talks to no server and the profile's head is a
+server fact. It is nullable and did **not** bump `SyncManifest.CurrentVersion`: a manifest
+written before revisions existed deserializes with it null, which reads as "not recorded" — true,
+and harmless. The bump for `Locked` was needed because the old data answered its question
+*wrongly*; this one answers it not at all, and discarding a manifest costs a full rescan for
+nothing.
 
 Two states to handle rather than assume away:
 

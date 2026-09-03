@@ -72,12 +72,24 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     protected override void OnInitCompleted()
     {
-        ModSummary = _fetchedModCount switch
+        ModSummary = Describe(_fetchedModCount);
+    }
+
+    /// <summary>
+    /// The revision is on the same line rather than a field of its own: it is what somebody says
+    /// out loud when asking a teammate to look at the same list, and the History page is where it
+    /// stops being a number and starts being a thing to act on.
+    /// </summary>
+    private string Describe(int? modCount)
+    {
+        var mods = modCount switch
         {
-            0 or null => "No mods pinned yet.",
-            1 => "1 mod pinned.",
-            var count => $"{count} mods pinned."
+            0 or null => "No mods pinned yet",
+            1 => "1 mod pinned",
+            var count => $"{count} mods pinned"
         };
+
+        return $"{mods} · revision {_profile.HeadRevision}.";
     }
 
 
@@ -86,6 +98,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         if (profileId == _profile.Id)
         {
             OnPropertyChanged(nameof(ProfileName));
+
+            // The head moves when somebody saves or restores, and this page can be standing open
+            // while that happens - from the History page next door, most obviously.
+            ModSummary = Describe(_fetchedModCount);
         }
     }
 

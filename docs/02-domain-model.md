@@ -2,7 +2,7 @@
 
 All server entities live in `ModsDude.Server.Domain` and have no framework dependencies.
 Identity is expressed with strongly-typed record structs (`RepoId`, `ModId`,
-`ModVersionId`, `ProfileId`, `UserId`, `DisplayName`, `ProfileName`, `InviteCode`) so that a `Guid` from one
+`ModVersionId`, `ProfileId`, `RevisionNumber`, `UserId`, `DisplayName`, `ProfileName`, `InviteCode`) so that a `Guid` from one
 aggregate cannot be passed where another is expected. EF maps these through a convention
 registered in `ModelConfigurationBuilderExtensions.ConfigureValueObjectConversionsFromAssembly`,
 and ASP.NET binds them through `StronglyTypedIdModelBinder`.
@@ -319,9 +319,10 @@ by derivation rather than by being stored once. The trade is that there is no re
 per-profile and survives version changes. See [Locking, in two places](#locking-in-two-places).
 
 **Two domain methods lost their navigation.** `ModDependency.CanBeUpgraded()` and `Upgrade()`
-reached the sibling versions through `ModVersion.Mod.Versions`. They now take the candidate set
-as a parameter, supplied by the endpoint that has to query for it anyway. That was the real cost
-of flattening, and it is small.
+reached the sibling versions through `ModVersion.Mod.Versions`, and were changed to take the
+candidate set as a parameter instead. That was the real cost of flattening, and it was small.
+Both are gone now: a dependency belongs to an immutable revision and no longer moves — see
+[Profile revisions](#profile-revisions) — and what counts as an update is decided client-side.
 
 It was done **early**, in one migration against an empty database — the same argument as
 normalising mod-id casing.
@@ -331,29 +332,140 @@ normalising mod-id casing.
 `ModsDude.Server.Domain/Profiles/`
 
 A `Profile` is a named mod list inside a repo, keyed `(RepoId, ProfileId)` with a unique
-index on `(RepoId, Name)`.
+index on `(RepoId, Name)`. The row itself holds identity, a name, and one number:
 
-`ModDependency` is the interesting part:
+| Field | Notes |
+| --- | --- |
+| `Id`, `RepoId` | The composite key |
+| `Name` | Unique within the repo |
+| `Created` | |
+| `HeadRevision` | `RevisionNumber(int)` — which revision is current |
+
+**What it pins is not here.** It lives on `ProfileRevision`, and there is deliberately no
+navigation from a profile to its revisions: a profile's history is hundreds of thousands of
+dependency rows at the volumes this targets, and a navigation would drag it into every load of a
+profile — renaming one, deleting one, checking a name.
+
+## Profile revisions
+
+`ModsDude.Server.Domain/Profiles/ProfileRevision.cs`
+
+A `ProfileRevision` is **one immutable snapshot of a profile's mod list**, keyed
+`(RepoId, ProfileId, Number)`. Numbers are contiguous and one-based, so "revision 7" is something
+somebody can say out loud and find.
+
+| Field | Notes |
+| --- | --- |
+| `Number` | `RevisionNumber(int)`. Position in this profile's history |
+| `ModDependencies` | The snapshot. An owned collection, as it was on `Profile` before |
+| `ModCount`, `Changes` | Denormalized at creation — see [Why the summary is stored](#why-the-summary-is-stored) |
+| `CreatedBy`, `Created` | Who saved it and when. The first thing about a shared profile that was never recorded before |
+| `Label` | What somebody called this save. Optional; most saves are not named |
+| `Origin` | `Created \| Saved \| Restored \| Copied` |
+| `SourceProfileId`, `SourceRevision` | Where the contents came from, for a restore or a branch |
+
+`ModDependency` is unchanged in shape and now set once:
 
 ```csharp
 public class ModDependency
 {
-    public required ModVersion ModVersion { get; set; }
-    public required bool Locked { get; set; }
+    public required ModVersion ModVersion { get; init; }
+    public required bool Locked { get; init; }
 }
 ```
 
-Two rules make this work as a coordination mechanism:
+Three rules make this work as a coordination mechanism:
 
-1. **A profile may depend on a mod at exactly one version.** `AddDependency` throws if a
-   dependency on that `ModId` already exists, and the unique index on
-   `(RepoId, ProfileId, ModId)` enforces the same rule underneath it. This is what makes a
-   profile unambiguous — it is not a set of constraints to be solved, it is a pinned list.
-2. **`Locked` decides whether the pin may move.** `Upgrade()` jumps the dependency to the
-   latest of the sibling versions it is handed; `CanBeUpgraded()` reports whether a newer one
-   exists among them. A locked
-   dependency is one the group has decided to hold, typically because a newer release broke
-   something.
+1. **A revision pins each mod at exactly one version.** `ProfileRevision`'s constructor throws
+   on a set that pins one mod twice, and the unique index on
+   `(RepoId, ProfileId, RevisionNumber, ModId)` enforces the same rule underneath it. This is
+   what makes a profile unambiguous — it is not a set of constraints to be solved, it is a
+   pinned list.
+2. **`Locked` decides whether the pin may move.** A locked dependency is one the group has
+   decided to hold, typically because a newer release broke something. It no longer *moves*: a
+   changed pin is a new revision carrying a different set.
+3. **A revision is immutable, and nothing can address one to write to it.** See below.
+
+### Read-only by having no address
+
+An old revision is not read-only because a flag says so. It is read-only because **no route
+names a revision to write to**: writes address the profile and always mean its head.
+`ProfileRevision` has no method that changes what it pins, and
+`PUT repos/{repoId}/profiles/{profileId}/revisions` produces a *successor* rather than editing
+anything.
+
+That is the whole enforcement. There is no `IsReadOnly` column, and therefore no fifteen places
+that have to remember to check it.
+
+### A snapshot, not a changeset
+
+The mod list *is* the profile, so an event log would make every read of history a fold — and the
+one-version-per-mod rule would stop being an index and become a hope. The cost is rows: a
+two-thousand-mod profile writes two thousand narrow rows per revision, which at a hundred
+revisions is two hundred thousand rows for one profile. That is the cheap half of the trade.
+
+Structural sharing — deduplicating identical dependency sets by hash — was considered and
+rejected. It buys nothing at this scale and makes every read indirect.
+
+### Why the summary is stored
+
+`ModCount` and `Changes` (added, changed, removed) are computed once, when the revision is
+created, and written to its own row. The history page renders tens of revisions at a time, and
+deriving those numbers on demand would mean diffing every adjacent pair of two-thousand-mod
+snapshots to produce three integers per line.
+
+They are facts about an immutable pair, so there is nothing to keep in step.
+`ProfileRevisionChanges.Between` computes them, keyed by mod — which is what makes a mod that
+moved version a *change* rather than a removal and an addition, and a toggled lock a change at
+all.
+
+### Rolling back copies forward
+
+Restoring revision 3 while the head is 8 produces **revision 9**, pinning what 3 pinned, stamped
+`Origin = Restored` and `SourceRevision = 3`. Nothing is deleted.
+
+Moving the head backwards instead would strand 4 through 8 as a future nobody can reach, and
+force a tree the moment anyone saved after rolling back. Deleting them would destroy the record
+of what people were actually running, and can invalidate the sync manifest of an instance that
+applied one. So a rollback is an ordinary edit whose contents happen to equal an old revision's,
+and undoing a bad rollback is another rollback.
+
+Branching a profile off is the same primitive pointed somewhere else: `POST .../profiles` with
+`CopyFrom` materializes an old snapshot as revision 1 of a **new** profile, stamped
+`Origin = Copied`. One domain method — `Profile.CreateRevision` — with three callers: saving,
+restoring, and branching.
+
+### A pinned version cannot be deleted any more
+
+This is the price of history, and it is worth stating plainly.
+
+`ModDependency`'s foreign key onto `ModVersion` is `Restrict`, and dependencies now live on
+revisions. So a version any revision of any profile has **ever** pinned stays pinned by that
+revision — which means in practice that **a mod version that has been used cannot be deleted**.
+`ProfileRevisionExtensions.CheckIfVersionIsDependedOn` reports it, the delete endpoints refuse
+it, and the database refuses it again underneath them.
+
+That is accepted rather than worked around. The alternatives are worse: scoping the check to
+head revisions lets old revisions dangle, which destroys the one property that makes keeping
+history worth anything — that an old revision is still *reproducible*. Blobs are shared by
+content hash, so the storage cost is bounded by distinct files rather than by pins.
+
+`GetModUsageAsync` counts accordingly: a profile that pinned a version across ten revisions
+counts once, but it does count, whether or not its current revision still pins it. The number
+exists to tell somebody whether a delete will be refused.
+
+### Concurrent saves
+
+A save names the revision it was built on. If that is no longer the head, it is refused with
+`profile-revision-stale`, carrying what the head is now.
+
+Underneath, the primary key on `(RepoId, ProfileId, Number)` is what makes it true rather than
+merely likely: two saves based on the same head both compute the same next number and exactly
+one of them commits. The check is the good error message; the key is the guarantee.
+
+Before revisions there was no way to even ask this question. Two members editing one profile
+wrote per dependency, last write silently winning per mod, and the profile could end up as
+neither person's list.
 
 ### Locking, in two places
 
@@ -382,33 +494,32 @@ a map mod declares its maps, so the answer comes out the same each time — cons
 is re-derived, not because it was stored once. There is no prompt at import.
 
 The consequence to know about: **there is no repo-wide user override.** A user who thinks the
-adapter is wrong unlocks on the `ModDependency` instead, which is per-profile and survives
-version changes, since `ChangeVersion` does not touch it. "Unlock" therefore means "in my
-profile" rather than "in this repo" — acceptable for a group this size, and the price of
-flattening `Mod` away.
+adapter is wrong unlocks on the `ModDependency` instead, which is per-profile and carried into
+every later revision the client saves. "Unlock" therefore means "in my profile" rather than "in
+this repo" — acceptable for a group this size, and the price of flattening `Mod` away.
 
 An adapter can never set `ModDependency.Locked`. Profile-level locking is a human decision about
 a human's profile.
 
-`AddDependency` also refuses a `ModVersion` whose `RepoId` differs from the profile's —
-mods do not cross repo boundaries.
+`ProfileRevision`'s constructor also refuses a `ModVersion` whose `RepoId` differs from the
+profile's — mods do not cross repo boundaries.
 
-**Every one of these operations reads the mod's identity off `ModVersion`**, which is what makes
-the navigation mandatory rather than optional. A profile loaded
-without it has dependencies whose `ModVersion` is `null`, and `AddDependency`,
-`DeleteDependency`, `HasDependencyOn` and `ChangeVersion` all throw. See
-[03 — Server](03-server.md#persistence).
+### What a revision costs to read
 
-[Flattening](#flattening) shortened that chain rather than removing the requirement: with no
-`Mod` to hop to, the operations read `(RepoId, ModId)` straight off the version and the include
-is one level instead of two. `ModDependency.ModVersion` still has to be loaded, and loading
-it is still not automatic.
+**A revision's checks read the mod's identity off `ModVersion`**, so building one needs the
+versions themselves, tracked — a dependency's foreign key is a navigation, and EF cannot be
+handed a key on its own. `ProfileRevisionWrites.ResolveAsync` is the single place a save pays
+that cost, once per save rather than once per mod.
 
-`Upgrade()` and `CanBeUpgraded()` are reachable through
-`POST repos/{repoId}/profiles/{profileId}/modDependencies/upgrade`, which is a **batch**: a
-profile holds one to two thousand mods, and one round trip per mod is the wrong shape. It skips
-locked dependencies entirely and reports each one as skipped, distinguishing the profile's lock
-from the mod's, so the client can say why without asking again.
+Reading is the opposite: **nothing outside that materializes a `ProfileRevision`.** Its
+dependencies are an owned collection, which EF loads with the entity whether or not anything
+asked, so a page of fifty revisions would read a hundred thousand rows to render fifty summary
+lines. Everything in `ProfileRevisionExtensions` and `ProfileRevisionReads` projects instead.
+See [03 — Server](03-server.md#persistence).
+
+`ProfileModPin` — `(ModId, VersionId, Locked)` — is the form those projections come back in, and
+what a comparison works in. It is the shape of a dependency with the version's whole record left
+behind.
 
 ## Client-side models
 

@@ -38,18 +38,16 @@ public class GetProfileV1Endpoint : IEndpoint
             return authResult;
         }
 
-        // Projected rather than materialized — see GetProfilesV1Endpoint. ModDependencies is owned
-        // and would be read in full for a DTO that does not carry it.
         var profile = await dbContext.Profiles
             .Where(x => x.RepoId == new RepoId(repoId) && x.Id == new ProfileId(profileId))
-            .Select(x => new { x.Id, x.RepoId, x.Name })
+            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision })
             .FirstOrDefaultAsync(cancellationToken);
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        var dto = new ProfileDto(profile.Id.Value, profile.RepoId.Value, profile.Name.Value);
+        var dto = new ProfileDto(profile.Id.Value, profile.RepoId.Value, profile.Name.Value, profile.HeadRevision.Value);
 
         return TypedResults.Ok(dto);
     }

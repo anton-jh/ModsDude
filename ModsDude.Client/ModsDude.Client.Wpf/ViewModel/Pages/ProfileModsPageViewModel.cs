@@ -61,7 +61,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
 
     protected override async Task InitAsync()
     {
-        _fetched = await _profileService.GetPinnedMods(_repo.Id, _profile.Id, CancellationToken.None);
+        _fetched = await _profileService.GetPinnedMods(_repo.Id, _profile.Id, null, CancellationToken.None);
     }
 
     protected override void OnInitCompleted()
