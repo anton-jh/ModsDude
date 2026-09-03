@@ -443,14 +443,34 @@ that was applied, so comparing it against the profile's current dependencies det
 else having edited the shared profile** since this instance last synced.
 
 The manifest also records **which revision of the profile was applied**, read out of the same
-response the dependencies came from. That is what lets a folder eventually say "this is on
-revision 6, the profile is at 8" rather than a bare "something differs" — though nothing reads it
-yet, because the cheap startup check deliberately talks to no server and the profile's head is a
-server fact. It is nullable and did **not** bump `SyncManifest.CurrentVersion`: a manifest
-written before revisions existed deserializes with it null, which reads as "not recorded" — true,
-and harmless. The bump for `Locked` was needed because the old data answered its question
-*wrongly*; this one answers it not at all, and discarding a manifest costs a full rescan for
-nothing.
+response the dependencies came from. It is nullable and did **not** bump
+`SyncManifest.CurrentVersion`: a manifest written before revisions existed deserializes with it
+null, which reads as "not recorded" — true, and harmless. The bump for `Locked` was needed because
+the old data answered its question *wrongly*; this one answers it not at all, and discarding a
+manifest costs a full rescan for nothing.
+
+### A profile that moved on is drift too
+
+`InstanceDriftReport.ProfileHasMoved` compares the revision the manifest records against the one
+the profile is on now, and a difference is **drift in its own right** — even when the folder holds
+exactly what was installed. That is the one kind of drift no directory listing could ever find:
+the folder matches a list nobody is using any more. A save that changes nothing mints no revision,
+so a moved number always means a different list.
+
+The notice says it in those terms — *"this folder was made to match revision 6; the profile is now
+at revision 8"* — rather than as a bare "something differs".
+
+**Where the head comes from, and where it does not.** `IProfileRevisions` is answered by
+`ProfileService` out of the profile list it has loaded, which is one repo at a time; for every
+other repo it answers `null`, and null means "not asked" rather than "unchanged". That is
+deliberate. Fetching it would put a network round trip per instance into a check that runs on
+every window activation and whose whole point is that it works offline and costs a directory
+listing. The consequence is worth stating plainly: **this half of drift is reported for the repo
+the user is standing in, and silently skipped for the rest.**
+
+Two integers, rather than the mod-by-mod `ProfileChangedMods` comparison beside it, is what makes
+it cheap enough to be free. Naming the changed mods needs the profile's current dependencies;
+noticing that there are some needs nothing but the number.
 
 Two states to handle rather than assume away:
 

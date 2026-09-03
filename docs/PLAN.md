@@ -649,21 +649,43 @@ accepted rather than worked around — an old revision that is not reproducible 
 keeping — but it is the thing most likely to surprise somebody later. See
 [02 — Domain model](02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more).
 
-What was deliberately left for later:
+Landed straight after, in the same shape:
+
+- [x] **The drift notice says which revision.** "This folder was made to match revision 6; the
+      profile is now at revision 8" — and a profile that moved on is drift in its own right, even
+      when the folder is exactly what was installed. It is the one kind of drift no directory
+      listing could ever find, and two integers are the whole mechanism.
+
+      The head comes from `IProfileRevisions`, which `ProfileService` answers **from the repo it
+      has loaded** and answers `null` for every other. Null is deliberate: fetching it would put a
+      network round trip per instance into a check that runs on every window activation and is
+      meant to work offline. A manifest written before revisions records none, which reads as "not
+      recorded" — so upgrading does not turn every existing instance into drift on the first
+      launch.
+- [x] **Compare two revisions.** The history says how many changed; the right-hand pane now says
+      which, as a second view of the same pane rather than a page of its own — the two questions
+      are asked about the same revision seconds apart. It defaults to comparing with the revision
+      before, so the pane and that row's own summary counts describe the same thing.
+
+      Computed **client-side**, out of two dependency reads and one walk of the registered mod
+      list. A diff endpoint would have bought little: naming the mods needs their registered
+      records either way, and the catalog walk dwarfs the dependency rows. It also keeps the
+      property that there is exactly one route into a profile's mod list, and that it reads.
+- [x] **Name a save from the editor** — an optional *version description*, Fusion 360's wording for
+      the same field on the same gesture, shown only while there is something to save. Never
+      required: a field the save button refused to work without would be answered with "asdf" by
+      the third save, and a history of "asdf" is worse than one of unnamed revisions with honest
+      counts.
+
+Still open:
 
 - [ ] **Page the history.** `GET .../revisions` windows by `skip`/`limit`, and the page reads the
       first fifty and says plainly that older ones exist. An offset rather than a keyset because
       `RevisionNumber` is a value object and a provider cannot translate a comparison on one — the
       same constraint the mod usage listing works around.
-- [ ] **Surface the applied revision in the drift notice** — "this folder is on revision 6, the
-      profile is at 8" instead of a bare "something differs". The manifest records the number
-      already; what it needs is the profile's head, which is a server fact the startup check
-      deliberately does not go and fetch.
-- [ ] **Compare two revisions.** The history says how many mods changed; saying *which* is a diff
-      of two snapshots, which is a query and a page rather than a stored fact.
-- [ ] **Name a save from the editor.** `Label` is carried end to end and only the restore path and
-      the API can set one; the editor sends none, because a required field on the save button
-      would be answered with "asdf" by the third save.
+
+      The comparison picker inherits the same bound: it offers the revisions that were read, so on
+      a profile with hundreds of them the oldest are not yet reachable to compare against.
 - [ ] **Prune history on a policy** — keep the last N, anything labelled, and anything an
       instance manifest references. Only worth building if storage ever actually bites; it is the
       release valve for the deletion consequence above, not something to pre-emptively add.

@@ -232,7 +232,9 @@ Profile → **Mods**. Two lists: available on the left, pinned on the right.
 6. **Save writes the whole list as one revision** —
    `PUT repos/{repoId}/profiles/{profileId}/revisions`, carrying every pin and the revision the
    page was built from. One save is one revision, which is why the boundary is the Save button
-   the user already presses rather than something extra to remember.
+   the user already presses rather than something extra to remember. An optional **version
+   description** beside the button names it in the history; left empty, the history shows what
+   changed instead.
 
 If somebody else saved the profile in the meantime, the save is refused and the page asks which
 way to go: load theirs and lose this draft, or save over them. Both are safe — theirs is a
@@ -251,10 +253,16 @@ pinned beside it.
    a line.
 2. Selecting one reads its mod list through
    `GET .../modDependencies?revision=N`, rendered with the same row as everywhere else.
-3. **Restore** copies that revision's list back to the front as a new revision. Nothing in
+3. The right-hand pane switches between **Contents** — what that revision pinned — and
+   **Changes**, which compares it with another. It defaults to the revision before, so the pane
+   and the selected row's own summary counts describe the same thing; the picker is what turns it
+   into a comparison of any two. Two revisions can genuinely hold the same list (comparing a
+   restore with what it restored is the ordinary way), and the pane says so rather than looking
+   broken.
+4. **Restore** copies that revision's list back to the front as a new revision. Nothing in
    between is deleted, so a restore is itself undoable — and the mod folder does not change until
    the profile is applied.
-4. **Save as…** creates a new profile that starts as a copy of that revision. This is how a
+5. **Save as…** creates a new profile that starts as a copy of that revision. This is how a
    profile is branched off: the same primitive as a restore, pointed at a new profile.
 
 Reading the history needs Guest; restoring and branching need Member, and the page hides those
@@ -334,3 +342,11 @@ reasoning are in [07 — Mod sync design](07-mod-sync-design.md).
 Drift — the folder no longer matching what was applied, which is what an in-game update-all
 leaves behind — is reported on this page. Making it visible from everywhere else is
 [Phase 4](PLAN.md#phase-4--make-drift-unmissable).
+
+A profile somebody else saved counts as drift too, and the notice says which revision: *"this
+folder was made to match revision 6; the profile is now at revision 8."* It is the one kind of
+drift a directory listing cannot find — the folder is exactly what was installed, and what was
+installed is a list nobody is using any more. The comparison is two integers, so it costs nothing;
+what it needs is the profile's current revision, which the client knows for the repo it has loaded
+and not for the others. See
+[07 — Mod sync design](07-mod-sync-design.md#a-profile-that-moved-on-is-drift-too).

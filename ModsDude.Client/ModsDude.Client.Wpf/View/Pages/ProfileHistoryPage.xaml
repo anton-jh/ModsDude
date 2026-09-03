@@ -140,15 +140,55 @@
                         BorderThickness="1"
                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                    <Grid RowDefinitions="auto *">
+                    <Grid RowDefinitions="auto auto *">
 
-                        <TextBlock Grid.Row="0"
-                                   Margin="16 12"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Style="{DynamicResource BodyStrongTextBlockStyle}"
-                                   Text="{Binding SelectedTitle}" />
+                        <!-- Two views of one pane. "What did it hold" and "what changed" are asked
+                             about the same revision seconds apart, so a comparison you have to
+                             navigate away to see makes it two acts of memory instead of one. -->
+                        <Grid Grid.Row="0" Margin="16 12" ColumnDefinitions="* auto auto">
 
-                        <Grid Grid.Row="1">
+                            <TextBlock Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}"
+                                       Text="{Binding SelectedTitle}" />
+
+                            <RadioButton Grid.Column="1"
+                                         Margin="8 0 0 0"
+                                         Content="Contents"
+                                         GroupName="HistoryPane"
+                                         IsChecked="{Binding ShowContents, Mode=OneWay}"
+                                         Command="{Binding ShowContentsViewCommand}" />
+
+                            <RadioButton Grid.Column="2"
+                                         Margin="12 0 0 0"
+                                         Content="Changes"
+                                         GroupName="HistoryPane"
+                                         IsChecked="{Binding ShowChanges, Mode=OneWay}"
+                                         Command="{Binding ShowChangesViewCommand}" />
+                        </Grid>
+
+                        <!-- Which pair is being compared. Defaults to the revision before the
+                             selected one, so this pane and that row's own summary counts are
+                             describing the same thing until somebody asks otherwise. -->
+                        <StackPanel Grid.Row="1"
+                                    Orientation="Horizontal"
+                                    Margin="16 0 16 12"
+                                    Visibility="{Binding ShowChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <TextBlock Text="Compared with"
+                                       VerticalAlignment="Center"
+                                       Margin="0 0 8 0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                            <ComboBox Width="220"
+                                      ItemsSource="{Binding ComparisonTargets}"
+                                      SelectedItem="{Binding ComparedWith, Mode=TwoWay}"
+                                      DisplayMemberPath="Title" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="2"
+                              Visibility="{Binding ShowContents, Converter={StaticResource BoolToVisibilityConverter}}">
 
                             <!-- The same row as everywhere else, rendered by the implicit
                                  ModListItemViewModel template in App.xaml. -->
@@ -194,6 +234,72 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding IsLoadingMods, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </Grid>
+
+                        <Grid Grid.Row="2"
+                              Visibility="{Binding ShowChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <ItemsControl ItemsSource="{Binding Changes}"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.Template>
+                                    <ControlTemplate TargetType="ItemsControl">
+                                        <ScrollViewer CanContentScroll="True"
+                                                      Focusable="False"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsPresenter />
+                                        </ScrollViewer>
+                                    </ControlTemplate>
+                                </ItemsControl.Template>
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ProfileModChangeViewModel}">
+                                        <Grid ColumnDefinitions="* auto auto">
+
+                                            <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                            <!-- The version transition, in the form somebody reads
+                                                 a diff in. Empty where only the lock moved, which
+                                                 the chip beside it says instead. -->
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="0 0 8 0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding Transition}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{Binding HasTransition, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <Border Grid.Column="2"
+                                                    Margin="0 0 12 0"
+                                                    Padding="8 2"
+                                                    VerticalAlignment="Center"
+                                                    CornerRadius="3"
+                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                <TextBlock Text="{Binding KindText}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Comparing…"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding IsLoadingChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <TextBlock Text="{Binding NoChangesText}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding HasNoChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </Grid>
                     </Grid>
                 </Border>

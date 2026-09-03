@@ -335,7 +335,22 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             ? $"{report.ProfileChangedMods.Count} mods are pinned differently than what is installed - somebody has edited the profile since."
             : "";
 
-        return string.Join(' ', new[] { folder, pins }.Where(x => x.Length > 0));
+        return string.Join(' ', new[] { folder, DescribeRevision(report), pins }.Where(x => x.Length > 0));
+    }
+
+    /// <summary>
+    /// The half of drift no directory listing can find: the folder is exactly what was installed,
+    /// and what was installed is no longer what the profile says. Two numbers, because that is all
+    /// the cheap check has - and two numbers is enough to say something specific.
+    /// </summary>
+    private static string DescribeRevision(InstanceDriftReport report)
+    {
+        if (report.ProfileHasMoved is false)
+        {
+            return "";
+        }
+
+        return $"This folder was made to match revision {report.AppliedRevision}; the profile is now at revision {report.CurrentRevision}.";
     }
 
     /// <summary>

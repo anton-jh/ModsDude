@@ -182,6 +182,11 @@ public partial class App : Application
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<RepoRepository>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ProfileService>());
 
+        // The same object again, for the one fact the drift check needs of it: which revision each
+        // profile it has loaded is on. It answers null for every other repo, which is why the check
+        // still works before anything has been loaded at all.
+        services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<ProfileService>());
+
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
         services.AddSingleton<AuthenticationService>();

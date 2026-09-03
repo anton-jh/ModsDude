@@ -241,6 +241,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
     private bool _hasUnsavedChanges;
 
+    /// <summary>
+    /// What to call this save in the profile's history. Optional, and never required: a field the
+    /// save button refused to work without would be answered with "asdf" by the third save, and a
+    /// history of "asdf" is worse than a history of unnamed revisions with honest counts.
+    /// </summary>
+    /// <remarks>
+    /// Borrowed wording. Fusion 360 calls the same field on the same gesture a <em>version
+    /// description</em>, and somebody who has used a CAD package will recognise it - which is worth
+    /// more than internal consistency with the word "revision" everywhere else on the page. It maps
+    /// to <c>ProfileRevision.Label</c>, which stays neutrally named because the domain already
+    /// spends the word "version" on a mod's.
+    /// </remarks>
+    [ObservableProperty]
+    private string _versionDescription = "";
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
@@ -887,6 +902,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var request = new SaveProfileRevisionRequest
         {
             BasedOn = _basedOn,
+            Label = string.IsNullOrWhiteSpace(VersionDescription) ? null : VersionDescription.Trim(),
             Mods = [.. desired.Select(x => new ProfileModPinRequest
             {
                 ModId = x.ModId.Value,
@@ -901,6 +917,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             _basedOn = saved.Number;
             _profile.HeadRevision = saved.Number;
+
+            // It described the save that just happened, not the next one. Left in place it would be
+            // carried onto an unrelated edit ten minutes later, which is how a history fills with
+            // labels that are quietly wrong.
+            VersionDescription = "";
 
             return true;
         }

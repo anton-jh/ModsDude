@@ -16,6 +16,27 @@ public interface IDriftCandidateSource
 
 public sealed record DriftCandidate(Guid InstanceId, string Name, string? ModFolder, ActiveProfile? ActiveProfile);
 
+/// <summary>
+/// Which revision a profile is on, for the profiles this client happens to know about.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Deliberately partial. The client holds the profile list of the repo it has loaded, so the answer
+/// is there for the repo the user is standing in and absent for the rest - and absent is the honest
+/// answer, because the alternative is a network round trip per instance on every window activation,
+/// in a check whose entire point is that it works offline and costs a directory listing.
+/// </para>
+/// <para>
+/// An interface for the same reason <see cref="IDriftCandidateSource"/> is one: the monitor depends
+/// on the one fact it uses, and can be exercised without a signed-in client.
+/// </para>
+/// </remarks>
+public interface IProfileRevisions
+{
+    /// <summary>The profile's current revision, or null where this client has not been told.</summary>
+    int? GetHeadRevision(ActiveProfile profile);
+}
+
 /// <param name="ProfileName">
 /// What the manifest recorded the profile was called. Null before an instance has ever synced, which
 /// is also a state with no drift to report.
@@ -73,6 +94,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     private readonly IDriftCandidateSource _candidates;
     private readonly InstanceDriftService _driftService;
     private readonly SyncManifestStore _manifestStore;
+    private readonly IProfileRevisions? _profileRevisions;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
 
@@ -87,11 +109,13 @@ public sealed class InstanceDriftMonitor : IDisposable
         IDriftCandidateSource candidates,
         InstanceDriftService driftService,
         SyncManifestStore manifestStore,
+        IProfileRevisions? profileRevisions = null,
         TimeProvider? timeProvider = null)
     {
         _candidates = candidates;
         _driftService = driftService;
         _manifestStore = manifestStore;
+        _profileRevisions = profileRevisions;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -152,12 +176,16 @@ public sealed class InstanceDriftMonitor : IDisposable
 
         foreach (var candidate in _candidates.GetDriftCandidates())
         {
-            if (candidate.ActiveProfile is null)
+            if (candidate.ActiveProfile is not ActiveProfile active)
             {
                 continue;
             }
 
-            var report = _driftService.Check(candidate.InstanceId, candidate.ActiveProfile, candidate.ModFolder);
+            var report = _driftService.Check(
+                candidate.InstanceId,
+                active,
+                candidate.ModFolder,
+                currentRevision: _profileRevisions?.GetHeadRevision(active));
 
             // Only a drifted instance needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
@@ -300,6 +328,10 @@ public sealed class InstanceDriftMonitor : IDisposable
                     string.Join(',', x.Report.Added),
                     string.Join(',', x.Report.Removed),
                     string.Join(',', x.Report.Changed),
-                    string.Join(',', x.Report.ProfileChangedMods.Select(m => m.Value)))));
+                    string.Join(',', x.Report.ProfileChangedMods.Select(m => m.Value)),
+                    // So that a dismissed notice comes straight back when the profile moves again,
+                    // which is a different problem than the one that was waved away.
+                    x.Report.AppliedRevision,
+                    x.Report.CurrentRevision)));
     }
 }

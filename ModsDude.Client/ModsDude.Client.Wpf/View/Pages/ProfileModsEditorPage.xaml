@@ -598,6 +598,24 @@
                 </StackPanel>
             </Border>
 
+            <!-- Only while there is something to save: a box that is always there is a field the
+                 page is asking to have filled in, and this one is genuinely optional. Fusion 360's
+                 wording, because this is the same gesture and somebody will recognise it.
+                 MaxLength matches ProfileRevision.MaximumLabelLength, which the server refuses
+                 beyond - stopping it here means the refusal is never reached. -->
+            <Border Margin="32 8 32 0"
+                    Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="Version description (optional)"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBox Margin="0 4 0 0"
+                             MaxLength="100"
+                             Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
+                             ToolTipService.InitialShowDelay="200" />
+                </StackPanel>
+            </Border>
+
             <Grid ColumnDefinitions="auto auto * auto">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the

@@ -59,6 +59,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
         Revisions = [];
         Mods = [];
+        Changes = [];
+        ComparisonTargets = [];
     }
 
 
@@ -72,6 +74,14 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     /// <summary>What the selected revision pinned.</summary>
     public ObservableCollection<PinnedModViewModel> Mods { get; }
 
+    /// <summary>What changed between the selected revision and the one it is compared with.</summary>
+    public ObservableCollection<ProfileModChangeViewModel> Changes { get; }
+
+    /// <summary>
+    /// The revisions the selected one can be compared with - every other one, newest first.
+    /// </summary>
+    public ObservableCollection<ProfileRevisionViewModel> ComparisonTargets { get; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
@@ -80,11 +90,38 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     [NotifyCanExecuteChangedFor(nameof(SaveAsCommand))]
     private ProfileRevisionViewModel? _selected;
 
+    /// <summary>
+    /// Which question the right-hand pane is answering: what this revision held, or what it did.
+    /// </summary>
+    /// <remarks>
+    /// Two views of one pane rather than two pages. "What did it hold" and "what changed" are asked
+    /// about the same revision, seconds apart, and a comparison you have to navigate away to see
+    /// makes it two acts of memory instead of one.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowContents))]
+    private bool _showChanges;
+
+    /// <summary>
+    /// What the selected revision is compared with. Defaults to the revision before it, so the
+    /// summary on its own row and this pane are describing the same thing.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ComparisonTitle))]
+    private ProfileRevisionViewModel? _comparedWith;
+
     [ObservableProperty]
     private bool _isLoading = true;
 
     [ObservableProperty]
     private bool _isLoadingMods;
+
+    [ObservableProperty]
+    private bool _isLoadingChanges;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoChanges))]
+    private bool _comparisonIsEmpty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
@@ -107,6 +144,25 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     public bool HasSelection => Selected is not null;
     public bool HasStatus => Status is not null;
     public bool HasOlder => HasMore;
+
+    public bool ShowContents => ShowChanges is false;
+
+    public bool HasNoChanges => ComparisonIsEmpty && IsLoadingChanges is false;
+
+    public string ComparisonTitle => ComparedWith is null
+        ? "Nothing to compare with"
+        : $"Compared with revision {ComparedWith.Number}";
+
+    /// <summary>
+    /// Two revisions can genuinely hold the same list - comparing a restore with what it restored is
+    /// the ordinary way that happens - so this says which, rather than reading as a failure.
+    /// </summary>
+    public string NoChangesText => (Selected, ComparedWith) switch
+    {
+        (not null, null) => $"Revision {Selected.Number} is the first one; there is nothing before it to compare with.",
+        (not null, not null) => $"Revisions {ComparedWith.Number} and {Selected.Number} pin exactly the same mods.",
+        _ => ""
+    };
 
     public string SelectedTitle => Selected is null
         ? ""
@@ -223,13 +279,62 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private async Task Refresh(CancellationToken cancellationToken)
         => await ReloadAsync(Selected?.Number, cancellationToken);
 
+    /// <summary>
+    /// The pane switch, as commands rather than a two-way bound flag: a radio button binding
+    /// <c>IsChecked</c> two-way fires on the way out as well as the way in, so both halves of the
+    /// pair would set the property and the second one would undo the first.
+    /// </summary>
+    [RelayCommand]
+    private void ShowContentsView() => ShowChanges = false;
+
+    [RelayCommand]
+    private void ShowChangesView() => ShowChanges = true;
+
 
     partial void OnSelectedChanged(ProfileRevisionViewModel? value)
     {
-        if (value is not null)
+        if (value is null)
         {
-            _ = LoadModsAsync(value.Number);
+            return;
         }
+
+        RefreshComparisonTargets(value);
+
+        _ = LoadModsAsync(value.Number);
+    }
+
+    partial void OnComparedWithChanged(ProfileRevisionViewModel? value)
+    {
+        _ = LoadChangesAsync();
+    }
+
+    partial void OnShowChangesChanged(bool value)
+    {
+        // Not loaded until it is looked at: a comparison is two more reads, and most visits to a
+        // history only ever ask what a revision held.
+        if (value)
+        {
+            _ = LoadChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// Every other revision, and by default the one immediately before the selected one - which is
+    /// what the selected row's own summary counts describe, so the two agree until somebody asks a
+    /// different question.
+    /// </summary>
+    private void RefreshComparisonTargets(ProfileRevisionViewModel selected)
+    {
+        ComparisonTargets.Clear();
+
+        foreach (var revision in Revisions.Where(x => x.Number != selected.Number))
+        {
+            ComparisonTargets.Add(revision);
+        }
+
+        // Assigning this is what loads the comparison, so it is the last thing that happens here.
+        ComparedWith = ComparisonTargets.FirstOrDefault(x => x.Number == selected.Number - 1)
+            ?? ComparisonTargets.FirstOrDefault();
     }
 
 
@@ -302,6 +407,62 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         finally
         {
             IsLoadingMods = false;
+        }
+    }
+
+    /// <summary>
+    /// Compares the selected revision with the chosen one. Skipped entirely while the Contents view
+    /// is showing, so picking through a history costs one read a row rather than three.
+    /// </summary>
+    private async Task LoadChangesAsync()
+    {
+        if (ShowChanges is false)
+        {
+            return;
+        }
+
+        if (Selected is not ProfileRevisionViewModel selected || ComparedWith is not ProfileRevisionViewModel against)
+        {
+            Changes.Clear();
+            ComparisonIsEmpty = true;
+            OnPropertyChanged(nameof(HasNoChanges));
+
+            return;
+        }
+
+        IsLoadingChanges = true;
+
+        try
+        {
+            var comparison = await _profileService.CompareRevisions(
+                _repo.Id, _profile.Id, against.Number, selected.Number, CancellationToken.None);
+
+            // The selection can have moved on while this was in flight, in which case this answer is
+            // about a pair nobody is looking at any more.
+            if (Selected?.Number != selected.Number || ComparedWith?.Number != against.Number)
+            {
+                return;
+            }
+
+            Changes.Clear();
+
+            foreach (var change in comparison.Changes)
+            {
+                Changes.Add(new ProfileModChangeViewModel(change, _repo.Id, _itemFactory));
+            }
+
+            ComparisonIsEmpty = comparison.IsEmpty;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Changes.Clear();
+            ComparisonIsEmpty = true;
+            Status = $"Could not compare revisions {against.Number} and {selected.Number}: {exception.Message}";
+        }
+        finally
+        {
+            IsLoadingChanges = false;
+            OnPropertyChanged(nameof(HasNoChanges));
         }
     }
 

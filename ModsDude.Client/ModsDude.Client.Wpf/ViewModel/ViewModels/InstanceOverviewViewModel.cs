@@ -37,8 +37,24 @@ public class InstanceOverviewViewModel(
 
         // The dangerous case gets its own words: an unlocked mod at the wrong version is untidy, a
         // locked map at the wrong version is a damaged savegame waiting to happen.
-        return drift.LockedDrift.Count > 0
-            ? $"{drift.DifferenceCount} differences, including the locked '{drift.LockedDrift[0].DisplayName}'. Hosting a savegame may damage it."
-            : $"{drift.DifferenceCount} differences from what was last applied here.";
+        if (drift.LockedDrift.Count > 0)
+        {
+            return $"{drift.DifferenceCount} differences, including the locked '{drift.LockedDrift[0].DisplayName}'. Hosting a savegame may damage it.";
+        }
+
+        // A profile that moved on is drift with nothing in the folder to count, so a difference
+        // count would read "0 differences" - which is both false and unhelpful.
+        var moved = drift.ProfileHasMoved
+            ? $"Applied at revision {drift.AppliedRevision}; the profile is now at revision {drift.CurrentRevision}."
+            : null;
+
+        if (drift.DifferenceCount == 0)
+        {
+            return moved ?? "Differs from what was last applied here.";
+        }
+
+        var differences = $"{drift.DifferenceCount} differences from what was last applied here.";
+
+        return moved is null ? differences : $"{differences} {moved}";
     }
 }

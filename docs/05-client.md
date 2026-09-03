@@ -453,6 +453,14 @@ re-reads the head and retries on top of it. Both are safe, and that is a propert
 rather than of the dialog: what is on the server is a revision either way, so saving over it does
 not destroy it.
 
+The footer carries an optional **version description** while there is something to save — Fusion
+360's wording for the same field on the same gesture, borrowed because somebody who has used a CAD
+package will recognise it. It maps to `ProfileRevision.Label`, which stays neutrally named because
+the domain already spends the word "version" on a mod's. It is never required: a field the save
+button refused to work without would be answered with "asdf" by the third save. It is cleared as
+the save that carried it completes, so it cannot be dragged onto an unrelated edit ten minutes
+later.
+
 **A different page for the same entry.** Profile → **Mods** resolves to
 `ProfileModsEditorPageViewModel` for a member and `ProfileModsPageViewModel` for a guest. The
 menu item holds a `Func<PageViewModel>`, so this is a branch in `ProfilePageViewModel` and
@@ -595,7 +603,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `ProfileOverviewPage` | Working | Mod count and current revision, plus the instances set to this profile |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |
-| `ProfileHistoryPage` | Working | The profile's revisions on the left, what the selected one pinned on the right. Restore and Save as… for a member; readable by a guest |
+| `ProfileHistoryPage` | Working | The profile's revisions on the left; on the right, either what the selected one pinned or what changed between it and another. Restore and Save as… for a member; readable by a guest |
 | `EditProfilePage` | Working | Rename or delete a profile |
 | `ExamplePage` | — | The placeholder. Still the Home page's content |
 

@@ -51,9 +51,9 @@ public sealed record DriftedLockedMod(ModKey ModId, string DisplayName, string? 
 /// <param name="Removed">Names the last sync installed that are no longer in the folder.</param>
 /// <param name="Changed">Names whose size or modification time no longer match - a mod was replaced or updated.</param>
 /// <param name="ProfileChangedMods">
-/// Mods the profile pins differently from what was applied. This is what catches somebody else
-/// having edited the shared profile since this instance synced, without needing a revision number on
-/// the profile - which it does not have.
+/// Mods the profile pins differently from what was applied - named, which needs the profile's
+/// current dependencies in hand. <see cref="ProfileHasMoved"/> answers the same question from two
+/// integers when they are not.
 /// </param>
 public sealed record InstanceDriftReport(
     InstanceDriftStatus Status,
@@ -63,6 +63,34 @@ public sealed record InstanceDriftReport(
     IReadOnlyList<ModKey> ProfileChangedMods)
 {
     public static InstanceDriftReport For(InstanceDriftStatus status) => new(status, [], [], [], []);
+
+    /// <summary>
+    /// Which revision of the profile the last sync installed, from the manifest. Null for a manifest
+    /// written before profiles had revisions, which reads as "not recorded" rather than as anything
+    /// about the folder.
+    /// </summary>
+    public int? AppliedRevision { get; init; }
+
+    /// <summary>
+    /// Which revision the profile is on now, where the caller knew - the client knows it for the
+    /// repo whose profiles it has loaded, and the check never goes and asks. Null is "unknown", not
+    /// "unchanged".
+    /// </summary>
+    public int? CurrentRevision { get; init; }
+
+    /// <summary>
+    /// Somebody has saved the profile since this folder was made to match it. Two integers rather
+    /// than a mod-by-mod comparison, which is what lets the startup check say it at all: naming the
+    /// mods needs the profile's dependencies, and the cheap check deliberately talks to no server.
+    /// </summary>
+    /// <remarks>
+    /// A save that changes nothing mints no revision, so a moved number always means a different
+    /// list. Only ever a difference, never a direction: an instance can sit on a newer revision than
+    /// the client happens to know about, and that is still worth saying.
+    /// </remarks>
+    public bool ProfileHasMoved => AppliedRevision is int applied
+        && CurrentRevision is int current
+        && applied != current;
 
     public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + ProfileChangedMods.Count;
 
@@ -112,12 +140,18 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
     /// What the profile pins right now, where the caller already had it. Null skips the
     /// profile-changed comparison and leaves the folder check to stand on its own.
     /// </param>
+    /// <param name="currentRevision">
+    /// Which revision the profile is on now, where the caller knew - the same "where you already had
+    /// it" bargain as <paramref name="profileDependencies"/>, and the cheap half of it. Null leaves
+    /// the question unasked rather than answered "unchanged".
+    /// </param>
     public InstanceDriftReport Check(
         Guid instanceId,
         ActiveProfile? activeProfile,
         string? modFolder,
         bool profileIsMissing = false,
-        IReadOnlyCollection<DesiredMod>? profileDependencies = null)
+        IReadOnlyCollection<DesiredMod>? profileDependencies = null,
+        int? currentRevision = null)
     {
         if (activeProfile is not ActiveProfile active)
         {
@@ -160,12 +194,21 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
         var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
         var (profileChanged, locked) = CompareProfile(manifest, profileDependencies);
 
-        var status = added.Count + removed.Count + changed.Count + profileChanged.Count > 0
+        // A profile that has moved on is drift even when the folder is exactly what was installed:
+        // the folder matches a list nobody is using any more. It is the one kind of drift that
+        // costs nothing to detect and that no directory listing could ever find.
+        var profileHasMoved = manifest.ProfileRevision is int applied
+            && currentRevision is int current
+            && applied != current;
+
+        var status = added.Count + removed.Count + changed.Count + profileChanged.Count > 0 || profileHasMoved
             ? InstanceDriftStatus.Drifted
             : InstanceDriftStatus.InSync;
 
         return new InstanceDriftReport(status, added, removed, changed, profileChanged)
         {
+            AppliedRevision = manifest.ProfileRevision,
+            CurrentRevision = currentRevision,
             // One entry per mod. A locked map whose file the game replaced and whose pin somebody
             // then moved is one problem, and the file is the half that is already on disk.
             LockedDrift = [.. NameLockedFiles(manifest, removed, changed).Concat(locked).DistinctBy(x => x.ModId)]

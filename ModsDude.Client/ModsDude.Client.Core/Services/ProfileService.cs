@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Sync;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
@@ -9,7 +10,7 @@ public class ProfileService(
     IProfilesClient profileClient,
     IModDependenciesClient modDependencyClient,
     IModsClient modsClient)
-    : IUserScopedState
+    : IUserScopedState, IProfileRevisions
 {
     /// <summary>Only ever walked to the end, so the page size is a round-trip count, not a UI concern.</summary>
     private const int _modPageSize = 200;
@@ -67,6 +68,22 @@ public class ProfileService(
     public void ClearUserState()
     {
         Profiles.Clear();
+    }
+
+    /// <summary>
+    /// What the drift check asks so it can say "this folder is on revision 6, the profile is at 8".
+    /// </summary>
+    /// <remarks>
+    /// Answered from <see cref="Profiles"/>, which holds one repo at a time, so this is null for
+    /// every profile outside the repo the user is standing in - and null on purpose. Going and
+    /// fetching it would put a network round trip per instance into a check that runs on every
+    /// window activation and is meant to work offline.
+    /// </remarks>
+    public int? GetHeadRevision(ActiveProfile profile)
+    {
+        var known = FindProfile(profile.ProfileId);
+
+        return known is not null && known.RepoId == profile.RepoId ? known.HeadRevision : null;
     }
 
     /// <param name="copyFrom">
@@ -200,6 +217,42 @@ public class ProfileService(
 
         var registered = await GetRegisteredVersions(repoId, cancellationToken);
 
+        return Resolve(dependencies, registered);
+    }
+
+    /// <summary>
+    /// What changed between two revisions of a profile, mod by mod.
+    /// </summary>
+    /// <remarks>
+    /// Two dependency reads and <b>one</b> walk of the registered mod list, which is why this is a
+    /// method rather than two calls to <see cref="GetPinnedMods"/>: the catalog walk is the
+    /// expensive half, and doing it twice to compare two lists of the same repo's mods would be
+    /// paying for the same answer again.
+    /// </remarks>
+    public async Task<ProfileRevisionComparison> CompareRevisions(
+        Guid repoId, Guid profileId, int from, int to, CancellationToken cancellationToken)
+    {
+        var before = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, from, cancellationToken);
+        var after = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, to, cancellationToken);
+
+        if (before.Dependencies.Count == 0 && after.Dependencies.Count == 0)
+        {
+            return new ProfileRevisionComparison(from, to, []);
+        }
+
+        var registered = await GetRegisteredVersions(repoId, cancellationToken);
+
+        return ProfileRevisionComparison.Between(
+            from,
+            to,
+            Resolve(before.Dependencies, registered),
+            Resolve(after.Dependencies, registered));
+    }
+
+    private static IReadOnlyList<PinnedMod> Resolve(
+        ICollection<ModDependencyDto> dependencies,
+        Dictionary<(ModKey, ModVersionKey), ModDto> registered)
+    {
         return
         [
             .. dependencies

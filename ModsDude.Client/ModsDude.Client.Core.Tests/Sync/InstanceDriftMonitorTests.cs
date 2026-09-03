@@ -28,6 +28,92 @@ public class InstanceDriftMonitorTests
         Assert.True(fixture.Monitor.ShouldNotify);
     }
 
+    /// <summary>
+    /// The half of drift a directory listing can never find: the folder is exactly what was
+    /// installed, and somebody has saved the profile since. Two integers are the whole mechanism,
+    /// which is what lets the offline check say it.
+    /// </summary>
+    [Fact]
+    public void A_profile_somebody_else_saved_is_drift_even_when_the_folder_is_untouched()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(6, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 8;
+        fixture.Monitor.Check();
+
+        var drift = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.True(drift.Report.ProfileHasMoved);
+        Assert.Equal(6, drift.Report.AppliedRevision);
+        Assert.Equal(8, drift.Report.CurrentRevision);
+
+        // Nothing in the folder differs, so a difference count would have said "0 differences".
+        Assert.Equal(0, drift.Report.DifferenceCount);
+    }
+
+    [Fact]
+    public void An_instance_on_the_profiles_current_revision_is_not_drifted_by_that()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(8, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 8;
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    /// <summary>
+    /// The client holds one repo's profiles at a time, so the head is unknown for every other repo -
+    /// and unknown has to read as "not asked" rather than as "unchanged" or as drift.
+    /// </summary>
+    [Fact]
+    public void A_profile_whose_revision_this_client_does_not_know_is_not_reported_as_moved()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(6, ("fs25_a.zip", "one"));
+
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    /// <summary>
+    /// A manifest written before profiles had revisions records none. That is "not recorded", which
+    /// says nothing about the folder - and must not turn every pre-existing instance into drift on
+    /// the first launch after the upgrade.
+    /// </summary>
+    [Fact]
+    public void A_manifest_from_before_revisions_is_not_reported_as_moved()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(null, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 8;
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    [Fact]
+    public void A_dismissed_notice_comes_back_when_the_profile_moves_again()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(6, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 7;
+        fixture.Monitor.Check();
+        fixture.Monitor.Dismiss();
+
+        Assert.False(fixture.Monitor.ShouldNotify);
+
+        fixture.Revisions.Head = 8;
+        fixture.Monitor.Check();
+
+        Assert.True(fixture.Monitor.ShouldNotify);
+    }
+
     [Fact]
     public void Activation_checks_are_throttled_so_alt_tabbing_costs_one_listing()
     {
@@ -206,6 +292,18 @@ public class InstanceDriftMonitorTests
     }
 
 
+    /// <summary>
+    /// What the client happens to know, which for a repo it has not loaded is nothing. Null is the
+    /// default here for the same reason it is the default in the app.
+    /// </summary>
+    private sealed class FakeProfileRevisions : IProfileRevisions
+    {
+        public int? Head { get; set; }
+
+        public int? GetHeadRevision(ActiveProfile profile) => Head;
+    }
+
+
     private sealed class MonitorFixture : IDisposable
     {
         private readonly TempDirectory _manifests = new("monitor-manifests");
@@ -217,7 +315,7 @@ public class InstanceDriftMonitorTests
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new InstanceDriftService(Manifests);
-            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Time);
+            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time);
         }
 
 
@@ -226,11 +324,19 @@ public class InstanceDriftMonitorTests
         public SyncManifestStore Manifests { get; }
         public InstanceDriftService Drift { get; }
         public TestTimeProvider Time { get; } = new();
+
+        /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
+        public FakeProfileRevisions Revisions { get; } = new();
+
         public InstanceDriftMonitor Monitor { get; }
 
 
         /// <summary>Writes the files and the manifest that says they are what was installed.</summary>
         public void Sync(params (string Name, string Content)[] files)
+            => Sync(null, files);
+
+        /// <param name="revision">Which revision of the profile the manifest records as applied.</param>
+        public void Sync(int? revision, params (string Name, string Content)[] files)
         {
             var entries = new List<SyncManifestEntry>();
 
@@ -254,6 +360,7 @@ public class InstanceDriftMonitorTests
                 RepoId = _repoId,
                 ProfileId = _profileId,
                 ProfileName = "Season 4",
+                ProfileRevision = revision,
                 SyncedAt = DateTimeOffset.UtcNow,
                 ModFolder = Folder.Path,
                 Entries = entries
@@ -262,7 +369,7 @@ public class InstanceDriftMonitorTests
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
         public InstanceDriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Time);
+            => new(Candidates, Drift, Manifests, Revisions, Time);
 
         public void Dispose()
         {
