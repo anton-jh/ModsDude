@@ -2,11 +2,12 @@
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 /// <summary>
-/// Everything that reads a profile's mod list.
+/// Everything that reads a profile's history, or the mod list of one revision of it.
 /// </summary>
 /// <remarks>
 /// All of it projects rather than materializes. A <see cref="ProfileRevision"/> entity carries its
@@ -65,6 +66,72 @@ public static class ProfileRevisionExtensions
         CancellationToken cancellationToken)
     {
         return dbSet.AnyAsync(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number, cancellationToken);
+    }
+
+    /// <summary>
+    /// A profile's history without its mod lists - newest first, windowed by offset.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Ordered and windowed before it is projected</b>, and that order matters. A provider cannot
+    /// see through a constructor-bound record: ordering by a member of the projection asks it to map
+    /// <c>new ProfileRevisionRow(...).Number</c> back to a column, which it refuses outright. Sorting
+    /// the entities and projecting the page is the same query and translates.
+    /// </para>
+    /// <para>
+    /// An offset rather than a keyset, like the mod usage listing: <see cref="RevisionNumber"/> is a
+    /// value object and a provider cannot translate a comparison on one. Ordering by it is fine -
+    /// that is the stored column - it is <c>&lt;</c> and <c>&gt;</c> that have nowhere to go. New
+    /// revisions arrive at the front, so a page read while somebody is saving can repeat a row.
+    /// </para>
+    /// </remarks>
+    public static Task<List<ProfileRevisionRow>> GetHistoryAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ProfileId profileId,
+        int skip, int take,
+        CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId && x.ProfileId == profileId)
+            .OrderByDescending(x => x.Number)
+            .Skip(skip)
+            .Take(take)
+            .Select(x => new ProfileRevisionRow(
+                x.Number,
+                x.Created,
+                x.CreatedBy,
+                x.Label,
+                x.Origin,
+                x.SourceProfileId,
+                x.SourceRevision,
+                x.ModCount,
+                x.Changes.Added,
+                x.Changes.Changed,
+                x.Changes.Removed))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>One revision's entry, or <c>null</c> where the profile has no such revision.</summary>
+    public static Task<ProfileRevisionRow?> GetRowAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ProfileId profileId, RevisionNumber number,
+        CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
+            .Select(x => new ProfileRevisionRow(
+                x.Number,
+                x.Created,
+                x.CreatedBy,
+                x.Label,
+                x.Origin,
+                x.SourceProfileId,
+                x.SourceRevision,
+                x.ModCount,
+                x.Changes.Added,
+                x.Changes.Changed,
+                x.Changes.Removed))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>
@@ -144,6 +211,27 @@ public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, strin
 {
     public ProfileModPin ToPin() => new(ModId, VersionId, Locked);
 }
+
+
+/// <summary>
+/// One revision as a history renders it: everything on its own row, and none of its mod list.
+/// </summary>
+/// <remarks>
+/// The counts are read rather than derived. They were recorded when the revision was written, which
+/// is what lets a page of fifty of these be fifty rows instead of fifty snapshot comparisons.
+/// </remarks>
+public record ProfileRevisionRow(
+    RevisionNumber Number,
+    DateTime Created,
+    UserId CreatedBy,
+    string? Label,
+    ProfileRevisionOrigin Origin,
+    ProfileId? SourceProfileId,
+    RevisionNumber? SourceRevision,
+    int ModCount,
+    int Added,
+    int Changed,
+    int Removed);
 
 
 /// <summary>

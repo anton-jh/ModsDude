@@ -106,6 +106,162 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         Assert.True(row.Locked);
     }
 
+    /// <summary>
+    /// The history listing, which is a provider question and nothing else: it orders by a value
+    /// object, windows the result, and projects into a constructor-bound record. Ordering <em>after</em>
+    /// that projection asks the provider to map a record member back to a column, which it refuses -
+    /// and that refusal is a runtime exception on the page rather than a build error, which is what
+    /// this test exists to turn back into a red test.
+    /// </summary>
+    [Fact]
+    public async Task The_history_reads_newest_first()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var history = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, 0, 50, CancellationToken.None);
+
+        Assert.Equal([3, 2, 1], history.Select(x => x.Number.Value));
+    }
+
+    [Fact]
+    public async Task The_history_is_windowed_so_it_can_be_paged()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var first = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, 0, 2, CancellationToken.None);
+        var second = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, 2, 2, CancellationToken.None);
+
+        Assert.Equal([3, 2], first.Select(x => x.Number.Value));
+        Assert.Equal([1], second.Select(x => x.Number.Value));
+    }
+
+    /// <summary>
+    /// Everything the history renders comes off the revision's own row, so none of it may arrive
+    /// null or zero through the projection - the counts especially, which are a complex property
+    /// flattened into three columns.
+    /// </summary>
+    [Fact]
+    public async Task A_history_row_carries_what_the_revision_recorded_about_itself()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0", "Pre-harvest freeze");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var history = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, 0, 50, CancellationToken.None);
+        var latest = history[0];
+
+        Assert.Equal("Pre-harvest freeze", latest.Label);
+        Assert.Equal(_author, latest.CreatedBy);
+        Assert.Equal(ProfileRevisionOrigin.Saved, latest.Origin);
+        Assert.Equal(1, latest.ModCount);
+
+        // The mod moved version, which is a change rather than an addition and a removal.
+        Assert.Equal((0, 1, 0), (latest.Added, latest.Changed, latest.Removed));
+    }
+
+    [Fact]
+    public async Task A_restore_records_the_revision_it_came_from()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+        await GivenARestoreOf(repoId, profileId, new RevisionNumber(1));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var restored = await dbContext.ProfileRevisions.GetRowAsync(repoId, profileId, new RevisionNumber(3), CancellationToken.None);
+
+        Assert.Equal(ProfileRevisionOrigin.Restored, restored!.Origin);
+        Assert.Equal(new RevisionNumber(1), restored.SourceRevision);
+    }
+
+    [Fact]
+    public async Task A_revision_the_profile_does_not_have_has_no_row()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        Assert.Null(await dbContext.ProfileRevisions.GetRowAsync(repoId, profileId, new RevisionNumber(7), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The other half of a history row. A join would have to produce a nullable value object inside
+    /// a projection, so the names come back in a second query keyed by a value-object id - which is
+    /// a <c>Contains</c> the provider has to translate.
+    /// </summary>
+    [Fact]
+    public async Task Authors_are_named_by_a_second_query_keyed_on_their_ids()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0");
+        var userId = new UserId($"user-{Guid.NewGuid()}");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            dbContext.Users.Add(new User(userId, new DisplayName("Anton"), DateTime.UtcNow));
+
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        using var verification = fixture.CreateDbContext();
+
+        var names = await verification.Users.GetDisplayNamesAsync([userId, new UserId("nobody")], CancellationToken.None);
+
+        Assert.Equal("Anton", names[userId].Value);
+
+        // An id with no row is absent rather than an error: the history falls back to the id, which
+        // is what the migrated revisions recorded as their author.
+        Assert.False(names.ContainsKey(new UserId("nobody")));
+    }
+
+    /// <summary>
+    /// What every save runs to turn a request's pins into dependencies. Two <c>IN</c> lists over
+    /// value-object ids, which over-selects on purpose - so this checks both that it translates and
+    /// that the caller is right to match the pairs itself.
+    /// </summary>
+    [Fact]
+    public async Task The_versions_a_save_names_are_read_in_one_query()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var versions = await dbContext.ModVersions.GetVersionsAsync(
+            repoId,
+            [_modId],
+            [new ModVersionId("1.0.0")],
+            CancellationToken.None);
+
+        Assert.Equal("1.0.0", Assert.Single(versions).Id.Value);
+    }
+
+    [Fact]
+    public async Task Naming_no_versions_reads_nothing_at_all()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        Assert.Empty(await dbContext.ModVersions.GetVersionsAsync(repoId, [], [], CancellationToken.None));
+    }
+
     [Fact]
     public async Task Deleting_a_profile_takes_its_whole_history_with_it()
     {
@@ -173,7 +329,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         return profile.Id;
     }
 
-    private async Task GivenAFurtherRevisionPinning(RepoId repoId, ProfileId profileId, string versionId)
+    private async Task GivenAFurtherRevisionPinning(RepoId repoId, ProfileId profileId, string versionId, string? label = null)
     {
         using var dbContext = fixture.CreateDbContext();
 
@@ -185,7 +341,39 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
             [new ModDependency { ModVersion = version!, Locked = false }],
             previous,
             _author,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            label);
+
+        dbContext.ProfileRevisions.Add(revision);
+
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+    }
+
+    /// <summary>The same write a restore makes: an old snapshot, copied to the front.</summary>
+    private async Task GivenARestoreOf(RepoId repoId, ProfileId profileId, RevisionNumber source)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
+        var pins = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, source, CancellationToken.None);
+        var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
+
+        var dependencies = new List<ModDependency>();
+
+        foreach (var pin in pins)
+        {
+            var version = await dbContext.ModVersions.GetAsync(repoId, pin.ModId, pin.VersionId, CancellationToken.None);
+
+            dependencies.Add(new ModDependency { ModVersion = version!, Locked = pin.Locked });
+        }
+
+        var revision = profile.CreateRevision(
+            dependencies,
+            previous,
+            _author,
+            DateTime.UtcNow,
+            origin: ProfileRevisionOrigin.Restored,
+            sourceRevision: source);
 
         dbContext.ProfileRevisions.Add(revision);
 

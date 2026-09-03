@@ -261,8 +261,13 @@ Notable configuration:
   paying for them.
 - Entity extension methods in `Persistence/Extensions/EntityExtensions/` provide the small
   query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`, `GetVersionsAsync`,
-  `GetLatestVersionOfEachAsync`, `GetPinsAsync`, `GetDependencyRowsAsync`, `GetModUsageAsync`,
-  `CheckNameIsTaken`, `GetByCodeAsync`.
+  `GetLatestVersionOfEachAsync`, `GetPinsAsync`, `GetDependencyRowsAsync`, `GetHistoryAsync`,
+  `GetRowAsync`, `GetModUsageAsync`, `GetDisplayNamesAsync`, `CheckNameIsTaken`, `GetByCodeAsync`.
+
+  **Every query lives here, including the ones only one endpoint issues.** A LINQ expression a
+  provider cannot translate is a runtime failure on a page rather than a build error, and the
+  persistence suite is the only thing in the tree that runs one against a real PostgreSQL — so a
+  query written next to its endpoint instead is a query nothing can cover.
 
 Six migrations: `20250717173302_MoveToPostgres`, which squashes the pre-Postgres history, then
 `FlattenModModel`, `ModImageReferencesAndModListDelta`, `ModImageRendition`,

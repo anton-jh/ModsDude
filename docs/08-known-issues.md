@@ -107,6 +107,27 @@ Blobs are shared by content hash, so the storage cost is bounded by distinct fil
 pins; if it ever does bite, the release valve is pruning old revisions on a policy, which
 [PLAN.md](PLAN.md#phase-45--profile-revisions) leaves unbuilt on purpose.
 
+### Ordering by a value object works; comparing on one does not, and neither fails at build time
+
+`RevisionNumber`, `ModId` and the rest are value-converted, and a provider's tolerance for them is
+uneven in a way nothing catches until the query runs:
+
+| | |
+| --- | --- |
+| `OrderBy(x => x.Number)` on an **entity** | Translates — it is the stored column |
+| `Contains` over a list of them | Translates |
+| `x.Number > cursor` | **Does not** — which is why every listing here windows by offset |
+| `OrderBy` after projecting into a **constructor-bound record** | **Does not** — the provider cannot map a record member back to a column |
+
+The last one is the trap, because the query reads as if it should work and the failure is an
+exception on a page rather than a build error. Order and window the *entities*, then project the
+page. `ProfileRevisionExtensions.GetHistoryAsync` is written that way and says so, and it shipped
+broken the other way round first.
+
+The defence is where the queries live: `Persistence/Extensions/EntityExtensions/`, because the
+persistence suite is the only thing in the tree that runs one against a real PostgreSQL. A query
+written next to its endpoint is a query nothing can cover.
+
 ### The usage cursor is an offset, and shifts under concurrent edits
 
 `GET repos/{repoId}/mods/usage` paginates by offset rather than by a key, because the ids are

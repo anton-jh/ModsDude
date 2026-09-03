@@ -4,18 +4,18 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
 /// <summary>
-/// Reading a profile's history, as a projection.
+/// A profile's history, as the API answers with it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nothing here materializes a <see cref="ProfileRevision"/>. Its dependencies are an owned
-/// collection, which EF loads with the entity whether or not anything asked - so a page of fifty
-/// revisions of a two-thousand-mod profile would read a hundred thousand rows to render fifty lines
-/// of "12 added, 3 changed".
+/// The query itself lives in <see cref="ProfileRevisionExtensions"/>, with the rest of the
+/// revision vocabulary and where the persistence suite can run it against a real PostgreSQL. This
+/// is the mapping either side of it: rows in, DTOs out, and the authors named.
 /// </para>
 /// <para>
 /// The authors are resolved in a second query rather than joined. A page of revisions has a handful
@@ -25,27 +25,13 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// </remarks>
 internal static class ProfileRevisionReads
 {
-    /// <summary>
-    /// Newest first, because the interesting end of a history is the recent one, and windowed by
-    /// offset.
-    /// </summary>
-    /// <remarks>
-    /// An offset rather than a keyset: <see cref="RevisionNumber"/> is a value object, and a
-    /// provider cannot translate a comparison on one - the same constraint the mod usage listing
-    /// works around. New revisions arrive at the front, so a page read while somebody is saving can
-    /// repeat a row. Acceptable for a list nothing acts on in bulk.
-    /// </remarks>
     public static async Task<List<ProfileRevisionDto>> GetHistoryAsync(
         ApplicationDbContext dbContext,
         RepoId repoId, ProfileId profileId,
         int skip, int take,
         CancellationToken cancellationToken)
     {
-        var rows = await Project(dbContext, repoId, profileId)
-            .OrderByDescending(x => x.Number)
-            .Skip(skip)
-            .Take(take)
-            .ToListAsync(cancellationToken);
+        var rows = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, skip, take, cancellationToken);
 
         return await ToDtosAsync(dbContext, repoId, profileId, rows, cancellationToken);
     }
@@ -56,8 +42,7 @@ internal static class ProfileRevisionReads
         RepoId repoId, ProfileId profileId, RevisionNumber number,
         CancellationToken cancellationToken)
     {
-        var row = await Project(dbContext, repoId, profileId)
-            .FirstOrDefaultAsync(x => x.Number == number, cancellationToken);
+        var row = await dbContext.ProfileRevisions.GetRowAsync(repoId, profileId, number, cancellationToken);
 
         if (row is null)
         {
@@ -78,28 +63,10 @@ internal static class ProfileRevisionReads
         => new(userId.Value, displayName?.Value ?? userId.Value, UserTag.For(userId));
 
 
-    private static IQueryable<RevisionRow> Project(ApplicationDbContext dbContext, RepoId repoId, ProfileId profileId)
-    {
-        return dbContext.ProfileRevisions
-            .Where(x => x.RepoId == repoId && x.ProfileId == profileId)
-            .Select(x => new RevisionRow(
-                x.Number,
-                x.Created,
-                x.CreatedBy,
-                x.Label,
-                x.Origin,
-                x.SourceProfileId,
-                x.SourceRevision,
-                x.ModCount,
-                x.Changes.Added,
-                x.Changes.Changed,
-                x.Changes.Removed));
-    }
-
     private static async Task<List<ProfileRevisionDto>> ToDtosAsync(
         ApplicationDbContext dbContext,
         RepoId repoId, ProfileId profileId,
-        IReadOnlyList<RevisionRow> rows,
+        IReadOnlyList<ProfileRevisionRow> rows,
         CancellationToken cancellationToken)
     {
         if (rows.Count == 0)
@@ -107,12 +74,9 @@ internal static class ProfileRevisionReads
             return [];
         }
 
-        var authorIds = rows.Select(x => x.CreatedBy).Distinct().ToList();
-
-        var names = await dbContext.Users
-            .Where(x => authorIds.Contains(x.Id))
-            .Select(x => new { x.Id, x.DisplayName })
-            .ToDictionaryAsync(x => x.Id, x => x.DisplayName, cancellationToken);
+        var names = await dbContext.Users.GetDisplayNamesAsync(
+            [.. rows.Select(x => x.CreatedBy).Distinct()],
+            cancellationToken);
 
         return
         [
@@ -130,18 +94,4 @@ internal static class ProfileRevisionReads
                 new ProfileRevisionChangesDto(row.Added, row.Changed, row.Removed)))
         ];
     }
-
-
-    private record RevisionRow(
-        RevisionNumber Number,
-        DateTime Created,
-        UserId CreatedBy,
-        string? Label,
-        ProfileRevisionOrigin Origin,
-        ProfileId? SourceProfileId,
-        RevisionNumber? SourceRevision,
-        int ModCount,
-        int Added,
-        int Changed,
-        int Removed);
 }
