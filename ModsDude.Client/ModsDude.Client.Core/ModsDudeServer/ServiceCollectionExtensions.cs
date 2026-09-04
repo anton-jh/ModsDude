@@ -31,6 +31,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IModsClient, ModsClient>()
             .AddTypedClient<IModsClient>((http, sp) => new ModsClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 
+        services.AddHttpClient<ISavegamesClient, SavegamesClient>()
+            .AddTypedClient<ISavegamesClient>((http, sp) => new SavegamesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+
         services.AddHttpClient<IFilesClient, FilesClient>()
             .AddTypedClient<IFilesClient>((http, sp) => new FilesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 

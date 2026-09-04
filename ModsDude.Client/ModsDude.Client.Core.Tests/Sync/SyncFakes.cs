@@ -104,6 +104,10 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         => throw new NotSupportedException();
     public Task<CreateModUploadLinkResponse> CreateModUploadLinkV1Async(CreateModUploadLinkRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+    public Task<CreateSavegameDownloadLinkResponse> CreateSavegameDownloadLinkV1Async(CreateSavegameDownloadLinkRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    public Task<CreateSavegameUploadLinkResponse> CreateSavegameUploadLinkV1Async(CreateSavegameUploadLinkRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
 }
 
 

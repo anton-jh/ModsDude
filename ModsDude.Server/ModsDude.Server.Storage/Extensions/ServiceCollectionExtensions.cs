@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<IModStorageService, ModStorageService>();
         services.AddScoped<IModImageStorageService, ModImageStorageService>();
+        services.AddScoped<ISavegameStorageService, SavegameStorageService>();
 
         return services;
     }

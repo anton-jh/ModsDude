@@ -350,6 +350,31 @@ failures](05-client.md#absorbed-is-not-hidden) by design. Without it, a fresh st
 presents as imagery that silently never appears. The `mods` container is not created this way:
 mod files go over a SAS, and the container predates all of this.
 
+### Savegame blobs
+
+`SavegameStorageService` holds packed savegames in a third container, `savegames`, at:
+
+```
+{repoId}/{savegameId}/{contentHash}
+```
+
+Mechanically the same as `ModStorageService` — user-delegation SAS, 30-minute lifetime, `sha256`
+stamped into metadata as the client uploads, and the API never touching the bytes. Upload is
+Member-level and download is Guest-level, because a Guest is offered *Take a copy*.
+
+**The one deliberate difference is the address.** A savegame's blob is named by its content rather
+than by its version number, and that is what makes concurrent check-ins safe: numbering the blob
+would have two people mint upload links for the same name, so whichever wrote second would replace
+the other's bytes — and the stale-base check that decides who takes the head runs after that, by
+which point the loser's save is gone. Content addressing also makes a restore a metadata operation
+with no blob copy, and a duplicate check-in free.
+
+Two consequences follow. A blob already at the requested address holds *the bytes being offered*,
+so `createSavegameUploadLink` reports it as `AlreadyStored` and the client skips to checking in —
+where the mod path has to refuse the same situation as an identity collision. And **several
+versions can share one blob**, so the reclamation sweep asks whether an address is still referred
+to, not whether a version still exists.
+
 ### Blob reclamation
 
 `BlobReclamationService` is a hosted service sweeping orphaned blobs — import orphans, and the
@@ -512,14 +537,64 @@ resources. The response is sparse: a version that does not appear is unused, but
 whole listing has been read**, so a client must exhaust the cursor before treating an absence as
 an answer. It is advisory; the delete endpoints re-ask the database when it matters.
 
+### Savegames
+
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| GET | `repos/{repoId}/savegames` | Guest | Each carries its head version and its open claim inline. Four queries flat, not one per row |
+| POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher |
+| PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename, or move to another profile |
+| DELETE | `repos/{repoId}/savegames/{savegameId}` | Member | Takes its versions and its claims with it |
+| GET | `repos/{repoId}/savegames/{savegameId}/versions` | Guest | The history, newest first, windowed by `skip`/`limit` |
+| PUT | `repos/{repoId}/savegames/{savegameId}/versions` | Member | **Check in.** Based on a version number, forcible |
+| POST | `.../versions/{number}/restore` | Member | Copies an older version forward as a new one |
+| GET | `repos/{repoId}/savegames/{savegameId}/checkouts` | Guest | The claim log, newest first, windowed |
+| POST | `repos/{repoId}/savegames/{savegameId}/checkouts` | Member | Take the claim, or renew your own. Answers with who it was taken from |
+| DELETE | `.../checkouts/current` | Member | **Discard** — give it back unplayed. Mints no version |
+
+**The client mints the savegame id**, as it does a repo id. The blob lives at
+`{repoId}/{savegameId}/{contentHash}`, so a server-minted id would name a blob nobody could have
+uploaded to: mint a GUID, upload, publish with it.
+
+`BasedOn` names the version the check-in was built on, and a stale one is refused with
+`savegame-version-stale` carrying the head. **Forcing past it is allowed** and records the fork as
+`Origin = Forced` with the version actually played, rather than hiding it — the claim is the social
+guard and this is the mechanical one. **A check-in whose hash equals the head's mints nothing** and
+answers with the head; a night that changed nothing is not an event. It still ends the caller's
+claim, because they pressed check in and should not be left holding a save they handed back.
+
+Taking a claim somebody else holds is Member, deliberately: the design's whole position on conflict
+is that a claim is advisory and a take-over is recorded rather than prevented. **Discard is
+holder-only** — `Discarded` means "the holder gave it back unplayed", and letting a third party
+write that would put a sentence in the log its subject never said. Taking a save is what the
+check-out route is for, and it records `TakenOver`.
+
+Checking in and restoring both prune the history afterwards, in a separate commit so a failed prune
+cannot cost somebody their play. Pruning deletes **rows only**; the blobs fall out on the next
+reclamation pass, which is what makes it safe when two versions name one address.
+
+Reading is Guest throughout, including the claim log: somebody who plays a shared save without
+curating it is exactly the person who needs to see who has had it.
+
 ### Files
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
 | POST | `files/createModUploadLink` | Member | 30-minute `Create\|Write` SAS, plus the metadata key to write the SHA-256 into. Refuses with `already-registered` or `file-already-present` |
 | POST | `files/createModDownloadLink` | Guest | 30-minute `Read` SAS |
+| POST | `files/createSavegameUploadLink` | Member | The same, addressed by content hash. Answers `AlreadyStored` instead of refusing |
+| POST | `files/createSavegameDownloadLink` | Guest | 30-minute `Read` SAS. Refuses with `file-not-found` |
 
-The two upload-link refusals are **distinct problem types on purpose.** There is nothing left to
+**A savegame upload link reports an occupied address as a success**, where the mod one refuses it.
+A mod blob is addressed by the version it belongs to, so a blob already there holds *somebody
+else's* bytes under this id — a collision to report before anything registers over it. A savegame
+blob is addressed by its own content, so a blob already there holds precisely the bytes being
+offered, and there is nothing left to do with them. That is what makes a night that changed
+nothing, and a restore, cost no upload at all. Both savegame routes refuse a `ContentHash` that is
+not a lowercase hex SHA-256, because it becomes a blob path segment and there is no global
+exception handler to turn the storage layer's own refusal into anything but a 500.
+
+The two mod upload-link refusals are **distinct problem types on purpose.** There is nothing left to
 do for a registered version, while an unregistered blob is the orphan a failed import left behind
 and is finished by registering without re-uploading. Answering both with one problem made a
 failed import unretryable. `file-already-present` carries the blob's recorded hash — matching it

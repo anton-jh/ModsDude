@@ -248,6 +248,131 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.ToTable("Repos");
                 });
 
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.Savegame", b =>
+                {
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("HeadVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("RepoId", "Id");
+
+                    b.HasIndex("RepoId", "Name")
+                        .IsUnique();
+
+                    b.HasIndex("RepoId", "ProfileId");
+
+                    b.ToTable("Savegames");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.SavegameCheckout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EndedReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SavegameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("TakenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepoId", "SavegameId")
+                        .IsUnique()
+                        .HasFilter("\"EndedAt\" IS NULL");
+
+                    b.HasIndex("RepoId", "SavegameId", "TakenAt");
+
+                    b.ToTable("SavegameCheckouts");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.SavegameVersion", b =>
+                {
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SavegameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("BaseVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("CheckoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ProfileRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("RepoId", "SavegameId", "Number");
+
+                    b.HasIndex("RepoId", "ProfileId", "ProfileRevision");
+
+                    b.HasIndex("RepoId", "SavegameId", "ContentHash");
+
+                    b.ToTable("SavegameVersions");
+                });
+
             modelBuilder.Entity("ModsDude.Server.Domain.Users.User", b =>
                 {
                     b.Property<string>("Id")
@@ -445,6 +570,45 @@ namespace ModsDude.Server.Persistence.Migrations
                         .WithMany("RepoMemberships")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.Savegame", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ModsDude.Server.Domain.Profiles.Profile", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId", "ProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.SavegameCheckout", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Savegames.Savegame", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId", "SavegameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Savegames.SavegameVersion", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Savegames.Savegame", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId", "SavegameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ModsDude.Server.Domain.Profiles.ProfileRevision", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId", "ProfileId", "ProfileRevision")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Savegames;
 
 namespace ModsDude.Server.Domain.Mods;
 
@@ -12,6 +13,15 @@ public readonly record struct StoredBlob(string Name, DateTimeOffset LastModifie
 /// registered addresses can be looked up in one step.
 /// </summary>
 public readonly record struct ModBlobAddress(RepoId RepoId, ModId ModId, ModVersionId VersionId);
+
+/// <summary>
+/// The pair a savegame blob is stored against. A version's bytes are addressed by <b>content</b>
+/// rather than by version number, so two people checking in at the same moment write two different
+/// blobs instead of racing for one name, and a restore is a metadata operation rather than a copy.
+/// The consequence for the sweep: several versions can refer to one blob, so what is registered is
+/// the set of addresses, not one per version.
+/// </summary>
+public readonly record struct SavegameBlobAddress(RepoId RepoId, SavegameId SavegameId, string ContentHash);
 
 /// <param name="Reclaimable">Blobs nothing refers to, old enough to be certain of it.</param>
 /// <param name="Retained">
@@ -63,6 +73,19 @@ public static class BlobReclamation
         return Plan(stored, cutoff, name => TryParseModBlobName(name, out var address) ? registered.Contains(address) : null);
     }
 
+    /// <param name="cutoff">
+    /// See <see cref="PlanModSweep"/>. The hazard is identical for savegames and so is the guard: a
+    /// client mints an upload link, writes the packed save, and only then checks it in, so between
+    /// those two steps a perfectly live blob is referred to by nothing at all.
+    /// </param>
+    public static ReclamationPlan PlanSavegameSweep(
+        IEnumerable<StoredBlob> stored,
+        IReadOnlySet<SavegameBlobAddress> registered,
+        DateTimeOffset cutoff)
+    {
+        return Plan(stored, cutoff, name => TryParseSavegameBlobName(name, out var address) ? registered.Contains(address) : null);
+    }
+
     /// <param name="cutoff">See <see cref="PlanModSweep"/>.</param>
     public static ReclamationPlan PlanImageSweep(
         IEnumerable<StoredBlob> stored,
@@ -91,6 +114,30 @@ public static class BlobReclamation
         }
 
         address = new ModBlobAddress(new RepoId(repoId), new ModId(segments[1]), new ModVersionId(segments[2]));
+
+        return true;
+    }
+
+    /// <summary>
+    /// The layout <c>SavegameStorageService</c> writes: <c>{repoId}/{savegameId}/{contentHash}</c>.
+    /// Both ids have to parse and the last segment has to be a hash, so a stray file or a future
+    /// layout is reported rather than deleted.
+    /// </summary>
+    public static bool TryParseSavegameBlobName(string name, out SavegameBlobAddress address)
+    {
+        address = default;
+
+        var segments = name.Split('/');
+
+        if (segments.Length != 3
+            || !Guid.TryParse(segments[0], out var repoId)
+            || !Guid.TryParse(segments[1], out var savegameId)
+            || !ModImageHash.IsValid(segments[2]))
+        {
+            return false;
+        }
+
+        address = new SavegameBlobAddress(new RepoId(repoId), new SavegameId(savegameId), segments[2]);
 
         return true;
     }

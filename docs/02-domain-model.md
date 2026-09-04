@@ -521,6 +521,120 @@ See [03 — Server](03-server.md#persistence).
 what a comparison works in. It is the shape of a dependency with the version's whole record left
 behind.
 
+## Savegame
+
+`ModsDude.Server.Domain/Savegames/`
+
+A named savegame inside a repo, keyed `(RepoId, Id)` with a unique index on `(RepoId, Name)` — the
+same aggregate placement as `Profile`, and for the same reasons.
+
+| Field | Notes |
+| --- | --- |
+| `Id`, `RepoId` | The composite key |
+| `Name` | `SavegameName(string)`, unique within the repo |
+| `ProfileId` | The profile this save **follows**. Intent, not history — see below |
+| `Created` | |
+| `HeadVersion` | `SavegameVersionNumber(int)` — which version is current |
+
+**A savegame is not owned by a profile.** It sits beside profiles in the repo, and it is the
+*version* that records the one profile revision it was played on. A save moves from revision 6 to
+revision 7 as the group updates its mods, so pinning a revision on the savegame would either forbid
+that or lie about it.
+
+`ProfileId` is therefore a different fact from the version's, and the two may legitimately disagree:
+branch a profile, move the save onto the branch, and the older versions still honestly name the old
+profile's revisions. It is the distinction `ActiveProfile` draws against the sync manifest in
+[07 — Mod sync design](07-mod-sync-design.md#what-sync-records-and-why-it-has-to), one aggregate over.
+
+As with a profile, **there is no navigation to the versions**. A savegame's history is read through
+its own set; this row only ever says which version is current.
+
+## Savegame versions
+
+`ModsDude.Server.Domain/Savegames/SavegameVersion.cs`
+
+One immutable version, keyed `(RepoId, SavegameId, Number)`.
+
+| Field | Notes |
+| --- | --- |
+| `Number` | `SavegameVersionNumber(int)`. One-based, and **not contiguous** — see below |
+| `ProfileId`, `ProfileRevision` | What it was played on. Never null. FK is `Restrict` |
+| `ContentHash`, `SizeBytes` | SHA-256 of the packed save, and what it weighs |
+| `CreatedBy`, `Created`, `Label` | `Label` is optional, and is what exempts a version from pruning |
+| `Origin` | `Created \| CheckedIn \| Forced \| Restored` |
+| `BaseVersion` | What the uploader was holding |
+| `CheckoutId` | The claim it was checked in against, or null for a publish |
+
+Read-only by the same mechanism a profile revision is: **nothing addresses one to write to it**. A
+check-in produces a successor and a restore copies an old one forward, so no route names a version
+and there is no `IsReadOnly` column for fifteen places to remember to check.
+
+### The blob is addressed by content, not by number
+
+`ContentHash` is the address: `{repoId}/{savegameId}/{contentHash}`. This is the one place the
+savegame storage layout deliberately diverges from `ModStorageService`, which addresses by identity.
+
+Numbering the blob would have two people checking in at the same moment mint upload links for the
+same name, so whichever wrote second would silently replace the other's bytes — and the stale-base
+check that decides who takes the head runs *after* that, by which point the loser's save is already
+gone. Hashing also makes a restore a pure metadata operation and a duplicate check-in free.
+
+The consequence: **several versions can share one blob**, so what the reclamation sweep reads is a
+set of addresses rather than one entry per version.
+
+### Numbers are not contiguous
+
+Unlike `RevisionNumber`, pruning leaves the gap where an old version was. Numbers exist to be said
+out loud, and renumbering would make yesterday's sentence point at a different save.
+
+### A played profile cannot be deleted
+
+`SavegameVersion`'s foreign key onto `ProfileRevision` is `Restrict`, and `Savegame`'s onto `Profile`
+is too — so a profile any savegame follows, or any version was ever played on, cannot be deleted.
+The same bargain as a pinned mod version, one aggregate up, and accepted for the same reason: a save
+whose mod list is gone is not restorable, which is the only thing that made keeping it worth
+anything. `DeleteProfileV1Endpoint` reports it; the database refuses it again underneath.
+
+### Retention
+
+`SavegameRetention.PlanPrune` keeps the last N versions (default 10), and never prunes the head or
+anything carrying a `Label` — labelling a version is the gesture by which somebody keeps it.
+
+Labelled versions are **exempt rather than counted**: the recency window is taken over the unlabelled
+ones. Otherwise naming your last two saves would silently leave you with two backups where the
+policy promised ten, the keeping gesture causing the loss.
+
+Pruning a savegame's history is legitimate where pruning a profile's is not: a savegame version is a
+backup, and an old profile revision has to stay *reproducible*.
+
+## Savegame checkouts
+
+`ModsDude.Server.Domain/Savegames/SavegameCheckout.cs`
+
+One person's claim on one savegame, keyed on `Id` and carrying `(RepoId, SavegameId)`.
+
+| Field | Notes |
+| --- | --- |
+| `UserId`, `TakenAt` | Who took it, and when |
+| `ExpiresAt` | Pushed forward by `Renew` while the holder still has the app open |
+| `EndedAt`, `EndedReason` | `CheckedIn \| TakenOver \| Discarded`. Null while this is the open row |
+
+**A log, not a field.** The current holder is the row that has not ended — a filtered unique index on
+`(RepoId, SavegameId) WHERE "EndedAt" IS NULL` permits exactly one — so there is no
+current-checkout column to keep in step with a history sitting beside it. Check-ins are already
+history, because they are versions; `SavegameVersion.CheckoutId` joins the two halves into one
+timeline.
+
+**The claim is advisory.** Anybody may take it from anybody, which closes the previous row as
+`TakenOver` and warns naming who held it. What actually protects a save is the base-version check on
+check-in: the claim is the social half, and only the mechanical half is a guarantee.
+
+**Expiry is not an end reason.** An expired claim is still the open row; it just reads as stale,
+because nothing runs to close it and a job that did would be inventing an event nobody caused.
+`GetStatus(now)` folds the two facts into `Held | Stale | Ended`, reporting `Ended` ahead of expiry —
+what actually happened outranks what would have happened. The distinction is the point of the type:
+"Anton has had this since 3 March" must not read as "Anton has this".
+
 ## Client-side models
 
 The client does not reuse the server's entities. It has its own, in

@@ -25,6 +25,34 @@
         },
         "type": "object"
       },
+      "CheckInSavegameRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "basedOn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "force": {
+            "type": "boolean"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "profileRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "CheckNameTakenRequest": {
         "additionalProperties": false,
         "properties": {
@@ -39,6 +67,23 @@
         "properties": {
           "isTaken": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CheckOutSavegameResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checkout": {
+            "$ref": "#/components/schemas/SavegameCheckoutDto"
+          },
+          "takenFrom": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameCheckoutDto"
+              }
+            ]
           }
         },
         "type": "object"
@@ -166,6 +211,65 @@
         },
         "type": "object"
       },
+      "CreateSavegameDownloadLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateSavegameDownloadLinkResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "link": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateSavegameUploadLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateSavegameUploadLinkResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "alreadyStored": {
+            "type": "boolean"
+          },
+          "contentHashMetadataKey": {
+            "type": "string"
+          },
+          "link": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CurrentUserDto": {
         "additionalProperties": false,
         "properties": {
@@ -282,6 +386,40 @@
           "revisions": {
             "items": {
               "$ref": "#/components/schemas/ProfileRevisionDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetSavegameCheckoutsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checkouts": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameCheckoutDto"
+            },
+            "type": "array"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GetSavegameVersionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "headVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameVersionDto"
             },
             "type": "array"
           }
@@ -539,7 +677,11 @@
           "https://server.modsdude.com/api/problems/invite-redemption-conflict",
           "https://server.modsdude.com/api/problems/invalid-invite-limits",
           "https://server.modsdude.com/api/problems/invite-cannot-grant-admin",
-          "https://server.modsdude.com/api/problems/profile-revision-stale"
+          "https://server.modsdude.com/api/problems/profile-revision-stale",
+          "https://server.modsdude.com/api/problems/savegame-version-stale",
+          "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
+          "https://server.modsdude.com/api/problems/savegame-not-checked-out",
+          "https://server.modsdude.com/api/problems/profile-in-use-by-savegame"
         ],
         "type": "string",
         "x-enumNames": [
@@ -570,7 +712,11 @@
           "InviteRedemptionConflict",
           "InvalidInviteLimits",
           "InviteCannotGrantAdmin",
-          "ProfileRevisionStale"
+          "ProfileRevisionStale",
+          "SavegameVersionStale",
+          "SavegameCheckoutConflict",
+          "SavegameNotCheckedOut",
+          "ProfileInUseBySavegame"
         ]
       },
       "ProfileDto": {
@@ -691,6 +837,38 @@
           "Restored",
           "Copied"
         ]
+      },
+      "PublishSavegameRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "profileRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
       },
       "RedeemInviteRequest": {
         "additionalProperties": false,
@@ -857,6 +1035,16 @@
         },
         "type": "object"
       },
+      "RestoreSavegameVersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SaveProfileRevisionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -876,6 +1064,193 @@
           }
         },
         "type": "object"
+      },
+      "SavegameCheckoutDto": {
+        "additionalProperties": false,
+        "properties": {
+          "endedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "endedReason": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameCheckoutEndReason"
+              }
+            ]
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "guid",
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SavegameCheckoutStatus"
+          },
+          "takenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "type": "object"
+      },
+      "SavegameCheckoutEndReason": {
+        "description": "",
+        "enum": [
+          "CheckedIn",
+          "TakenOver",
+          "Discarded"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "CheckedIn",
+          "TakenOver",
+          "Discarded"
+        ]
+      },
+      "SavegameCheckoutStatus": {
+        "description": "",
+        "enum": [
+          "Held",
+          "Stale",
+          "Ended"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Held",
+          "Stale",
+          "Ended"
+        ]
+      },
+      "SavegameDto": {
+        "additionalProperties": false,
+        "properties": {
+          "checkout": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameCheckoutDto"
+              }
+            ]
+          },
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "head": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameVersionDto"
+              }
+            ]
+          },
+          "id": {
+            "format": "guid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SavegameVersionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "baseVersion": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "checkoutId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/UserDto"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "number": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SavegameVersionOrigin"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "profileRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SavegameVersionOrigin": {
+        "description": "",
+        "enum": [
+          "Created",
+          "CheckedIn",
+          "Forced",
+          "Restored"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Created",
+          "CheckedIn",
+          "Forced",
+          "Restored"
+        ]
       },
       "SetModVersionImagesRequest": {
         "additionalProperties": false,
@@ -914,6 +1289,19 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateSavegameRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "guid",
             "type": "string"
           }
         },
@@ -1047,6 +1435,140 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateModUploadLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/createSavegameDownloadLink": {
+      "post": {
+        "operationId": "CreateSavegameDownloadLinkV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavegameDownloadLinkRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSavegameDownloadLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/createSavegameUploadLink": {
+      "post": {
+        "operationId": "CreateSavegameUploadLinkV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavegameUploadLinkRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSavegameUploadLinkResponse"
                 }
               }
             },
@@ -3469,6 +3991,834 @@
         ],
         "tags": [
           "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames": {
+      "get": {
+        "operationId": "GetSavegamesV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SavegameDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      },
+      "post": {
+        "operationId": "PublishSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishSavegameRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavegameDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}": {
+      "delete": {
+        "operationId": "DeleteSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      },
+      "put": {
+        "operationId": "UpdateSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavegameRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavegameDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/checkouts": {
+      "get": {
+        "operationId": "GetSavegameCheckoutsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 3
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSavegameCheckoutsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      },
+      "post": {
+        "operationId": "CheckOutSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOutSavegameResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/checkouts/current": {
+      "delete": {
+        "operationId": "DiscardSavegameCheckoutV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions": {
+      "get": {
+        "operationId": "GetSavegameVersionsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 3
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int32",
+              "nullable": true,
+              "type": "integer"
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSavegameVersionsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      },
+      "put": {
+        "operationId": "CheckInSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckInSavegameRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavegameVersionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}/restore": {
+      "post": {
+        "operationId": "RestoreSavegameVersionV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreSavegameVersionRequest"
+              }
+            }
+          },
+          "x-name": "request",
+          "x-position": 4
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavegameVersionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
         ]
       }
     },

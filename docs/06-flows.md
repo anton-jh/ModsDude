@@ -350,3 +350,38 @@ installed is a list nobody is using any more. The comparison is two integers, so
 what it needs is the profile's current revision, which the client knows for the repo it has loaded
 and not for the others. See
 [07 — Mod sync design](07-mod-sync-design.md#a-profile-that-moved-on-is-drift-too).
+
+## Checking out a savegame
+
+Not built on the client yet — the server, the storage and the adapter's slot reading are. The
+design and its reasoning are in [PLAN.md](PLAN.md#phase-8--savegames); this is the shape the flow
+takes.
+
+Repo → **Saves** → a save → *Check out*. One gesture, whose second half is derived: a savegame
+version records the profile revision it was played on, so the mod list the user needs is not
+something to ask about.
+
+1. **The slot picker**, blocking and up front, because writing a slot is the destructive local step.
+   The remembered slot for this save is pre-selected if it is free, else the first free one with a
+   note that the remembered one is taken. Slots are labelled with the game's own name for the save
+   and its playtime, never `savegame3`.
+2. **The claim and the bytes.** `POST .../savegames/{id}/checkouts` takes the claim — closing
+   somebody else's open row as `TakenOver` if they had it, with a warning naming them — and the
+   packed save is downloaded over a SAS and unpacked into the slot. Neither depends on the mods
+   being right, so a user who wanders off here still holds the save and has it on disk.
+3. **The mods.** With nothing unrecognised in the mod folder, the profile is applied and there is no
+   dialog: the ordinary night is one click. Otherwise the drift notice's own two verbs — *Apply*,
+   which says that the unrecognised mods go to the Recycle Bin, or *Review*, which opens that
+   profile's mod list editor with the folder scanned. **Nothing offers to import from that dialog**;
+   import is what Save does once somebody has chosen, which is the rule the editor already follows.
+4. *Review* leaves the instance drifted, and the persistent drift notification carries it from
+   there — the answer this design already gives for an instance that cannot be applied to right now.
+
+Checking back in is the reverse and asks nothing, because the claim already names the slot. It is
+clicked from the drift notification rather than found by navigating: unchecked-in play is one of the
+three savegame drift states, and the app coming back to a folder with newer bytes in it is the
+moment worth speaking up.
+
+A check-in names the version it was built on. If somebody took the save over and checked in while
+you were away, `savegame-version-stale` says so and carries the head; forcing past it is allowed and
+records the fork as `Origin = Forced` with the version you actually played, rather than hiding it.

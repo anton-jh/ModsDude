@@ -114,11 +114,57 @@ public interface IInstanceModAdapter : IBaseModAdapter
 
 public interface IBaseSavegameAdapter
 {
+    /// <summary>
+    /// Whether this game lets a save be put somewhere that does not exist yet. False for a game with
+    /// a fixed set of numbered slots, true for one whose saves are named freely.
+    /// </summary>
+    /// <remarks>
+    /// The point of asking this rather than a slot <em>count</em> is that both games are then the
+    /// same model - an adapter-supplied list of containers, some occupied - and nothing outside an
+    /// adapter ever hardcodes twenty.
+    /// </remarks>
+    bool CanCreateSlots { get; }
+
     IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings);
     IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings);
 }
 
+/// <summary>
+/// The write side for savegames, and - as with mods - deliberately only paths and facts. The engine
+/// packs, unpacks, hashes and displaces; the adapter says where saves live, which of them exist, and
+/// what belongs in one.
+/// </summary>
 public interface IInstanceSavegameAdapter : IBaseSavegameAdapter
 {
+    /// <summary>
+    /// Every slot this instance has, occupied or not, in the order a picker should show them.
+    /// </summary>
+    /// <remarks>
+    /// Reads each occupied slot far enough to name it, because a picker that says "savegame3" is the
+    /// memory test this feature exists to remove. A slot whose contents cannot be read comes back
+    /// occupied with a null name rather than being omitted or thrown over: it is still somebody's
+    /// data and must still be impossible to overwrite by accident.
+    /// </remarks>
+    Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken);
 
+    /// <summary>The folder a slot's contents live in. It need not exist yet.</summary>
+    string GetSlotPath(SavegameSlotId slot);
+
+    /// <summary>
+    /// The slot a save called <paramref name="name"/> would occupy, for a game where
+    /// <see cref="IBaseSavegameAdapter.CanCreateSlots"/> is true. Mints an address, not a folder -
+    /// creating it is the engine's business.
+    /// </summary>
+    SavegameSlotId CreateSlot(string name) => throw new NotSupportedException("This game's savegames cannot be put in a slot that does not already exist.");
+
+    /// <summary>
+    /// Whether a file inside a slot's folder, given relative to it, is part of the save.
+    /// </summary>
+    /// <remarks>
+    /// The exclusion list is game knowledge and belongs here: screenshots, thumbnails and caches are
+    /// bulk that regenerates, and shipping them would make every check-in bigger and every content
+    /// hash differ for reasons nobody played. Defaults to taking everything, which is the safe answer
+    /// for an adapter that has not thought about it - a save that carries too much still restores.
+    /// </remarks>
+    bool BelongsInPackedSave(string relativePath) => true;
 }

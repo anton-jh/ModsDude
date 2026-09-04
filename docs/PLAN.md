@@ -28,7 +28,7 @@ out right; that slice is now closed end to end.
 | Mod upload / download | Working, both directions, straight to blob storage |
 | Profile → instance sync | Working — content store, plan, execute, manifest |
 | Drift | Detected at startup and on window activation, surfaced app-wide, re-appliable in one click |
-| Savegames | Placeholder interfaces only |
+| Savegames | Server built — entities, migration, endpoints, blob storage, sweep. Adapter reads slots. No client engine and no UI |
 | Tests | Three projects: server domain, server persistence (needs PostgreSQL), client core |
 | CI | Two jobs — Linux for the server and the OpenAPI diff, Windows for the client |
 | Deployment | None |
@@ -851,17 +851,305 @@ answer for the ones where the version strings genuinely do not say.
 
 ## Phase 8 — Savegames
 
-Only once mod sync is solid.
+Only once mod sync is solid. `IBaseSavegameAdapter`, `IInstanceSavegameAdapter` and the
+`CanSupportSavegames` flag are empty placeholders today, and nothing reads the flag.
 
-The adapter interfaces (`IBaseSavegameAdapter`, `IInstanceSavegameAdapter`) and the
-`CanSupportSavegames` flag exist as empty placeholders. The shape to aim for: a savegame
-belongs to a profile, is uploaded and downloaded through the same SAS mechanism as mods, and
-carries enough metadata to tell whose copy is newer.
+Transport is the easy half — the mod upload path pointed at a different container. The hard half
+is conflict, and this design refuses the merge rather than attempting one: **one holder at a time,
+an explicit hand-back, and a version for every hand-back.**
 
-The hard part is not transport, it is conflict. Two people playing the same shared save on
-different machines is a genuine last-writer-wins problem, and the design should probably start
-by refusing it — one save, one owner at a time, an explicit hand-off — rather than attempting
-a merge.
+> **The server is built; nothing uses it.** Entities, migration, the ten routes, blob storage, the
+> reclamation sweep and retention are done, and `IInstanceSavegameAdapter` reads a game's slots. A
+> savegame can be published, checked out, checked in, forced, restored and discarded through the
+> API — and no part of the app offers to. What is missing is everything between: the client-side
+> pack and unpack, the checkout binding being written, the slot safety checks, and all of the UI.
+> The Farming Simulator slot reader has also never been run against the real game.
+
+### A savegame belongs to the repo; a version belongs to a revision
+
+A savegame is not owned by a profile. It sits in the repo beside profiles, keyed `(RepoId, Id)` —
+the same aggregate placement as `Profile`, for the same reasons.
+
+**Every version records exactly one `ProfileRevision`**, and that is where the dependency lives. A
+save moves from revision 6 to revision 7 as the group updates mods, so pinning a profile on the
+savegame itself would either forbid that or lie about it.
+
+`Savegame.ProfileId` still exists and means something different: the standing intent that this save
+follows that profile. It is the distinction `ActiveProfile` draws against the manifest in
+[07 — Mod sync design](07-mod-sync-design.md#what-sync-records-and-why-it-has-to), one aggregate
+over. The two may legitimately disagree — branch a profile, move the save onto the branch, and the
+old versions still honestly name the old profile's revisions.
+
+### Server model
+
+- [x] `Savegame (RepoId, Id)` — `Name` unique per repo, `ProfileId`, `HeadVersion`, `Created`. No
+      navigation to its versions, for the reason `Profile` has none to its revisions.
+- [x] `SavegameVersion (RepoId, SavegameId, Number)` — `ProfileId` + `ProfileRevision` (FK,
+      `Restrict`), `ContentHash`, `SizeBytes`, `CreatedBy`, `Created`, `Label`,
+      `Origin (Created | CheckedIn | Forced | Restored)`, `BaseVersion`, `CheckoutId?`. Numbers
+      one-based, so somebody can say one out loud and find it — but, unlike a revision number,
+      **not contiguous**: pruning leaves the gap where an old version was, because renumbering would
+      make yesterday's sentence point at a different save.
+- [x] **A check-in names the version it was built on**, and a stale base is refused with
+      `savegame-version-stale` carrying what the head is now. The primary key on
+      `(RepoId, SavegameId, Number)` is what makes that true rather than merely likely — the same
+      argument as [Phase 4.5](#phase-45--profile-revisions), one aggregate over.
+- [x] **Forcing over a stale base copies forward.** The forced check-in becomes the new head,
+      stamped `Origin = Forced` with `BaseVersion` naming what was actually played. The fork ends
+      up in the record without anybody needing a tree.
+- [x] **A check-in whose hash equals the head's mints no version.** Launching the game and quitting
+      must not cost a 400 MB blob and a line of history. A save that changes nothing mints nothing,
+      exactly as for revisions.
+- [x] Authorization: Guest downloads; Member publishes, checks in, forces, and takes a checkout.
+
+The consequence to accept knowingly: **a profile that has been played can no longer be deleted**,
+because a version still names one of its revisions and the foreign key is `Restrict`. Same bargain
+as a pinned mod version one level up, and it should be reported the way
+`ProfileRevisionExtensions.CheckIfVersionIsDependedOn` reports its own rather than surfacing as a
+database error.
+
+### The checkout is a log, not a field
+
+- [x] `SavegameCheckout`, keyed on `Id` alone and carrying `(RepoId, SavegameId)` — `UserId`,
+      `TakenAt`, `ExpiresAt`, `EndedAt?`,
+      `EndedReason (CheckedIn | TakenOver | Discarded)`.
+- [x] **Expiry is not an end reason.** An expired claim is still the open row — it just reads as
+      stale — because nothing runs to close it and a job that did would be inventing an event nobody
+      caused. `GetStatus(now)` folds the two facts into `Held | Stale | Ended`, reporting `Ended`
+      ahead of expiry: what actually happened outranks what would have happened.
+- [x] **The current holder is the open row.** A filtered unique index on `(RepoId, SavegameId)`
+      where `EndedAt is null` permits one, so there is no current-checkout field to keep in step
+      with the history sitting beside it.
+- [x] `SavegameVersion.CheckoutId` joins the two halves into one timeline — check-ins are already
+      history, so only the check-out half needs recording. Null for a publish, and for a forced
+      check-in taken without a checkout.
+- [x] **The claim expires, and is renewed while it is held.** Somebody who checks out on Friday and
+      goes on holiday has to read as stale rather than as holding it: a warning that never clears is
+      a warning everybody learns to click past, which is
+      [Phase 4](#phase-4--make-drift-unmissable)'s argument seen from the other end.
+- [x] **Taking it anyway is allowed.** It closes the previous row as `TakenOver` and warns naming
+      who holds it and since when. The checkout is the social half; the base-version check is the
+      mechanical one, and only the second is a guarantee.
+- [x] **The log is never pruned with the versions.** The rows are tiny and outlive the blobs, so
+      history can still say that a version existed and was pruned.
+
+### Storage and retention
+
+- [x] Blobs at **`{repoId}/{savegameId}/{contentHash}`**, through the same SAS mint as mods —
+      addressed by content rather than by version number, which is the one place this deliberately
+      diverges from `ModStorageService`. Numbering the blob would have two people checking in at the
+      same moment mint upload links for the same name, so whichever wrote second would silently
+      replace the other's bytes; the stale-base check decides who takes the head, but by then the
+      loser's save is already gone. Hashing also makes a restore a metadata operation rather than a
+      blob copy, and lets a duplicate check-in cost nothing.
+- [x] `BlobReclamation` grows `PlanSavegameSweep` and a third name parser. The hazard is unchanged
+      and so is the remedy: a grace period well past the SAS lifetime, and list the blobs **before**
+      reading the registrations.
+- [x] Keep the last N versions, default 10, configurable per repo. **The head is never pruned, and
+      neither is anything carrying a `Label`** — labelling a version is how somebody keeps it.
+- [x] Pruning leaves gaps in the numbering. Numbers exist to be said out loud; nothing renumbers.
+
+### Four verbs, and only one of them asks about a slot
+
+| Verb | Direction | Slot chosen | Local copy afterwards |
+| --- | --- | --- | --- |
+| **Publish** | slot → new savegame | already known | kept, now checked out |
+| **Check out** | savegame → slot | **every time** | written |
+| **Check in** | slot → new version | no | recycled |
+| **Discard** | — | no | recycled, no version minted |
+
+- [ ] **Publish is not check-in.** "Upload this new thing" and "upload a new version of that thing"
+      have opposite failure modes, and the old MVP made them one button.
+- [ ] **Check-in asks nothing.** It acts on the slot the open checkout already names. Choosing
+      between twenty near-identical folders from memory is where the MVP went wrong, and it is
+      precisely the moment where a wrong answer publishes somebody else's farm under this save's
+      name and burns a version doing it.
+- [ ] **Discard ends a checkout without minting a version** — taken by mistake, never played.
+      Without it the only ways out are a junk version or waiting to be taken over.
+
+### Slots
+
+- [ ] **A slot is occupied by ModsDude only while a save is checked out**; check-in frees it by
+      recycling the local copy. That is what removes any need for eviction machinery — the slots in
+      use are the saves actually being played, which is one or two, not twenty.
+- [ ] **The live checkout binding is authoritative and persisted** in `LocalState`: which slot holds
+      which savegame at which version, and the hash that was written there. Once somebody has
+      played, the bytes match no version on the server, so nothing can re-derive it. Same argument
+      as `ActiveProfile`, and the same conclusion.
+- [ ] **The last-slot hint is a separate, advisory thing**, kept after check-in purely to
+      pre-select next time. Never repaired, never trusted, and worth nothing when wrong — the
+      `SyncManifest` category.
+- [ ] **The picker is shown on every check-out.** The hint pre-selects; it never decides.
+      Pre-selection order: the slot this savegame used last if it is free → otherwise the first
+      free slot, saying plainly that the remembered one is taken → otherwise nothing pre-selected,
+      and the list is of occupied slots.
+- [ ] A savegame is checked out to at most one slot per instance.
+- [ ] **"No free slot" is still a state**, because the remaining slots can be full of saves
+      ModsDude knows nothing about. The answer there is the unrecognised-slot confirmation below,
+      not a ranked eviction.
+
+### Slot safety
+
+- [ ] A **free** slot is written without a confirmation.
+- [ ] **Another checked-out savegame** is refused rather than warned about: that slot holds play
+      nobody has checked in. Offer checking that one in first, as a single action.
+- [ ] An **unrecognised** slot — somebody's own save, never published — needs a confirmation naming
+      what the game calls it, and the displaced folder goes to `IRecycleBin`, with the store's
+      quarantine as the fallback on a volume that has no bin. Same rule and the same reasoning as
+      an unrecognised mod file: see [07 — Mod sync design](07-mod-sync-design.md#uninstall-rules).
+- [ ] **Check-in recycles the local copy only after the upload is verified.**
+- [ ] Slots are labelled with the game's own name for the save and its playtime — never
+      `savegame3`. The folder number is an implementation detail the player has never thought in,
+      and a picker that shows it is the memory test again.
+
+### The adapter
+
+- [x] `IBaseSavegameAdapter` returns a slot **list**, not a count, plus whether it can mint new
+      ones. A fixed-slot game and one with free-form save names are then the same model, and
+      nothing outside the adapter ever learns a number.
+- [x] `IInstanceSavegameAdapter` supplies: enumerate the slots, the path of one, what belongs in a
+      packed save and what is excluded from it. The engine performs the filesystem work, exactly as
+      it does for mods — adapters supply paths.
+- [x] **Anything read out of the save file is display-only**: in-game date, money, the mod list it
+      believes it needs. The recorded `ProfileRevision` is the truth. Same rule as
+      `ModVersion.Attributes` — see [02 — Domain model](02-domain-model.md#modversion).
+
+### Drift, reusing what is already there
+
+- [ ] Three states, found by the same startup-and-window-activation check that already runs, and
+      surfaced in the same place as mod drift:
+      - a checked-out slot holds play newer than its recorded hash → **unchecked-in play**
+      - the server head is past the version being held → **somebody took it over and checked in**
+      - the version's revision is not the instance's applied revision → **played on a mod list this
+        folder no longer runs**
+- [ ] Each is phrased as the consequence rather than the condition — the third especially, which is
+      the case that corrupts saves and the reason locking exists at all.
+
+### Capability decides the shape, and neither half requires the other
+
+`CanSupportMods` and `CanSupportSavegames` both sit on `IBaseGameAdapter`, and either can be false.
+Three repo shapes result, and the whole difference is confined to which surfaces exist:
+
+| Repo | Sidebar | Overview leads with |
+| --- | --- | --- |
+| Mods only — every repo today | Profiles and instances, as now | Instance status and drift. Nothing about saves anywhere |
+| Mods and saves | Profiles and instances, plus a Saves item | Where you were, linking into Saves |
+| Saves only | Instances | Where you were |
+
+- [ ] **Activating a profile never mentions a savegame**, and checking one out never requires that
+      the user has thought about profiles. The two flows *offer* each other and are never steps
+      inside each other:
+      - after activating a profile that has saves and none checked out here — *"Season 4 has 3
+        saves. Check one out?"*, dismissible, and absent where the adapter has none
+      - checking out a save derives and applies its profile where the adapter has mods, and is
+        simply "write the slot" where it does not
+- [ ] **A repo whose adapter has no mods gets one implicit profile** — an empty pinned list created
+      with the repo, minting one revision that never changes. Every `SavegameVersion` then names a
+      real revision, revision drift never fires, and the variation lives entirely in the UI. The
+      alternative is a nullable foreign key whose nullability depends on adapter configuration and
+      is checked in fifteen places, which is the `IsReadOnly` column again one aggregate over.
+
+### Saves are a repo-level collection, beside Mods
+
+`Savegame` is keyed `(RepoId, Id)` and `ProfileId` is an attribute rather than a parent, so the
+faithful rendering is one repo-level list with a profile column — not a list per profile, and not
+two surfaces showing the same rows under different rules, which is the thing merging Import into
+Manage removed.
+
+- [ ] **One fixed sidebar item, not a list of entries:**
+
+      ```
+      RepoPage   Overview │ Admin │ Members │ Mods │ Saves │ Create profile │ Connect game │ ...profiles │ ...instances
+      ```
+
+      It is the sibling of Mods, sits next to it, and is absent where the adapter has no savegames —
+      exactly as Mods would be absent for an adapter with no mods. Profiles keep their own place:
+      they are destinations with three sub-pages each, and the sidebar's profile list is what
+      drag-to-activate and "everything visible is compatible by construction" both rest on.
+- [ ] **`RepoSavegamesPage` is master-detail**, the shape this client already uses three times.
+      Saves on the left — name, profile, holder chip, state — with *Check out* as the row action.
+      The selected save on the right: versions and checkouts as one timeline, and for the selected
+      entry who, when, size, label, and the profile revision it was played on, with a link into the
+      revision comparison that already exists.
+
+      **Not an accordion.** A two-pane history does not fit inside a row, and an expander moves the
+      list under the pointer — the thing the import list is explicitly ordered to avoid.
+- [ ] **Restoring copies forward**, exactly as it does for a profile revision: version 4 restored
+      while the head is 12 becomes version 13, stamped `Origin = Restored` with `BaseVersion = 4`,
+      and no bytes move because the blob is addressed by its hash. So **check-out always takes the
+      head** — there is no stale base to reason about at the moment somebody wants to play, and
+      looking at an old version without disturbing anybody is what *Take a copy* is for.
+- [ ] **The repo overview does not repeat the list.** It answers *where was I* — the instance, its
+      active profile, drift, and what you are holding — and links into Saves.
+- [ ] **`InstancePage` gains Saves**: the slot list, which is the local half — free, checked out
+      with unchecked-in play called out, or unrecognised. **Publish lives here**, because it is
+      inherently about a slot, and it asks nothing about the profile: the instance has an active one
+      to derive from.
+
+### Checking out, in order
+
+The destructive step is local and comes first, the claim is social and wants to be fast, and the
+mod question is last because it is the only one that can be deferred.
+
+- [ ] **1. The slot picker and its safety checks**, blocking, up front. Pre-selected per
+      [Slots](#slots), and the three states told apart per [Slot safety](#slot-safety).
+- [ ] **2. Take the claim and write the save into the slot.** Neither depends on the mods being
+      right, and a user who wanders off here still holds the save and has it on disk.
+- [ ] **3. Nothing unrecognised in the mod folder → apply, no dialog.** The ordinary night stays one
+      click.
+- [ ] **4. Otherwise, the drift notice's own two verbs**, because this is that problem found at a
+      different moment:
+
+      > **The mod folder has 2 mods that are not in the repo.** `FS25_BigBaler` 1.2, `FS25_Meadow` 3.0
+      >
+      > **Apply** — puts the folder on Season 4. The 2 mods go to the Recycle Bin.
+      > **Review** — opens Season 4's mod list with this folder scanned, to decide there.
+
+- [ ] **Never offer to import from that dialog.** Importing on the way past would commit files
+      nobody decided to keep, which is the argument that already put import behind Save in the
+      editor — see [09 — Mod catalog](09-mod-catalog.md#import-on-save). Import is what Save does
+      once somebody has chosen.
+- [ ] **Review lands on machinery that exists**: `GoToProfileModsAsync` carrying the instance id,
+      the folder as the one pre-enabled source, the unrecognised mods on the left as local
+      candidates, and **Save and apply** as the single button that imports what was kept and syncs.
+      What was not kept is recycled by the ordinary uninstall rule.
+- [ ] **Review leaves the instance drifted**, and the persistent notification takes it from there —
+      the same answer this design already gives for an instance that cannot be applied to right now.
+- [ ] **Apply carries the consequence in its label**, not just the verb. "Go to the Recycle Bin" is
+      the difference between a frightening button and an informed one, and it is recoverable.
+
+### Where the rest of it is surfaced
+
+- [ ] **Check-in is clicked from the drift notification**, not found by navigating to it. *"You
+      played Big Valley for 2 hours. Check it in so the others can take it."* Unchecked-in play is
+      one of the three savegame drift states, the notification is already app-level and persistent,
+      and its dismissal already expires when the set changes. A second notification competing with
+      it would be strictly worse.
+- [ ] **Reachable from both ends**, as activation is:
+
+      | From | Fixed | Chosen |
+      | --- | --- | --- |
+      | The Saves page | the savegame, and therefore its profile | the instance, where there is more than one, and the slot |
+      | The instance's Saves | the instance | the savegame, grouped by profile |
+- [ ] **State is one chip per row**, in the vocabulary the member list already uses: *Available*;
+      *You have it*, plus *unchecked-in play* where the slot has moved; *Anton has it, since 20
+      minutes ago*; *Anton has had it since 3 March* for a stale claim; *2 revisions behind*,
+      caution-coloured only where a locked pin moved between the two.
+- [ ] **The check-out confirmation is where the locked-mod warning finally lands.** This design has
+      always said locked drift deserves naming rather than a count, and nothing renders it yet. The
+      moment before somebody plays a shared save is when a map at the wrong version stops being
+      untidy and starts being a damaged save.
+- [ ] **_Take a copy_** — a third download mode, writing a save into a slot without taking the claim
+      and without a binding. It answers what a Guest is offered (the list, the history, and this),
+      and it covers a Member who wants to see what revision 4 was like without holding the save
+      hostage. The copy is an ordinary unrecognised slot from then on.
+
+### Still open
+
+- [ ] **Does check-in have a _keep playing_ option?** Keeping ten versions implies minting them
+      often, and a strict check-in makes a mid-session backup an upload followed immediately by
+      re-downloading what was just sent. Probably yes: the same version minted, the local copy and
+      the claim both kept.
 
 ## Deliberately not planned
 

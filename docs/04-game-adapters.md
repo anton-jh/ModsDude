@@ -50,7 +50,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 | Capability | Base stage | Instance stage |
 | --- | --- | --- |
 | Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `IInstanceModAdapter` — `GetInstalledMods(ct)`, plus `ModFolder`, `GetModFilePath` and `GetInstalledModPath` |
-| Savegames | `IBaseSavegameAdapter` | `IInstanceSavegameAdapter` — both currently empty |
+| Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `IInstanceSavegameAdapter` — `GetSlots(ct)`, plus `GetSlotPath`, `CreateSlot` and `BelongsInPackedSave` |
 
 `IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
@@ -352,7 +352,7 @@ the only one that exists.
 | `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => false` |
 | `FarmingSimulatorInstanceModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
-| `FarmingSimulator*SavegameAdapter` | Placeholders, no members |
+| `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and timed from its own `careerSavegame.xml`. `CanCreateSlots => false`. Untested against the real game — see [08](08-known-issues.md) |
 
 ### How a mod is read
 
@@ -419,7 +419,12 @@ Several details in this code are load-bearing and worth preserving if you touch 
 7. Nothing else. Registration is by reflection, and the UI is driven by the dynamic forms.
 
 Set `CanSupportSavegames = false` unless you implement it — the flag is what the UI checks
-before offering the feature.
+before offering the feature. Implementing it means `GetSlots` above all: a slot list rather than a
+slot *count*, so that a game with twenty numbered folders and one with freely named saves are the
+same model, and nothing above the adapter ever learns a number. Read each occupied slot far enough
+to name it the way the game does; a picker that shows `savegame3` is the memory test the feature
+exists to remove. A slot you cannot read is **occupied and unnamed**, never empty — empty is the one
+the engine overwrites without asking.
 
 Leave `SupportsHardlinks` alone unless somebody has actually tested what the game's updater does
 to a mod file. The default is `false` because the failure is silent and takes every repo on the

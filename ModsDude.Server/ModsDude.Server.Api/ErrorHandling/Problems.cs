@@ -3,6 +3,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Users;
 using System.Diagnostics;
 using System.Runtime.Serialization;
@@ -46,6 +47,60 @@ public static class Problems
         Type = ProblemType.ProfileRevisionStale,
         Title = "The profile changed while you were editing it",
         Detail = $"This save is based on revision {basedOn.Value} of profile '{profileId.Value}', which is now at revision {head.Value}. Reload the mod list and save again."
+    };
+
+    /// <summary>
+    /// The check-in was built on a version that is no longer the head - somebody took the save over
+    /// and checked in while this one was being played. <paramref name="head"/> is carried so the
+    /// client can say what it is now, and so the user can decide to force past it: forcing is
+    /// allowed, and records the fork rather than hiding it.
+    /// </summary>
+    public static CustomProblemDetails SavegameVersionStale(SavegameId savegameId, SavegameVersionNumber basedOn, SavegameVersionNumber head) => new()
+    {
+        Type = ProblemType.SavegameVersionStale,
+        Title = "The savegame changed while you were playing it",
+        Detail = $"This check-in is based on version {basedOn.Value} of savegame '{savegameId.Value}', which is now at version {head.Value}. Somebody else checked in while you were away."
+    };
+
+    /// <summary>
+    /// Two people took the same savegame in the same instant, and the one-open-claim index let
+    /// exactly one through. Taking a save from somebody is allowed; taking it from two people at
+    /// once is not a state the log can represent.
+    /// </summary>
+    public static CustomProblemDetails SavegameCheckoutConflict(SavegameId savegameId) => new()
+    {
+        Type = ProblemType.SavegameCheckoutConflict,
+        Title = "Somebody took the savegame at the same moment",
+        Detail = $"Savegame '{savegameId.Value}' was claimed by somebody else while this request was being made. Reload and decide again."
+    };
+
+    public static CustomProblemDetails SavegameNotCheckedOut(SavegameId savegameId) => new()
+    {
+        Type = ProblemType.SavegameNotCheckedOut,
+        Title = "Nobody has this savegame checked out",
+        Detail = $"Savegame '{savegameId.Value}' has no open checkout, so there is none to renew or give back."
+    };
+
+    /// <summary>
+    /// The content hash is a blob path segment, so an unparseable one has to be refused at the
+    /// boundary rather than carried inward. There is no global exception handler, and the storage
+    /// layer validates the same value on its way to building a blob name — without this the caller
+    /// gets a 500 for what is plainly a bad request. Reuses <see cref="ProblemType.InvalidHash"/>
+    /// rather than minting a savegame-specific type: it is the same fact about the same kind of
+    /// value, and every problem type is a wire contract the generated client has to learn.
+    /// </summary>
+    public static CustomProblemDetails InvalidSavegameContentHash(string contentHash) => new()
+    {
+        Type = ProblemType.InvalidHash,
+        Title = "Not a valid savegame address",
+        Detail = $"'{contentHash}' is not a lowercase hex SHA-256."
+    };
+
+    public static CustomProblemDetails SavegameFileDoesNotExist(RepoId repoId, SavegameId savegameId, string contentHash) => new()
+    {
+        Type = ProblemType.FileNotFound,
+        Title = "Cannot find file for savegame version",
+        Detail = $"Nothing is stored for repo '{repoId.Value}', savegame '{savegameId.Value}' at content hash '{contentHash}'."
     };
 
     public static CustomProblemDetails InsufficientRepoAccess(RepoMembershipLevel minimumLevel)
@@ -264,6 +319,18 @@ public static class Problems
         Detail = detail
     };
 
+    /// <summary>
+    /// A savegame follows the profile, or a version of one was played on a revision of it. Either
+    /// makes the profile undeletable - the same bargain as a pinned mod version one aggregate down,
+    /// and reported here rather than left to surface as a foreign key violation.
+    /// </summary>
+    public static CustomProblemDetails ProfileInUseBySavegame(RepoId repoId, ProfileId profileId) => new()
+    {
+        Type = ProblemType.ProfileInUseBySavegame,
+        Title = "The profile is used by a savegame",
+        Detail = $"Profile '{profileId.Value}' cannot be deleted from repo '{repoId.Value}' while a savegame follows it or was played on one of its revisions."
+    };
+
     public static CustomProblemDetails RepoNotEmpty(RepoId repoId) => new()
     {
         Type = ProblemType.RepoNotEmpty,
@@ -392,5 +459,21 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "profile-revision-stale")]
         [JsonStringEnumMemberName(_typeBaseUri + "profile-revision-stale")]
         ProfileRevisionStale,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-version-stale")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-version-stale")]
+        SavegameVersionStale,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-checkout-conflict")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-checkout-conflict")]
+        SavegameCheckoutConflict,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-not-checked-out")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-not-checked-out")]
+        SavegameNotCheckedOut,
+
+        [EnumMember(Value = _typeBaseUri + "profile-in-use-by-savegame")]
+        [JsonStringEnumMemberName(_typeBaseUri + "profile-in-use-by-savegame")]
+        ProfileInUseBySavegame,
     }
 }

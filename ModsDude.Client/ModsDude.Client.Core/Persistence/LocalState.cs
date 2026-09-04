@@ -7,6 +7,12 @@ public class LocalState
     /// older version is discarded by <see cref="StateStore"/>'s compatibility check, which is
     /// affordable while the system has no users.
     /// </summary>
+    /// <remarks>
+    /// Not bumped for the savegame collections on <see cref="PersistedLocalInstance"/>. A version 2
+    /// state deserializes with both of them empty, which reads as "this machine holds no savegame" -
+    /// true, and the right answer. Bumping would throw away every configured instance to learn
+    /// something already known.
+    /// </remarks>
     public const int CurrentVersion = 2;
 
 

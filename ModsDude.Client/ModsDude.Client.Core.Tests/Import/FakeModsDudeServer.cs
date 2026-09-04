@@ -183,6 +183,12 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 
+    public Task<CreateSavegameDownloadLinkResponse> CreateSavegameDownloadLinkV1Async(CreateSavegameDownloadLinkRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public Task<CreateSavegameUploadLinkResponse> CreateSavegameUploadLinkV1Async(CreateSavegameUploadLinkRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
     public Task DeleteModV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 

@@ -115,7 +115,7 @@ public class FarmingSimulatorInstanceGameAdapter(
     // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
     private readonly List<object> _capabilities = [
         new Func<IInstanceModAdapter>(() => new FarmingSimulatorInstanceModAdapter(instanceSettings)),
-        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter())
+        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter(instanceSettings))
         ];
 
 

@@ -28,4 +28,22 @@ public class PersistedLocalInstance
     public string? ModFolder { get; set; }
 
     public ActiveProfile? ActiveProfile { get; set; }
+
+    /// <summary>
+    /// The savegames this instance currently holds, one per occupied slot. Underivable once somebody
+    /// has played, so it is persisted rather than worked out - see
+    /// <see cref="SavegameCheckoutBinding"/>.
+    /// </summary>
+    /// <remarks>
+    /// A list rather than a single entry because a game has several slots, but a short one: a slot
+    /// is held only while a save is checked out. At most one entry per savegame and one per slot,
+    /// which is what makes a check-in able to act without asking anything.
+    /// </remarks>
+    public List<SavegameCheckoutBinding> SavegameCheckouts { get; init; } = [];
+
+    /// <summary>
+    /// Where each savegame was last put on this machine. Kept after a check-in, purely to pre-select
+    /// the picker next time, and discarded silently whenever it turns out to be wrong.
+    /// </summary>
+    public List<SavegameSlotHint> SavegameSlotHints { get; init; } = [];
 }

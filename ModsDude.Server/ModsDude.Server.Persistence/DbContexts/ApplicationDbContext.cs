@@ -6,6 +6,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions;
 
@@ -19,6 +20,9 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Profile> Profiles { get; init; }
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
+    public required DbSet<Savegame> Savegames { get; init; }
+    public required DbSet<SavegameVersion> SavegameVersions { get; init; }
+    public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

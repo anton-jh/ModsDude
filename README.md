@@ -15,7 +15,8 @@ reference implementation.
 
 > **Status: in development.** The core loop works end to end — import mods, pin them in a
 > profile, sync that profile into a game's mod folder — and drift from a profile is surfaced and
-> re-appliable. Profile history landed most recently. Savegames are untouched. See
+> re-appliable. Savegames landed most recently, server-side only — they can be published, checked
+> out and checked in through the API, and no part of the app offers to yet. See
 > [docs/PLAN.md](docs/PLAN.md).
 
 ## Documentation

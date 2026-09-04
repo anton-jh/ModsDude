@@ -70,10 +70,20 @@ and import** reports that the profile could not be opened, and **Re-apply now** 
 both of its buttons are dead. Nothing narrows the drift set to repos the signed-in user can
 actually reach. See [05](05-client.md#authentication) for what a switch does clear.
 
-### Savegames are placeholder interfaces
+### Savegames have a server and an adapter, and nothing that uses them
 
-`IBaseSavegameAdapter` and `IInstanceSavegameAdapter` have no members, and
-`CanSupportSavegames` is read by nothing. Deliberate — [Phase 8](PLAN.md#phase-8--savegames).
+The server side of [Phase 8](PLAN.md#phase-8--savegames) is built — entities, migration, endpoints,
+blob storage, the reclamation sweep — and `IInstanceSavegameAdapter` now enumerates slots, names
+them from the save's own data, and says what belongs in a packed save.
+
+What does not exist yet is everything between: no client-side pack/unpack, no checkout binding in
+`LocalState`, no slot safety checks, no UI, and `CanSupportSavegames` is still read by nothing. So a
+savegame can be created, checked in and out through the API, and no part of the app offers to.
+
+The Farming Simulator slot reader is also **written against the observed layout and never run
+against the real game** — twenty `savegameN` folders, `careerSavegame.xml`, `settings/savegameName`
+and `settings/playTime`. It degrades rather than throws where that is wrong (a slot it cannot read
+is occupied and unnamed, never empty), but the names and the playtimes it produces are unverified.
 
 ## Traps in the model
 

@@ -4,6 +4,7 @@ using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Maintenance;
 
@@ -72,11 +73,13 @@ public class BlobReclamationService(
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var modStorage = scope.ServiceProvider.GetRequiredService<IModStorageService>();
         var imageStorage = scope.ServiceProvider.GetRequiredService<IModImageStorageService>();
+        var savegameStorage = scope.ServiceProvider.GetRequiredService<ISavegameStorageService>();
 
         DateTimeOffset cutoff = timeService.Now() - options.Value.MinimumBlobAge;
 
         await SweepModsAsync(dbContext, modStorage, cutoff, cancellationToken);
         await SweepImagesAsync(dbContext, imageStorage, cutoff, cancellationToken);
+        await SweepSavegamesAsync(dbContext, savegameStorage, cutoff, cancellationToken);
     }
 
     private async Task SweepModsAsync(
@@ -128,6 +131,29 @@ public class BlobReclamationService(
         var plan = BlobReclamation.PlanImageSweep(stored, referenced, cutoff);
 
         await ApplyAsync("mod-images", plan, stored.Count, storage.DeleteStoredBlob, cancellationToken);
+    }
+
+    private async Task SweepSavegamesAsync(
+        ApplicationDbContext dbContext,
+        ISavegameStorageService storage,
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken)
+    {
+        var stored = new List<StoredBlob>();
+        await foreach (var blob in storage.ListStoredSavegames(cancellationToken))
+        {
+            stored.Add(blob);
+        }
+
+        // A set of addresses rather than one entry per version, because several versions can name
+        // one address: a restore copies an old version forward under the same hash, and so does a
+        // night that changed nothing. So the question worth asking of a blob is whether anything
+        // still refers to it, never how many versions do or which one owns it.
+        var registered = await dbContext.SavegameVersions.GetRegisteredBlobAddressesAsync(cancellationToken);
+
+        var plan = BlobReclamation.PlanSavegameSweep(stored, registered, cutoff);
+
+        await ApplyAsync("savegames", plan, stored.Count, storage.DeleteStoredBlob, cancellationToken);
     }
 
     private async Task ApplyAsync(
