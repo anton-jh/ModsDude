@@ -16,6 +16,13 @@ internal class ModStorageService(
     private const int _sasLifetime = 30;
 
     /// <summary>
+    /// How far a SAS is backdated to absorb the difference between this server's clock and the
+    /// storage account's. Generous on purpose: the cost of too much is a credential usable slightly
+    /// earlier than intended, and the cost of too little is an upload that fails outright.
+    /// </summary>
+    private static readonly TimeSpan _clockSkewAllowance = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it uploads, because the API never
     /// sees the bytes and so cannot compute it; the SAS it uploads over already carries Write, which
     /// is the permission Put Blob needs to set metadata alongside the content.
@@ -95,8 +102,13 @@ internal class ModStorageService(
     {
         var blobClient = GetBlobClient(repoId, modId, versionId);
 
-        var startsOn = DateTimeOffset.UtcNow;
-        var expiresOn = startsOn.AddMinutes(_sasLifetime);
+        // Backdated, because the signature is checked against Azure's clock rather than ours. A key
+        // starting at this instant is rejected outright by a storage node running a second behind -
+        // "Signature not valid in the specified time frame" - and the failure lands on the client
+        // mid-upload, where it reads as an authentication problem rather than as the clock difference
+        // it is. The window still ends _sasLifetime from now, so nothing is valid for longer.
+        var startsOn = DateTimeOffset.UtcNow - _clockSkewAllowance;
+        var expiresOn = DateTimeOffset.UtcNow.AddMinutes(_sasLifetime);
 
         var userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn, expiresOn, cancellationToken);
 
