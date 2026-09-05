@@ -342,13 +342,14 @@ See [09 — Mod catalog](09-mod-catalog.md#serving-them-back).
 Blob storage has no batch existence call, so `CheckWhichExist` is a bounded parallel fan-out; the
 batch is a batch to the *client*, which is where the round trips that matter are.
 
-`Program.cs` calls `EnsureContainerExists` once at startup, beside the migration. Unlike the
+`Program.cs` ensures **every** container it writes to exists at startup, beside the migration - `mods`, `mod-images` and `savegames`, each independently so one failure does not stop the others. Unlike the
 migration it is **not** fatal — the API serves every metadata route without it, and a storage
 account that is briefly unreachable is no reason to refuse to start — but it is logged as an error,
 because uploads fail until it succeeds and [the client absorbs those
 failures](05-client.md#absorbed-is-not-hidden) by design. Without it, a fresh storage account
-presents as imagery that silently never appears. The `mods` container is not created this way:
-mod files go over a SAS, and the container predates all of this.
+presents as a feature that silently never works — which is exactly how the `savegames` container
+first announced itself. Going over a SAS is no exemption: the client cannot create what it is
+handed a link into, so every container this server addresses is ensured here.
 
 ### Savegame blobs
 

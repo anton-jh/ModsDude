@@ -33,6 +33,13 @@ internal class SavegameStorageService(
     public string ContentHashMetadataKey => _contentHashMetadataKey;
 
 
+    public async Task EnsureContainerExists(CancellationToken cancellationToken)
+    {
+        await blobServiceClient
+            .GetBlobContainerClient(_savegamesContainerName)
+            .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+    }
+
     public async Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
         var result = await GetBlobClient(repoId, savegameId, contentHash).ExistsAsync(cancellationToken);

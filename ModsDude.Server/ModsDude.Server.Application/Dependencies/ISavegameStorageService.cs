@@ -44,6 +44,12 @@ public interface ISavegameStorageService
     /// Whether these bytes are already stored for this savegame. True is the answer that makes a
     /// re-check-in free: the address is the hash, so a blob that is there is the same save.
     /// </summary>
+    /// <summary>
+    /// Creates the container if it is not there. Called at startup rather than before each write:
+    /// a fresh storage account should not present as savegames that silently never upload.
+    /// </summary>
+    Task EnsureContainerExists(CancellationToken cancellationToken);
+
     Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>

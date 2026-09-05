@@ -26,6 +26,13 @@ internal class ModStorageService(
     public string ContentHashMetadataKey => _contentHashMetadataKey;
 
 
+    public async Task EnsureContainerExists(CancellationToken cancellationToken)
+    {
+        await blobServiceClient
+            .GetBlobContainerClient(_modsContainerName)
+            .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+    }
+
     public async Task<bool> CheckIfModExists(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
     {
         var result = await GetBlobClient(repoId, modId, versionId).ExistsAsync(cancellationToken);

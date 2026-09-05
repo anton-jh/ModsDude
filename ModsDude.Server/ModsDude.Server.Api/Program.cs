@@ -160,18 +160,30 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
         .Database.Migrate();
 
-    // Not fatal, unlike the migration above: the API serves every metadata route perfectly well
-    // without it, and a storage account that is momentarily unreachable is not a reason to refuse
-    // to start. Logged as an error because uploads will fail until it succeeds, and the client
-    // absorbs those failures by design.
-    try
+    // Every container this server writes to, created if it is not there. Not fatal, unlike the
+    // migration above: the API serves every metadata route perfectly well without them, and a
+    // storage account that is momentarily unreachable is not a reason to refuse to start. Logged as
+    // an error because uploads fail until it succeeds, and a fresh storage account otherwise
+    // presents as a feature that silently never works.
+    var containers = new (string Name, Func<CancellationToken, Task> Ensure)[]
     {
-        await scope.ServiceProvider.GetRequiredService<IModImageStorageService>()
-            .EnsureContainerExists(CancellationToken.None);
-    }
-    catch (Exception exception)
+        ("mod image", scope.ServiceProvider.GetRequiredService<IModImageStorageService>().EnsureContainerExists),
+        ("mod", scope.ServiceProvider.GetRequiredService<IModStorageService>().EnsureContainerExists),
+        ("savegame", scope.ServiceProvider.GetRequiredService<ISavegameStorageService>().EnsureContainerExists)
+    };
+
+    foreach (var (name, ensure) in containers)
     {
-        app.Logger.LogError(exception, "Could not ensure the mod image container exists. Image uploads will fail until it does.");
+        try
+        {
+            await ensure(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            // One failure must not stop the others being tried: they are independent, and a
+            // permission problem on one says nothing about the rest.
+            app.Logger.LogError(exception, "Could not ensure the {Container} container exists. Uploads of that kind will fail until it does.", name);
+        }
     }
 }
 

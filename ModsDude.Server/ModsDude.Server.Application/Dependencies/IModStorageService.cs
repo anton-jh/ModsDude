@@ -10,6 +10,9 @@ public interface IModStorageService
     /// </summary>
     string ContentHashMetadataKey { get; }
 
+    /// <inheritdoc cref="IModImageStorageService.EnsureContainerExists"/>
+    Task EnsureContainerExists(CancellationToken cancellationToken);
+
     Task<bool> CheckIfModExists(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     /// <summary>
