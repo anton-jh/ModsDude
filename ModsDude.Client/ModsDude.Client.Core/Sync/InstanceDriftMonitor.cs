@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Sync;
 
@@ -43,7 +44,16 @@ public interface IProfileRevisions
 /// </param>
 public sealed record InstanceDrift(DriftCandidate Instance, InstanceDriftReport Report, string? ProfileName)
 {
-    public bool IsDrifted => Report.Status is InstanceDriftStatus.Drifted;
+    /// <summary>
+    /// Whether this instance is worth telling somebody about.
+    /// </summary>
+    /// <remarks>
+    /// A held savegame that has moved counts, even where the mod folder is exactly what was
+    /// installed. <see cref="InstanceDriftStatus"/> is a statement about the mod folder and stays
+    /// one; that the notice fires for two different kinds of problem is this line's business, not
+    /// that enum's.
+    /// </remarks>
+    public bool IsDrifted => Report.Status is InstanceDriftStatus.Drifted || Report.HasSavegameDrift;
 }
 
 /// <param name="Reason">Only for the throttle: a check the user asked for is never dropped.</param>
@@ -95,6 +105,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     private readonly InstanceDriftService _driftService;
     private readonly SyncManifestStore _manifestStore;
     private readonly IProfileRevisions? _profileRevisions;
+    private readonly ISavegameService? _savegames;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
 
@@ -105,17 +116,23 @@ public sealed class InstanceDriftMonitor : IDisposable
     private IReadOnlyList<InstanceDrift> _results = [];
 
 
+    /// <param name="savegames">
+    /// Where the savegame half of the answer comes from. Optional, and absent for a build with no
+    /// savegame support composed - the notice then says exactly what it has always said.
+    /// </param>
     public InstanceDriftMonitor(
         IDriftCandidateSource candidates,
         InstanceDriftService driftService,
         SyncManifestStore manifestStore,
         IProfileRevisions? profileRevisions = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ISavegameService? savegames = null)
     {
         _candidates = candidates;
         _driftService = driftService;
         _manifestStore = manifestStore;
         _profileRevisions = profileRevisions;
+        _savegames = savegames;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -161,6 +178,23 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// </summary>
     /// <returns>False where the throttle swallowed the request, so nothing was looked at.</returns>
     public bool Check(DriftCheckReason reason = DriftCheckReason.Explicit)
+        => CheckAsync(reason).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// The same check off the calling thread, since it lists directories - and now hashes savegame
+    /// slots - which may be slow.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Task.Run(Func{Task{bool}})"/> rather than awaiting the core directly, so that the
+    /// whole of it - including the synchronous directory listings before the first await - is off the
+    /// caller's thread, and so that <see cref="Check"/> can block on it from a UI thread without the
+    /// continuations queueing behind the block it is itself holding.
+    /// </remarks>
+    public Task<bool> CheckAsync(DriftCheckReason reason = DriftCheckReason.Explicit)
+        => Task.Run(() => CheckCoreAsync(reason));
+
+
+    private async Task<bool> CheckCoreAsync(DriftCheckReason reason)
     {
         lock (_lock)
         {
@@ -176,8 +210,20 @@ public sealed class InstanceDriftMonitor : IDisposable
 
         foreach (var candidate in _candidates.GetDriftCandidates())
         {
+            // Asked for every instance, including ones with no active profile: holding somebody's
+            // evening in a slot is worth saying whether or not this folder has ever been synced.
+            var savegameDrift = await CheckSavegamesAsync(candidate.InstanceId);
+
             if (candidate.ActiveProfile is not ActiveProfile active)
             {
+                if (savegameDrift.Count > 0)
+                {
+                    results.Add(new InstanceDrift(
+                        candidate,
+                        InstanceDriftReport.For(InstanceDriftStatus.NoActiveProfile) with { SavegameDrift = savegameDrift },
+                        null));
+                }
+
                 continue;
             }
 
@@ -185,7 +231,8 @@ public sealed class InstanceDriftMonitor : IDisposable
                 candidate.InstanceId,
                 active,
                 candidate.ModFolder,
-                currentRevision: _profileRevisions?.GetHeadRevision(active));
+                currentRevision: _profileRevisions?.GetHeadRevision(active),
+                savegameDrift: savegameDrift);
 
             // Only a drifted instance needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
@@ -212,9 +259,30 @@ public sealed class InstanceDriftMonitor : IDisposable
         return true;
     }
 
-    /// <summary>The same check off the calling thread, since it lists directories that may be slow.</summary>
-    public Task<bool> CheckAsync(DriftCheckReason reason = DriftCheckReason.Explicit)
-        => Task.Run(() => Check(reason));
+    /// <summary>
+    /// The savegame half, or nothing where this build has none.
+    /// </summary>
+    /// <remarks>
+    /// Its failures are swallowed on purpose. The mod half of the answer is the one that has always
+    /// been there and it is computed already; losing all of it because a save folder went missing
+    /// mid-check would trade a working notice for an exception on a background thread.
+    /// </remarks>
+    private async Task<IReadOnlyList<Savegames.SavegameDrift>> CheckSavegamesAsync(Guid instanceId)
+    {
+        if (_savegames is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            return await _savegames.CheckDriftAsync(instanceId, CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
 
     /// <summary>
     /// Silences the notice for the drift that is on screen right now, and nothing else. There is no
@@ -332,6 +400,9 @@ public sealed class InstanceDriftMonitor : IDisposable
                     // So that a dismissed notice comes straight back when the profile moves again,
                     // which is a different problem than the one that was waved away.
                     x.Report.AppliedRevision,
-                    x.Report.CurrentRevision)));
+                    x.Report.CurrentRevision,
+                    // And when a savegame goes wrong under a dismissed mod warning: an evening that
+                    // exists only on this disk is not covered by having waved away two stray mods.
+                    string.Join(',', x.Report.SavegameDrift.Select(s => $"{s.SavegameId}:{s.Kind}")))));
     }
 }

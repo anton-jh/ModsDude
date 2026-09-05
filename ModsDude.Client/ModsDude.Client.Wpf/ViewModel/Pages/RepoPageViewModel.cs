@@ -39,6 +39,7 @@ public partial class RepoPageViewModel
         InstancePageViewModel.Factory instancePageViewModelFactory,
         CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
+        RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         ProfileService profileService,
         LastSelectionRepository lastSelectionRepository,
         NavigationLockService navigationLockService,
@@ -68,11 +69,21 @@ public partial class RepoPageViewModel
                 .RestrictIf(isNotAdmin, "Only an admin can rename this repo, change its game settings or delete it."),
             new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo))
                 .RestrictIf(isGuest, "Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level."),
-            new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo)),
-            new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
-                .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."),
-            connectGameMenuItem
+            new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo))
         ];
+
+        // Saves is the sibling of Mods and sits next to it, and is *absent* rather than closed where
+        // the adapter has no savegames - exactly as Mods would be for an adapter with no mods. That is
+        // the distinction between a restriction and a capability: a level is something to ask an admin
+        // for, and a game that has no savegames is not.
+        if (repo.Adapter.CanSupportSavegames)
+        {
+            MenuItems.Add(new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo)));
+        }
+
+        MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+            .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));
+        MenuItems.Add(connectGameMenuItem);
 
         Instances = [];
         _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);

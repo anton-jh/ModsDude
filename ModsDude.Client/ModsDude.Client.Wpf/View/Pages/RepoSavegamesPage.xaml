@@ -1,0 +1,299 @@
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.RepoSavegamesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=pvm:RepoSavegamesPageViewModel, IsDesignTimeCreatable=False}"
+      Title="RepoSavegamesPage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Grid RowDefinitions="auto auto auto auto *">
+
+            <TextBlock Grid.Row="0"
+                       Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding RepoName}" />
+            <TextBlock Grid.Row="1"
+                       Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                       Text="Saves"
+                       Margin="0 8 0 24" />
+
+            <TextBlock Grid.Row="2"
+                       Margin="0 0 0 12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                       Text="Every save in this repo, and which profile each one follows. One person holds a save at a time and hands it back explicitly - so checking one out stops anybody else taking it until you check it in. Taking a copy stops nobody." />
+
+            <Border Grid.Row="3"
+                    Margin="0 0 0 12"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                    Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock Text="{Binding Status}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Border>
+
+            <Grid Grid.Row="4" ColumnDefinitions="420 *">
+
+                <!-- The saves. -->
+                <Border Grid.Column="0"
+                        Margin="0 0 12 0"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    <Grid RowDefinitions="* auto auto">
+
+                        <ListBox Grid.Row="0"
+                                 ItemsSource="{Binding Savegames}"
+                                 SelectedItem="{Binding Selected, Mode=TwoWay}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:SavegameListItemViewModel}">
+                                    <Grid Margin="0 6" ColumnDefinitions="auto * auto">
+
+                                        <!-- Whoever holds it, drawn the same way they are drawn in the
+                                             member list. An identity, not a warning. -->
+                                        <Border Grid.Column="0"
+                                                Width="28" Height="28"
+                                                Margin="0 0 10 0"
+                                                CornerRadius="14"
+                                                VerticalAlignment="Top"
+                                                Background="{Binding HolderColor}"
+                                                ToolTip="{Binding HolderTag}"
+                                                Visibility="{Binding HasHolder, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock Text="{Binding HolderInitial}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Foreground="White"
+                                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                            <TextBlock Margin="0 2 0 0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding ProfileName}" />
+
+                                            <TextBlock Margin="0 2 0 0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Text="{Binding Summary}" />
+
+                                            <ItemsControl Margin="0 6 0 0" ItemsSource="{Binding Chips}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" Margin="8 0 0 0" VerticalAlignment="Top">
+                                            <!-- Never offered to a guest: a picker leading to a refusal
+                                                 is worse than one never offered. -->
+                                            <Button Content="Check out"
+                                                    HorizontalAlignment="Stretch"
+                                                    Style="{DynamicResource AccentButtonStyle}"
+                                                    ToolTip="Takes the claim and writes it into a slot. Nobody else can take it until you check it in."
+                                                    Command="{Binding CheckOutCommand}"
+                                                    Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <Button Margin="0 4 0 0"
+                                                    Content="Take a copy"
+                                                    HorizontalAlignment="Stretch"
+                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                    ToolTip="Writes it into a slot and claims nothing. Whoever holds it keeps holding it."
+                                                    Command="{Binding TakeCopyCommand}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Grid.Row="0"
+                                   Margin="16"
+                                   TextWrapping="Wrap"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="No saves here yet. Publish one from a game installation's Saves tab, and it appears in this list for everybody."
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="12 4"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="Reading the repo's saves…"
+                                   Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <Border Grid.Row="2"
+                                BorderThickness="0 1 0 0"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                            <Button Margin="12"
+                                    HorizontalAlignment="Left"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Content="Refresh"
+                                    Command="{Binding RefreshCommand}" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Its history: versions and checkouts as one column. -->
+                <Border Grid.Column="1"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    <Grid RowDefinitions="auto * auto auto"
+                          Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                        <Grid Grid.Row="0" Margin="16 12" ColumnDefinitions="* auto">
+                            <TextBlock Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}"
+                                       Text="{Binding SelectedTitle}" />
+
+                            <!-- Into the profile's own history, where two revisions can be compared
+                                 properly. Repeating a cut-down comparison here would be a second
+                                 answer to keep true. -->
+                            <Button Grid.Column="1"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Content="See the profile's history"
+                                    ToolTip="Opens this save's profile, where any two revisions can be compared."
+                                    Command="{Binding CompareRevisionsCommand}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ListBox ItemsSource="{Binding Timeline}"
+                                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
+                                        <Grid Margin="0 4" ColumnDefinitions="* auto">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding Title}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                                <TextBlock Margin="0 2 0 0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding Detail}" />
+
+                                                <TextBlock Margin="0 2 0 0"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           Style="{DynamicResource CaptionTextBlockStyle}">
+                                                    <Run Text="{Binding Who, Mode=OneWay}" />
+                                                    <Run Text="·" />
+                                                    <Run Text="{Binding AgoText, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <Border Grid.Column="1"
+                                                    Margin="8 0 0 0"
+                                                    VerticalAlignment="Top"
+                                                    Style="{StaticResource StatusChip}"
+                                                    Background="{DynamicResource AccentFillColorSecondaryBrush}"
+                                                    Visibility="{Binding IsHead, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="Current"
+                                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <TextBlock Text="Reading this save's history…"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding IsLoadingTimeline, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </Grid>
+
+                        <!-- What the selected entry was, and the two things that can be done with it. -->
+                        <Border Grid.Row="2"
+                                BorderThickness="0 1 0 0"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Visibility="{Binding HasSelectedEntry, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Margin="16 12" DataContext="{Binding SelectedEntry}">
+
+                                <TextBlock Text="{Binding Title}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                <TextBlock Margin="0 4 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                    <Run Text="{Binding Who, Mode=OneWay}" />
+                                    <Run Text="·" />
+                                    <Run Text="{Binding WhenText, Mode=OneWay}" />
+                                </TextBlock>
+
+                                <TextBlock Margin="0 2 0 0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding SizeText}"
+                                           Visibility="{Binding HasSize, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!-- The recorded truth about which mod list this was played on.
+                                     Anything read out of the save file itself is display-only. -->
+                                <TextBlock Margin="0 2 0 0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding RevisionText}"
+                                           Visibility="{Binding HasRevision, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <TextBlock Margin="0 2 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Text="{Binding Label}"
+                                           Visibility="{Binding HasLabel, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- The two verbs sit on the entry rather than on the row, because which
+                             version they act on is what the timeline selection decides. -->
+                        <StackPanel Grid.Row="3"
+                                    Orientation="Horizontal"
+                                    Margin="16 12 16 12"
+                                    HorizontalAlignment="Right"
+                                    Visibility="{Binding HasSelectedEntry, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <Button Margin="0 0 8 0"
+                                    Style="{DynamicResource AccentButtonStyle}"
+                                    Content="Check this version out"
+                                    ToolTip="An older version is copied forward as the newest one first, so nothing in between is deleted."
+                                    Command="{Binding CheckOutVersionCommand}"
+                                    Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <Button Content="Take a copy of this version"
+                                    ToolTip="Writes it into a slot and claims nothing. Whoever holds the save keeps holding it."
+                                    Command="{Binding TakeCopyVersionCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+        </Grid>
+    </Border>
+</Page>

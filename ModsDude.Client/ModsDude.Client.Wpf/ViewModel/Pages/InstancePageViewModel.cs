@@ -52,6 +52,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         InstanceDriftMonitor driftMonitor,
         ProfileApplyService applyService,
         SyncPageViewModel.Factory syncPageViewModelFactory,
+        InstanceSavegamesPageViewModel.Factory instanceSavegamesPageViewModelFactory,
         EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory)
     {
         _instance = instance;
@@ -67,9 +68,18 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Sync", () => syncPageViewModelFactory.Create(repo, instance)),
-            new MenuItemViewModel("Manage", () => editLocalInstancePageViewModelFactory.Create(repo, instance))
+            new MenuItemViewModel("Sync", () => syncPageViewModelFactory.Create(repo, instance))
         ];
+
+        // The local half of savegames: the slot list, and the one verb - publish - that is inherently
+        // about a slot. Absent rather than closed where the game has no saves, for the same reason the
+        // repo's Saves entry is.
+        if (repo.Adapter.CanSupportSavegames)
+        {
+            MenuItems.Add(new MenuItemViewModel("Saves", () => instanceSavegamesPageViewModelFactory.Create(repo, instance)));
+        }
+
+        MenuItems.Add(new MenuItemViewModel("Manage", () => editLocalInstancePageViewModelFactory.Create(repo, instance)));
 
         NavManager.Selected = MenuItems.First();
     }

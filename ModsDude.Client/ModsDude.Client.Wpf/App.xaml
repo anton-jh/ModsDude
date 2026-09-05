@@ -83,6 +83,12 @@
             <DataTemplate DataType="{x:Type pvm:SyncPageViewModel}">
                 <p:SyncPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoSavegamesPageViewModel}">
+                <p:RepoSavegamesPage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:InstanceSavegamesPageViewModel}">
+                <p:InstanceSavegamesPage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
                 <p:RepoModsPage />
             </DataTemplate>
@@ -110,6 +116,37 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ProfileSaveAsModalViewModel}">
                 <uc:ProfileSaveAsDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SavegameCheckOutModalViewModel}">
+                <uc:SavegameCheckOutDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SavegameCheckInModalViewModel}">
+                <uc:SavegameCheckInDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SavegamePublishModalViewModel}">
+                <uc:SavegamePublishDialog />
+            </DataTemplate>
+
+            <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so
+                 that "this can damage a save" is never a colour somebody picked in a template. -->
+            <DataTemplate DataType="{x:Type vm:SavegameChip}">
+                <Border Margin="0 0 4 4">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAccent}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                                    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsCaution}" Value="True">
+                                    <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+
+                    <TextBlock Text="{Binding Text}" Style="{DynamicResource CaptionTextBlockStyle}" />
+                </Border>
             </DataTemplate>
 
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,

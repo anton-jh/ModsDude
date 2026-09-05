@@ -28,7 +28,30 @@ public readonly record struct SavegameCheckoutBinding(
     string SlotId,
     int Version,
     string ContentHash,
-    DateTime WrittenAt);
+    DateTime WrittenAt)
+{
+    /// <summary>
+    /// The profile the version being held was played on, and which revision of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Recorded here because it is the only place it can be: the version's own revision lives on the
+    /// server, and asking for it is a network call in a drift check that must work offline. With both
+    /// numbers in local state, "this save was checked out against a mod list this folder no longer
+    /// runs" - the state that actually corrupts saves - costs no I/O whatsoever.
+    /// </para>
+    /// <para>
+    /// Nullable, and appended as properties rather than as positional members: a binding persisted
+    /// before this existed deserializes with both null, which reads as "not recorded" and leaves the
+    /// question unasked. Discarding those bindings instead would lose the ability to check the saves
+    /// they name back in at all, which is a far worse trade than one drift state going unreported.
+    /// </para>
+    /// </remarks>
+    public Guid? ProfileId { get; init; }
+
+    /// <inheritdoc cref="ProfileId"/>
+    public int? ProfileRevision { get; init; }
+}
 
 
 /// <summary>

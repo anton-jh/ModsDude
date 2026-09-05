@@ -37,6 +37,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly MenuItemViewModel _modsMenuItem;
+    private readonly MenuItemViewModel _historyMenuItem;
 
     private ProfileModsEditorPageViewModel? _openModsEditor;
 
@@ -82,16 +83,17 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             return profileModsEditorPageViewModelFactory.Create(repo, profile, scanInstanceId);
         });
 
+        // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
+        // this profile without curating it is exactly the person who wants to know what changed under
+        // them. Restoring and branching are what a Member level buys, and the page hides those
+        // controls rather than closing the entry.
+        _historyMenuItem = new MenuItemViewModel("History", () => profileHistoryPageViewModelFactory.Create(repo, profile));
+
         NavManager = navigationManager;
         MenuItems = [
             new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
             _modsMenuItem,
-
-            // Open to a guest, like the read-only mod list and for the same reason: somebody who
-            // syncs this profile without curating it is exactly the person who wants to know what
-            // changed under them. Restoring and branching are what a Member level buys, and the page
-            // hides those controls rather than closing the entry.
-            new MenuItemViewModel("History", () => profileHistoryPageViewModelFactory.Create(repo, profile)),
+            _historyMenuItem,
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
                 .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];
@@ -254,6 +256,21 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         }
 
         return ReferenceEquals(NavManager.Selected, _modsMenuItem);
+    }
+
+    /// <summary>
+    /// Selects the History sub-page, for a deep link from a savegame - whose versions each name the
+    /// revision they were played on, and whose "what changed under this save" is exactly the question
+    /// that page already answers.
+    /// </summary>
+    public bool TrySelectHistory()
+    {
+        if (ReferenceEquals(NavManager.Selected, _historyMenuItem) is false)
+        {
+            NavManager.Selected = _historyMenuItem;
+        }
+
+        return ReferenceEquals(NavManager.Selected, _historyMenuItem);
     }
 
     /// <summary>

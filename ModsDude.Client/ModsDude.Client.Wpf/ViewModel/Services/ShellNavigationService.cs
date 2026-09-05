@@ -52,4 +52,31 @@ public sealed class ShellNavigationService
 
         return profilePage.TrySelectMods(driftedInstanceId);
     }
+
+    /// <summary>
+    /// Into a profile's own history, where any two revisions can be compared. Reached from a savegame,
+    /// whose versions each name the revision they were played on - so "what changed under this save"
+    /// is a question this already answers, and a cut-down comparison beside the savegame list would be
+    /// a second answer to keep true.
+    /// </summary>
+    /// <returns>False where the shell is not up yet, the target is gone, or navigation was refused.</returns>
+    public async Task<bool> GoToProfileHistoryAsync(Guid repoId, Guid profileId)
+    {
+        if (_shell is not MainPageViewModel shell)
+        {
+            return false;
+        }
+
+        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
+        {
+            return false;
+        }
+
+        if (await repoPage.TrySelectProfileAsync(profileId) is not ProfilePageViewModel profilePage)
+        {
+            return false;
+        }
+
+        return profilePage.TrySelectHistory();
+    }
 }

@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Diagnostics;
@@ -118,6 +119,8 @@ public partial class App : Application
         services.AddSingleton<InstancePageViewModel.Factory>();
         services.AddSingleton<SyncPageViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
+        services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
+        services.AddSingleton<InstanceSavegamesPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
@@ -125,6 +128,10 @@ public partial class App : Application
         // One notice for the whole app, and one way in to it from outside the sidebar.
         services.AddSingleton<ShellNavigationService>();
         services.AddSingleton<ProfileApplyService>();
+
+        // Check-in is reached from a slot row and from the check-out dialog's way out of a refused
+        // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
+        services.AddSingleton<SavegameFlowService>();
         services.AddSingleton<DriftNotificationViewModel>();
 
         // Both faces of one object again: everything that absorbs a failure reports it through the
@@ -186,6 +193,12 @@ public partial class App : Application
         // profile it has loaded is on. It answers null for every other repo, which is why the check
         // still works before anything has been loaded at all.
         services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<ProfileService>());
+
+        // The savegame counterpart, populated as a side effect of the Saves page having read a list.
+        // Registered under both names for the same reason: the page records into it, the drift check
+        // reads it, and they have to be the one object.
+        services.AddSingleton<SavegameHeadVersionCache>();
+        services.AddSingleton<ISavegameHeadVersions>(sp => sp.GetRequiredService<SavegameHeadVersionCache>());
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

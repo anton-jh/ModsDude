@@ -104,6 +104,27 @@ public sealed record InstanceDriftReport(
     public IReadOnlyList<ModKey> LockedMods => [.. LockedDrift.Select(x => x.ModId)];
 
     public bool HasLockedDrift => LockedDrift.Count > 0;
+
+    /// <summary>
+    /// The savegames this instance is holding that have stopped agreeing with the server.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Carried on the same report so that one notice can say both halves. They are one situation to
+    /// the person looking at it - "this folder is not what you think it is" - and two notices racing
+    /// each other to say it is how a warning becomes something to click past.
+    /// </para>
+    /// <para>
+    /// <b>Computed elsewhere and passed in</b>, unlike every other field here. The savegame check
+    /// needs the binding store, a hydrated adapter and a full archive pass per held save; this class
+    /// is a synchronous comparison of a manifest against a directory listing, and acquiring three
+    /// dependencies of a different cost class to fold them into one method would make the cheap check
+    /// expensive for every instance that holds no savegames - which is most of them.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Savegames.SavegameDrift> SavegameDrift { get; init; } = [];
+
+    public bool HasSavegameDrift => SavegameDrift.Count > 0;
 }
 
 
@@ -145,27 +166,37 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
     /// it" bargain as <paramref name="profileDependencies"/>, and the cheap half of it. Null leaves
     /// the question unasked rather than answered "unchanged".
     /// </param>
+    /// <param name="savegameDrift">
+    /// What the savegame check found for this instance, where the caller ran one. Carried through
+    /// rather than computed here - see <see cref="InstanceDriftReport.SavegameDrift"/> - and attached
+    /// to <em>every</em> answer including the ones that stop early: a held savegame with an evening in
+    /// it is worth saying whatever the mod folder turned out to be, and an instance whose profile was
+    /// deleted underneath it is precisely a case where somebody wants to hear about their save.
+    /// </param>
     public InstanceDriftReport Check(
         Guid instanceId,
         ActiveProfile? activeProfile,
         string? modFolder,
         bool profileIsMissing = false,
         IReadOnlyCollection<DesiredMod>? profileDependencies = null,
-        int? currentRevision = null)
+        int? currentRevision = null,
+        IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null)
     {
+        var saves = savegameDrift ?? [];
+
         if (activeProfile is not ActiveProfile active)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.NoActiveProfile);
+            return InstanceDriftReport.For(InstanceDriftStatus.NoActiveProfile) with { SavegameDrift = saves };
         }
 
         if (profileIsMissing)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.DanglingProfile);
+            return InstanceDriftReport.For(InstanceDriftStatus.DanglingProfile) with { SavegameDrift = saves };
         }
 
         if (modFolder is null || Directory.Exists(modFolder) is false)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable);
+            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
         var manifest = manifestStore.TryRead(instanceId);
@@ -177,7 +208,7 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
             manifest.RepoId != active.RepoId ||
             FileSystemHelper.ArePathsEqual(manifest.ModFolder, modFolder) is false)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.NeverSynced);
+            return InstanceDriftReport.For(InstanceDriftStatus.NeverSynced) with { SavegameDrift = saves };
         }
 
         List<string> listing;
@@ -188,7 +219,7 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
         }
         catch (Exception)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable);
+            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
         var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
@@ -209,6 +240,7 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
         {
             AppliedRevision = manifest.ProfileRevision,
             CurrentRevision = currentRevision,
+            SavegameDrift = saves,
             // One entry per mod. A locked map whose file the game replaced and whose pin somebody
             // then moved is one problem, and the file is the half that is already on disk.
             LockedDrift = [.. NameLockedFiles(manifest, removed, changed).Concat(locked).DistinctBy(x => x.ModId)]
