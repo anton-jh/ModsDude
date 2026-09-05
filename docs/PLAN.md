@@ -1146,10 +1146,19 @@ mod question is last because it is the only one that can be deferred.
 
 ### Still open
 
-- [ ] **Does check-in have a _keep playing_ option?** Keeping ten versions implies minting them
-      often, and a strict check-in makes a mid-session backup an upload followed immediately by
-      re-downloading what was just sent. Probably yes: the same version minted, the local copy and
-      the claim both kept.
+- [ ] **Check-in has a _keep playing_ option.** Decided. The same version is minted, and the local
+      copy and the claim are both kept, so a mid-session backup does not become an upload followed
+      immediately by re-downloading what was just sent.
+
+Three things settled with it, and deliberately not built:
+
+- **Retention stays at ten for every repo.** Configurable-per-repo is a column, a migration and an
+  admin field for a number nobody has yet wanted to change. `SavegamePruning.PruneAsync` takes
+  `keep` as a parameter, so the day it becomes a setting it is one call site.
+- **Mods-less repos get no implicit profile yet.** The reasoning above stands and the shape is
+  decided; no adapter needs it, and building it now would be untested scaffolding.
+- **No backwards compatibility anywhere in this phase.** One developer, no users, no data worth
+  migrating.
 
 ## Deliberately not planned
 
