@@ -338,7 +338,7 @@ long-lived source, and a leaked subscription keeps a whole page graph alive.
 ## Names sort naturally
 
 `NaturalOrder.Comparer` is the one comparer behind every sort of a name a person wrote —
-mods, versions, profiles, repos, savegames, members, instances — so "Mod 10" comes after
+mods, profiles, repos, savegames, members, instances — so "Mod 10" comes after
 "Mod 9" rather than after "Mod 1". It wraps `StringComparer.CurrentCultureIgnoreCase` with
 `NaturalSort.Extension`, which leaves the letters to the culture and reads the digit runs as
 numbers.
@@ -347,6 +347,12 @@ It is deliberately **not** used for anything the machine reads. File names, cont
 volume roots and zip entries stay ordinal, because those orderings are compared against stored
 values and must not move when the thread's culture does — `SavegamePacker` and the Farming
 Simulator adapter's image ordering are both load-bearing in that way.
+
+Nor is it used where an ordering already exists. Within one mod, the repo's registered
+versions are laid out by `SequenceNumber` — the arbitrated answer every member shares — and the
+version string decides nothing; it is the last resort for a version with no sequence number,
+which is one that is not registered yet. Re-deriving an order from the strings would be a
+second opinion, free to disagree with the repo about which version is newest.
 
 The server still orders repos and savegames by name in SQL, where a natural sort is not
 available. That is a stable base the client re-sorts on arrival, so nothing depends on the

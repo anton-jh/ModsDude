@@ -918,14 +918,33 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private static string Describe(int visible, int total)
         => visible == total ? $"{total} mods" : $"{visible} of {total} mods";
 
+    /// <summary>
+    /// The order a rebuild lays the rows out in: by name, and within one mod by the order the
+    /// <em>repo</em> holds its versions in.
+    /// </summary>
+    /// <remarks>
+    /// <b>The version string is the last resort, not the tie-break.</b> A registered version has a
+    /// <see cref="CatalogModVersion.SequenceNumber"/>, which is the arbitrated answer the whole repo
+    /// shares - re-deriving an order from the strings here would be a second opinion, free to
+    /// disagree with the one <c>_newestRegistered</c> reads two lines below. Only a version with no
+    /// sequence number at all, which is one that is not registered yet, falls through to the string,
+    /// and it sorts after the registered ones because where it belongs is exactly what nobody has
+    /// decided.
+    /// </remarks>
     private static IEnumerable<CatalogModVersion> Order(IEnumerable<CatalogModVersion> versions)
         => versions
             .OrderBy(x => x.Name, NaturalOrder.Comparer)
+            // Two different mods can carry one display name, and their sequence numbers say nothing
+            // about each other - so the id separates them before either is read.
+            .ThenBy(x => x.ModId.Value, StringComparer.Ordinal)
+            .ThenBy(x => x.SequenceNumber ?? int.MaxValue)
             .ThenBy(x => x.VersionId.Value, NaturalOrder.Comparer);
 
     /// <summary>
     /// The order the right-hand list is held in, and the one an insert has to agree with: whatever
-    /// wants an answer first, then alphabetical.
+    /// wants an answer first, then alphabetical, then - within one mod - the repo's own version
+    /// order. Same rule as <see cref="Order"/>, and it has to be, since one is what a rebuild
+    /// produces and the other is where a single insert lands.
     /// </summary>
     private static readonly IComparer<ModListItemViewModel> RowOrder =
         Comparer<ModListItemViewModel>.Create((left, right) =>
@@ -939,8 +958,25 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
             var byName = NaturalOrder.Compare(left.Name, right.Name);
 
-            return byName != 0
-                ? byName
+            if (byName != 0)
+            {
+                return byName;
+            }
+
+            var byMod = string.CompareOrdinal(left.Mod.ModId.Value, right.Mod.ModId.Value);
+
+            if (byMod != 0)
+            {
+                return byMod;
+            }
+
+            // The repo's arbitrated order, not one re-derived from the strings. A version with no
+            // sequence number is not registered, and sorts after the ones that are.
+            var bySequence = (left.Mod.SequenceNumber ?? int.MaxValue)
+                .CompareTo(right.Mod.SequenceNumber ?? int.MaxValue);
+
+            return bySequence != 0
+                ? bySequence
                 : NaturalOrder.Compare(left.Version, right.Version);
         });
 
