@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
+using ModsDude.Client.Core.Tests.Sync;
 using System.Text;
 using static ModsDude.Client.Core.Tests.Keys;
 
@@ -18,13 +19,14 @@ public class ModImportServiceTests
     private readonly FakeModsDudeServer _server = new();
     private readonly RecordingModImagePublisher _imagery = new();
     private readonly FakeModFileUploader _uploader;
+    private readonly FakeRecycleBin _recycleBin = new();
     private readonly ModImportService _service;
 
 
     public ModImportServiceTests()
     {
         _uploader = new FakeModFileUploader(_server);
-        _service = new ModImportService(_server, _server, _uploader, _imagery, NullLogger<ModImportService>.Instance);
+        _service = new ModImportService(_server, _server, _uploader, _imagery, _recycleBin, NullLogger<ModImportService>.Instance);
     }
 
 
@@ -285,22 +287,154 @@ public class ModImportServiceTests
     }
 
     [Fact]
-    public async Task A_version_two_sources_disagree_about_is_refused_rather_than_guessed_at()
+    public async Task A_version_two_sources_disagree_about_is_refused_when_nothing_can_be_asked()
     {
-        var conflicted = Local("FS25_Plough", "1.0") with
-        {
-            FoundIn =
-            [
-                Occurrence(_downloads, "one build"),
-                Occurrence(_instance, "a different build of the same version")
-            ]
-        };
-
-        var result = await ImportAsync([conflicted, Local("FS25_Trailer", "1.0")]);
+        var result = await ImportAsync([Conflicted(), Local("FS25_Trailer", "1.0")]);
 
         Assert.Equal(ModImportStatus.SourceConflict, Assert.Single(result.Unfinished).Status);
         Assert.DoesNotContain(_server.CallsOf(ServerCallKind.Link), x => x.ModId == Mod("FS25_Plough"));
         Assert.Single(result.Succeeded);
+        Assert.Empty(result.Superseded);
+    }
+
+    /// <summary>
+    /// The ordinary case, and the reason this is decided by hashing rather than by file size: a mod
+    /// sitting in both the mod folder and Downloads is one file in two places, and there is nothing
+    /// to choose between them.
+    /// </summary>
+    [Fact]
+    public async Task Two_sources_holding_identical_bytes_are_never_asked_about()
+    {
+        var asked = false;
+
+        var duplicated = Local("FS25_Plough", "1.0") with
+        {
+            FoundIn =
+            [
+                Occurrence(_downloads, "one build"),
+                Occurrence(_instance, "one build")
+            ]
+        };
+
+        var result = await ImportAsync([duplicated], x => x with
+        {
+            ResolveSourceConflicts = (_, _) =>
+            {
+                asked = true;
+                return Task.FromResult<IReadOnlyDictionary<ModVersionIdentity, string>?>(null);
+            }
+        });
+
+        Assert.False(asked);
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+
+        // Nothing was chosen against, so nothing is due for the Recycle Bin - the copy that was not
+        // uploaded is the same bytes as the one that was.
+        Assert.Empty(result.Superseded);
+    }
+
+    [Fact]
+    public async Task Choosing_between_disagreeing_sources_imports_that_file_and_supersedes_the_other()
+    {
+        var result = await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("a different build of the same version")
+        });
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+
+        // The bytes that were chosen, not the first occurrence the catalog happened to list.
+        Assert.Equal(
+            await HashOfContent("a different build of the same version"),
+            _server.RecordedHash(new ModVersionIdentity(Mod("FS25_Plough"), V("1.0"))));
+
+        var superseded = Assert.Single(result.Superseded);
+
+        Assert.Equal(Path.Combine(_downloads.Path, "FS25_Plough.zip"), superseded.FilePath);
+    }
+
+    /// <summary>
+    /// The choice costs nothing until the import it was for has actually landed. A version that was
+    /// resolved and then failed leaves the repo holding neither file, and the copy on disk is all
+    /// that is left of it.
+    /// </summary>
+    [Fact]
+    public async Task A_resolved_version_that_fails_supersedes_nothing()
+    {
+        _uploader.OnUpload = _ => throw new IOException("the disk went away");
+
+        var result = await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("one build")
+        });
+
+        Assert.Equal(ModImportStatus.Failed, Assert.Single(result.Items).Status);
+        Assert.Empty(result.Superseded);
+    }
+
+    [Fact]
+    public async Task Declining_to_choose_skips_the_version_and_removes_nothing()
+    {
+        var result = await ImportAsync([Conflicted(), Local("FS25_Trailer", "1.0")], x => x with
+        {
+            ResolveSourceConflicts = (_, _) =>
+                Task.FromResult<IReadOnlyDictionary<ModVersionIdentity, string>?>(null)
+        });
+
+        Assert.Equal(ModImportStatus.SourceConflict, Assert.Single(result.Unfinished).Status);
+        Assert.Empty(result.Superseded);
+        Assert.Single(result.Succeeded);
+    }
+
+    /// <summary>The dialog is asked once for the whole run, not once per disagreeing version.</summary>
+    [Fact]
+    public async Task Every_disagreeing_version_is_asked_about_in_one_go()
+    {
+        var calls = 0;
+
+        var result = await ImportAsync(
+            [Conflicted(), Conflicted("FS25_Trailer")],
+            x => x with
+            {
+                ResolveSourceConflicts = (conflicts, _) =>
+                {
+                    calls++;
+
+                    Assert.Equal(2, conflicts.Count);
+
+                    return Task.FromResult<IReadOnlyDictionary<ModVersionIdentity, string>?>(
+                        conflicts.ToDictionary(y => y.Version.Identity, y => y.Candidates[0].Key));
+                }
+            });
+
+        Assert.Equal(1, calls);
+        Assert.Equal(2, result.Succeeded.Count);
+    }
+
+    /// <summary>
+    /// Files the user chose against, sent to the bin by the caller once its own work is done. A copy
+    /// that has already gone is not a failure - somebody deleted it themselves, which is the outcome
+    /// this was going to produce anyway.
+    /// </summary>
+    [Fact]
+    public void Recycling_superseded_files_skips_the_ones_that_are_already_gone()
+    {
+        using var directory = new TempDirectory("import-superseded");
+
+        var present = Path.Combine(directory.Path, "FS25_Plough.zip");
+        var missing = Path.Combine(directory.Path, "FS25_Trailer.zip");
+
+        File.WriteAllText(present, "rejected bytes");
+
+        var recycled = _service.RecycleSuperseded(
+        [
+            new ModSupersededFile(new ModVersionIdentity(Mod("FS25_Plough"), V("1.0")), present, "Downloads"),
+            new ModSupersededFile(new ModVersionIdentity(Mod("FS25_Trailer"), V("1.0")), missing, "Downloads")
+        ]);
+
+        Assert.Equal(1, recycled);
+        Assert.False(File.Exists(present));
+        Assert.Equal(["rejected bytes"], _recycleBin.Recycled);
     }
 
     [Fact]
@@ -404,7 +538,40 @@ public class ModImportServiceTests
         return await ModContentHasher.ComputeAsync(content, CancellationToken.None);
     }
 
+    /// <summary>
+    /// One version that two sources hold genuinely different files for - the only shape that ever
+    /// reaches the picker.
+    /// </summary>
+    private static CatalogModVersion Conflicted(string modId = "FS25_Plough")
+    {
+        return Local(modId, "1.0") with
+        {
+            FoundIn =
+            [
+                Occurrence(_downloads, "one build", modId),
+                Occurrence(_instance, "a different build of the same version", modId)
+            ]
+        };
+    }
+
+    /// <summary>Answers the picker with whichever candidate holds the given bytes.</summary>
+    private static ModSourceConflictResolver Choose(string content)
+    {
+        return async (conflicts, cancellationToken) =>
+        {
+            var wanted = await HashOfContent(content);
+
+            return conflicts.ToDictionary(
+                x => x.Version.Identity,
+                x => x.Candidates.Single(y => y.ContentHash == wanted).Key);
+        };
+    }
+
+    private static Task<string> HashOfContent(string content)
+        => ModContentHasher.ComputeAsync(new MemoryStream(Encoding.UTF8.GetBytes(content)), CancellationToken.None);
+
     private static CatalogModVersion Local(string modId, string version, string content = "mod bytes", ModSource? source = null)
+
     {
         return new CatalogModVersion(Mod(modId), V(version), modId, "A mod.", IsLocal: true, IsOnServer: false, Locked: false)
         {

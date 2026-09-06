@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Services;
@@ -38,11 +39,61 @@ public sealed class ModImportService(
     IModsClient modsClient,
     IModFileUploader uploader,
     IModImagePublisher imagePublisher,
+    IRecycleBin recycleBin,
     ILogger<ModImportService> logger)
 {
     public Task<ModImportResult> ImportAsync(ModImportRequest request, CancellationToken cancellationToken)
     {
         return new ImportRun(filesClient, modsClient, uploader, imagePublisher, request, logger).RunAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends the files the user chose against to the Recycle Bin, once whatever they were doing has
+    /// actually succeeded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Called by the caller, not by the import.</b> The import knows a version registered; it does
+    /// not know whether the profile save that registration was the first half of has committed. A
+    /// file removed for a save that never happened is a file removed for nothing.
+    /// </para>
+    /// <para>
+    /// <b>Best-effort, and never fatal.</b> A file the game is holding open stays where it is, which
+    /// costs a duplicate on disk and nothing else - the repo already has the bytes that matter.
+    /// Nothing here throws, and everything it could not do is in the log.
+    /// </para>
+    /// </remarks>
+    /// <returns>How many files reached the Recycle Bin.</returns>
+    public int RecycleSuperseded(IReadOnlyList<ModSupersededFile> superseded)
+    {
+        var recycled = 0;
+
+        foreach (var file in superseded)
+        {
+            try
+            {
+                if (File.Exists(file.FilePath) is false)
+                {
+                    continue;
+                }
+
+                if (recycleBin.TryRecycle(file.FilePath))
+                {
+                    recycled++;
+                    continue;
+                }
+
+                logger.LogWarning(
+                    "Could not recycle {File}, superseded by another source's copy of {Mod} {Version}.",
+                    file.FilePath, file.Identity.ModId.Value, file.Identity.VersionId.Value);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Could not recycle {File}.", file.FilePath);
+            }
+        }
+
+        return recycled;
     }
 
     /// <summary>
@@ -82,6 +133,12 @@ public sealed class ModImportService(
         private readonly Lock _results = new();
         private readonly List<ModImportItemResult> _items = [];
 
+        /// <summary>Which file each version is imported from, once that has been settled.</summary>
+        private readonly Dictionary<ModVersionIdentity, ModOccurrence> _chosen = [];
+
+        /// <summary>What the user chose against, for the versions that end up importing.</summary>
+        private readonly List<ModSupersededFile> _superseded = [];
+
         private RegisteredVersions _registered = RegisteredVersions.Empty;
 
 
@@ -98,6 +155,13 @@ public sealed class ModImportService(
             var planned = _registered;
 
             candidates = DropAlreadyRegistered(candidates, planned);
+
+            if (candidates.Count == 0)
+            {
+                return Result();
+            }
+
+            candidates = await ResolveSourcesAsync(candidates, cancellationToken);
 
             if (candidates.Count == 0)
             {
@@ -146,16 +210,10 @@ public sealed class ModImportService(
                     continue;
                 }
 
-                if (version.HasSourceConflict)
-                {
-                    // The catalog withholds the stream in this case precisely so that no import can
-                    // pick one of the two files silently.
-                    Refuse(version, ModImportStatus.SourceConflict,
-                        "Two sources hold different files for this mod and version. Choose which source to import from.");
-                    continue;
-                }
-
-                if (version.OpenStream is null)
+                // Sources that disagree are not decided here. Telling a duplicate from a genuine
+                // disagreement means hashing archives, which is worth doing only for versions that
+                // survive triage and the already-registered pass - see ResolveSourcesAsync.
+                if (version.FoundIn.Count == 0)
                 {
                     Refuse(version, ModImportStatus.NoLocalFile, "There is no local file to upload for this version.");
                     continue;
@@ -199,6 +257,134 @@ public sealed class ModImportService(
                 .Where(x => x.Value.Count > 0)
                 .ToDictionary(x => x.Key, x => x.Value);
         }
+
+        /// <summary>
+        /// Decides which file each version is imported from, and asks where the answer is not
+        /// obvious.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Runs after the already-registered pass, deliberately.</b> This is the only phase that
+        /// reads whole archives, and re-importing a folder the repo already holds should not pay for
+        /// hashing files nothing is going to upload.
+        /// </para>
+        /// <para>
+        /// <b>Identical copies are not a question.</b> Two sources holding the same bytes is the
+        /// ordinary case - a mod in the mod folder and still in Downloads - and there is nothing to
+        /// choose between them, so one is taken and nothing is said. Only genuinely different files
+        /// reach the user, and only they can lead to anything being recycled.
+        /// </para>
+        /// </remarks>
+        private async Task<Dictionary<ModKey, Dictionary<ModVersionKey, CatalogModVersion>>> ResolveSourcesAsync(
+            Dictionary<ModKey, Dictionary<ModVersionKey, CatalogModVersion>> candidates,
+            CancellationToken cancellationToken)
+        {
+            var conflicts = new List<ModSourceConflict>();
+
+            foreach (var (_, versions) in candidates)
+            {
+                foreach (var version in versions.Values.ToList())
+                {
+                    var files = await ModOccurrenceResolver.ResolveAsync(version.FoundIn, cancellationToken);
+
+                    switch (files.Count)
+                    {
+                        case 0:
+                            // Every copy has gone or will not open since the scan.
+                            Refuse(version, ModImportStatus.NoLocalFile, "There is no local file to upload for this version.");
+                            versions.Remove(version.VersionId);
+                            break;
+
+                        case 1:
+                            _chosen[version.Identity] = files[0].Primary;
+                            break;
+
+                        default:
+                            conflicts.Add(new ModSourceConflict(version, files));
+                            break;
+                    }
+                }
+            }
+
+            if (conflicts.Count > 0)
+            {
+                await ResolveConflictsAsync(conflicts, candidates, cancellationToken);
+            }
+
+            return candidates
+                .Where(x => x.Value.Count > 0)
+                .ToDictionary(x => x.Key, x => x.Value);
+        }
+
+        /// <summary>
+        /// One dialog for every disagreeing version at once, and the same bargain the arbitration
+        /// dialog strikes: an unanswered version is skipped and the rest of the batch carries on.
+        /// </summary>
+        private async Task ResolveConflictsAsync(
+            IReadOnlyList<ModSourceConflict> conflicts,
+            Dictionary<ModKey, Dictionary<ModVersionKey, CatalogModVersion>> candidates,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyDictionary<ModVersionIdentity, string>? resolved = null;
+
+            if (request.ResolveSourceConflicts is not null)
+            {
+                try
+                {
+                    resolved = await request.ResolveSourceConflicts(conflicts, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    // Losing the dialog costs the versions it was asking about and nothing else.
+                    logger.LogWarning(exception, "Asking which source to import from failed.");
+                }
+            }
+
+            foreach (var conflict in conflicts)
+            {
+                var version = conflict.Version;
+
+                var chosen = resolved?.TryGetValue(version.Identity, out var key) is true
+                    ? conflict.Candidates.FirstOrDefault(x => x.Key == key)
+                    : null;
+
+                if (chosen is null)
+                {
+                    Refuse(version, ModImportStatus.SourceConflict,
+                        "Several sources hold different files for this mod and version, and nothing said which to import.");
+
+                    candidates[version.ModId].Remove(version.VersionId);
+                    continue;
+                }
+
+                _chosen[version.Identity] = chosen.Primary;
+
+                // Recorded now, recycled only if this version goes on to import - and by the caller,
+                // not here. See ModSupersededFile.
+                foreach (var rejected in conflict.Candidates.Where(x => x != chosen))
+                {
+                    foreach (var occurrence in rejected.Occurrences)
+                    {
+                        _superseded.Add(new ModSupersededFile(
+                            version.Identity, occurrence.FilePath, occurrence.Source.Name));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The file this version is being imported from. Everything that reads bytes, names them or
+        /// measures them goes through here, so a resolved conflict cannot end up uploading one
+        /// source's file under another source's name.
+        /// </summary>
+        private ModOccurrence Chosen(CatalogModVersion version)
+            => _chosen.TryGetValue(version.Identity, out var occurrence)
+                ? occurrence
+                : version.FoundIn[0];
 
         private async Task StartArbitratedAsync(
             IReadOnlyList<ModVersionArbitrationItem> arbitration,
@@ -393,12 +579,12 @@ public sealed class ModImportService(
                     return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
                 }
 
-                var total = version.FoundIn.FirstOrDefault()?.FileLength ?? 0;
+                var total = Chosen(version).FileLength;
 
                 Report(version, ModImportPhase.Uploading, 0, total);
 
                 var hash = await uploader.UploadAsync(
-                    new ModFileUpload(link.Link, link.ContentHashMetadataKey, version.OpenStream!)
+                    new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
                     {
                         BytesTransferred = new Forwarder<long>(x => Report(version, ModImportPhase.Uploading, x, total))
                     },
@@ -440,7 +626,7 @@ public sealed class ModImportService(
         {
             string ours;
 
-            using (var content = version.OpenStream!())
+            using (var content = Chosen(version).OpenStream())
             {
                 ours = await ModContentHasher.ComputeAsync(content, cancellationToken);
             }
@@ -476,9 +662,10 @@ public sealed class ModImportService(
                         DisplayName = version.Name,
                         Description = version.Description,
                         // The repo learns what the file is called here and nowhere else, and every
-                        // other member's mod folder is named from it. Set exactly where OpenStream
-                        // is, and for the same reason - both come off the occurrence being uploaded.
-                        FileName = version.FileName!.Value.Value,
+                        // other member's mod folder is named from it. Taken off the occurrence the
+                        // upload read, for the same reason the bytes are - a resolved conflict must
+                        // not register one source's file under another source's name.
+                        FileName = ModFileName.ForFile(version.ModId, Chosen(version).FilePath).Value,
                         ContentHash = contentHash,
                         Locked = version.Locked,
                         Placement = new ServerPlacement()
@@ -615,16 +802,18 @@ public sealed class ModImportService(
 
 
         /// <summary>
-        /// The archive the upload took its bytes from, in the shape the image publisher wants. The
-        /// first occurrence is the one <see cref="CatalogModVersion.OpenStream"/> hands out, so the
-        /// images published are the ones inside the file that was actually registered.
+        /// The archive the upload took its bytes from, in the shape the image publisher wants - the
+        /// same occurrence, so the images published are the ones inside the file that was actually
+        /// registered rather than a rejected copy's.
         /// </summary>
-        private static LocalMod? ToLocalMod(CatalogModVersion version)
+        private LocalMod? ToLocalMod(CatalogModVersion version)
         {
-            if (version.FoundIn.FirstOrDefault() is not ModOccurrence occurrence)
+            if (version.FoundIn.Count == 0)
             {
                 return null;
             }
+
+            var occurrence = Chosen(version);
 
             return new LocalMod(version.ModId, version.VersionId, version.Name, version.Description, occurrence.OpenStream)
             {
@@ -692,7 +881,18 @@ public sealed class ModImportService(
         {
             lock (_results)
             {
-                return new ModImportResult([.. _items]);
+                // Superseded files follow their version's fate. A conflict that was resolved and
+                // then failed to upload must not cost somebody the copy they chose against - the
+                // repo has neither file, and the one still on disk is all that is left.
+                var imported = _items
+                    .Where(x => x.IsSuccess)
+                    .Select(x => x.Identity)
+                    .ToHashSet();
+
+                return new ModImportResult([.. _items])
+                {
+                    Superseded = [.. _superseded.Where(x => imported.Contains(x.Identity))]
+                };
             }
         }
 

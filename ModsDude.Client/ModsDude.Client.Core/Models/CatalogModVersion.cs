@@ -106,29 +106,39 @@ public record CatalogModVersion(
     public bool IsUnused => IsOnServer && UsedByProfiles is 0;
 
     /// <summary>
-    /// True when two sources hold a file claiming this mod and version but disagreeing on its size -
-    /// typically a re-uploaded build the author did not renumber. Only one can ever be registered,
-    /// so the user picks the source rather than the catalog picking silently.
+    /// A cheap warning that this version's sources may disagree: they hold files of different sizes,
+    /// which is typically a re-uploaded build the author did not renumber.
     /// </summary>
     /// <remarks>
-    /// Under-reports rather than over-reports: equal sizes are not proof of equal bytes, and proving
-    /// it would mean hashing every archive in every source on every scan.
+    /// <para>
+    /// <b>Advisory only, and both approximate directions are accepted.</b> It over-reports nothing
+    /// and under-reports plenty - equal sizes are not equal bytes - because it is computed for every
+    /// row of every scan and proving it would mean hashing every archive in every source.
+    /// </para>
+    /// <para>
+    /// The authority is <see cref="Import.ModOccurrenceResolver"/>, which hashes, and it runs at
+    /// import over the handful of versions actually selected. A row with no chip can still raise the
+    /// question, and a row with one can turn out to have identical copies and never ask.
+    /// </para>
     /// </remarks>
     public bool HasSourceConflict => FoundIn.Select(x => x.FileLength).Distinct().Count() > 1;
 
     /// <summary>
-    /// The bytes to import, when the sources agree on which bytes those are. Null for a version with
-    /// no local file, and null while <see cref="HasSourceConflict"/> stands - resolving that is the
-    /// user's choice from <see cref="FoundIn"/>, not this record's.
+    /// The bytes to read for anything that is not an import - imagery, mostly. Null for a version
+    /// with no local file, and null while <see cref="HasSourceConflict"/> stands, because a caller
+    /// with no way to ask cannot be handed one of two files at random.
     /// </summary>
+    /// <remarks>
+    /// <b>The import does not read this.</b> It resolves the sources properly and reads the
+    /// occurrence it chose, which is the only path that can pick between two differing files.
+    /// </remarks>
     public Func<Stream>? OpenStream => HasSourceConflict
         ? null
         : FoundIn.FirstOrDefault()?.OpenStream;
 
     /// <summary>
-    /// What to register the imported file as being called. From the same occurrence
-    /// <see cref="OpenStream"/> reads, deliberately: the name has to describe the bytes that are
-    /// actually uploaded, not another source's copy of the same version.
+    /// What a file here is called, on the same terms as <see cref="OpenStream"/> and for the same
+    /// reason: a name has to describe the bytes it is recorded against.
     /// </summary>
     public ModFileName? FileName => HasSourceConflict || FoundIn.FirstOrDefault() is not ModOccurrence source
         ? null

@@ -664,6 +664,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // What the profile holds now, so that anything left over is the only thing still unsaved.
             _original = desired;
 
+            // The revision is written, so the import that fed it is finally paid for and the copies
+            // the user chose against can go. Not one line earlier: everything above this can still
+            // return without saving, and a file removed for a revision that never existed is gone
+            // for nothing.
+            _importService.RecycleSuperseded(import.Superseded);
+
             await ReloadAsync();
 
             SaveSummary = Describe(changes);
@@ -848,7 +854,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (pending.Count == 0)
         {
-            return new PendingImport([], null);
+            return new PendingImport([], null, []);
         }
 
         var rows = pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
@@ -864,7 +870,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _repo.Adapter.VersionComparer)
         {
             Progress = new RowProgressReporter(rows),
-            ResolveArbitration = ResolveArbitrationAsync
+            ResolveArbitration = ResolveArbitrationAsync,
+            ResolveSourceConflicts = ResolveSourceConflictsAsync
         };
 
         // The overload that invalidates the catalog afterwards: a partly failed import still
@@ -888,18 +895,42 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             id => rows.TryGetValue(id, out var row) ? row.Name : id.ModId.Value,
             "Nothing was saved.");
 
-        return new PendingImport([.. result.Succeeded.Select(x => x.Identity)], problems);
+        return new PendingImport([.. result.Succeeded.Select(x => x.Identity)], problems, result.Superseded);
     }
 
     /// <param name="Imported">What the repo holds now, which is what the save is allowed to pin.</param>
     /// <param name="Problems">The dialog for what did not make it, or null when everything did.</param>
+    /// <param name="Superseded">
+    /// Copies the user chose against where two sources disagreed. Held until the save commits: here
+    /// the import is only the first half of the action, and a file removed for a revision that was
+    /// never written is a file removed for nothing.
+    /// </param>
     private sealed record PendingImport(
         HashSet<ModVersionIdentity> Imported,
-        ErrorDialogViewModel? Problems);
+        ErrorDialogViewModel? Problems,
+        IReadOnlyList<ModSupersededFile> Superseded);
 
     /// <summary>
     /// One dialog for the whole save, and only for the mods whose version ordering the comparer could
     /// not settle. Everything it settled is already registering by the time this is asked.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, string>?> ResolveSourceConflictsAsync(
+        IReadOnlyList<ModSourceConflict> conflicts,
+        CancellationToken cancellationToken)
+    {
+        return await Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            var modal = new ModSourceConflictModalViewModel(conflicts);
+
+            await _modalService.Show(modal);
+
+            return modal.Result;
+        }).Task.Unwrap();
+    }
+
+    /// <summary>
+    /// Asked once per import, and only where two sources hold genuinely different files under one
+    /// mod and version. Identical copies never reach here - there is nothing to choose between them.
     /// </summary>
     private async Task<IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>?> ResolveArbitrationAsync(
         IReadOnlyList<ModVersionArbitrationItem> items,

@@ -87,8 +87,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     /// </summary>
     public bool HasSourceConflict => Mod.HasSourceConflict;
 
-    public string SourceConflictTooltip => "Two sources hold different files for this mod and version. "
-        + "Only one can be registered, so disable a source to choose between them:"
+    public string SourceConflictTooltip => "Two sources hold files of different sizes for this mod and "
+        + "version. Only one can be registered, and importing will ask which:"
         + string.Concat(Mod.FoundIn.Select(x => $"\n{x.Source.Name} - {x.FilePath} ({x.FileLength:N0} bytes)"));
 
     /// <summary>Stands in for the icon while it loads, and for mods that ship without one.</summary>

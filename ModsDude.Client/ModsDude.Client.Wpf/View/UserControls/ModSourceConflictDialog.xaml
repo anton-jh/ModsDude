@@ -1,0 +1,153 @@
+<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.ModSourceConflictDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="700" MaxHeight="700"
+             d:DataContext="{d:DesignInstance Type=vm:ModSourceConflictModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <TextBlock Text="{Binding Title}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                <!-- What the choice costs, said before it is made rather than reported after. -->
+                <Border Margin="0 12 0 0"
+                        Padding="12 8"
+                        CornerRadius="4"
+                        Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                    <TextBlock Text="{Binding RecycleWarning}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                </Border>
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Mods}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ModSourceConflictItemViewModel}">
+                            <StackPanel Margin="0 0 0 20">
+
+                                <Grid ColumnDefinitions="* auto" Margin="0 0 0 6">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                    <Border Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Padding="6 1"
+                                            CornerRadius="3"
+                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                        <TextBlock Text="{Binding Version}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                                    </Border>
+                                </Grid>
+
+                                <!-- Radios rather than a picker: there are two or three of these and
+                                     the point is to compare them, not to choose from a closed list.
+                                     No GroupName - the view model owns the exclusion, because a
+                                     group name is resolved across the whole window and every mod on
+                                     this dialog would end up sharing one. -->
+                                <ItemsControl ItemsSource="{Binding Candidates}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:ModFileCandidateViewModel}">
+                                            <RadioButton Margin="0 2"
+                                                         VerticalContentAlignment="Top"
+                                                         IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                                                <StackPanel Margin="4 0 0 0">
+                                                    <Grid ColumnDefinitions="auto auto">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Headline}"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                                                        <TextBlock Grid.Column="1"
+                                                                   Margin="8 0 0 0"
+                                                                   Text="{Binding ShortHash}"
+                                                                   FontFamily="Consolas"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                                                    </Grid>
+
+                                                    <ItemsControl ItemsSource="{Binding Locations}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           ToolTip="{Binding}"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </RadioButton>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid RowDefinitions="auto auto" Margin="24 16 24 20">
+
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding SkipMessage}"
+                               TextWrapping="Wrap"
+                               Margin="0 0 0 12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <Grid Grid.Row="1" ColumnDefinitions="* *">
+                        <Button Grid.Column="0"
+                                Margin="0 0 4 0"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Import these"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding ConfirmCommand}" />
+
+                        <Button Grid.Column="1"
+                                Margin="4 0 0 0"
+                                Content="Skip these mods"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding SkipCommand}" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Return" Command="{Binding ConfirmCommand}" />
+        <KeyBinding Key="Esc" Command="{Binding SkipCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

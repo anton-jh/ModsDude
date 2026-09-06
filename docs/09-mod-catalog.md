@@ -518,15 +518,61 @@ can say where it came from, and two sources disagreeing about the bytes stays vi
 single enabled source, naming it on every row is noise; show it once more than one is active.
 
 That makes the sharper case detectable: **two files claiming the same mod id and version but
-holding different bytes** — typically a re-uploaded build the author did not renumber. Since only
-one can be registered, the conflict is surfaced on the row and `OpenStream` returns `null`, so
-the version is **withheld from import** until the user picks a source rather than the catalog
-picking silently. Without this, whichever source was scanned first would win.
+holding different bytes** — typically a re-uploaded build the author did not renumber. Only one of
+them can ever be registered.
 
-The check compares **file lengths**, not hashes, so it **under-reports rather than over-reports**:
-equal sizes are not proof of equal bytes, and proving it would mean hashing every archive in every
-source on every scan. Two builds that differ and happen to be the same size import the first one
-found — which is exactly what would have happened anyway, and no worse.
+**The catalog's chip is a warning, not the answer.** `CatalogModVersion.HasSourceConflict` compares
+**file lengths**, which is free and runs over every row of every scan — so it under-reports, because
+equal sizes are not equal bytes. That is the wrong way round for a decision that ends with somebody's
+file in the Recycle Bin, so it decides nothing. It exists to say "this may need answering" before
+anybody presses Import.
+
+**The answer is `ModOccurrenceResolver`, and it hashes.** It runs at import, over the versions
+actually selected, and after the already-registered pass — so re-importing a folder the repo already
+holds pays nothing, and the cost falls on genuine duplicates alone. It groups a version's
+occurrences by SHA-256 into `ModFileCandidate`s:
+
+- **One candidate** — every source holds the same bytes. This is the ordinary case, a mod sitting in
+  both the mod folder and Downloads, and there is nothing to choose between them. One is taken,
+  nothing is asked, nothing is removed.
+- **Several candidates** — the files genuinely differ. The user picks, once for the whole run, in
+  `ModSourceConflictDialog`. Dismissing skips exactly those versions and lets the rest of the batch
+  finish, the same bargain the version arbitration dialog strikes.
+
+Length is not used as a shortcut past hashing, even though a difference in it is conclusive. The
+saving would land only on the rare case where two sources genuinely disagree, and it would leave
+candidates with no hash sitting beside candidates that have one — two kinds of identity for the
+dialog and its answer to keep straight, in exchange for not reading a file the user is about to be
+asked about anyway.
+
+**The chosen occurrence is what everything reads.** `ModImportService.Chosen` is the single accessor
+for the bytes, the file name registered against them, the size a progress bar counts to, and the
+archive imagery is extracted from. `CatalogModVersion.OpenStream` still withholds a stream while
+the size heuristic fires, but the import no longer reads it — a caller with no way to ask cannot be
+handed one of two files at random, and the import is the one caller that *can* ask.
+
+#### The copies not chosen are recycled
+
+Leaving them means being asked the same question on every future import, by two files that will
+never stop disagreeing. So the rejected copies go to the Recycle Bin — said on the dialog that asks,
+before the choice is made, rather than reported afterwards.
+
+Two rules make that safe:
+
+- **Only rejected bytes.** Copies byte-identical to the one imported are left alone. The user was
+  asked which of several *different* files to keep; deleting their duplicates of the winner is
+  tidying they did not ask for.
+- **Only after the whole action succeeded.** `ModImportResult.Superseded` reports the files; the
+  caller removes them. The import knows a version registered, but not whether the thing the user was
+  actually doing has finished — in the profile editor the import is the first half of a save, and a
+  file removed for a revision that was never written is a file removed for nothing. `RepoModsPage`
+  recycles once the run reports; `ProfileModsEditorPage` waits until the revision commits.
+  `Result()` drops the superseded files of any version that did not import, because a resolved
+  version that then failed leaves the repo holding neither file and the copy on disk is all that is
+  left of it.
+
+Recycling is best-effort and never fatal: a file the game is holding open stays where it is, which
+costs a duplicate on disk and nothing else, and every failure is in the log.
 
 ## The `ModCatalog` service
 

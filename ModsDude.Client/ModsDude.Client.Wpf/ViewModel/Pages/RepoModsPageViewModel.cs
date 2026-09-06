@@ -494,7 +494,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             var request = new ModImportRequest(_repo.Id, [.. pending.Select(x => x.Mod)], _repo.Adapter.VersionComparer)
             {
                 Progress = new RowProgressReporter(rows),
-                ResolveArbitration = ResolveArbitrationAsync
+                ResolveArbitration = ResolveArbitrationAsync,
+                ResolveSourceConflicts = ResolveSourceConflictsAsync
             };
 
             // The overload that invalidates the catalog when it is over: a cancelled or partly failed
@@ -511,6 +512,10 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             }
 
             ImportSummary = Describe(result);
+
+            // The registration is the whole of what this page was asked to do, so the copies the
+            // user chose against can go now. Warned about on the dialog that asked, not here.
+            RecycleSuperseded(result);
 
             // One dialog for the run, once every row has been marked - so what it names is already
             // findable in the list behind it.
@@ -588,6 +593,48 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         return await Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             var modal = new ModVersionArbitrationModalViewModel(items);
+
+            await _modalService.Show(modal);
+
+            return modal.Result;
+        }).Task.Unwrap();
+    }
+
+    /// <summary>
+    /// Sends the copies the user chose against to the Recycle Bin, and says so in the summary line.
+    /// </summary>
+    /// <remarks>
+    /// Appended rather than shown as its own dialog: the user already agreed to this when they
+    /// picked, and a second dialog saying the thing they were told would happen has happened is a
+    /// dialog people learn to dismiss without reading.
+    /// </remarks>
+    private void RecycleSuperseded(ModImportResult result)
+    {
+        if (result.Superseded.Count == 0)
+        {
+            return;
+        }
+
+        var recycled = _importService.RecycleSuperseded(result.Superseded);
+
+        ImportSummary += recycled == result.Superseded.Count
+            ? recycled == 1
+                ? " One superseded copy went to the Recycle Bin."
+                : $" {recycled} superseded copies went to the Recycle Bin."
+            : $" {recycled} of {result.Superseded.Count} superseded copies went to the Recycle Bin; the rest are still on disk.";
+    }
+
+    /// <summary>
+    /// Asked once per import, and only where two sources hold genuinely different files under one
+    /// mod and version. Identical copies never reach here - there is nothing to choose between them.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, string>?> ResolveSourceConflictsAsync(
+        IReadOnlyList<ModSourceConflict> conflicts,
+        CancellationToken cancellationToken)
+    {
+        return await Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            var modal = new ModSourceConflictModalViewModel(conflicts);
 
             await _modalService.Show(modal);
 
