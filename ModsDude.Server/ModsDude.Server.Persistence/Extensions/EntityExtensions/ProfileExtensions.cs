@@ -60,6 +60,33 @@ public static class ProfileExtensions
     /// aggregate down.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The name and head revision of a handful of profiles at once, for a list that already knows
+    /// which ids it is going to name.
+    /// </summary>
+    /// <remarks>
+    /// Projected rather than materialized, like everything else that reads a profile: the entity
+    /// itself is cheap, but nothing here needs to be tracked and a dictionary is what the caller
+    /// wants anyway.
+    /// </remarks>
+    public static async Task<Dictionary<ProfileId, ProfileSummary>> GetSummariesAsync(
+        this DbSet<Profile> dbSet,
+        RepoId repoId, IReadOnlyCollection<ProfileId> profileIds,
+        CancellationToken cancellationToken)
+    {
+        if (profileIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId && profileIds.Contains(x.Id))
+            .Select(x => new ProfileSummary(x.Id, x.Name, x.HeadRevision))
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.Id);
+    }
+
     public static async Task<bool> CheckIfUsedBySavegameAsync(
         this DbSet<Savegame> dbSet,
         DbSet<SavegameVersion> versions,
@@ -70,3 +97,7 @@ public static class ProfileExtensions
             || await versions.AnyAsync(x => x.RepoId == repoId && x.ProfileId == profileId, cancellationToken);
     }
 }
+
+
+/// <summary>A profile's row without its history: what a list naming several of them needs.</summary>
+public record ProfileSummary(ProfileId Id, ProfileName Name, RevisionNumber HeadRevision);

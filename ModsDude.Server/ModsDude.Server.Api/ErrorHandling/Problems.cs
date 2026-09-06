@@ -252,6 +252,17 @@ public static class Problems
         Detail = $"The images offered for version '{modVersionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' contain more than one icon of a rendition, or two images of a kind at the same rendition and position."
     };
 
+    /// <summary>
+    /// The head version is what a check-out hands people, so a savegame whose current version is
+    /// missing is a savegame nobody can play. Deleting the savegame itself is a different act.
+    /// </summary>
+    public static CustomProblemDetails CannotDeleteHeadSavegameVersion(SavegameId savegameId, SavegameVersionNumber number) => new()
+    {
+        Type = ProblemType.CannotDeleteHeadSavegameVersion,
+        Title = "Cannot delete a savegame's current version",
+        Detail = $"Version {number.Value} is the current version of savegame '{savegameId.Value}'. Check in or restore another version first, or delete the whole savegame."
+    };
+
     public static CustomProblemDetails BatchTooLarge(int size, int maximum) => new()
     {
         Type = ProblemType.BatchTooLarge,
@@ -434,6 +445,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invalid-image-set")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-image-set")]
         InvalidImageSet,
+
+        [EnumMember(Value = _typeBaseUri + "cannot-delete-head-savegame-version")]
+        [JsonStringEnumMemberName(_typeBaseUri + "cannot-delete-head-savegame-version")]
+        CannotDeleteHeadSavegameVersion,
 
         [EnumMember(Value = _typeBaseUri + "batch-too-large")]
         [JsonStringEnumMemberName(_typeBaseUri + "batch-too-large")]

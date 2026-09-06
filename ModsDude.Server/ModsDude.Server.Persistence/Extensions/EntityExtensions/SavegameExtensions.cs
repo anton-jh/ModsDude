@@ -64,6 +64,28 @@ public static class SavegameExtensions
     /// the order can be settled once for every caller.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The names of a handful of savegames at once, for a refusal that has to name what is holding
+    /// something rather than counting it.
+    /// </summary>
+    public static async Task<Dictionary<SavegameId, SavegameName>> GetNamesAsync(
+        this DbSet<Savegame> dbSet,
+        RepoId repoId, IReadOnlyCollection<SavegameId> savegameIds,
+        CancellationToken cancellationToken)
+    {
+        if (savegameIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId && savegameIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.Name })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.Id, x => x.Name);
+    }
+
     public static Task<List<SavegameRow>> GetRowsAsync(
         this DbSet<Savegame> dbSet,
         RepoId repoId,

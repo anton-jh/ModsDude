@@ -165,6 +165,116 @@ public static class ProfileRevisionExtensions
     }
 
     /// <summary>
+    /// Drops revisions of one profile, rows and all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Leaves a gap, and that is the point.</b> Revision numbers exist to be said out loud;
+    /// renumbering would make yesterday's sentence point at a different list. Savegame version
+    /// numbers already work this way, and for the same reason.
+    /// </para>
+    /// <para>
+    /// <c>ExecuteDelete</c> rather than loading the entities: a revision's dependencies are an owned
+    /// collection, so materializing fifty of a two-thousand-mod profile's revisions to delete them
+    /// would read a hundred thousand rows first. The owned rows go with the principal in the
+    /// database, which is where the cascade belongs.
+    /// </para>
+    /// </remarks>
+    public static Task<int> DeleteRevisionsAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ProfileId profileId,
+        IReadOnlyCollection<RevisionNumber> numbers,
+        CancellationToken cancellationToken)
+    {
+        if (numbers.Count == 0)
+        {
+            return Task.FromResult(0);
+        }
+
+        return dbSet
+            .Where(x => x.RepoId == repoId && x.ProfileId == profileId && numbers.Contains(x.Number))
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <summary>Which of the named revisions the profile actually has.</summary>
+    public static async Task<HashSet<RevisionNumber>> GetExistingAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ProfileId profileId, IReadOnlyCollection<RevisionNumber> numbers,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId && x.ProfileId == profileId && numbers.Contains(x.Number))
+            .Select(x => x.Number)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows];
+    }
+
+    /// <summary>
+    /// Which revisions of which profiles pin a mod, so a refused delete can say what is holding it
+    /// rather than only that something is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Every revision, not only the head ones.</b> That is what the foreign key enforces and
+    /// therefore what the user has to act on: a version pinned once, five hundred revisions ago, is
+    /// as undeletable as one pinned now. Saying "profile X" without saying which revisions would
+    /// send somebody to a history page with nothing to look for.
+    /// </para>
+    /// <para>
+    /// Bounded, because a repo's dependency rows are its profile count times its revision count
+    /// times its profile sizes. The caller is drawing a list somebody reads, so the cap is generous
+    /// enough to be the whole answer in every ordinary case and the response says when it was not.
+    /// </para>
+    /// </remarks>
+    /// <param name="modVersionId">
+    /// One version, or null for the whole mod - the two things that can be deleted, and the same
+    /// query either way.
+    /// </param>
+    public static async Task<List<ProfileRevisionDependency>> GetDependentRevisionsAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ModId modId, ModVersionId? modVersionId,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId)
+            .SelectMany(
+                x => x.ModDependencies,
+                (revision, dependency) => new
+                {
+                    revision.ProfileId,
+                    revision.Number,
+                    dependency.ModVersion.ModId,
+                    VersionId = dependency.ModVersion.Id
+                })
+            .Where(x => x.ModId == modId && (modVersionId == null || x.VersionId == modVersionId))
+            .OrderBy(x => x.ProfileId).ThenBy(x => x.Number)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(x => new ProfileRevisionDependency(x.ProfileId, x.Number, x.VersionId))];
+    }
+
+    /// <summary>
+    /// Which savegame versions were played on a profile revision. The other half of what stops a
+    /// revision being deleted, and the only one the user can do anything about.
+    /// </summary>
+    public static Task<List<SavegameRevisionDependency>> GetDependentSavegameVersionsAsync(
+        this DbSet<Domain.Savegames.SavegameVersion> dbSet,
+        RepoId repoId, ProfileId profileId, IReadOnlyCollection<RevisionNumber> revisions,
+        CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == repoId
+                && x.ProfileId == profileId
+                && revisions.Contains(x.ProfileRevision))
+            .OrderBy(x => x.SavegameId).ThenBy(x => x.Number)
+            .Select(x => new SavegameRevisionDependency(x.SavegameId, x.Number, x.ProfileRevision))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// How many of the repo's profiles pin each version, for the versions at least one of them pins.
     /// Ordered by <c>(ModId, VersionId)</c> and windowed, because a repo's dependency rows are its
     /// profile count times its revision count times its profile sizes - thousands of mods each - and
@@ -241,3 +351,13 @@ public record ProfileRevisionRow(
 /// of it is whether the number is zero.
 /// </summary>
 public record ModVersionUsage(ModId ModId, ModVersionId VersionId, int ProfileCount);
+
+
+/// <summary>One revision that pins a mod, and which version of it.</summary>
+public record ProfileRevisionDependency(ProfileId ProfileId, RevisionNumber Revision, ModVersionId VersionId);
+
+/// <summary>One savegame version that was played on a profile revision.</summary>
+public record SavegameRevisionDependency(
+    Domain.Savegames.SavegameId SavegameId,
+    Domain.Savegames.SavegameVersionNumber Number,
+    RevisionNumber Revision);

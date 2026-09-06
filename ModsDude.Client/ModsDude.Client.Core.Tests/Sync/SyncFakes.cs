@@ -117,6 +117,10 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         => throw new NotSupportedException();
     public Task<ModDto> RegisterModV1Async(Guid repoId, RegisterModRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+    public Task<ModDependentsDto> GetModDependentsV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    public Task<ModDependentsDto> GetModVersionDependentsV1Async(Guid repoId, string modId, string versionId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
     public Task<GetModUsageResponse> GetModUsageV1Async(Guid repoId, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<GetModVersionsResponse> GetModVersionsV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)

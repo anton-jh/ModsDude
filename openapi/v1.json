@@ -1,6 +1,37 @@
 {
   "components": {
     "schemas": {
+      "BlockedRevisionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/BlockedRevisionReason"
+          },
+          "revision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "savegames": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameVersionRefDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BlockedRevisionReason": {
+        "description": "",
+        "enum": [
+          "IsHead",
+          "PlayedOn"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "IsHead",
+          "PlayedOn"
+        ]
+      },
       "CheckImagesExistRequest": {
         "additionalProperties": false,
         "properties": {
@@ -476,6 +507,21 @@
         },
         "type": "object"
       },
+      "ModDependentsDto": {
+        "additionalProperties": false,
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileDependentDto"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ModDto": {
         "additionalProperties": false,
         "properties": {
@@ -676,6 +722,7 @@
           "https://server.modsdude.com/api/problems/hash-mismatch",
           "https://server.modsdude.com/api/problems/invalid-hash",
           "https://server.modsdude.com/api/problems/invalid-image-set",
+          "https://server.modsdude.com/api/problems/cannot-delete-head-savegame-version",
           "https://server.modsdude.com/api/problems/batch-too-large",
           "https://server.modsdude.com/api/problems/invalid-cursor",
           "https://server.modsdude.com/api/problems/invite-not-found",
@@ -712,6 +759,7 @@
           "HashMismatch",
           "InvalidHash",
           "InvalidImageSet",
+          "CannotDeleteHeadSavegameVersion",
           "BatchTooLarge",
           "InvalidCursor",
           "InviteNotFound",
@@ -726,6 +774,29 @@
           "ProfileInUseBySavegame",
           "InvalidModFileName"
         ]
+      },
+      "ProfileDependentDto": {
+        "additionalProperties": false,
+        "properties": {
+          "includesHead": {
+            "type": "boolean"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "profileName": {
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
       },
       "ProfileDto": {
         "additionalProperties": false,
@@ -845,6 +916,35 @@
           "Restored",
           "Copied"
         ]
+      },
+      "PruneProfileRevisionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "revisions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PruneProfileRevisionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "blocked": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedRevisionDto"
+            },
+            "type": "array"
+          },
+          "deleted": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
       },
       "PublishSavegameRequest": {
         "additionalProperties": false,
@@ -1262,6 +1362,23 @@
           "Forced",
           "Restored"
         ]
+      },
+      "SavegameVersionRefDto": {
+        "additionalProperties": false,
+        "properties": {
+          "number": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
       },
       "SetModVersionImagesRequest": {
         "additionalProperties": false,
@@ -2907,6 +3024,72 @@
         ]
       }
     },
+    "/api/v1/repos/{repoId}/mods/{modId}/dependents": {
+      "get": {
+        "operationId": "GetModDependentsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDependentsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
     "/api/v1/repos/{repoId}/mods/{modId}/versions": {
       "get": {
         "operationId": "GetModVersionsV1",
@@ -3025,6 +3208,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Mods"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/mods/{modId}/versions/{versionId}/dependents": {
+      "get": {
+        "operationId": "GetModVersionDependentsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "modId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModDependentsDto"
                 }
               }
             },
@@ -3907,6 +4165,95 @@
         ]
       }
     },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/revisions/prune": {
+      "post": {
+        "operationId": "PruneProfileRevisionsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PruneProfileRevisionsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PruneProfileRevisionsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
     "/api/v1/repos/{repoId}/profiles/{profileId}/revisions/{number}/restore": {
       "post": {
         "operationId": "RestoreProfileRevisionV1",
@@ -4692,6 +5039,86 @@
                 }
               }
             },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}": {
+      "delete": {
+        "operationId": "DeleteSavegameVersionV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           },
           "400": {
