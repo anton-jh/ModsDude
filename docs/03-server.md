@@ -431,9 +431,9 @@ invite.
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/invites` | Member | Every invite the repo has ever had, each with its `Status` and join count |
+| GET | `repos/{repoId}/invites` | Member | The repo's invite list - everything not dismissed - each with its `Status` and join count |
 | POST | `repos/{repoId}/invites` | Member + may grant the requested level | `{ membershipLevel, maximumUses?, expiresAt? }`. Both limits optional and independent |
-| DELETE | `repos/{repoId}/invites/{inviteId}` | Member | Revokes for good. An invite belonging to another repo is reported as absent |
+| DELETE | `repos/{repoId}/invites/{inviteId}` | Member | Takes it off the list, revoking it first if it still works. An invite belonging to another repo is reported as absent |
 | POST | `invites/redeem` | — | `{ code }`. Joins the caller to whichever repo the code belongs to, and returns that `RepoMembershipDto` |
 
 `invites/redeem` takes the code in the body rather than the path, because a path is written down
@@ -444,6 +444,18 @@ another redemption as `invite-redemption-conflict`.
 
 Any Member may revoke any of the repo's invites, including one an Admin made: revoking only ever
 takes access away, and a loose code wants stopping by whoever notices it.
+
+**One route, two gestures.** `DELETE` means "this should stop being on my screen", and which act
+that needs is decided by the invite rather than by the caller: an `Active` one is revoked, which
+dismisses it in the same stroke, and a dead one is only dismissed — so an exhausted code is not
+recorded as something somebody chose to retire. `RepoInvite.Dismiss` refuses an active invite
+outright, because hiding a code that still works would leave it live, in the world, and off the
+only screen from which it could be revoked.
+
+Nothing is deleted. The row keeps the count of who came in through the code and keeps the code
+unusable; `GetForRepoAsync` filters on `DismissedAt` so nothing can accidentally serve one.
+Dismissal is repo-level, like every other fact about an invite — the list is the same list for
+everybody.
 
 ### Profiles
 

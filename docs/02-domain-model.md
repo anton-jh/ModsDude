@@ -124,6 +124,7 @@ mints a code; whoever holds it joins with it themselves.
 | `ExpiresAt`, `MaximumUses` | Either, both, or neither. Null means unlimited |
 | `Uses` | Successful joins only |
 | `IsRevoked` | One-way. A code that has been out in the world cannot be un-retired |
+| `DismissedAt` | When somebody took it off the repo's invite list, or null while it is on it |
 
 **An invite can never grant Admin**, however senior the person minting it. A code is a secret
 that travels, and the limits above are an admission that one can end up somewhere it was not
@@ -137,6 +138,16 @@ The constructor refuses it and `CreateInviteV1Endpoint` reports it as
 reporting revocation ahead of the other two because it is the one somebody chose. `Redeem`
 refuses anything but `Active`, and the row carries Postgres' `xmin` as a concurrency token
 so two people racing for the last use of a capped invite cannot both win.
+
+**Revoked invites leave the list; spent ones do not.** `Revoke` stamps `DismissedAt` as well,
+because switching a code off and taking it off the list are one act, and every retired code would
+otherwise accumulate there forever. An `Expired` or `Exhausted` invite stays until somebody removes
+it: it is the only evidence the invite was made at all, and its absence reads as "I forgot to create
+one" rather than "it ran out". `Dismiss` refuses an `Active` invite, which is the one state this
+must never produce — a working code, out in the world, off the only screen that could revoke it.
+
+Dismissal hides rather than deletes. The row keeps the join count and keeps the code unusable, and
+the listing query is what filters it.
 
 Codes are read aloud and typed back in, so the alphabet excludes `I`, `L`, `O` and `U`;
 `InviteCodes.TryParse` folds the first three into the digits they resemble and accepts any

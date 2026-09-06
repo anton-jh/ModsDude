@@ -60,9 +60,67 @@ public class RepoInviteTests
         var invite = CreateInvite(maximumUses: 1, expiresAt: _created.AddHours(1));
 
         invite.Redeem(_created);
-        invite.Revoke();
+        invite.Revoke(_created);
 
         Assert.Equal(InviteStatus.Revoked, invite.GetStatus(_created.AddDays(1)));
+    }
+
+    /// <summary>
+    /// Two gestures in one: somebody switching a code off is done with it, and leaving it on the
+    /// list afterwards means every retired code accumulates there forever.
+    /// </summary>
+    [Fact]
+    public void Revoking_also_takes_the_invite_off_the_list()
+    {
+        var invite = CreateInvite();
+
+        invite.Revoke(_created);
+
+        Assert.Equal(_created, invite.DismissedAt);
+    }
+
+    [Fact]
+    public void A_fresh_invite_is_on_the_list()
+    {
+        Assert.Null(CreateInvite().DismissedAt);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_dead_invite_can_be_dismissed(bool byExhaustion)
+    {
+        var invite = byExhaustion
+            ? CreateInvite(maximumUses: 1)
+            : CreateInvite(expiresAt: _created.AddHours(1));
+
+        if (byExhaustion)
+        {
+            invite.Redeem(_created);
+        }
+
+        var later = _created.AddDays(1);
+
+        invite.Dismiss(later);
+
+        Assert.Equal(later, invite.DismissedAt);
+
+        // Dismissing hides it; it does not rewrite what happened to it.
+        Assert.False(invite.IsRevoked);
+    }
+
+    /// <summary>
+    /// The one state this must never produce: a code that still works, still out in the world, and
+    /// off the only screen from which it could be revoked.
+    /// </summary>
+    [Fact]
+    public void An_active_invite_cannot_be_dismissed()
+    {
+        var invite = CreateInvite();
+
+        Assert.Throws<DomainValidationException>(() => invite.Dismiss(_created));
+
+        Assert.Null(invite.DismissedAt);
     }
 
     [Fact]

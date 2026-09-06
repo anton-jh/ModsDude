@@ -317,7 +317,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         {
             var row = new RepoInviteViewModel(invite, CanManageInvites);
 
-            row.RevokeRequested += OnRevokeRequested;
+            row.RemovalRequested += OnRemovalRequested;
 
             Invites.Add(row);
         }
@@ -338,7 +338,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     {
         foreach (var invite in Invites)
         {
-            invite.RevokeRequested -= OnRevokeRequested;
+            invite.RemovalRequested -= OnRemovalRequested;
         }
 
         Invites.Clear();
@@ -401,19 +401,31 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private async void OnRevokeRequested(object? sender, EventArgs e)
+    /// <summary>
+    /// One handler for the row's one button, in two tenses. A code that still works is being switched
+    /// off, which is worth confirming; a spent one is only being tidied away, and saying so in the
+    /// same words as a revocation would make the serious one read as routine.
+    /// </summary>
+    private async void OnRemovalRequested(object? sender, EventArgs e)
     {
         if (sender is not RepoInviteViewModel invite)
         {
             return;
         }
 
-        var modal = new ConfirmationDialogViewModel(
-            "Revoke this invite?",
-            $"{invite.Code} will stop working for good. Anybody who already joined with it stays a member.",
-            IconKind.Warning,
-            "Revoke",
-            "Keep it");
+        var modal = invite.IsActive
+            ? new ConfirmationDialogViewModel(
+                "Revoke this invite?",
+                $"{invite.Code} will stop working for good and leave this list. Anybody who already joined with it stays a member.",
+                IconKind.Warning,
+                "Revoke",
+                "Keep it")
+            : new ConfirmationDialogViewModel(
+                "Remove this invite?",
+                $"{invite.Code} already stopped working - it is on this list only as the record that it was made. Removing it takes it off for everybody.",
+                IconKind.Question,
+                "Remove",
+                "Keep it");
 
         await _modalService.Show(modal);
 

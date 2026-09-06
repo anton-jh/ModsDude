@@ -171,9 +171,13 @@
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Limit}" />
 
-                                                    <Button Content="Revoke" Margin="8 0 0 0"
-                                                            Visibility="{Binding CanRevoke, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                            Command="{Binding RequestRevokeCommand}" />
+                                                    <!-- One button, two tenses: an active code is
+                                                         revoked, a spent one is only taken off the
+                                                         list. Which is which is the row's to say. -->
+                                                    <Button Content="{Binding ActionText}" Margin="8 0 0 0"
+                                                            ToolTip="{Binding ActionToolTip}"
+                                                            Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding RequestRemovalCommand}" />
                                                 </StackPanel>
 
                                                 <TextBlock Margin="0 6 0 0"
@@ -185,8 +189,10 @@
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Style.Triggers>
-                                                        <!-- Spent invites stay in the list for their join count,
-                                                             but they are history rather than something to hand out. -->
+                                                        <!-- Spent invites stay for their join count, and so
+                                                             that a list with none on it reads as "I never made
+                                                             one" rather than "it ran out". History, though,
+                                                             rather than something to hand out. -->
                                                         <DataTrigger Binding="{Binding IsActive}" Value="False">
                                                             <Setter Property="Opacity" Value="0.5" />
                                                         </DataTrigger>

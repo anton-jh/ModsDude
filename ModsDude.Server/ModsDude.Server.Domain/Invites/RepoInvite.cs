@@ -79,6 +79,29 @@ public class RepoInvite
 
     public bool IsRevoked { get; private set; }
 
+    /// <summary>
+    /// When somebody took this off the repo's invite list, or null while it is still on it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Not the same fact as revocation, and not the same fact as being dead.</b> A revoked invite
+    /// is dismissed by the same gesture, because "stop this code working" and "take it off my list"
+    /// are one act. An <see cref="InviteStatus.Expired"/> or <see cref="InviteStatus.Exhausted"/> one
+    /// stays on the list until somebody says otherwise: it is the only evidence that the invite was
+    /// made at all, and its absence would read as "I forgot to create one" rather than "it ran out".
+    /// </para>
+    /// <para>
+    /// <b>The row survives.</b> Dismissal hides an invite; it does not delete the record of who came
+    /// in through which code, and it does not free the code for reuse - a dismissed invite is still
+    /// refused by <see cref="Redeem"/> for whatever reason it was already refused.
+    /// </para>
+    /// <para>
+    /// Repo-level, like every other fact here. Any Member may revoke any invite, so any Member may
+    /// dismiss one, and the list is the same list for everybody.
+    /// </para>
+    /// </remarks>
+    public DateTime? DismissedAt { get; private set; }
+
 
     /// <summary>
     /// Revocation is reported ahead of the other two because it is the one somebody chose, and the
@@ -116,11 +139,35 @@ public class RepoInvite
 
     /// <summary>
     /// Irreversible on purpose. An invite is a secret that has been out in the world, and one that
-    /// could be switched back on would be a secret nobody could ever finish retiring.
+    /// could be switched back on would be a secret nobody could ever finish retiring. Takes it off
+    /// the list at the same time - see <see cref="DismissedAt"/>.
     /// </summary>
-    public void Revoke()
+    public void Revoke(DateTime now)
     {
         IsRevoked = true;
+
+        // Revoking is one gesture, not two. Somebody switching a code off is done with it, and
+        // leaving it on the list afterwards means every retired code accumulates there forever.
+        DismissedAt = now;
+    }
+
+    /// <summary>
+    /// Takes a dead invite off the list.
+    /// </summary>
+    /// <remarks>
+    /// <b>Refuses an active one.</b> Hiding a code that still works would leave it live, in the world,
+    /// and off the only screen from which it could be revoked. That is the one state this must never
+    /// be able to produce, which is why it is checked here and not only at the endpoint.
+    /// </remarks>
+    public void Dismiss(DateTime now)
+    {
+        if (GetStatus(now) is InviteStatus.Active)
+        {
+            throw new DomainValidationException(
+                $"Invite '{Id.Value}' still works, so it can be revoked but not dismissed.");
+        }
+
+        DismissedAt = now;
     }
 }
 
