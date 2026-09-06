@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
 
@@ -466,7 +467,7 @@ public class ModSyncServiceTests
             Downloader = new FakeModFileDownloader(Server);
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new InstanceDriftService(Manifests);
+            Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
 
             Service = new ModSyncService(
                 Server,
@@ -476,7 +477,8 @@ public class ModSyncServiceTests
                 new FakeStoreProvider(ServingStore, OtherStore),
                 Manifests,
                 RecycleBin,
-                new FakeInstanceModFolders(new InstanceModFolder(InstanceId, Folder.Path)));
+                new FakeInstanceModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
+                NullLogger<ModSyncService>.Instance);
         }
 
 

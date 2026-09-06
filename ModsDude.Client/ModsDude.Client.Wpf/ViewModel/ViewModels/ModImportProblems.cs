@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Text;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -41,7 +42,8 @@ public static class ModImportProblems
     /// What the failures cost, in the caller's terms - a save that wrote nothing, say. A few words,
     /// not a paragraph: this is the top of a dialog, and the reasons under it are the point of it.
     /// </param>
-    public static ConfirmationDialogViewModel? Build(
+    public static ErrorDialogViewModel? Build(
+        IErrorReporter errorReporter,
         ModImportResult result,
         Func<ModVersionIdentity, string> nameOf,
         string? consequence = null)
@@ -78,7 +80,11 @@ public static class ModImportProblems
                 .Append(NameThem(group, nameOf));
         }
 
-        return ConfirmationDialogViewModel.Error(message.ToString());
+        // Through the reporter like every other error: the per-mod exceptions are already in the
+        // log, and this is the line that says which run they belonged to.
+        return errorReporter.Record(
+            message.ToString(),
+            context: "importing mods");
     }
 
     /// <summary>

@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Wpf.Diagnostics;
 using ModsDude.Client.Wpf.ViewModel.Services;
-using System.Diagnostics;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -67,17 +66,11 @@ public partial class BackgroundProblemViewModel(
     [RelayCommand]
     private void OpenLog()
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo(FileLoggerProvider.LogDirectory) { UseShellExecute = true });
-        }
-        catch (Exception exception)
+        if (LogFolder.TryOpen(logger) is false)
         {
             // The one thing this notice can do, and it failed. Naming the folder is still better
             // than nothing, so the detail line becomes the fallback.
-            logger.LogWarning(exception, "Could not open the log folder {Directory}.", FileLoggerProvider.LogDirectory);
-
-            Detail = $"The log is in {FileLoggerProvider.LogDirectory}.";
+            Detail = $"The log is in {LogFolder.Path}.";
         }
     }
 

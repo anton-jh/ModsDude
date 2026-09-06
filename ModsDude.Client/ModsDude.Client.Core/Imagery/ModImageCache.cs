@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Persistence;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,7 +22,7 @@ namespace ModsDude.Client.Core.Imagery;
 /// refreshes the timestamp once it has gone stale.
 /// </para>
 /// </remarks>
-public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
+public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<ModImageCache> logger)
 {
     /// <summary>
     /// Walking the directory costs the same whether one file or a thousand were added since, so
@@ -56,10 +57,13 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
 
             return bytes;
         }
-        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {
             // A half-written or locked entry costs a re-fetch, which is the whole contract of a
-            // cache. Nothing here is worth reporting.
+            // cache. Not worth interrupting anybody for - but a cache that misses every time is a
+            // slow app with no other symptom, so it does not get to be silent.
+            logger.LogDebug(exception, "Could not read the cached image {Key}.", key);
+
             return null;
         }
     }
@@ -77,8 +81,10 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
             await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken);
             File.Move(temporaryPath, path, overwrite: true);
         }
-        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {
+            logger.LogDebug(exception, "Could not cache the image {Key}.", key);
+
             return;
         }
 
@@ -136,15 +142,17 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
                     entry.File.Delete();
                     total -= entry.Length;
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
                     // Something else is reading it. It will be swept next time.
+                    logger.LogDebug(exception, "Could not evict the cached image {File}.", entry.File.FullName);
                 }
             }
         }
-        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {
             // An unreachable or unwritable cache folder means a slower app, not a broken one.
+            logger.LogWarning(exception, "Sweeping the image cache failed.");
         }
         finally
         {
@@ -165,7 +173,7 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
         return System.IO.Path.Combine(getSettings().Path, $"{Convert.ToHexStringLower(digest, 0, 16)}.img");
     }
 
-    private static void Touch(string path)
+    private void Touch(string path)
     {
         try
         {
@@ -176,9 +184,10 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings)
                 File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
             }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Losing a touch costs an entry its place in the eviction order, nothing more.
+            logger.LogDebug(exception, "Could not touch the cached image {File}.", path);
         }
     }
 }

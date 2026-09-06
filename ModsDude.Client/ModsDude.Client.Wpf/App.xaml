@@ -102,6 +102,9 @@
 
             <!-- Without its own template this would fall through to the base ModalViewModel one
                  above and render as a confirmation dialog. -->
+            <DataTemplate DataType="{x:Type vm:ErrorDialogViewModel}">
+                <uc:ErrorDialog />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ModDetailsModalViewModel}">
                 <uc:ModDetailsDialog />
             </DataTemplate>

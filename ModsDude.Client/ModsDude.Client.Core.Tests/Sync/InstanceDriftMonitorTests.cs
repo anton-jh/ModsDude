@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
@@ -314,7 +315,7 @@ public class InstanceDriftMonitorTests
             Folder = new TempDirectory("monitor-mods");
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new InstanceDriftService(Manifests);
+            Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
             Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time);
         }
 

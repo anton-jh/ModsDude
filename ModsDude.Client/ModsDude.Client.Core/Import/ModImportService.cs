@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -36,11 +37,12 @@ public sealed class ModImportService(
     IFilesClient filesClient,
     IModsClient modsClient,
     IModFileUploader uploader,
-    IModImagePublisher imagePublisher)
+    IModImagePublisher imagePublisher,
+    ILogger<ModImportService> logger)
 {
     public Task<ModImportResult> ImportAsync(ModImportRequest request, CancellationToken cancellationToken)
     {
-        return new ImportRun(filesClient, modsClient, uploader, imagePublisher, request).RunAsync(cancellationToken);
+        return new ImportRun(filesClient, modsClient, uploader, imagePublisher, request, logger).RunAsync(cancellationToken);
     }
 
     /// <summary>
@@ -69,7 +71,8 @@ public sealed class ModImportService(
         IModsClient modsClient,
         IModFileUploader uploader,
         IModImagePublisher imagePublisher,
-        ModImportRequest request)
+        ModImportRequest request,
+        ILogger logger)
     {
         /// <summary>Matches the catalog's: the repo is expected to hold thousands of versions.</summary>
         private const int _pageSize = 500;
@@ -530,6 +533,8 @@ public sealed class ModImportService(
                 // Cancellation is swallowed here along with everything else, deliberately: the
                 // version is registered by this point, and letting the token throw out of a
                 // decoration step would lose that fact. The loop checks the token again anyway.
+                logger.LogWarning(exception, "Imagery was not published for {Mod} {Version}.", version.ModId.Value, version.VersionId.Value);
+
                 return $"Imagery was not published: {exception.Message}";
             }
         }
@@ -644,6 +649,17 @@ public sealed class ModImportService(
 
         private void Record(CatalogModVersion version, ModImportStatus status, string? message = null, Exception? exception = null)
         {
+            // The one funnel every unfinished item passes through, which is why the log line lives
+            // here rather than at each of the four catch sites. What the user is shown names the
+            // mods and the reason and deliberately no exception; this is where the rest of it goes.
+            if (status is not (ModImportStatus.Registered or ModImportStatus.AlreadyRegistered))
+            {
+                logger.LogWarning(
+                    exception,
+                    "{Mod} {Version} was not imported ({Status}): {Message}",
+                    version.ModId.Value, version.VersionId.Value, status, message ?? "no reason given");
+            }
+
             lock (_results)
             {
                 _items.Add(new ModImportItemResult(version.Identity, status)

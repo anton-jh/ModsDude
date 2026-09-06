@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
@@ -22,7 +23,9 @@ public interface IContentStoreProvider
 
 
 /// <inheritdoc cref="IContentStoreProvider"/>
-public sealed class ContentStoreProvider(ClientSettingsRepository settingsRepository)
+public sealed class ContentStoreProvider(
+    ClientSettingsRepository settingsRepository,
+    ILogger<ContentStore> storeLogger)
     : IContentStoreProvider
 {
     public ContentStore GetStoreServing(string path)
@@ -30,7 +33,7 @@ public sealed class ContentStoreProvider(ClientSettingsRepository settingsReposi
         var settings = settingsRepository.Settings;
         var servingVolume = settings.GetServingVolume(FileSystemHelper.NormalizeVolumeRoot(path));
 
-        return Build(servingVolume, settings);
+        return Build(servingVolume, settings, storeLogger);
     }
 
     public IReadOnlyList<ContentStore> GetAllStores()
@@ -44,7 +47,7 @@ public sealed class ContentStoreProvider(ClientSettingsRepository settingsReposi
             .Select(FileSystemHelper.NormalizeVolumeRoot)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-        return [.. volumes.Select(x => Build(x, settings))];
+        return [.. volumes.Select(x => Build(x, settings, storeLogger))];
     }
 
 
@@ -52,13 +55,14 @@ public sealed class ContentStoreProvider(ClientSettingsRepository settingsReposi
     /// An unconfigured volume gets the same defaults the settings page would offer it, rather than
     /// refusing to sync until somebody has visited a page to accept them.
     /// </summary>
-    private static ContentStore Build(string volumeRoot, ClientSettings settings)
+    private static ContentStore Build(string volumeRoot, ClientSettings settings, ILogger<ContentStore> logger)
     {
         var configured = settings.Stores.GetValueOrDefault(volumeRoot);
 
         return new ContentStore(
             volumeRoot,
             configured?.Path ?? ContentStoreSettings.GetDefaultPath(volumeRoot),
-            configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes);
+            configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes,
+            logger);
     }
 }

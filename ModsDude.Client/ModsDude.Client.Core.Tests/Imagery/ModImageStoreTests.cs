@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
@@ -13,7 +14,7 @@ public class ModImageStoreTests : IDisposable
 
     public ModImageStoreTests()
     {
-        _cache = new ModImageCache(() => new ImageCacheSettings() { Path = _directory, MaxSizeBytes = 1024 * 1024 });
+        _cache = new ModImageCache(() => new ImageCacheSettings() { Path = _directory, MaxSizeBytes = 1024 * 1024 }, NullLogger<ModImageCache>.Instance);
     }
 
 

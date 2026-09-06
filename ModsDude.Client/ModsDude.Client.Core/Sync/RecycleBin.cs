@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
 namespace ModsDude.Client.Core.Sync;
@@ -29,7 +30,7 @@ public interface IRecycleBin
 
 
 /// <inheritdoc cref="IRecycleBin"/>
-public sealed partial class ShellRecycleBin : IRecycleBin
+public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : IRecycleBin
 {
     private const uint _deleteOperation = 0x0003;
 
@@ -71,8 +72,12 @@ public sealed partial class ShellRecycleBin : IRecycleBin
 
             return SHQueryRecycleBinW(root, ref info) == 0;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // No recycle bin on this volume means a delete is permanent, and the caller quarantines
+            // instead. Which of the two happened is not visible from the outside.
+            logger.LogDebug(exception, "Could not query the recycle bin for {Path}.", path);
+
             return false;
         }
     }
@@ -105,8 +110,10 @@ public sealed partial class ShellRecycleBin : IRecycleBin
             // file rather than an error - and is handled the same way, by quarantining it.
             return result == 0 && operation.AnyOperationsAborted == 0 && File.Exists(path) is false;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Could not recycle {Path}; it will be quarantined instead.", path);
+
             return false;
         }
         finally

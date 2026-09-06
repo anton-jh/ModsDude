@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -144,7 +145,9 @@ public sealed record InstanceDriftReport(
 /// activation - is Phase 4's, see docs/PLAN.md#phase-4--make-drift-unmissable.
 /// </para>
 /// </remarks>
-public sealed class InstanceDriftService(SyncManifestStore manifestStore)
+public sealed class InstanceDriftService(
+    SyncManifestStore manifestStore,
+    ILogger<InstanceDriftService> logger)
 {
     /// <param name="activeProfile">
     /// The instance's standing intent. Passed rather than read off the instance so this depends on
@@ -217,8 +220,12 @@ public sealed class InstanceDriftService(SyncManifestStore manifestStore)
         {
             listing = [.. Directory.EnumerateFiles(modFolder).Select(Path.GetFileName).OfType<string>()];
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // Unreachable is a status the notice reports in one word, so the reason it was
+            // unreachable exists here or nowhere.
+            logger.LogWarning(exception, "Could not list the mod folder {Folder}.", modFolder);
+
             return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 

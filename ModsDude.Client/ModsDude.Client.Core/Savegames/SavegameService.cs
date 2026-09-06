@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -165,6 +166,7 @@ public sealed class SavegameService(
     IModFileUploader uploader,
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
+    ILogger<SavegameService> logger,
     ISavegameHeadVersions? headVersions = null)
     : ISavegameService
 {
@@ -822,6 +824,7 @@ public sealed class SavegameService(
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The game holding a file open in a save that has just been checked in. Left where it is.
+            logger.LogWarning(exception, "Could not clear slot {Slot} after checking in.", slot.Value);
         }
     }
 
@@ -832,7 +835,7 @@ public sealed class SavegameService(
                 $"No loaded repo hydrates a savegame adapter for instance '{instance.Id}' - either its game does not support savegames, or no repo on this machine serves its scope.");
 
     /// <summary>Slots, or nothing where the game folder is unreachable - unknown, never drifted.</summary>
-    private static async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(IInstanceSavegameAdapter adapter, CancellationToken ct)
+    private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(IInstanceSavegameAdapter adapter, CancellationToken ct)
     {
         try
         {
@@ -840,6 +843,10 @@ public sealed class SavegameService(
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // An unreachable game folder reads as "no slots", which is deliberately indistinguishable
+            // from an empty one to everything above - so this is the only place it is visible.
+            logger.LogWarning(exception, "Could not read the savegame slots; treating the instance as having none.");
+
             return [];
         }
     }
@@ -857,6 +864,10 @@ public sealed class SavegameService(
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Reports no drift rather than play. Being wrong in this direction is quiet by design,
+            // which is exactly why it has to be loud in the log.
+            logger.LogWarning(exception, "Could not hash slot {Slot}; reporting no drift for it.", slot.Value);
+
             return null;
         }
     }
@@ -864,15 +875,16 @@ public sealed class SavegameService(
     private static string GetTemporaryArchivePath()
         => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
 
-    private static void TryDeleteFile(string path)
+    private void TryDeleteFile(string path)
     {
         try
         {
             File.Delete(path);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A leftover temporary archive costs disk space until the machine's temp folder is swept.
+            logger.LogDebug(exception, "Could not delete the temporary archive {File}.", path);
         }
     }
 }

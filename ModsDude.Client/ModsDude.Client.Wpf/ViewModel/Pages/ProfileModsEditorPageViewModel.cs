@@ -62,6 +62,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IModDependenciesClient _dependenciesClient;
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
     private readonly IDialogService _dialogService;
     private readonly NavigationLockService _navigationLock;
     private readonly LocalInstanceRepository _localInstanceRepository;
@@ -132,6 +133,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IModDependenciesClient dependenciesClient,
         IProfilesClient profilesClient,
         IModalService modalService,
+        IErrorReporter errorReporter,
         IDialogService dialogService,
         NavigationLockService navigationLock,
         LocalInstanceRepository localInstanceRepository,
@@ -146,6 +148,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _dependenciesClient = dependenciesClient;
         _profilesClient = profilesClient;
         _modalService = modalService;
+        _errorReporter = errorReporter;
         _dialogService = dialogService;
         _navigationLock = navigationLock;
         _localInstanceRepository = localInstanceRepository;
@@ -666,7 +669,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// told that something went wrong. Leaving the draft where it is also keeps it unsaved, so Save
     /// stays enabled and pressing it again once the cause is fixed is the whole recovery path.
     /// </remarks>
-    private async Task StopAtFailedImportAsync(int unfinished, ConfirmationDialogViewModel? problems)
+    private async Task StopAtFailedImportAsync(int unfinished, ErrorDialogViewModel? problems)
     {
         Recount();
 
@@ -849,6 +852,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // The profile keeps its draft when an import falls short, so the mods it names are still in
         // the list the user is looking at.
         var problems = ModImportProblems.Build(
+            _errorReporter,
             result,
             id => rows.TryGetValue(id, out var row) ? row.Name : id.ModId.Value,
             "Nothing was saved.");
@@ -860,7 +864,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <param name="Problems">The dialog for what did not make it, or null when everything did.</param>
     private sealed record PendingImport(
         HashSet<ModVersionIdentity> Imported,
-        ConfirmationDialogViewModel? Problems);
+        ErrorDialogViewModel? Problems);
 
     /// <summary>
     /// One dialog for the whole save, and only for the mods whose version ordering the comparer could

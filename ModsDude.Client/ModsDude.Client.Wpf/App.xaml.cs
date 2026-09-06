@@ -45,6 +45,11 @@ public partial class App : Application
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 
+        // Two ways out of the process that the dispatcher handler never sees: a throw on a thread
+        // that is not the UI one, and a Task nobody awaited. Both used to be silent.
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
         // The one thing the container cannot reach: an attached behaviour XAML constructs itself.
         LazyLoad.UseDiagnostics(
             _serviceProvider.GetRequiredService<ILogger<App>>(),
@@ -62,20 +67,36 @@ public partial class App : Application
     {
         e.Handled = true;
 
-        // The dialog tells the user what went wrong; the log is what tells anyone why. The wrapped
-        // exception loses the original stack, so this logs what actually arrived.
+        await _serviceProvider.GetRequiredService<IErrorReporter>()
+            .ShowAsync(e.Exception, "handling something on the UI thread");
+    }
+
+    /// <summary>
+    /// A failed <see cref="Task"/> nobody awaited. It reaches here when the task is collected, which
+    /// is long after the fact and on a finalizer thread - so there is nothing to show and nothing to
+    /// interrupt, only something to write down.
+    /// </summary>
+    /// <remarks>
+    /// Marked observed, deliberately. Leaving it unobserved is a process kill on an app that is very
+    /// likely still working, and a fire-and-forget continuation that failed has already cost
+    /// whatever it was going to cost by the time this runs.
+    /// </remarks>
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
         _serviceProvider.GetRequiredService<ILogger<App>>()
-            .LogError(e.Exception, "Unhandled exception reached the dispatcher.");
+            .LogError(e.Exception, "A task failed and nothing was awaiting it.");
 
-        var exception = e.Exception switch
-        {
-            UserFriendlyException userFriendlyException => userFriendlyException,
-            Exception unknownException => UserFriendlyException.WrapUnknown(unknownException)
-        };
+        e.SetObserved();
+    }
 
-        var modalService = _serviceProvider.GetRequiredService<IModalService>();
-        var modal = ConfirmationDialogViewModel.Error(exception);
-        await modalService.Show(modal);
+    /// <summary>
+    /// The last thing that runs. Nothing here can stop the process - the runtime is on its way down
+    /// - so the only useful act is getting the exception into the file before it goes.
+    /// </summary>
+    private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        _serviceProvider.GetRequiredService<ILogger<App>>()
+            .LogCritical(e.ExceptionObject as Exception, "Unhandled exception; terminating: {Terminating}.", e.IsTerminating);
     }
 
 
@@ -150,12 +171,18 @@ public partial class App : Application
         services.AddSingleton(sp => new Lazy<IModalService>(sp.GetRequiredService<IModalService>));
         services.AddSingleton<IDialogService, DialogService>();
 
+        // Everything the user is told went wrong goes through here, which is what makes the log a
+        // by-product of the dialog rather than a second thing every catch block has to remember.
+        services.AddSingleton<IErrorReporter, ErrorReporter>();
+
         // Singleton so the decoded thumbnails survive navigating away from a page and back.
         services.AddSingleton<IModImageProvider, ModImageProvider>();
 
         // One cache per machine, not one per volume: images are always copies, so the hardlink
         // constraint that makes content stores per-volume does not apply to them.
-        services.AddSingleton(sp => new ModImageCache(() => sp.GetRequiredService<ClientSettingsRepository>().Settings.ImageCache));
+        services.AddSingleton(sp => new ModImageCache(
+            () => sp.GetRequiredService<ClientSettingsRepository>().Settings.ImageCache,
+            sp.GetRequiredService<ILogger<ModImageCache>>()));
         services.AddSingleton<IModImageStore, ModImageStore>();
         services.AddSingleton<IModImagerySource, ModImagerySource>();
 

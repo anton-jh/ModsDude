@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
 
@@ -108,6 +110,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     private readonly ISavegameService? _savegames;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
+    private readonly ILogger _logger;
 
     private readonly List<FileSystemWatcher> _watchers = [];
 
@@ -126,8 +129,10 @@ public sealed class InstanceDriftMonitor : IDisposable
         SyncManifestStore manifestStore,
         IProfileRevisions? profileRevisions = null,
         TimeProvider? timeProvider = null,
-        ISavegameService? savegames = null)
+        ISavegameService? savegames = null,
+        ILogger<InstanceDriftMonitor>? logger = null)
     {
+        _logger = logger ?? (ILogger)NullLogger.Instance;
         _candidates = candidates;
         _driftService = driftService;
         _manifestStore = manifestStore;
@@ -278,8 +283,12 @@ public sealed class InstanceDriftMonitor : IDisposable
         {
             return await _savegames.CheckDriftAsync(instanceId, CancellationToken.None);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // The notice degrades to the mod half rather than failing. Nothing on screen says the
+            // savegame half was even attempted.
+            _logger.LogWarning(exception, "Could not check savegame drift for instance {Instance}.", instanceId);
+
             return [];
         }
     }
@@ -339,6 +348,7 @@ public sealed class InstanceDriftMonitor : IDisposable
             {
                 // An unreachable folder is unknown, not drifted, and it is certainly not worth an
                 // error dialog. The activation check reports it quietly when the time comes.
+                _logger.LogWarning(exception, "Could not watch a mod folder for changes; drift there will only be noticed on a manual check.");
             }
         }
     }

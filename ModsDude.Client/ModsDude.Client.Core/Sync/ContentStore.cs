@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using System.Security.Cryptography;
 
@@ -42,8 +44,9 @@ public sealed class ContentStore
     private static readonly TimeSpan _timestampRefreshInterval = TimeSpan.FromHours(12);
 
 
-    public ContentStore(string volumeRoot, string rootPath, long maxSizeBytes)
+    public ContentStore(string volumeRoot, string rootPath, long maxSizeBytes, ILogger? logger = null)
     {
+        Log = logger ?? NullLogger.Instance;
         VolumeRoot = volumeRoot;
         RootPath = rootPath;
         MaxSizeBytes = maxSizeBytes;
@@ -56,6 +59,9 @@ public sealed class ContentStore
     public string RootPath { get; }
 
     public long MaxSizeBytes { get; }
+
+    /// <summary>Never null: a store built without one is a store nothing is listening to.</summary>
+    private ILogger Log { get; }
 
 
     public string GetBlobPath(string hash)
@@ -214,9 +220,10 @@ public sealed class ContentStore
                 File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
             }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Losing a touch costs an entry its place in the eviction order and nothing else.
+            Log.LogDebug(exception, "Could not touch the store blob {Hash}.", hash);
         }
     }
 
@@ -293,10 +300,11 @@ public sealed class ContentStore
                 reclaimed += entry.Length;
                 evicted++;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 // Something else is reading it. It will be swept next time; everything in a store is
                 // registered somewhere and therefore re-downloadable, so nothing here needs asking.
+                Log.LogDebug(exception, "Could not evict the store blob {File}.", entry.Path);
             }
         }
 
@@ -342,9 +350,10 @@ public sealed class ContentStore
         {
             File.Move(temporaryPath, blobPath);
         }
-        catch (IOException) when (File.Exists(blobPath))
+        catch (IOException exception) when (File.Exists(blobPath))
         {
             // Lost the race with another sync writing the same address.
+            Log.LogDebug(exception, "Another writer got to the store blob {Hash} first.", hash);
         }
     }
 
@@ -387,15 +396,16 @@ public sealed class ContentStore
         return Path.Combine(RootPath, _temporaryDirectory, $"{Guid.NewGuid():N}.part");
     }
 
-    private static void Delete(string path)
+    private void Delete(string path)
     {
         try
         {
             File.Delete(path);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A leftover temporary file costs disk space until the next sweep, nothing more.
+            Log.LogDebug(exception, "Could not delete the temporary store file {File}.", path);
         }
     }
 

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Persistence;
 
@@ -105,7 +106,7 @@ public class ModImageCacheTests : IDisposable
     }
 
 
-    private ModImageCache CreateCache() => new(() => _settings);
+    private ModImageCache CreateCache() => new(() => _settings, NullLogger<ModImageCache>.Instance);
 
     /// <summary>
     /// Writes an entry and backdates it, since least-recently-used is approximated by last-write

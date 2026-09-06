@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
@@ -23,7 +24,7 @@ public class ModImportServiceTests
     public ModImportServiceTests()
     {
         _uploader = new FakeModFileUploader(_server);
-        _service = new ModImportService(_server, _server, _uploader, _imagery);
+        _service = new ModImportService(_server, _server, _uploader, _imagery, NullLogger<ModImportService>.Instance);
     }
 
 

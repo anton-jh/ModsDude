@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Helpers;
 using System.Text.Json;
 
@@ -26,16 +28,18 @@ public sealed class SyncManifestStore
 
     private readonly string _directory;
     private readonly Lock _lock = new();
+    private readonly ILogger _log;
 
 
-    public SyncManifestStore()
-        : this(Path.Combine(FileSystemHelper.GetAppDataDirectory(), "manifests"))
+    public SyncManifestStore(ILogger<SyncManifestStore> logger)
+        : this(Path.Combine(FileSystemHelper.GetAppDataDirectory(), "manifests"), logger)
     { }
 
     /// <param name="directory">Where the manifests live. Named so tests can point it somewhere else.</param>
-    public SyncManifestStore(string directory)
+    public SyncManifestStore(string directory, ILogger? logger = null)
     {
         _directory = directory;
+        _log = logger ?? NullLogger.Instance;
     }
 
 
@@ -62,6 +66,10 @@ public sealed class SyncManifestStore
             }
             catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
             {
+                // A manifest that cannot be read costs a full reconcile rather than a delta, which
+                // is slow but correct - and invisible, which is why it is written down.
+                _log.LogWarning(exception, "Could not read the sync manifest for instance {Instance}.", instanceId);
+
                 return null;
             }
         }
@@ -98,6 +106,7 @@ public sealed class SyncManifestStore
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // A manifest for an instance that no longer exists is inert.
+                _log.LogDebug(exception, "Could not delete the sync manifest for instance {Instance}.", instanceId);
             }
         }
     }

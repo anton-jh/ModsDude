@@ -46,6 +46,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly ModImportService _importService;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
     private readonly IDialogService _dialogService;
     private readonly IModsClient _modsClient;
 
@@ -85,6 +86,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         ModListItemViewModel.Factory itemFactory,
         ModImportService importService,
         IModalService modalService,
+        IErrorReporter errorReporter,
         IDialogService dialogService,
         IModsClient modsClient)
     {
@@ -92,6 +94,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         _itemFactory = itemFactory;
         _importService = importService;
         _modalService = modalService;
+        _errorReporter = errorReporter;
         _dialogService = dialogService;
         _modsClient = modsClient;
 
@@ -511,7 +514,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
             // One dialog for the run, once every row has been marked - so what it names is already
             // findable in the list behind it.
-            if (ModImportProblems.Build(result, id => NameOf(rows, id)) is ConfirmationDialogViewModel problems)
+            if (ModImportProblems.Build(_errorReporter, result, id => NameOf(rows, id)) is ErrorDialogViewModel problems)
             {
                 await _modalService.Show(problems);
             }

@@ -1,0 +1,102 @@
+<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.ErrorDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="500"
+             d:DataContext="{d:DesignInstance vm:ErrorDialogViewModel}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="* auto">
+            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 0">
+
+                <Grid ColumnDefinitions="auto *">
+                    <TextBlock Grid.Column="0"
+                               Text="&#xEA39;"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 12 24"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Title}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 0 24" />
+                </Grid>
+
+                <TextBlock Text="{Binding Message}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0 0 0 16" />
+
+                <!-- The developer's half, kept visually secondary and scrollable: an exception
+                     message can be a paragraph, and it must not push the button off the dialog. -->
+                <Border Padding="12"
+                        Margin="0 0 0 24"
+                        CornerRadius="4"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding Details}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                    </ScrollViewer>
+                </Border>
+
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid ColumnDefinitions="* auto" Margin="24">
+
+                    <!-- When it happened, and the way to what else was written down at that moment.
+                         Left of the button because it is the thing somebody reports, not the thing
+                         they click to leave. -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Vertical">
+                        <TextBlock Text="{Binding Footer}"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+
+                        <TextBlock Margin="0 2 0 0" Style="{DynamicResource CaptionTextBlockStyle}">
+                            <Hyperlink Style="{StaticResource TextLink}"
+                                       Command="{Binding OpenLogCommand}">
+                                <Run Text="Open log folder" />
+                            </Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            MinWidth="120"
+                            Margin="16 0 0 0"
+                            VerticalAlignment="Center"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="Day: ruined"
+                            Command="{Binding DismissCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Return" Command="{Binding DismissCommand}" />
+        <KeyBinding Key="Esc" Command="{Binding DismissCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

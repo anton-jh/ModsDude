@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
@@ -240,7 +241,7 @@ public class InstanceDriftServiceTests
         public DriftFixture()
         {
             Manifests = new SyncManifestStore(_manifests.Path);
-            Service = new InstanceDriftService(Manifests);
+            Service = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
         }
 
 

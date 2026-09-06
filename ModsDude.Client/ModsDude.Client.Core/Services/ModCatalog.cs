@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -43,6 +44,7 @@ public sealed class ModCatalog : IDisposable
     private readonly Repo _repo;
     private readonly IBaseModAdapter _modAdapter;
     private readonly IModsClient _modsClient;
+    private readonly ILogger<ModCatalog> _logger;
 
     private readonly CancellationTokenSource _cancellation = new();
     private readonly object _lock = new();
@@ -67,10 +69,12 @@ public sealed class ModCatalog : IDisposable
 
     public ModCatalog(
         Repo repo,
-        IModsClient modsClient)
+        IModsClient modsClient,
+        ILogger<ModCatalog> logger)
     {
         _repo = repo;
         _modsClient = modsClient;
+        _logger = logger;
         _modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke()
             ?? throw UserFriendlyException.RepoNoModSupport();
     }
@@ -326,7 +330,10 @@ public sealed class ModCatalog : IDisposable
         catch (Exception ex)
         {
             // An unplugged drive or a folder the user deleted marks this one source bad. The rest of
-            // the catalog is still worth showing.
+            // the catalog is still worth showing - and the user is told, but only the message, so
+            // this is the only place the rest of it survives.
+            _logger.LogWarning(ex, "Could not scan mod source {Source} at {Path}.", source.Name, source.Path);
+
             return new SourceScan(source, [], ex.Message);
         }
     }
@@ -534,9 +541,10 @@ public sealed class ModCatalog : IDisposable
 
 
     public class Factory(
-        IModsClient modsClient)
+        IModsClient modsClient,
+        ILogger<ModCatalog> logger)
     {
-        public ModCatalog Create(Repo repo) => new(repo, modsClient);
+        public ModCatalog Create(Repo repo) => new(repo, modsClient, logger);
     }
 }
 

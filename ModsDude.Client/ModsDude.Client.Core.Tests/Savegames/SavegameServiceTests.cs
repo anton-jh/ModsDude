@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
@@ -468,6 +469,7 @@ public class SavegameServiceTests
                 Uploader,
                 ManifestStore,
                 RecycleBin,
+                NullLogger<SavegameService>.Instance,
                 Heads);
         }
 

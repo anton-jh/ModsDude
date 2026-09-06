@@ -28,6 +28,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly CurrentUserService _currentUserService;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
     private IReadOnlyList<RepoInviteDto> _fetchedInvites = [];
@@ -41,7 +42,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         RepoRepository repoRepository,
         CurrentUserService currentUserService,
         NavigationLockService navigationLockService,
-        IModalService modalService)
+        IModalService modalService,
+        IErrorReporter errorReporter)
     {
         _repo = repo;
         _membershipService = membershipService;
@@ -50,6 +52,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _currentUserService = currentUserService;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
+        _errorReporter = errorReporter;
 
         Members = [];
         Invites = [];
@@ -437,8 +440,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private Task ShowError(Exception ex)
     {
-        return _modalService.Show(ConfirmationDialogViewModel.Error(
-            ex as UserFriendlyException ?? UserFriendlyException.WrapUnknown(ex)));
+        return _errorReporter.ShowAsync(ex, "changing who is in the repo");
     }
 
 

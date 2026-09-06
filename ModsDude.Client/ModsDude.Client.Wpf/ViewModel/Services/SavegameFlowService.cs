@@ -22,7 +22,10 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 /// may want this one - see <see cref="ProfileApplyService"/> for the cycle that closes otherwise.
 /// </para>
 /// </remarks>
-public sealed class SavegameFlowService(ISavegameService savegames, Lazy<IModalService> modalService)
+public sealed class SavegameFlowService(
+    ISavegameService savegames,
+    Lazy<IModalService> modalService,
+    IErrorReporter errorReporter)
 {
     /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
@@ -157,7 +160,7 @@ public sealed class SavegameFlowService(ISavegameService savegames, Lazy<IModalS
         }
         catch (UserFriendlyException exception)
         {
-            await modalService.Value.Show(ConfirmationDialogViewModel.Error(exception));
+            await errorReporter.ShowAsync(exception, "checking a savegame in");
 
             return SavegameCheckInOutcome.Cancelled;
         }

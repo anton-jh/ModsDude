@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -58,7 +59,8 @@ public sealed class ModSyncService(
     IContentStoreProvider storeProvider,
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
-    IInstanceModFolders instanceModFolders)
+    IInstanceModFolders instanceModFolders,
+    ILogger<ModSyncService> logger)
 {
     /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
     private const int _registeredPageSize = 500;
@@ -198,6 +200,10 @@ public sealed class ModSyncService(
             }
             catch (Exception exception)
             {
+                // Collected rather than thrown, so the rest of the sync still runs - which is also
+                // why nothing else would ever see the stack.
+                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
+
                 failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
             }
 
@@ -304,6 +310,10 @@ public sealed class ModSyncService(
             }
             catch (Exception exception)
             {
+                // Collected rather than thrown, so the rest of the sync still runs - which is also
+                // why nothing else would ever see the stack.
+                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
+
                 failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
             }
 
@@ -359,10 +369,12 @@ public sealed class ModSyncService(
 
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.QuarantineFolder) { Path = destination };
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Both routes refused. The file stays where it is, which is the safe end of the failure -
             // sync reports it rather than removing something it cannot put back.
+            logger.LogWarning(exception, "Could not displace {File} for {Mod}; leaving it where it is.", path, item.ModId.Value);
+
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.Failed);
         }
     }
@@ -401,6 +413,10 @@ public sealed class ModSyncService(
             }
             catch (Exception exception)
             {
+                // Collected rather than thrown, so the rest of the sync still runs - which is also
+                // why nothing else would ever see the stack.
+                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
+
                 failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
             }
 
@@ -580,10 +596,12 @@ public sealed class ModSyncService(
         {
             return plan.ServingStore.Evict(GetPinnedHashes(plan), CancellationToken.None);
         }
-        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {
             // Housekeeping. A store that could not be swept is a store that is too big, not a failed
             // sync - and the mod folder is already correct by this point.
+            logger.LogWarning(exception, "Could not evict from the content store after syncing.");
+
             return null;
         }
     }
@@ -793,7 +811,7 @@ public sealed class ModSyncService(
     /// deliberate trade of sync time for space, and an adapter without hardlink support is a stated
     /// property of the game rather than a silent surprise.
     /// </remarks>
-    private static ModMaterialization DecideMaterialization(string modFolder, ContentStore servingStore, IInstanceModAdapter adapter)
+    private ModMaterialization DecideMaterialization(string modFolder, ContentStore servingStore, IInstanceModAdapter adapter)
     {
         var sameVolume = string.Equals(
             FileSystemHelper.NormalizeVolumeRoot(modFolder),
@@ -810,7 +828,7 @@ public sealed class ModSyncService(
             : new ModMaterialization(MaterializationMethod.Copy, FellBackToCopy: true);
     }
 
-    private static bool SupportsHardlinks(ContentStore servingStore)
+    private bool SupportsHardlinks(ContentStore servingStore)
     {
         var directory = Path.Combine(servingStore.RootPath, "tmp");
         var probe = Path.Combine(directory, $"linkprobe-{Guid.NewGuid():N}");
@@ -823,8 +841,12 @@ public sealed class ModSyncService(
 
             return FileLinks.TryCreateHardLink(link, probe);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // A store that cannot be hardlinked into is copied into instead, which is slower and
+            // correct - and indistinguishable from a store that simply chose to copy.
+            logger.LogInformation(exception, "Hardlink probe failed in {Store}; falling back to copying.", servingStore.RootPath);
+
             return false;
         }
         finally
@@ -834,15 +856,16 @@ public sealed class ModSyncService(
         }
     }
 
-    private static void TryDelete(string path)
+    private void TryDelete(string path)
     {
         try
         {
             File.Delete(path);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A leftover probe file is inert.
+            logger.LogDebug(exception, "Could not delete the hardlink probe file {File}.", path);
         }
     }
 

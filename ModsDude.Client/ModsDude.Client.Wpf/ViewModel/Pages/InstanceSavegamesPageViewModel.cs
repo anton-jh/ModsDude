@@ -42,6 +42,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly ProfileService _profileService;
     private readonly SavegameFlowService _flowService;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -58,7 +59,8 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         SavegameFlowService flowService,
-        IModalService modalService)
+        IModalService modalService,
+        IErrorReporter errorReporter)
     {
         _repo = repo;
         _instance = instance;
@@ -68,6 +70,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         _profileService = profileService;
         _flowService = flowService;
         _modalService = modalService;
+        _errorReporter = errorReporter;
 
         _lifetime = _pageLifetime.Token;
 
@@ -367,8 +370,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         }
         catch (Exception exception)
         {
-            await _modalService.Show(ConfirmationDialogViewModel.Error(
-                exception as UserFriendlyException ?? UserFriendlyException.WrapUnknown(exception)));
+            await _errorReporter.ShowAsync(exception, "acting on a savegame slot");
         }
     }
 

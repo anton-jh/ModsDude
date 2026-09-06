@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
@@ -88,8 +90,10 @@ public interface ISavegamePacker
 
 
 /// <inheritdoc cref="ISavegamePacker"/>
-public sealed class SavegamePacker : ISavegamePacker
+public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISavegamePacker
 {
+    private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
+
     /// <summary>
     /// Every entry's timestamp, in place of the file's own.
     /// </summary>
@@ -332,19 +336,20 @@ public sealed class SavegamePacker : ISavegamePacker
     private static string GetTemporaryArchivePath()
         => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
 
-    private static void TryDeleteFile(string path)
+    private void TryDeleteFile(string path)
     {
         try
         {
             File.Delete(path);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A leftover temporary archive costs disk space until the machine's temp folder is swept.
+            _log.LogDebug(exception, "Could not delete the temporary archive {File}.", path);
         }
     }
 
-    private static void TryDeleteDirectory(string path)
+    private void TryDeleteDirectory(string path)
     {
         try
         {
@@ -353,9 +358,10 @@ public sealed class SavegamePacker : ISavegamePacker
                 Directory.Delete(path, recursive: true);
             }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Same bargain as the file above, one directory larger.
+            _log.LogDebug(exception, "Could not delete the staging directory {Directory}.", path);
         }
     }
 

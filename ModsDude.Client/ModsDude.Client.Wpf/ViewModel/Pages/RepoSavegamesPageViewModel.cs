@@ -52,6 +52,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly SavegameFlowService _flowService;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -80,7 +81,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         InstanceDriftMonitor driftMonitor,
         SavegameFlowService flowService,
         ShellNavigationService shellNavigation,
-        IModalService modalService)
+        IModalService modalService,
+        IErrorReporter errorReporter)
     {
         _repo = repo;
         _savegamesClient = savegamesClient;
@@ -96,6 +98,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _flowService = flowService;
         _shellNavigation = shellNavigation;
         _modalService = modalService;
+        _errorReporter = errorReporter;
 
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
@@ -577,8 +580,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             // The rows raise plain events rather than running commands, so a failure here has no
             // command to carry it to the global handler and has to reach the user itself.
-            await _modalService.Show(ConfirmationDialogViewModel.Error(
-                exception as UserFriendlyException ?? UserFriendlyException.WrapUnknown(exception)));
+            await _errorReporter.ShowAsync(exception, "checking a savegame out");
         }
         finally
         {

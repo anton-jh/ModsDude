@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
@@ -220,7 +221,7 @@ public class SavegameDriftTests
         using var manifests = new TempDirectory("savegame-drift-report");
         using var modFolder = new TempDirectory("savegame-drift-mods");
 
-        var service = new InstanceDriftService(new SyncManifestStore(manifests.Path));
+        var service = new InstanceDriftService(new SyncManifestStore(manifests.Path), NullLogger<InstanceDriftService>.Instance);
         var drift = new[] { new SavegameDrift(_repoId, _savegameId, _slot, SavegameDriftKind.UncheckedInPlay) };
 
         var report = service.Check(
@@ -295,6 +296,7 @@ public class SavegameDriftTests
                 new FakeSavegameUploader(Server),
                 _manifestStore,
                 new FakeSlotRecycleBin(),
+                NullLogger<SavegameService>.Instance,
                 Heads);
         }
 

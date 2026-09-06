@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Helpers;
 using System.Text.Json;
 
@@ -9,13 +11,16 @@ namespace ModsDude.Client.Core.Persistence;
 /// schema-version bump relies on; without it a bumped version silently deserializes old JSON into
 /// the new shape rather than being discarded.
 /// </param>
-public class Store<T>(string filename, Func<T, bool>? isCompatible = null)
+public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogger? logger = null)
     where T : class, new()
 {
     private readonly static JsonSerializerOptions _serializerOptions = new() { WriteIndented = true };
     private readonly string _filepath = Path.Combine(FileSystemHelper.GetAppDataDirectory(), filename);
     private T? _state;
     private readonly object _lock = new();
+
+    /// <summary>Never null: a store built without one is a store nothing is listening to.</summary>
+    private ILogger Log { get; } = logger ?? NullLogger.Instance;
 
 
     public T Get()
@@ -33,6 +38,10 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null)
 
                         if (loaded is null || isCompatible?.Invoke(loaded) == false)
                         {
+                            // Deliberate, not a fault: a schema bump discards old state by design.
+                            // Still worth a line, because it is why somebody's settings are gone.
+                            Log.LogInformation("{File} is not compatible with this version and was moved aside.", _filepath);
+
                             _state = new();
                             MoveAside();
                         }
@@ -41,8 +50,13 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null)
                             _state = loaded;
                         }
                     }
-                    catch (JsonException)
+                    catch (JsonException exception)
                     {
+                        // The user's instance list, store assignments and savegame bindings, gone.
+                        // Recoverable - the file is moved aside rather than deleted - but only by
+                        // somebody who knows it happened, which is what this line is for.
+                        Log.LogError(exception, "{File} could not be read and was moved aside; starting from empty state.", _filepath);
+
                         _state = new();
                         MoveAside();
                     }

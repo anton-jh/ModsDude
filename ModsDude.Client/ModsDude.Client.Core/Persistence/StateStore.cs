@@ -1,3 +1,6 @@
-﻿namespace ModsDude.Client.Core.Persistence;
+using Microsoft.Extensions.Logging;
 
-public class StateStore() : Store<LocalState>("state.json", state => state.Version == LocalState.CurrentVersion);
+namespace ModsDude.Client.Core.Persistence;
+
+public class StateStore(ILogger<StateStore> logger)
+    : Store<LocalState>("state.json", state => state.Version == LocalState.CurrentVersion, logger);

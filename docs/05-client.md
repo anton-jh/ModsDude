@@ -91,6 +91,52 @@ It is a few dozen lines, not a logging framework. A desktop client writing a few
 session does not need one, and a dependency that has to be configured before it works is a
 dependency that ships misconfigured.
 
+### Nothing reaches the user without reaching the log
+
+**`IErrorReporter` is the one way a failure becomes a dialog.** It writes the exception to the
+log, stamps the moment it did, and returns an `ErrorDialogViewModel` carrying that stamp. Showing
+and logging used to be separate acts, so they could disagree — and did: half a dozen catch blocks
+built an error dialog and wrote nothing, which meant the failures a user was most likely to ask
+about were the ones with no record behind them.
+
+Every caller passes a short `context` — "saving the profile", "checking a savegame in" — because
+it is the log's only clue about which of a page's several operations this was.
+
+**`ErrorDialogViewModel` is separate from `ConfirmationDialogViewModel` on purpose.** The
+confirmation dialog is generic: it still asks questions, reports refusals and lists validation
+errors. None of those are faults, none has a log line to point at, and offering "Open log folder"
+on "Really delete this?" would be offering a dead end. The error dialog has one button, the
+timestamp, and the link — `LogFolder.TryOpen`, shared with the background-problem notice so there
+is one place that knows where the folder is.
+
+The timestamp is what makes the folder worth opening. It is written in the same format as a log
+line's own prefix, so it can be searched for; by the time somebody reads a dialog, decides to
+report it and finds the folder, "just now" has stopped being an answer.
+
+**Three ways out of the process, all covered.** `Application_DispatcherUnhandledException` goes
+through the reporter. `TaskScheduler.UnobservedTaskException` and
+`AppDomain.CurrentDomain.UnhandledException` are wired in `OnStartup` and log only — the first
+fires on a finalizer thread long after the fact, and the second while the runtime is on its way
+down, so neither has anything left to interrupt. The unobserved one is marked observed:
+otherwise a fire-and-forget continuation that already cost whatever it was going to cost takes
+the process with it.
+
+**Core logs its own absorbed failures.** `Client.Core` had no logger anywhere, so a discarded
+`state.json`, an unreadable sync manifest, a mod source that could not be scanned and every mod
+an import refused were all invisible. The rule is: **an exception that is neither rethrown nor
+wrapped-and-rethrown is logged before it is discarded**, at the level its consequence deserves —
+`Warning` where something the user can see is now wrong or missing, `Debug` where the cost is a
+re-fetch or a leftover temp file. `ModImportService` logs at `Record`, the one funnel every
+unfinished item passes through, which is why the four catch sites above it write nothing
+themselves.
+
+Three deliberate exceptions, all of them expected high-volume fallbacks rather than swallowed
+failures: `FileLinks` and `KnownFolders` probing for OS APIs that may not exist,
+`ModSyncPlanner` failing to hash a file the running game holds open, and the Farming Simulator
+mod adapter skipping the non-mods that make up most of a Downloads folder. Logging any of them
+per occurrence would bury everything else. Where the *outcome* matters it is logged once by the
+caller instead — `ModSyncService` records falling back from hardlinks to copying.
+
 ### Absorbed is not hidden
 
 Several paths swallow failures on purpose, and the reasoning is sound in every case: an error
