@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -1264,7 +1265,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 // The newest known version stands for the mod on the left. Picking a different one
                 // is a decision that belongs to the row it becomes on the right.
                 .Select(x => x[^1])
-                .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(x => x.Name, NaturalOrder.Comparer)
                 .Select(x => CreateAvailableRow(x, showSources))];
 
             // Rebuilt rather than refreshed, because the list behind it is replaced wholesale -
@@ -1393,7 +1394,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         return byRemoval != 0
             ? byRemoval
-            : string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+            : NaturalOrder.Compare(left.Name, right.Name);
     }
 
     private bool IsPendingRemoval(ModListItemViewModel row)
@@ -1410,7 +1411,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         return byRank != 0
             ? byRank
-            : string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+            : NaturalOrder.Compare(left.Name, right.Name);
     }
 
     /// <summary>

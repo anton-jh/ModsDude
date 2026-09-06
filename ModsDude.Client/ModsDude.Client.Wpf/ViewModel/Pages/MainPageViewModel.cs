@@ -66,7 +66,7 @@ public partial class MainPageViewModel
         _lastSelectionRepository = lastSelectionRepository;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _shellNavigationService = shellNavigationService;
-        _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title);
+        _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
 
         repoService.RepoCreated += OnRepoCreated;
         NavManager.PropertyChanged += OnNavigationChanged;

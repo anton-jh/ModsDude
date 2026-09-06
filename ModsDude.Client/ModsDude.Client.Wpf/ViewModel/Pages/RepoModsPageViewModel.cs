@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -919,8 +920,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     private static IEnumerable<CatalogModVersion> Order(IEnumerable<CatalogModVersion> versions)
         => versions
-            .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ThenBy(x => x.VersionId.Value, StringComparer.CurrentCultureIgnoreCase);
+            .OrderBy(x => x.Name, NaturalOrder.Comparer)
+            .ThenBy(x => x.VersionId.Value, NaturalOrder.Comparer);
 
     /// <summary>
     /// The order the right-hand list is held in, and the one an insert has to agree with: whatever
@@ -936,11 +937,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
                 return byRank;
             }
 
-            var byName = string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+            var byName = NaturalOrder.Compare(left.Name, right.Name);
 
             return byName != 0
                 ? byName
-                : string.Compare(left.Version, right.Version, StringComparison.CurrentCultureIgnoreCase);
+                : NaturalOrder.Compare(left.Version, right.Version);
         });
 
     /// <summary>

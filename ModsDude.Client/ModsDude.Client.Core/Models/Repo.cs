@@ -109,6 +109,7 @@ public class Repo
             target: LocalInstances,
             factory: x => x,
             keySelectorExpression: x => x.Name,
+            comparer: NaturalOrder.Comparer,
             filter: x => x.Scope == Scope,
             disposeRemovedTargets: false);
     }

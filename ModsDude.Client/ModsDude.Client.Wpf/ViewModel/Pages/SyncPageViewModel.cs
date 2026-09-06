@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
@@ -300,7 +301,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         var changing = plan.Items
             .Where(x => x.Action is not ModSyncAction.Keep)
             .OrderBy(x => x.Action)
-            .ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase);
+            .ThenBy(x => x.DisplayName, NaturalOrder.Comparer);
 
         foreach (var item in changing)
         {

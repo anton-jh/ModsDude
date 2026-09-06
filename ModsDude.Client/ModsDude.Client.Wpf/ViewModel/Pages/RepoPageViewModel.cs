@@ -86,12 +86,12 @@ public partial class RepoPageViewModel
         MenuItems.Add(connectGameMenuItem);
 
         Instances = [];
-        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title);
+        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title, NaturalOrder.Comparer);
 
         Profiles = [];
         _profileService.ProfileCreated += OnProfileCreated;
         _profileService.ProfileUpdated += OnProfileUpdated;
-        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title);
+        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
 
         NavManager = new(navigationLockService, modalService)
         {

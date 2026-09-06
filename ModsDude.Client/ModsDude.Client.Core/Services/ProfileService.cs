@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -275,7 +276,7 @@ public class ProfileService(
                 // deleted the version in between. The pin is gone, so the row is too, which is what
                 // a refresh would show anyway.
                 .OfType<PinnedMod>()
-                .OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(x => x.DisplayName, NaturalOrder.Comparer)
         ];
     }
 

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
@@ -281,7 +282,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         // an Anton who is the only one here gets none, even if the server knows of others.
         var ambiguous = UserDisplay.FindAmbiguous(members.Select(x => x.User));
 
-        foreach (var member in members.OrderBy(x => x.User.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var member in members.OrderBy(x => x.User.DisplayName, NaturalOrder.Comparer))
         {
             var row = new RepoMemberViewModel(
                 member,

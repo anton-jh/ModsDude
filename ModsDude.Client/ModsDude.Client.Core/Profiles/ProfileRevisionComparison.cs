@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Profiles;
@@ -101,7 +102,7 @@ public sealed record ProfileRevisionComparison(
         return new ProfileRevisionComparison(
             from,
             to,
-            [.. changes.OrderBy(x => x.Kind).ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)]);
+            [.. changes.OrderBy(x => x.Kind).ThenBy(x => x.DisplayName, NaturalOrder.Comparer)]);
     }
 }
 

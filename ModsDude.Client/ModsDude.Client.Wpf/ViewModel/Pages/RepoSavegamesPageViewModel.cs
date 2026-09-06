@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -282,7 +283,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var ambiguous = UserDisplay.FindAmbiguous(
             savegames.Select(x => x.Checkout?.User).OfType<UserDto>());
 
-        foreach (var savegame in savegames.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var savegame in savegames.OrderBy(x => x.Name, NaturalOrder.Comparer))
         {
             var row = new SavegameListItemViewModel(
                 savegame,
