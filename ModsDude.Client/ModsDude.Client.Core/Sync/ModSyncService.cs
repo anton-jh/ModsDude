@@ -373,8 +373,10 @@ public sealed class ModSyncService(
         List<ModSyncFailure> failures,
         CancellationToken cancellationToken)
     {
+        // Renames ride along: they are the same question - "make the folder hold this file under
+        // this name" - answered with one directory operation instead of a copy.
         var installs = plan.Items
-            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
+            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename)
             .ToList();
 
         var completed = 0;
@@ -409,13 +411,22 @@ public sealed class ModSyncService(
     }
 
     /// <summary>
-    /// Puts the store's bytes where the adapter says the file belongs - a second directory entry
-    /// where that is safe, a copy otherwise.
+    /// Makes the mod folder hold this item's file, under the name the adapter says it belongs under
+    /// - a second directory entry into the store where that is safe, a copy otherwise, and for a
+    /// rename just the name, since the right bytes are already there.
     /// </summary>
     private static void Materialize(ModSyncPlan plan, ModSyncItem item)
     {
+        var target = plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName);
+
+        if (item.Action is ModSyncAction.Rename)
+        {
+            Rename(item.InstalledPath!, target);
+
+            return;
+        }
+
         var hash = item.DesiredHash!;
-        var target = plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value);
         var blob = plan.ServingStore.GetBlobPath(hash);
 
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -440,6 +451,46 @@ public sealed class ModSyncService(
         // the game sees an ordinary, writable file of its own.
         var info = new FileInfo(target) { IsReadOnly = false };
         info.LastWriteTimeUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Gives an already-correct file the name the repo registered for it.
+    /// </summary>
+    /// <remarks>
+    /// A directory operation, so it costs nothing and keeps every hardlink into the blob intact. The
+    /// fallback is for the case that motivates the whole action: a rename that only changes case is,
+    /// to a case-insensitive filesystem, a move onto a path that already exists, and not every one of
+    /// them allows it. Going through a name nothing holds is the same rename in two steps, and the
+    /// file is put back under its old name if the second step fails.
+    /// </remarks>
+    private static void Rename(string from, string to)
+    {
+        if (string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Move(from, to);
+        }
+        catch (IOException) when (File.Exists(from))
+        {
+            var staging = Path.Combine(Path.GetDirectoryName(to)!, $"{Guid.NewGuid():N}.renaming");
+
+            File.Move(from, staging);
+
+            try
+            {
+                File.Move(staging, to);
+            }
+            catch (Exception)
+            {
+                File.Move(staging, from);
+
+                throw;
+            }
+        }
     }
 
     /// <summary>
@@ -477,11 +528,11 @@ public sealed class ModSyncService(
     {
         var entries = new List<SyncManifestEntry>();
 
-        foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Install or ModSyncAction.Replace))
+        foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Install or ModSyncAction.Replace))
         {
             var path = item.Action is ModSyncAction.Keep
                 ? item.InstalledPath!
-                : plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value);
+                : plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName);
 
             var info = new FileInfo(path);
 
@@ -580,13 +631,22 @@ public sealed class ModSyncService(
     {
         var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, null, cancellationToken);
 
-        // Normalized where the ids enter the client, as everywhere else: the server holds whatever
-        // casing was registered, and an un-normalized id would miss the file it belongs to.
-        return ([.. response.Dependencies.Select(x => new DesiredMod(
-            ModKey.From(x.ModId),
-            ModVersionKey.From(x.ModVersionId),
-            x.ContentHash,
-            x.Locked))], response.Revision);
+        // Normalized where the ids enter the client, as everywhere else, and the file name checked
+        // in the same breath: it came off somebody else's disk and is about to be interpolated into
+        // a path here, so it is validated against the id it arrived with rather than trusted.
+        return ([.. response.Dependencies.Select(x =>
+        {
+            var modId = ModKey.From(x.ModId);
+
+            return new DesiredMod(
+                modId,
+                ModVersionKey.From(x.ModVersionId),
+                x.ContentHash,
+                x.Locked)
+            {
+                FileName = ModFileName.For(modId, x.FileName)
+            };
+        })], response.Revision);
     }
 
     private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(
@@ -642,9 +702,9 @@ public sealed class ModSyncService(
         var unmanaged = new HashSet<string>(unmanagedFileNames, StringComparer.OrdinalIgnoreCase);
         var blocking = new List<ModSyncItem>();
 
-        foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace))
+        foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename))
         {
-            var name = Path.GetFileName(adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value));
+            var name = Path.GetFileName(adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName));
 
             if (unmanaged.Remove(name) is false)
             {

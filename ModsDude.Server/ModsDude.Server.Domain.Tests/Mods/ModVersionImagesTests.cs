@@ -134,6 +134,7 @@ public class ModVersionImagesTests
         SequenceNumber = 0,
         DisplayName = "Test mod",
         Description = "",
+        FileName = $"{_modId.Value}.zip",
         ContentHash = _hash,
         Locked = false,
         Attributes = [],

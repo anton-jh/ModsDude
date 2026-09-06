@@ -170,6 +170,7 @@ therefore two different sets of rows.
 | `RepoId`, `ModId`, `Id` | The composite key. `Id` is `ModVersionId(string)` |
 | `SequenceNumber` | Position in the upgrade order. Unique per `(RepoId, ModId)` |
 | `DisplayName`, `Description` | Per-version, because mods rename themselves between releases |
+| `FileName` | What the archive is called on disk, in the casing it was imported with. See [The casing trap](09-mod-catalog.md#the-casing-trap) |
 | `ContentHash` | SHA-256 of the mod file. See [Content hash](#content-hash) |
 | `Locked` | The mod is version-sensitive. See [Locking, in two places](#locking-in-two-places) |
 | `Attributes` | An owned collection of free-form `(Key, Value?)` pairs |
@@ -647,6 +648,9 @@ The client does not reuse the server's entities. It has its own, in
   leak. `ModKey.From` normalizes, and the type has no other representable form, so nothing can
   hand raw casing to blob storage. See
   [09 — Mod catalog](09-mod-catalog.md#the-casing-trap).
+- **`ModFileName`** — the other half of that: what a mod's file is *called*, carried beside the
+  normalized id so that the mod folder does not inherit the normalization. Also a private
+  constructor, because the value arrives from another member's disk and becomes a path here.
 - **`CatalogModVersion`** — the merged model the catalog, the management list and the profile
   editor all render: **one record per version, no parent**, carrying `IsLocal` and `IsOnServer`
   as independent facts. There is no client-side `Mod`; the wrapper that pre-split latest from

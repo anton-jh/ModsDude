@@ -30,6 +30,7 @@ public class ModSyncRowViewModel
         ActionText = item.Action switch
         {
             ModSyncAction.Install => "Install",
+            ModSyncAction.Rename => "Rename",
             ModSyncAction.Replace => "Replace",
             ModSyncAction.UninstallRecoverable => "Uninstall",
             ModSyncAction.Quarantine => "Move to Recycle Bin",
@@ -39,6 +40,8 @@ public class ModSyncRowViewModel
         Detail = item.Action switch
         {
             ModSyncAction.Install => "Not in the mod folder yet.",
+            ModSyncAction.Rename =>
+                $"The right file under the wrong name. It is renamed to '{item.FileName}'; nothing is downloaded or removed.",
             ModSyncAction.Replace when item.InstalledIsRecoverable =>
                 $"Replaces {item.InstalledVersion?.Value}. The old file stays recoverable.",
             ModSyncAction.Replace =>

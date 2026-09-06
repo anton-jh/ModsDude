@@ -67,7 +67,7 @@ The instance stage is where the **write side** lives, and it is deliberately onl
 
 ```csharp
 string ModFolder { get; }                                   // no two instances may own the same one
-string GetModFilePath(ModKey modId, ModVersionKey versionId);
+string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 ```
 
@@ -77,6 +77,12 @@ game — so it belongs in the sync engine, once, instead of in every adapter. Ad
 paths; the engine performs the filesystem operations. `GetInstalledModPath` is separate from
 `GetModFilePath` because what is already on disk is not necessarily where this adapter version
 would put it.
+
+`fileName` is what the repo registered the file as being called, and an adapter that honours it
+gives every member the folder the importer had rather than one renamed to the normalized id. It
+is already checked to be a bare name belonging to `modId`, so an adapter uses it as it stands and
+falls back to the id only where it is null. See
+[09 — Mod catalog](09-mod-catalog.md#the-other-half-normalizing-the-id-must-not-rename-the-file).
 
 ## What the sync engine and registration read off an adapter
 

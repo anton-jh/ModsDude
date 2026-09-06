@@ -12,6 +12,12 @@ public sealed record DesiredMod(ModKey ModId, ModVersionKey VersionId, string Co
 {
     /// <summary>For the plan preview. Falls back to the mod id, which is what the dependency carries.</summary>
     public string? DisplayName { get; init; }
+
+    /// <summary>
+    /// What the repo registered the file as being called, and therefore what the mod folder has to
+    /// call it. Null where the repo has nothing usable, which leaves the name to the adapter.
+    /// </summary>
+    public ModFileName? FileName { get; init; }
 }
 
 /// <summary>One mod file the adapter found in the mod folder.</summary>
@@ -40,6 +46,17 @@ public enum ModSyncAction
 {
     /// <summary>Pinned, installed, and the bytes match. No I/O at all.</summary>
     Keep,
+
+    /// <summary>
+    /// Pinned, installed, the bytes match - and the file is under the wrong name. One directory
+    /// operation; nothing is fetched, copied or removed.
+    /// </summary>
+    /// <remarks>
+    /// Its own action rather than a quiet fixup inside <see cref="Keep"/>, because a plan of nothing
+    /// but keeps reports "already correct" and is never executed. A folder that an older client
+    /// lower-cased is corrected by exactly this, on the next apply.
+    /// </remarks>
+    Rename,
 
     /// <summary>Pinned and absent.</summary>
     Install,
@@ -71,6 +88,12 @@ public sealed record ModSyncItem
 
     public ModVersionKey? DesiredVersion { get; init; }
     public string? DesiredHash { get; init; }
+
+    /// <summary>
+    /// What the file has to be called once this item has run. Null where the repo registered nothing
+    /// usable, which leaves the name to the adapter. See <see cref="ModFileName"/>.
+    /// </summary>
+    public ModFileName? FileName { get; init; }
 
     /// <summary>Version-sensitive in the profile. A locked mod at the wrong version risks a savegame.</summary>
     public bool Locked { get; init; }
@@ -154,6 +177,7 @@ public sealed record ModSyncPlan
     public required IReadOnlyList<ContentStore> AllStores { get; init; }
 
     public int KeepCount => Items.Count(x => x.Action is ModSyncAction.Keep);
+    public int RenameCount => Items.Count(x => x.Action is ModSyncAction.Rename);
     public int InstallCount => Items.Count(x => x.Action is ModSyncAction.Install);
     public int ReplaceCount => Items.Count(x => x.Action is ModSyncAction.Replace);
     public int UninstallCount => Items.Count(x => x.Action is ModSyncAction.UninstallRecoverable);

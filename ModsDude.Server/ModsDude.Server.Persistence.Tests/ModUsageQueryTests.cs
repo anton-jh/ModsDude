@@ -198,6 +198,7 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
         SequenceNumber = sequenceNumber,
         DisplayName = versionId,
         Description = "",
+        FileName = $"{modId}.zip",
         ContentHash = versionId,
         Locked = false,
         Attributes = [],

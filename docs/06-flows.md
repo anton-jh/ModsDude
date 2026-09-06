@@ -329,9 +329,10 @@ reasoning are in [07 — Mod sync design](07-mod-sync-design.md).
 1. `SyncPageViewModel` reads the instance's `ActiveProfile` and pulls that profile's
    dependencies — each of which carries its `ContentHash`, so nothing has to fetch the repo's
    mod list to find out what bytes are wanted.
-2. `ModSyncPlanner` classifies every mod: Keep, Install, Replace, uninstall-recoverable, or
-   quarantine. **The comparison is on bytes**, from the manifest's recorded hash, rehashing only
-   files whose size or mtime have moved.
+2. `ModSyncPlanner` classifies every mod: Keep, Rename, Install, Replace, uninstall-recoverable,
+   or quarantine. **The comparison is on bytes**, from the manifest's recorded hash, rehashing
+   only files whose size or mtime have moved. Rename is the one that is not about bytes at all:
+   the right file under a name that is not the one the repo registered.
 3. The plan is shown before anything is touched, and anything unrecognised — a file the repo
    cannot reproduce — is named in a confirmation that says where it is going.
 4. Execution populates the serving store first, from another disk's store where possible and the

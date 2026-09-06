@@ -200,6 +200,7 @@ public class ProfileRevisionTests
         SequenceNumber = 0,
         DisplayName = versionId,
         Description = "",
+        FileName = $"{modId.Value}.zip",
         ContentHash = versionId,
         Locked = false,
         Attributes = [],

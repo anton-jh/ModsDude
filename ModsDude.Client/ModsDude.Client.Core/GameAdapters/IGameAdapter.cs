@@ -95,6 +95,12 @@ public interface IInstanceModAdapter : IBaseModAdapter
     /// Where a mod version's file belongs, and what it is called. The write side of the adapter -
     /// where a file goes is game knowledge, and nothing else can answer it.
     /// </summary>
+    /// <param name="fileName">
+    /// What the repo has registered this file as being called, or null where it has nothing usable.
+    /// An adapter that honours it gives every member the folder the importer had rather than one
+    /// renamed to the normalized id; see <see cref="ModFileName"/>. The value is already checked to
+    /// be a bare name belonging to <paramref name="modId"/>, so it can be used as it stands.
+    /// </param>
     /// <remarks>
     /// A path rather than an <c>InstallMod</c> taking a stream, deliberately. Materialising is a
     /// hardlink on one disk and a copy on another, and that decision depends on the store assignment
@@ -102,7 +108,7 @@ public interface IInstanceModAdapter : IBaseModAdapter
     /// of in every adapter. Adapters supply paths; the engine performs the filesystem operations.
     /// See docs/07-mod-sync-design.md#fitting-it-into-the-client.
     /// </remarks>
-    string GetModFilePath(ModKey modId, ModVersionKey versionId);
+    string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 
     /// <summary>
     /// The file to remove when uninstalling a mod that is currently installed. The uninstall half of

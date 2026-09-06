@@ -20,6 +20,10 @@ internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModV
             image.Property(x => x.Rendition).HasConversion<string>();
         });
 
+        // Bounded to what ModFileName accepts, so the column cannot hold a name the validation
+        // would have refused had it been a byte longer.
+        builder.Property(x => x.FileName).HasMaxLength(255);
+
         builder.HasIndex(x => new { x.RepoId, x.ModId, x.SequenceNumber }).IsUnique();
 
         // Backs the delta form of the mod list, which orders by Updated inside a repo and resumes

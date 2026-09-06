@@ -124,6 +124,15 @@ public record CatalogModVersion(
     public Func<Stream>? OpenStream => HasSourceConflict
         ? null
         : FoundIn.FirstOrDefault()?.OpenStream;
+
+    /// <summary>
+    /// What to register the imported file as being called. From the same occurrence
+    /// <see cref="OpenStream"/> reads, deliberately: the name has to describe the bytes that are
+    /// actually uploaded, not another source's copy of the same version.
+    /// </summary>
+    public ModFileName? FileName => HasSourceConflict || FoundIn.FirstOrDefault() is not ModOccurrence source
+        ? null
+        : ModFileName.ForFile(ModId, source.FilePath);
 }
 
 /// <summary>One source's copy of a version, and the file it found there.</summary>

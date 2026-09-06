@@ -472,6 +472,10 @@ public sealed class ModImportService(
                         VersionId = version.VersionId.Value,
                         DisplayName = version.Name,
                         Description = version.Description,
+                        // The repo learns what the file is called here and nowhere else, and every
+                        // other member's mod folder is named from it. Set exactly where OpenStream
+                        // is, and for the same reason - both come off the occurrence being uploaded.
+                        FileName = version.FileName!.Value.Value,
                         ContentHash = contentHash,
                         Locked = version.Locked,
                         Placement = new ServerPlacement()

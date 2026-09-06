@@ -312,7 +312,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         Summary = plan.HasWork
             ? $"{plan.InstallCount} to install, {plan.ReplaceCount} to replace, " +
               $"{plan.UninstallCount} to uninstall, {plan.QuarantineCount} to move to the Recycle Bin, " +
-              $"{plan.KeepCount} already correct."
+              $"{plan.RenameCount} to rename, {plan.KeepCount} already correct."
             : $"Nothing to do - all {plan.KeepCount} mods already match this profile.";
 
         Status = plan.HasWork

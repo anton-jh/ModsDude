@@ -205,6 +205,7 @@ public class ModVersionOrderingTests(DatabaseFixture fixture)
         SequenceNumber = sequenceNumber,
         DisplayName = versionId,
         Description = "",
+        FileName = $"{modId.Value}.zip",
         ContentHash = versionId,
         Locked = false,
         Attributes = [],

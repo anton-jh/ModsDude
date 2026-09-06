@@ -6,12 +6,17 @@ namespace ModsDude.Server.Api.Dtos;
 /// One DTO per version, with no parent. Nesting versions under a mod would only make the client
 /// re-group on receipt, which is exactly what its flat model exists to avoid.
 /// </summary>
+/// <param name="FileName">
+/// What the archive is called on disk, in its registered casing. Distinct from
+/// <paramref name="DisplayName"/>, which is the mod's title: this is the name a client writes.
+/// </param>
 public record ModDto(
     string ModId,
     string VersionId,
     int SequenceNumber,
     string DisplayName,
     string Description,
+    string FileName,
     string ContentHash,
     bool Locked,
     IEnumerable<ModAttributeDto> Attributes,
@@ -27,6 +32,7 @@ public record ModDto(
             model.SequenceNumber,
             model.DisplayName,
             model.Description,
+            model.FileName,
             model.ContentHash,
             model.Locked,
             model.Attributes.Select(ModAttributeDto.FromModel),

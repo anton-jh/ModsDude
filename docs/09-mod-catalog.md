@@ -48,6 +48,28 @@ That is `ModKey` and `ModVersionKey`. `ModKey.From` is the only way to build one
 normalizes, so the type's only representable form is the normalized one — a rule the compiler
 enforces rather than one every use site has to remember.
 
+#### The other half: normalizing the id must not rename the file
+
+The first version of this stopped there, and that was half a fix. `GetModFilePath` built the
+install path out of `ModKey`, so the normalization did not stay in the identity — it reached the
+mod folder, and applying a profile renamed every archive in it to lower case. That is visible:
+Farming Simulator's own mod list shows filenames, and a mod referring to another by name is
+reading a string the user can see.
+
+The identity has to be normalized and the file has to keep its name, so they are two values, not
+one. `ModVersion.FileName` records what the archive was called on the importing machine, the
+profile's dependencies carry it to every other member, and the adapter installs under it —
+falling back to the id where a repo has nothing usable registered.
+
+The registered name is a string one member of a repo chooses that becomes a path every other
+member writes to, so `ModFileName` checks it rather than trusting it, and has a private
+constructor for the same reason `ModKey` does. Valid means a bare file name — no separator, no
+traversal, nothing a path normalizer would rewrite — whose stem normalizes to the same `ModKey`.
+That last clause is the bound: a repo can respell its own mods' files and nothing else.
+
+A folder an older client already lower-cased is corrected by `ModSyncAction.Rename` — one
+directory operation, no fetch, no removal. It is its own action rather than a fixup inside
+`Keep` because a plan of nothing but keeps reports "already correct" and is never executed.
 ## A merged model
 
 `ModListItemViewModel` used to take a `LocalMod` and delegate `Id`/`Name`/`Version`/

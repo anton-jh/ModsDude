@@ -168,6 +168,13 @@ public static class Problems
         Detail = $"Cannot find file for repo '{repoId.Value}', mod '{modId.Value}' and version '{modVersionId.Value}'."
     };
 
+    public static CustomProblemDetails InvalidModFileName(ModId modId, string? fileName) => new()
+    {
+        Type = ProblemType.InvalidModFileName,
+        Title = "Not a usable mod file name",
+        Detail = $"'{fileName}' cannot be the file name of mod '{modId.Value}'. It has to be a bare file name - no path separator, no traversal, nothing a path normalizer would rewrite - whose stem lower-cases to the mod id."
+    };
+
     public static CustomProblemDetails ImageDoesNotExist(string hash) => new()
     {
         Type = ProblemType.FileNotFound,
@@ -475,5 +482,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "profile-in-use-by-savegame")]
         [JsonStringEnumMemberName(_typeBaseUri + "profile-in-use-by-savegame")]
         ProfileInUseBySavegame,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-mod-file-name")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-mod-file-name")]
+        InvalidModFileName,
     }
 }

@@ -60,6 +60,7 @@ public static class ModSyncPlanner
                     DisplayName = want.DisplayName ?? want.ModId.Value,
                     DesiredVersion = want.VersionId,
                     DesiredHash = want.ContentHash,
+                    FileName = want.FileName,
                     Locked = want.Locked
                 });
 
@@ -77,11 +78,14 @@ public static class ModSyncPlanner
 
             items.Add(new ModSyncItem
             {
-                Action = matches ? ModSyncAction.Keep : ModSyncAction.Replace,
+                Action = matches
+                    ? (IsMisnamed(have.Path, want.FileName) ? ModSyncAction.Rename : ModSyncAction.Keep)
+                    : ModSyncAction.Replace,
                 ModId = want.ModId,
                 DisplayName = want.DisplayName ?? have.DisplayName,
                 DesiredVersion = want.VersionId,
                 DesiredHash = want.ContentHash,
+                FileName = want.FileName,
                 Locked = want.Locked,
                 InstalledVersion = have.VersionId,
                 InstalledPath = have.Path,
@@ -114,6 +118,21 @@ public static class ModSyncPlanner
         return items;
     }
 
+
+    /// <summary>
+    /// Whether the right file is under the wrong name - compared ordinally, since case is the whole
+    /// point.
+    /// </summary>
+    /// <remarks>
+    /// Only asked of a file whose bytes already match, so it can never be confused with a mod
+    /// changing what it calls itself between versions: that arrives as different content and is a
+    /// replace. A repo with nothing usable registered has no opinion, and nothing is renamed.
+    /// </remarks>
+    private static bool IsMisnamed(string path, ModFileName? wanted)
+    {
+        return wanted is ModFileName name
+            && string.Equals(Path.GetFileName(path), name.Value, StringComparison.Ordinal) is false;
+    }
 
     /// <summary>
     /// The manifest's hash where the file is still the one it describes, and a fresh hash otherwise.

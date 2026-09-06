@@ -108,6 +108,7 @@ public class ReclamationQueryTests(DatabaseFixture fixture)
                     SequenceNumber = index,
                     DisplayName = version.VersionId,
                     Description = "",
+                    FileName = $"{version.ModId}.zip",
                     ContentHash = version.VersionId,
                     Locked = false,
                     Attributes = [],

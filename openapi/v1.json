@@ -461,6 +461,9 @@
           "contentHash": {
             "type": "string"
           },
+          "fileName": {
+            "type": "string"
+          },
           "locked": {
             "type": "boolean"
           },
@@ -493,6 +496,9 @@
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "fileName": {
             "type": "string"
           },
           "images": {
@@ -681,7 +687,8 @@
           "https://server.modsdude.com/api/problems/savegame-version-stale",
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
           "https://server.modsdude.com/api/problems/savegame-not-checked-out",
-          "https://server.modsdude.com/api/problems/profile-in-use-by-savegame"
+          "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
+          "https://server.modsdude.com/api/problems/invalid-mod-file-name"
         ],
         "type": "string",
         "x-enumNames": [
@@ -716,7 +723,8 @@
           "SavegameVersionStale",
           "SavegameCheckoutConflict",
           "SavegameNotCheckedOut",
-          "ProfileInUseBySavegame"
+          "ProfileInUseBySavegame",
+          "InvalidModFileName"
         ]
       },
       "ProfileDto": {
@@ -895,6 +903,9 @@
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "fileName": {
             "type": "string"
           },
           "locked": {

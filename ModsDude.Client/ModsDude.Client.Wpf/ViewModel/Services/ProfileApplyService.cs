@@ -180,6 +180,7 @@ public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalS
         if (plan.ReplaceCount > 0) lines.Add($"{plan.ReplaceCount} to replace");
         if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
         if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin");
+        if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
 
         var modal = new ConfirmationDialogViewModel(
             $"Apply to '{instance.Name}'?",

@@ -74,7 +74,7 @@ public class GetModDependenciesV1Endpoint : IEndpoint
         var rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(
             profile.RepoId, profile.Id, requested, cancellationToken);
 
-        var dtos = rows.Select(x => new ModDependencyDto(x.ModId.Value, x.VersionId.Value, x.ContentHash, x.Locked));
+        var dtos = rows.Select(x => new ModDependencyDto(x.ModId.Value, x.VersionId.Value, x.FileName, x.ContentHash, x.Locked));
 
         return TypedResults.Ok(new GetModDependenciesResponse(requested.Value, requested == profile.HeadRevision, dtos));
     }

@@ -308,17 +308,20 @@ public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings
     }
 
     /// <summary>
-    /// One archive per mod, named after the mod id - which is where the id came from in the first
-    /// place, so the version never appears in the filename. Installing a different version replaces
-    /// the same file.
+    /// One archive per mod, under the name the repo registered for it - which came from the file the
+    /// mod was imported from, so the version never appears in it. Installing a different version
+    /// replaces the same file.
     /// </summary>
     /// <remarks>
-    /// The name comes out lower-cased, because <see cref="ModKey"/> is. That is what makes two
-    /// members' folders identical rather than differing by whatever casing each one's original
-    /// download happened to have, and the game reads the folder case-insensitively either way.
+    /// The registered name rather than the mod id, because <see cref="ModKey"/> is lower-cased and
+    /// the id is not what the file is called. Building the name from the id renamed every archive in
+    /// the folder on the first apply, which is a real difference: Farming Simulator's mod list shows
+    /// filenames, and a mod that refers to another by name is reading a string the user can see.
+    /// Falls back to the id where the repo has nothing usable registered - an older row, or a name
+    /// that failed validation - which is exactly what this used to do for everything.
     /// </remarks>
-    public string GetModFilePath(ModKey modId, ModVersionKey versionId)
+    public string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName)
     {
-        return Path.Combine(ModFolder, $"{modId.Value}.zip");
+        return Path.Combine(ModFolder, fileName?.Value ?? $"{modId.Value}.zip");
     }
 }

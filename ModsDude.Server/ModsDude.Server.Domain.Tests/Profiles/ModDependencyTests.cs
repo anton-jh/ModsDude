@@ -58,6 +58,7 @@ public class ModDependencyTests
         SequenceNumber = 0,
         DisplayName = versionId,
         Description = "",
+        FileName = $"{_modId.Value}.zip",
         ContentHash = versionId,
         Locked = locked,
         Attributes = [],

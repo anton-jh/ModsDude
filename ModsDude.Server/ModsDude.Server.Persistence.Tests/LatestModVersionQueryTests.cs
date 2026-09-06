@@ -113,6 +113,7 @@ public class LatestModVersionQueryTests(DatabaseFixture fixture)
             SequenceNumber = index,
             DisplayName = versionId,
             Description = "",
+            FileName = $"{modId}.zip",
             ContentHash = versionId,
             Locked = false,
             Attributes = [],

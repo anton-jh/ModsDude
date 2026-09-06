@@ -14,6 +14,13 @@ public record LocalMod(ModKey Id, ModVersionKey Version, string Name, string Des
     public required string FilePath { get; init; }
 
     /// <summary>
+    /// What the archive is called, in the casing the disk spells it. Registered alongside
+    /// <see cref="Id"/> so that a mod folder somewhere else gets this name rather than the
+    /// normalized id; see <see cref="ModFileName"/>.
+    /// </summary>
+    public ModFileName FileName => ModFileName.ForFile(Id, FilePath);
+
+    /// <summary>
     /// The archive's size. The only content signal a scan can afford - hashing every archive in a
     /// mod folder would read tens of gigabytes - so it is what tells two sources claiming the same
     /// mod and version apart. See docs/09-mod-catalog.md#same-mod-several-sources.

@@ -860,9 +860,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         if (plan.InstallCount > 0) parts.Add($"{plan.InstallCount} to install");
         if (plan.ReplaceCount > 0) parts.Add($"{plan.ReplaceCount} to replace");
         if (plan.UninstallCount > 0) parts.Add($"{plan.UninstallCount} to uninstall");
+        if (plan.RenameCount > 0) parts.Add($"{plan.RenameCount} to rename");
 
+        // A rename leaves the bytes alone, so a locked mod being renamed is not a mod changing
+        // under a savegame and is not worth warning about.
         var locked = plan.Items
-            .Where(x => x.Locked && x.Action is not ModSyncAction.Keep)
+            .Where(x => x.Locked && x.Action is not (ModSyncAction.Keep or ModSyncAction.Rename))
             .Select(x => $"'{x.DisplayName}'")
             .ToList();
 

@@ -16,6 +16,18 @@ public class ModVersion
     public required string Description { get; set; }
 
     /// <summary>
+    /// What the file is called on disk, in the casing it was imported with. Validated against
+    /// <see cref="ModFileName"/> at registration, which is also what makes it safe to interpolate
+    /// into a path on somebody else's machine.
+    /// </summary>
+    /// <remarks>
+    /// Per version rather than per mod because there is no per-mod row to put it on, and because a
+    /// mod can genuinely change what it calls itself between versions. A client installs one file
+    /// per mod, so the version it installs is the one that decides the name in the folder.
+    /// </remarks>
+    public required string FileName { get; set; }
+
+    /// <summary>
     /// SHA-256 of the mod file. A real property rather than a <see cref="ModAttribute"/>: the
     /// system depends on it to address content, so it cannot be something an adapter may omit.
     /// </summary>

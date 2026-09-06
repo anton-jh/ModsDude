@@ -388,6 +388,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         SequenceNumber = sequenceNumber,
         DisplayName = versionId,
         Description = "",
+        FileName = $"{_modId.Value}.zip",
         ContentHash = versionId,
         Locked = false,
         Attributes = [],

@@ -30,17 +30,39 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
 
     /// <summary>Registers a version in the repo, uploads its bytes, and pins it in the profile.</summary>
-    public void Pin(string modId, string version, string content, bool locked = false)
+    /// <param name="fileName">
+    /// What the repo says the file is called. Defaults to the name the id alone produces, which is
+    /// what a repo whose mods were imported from lower-cased folders holds.
+    /// </param>
+    public void Pin(string modId, string version, string content, bool locked = false, string? fileName = null)
     {
-        Register(modId, version, content, locked);
+        Register(modId, version, content, locked, fileName);
 
         _dependencies.Add(new ModDependencyDto
         {
             ModId = modId,
             ModVersionId = version,
+            FileName = fileName ?? $"{modId}.zip",
             ContentHash = SyncTestContent.HashOf(content),
             Locked = locked
         });
+    }
+
+    /// <summary>
+    /// Changes what the repo says a pinned mod's file is called, leaving its bytes alone - what a
+    /// re-import from a correctly-cased source does to everybody else's next apply.
+    /// </summary>
+    public void Rename(string modId, string fileName)
+    {
+        foreach (var dependency in _dependencies.Where(x => x.ModId == modId))
+        {
+            dependency.FileName = fileName;
+        }
+
+        foreach (var version in _registered.Where(x => x.ModId == modId))
+        {
+            version.FileName = fileName;
+        }
     }
 
     /// <summary>Takes a mod out of the profile, leaving it registered - what switching profiles looks like.</summary>
@@ -48,7 +70,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         => _dependencies.RemoveAll(x => x.ModId == modId);
 
     /// <summary>Registers a version without pinning it - what the repo can reproduce but does not want here.</summary>
-    public void Register(string modId, string version, string content, bool locked = false)
+    public void Register(string modId, string version, string content, bool locked = false, string? fileName = null)
     {
         var hash = SyncTestContent.HashOf(content);
 
@@ -59,6 +81,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             SequenceNumber = _registered.Count,
             DisplayName = modId,
             Description = "",
+            FileName = fileName ?? $"{modId}.zip",
             ContentHash = hash,
             Locked = locked,
             Attributes = [],
@@ -184,8 +207,8 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
         return Task.FromResult<IEnumerable<LocalMod>>(mods);
     }
 
-    public string GetModFilePath(ModKey modId, ModVersionKey versionId)
-        => Path.Combine(ModFolder, $"{modId.Value}.zip");
+    public string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName)
+        => Path.Combine(ModFolder, fileName?.Value ?? $"{modId.Value}.zip");
 
     public IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings) => this;
     public IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings) => this;

@@ -829,7 +829,7 @@ because that is game knowledge:
 
 ```csharp
 string ModFolder { get; }
-string GetModFilePath(ModKey modId, ModVersionKey versionId);
+string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 ```
 

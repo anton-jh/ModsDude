@@ -210,6 +210,79 @@ public class ModSyncPlannerTests
     }
 
 
+    /// <summary>
+    /// What a folder an older client lower-cased looks like on the next apply. The bytes are right,
+    /// so nothing is fetched or removed - but the name is not what the repo registered, and leaving
+    /// it would mean the correction could never happen.
+    /// </summary>
+    [Fact]
+    public async Task A_matching_file_under_the_wrong_name_is_renamed()
+    {
+        using var folder = new TempDirectory("plan-rename");
+        var installed = Install(folder, "fs25_a", "1.0.0", "the bytes");
+
+        var items = await Plan(
+            [Want("fs25_a", "1.0.0", "the bytes") with { FileName = ModFileName.For(Keys.Mod("fs25_a"), "FS25_A.zip") }],
+            [installed],
+            RegisteredContent.None,
+            null);
+
+        var item = Assert.Single(items);
+
+        Assert.Equal(ModSyncAction.Rename, item.Action);
+        Assert.Equal("FS25_A.zip", item.FileName?.Value);
+    }
+
+    [Fact]
+    public async Task A_matching_file_already_under_the_registered_name_is_kept()
+    {
+        using var folder = new TempDirectory("plan-named-right");
+        var installed = Install(folder, "fs25_a", "1.0.0", "the bytes");
+
+        var items = await Plan(
+            [Want("fs25_a", "1.0.0", "the bytes") with { FileName = ModFileName.For(Keys.Mod("fs25_a"), "fs25_a.zip") }],
+            [installed],
+            RegisteredContent.None,
+            null);
+
+        Assert.Equal(ModSyncAction.Keep, Assert.Single(items).Action);
+    }
+
+    /// <summary>
+    /// A repo with nothing usable registered has no opinion about the name, so the file is left
+    /// exactly as it is rather than renamed to the id.
+    /// </summary>
+    [Fact]
+    public async Task A_repo_that_registered_no_name_renames_nothing()
+    {
+        using var folder = new TempDirectory("plan-no-name");
+        var installed = Install(folder, "FS25_A", "1.0.0", "the bytes");
+
+        var items = await Plan([Want("fs25_a", "1.0.0", "the bytes")], [installed], RegisteredContent.None, null);
+
+        Assert.Equal(ModSyncAction.Keep, Assert.Single(items).Action);
+    }
+
+    /// <summary>
+    /// A name is only ever compared for a file whose bytes already match, so a mod that renames
+    /// itself between versions arrives as different content and stays a replace.
+    /// </summary>
+    [Fact]
+    public async Task Wrong_bytes_under_the_registered_name_are_still_replaced()
+    {
+        using var folder = new TempDirectory("plan-rename-vs-replace");
+        var installed = Install(folder, "fs25_a", "1.0.0", "the old build");
+
+        var items = await Plan(
+            [Want("fs25_a", "1.0.0", "the new build") with { FileName = ModFileName.For(Keys.Mod("fs25_a"), "FS25_A.zip") }],
+            [installed],
+            RegisteredContent.None,
+            null);
+
+        Assert.Equal(ModSyncAction.Replace, Assert.Single(items).Action);
+    }
+
+
     private static Task<IReadOnlyList<ModSyncItem>> Plan(
         IReadOnlyCollection<DesiredMod> desired,
         IReadOnlyCollection<InstalledMod> installed,

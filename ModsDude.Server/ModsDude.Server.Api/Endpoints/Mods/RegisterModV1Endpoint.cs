@@ -45,6 +45,13 @@ public class RegisterModV1Endpoint : IEndpoint
         var modId = new ModId(request.ModId);
         var versionId = new ModVersionId(request.VersionId);
 
+        // Checked here rather than trusted, because every other member's client writes a file with
+        // this name. See ModFileName for what "valid" means and why it is this strict.
+        if (!ModFileName.IsValidFor(modId, request.FileName))
+        {
+            return TypedResults.BadRequest(Problems.InvalidModFileName(modId, request.FileName));
+        }
+
         // Metadata is never written for a file nobody has: the blob has to be there first.
         if (!await storageService.CheckIfModExists(new RepoId(repoId), modId, versionId, cancellationToken))
         {
@@ -76,6 +83,7 @@ public class RegisterModV1Endpoint : IEndpoint
             SequenceNumber = ModVersionSequencer.MakeRoomAt(siblings, after, before, timestamp),
             DisplayName = request.DisplayName,
             Description = request.Description,
+            FileName = request.FileName,
             ContentHash = request.ContentHash,
             Locked = request.Locked,
             Attributes = new(request.Attributes.Select(ModAttributeDto.ToModel)),
@@ -90,11 +98,17 @@ public class RegisterModV1Endpoint : IEndpoint
     }
 
 
+    /// <param name="FileName">
+    /// What the archive is called on the importing machine, extension and all. The mod folder gets
+    /// this name verbatim on every machine that applies a profile pinning this version, so it has to
+    /// be a bare file name whose stem lower-cases to <paramref name="ModId"/>.
+    /// </param>
     public record RegisterModRequest(
         string ModId,
         string VersionId,
         string DisplayName,
         string Description,
+        string FileName,
         string ContentHash,
         bool Locked,
         ModVersionPlacement Placement,

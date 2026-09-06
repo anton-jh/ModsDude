@@ -359,6 +359,78 @@ public class ModSyncServiceTests
         Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
+    /// <summary>
+    /// The whole point of the exercise: the folder ends up holding the name the mod was imported
+    /// under, not the normalized id. Farming Simulator's mod list shows filenames, so this is
+    /// visible to the user in the game.
+    /// </summary>
+    [Fact]
+    public async Task An_install_uses_the_name_the_repo_registered()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_mymod", "1.0.0", Mod("1.0.0", "a"), fileName: "FS25_MyMod.zip");
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.Equal(["FS25_MyMod.zip"], fixture.FolderContents());
+        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+    }
+
+    /// <summary>
+    /// A registered name is a string one member of the repo chose, and it decides a path every other
+    /// member writes to. A name that does not belong to the mod it is registered under is ignored
+    /// outright rather than trusted, so the worst a repo can do is respell its own mods' files.
+    /// </summary>
+    [Fact]
+    public async Task A_registered_name_that_does_not_belong_to_its_mod_is_ignored()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"), fileName: @"..\..\fs25_a.zip");
+        fixture.Server.Pin("fs25_b", "1.0.0", Mod("1.0.0", "b"), fileName: "fs25_a.zip");
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.Equal(["fs25_a.zip", "fs25_b.zip"], fixture.FolderContents());
+    }
+
+    /// <summary>
+    /// A folder an older client lower-cased, corrected on the next apply. The bytes never move - it
+    /// is one directory operation - and it is a case-only rename, which is the one a filesystem is
+    /// most likely to refuse outright.
+    /// </summary>
+    [Fact]
+    public async Task A_folder_named_by_an_older_client_is_renamed_rather_than_refetched()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"), fileName: "fs25_a.zip");
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+        Assert.Equal(["fs25_a.zip"], fixture.FolderContents());
+
+        // Somebody re-imports the mod from the folder it was downloaded to, and the repo learns
+        // what it is really called.
+        fixture.Server.Rename("fs25_a", "FS25_A.zip");
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.True(plan.HasWork);
+        Assert.Equal(1, plan.RenameCount);
+        Assert.Empty(plan.HashesToFetch);
+
+        var downloads = fixture.Downloader.Downloads;
+        var result = await fixture.ExecuteAsync(plan);
+
+        Assert.True(result.Completed);
+        Assert.Equal(downloads, fixture.Downloader.Downloads);
+        Assert.Equal(["FS25_A.zip"], fixture.FolderContents());
+        Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("FS25_A.zip"));
+
+        // Recorded under the new name, or the next drift check reports one file added and one gone.
+        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+    }
+
     [Fact]
     public async Task Recording_a_match_is_refused_for_a_plan_that_has_work()
     {
@@ -428,6 +500,10 @@ public class ModSyncServiceTests
             => Service.ExecuteAsync(plan, null, CancellationToken.None);
 
         public void Install(string name, string content) => Folder.WriteFile(name, content);
+
+        /// <summary>Every name in the mod folder, which is where casing is visible at all.</summary>
+        public IReadOnlyList<string> FolderContents()
+            => [.. Directory.EnumerateFiles(Folder.Path).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)];
 
         public string ReadInstalled(string name) => File.ReadAllText(Folder.Combine(name));
 
