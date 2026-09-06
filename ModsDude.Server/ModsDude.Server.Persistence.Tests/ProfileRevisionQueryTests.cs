@@ -288,6 +288,135 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     }
 
 
+    /// <summary>
+    /// What a refused delete needs in order to be actionable: which revisions, not merely that some
+    /// exist. A version pinned once and then moved past is still pinned by the revision that pinned
+    /// it, which is exactly the case naming only the profile would hide.
+    /// </summary>
+    [Fact]
+    public async Task Dependent_revisions_name_every_revision_that_ever_pinned_a_version()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var rows = await dbContext.ProfileRevisions.GetDependentRevisionsAsync(
+            repoId, _modId, new ModVersionId("1.0.0"), 100, CancellationToken.None);
+
+        Assert.Equal([1, 3], rows.Select(x => x.Revision.Value).Order());
+        Assert.All(rows, x => Assert.Equal(profileId, x.ProfileId));
+    }
+
+    /// <summary>Deleting a mod is a different question from deleting one of its versions.</summary>
+    [Fact]
+    public async Task Dependent_revisions_for_a_whole_mod_cover_every_version_of_it()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var rows = await dbContext.ProfileRevisions.GetDependentRevisionsAsync(
+            repoId, _modId, null, 100, CancellationToken.None);
+
+        Assert.Equal([1, 2], rows.Select(x => x.Revision.Value).Order());
+    }
+
+    [Fact]
+    public async Task Dependent_revisions_stop_at_the_limit_they_are_given()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var rows = await dbContext.ProfileRevisions.GetDependentRevisionsAsync(
+            repoId, _modId, new ModVersionId("1.0.0"), 2, CancellationToken.None);
+
+        Assert.Equal(2, rows.Count);
+    }
+
+    /// <summary>
+    /// The point of pruning: a version nothing pins any more can be deleted, and the dependency rows
+    /// have to actually go for the foreign key to agree.
+    /// </summary>
+    [Fact]
+    public async Task Pruning_a_revision_takes_its_dependencies_with_it()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ProfileRevisions.DeleteRevisionsAsync(
+                repoId, profileId, [new RevisionNumber(1)], CancellationToken.None);
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var dependents = await dbContext.ProfileRevisions.GetDependentRevisionsAsync(
+                repoId, _modId, new ModVersionId("1.0.0"), 100, CancellationToken.None);
+
+            Assert.Empty(dependents);
+
+            // And the version it was holding is now deletable, which is the whole reason to prune.
+            Assert.False(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(
+                repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
+        }
+    }
+
+    /// <summary>
+    /// Numbers are not renumbered. A gap is the correct outcome: a revision number exists to be said
+    /// out loud, and renumbering would make yesterday's sentence point at a different mod list.
+    /// </summary>
+    [Fact]
+    public async Task Pruning_leaves_a_gap_rather_than_renumbering()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0");
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ProfileRevisions.DeleteRevisionsAsync(
+                repoId, profileId, [new RevisionNumber(2)], CancellationToken.None);
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var history = await dbContext.ProfileRevisions.GetHistoryAsync(repoId, profileId, 0, 50, CancellationToken.None);
+
+            Assert.Equal([3, 1], history.Select(x => x.Number.Value));
+        }
+    }
+
+    [Fact]
+    public async Task Only_the_revisions_that_exist_are_reported_as_existing()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0");
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var existing = await dbContext.ProfileRevisions.GetExistingAsync(
+            repoId, profileId, [new RevisionNumber(1), new RevisionNumber(7)], CancellationToken.None);
+
+        Assert.Equal([1], existing.Select(x => x.Value));
+    }
+
     private async Task<RepoId> GivenARepoWithAMod(params string[] versionIds)
     {
         using var dbContext = fixture.CreateDbContext();

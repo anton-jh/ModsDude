@@ -1,0 +1,95 @@
+<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.BlockedRevisionsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="620" MaxHeight="640"
+             d:DataContext="{d:DesignInstance Type=vm:BlockedRevisionsModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <TextBlock Text="{Binding Title}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:BlockedRevisionViewModel}">
+                            <Border Margin="0 0 0 12"
+                                    Padding="12"
+                                    CornerRadius="4"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label}"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                    <TextBlock Text="{Binding Reason}"
+                                               Margin="0 4 0 0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                    <!-- Links only where there is something to do. The head revision
+                                         is an explanation, not a task. -->
+                                    <ItemsControl ItemsSource="{Binding Savegames}"
+                                                  Margin="0 8 0 0"
+                                                  Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:SavegameVersionLinkViewModel}">
+                                                <TextBlock Margin="0 0 0 2">
+                                                    <Hyperlink Style="{StaticResource TextLink}"
+                                                               ToolTip="Open this repo's savegames"
+                                                               Command="{Binding OpenCommand}">
+                                                        <Run Text="{Binding Label, Mode=OneWay}" />
+                                                    </Hyperlink>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+                <Button Margin="24"
+                        MinWidth="120"
+                        HorizontalAlignment="Right"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="Ok"
+                        Command="{Binding CloseCommand}" />
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Return" Command="{Binding CloseCommand}" />
+        <KeyBinding Key="Esc" Command="{Binding CloseCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

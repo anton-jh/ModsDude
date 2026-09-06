@@ -48,7 +48,7 @@
                         BorderThickness="1"
                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                    <Grid RowDefinitions="* auto auto">
+                    <Grid RowDefinitions="* auto auto auto">
 
                         <ListBox Grid.Row="0"
                                  ItemsSource="{Binding Revisions}"
@@ -59,9 +59,33 @@
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:ProfileRevisionViewModel}">
-                                    <Grid Margin="0 4" ColumnDefinitions="* auto">
+                                    <Grid Margin="0 4" ColumnDefinitions="auto * auto">
 
-                                        <StackPanel Grid.Column="0">
+                                        <!-- Only where pruning is on offer, and never on the head:
+                                             a checkbox that can only ever be refused is worse than
+                                             no checkbox. -->
+                                        <CheckBox Grid.Column="0"
+                                                  Margin="0 0 8 0"
+                                                  VerticalAlignment="Top"
+                                                  ToolTip="Select for deletion"
+                                                  IsChecked="{Binding IsMarkedForPruning, Mode=TwoWay}">
+                                            <CheckBox.Style>
+                                                <Style TargetType="CheckBox">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding CanPrune}" Value="True" />
+                                                                <Condition Binding="{Binding DataContext.CanPrune, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True" />
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </MultiDataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </CheckBox.Style>
+                                        </CheckBox>
+
+                                        <StackPanel Grid.Column="1">
                                             <TextBlock Text="{Binding Title}"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -86,7 +110,7 @@
                                         <!-- Which one a sync would actually install. Without it the
                                              top row and the current list are only the same thing by
                                              coincidence of ordering. -->
-                                        <Border Grid.Column="1"
+                                        <Border Grid.Column="2"
                                                 Margin="8 0 0 0"
                                                 Padding="8 2"
                                                 VerticalAlignment="Top"
@@ -130,6 +154,48 @@
                                         ToolTip="Creates a new profile that starts as a copy of this revision."
                                         Command="{Binding SaveAsCommand}" />
                             </Grid>
+                        </Border>
+                        <!-- Admin only, and below the Restore/Save-as pair because it is the one
+                             action here that destroys rather than adds. -->
+                        <Border Grid.Row="3"
+                                BorderThickness="0 1 0 0"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Visibility="{Binding CanPrune, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Margin="12">
+                                <Grid ColumnDefinitions="* auto">
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Style="{DynamicResource CaptionTextBlockStyle}"
+                                               Text="Deleting old revisions is what frees the mod versions they pin." />
+
+                                    <Button Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Padding="8 2"
+                                            FontSize="12"
+                                            Content="Select all older"
+                                            ToolTip="Ticks every revision but the current one. Whether each can actually go is the server's to say."
+                                            Command="{Binding MarkAllOlderCommand}" />
+                                </Grid>
+
+                                <Grid ColumnDefinitions="* auto"
+                                      Margin="0 8 0 0"
+                                      Visibility="{Binding HasMarkedRevisions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Button Grid.Column="0"
+                                            Margin="0 0 4 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="{Binding PruneText}"
+                                            ToolTip="Deletes the ticked revisions. This cannot be undone."
+                                            Command="{Binding PruneCommand}" />
+
+                                    <Button Grid.Column="1"
+                                            Padding="8 2"
+                                            FontSize="12"
+                                            Content="Clear"
+                                            Command="{Binding ClearMarksCommand}" />
+                                </Grid>
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>

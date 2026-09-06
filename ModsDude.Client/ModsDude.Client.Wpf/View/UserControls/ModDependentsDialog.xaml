@@ -1,0 +1,139 @@
+<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.ModDependentsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             mc:Ignorable="d"
+             Width="620" MaxHeight="640"
+             d:DataContext="{d:DesignInstance Type=vm:ModDependentsModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <Grid ColumnDefinitions="auto *">
+                    <TextBlock Grid.Column="0"
+                               Text="&#xE7BA;"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 0 12 0"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Title}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}" />
+                </Grid>
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                <TextBlock Text="{Binding Advice}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding Profiles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ProfileDependentViewModel}">
+                                <Border Margin="0 0 0 12"
+                                        Padding="12"
+                                        CornerRadius="4"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="* auto">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="8 0 0 0"
+                                                       Text="{Binding Summary}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}" />
+                                        </Grid>
+
+                                        <!-- The one case pruning cannot solve, so it is said on the
+                                             row rather than left to somebody comparing numbers. -->
+                                        <TextBlock Margin="0 4 0 0"
+                                                   Text="Includes this profile's current revision, which cannot be pruned."
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                                   Visibility="{Binding IncludesHead, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                        <!-- Wrapping, because a profile with two hundred revisions
+                                             pinning one mod is an ordinary thing to have to look at. -->
+                                        <ItemsControl ItemsSource="{Binding Revisions}" Margin="0 8 0 0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:RevisionLinkViewModel}">
+                                                    <TextBlock Margin="0 0 10 2">
+                                                        <Hyperlink Style="{StaticResource TextLink}"
+                                                                   ToolTip="Open this revision in the profile's history"
+                                                                   Command="{Binding OpenCommand}">
+                                                            <Run Text="{Binding Label, Mode=OneWay}" />
+                                                        </Hyperlink>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="{Binding TruncationNote}"
+                               Margin="0 0 0 12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Visibility="{Binding Truncated, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+                <Button Margin="24"
+                        MinWidth="120"
+                        HorizontalAlignment="Right"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="Ok"
+                        Command="{Binding CloseCommand}" />
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Return" Command="{Binding CloseCommand}" />
+        <KeyBinding Key="Esc" Command="{Binding CloseCommand}" />
+    </UserControl.InputBindings>
+
+</UserControl>

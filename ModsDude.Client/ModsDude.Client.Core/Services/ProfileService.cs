@@ -192,6 +192,27 @@ public class ProfileService(
     }
 
     /// <summary>
+    /// Deletes old revisions, which is how the mod versions they pin stop being undeletable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one thing on this service that destroys history rather than adding to it, and the head is
+    /// refused by the server, so nothing here can change what the profile currently pins - which is
+    /// why no cached <c>HeadRevision</c> needs touching afterwards.
+    /// </para>
+    /// <para>
+    /// One request for the whole selection. It deletes what it can and names what it cannot, so a
+    /// hundred revisions blocked by one savegame is an answer rather than an exercise in bisection.
+    /// </para>
+    /// </remarks>
+    public Task<PruneProfileRevisionsResponse> PruneRevisions(
+        Guid repoId, Guid profileId, IReadOnlyList<int> revisions, CancellationToken cancellationToken)
+    {
+        return profileClient.PruneProfileRevisionsV1Async(
+            repoId, profileId, new PruneProfileRevisionsRequest { Revisions = [.. revisions] }, cancellationToken);
+    }
+
+    /// <summary>
     /// What the profile pins, with each version resolved to the registered record behind it - which
     /// is what the shared list row needs to render one.
     /// </summary>

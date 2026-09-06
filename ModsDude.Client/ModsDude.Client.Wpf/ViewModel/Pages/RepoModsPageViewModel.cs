@@ -47,6 +47,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly ModImportService _importService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly ShellNavigationService _shellNavigation;
     private readonly IDialogService _dialogService;
     private readonly IModsClient _modsClient;
 
@@ -87,6 +88,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         ModImportService importService,
         IModalService modalService,
         IErrorReporter errorReporter,
+        ShellNavigationService shellNavigation,
         IDialogService dialogService,
         IModsClient modsClient)
     {
@@ -95,6 +97,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         _importService = importService;
         _modalService = modalService;
         _errorReporter = errorReporter;
+        _shellNavigation = shellNavigation;
         _dialogService = dialogService;
         _modsClient = modsClient;
 
@@ -705,7 +708,9 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ModInUse)
         {
-            await ShowRefusal("Still in use",
+            await ShowDependentsAsync(
+                $"Version '{row.Version}' of '{row.Name}'",
+                ct => _modsClient.GetModVersionDependentsV1Async(_repo.Id, row.Id, row.Version, ct),
                 $"A profile depends on version '{row.Version}' of '{row.Name}'. Take it out of that profile first.");
 
             return;
@@ -754,7 +759,9 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ModInUse)
         {
-            await ShowRefusal("Still in use",
+            await ShowDependentsAsync(
+                $"'{row.Name}'",
+                ct => _modsClient.GetModDependentsV1Async(_repo.Id, row.Id, ct),
                 $"A profile depends on '{row.Name}'. Take it out of that profile first.");
 
             return;
@@ -767,6 +774,51 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     {
         return _modalService.Show(ConfirmationDialogViewModel.Refusal(title, message));
     }
+
+    /// <summary>
+    /// Turns "a profile depends on it" into the profiles and revisions that actually do, each a link
+    /// into the history where it can be pruned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked only once the delete has been refused. The server and the foreign key decide; this is
+    /// the difference between a wall and a next step, and paying for it before every delete would
+    /// mean querying the whole dependency graph to tell somebody nothing was wrong.
+    /// </para>
+    /// <para>
+    /// <paramref name="fallback"/> is the old flat refusal, kept for the case where the follow-up
+    /// read fails or comes back empty - a race with somebody else's edit. Being told less is better
+    /// than being told nothing after a delete that visibly did not happen.
+    /// </para>
+    /// </remarks>
+    private async Task ShowDependentsAsync(
+        string what,
+        Func<CancellationToken, Task<ModDependentsDto>> fetch,
+        string fallback)
+    {
+        ModDependentsDto? dependents = null;
+
+        try
+        {
+            dependents = await fetch(_cancellation.Token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _errorReporter.Record(exception, "reading what depends on a mod");
+        }
+
+        if (dependents is null || dependents.Profiles.Any() is false)
+        {
+            await ShowRefusal("Still in use", fallback);
+
+            return;
+        }
+
+        await _modalService.Show(new ModDependentsModalViewModel(what, dependents, GoToRevisionAsync));
+    }
+
+    private Task<bool> GoToRevisionAsync(Guid profileId, int revision)
+        => _shellNavigation.GoToProfileHistoryAsync(_repo.Id, profileId, revision);
 
     /// <summary>
     /// A delta fetch only ever adds, so a version that has just been deleted is invisible to one -

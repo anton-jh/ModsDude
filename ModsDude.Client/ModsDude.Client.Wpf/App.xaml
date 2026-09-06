@@ -108,6 +108,12 @@
             <DataTemplate DataType="{x:Type vm:ModDetailsModalViewModel}">
                 <uc:ModDetailsDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:BlockedRevisionsModalViewModel}">
+                <uc:BlockedRevisionsDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ModDependentsModalViewModel}">
+                <uc:ModDependentsDialog />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ModSourceConflictModalViewModel}">
                 <uc:ModSourceConflictDialog />
             </DataTemplate>

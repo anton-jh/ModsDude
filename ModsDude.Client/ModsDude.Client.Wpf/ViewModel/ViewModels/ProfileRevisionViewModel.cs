@@ -20,6 +20,15 @@ public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool 
     /// <summary>Whether this is the profile's current list - the one a sync would install.</summary>
     public bool IsHead { get; } = isHead;
 
+    /// <summary>
+    /// Whether this row is selected for pruning. Never the head: it is what the profile pins, and a
+    /// checkbox that can only ever be refused is worse than no checkbox.
+    /// </summary>
+    public bool CanPrune => IsHead is false;
+
+    [ObservableProperty]
+    private bool _isMarkedForPruning;
+
     public string Title => Revision.Label is { Length: > 0 } label
         ? $"{Number}. {label}"
         : $"Revision {Number}";

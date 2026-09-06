@@ -469,6 +469,7 @@ everybody.
 | GET | `repos/{repoId}/profiles/{profileId}/revisions` | Guest | The history, newest first, windowed by `skip`/`limit` |
 | PUT | `repos/{repoId}/profiles/{profileId}/revisions` | Member | **Saves the mod list.** The whole list, based on a revision number |
 | POST | `repos/{repoId}/profiles/{profileId}/revisions/{number}/restore` | Member | Copies an older revision forward as a new one |
+| POST | `repos/{repoId}/profiles/{profileId}/revisions/prune` | **Admin** | Deletes old revisions. Refuses the head and any revision a savegame was played on, naming which |
 
 Same singular/plural inconsistency on the single-profile GET.
 
@@ -521,6 +522,8 @@ without a second endpoint that can only express one shape of change.
 | --- | --- | --- | --- |
 | GET | `repos/{repoId}/mods` | Guest | Paginated **and** delta. See below |
 | GET | `repos/{repoId}/mods/usage` | Guest | Which registered versions the repo's profiles pin, and how many. Paginated |
+| GET | `repos/{repoId}/mods/{modId}/dependents` | Guest | Which profiles and revisions pin any version of a mod. Read after a delete is refused |
+| GET | `repos/{repoId}/mods/{modId}/versions/{versionId}/dependents` | Guest | The same for one version |
 | GET | `repos/{repoId}/mods/{modId}/versions` | Guest | One mod's versions, oldest first. Unpaged deliberately — bounded by how many releases one mod has had, not by the repo |
 | POST | `repos/{repoId}/mods` | Member | Register a version. Verifies the blob exists first, and asserts the placement |
 | PUT | `repos/{repoId}/mods/{modId}/versions/{versionId}/placement` | Member | Move an already-registered version. Returns the resulting order |
@@ -558,6 +561,7 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 | POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher |
 | PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename, or move to another profile |
 | DELETE | `repos/{repoId}/savegames/{savegameId}` | Member | Takes its versions and its claims with it |
+| DELETE | `repos/{repoId}/savegames/{savegameId}/versions/{number}` | **Admin** | Deletes one version. Refuses the head. Rows only - the blobs go to the reclamation sweep |
 | GET | `repos/{repoId}/savegames/{savegameId}/versions` | Guest | The history, newest first, windowed by `skip`/`limit` |
 | PUT | `repos/{repoId}/savegames/{savegameId}/versions` | Member | **Check in.** Based on a version number, forcible |
 | POST | `.../versions/{number}/restore` | Member | Copies an older version forward as a new one |
@@ -588,6 +592,46 @@ reclamation pass, which is what makes it safe when two versions name one address
 
 Reading is Guest throughout, including the claim log: somebody who plays a shared save without
 curating it is exactly the person who needs to see who has had it.
+
+### A refusal has to say what is holding it
+
+`GET .../mods/{modId}/dependents` and `.../versions/{versionId}/dependents` name the profiles and
+the exact revisions pinning a mod. They are read **after** a delete has been refused, never before
+it is offered: the refusal is what `CheckIfVersionIsDependedOn` and the foreign key decide, and
+paying for the dependency graph before every delete would mean querying it to tell somebody nothing
+was wrong.
+
+Named **per revision**, because that is what the foreign key enforces — a version pinned once, three
+hundred revisions ago, is as undeletable as one pinned now, so naming only the profile sends
+somebody to a history page with nothing to look for. The response says whether the listing hit its
+bound rather than quietly stopping, and flags a profile whose *head* pins it: that one cannot be
+pruned at all, so it is a different job (edit the profile and save) rather than a bigger version of
+the same one.
+
+### Pruning revisions, and what blocks it
+
+`POST .../profiles/{profileId}/revisions/prune` is how the versions an old revision pins stop being
+undeletable. **Admin**, deliberately: keeping history is what makes an old revision reproducible, so
+throwing it away is not part of running a repo — it is reclaiming space, which belongs to whoever is
+responsible for the repo rather than to whoever is editing a profile today. Every other destructive
+action that is not required for normal operation sits at the same level.
+
+**Numbers are not renumbered.** Pruning leaves the gap where a revision was, exactly as
+`SavegameVersionNumber` already does, and for the same reason: a number exists to be said out loud,
+and renumbering would make yesterday's sentence point at a different mod list.
+
+**The head is always refused**, and so is any revision a `SavegameVersion` records having been
+played on — the foreign key is `Restrict` and the endpoint asks first, once for the whole batch. It
+**deletes what it can and names what it cannot**, because a batch that refused wholesale over one
+blocked revision would make pruning a hundred of them an exercise in bisection. Each refusal carries
+the savegame versions holding it, so the next step is a link rather than a guess.
+
+That link needs somewhere to go, which is why
+`DELETE .../savegames/{savegameId}/versions/{number}` exists. Without it, "played on save X version
+3" would be an obstacle the user could see and never move. Admin again, and the **head version is
+refused**: it is what a check-out hands people, and a savegame whose current version is missing is
+one nobody can play. Rows only — several versions legitimately share one content-addressed blob, so
+the bytes stay with the reclamation sweep, which asks the one question that makes deleting them
 
 ### Files
 

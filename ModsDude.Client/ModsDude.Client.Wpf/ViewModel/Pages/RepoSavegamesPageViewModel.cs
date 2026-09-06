@@ -106,6 +106,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         CanCheckOut = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
+        // Admin, like pruning a profile's revisions and for the same reason: it destroys a backup,
+        // which is not part of running a repo.
+        CanPruneVersions = repo.MembershipLevel >= RepoMembershipLevel.Admin;
+
         Savegames = [];
         Timeline = [];
     }
@@ -115,6 +119,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     /// <summary>Whether taking the claim is on offer at all. Reading the list and copying a version is not gated.</summary>
     public bool CanCheckOut { get; }
+
+    /// <summary>Whether deleting a version of a savegame's history is on offer. Admin only.</summary>
+    public bool CanPruneVersions { get; }
 
     public ObservableCollection<SavegameListItemViewModel> Savegames { get; }
 
@@ -131,6 +138,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(HasSelectedEntry))]
     [NotifyCanExecuteChangedFor(nameof(CheckOutVersionCommand))]
     [NotifyCanExecuteChangedFor(nameof(TakeCopyVersionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteVersionCommand))]
     private SavegameTimelineEntryViewModel? _selectedEntry;
 
     [ObservableProperty]
@@ -234,6 +242,70 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             await StartAsync(row, number, SavegameCheckOutMode.TakeCopy);
         }
     }
+
+    /// <summary>
+    /// Deletes the selected version from the savegame's history.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Admin only, and never the head.</b> It destroys a backup, which is not part of running a
+    /// repo; and the head is what a check-out hands people, so a savegame whose current version is
+    /// missing is one nobody can play. The server refuses both, and the button is simply absent
+    /// rather than present-and-doomed.
+    /// </para>
+    /// <para>
+    /// <b>The reason this exists is a profile's history.</b> A version pins the profile revision it
+    /// was played on, so it is what stops that revision being pruned - and "played on save X version
+    /// 3" would be an obstacle somebody could see and never move.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanDeleteEntry))]
+    private async Task DeleteVersion()
+    {
+        if (Selected is not SavegameListItemViewModel row || SelectedEntry?.VersionNumber is not int number)
+        {
+            return;
+        }
+
+        var confirmation = new ConfirmationDialogViewModel(
+            $"Delete version {number}?",
+            $"This copy of '{row.Name}' goes for good. The others stay, and whoever is playing it now "
+                + "is unaffected - they hold the current version, which this is not.",
+            IconKind.Warning,
+            "Delete it",
+            "Keep it");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            await _savegamesClient.DeleteSavegameVersionV1Async(_repo.Id, row.Id, number, _pageLifetime.Token);
+
+            await LoadTimelineAsync(row);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "deleting a savegame version");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    private bool CanDeleteEntry()
+        => CanPruneVersions && IsWorking is false && SelectedEntry is { IsVersion: true, IsHead: false };
 
     private bool CanActOnEntry() => CanCheckOut && IsWorking is false && SelectedEntry is { IsVersion: true };
     private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsVersion: true };

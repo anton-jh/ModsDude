@@ -286,9 +286,17 @@
                                     Command="{Binding CheckOutVersionCommand}"
                                     Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                            <Button Content="Take a copy of this version"
+                            <Button Margin="0 0 8 0"
+                                    Content="Take a copy of this version"
                                     ToolTip="Writes it into a slot and claims nothing. Whoever holds the save keeps holding it."
                                     Command="{Binding TakeCopyVersionCommand}" />
+
+                            <!-- Admin only, and never the current version. Also the way an old
+                                 profile revision stops being blocked from pruning. -->
+                            <Button Content="Delete this version"
+                                    ToolTip="Removes this copy for good. The current version and the others stay."
+                                    Command="{Binding DeleteVersionCommand}"
+                                    Visibility="{Binding CanPruneVersions, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </Grid>
                 </Border>

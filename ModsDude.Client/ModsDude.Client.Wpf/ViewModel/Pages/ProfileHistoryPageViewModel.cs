@@ -38,8 +38,28 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly ProfileService _profileService;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
+    private readonly ShellNavigationService _shellNavigation;
 
     private ProfileHistory? _fetched;
+
+    /// <summary>
+    /// Which revision a deep link asked for, used once and then forgotten - a later refresh keeps
+    /// whatever the user has since selected rather than jumping back to where they arrived.
+    /// </summary>
+    private int? _selectRevisionOnce;
+
+
+    /// <summary>
+    /// Which revision to open at, for a page reached by a link rather than by the sidebar.
+    /// </summary>
+    /// <remarks>
+    /// A method rather than a constructor parameter: <c>ActivatorUtilities</c> matches the arguments
+    /// it is handed by type, and a nullable int that is sometimes absent is exactly the shape it
+    /// cannot match. Called by the factory before the page initializes, which is well before
+    /// anything reads it.
+    /// </remarks>
+    public void SelectOnArrival(int? revision) => _selectRevisionOnce = revision;
 
 
     public ProfileHistoryPageViewModel(
@@ -47,8 +67,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         ProfileDto profile,
         ProfileService profileService,
         ModListItemViewModel.Factory itemFactory,
-        IModalService modalService)
+        IModalService modalService,
+        IErrorReporter errorReporter,
+        ShellNavigationService shellNavigation)
     {
+        _errorReporter = errorReporter;
+        _shellNavigation = shellNavigation;
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
@@ -56,6 +80,11 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         _modalService = modalService;
 
         CanEdit = repo.MembershipLevel >= RepoMembershipLevel.Member;
+
+        // Admin, not Member. Keeping history is what makes an old revision reproducible, so throwing
+        // it away is not part of running a repo - it is reclaiming space, which belongs to whoever
+        // is responsible for the repo rather than to whoever is editing a profile today.
+        CanPrune = repo.MembershipLevel >= RepoMembershipLevel.Admin;
 
         Revisions = [];
         Mods = [];
@@ -177,6 +206,162 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     public bool CanRestoreSelected => Selected is not null && Selected.IsHead is false;
 
 
+    /// <summary>
+    /// Whether pruning is on offer at all. Admin only - see the constructor.
+    /// </summary>
+    public bool CanPrune { get; }
+
+    /// <summary>
+    /// How many rows are ticked. Counted rather than derived on demand, because the footer that reads
+    /// it is bound and the rows change one at a time.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMarkedRevisions))]
+    [NotifyPropertyChangedFor(nameof(PruneText))]
+    [NotifyCanExecuteChangedFor(nameof(PruneCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearMarksCommand))]
+    private int _markedCount;
+
+
+    public bool HasMarkedRevisions => MarkedCount > 0;
+
+    public string PruneText => MarkedCount == 1
+        ? "Delete 1 revision"
+        : $"Delete {MarkedCount} revisions";
+
+
+    /// <summary>
+    /// Deletes the ticked revisions, and says what it could not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One request for the whole selection: the server deletes what it can and names what it cannot,
+    /// so a hundred revisions blocked by one savegame comes back as an answer rather than as a
+    /// hundred separate refusals to reassemble.
+    /// </para>
+    /// <para>
+    /// The confirmation says what is lost, because nothing else will. A pruned revision is not
+    /// recoverable and the mod list it held stops being reproducible - which is the whole reason
+    /// history is kept, and therefore the whole reason this is a deliberate act rather than a
+    /// retention policy running in the background.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanPruneNow))]
+    private async Task Prune(CancellationToken cancellationToken)
+    {
+        var marked = Revisions.Where(x => x.IsMarkedForPruning).Select(x => x.Number).ToList();
+
+        if (marked.Count == 0)
+        {
+            return;
+        }
+
+        var confirmation = new ConfirmationDialogViewModel(
+            marked.Count == 1 ? "Delete this revision?" : $"Delete {marked.Count} revisions?",
+            marked.Count == 1
+                ? "The mod list it recorded goes with it and cannot be brought back. Anything it was "
+                    + "the last revision to pin becomes deletable from the repo."
+                : $"The mod lists those {marked.Count} revisions recorded go with them and cannot be "
+                    + "brought back. Anything they were the last revisions to pin becomes deletable "
+                    + "from the repo.",
+            IconKind.Warning,
+            marked.Count == 1 ? "Delete it" : "Delete them",
+            "Keep them");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        IsWorking = true;
+        Status = null;
+
+        try
+        {
+            var result = await _profileService.PruneRevisions(_repo.Id, _profile.Id, marked, cancellationToken);
+
+            Status = Describe(result);
+
+            if (result.Blocked.Any())
+            {
+                await _modalService.Show(new BlockedRevisionsModalViewModel(
+                    _profile.Name, result, GoToSavegameAsync));
+            }
+
+            await ReloadAsync(null, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "pruning a profile's revisions");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasMarkedRevisions))]
+    private void ClearMarks()
+    {
+        foreach (var revision in Revisions)
+        {
+            revision.IsMarkedForPruning = false;
+        }
+
+        RecountMarked();
+    }
+
+    /// <summary>
+    /// Ticks every revision that can be pruned, which is every one but the head. What is actually
+    /// deletable is narrower - a savegame may hold one - but that is the server's to say, and
+    /// guessing at it here would be a second copy of a rule that has to agree with the server's.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPruneAny))]
+    private void MarkAllOlder()
+    {
+        foreach (var revision in Revisions)
+        {
+            revision.IsMarkedForPruning = revision.CanPrune;
+        }
+
+        RecountMarked();
+    }
+
+
+    private bool CanPruneNow() => CanPrune && IsWorking is false && HasMarkedRevisions;
+
+    private bool CanPruneAny() => CanPrune && IsWorking is false;
+
+    private void RecountMarked() => MarkedCount = Revisions.Count(x => x.IsMarkedForPruning);
+
+    private void OnRevisionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProfileRevisionViewModel.IsMarkedForPruning))
+        {
+            RecountMarked();
+        }
+    }
+
+    private Task<bool> GoToSavegameAsync(Guid savegameId)
+        => _shellNavigation.GoToSavegamesAsync(_repo.Id, savegameId);
+
+    private static string Describe(PruneProfileRevisionsResponse result)
+    {
+        var blocked = result.Blocked.Count();
+
+        var deleted = result.Deleted == 1 ? "1 revision deleted" : $"{result.Deleted} revisions deleted";
+
+        return blocked == 0
+            ? $"{deleted}."
+            : $"{deleted}. {(blocked == 1 ? "1 was kept" : $"{blocked} were kept")} - see why below.";
+    }
+
     protected override async Task InitAsync()
     {
         _fetched = await _profileService.GetHistory(_repo.Id, _profile.Id, CancellationToken.None);
@@ -186,7 +371,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     {
         if (_fetched is not null)
         {
-            Publish(_fetched);
+            Publish(_fetched, _selectRevisionOnce);
+            _selectRevisionOnce = null;
         }
 
         IsLoading = false;
@@ -356,12 +542,27 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     {
         var wanted = select ?? Selected?.Number ?? history.HeadRevision;
 
+        foreach (var existing in Revisions)
+        {
+            existing.PropertyChanged -= OnRevisionChanged;
+        }
+
         Revisions.Clear();
 
         foreach (var revision in history.Revisions)
         {
-            Revisions.Add(new ProfileRevisionViewModel(revision, revision.Number == history.HeadRevision));
+            var row = new ProfileRevisionViewModel(revision, revision.Number == history.HeadRevision);
+
+            // The footer counts ticks, and the rows are ticked one at a time by a binding that has
+            // nothing else to tell anybody.
+            row.PropertyChanged += OnRevisionChanged;
+
+            Revisions.Add(row);
         }
+
+        // The rows are new, so nothing is ticked - including after a prune, where the marks that are
+        // gone were the whole point.
+        RecountMarked();
 
         HasMore = history.HasMore;
 
@@ -469,7 +670,13 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileHistoryPageViewModel Create(Repo repo, ProfileDto profile)
-            => ActivatorUtilities.CreateInstance<ProfileHistoryPageViewModel>(serviceProvider, repo, profile);
+        public ProfileHistoryPageViewModel Create(Repo repo, ProfileDto profile, int? selectRevision = null)
+        {
+            var page = ActivatorUtilities.CreateInstance<ProfileHistoryPageViewModel>(serviceProvider, repo, profile);
+
+            page.SelectOnArrival(selectRevision);
+
+            return page;
+        }
     }
 }

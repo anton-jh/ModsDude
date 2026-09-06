@@ -23,6 +23,13 @@ public partial class RepoPageViewModel
     private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly InstancePageViewModel.Factory _instancePageViewModelFactory;
+    /// <summary>
+    /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
+    /// versions holding a revision, and a link that could not open the list would be no link at all.
+    /// Null for a game with no savegames, where there is no entry to select.
+    /// </summary>
+    private readonly MenuItemViewModel? _savesMenuItem;
+
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
@@ -78,7 +85,9 @@ public partial class RepoPageViewModel
         // for, and a game that has no savegames is not.
         if (repo.Adapter.CanSupportSavegames)
         {
-            MenuItems.Add(new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo)));
+            _savesMenuItem = new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo));
+
+            MenuItems.Add(_savesMenuItem);
         }
 
         MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
@@ -148,6 +157,25 @@ public partial class RepoPageViewModel
     /// Null where the profile is gone, or where the page in front of the user refused to be navigated
     /// away from.
     /// </returns>
+    /// <summary>
+    /// Selects the repo's Saves list, for a link from a prune that a savegame version blocked.
+    /// </summary>
+    /// <returns>False where this repo has no savegames, or navigation was refused.</returns>
+    public bool TrySelectSavegames()
+    {
+        if (_savesMenuItem is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(NavManager.Selected, _savesMenuItem) is false)
+        {
+            NavManager.Selected = _savesMenuItem;
+        }
+
+        return ReferenceEquals(NavManager.Selected, _savesMenuItem);
+    }
+
     public async Task<ProfilePageViewModel?> TrySelectProfileAsync(Guid profileId)
     {
         // A repo opened a moment ago has its profile list still on the way, so a deep link arriving

@@ -44,6 +44,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
     private Guid? _scanInstanceIdOnce;
 
+    /// <summary>
+    /// Which revision a deep link into the history asked for. Same one-shot shape as
+    /// <see cref="_scanInstanceIdOnce"/>, and for the same reason: it describes an arrival, not a
+    /// standing preference.
+    /// </summary>
+    private int? _selectRevisionOnce;
+
 
     public ProfilePageViewModel(
         Repo repo,
@@ -87,7 +94,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         // this profile without curating it is exactly the person who wants to know what changed under
         // them. Restoring and branching are what a Member level buys, and the page hides those
         // controls rather than closing the entry.
-        _historyMenuItem = new MenuItemViewModel("History", () => profileHistoryPageViewModelFactory.Create(repo, profile));
+        _historyMenuItem = new MenuItemViewModel("History", () =>
+        {
+            var selectRevision = _selectRevisionOnce;
+            _selectRevisionOnce = null;
+
+            return profileHistoryPageViewModelFactory.Create(repo, profile, selectRevision);
+        });
 
         NavManager = navigationManager;
         MenuItems = [
@@ -263,14 +276,25 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// revision they were played on, and whose "what changed under this save" is exactly the question
     /// that page already answers.
     /// </summary>
-    public bool TrySelectHistory()
+    public bool TrySelectHistory(int? selectRevision = null)
     {
+        _selectRevisionOnce = selectRevision;
+
         if (ReferenceEquals(NavManager.Selected, _historyMenuItem) is false)
         {
             NavManager.Selected = _historyMenuItem;
         }
 
-        return ReferenceEquals(NavManager.Selected, _historyMenuItem);
+        var selected = ReferenceEquals(NavManager.Selected, _historyMenuItem);
+
+        if (selected is false)
+        {
+            // Refused, so nothing read the value and it must not be waiting for whoever opens the
+            // history next.
+            _selectRevisionOnce = null;
+        }
+
+        return selected;
     }
 
     /// <summary>

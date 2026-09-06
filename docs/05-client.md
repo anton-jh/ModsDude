@@ -565,6 +565,28 @@ exactly that, and keeps the row removable. It is marked `IsOnServer: true` on pu
 hold the version, and a row claiming otherwise would read as pending and be handed to the importer
 at save with no file to import.
 
+## A refused delete is a list, not a wall
+
+"A profile depends on it" is true and unactionable. `ModDependentsModalViewModel` replaces it: after
+the server refuses, the page reads `.../dependents` and shows the profiles, the exact revisions
+pinning the mod, and a link into each one — `ShellNavigationService.GoToProfileHistoryAsync` now
+takes a revision to open at, so the link lands on the row rather than on the head.
+
+The old flat refusal is still there as the fallback, for a follow-up read that fails or comes back
+empty because somebody else edited in between. Being told less beats being told nothing after a
+delete that visibly did not happen.
+
+`ProfileHistoryPage` is where the list leads. Ticking revisions and pruning them is **Admin only**,
+below Restore and Save-as because it is the one action on that page that destroys rather than adds.
+A blocked prune opens `BlockedRevisionsModalViewModel`, which distinguishes the two reasons: the
+head is an explanation and nothing more, while a revision a savegame was played on carries links to
+that savegame — and the saves page grew an Admin-only *Delete this version* for exactly that,
+absent rather than present-and-doomed on the head version.
+
+Both dialogs close themselves before navigating, and regardless of whether navigation was refused: a
+page holding unsaved changes is entitled to say no, and reopening a dialog over the page the user is
+still standing on would be the app arguing with itself.
+
 ## Telling two users with one name apart
 
 Display names are not unique — see
