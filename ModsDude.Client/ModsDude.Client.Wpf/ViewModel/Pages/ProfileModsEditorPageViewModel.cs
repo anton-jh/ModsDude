@@ -166,6 +166,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         PinnedView = (ListCollectionView)CollectionViewSource.GetDefaultView(Pinned);
         PinnedView.CustomSort = Comparer<ProfileModRowViewModel>.Create(ComparePinned);
 
+        // One box over both lists, as on the repo mods page. A mod is only ever on one side, so a
+        // search that reached only the left one answered half the question somebody was asking -
+        // and the half it answered was the side they were least likely to be looking for.
+        PinnedView.Filter = x => x is ProfileModRowViewModel row && row.Matches(SearchText);
+
         Pinned.CollectionChanged += (_, _) => OnPinnedChanged();
 
         _repo.LocalInstances.CollectionChanged += OnLocalInstancesChanged;
@@ -200,6 +205,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(AvailableCountText))]
     private int _availableCount;
 
+    /// <summary>Everything the profile does not hold, whatever the search is showing of it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AvailableCountText))]
+    private int _availableTotal;
+
     /// <summary>Of those, how many the profile has never held - what a bulk add would take.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddAllShownNewCommand))]
@@ -216,6 +226,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(PinnedCountText))]
     [NotifyPropertyChangedFor(nameof(HasPinnedMods))]
     private int _pinnedCount;
+
+    /// <summary>How many of those the search is showing. Equal to PinnedCount when nothing is typed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinnedCountText))]
+    [NotifyPropertyChangedFor(nameof(HasVisiblePinnedMods))]
+    private int _pinnedVisibleCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PendingText))]
@@ -326,12 +342,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         "the game updated them to. Only if you know exactly what you are doing.";
 
     public bool HasPinnedMods => PinnedCount > 0;
+
+    /// <summary>
+    /// Whether the right list is showing anything. Distinct from <see cref="HasPinnedMods"/> now the
+    /// search reaches this side: a profile with two thousand mods and no match for what was typed is
+    /// an empty box that has to say why, and "nothing in this profile yet" would be a lie.
+    /// </summary>
+    public bool HasVisiblePinnedMods => PinnedVisibleCount > 0;
     public bool HasRemovals => RemovalCount > 0;
     public bool HasPending => PendingCount > 0;
     public bool HasSkippedUpdates => SkippedUpdateCount > 0;
     public bool HasSaveSummary => SaveSummary is not null;
 
-    public string AvailableCountText => AvailableCount == 1 ? "1 mod" : $"{AvailableCount} mods";
+    public string AvailableCountText => Describe(AvailableCount, AvailableTotal);
 
     /// <summary>
     /// Says why the top of the left list is not alphabetical. Worded as what a save will do, because
@@ -341,7 +364,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ? "1 taken out"
         : $"{RemovalCount} taken out";
 
-    public string PinnedCountText => PinnedCount == 1 ? "1 mod" : $"{PinnedCount} mods";
+    public string PinnedCountText => Describe(PinnedVisibleCount, PinnedCount);
+
+    /// <summary>
+    /// The same wording as the repo mods page, and for the same reason: with one box filtering both
+    /// lists, a count that only ever said "412 mods" could not say whether the search had found
+    /// nothing or the list was empty.
+    /// </summary>
+    private static string Describe(int visible, int total)
+        => visible == total ? total == 1 ? "1 mod" : $"{total} mods" : $"{visible} of {total} mods";
 
     public string PendingText => PendingCount == 1
         ? "1 mod will be imported when you save"
@@ -1467,8 +1498,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     partial void OnSearchTextChanged(string value)
     {
         AvailableView?.Refresh();
+        PinnedView.Refresh();
 
         RecountAvailable();
+        RecountPinnedVisible();
     }
 
     /// <summary>
@@ -1477,8 +1510,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private void RecountAvailable()
     {
+        AvailableTotal = _available.Count(x => _pinnedIds.Contains(x.Mod.ModId) is false);
         AvailableCount = _available.Count(Passes);
         NewCount = _available.Count(x => Passes(x) && IsPendingRemoval(x) is false);
+    }
+
+    /// <summary>How many of the profile's mods the search is showing. The total is PinnedCount.</summary>
+    private void RecountPinnedVisible()
+    {
+        PinnedVisibleCount = Pinned.Count(x => x.Matches(SearchText));
     }
 
     private void Recount()
@@ -1497,6 +1537,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         PinnedCount = Pinned.Count;
+        RecountPinnedVisible();
         RemovalCount = _pendingRemovals.Count;
         PendingCount = Pinned.Count(x => x.IsPending);
 

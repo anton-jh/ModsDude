@@ -123,7 +123,7 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <Grid RowDefinitions="auto auto auto *">
+            <Grid RowDefinitions="auto auto auto auto *">
 
                 <TextBlock Grid.Row="0"
                            Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -145,7 +145,61 @@
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 </Border>
 
-                <Grid Grid.Row="3" ColumnDefinitions="* 16 *">
+                <!-- One search box over both lists. A mod is only ever on one side, so a box that
+                     reached only the left one answered half the question - and the half it could
+                     not answer was "is this already in the profile?". Same shape as the repo mods
+                     page, which has the same two lists and the same question. -->
+                <Grid Grid.Row="3" Margin="0 0 0 12">
+
+                    <!-- Right padding keeps the text from running under the clear button. The rest
+                         matches the theme's own TextBox padding. -->
+                    <TextBox x:Name="SearchBox"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                             Padding="10 5 32 6"
+                             VerticalAlignment="Center" />
+
+                    <!-- Watches the box rather than the view model: the binding above delays pushing
+                         the text through, so anything driven off SearchText stays a beat behind what
+                         has actually been typed. -->
+                    <TextBlock Text="Search by name, id or author"
+                               Margin="12 0 0 0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Button Width="24" Height="24"
+                            FontSize="12"
+                            Margin="0 0 4 0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Content="&#xE10A;"
+                            ToolTip="Clear search"
+                            Command="{Binding ClearSearchCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="4" ColumnDefinitions="* 16 *">
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
@@ -153,54 +207,12 @@
 
                         <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto auto">
 
-                            <Grid Grid.Column="0">
-                                <!-- Right padding keeps the text from running under the clear
-                                     button. The rest matches the theme's own TextBox padding. -->
-                                <TextBox x:Name="SearchBox"
-                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
-                                         Padding="10 5 32 6"
-                                         VerticalAlignment="Center" />
-
-                                <!-- Watches the box rather than the view model: the binding above
-                                     delays pushing the text through, so anything driven off
-                                     SearchText stays a beat behind what has actually been typed. -->
-                                <TextBlock Text="Search by name, id or author"
-                                           Margin="12 0 0 0"
-                                           VerticalAlignment="Center"
-                                           IsHitTestVisible="False"
-                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-
-                                <Button Width="24" Height="24"
-                                        FontSize="12"
-                                        Margin="0 0 4 0"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Center"
-                                        Content="&#xE10A;"
-                                        ToolTip="Clear search"
-                                        Command="{Binding ClearSearchCommand}">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </Grid>
+                            <TextBlock Grid.Column="0"
+                                       Text="Not in this profile"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Registered in this repo or found on this computer, and not pinned here."
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                             <!-- Says why the top of this list is not alphabetical: what the draft has
                                  taken out of the profile is back here, and looks exactly like a mod
@@ -515,6 +527,29 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+
+                                <!-- Two messages, because the box is empty for two different
+                                     reasons now that the search reaches this side. -->
+                                <TextBlock Text="No mods in this profile match your search."
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           TextAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsLoading}" Value="False" />
+                                                        <Condition Binding="{Binding HasPinnedMods}" Value="True" />
+                                                        <Condition Binding="{Binding HasVisiblePinnedMods}" Value="False" />
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
 
                                 <TextBlock Text="Nothing in this profile yet.&#x0a;Add mods from the list on the left."
                                            HorizontalAlignment="Center" VerticalAlignment="Center"

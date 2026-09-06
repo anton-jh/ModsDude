@@ -636,6 +636,18 @@ without a detour to another page. It carries the same source list and checkboxes
 adding a mod straight from Downloads while building a profile is the point of having sources at
 all.
 
+**One search box, over both lists.** It sits above the two columns rather than in the left one's
+header, because a mod is only ever on one side: a box that reached only the left list answered
+half the question, and the half it could not answer was "is this already in the profile?".
+`ProfileModRowViewModel.Matches` delegates to its `Item`, so both sides answer the same question
+the same way and the answer follows the version selector. Same shape as Manage, which has the
+same two lists and the same question.
+
+Each header then reads **"N of M mods"** while a search is narrowing it — a count that only ever
+said "412 mods" could not distinguish a search that found nothing from an empty list. The right
+list gains a second empty-state message for the same reason: with the search reaching it, "nothing
+in this profile yet" would be a lie for a two-thousand-mod profile with no match.
+
 **Updates belong on the right, not the left.** If a mod is already in the profile, also showing
 it on the left as "update available" puts the same mod on both sides at once. Render it as an
 update affordance on the right-hand row, plus a "N updates available" batch action in the

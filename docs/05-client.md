@@ -699,3 +699,8 @@ the fact "already in the repo" with the context-dependent judgments "new" and "u
 available" — the facts are now `IsLocal` and `IsOnServer` on `CatalogModVersion`, and the
 display status is computed per context from them. See
 [09 — Mod catalog](09-mod-catalog.md#one-identity-two-facts).
+
+An import that did not finish shows as the row's **chip and nothing else**. The warning triangle
+that used to sit beside it was the same fact twice, in a row with four other things competing for
+the same twelve pixels; the reason moved onto the chip as a tooltip, and is null where there is no
+problem, so a row that is merely new does not sprout a tooltip saying nothing went wrong.

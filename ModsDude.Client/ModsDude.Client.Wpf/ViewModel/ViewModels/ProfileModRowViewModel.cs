@@ -55,6 +55,15 @@ public partial class ProfileModRowViewModel : ObservableObject
 
     public IReadOnlyList<ProfileModVersionOption> Versions { get; }
 
+
+    /// <summary>
+    /// Whether the search box is showing this row. Delegated to the shared list row rather than
+    /// reimplemented, so both sides of the editor answer the same question the same way - and so
+    /// that the answer follows the version selector, since <see cref="Item"/> is replaced when the
+    /// selection changes.
+    /// </summary>
+    public bool Matches(string? searchTerm) => Item.Matches(searchTerm);
+
     /// <summary>
     /// The shared list row for whatever version is selected. Replaced rather than mutated when the
     /// version changes, because a row wraps exactly one version - and a new one is what makes the

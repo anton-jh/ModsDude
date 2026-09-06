@@ -199,14 +199,20 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     public bool HasImportState => ImportState is not ModImportRowState.None;
 
     /// <summary>
-    /// Whether the row is marked as one the import did not finish. A mark rather than a sentence:
-    /// the reason is one line in the dialog the import raises when it is over, and text long enough
-    /// to be worth reading is text a 72-pixel row can only clip.
+    /// Whether the import left this row unfinished. The row says so with its chip and nothing else -
+    /// a warning triangle beside a chip already coloured for failure was the same fact twice, in a
+    /// row that has four other things competing for the same twelve pixels.
     /// </summary>
     public bool HasImportProblem => ImportState is ModImportRowState.Failed or ModImportRowState.Skipped;
 
-    /// <summary>Which mod the dialog was talking about, for whoever comes back to the list after it.</summary>
-    public string ImportProblemTooltip => ModImportProblems.DescribeRow(ImportOutcome);
+    /// <summary>
+    /// Which mod the dialog was talking about, for whoever comes back to the list after it. On the
+    /// chip, since that is what carries the state now - and null where there is no problem, so a row
+    /// that is merely new does not sprout a tooltip explaining that nothing went wrong.
+    /// </summary>
+    public string? ImportProblemTooltip => HasImportProblem
+        ? ModImportProblems.DescribeRow(ImportOutcome)
+        : null;
 
     public bool IsUploading => ImportPhase is ModImportPhase.Uploading;
 

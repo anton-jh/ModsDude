@@ -34,7 +34,7 @@
 
             <Grid>
 
-                <Grid ColumnDefinitions="auto auto * auto auto auto auto auto">
+                <Grid ColumnDefinitions="auto auto * auto auto auto auto">
 
                     <CheckBox Grid.Column="0"
                               Margin="12 0 0 0"
@@ -145,40 +145,13 @@
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
-                    <!-- Marks the row the dialog was talking about, and says nothing the dialog did
-                         not: the import raises one of those for the whole run, and a row is not
-                         where a reason can be read. -->
-                    <TextBlock Grid.Column="5"
-                               Margin="0 0 8 0"
-                               VerticalAlignment="Center"
-                               Text="&#xE7BA;"
-                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                               ToolTip="{Binding ImportProblemTooltip}"
-                               ToolTipService.InitialShowDelay="400">
-                        <TextBlock.Style>
-                            <!-- Caution by default and critical for a failure - the same distinction
-                                 the chip beside it draws between waiting on a decision and going
-                                 wrong. -->
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasImportProblem}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding ImportState}" Value="Failed">
-                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
                     <!-- One chip, showing the import while it is happening and the presence status
                          otherwise. A running import is the more urgent of the two, and stacking them
                          would make every row two chips wide for the sake of one moment. -->
-                    <Border Grid.Column="6"
-                            Margin="0 0 8 0">
+                    <Border Grid.Column="5"
+                            Margin="0 0 8 0"
+                            ToolTip="{Binding ImportProblemTooltip}"
+                            ToolTipService.InitialShowDelay="400">
 
                         <Border.Style>
                             <!-- Every fill here comes with the text colour that can be read on it;
@@ -237,7 +210,7 @@
 
                     <!-- Margin on the panel rather than on the grid inside it, so the row keeps its
                          trailing gap for a member who has no actions to be offered. -->
-                    <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center"
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="0 0 12 0">
 
                         <Grid Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">
