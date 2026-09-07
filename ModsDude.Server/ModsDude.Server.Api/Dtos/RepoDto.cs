@@ -2,7 +2,8 @@
 
 namespace ModsDude.Server.Api.Dtos;
 
-public record RepoDto(Guid Id, string Name, string AdapterId, string AdapterConfiguration)
+/// <param name="ArchivedAt">When it was put away, or null while it is live.</param>
+public record RepoDto(Guid Id, string Name, string AdapterId, string AdapterConfiguration, DateTime? ArchivedAt)
 {
     public static RepoDto FromModel(Repo repo)
     {
@@ -10,6 +11,7 @@ public record RepoDto(Guid Id, string Name, string AdapterId, string AdapterConf
             repo.Id.Value,
             repo.Name.Value,
             repo.AdapterData.Id.Value,
-            repo.AdapterData.Configuration.Value);
+            repo.AdapterData.Configuration.Value,
+            repo.ArchivedAt);
     }
 }

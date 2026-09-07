@@ -17,6 +17,7 @@ public class Profile(
     RepoId repoId,
     ProfileName name,
     DateTime created)
+    : IArchivable
 {
     public ProfileId Id { get; init; } = new(Guid.NewGuid());
     public RepoId RepoId { get; } = repoId;
@@ -30,6 +31,36 @@ public class Profile(
     /// revision, which happens in the same transaction that creates it.
     /// </summary>
     public RevisionNumber HeadRevision { get; private set; } = RevisionNumber.None;
+
+    /// <inheritdoc cref="IArchivable.ArchivedAt"/>
+    public DateTime? ArchivedAt { get; private set; }
+
+    public bool IsArchived => ArchivedAt is not null;
+
+
+    /// <summary>
+    /// Puts the profile away. It keeps its history, its revisions stay reproducible, and anything
+    /// following it - an instance, a savegame - goes on following it; it is only out of the lists.
+    /// Idempotent, and it does not restamp.
+    /// </summary>
+    public void Archive(DateTime now)
+    {
+        ArchivedAt ??= now;
+    }
+
+    /// <summary>
+    /// Brings it back, optionally under a new name - which is how a clash with a live profile is
+    /// resolved, since an archived one gave up its name when it was archived.
+    /// </summary>
+    public void Restore(ProfileName? name = null)
+    {
+        if (name is ProfileName renamed)
+        {
+            Name = renamed;
+        }
+
+        ArchivedAt = null;
+    }
 
 
     /// <summary>

@@ -38,14 +38,19 @@ public static class SavegameExtensions
         return dbSet.FindAsync(GetKey(repoId, savegameId), cancellationToken);
     }
 
+    /// <summary>
+    /// Whether a live savegame already answers to this name. Archived ones are ignored - they gave
+    /// up their names when they were archived.
+    /// </summary>
     public static Task<bool> CheckNameIsTaken(this DbSet<Savegame> dbSet, RepoId repoId, SavegameName name, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.ArchivedAt == null && x.Name == name, cancellationToken);
     }
 
+    /// <inheritdoc cref="CheckNameIsTaken(DbSet{Savegame}, RepoId, SavegameName, CancellationToken)"/>
     public static Task<bool> CheckNameIsTaken(this DbSet<Savegame> dbSet, RepoId repoId, SavegameId except, SavegameName name, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Id != except && x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.ArchivedAt == null && x.Id != except && x.Name == name, cancellationToken);
     }
 
     /// <summary>
@@ -86,15 +91,24 @@ public static class SavegameExtensions
         return rows.ToDictionary(x => x.Id, x => x.Name);
     }
 
+    /// <param name="archived">
+    /// Which list this is. The two are disjoint and never merged: the saves page shows what the repo
+    /// is using and the archive shows what it has put away, and a flag on a row that mixed them
+    /// would make every caller responsible for filtering something it did not ask for.
+    /// </param>
     public static Task<List<SavegameRow>> GetRowsAsync(
         this DbSet<Savegame> dbSet,
         RepoId repoId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool archived = false)
     {
         return dbSet
-            .Where(x => x.RepoId == repoId)
-            .OrderBy(x => x.Name)
-            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadVersion))
+            .Where(x => x.RepoId == repoId && (x.ArchivedAt != null) == archived)
+            // Archived ones lead with when they were put away, because several may share a name and
+            // that is the only thing telling them apart.
+            .OrderBy(x => archived ? x.ArchivedAt : null)
+            .ThenBy(x => x.Name)
+            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadVersion, x.ArchivedAt))
             .ToListAsync(cancellationToken);
     }
 
@@ -433,7 +447,8 @@ public record SavegameRow(
     SavegameName Name,
     ProfileId ProfileId,
     DateTime Created,
-    SavegameVersionNumber HeadVersion);
+    SavegameVersionNumber HeadVersion,
+    DateTime? ArchivedAt);
 
 
 /// <summary>

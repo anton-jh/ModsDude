@@ -28,7 +28,8 @@ public record SavegameDto(
     Guid ProfileId,
     DateTime Created,
     SavegameVersionDto? Head,
-    SavegameCheckoutDto? Checkout);
+    SavegameCheckoutDto? Checkout,
+    DateTime? ArchivedAt);
 
 
 /// <summary>

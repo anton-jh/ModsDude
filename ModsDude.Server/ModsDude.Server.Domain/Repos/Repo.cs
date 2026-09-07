@@ -2,7 +2,7 @@
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Repos;
-public class Repo
+public class Repo : IArchivable
 {
     private readonly HashSet<RepoMembership> _memberships = [];
 
@@ -23,6 +23,36 @@ public class Repo
     public RepoName Name { get; set; }
     public required AdapterData AdapterData { get; set; }
     public DateTime Created { get; }
+
+    /// <inheritdoc cref="IArchivable.ArchivedAt"/>
+    public DateTime? ArchivedAt { get; private set; }
+
+    public bool IsArchived => ArchivedAt is not null;
+
+
+    /// <summary>
+    /// Puts the repo away for everybody - it is repo state, not membership state, so there is no
+    /// per-person version of this. Idempotent, and it does not restamp: the timestamp is what tells
+    /// two archived repos of the same name apart.
+    /// </summary>
+    public void Archive(DateTime now)
+    {
+        ArchivedAt ??= now;
+    }
+
+    /// <summary>
+    /// Brings it back, optionally under a new name - which is how a clash with a live repo is
+    /// resolved, since an archived one gave up its name when it was archived.
+    /// </summary>
+    public void Restore(RepoName? name = null)
+    {
+        if (name is RepoName renamed)
+        {
+            Name = renamed;
+        }
+
+        ArchivedAt = null;
+    }
 
 
     public void AddMember(UserId userId, RepoMembershipLevel level)

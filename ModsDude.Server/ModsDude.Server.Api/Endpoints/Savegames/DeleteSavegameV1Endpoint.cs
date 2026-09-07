@@ -52,7 +52,7 @@ public class DeleteSavegameV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
             .MapToForbidden();
         if (authResult is not null)
         {
@@ -63,6 +63,13 @@ public class DeleteSavegameV1Endpoint : IEndpoint
         if (savegame is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
+        }
+
+        // Reached from the archive and nowhere else. What goes here is somebody's backups, so it is a
+        // second deliberate act rather than a click on a list - see IArchivable.
+        if (savegame.IsArchived is false)
+        {
+            return TypedResults.BadRequest(Problems.NotArchived("Savegame", savegameId));
         }
 
         // The versions and the claims go with it by cascade, in the database rather than here, so

@@ -41,6 +41,10 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
         // A savegame's name is what people say to each other, so it has to mean one thing inside a
         // repo. Unique rather than checked in the endpoint, so two people publishing "Season 4" at
         // the same moment produce one savegame and one refusal.
-        builder.HasIndex(x => new { x.RepoId, x.Name }).IsUnique();
+        // Filtered on ArchivedAt, like a profile's: an archived savegame gives up its name, and a
+        // clash is resolved when it is restored rather than being prevented forever.
+        builder.HasIndex(x => new { x.RepoId, x.Name })
+            .IsUnique()
+            .HasFilter("\"ArchivedAt\" IS NULL");
     }
 }

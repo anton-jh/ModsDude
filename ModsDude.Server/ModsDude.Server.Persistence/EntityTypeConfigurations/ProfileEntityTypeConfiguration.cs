@@ -19,6 +19,11 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
         // Profile for why loading a profile must not be able to drag its history in with it.
         builder.Property(x => x.HeadRevision);
 
-        builder.HasIndex(x => new { x.RepoId, x.Name }).IsUnique();
+        // Filtered on ArchivedAt: an archived profile gives up its name, so the name is free again
+        // immediately and several archived profiles may share one. Restoring is where a clash has to
+        // be resolved, by renaming - see IArchivable.
+        builder.HasIndex(x => new { x.RepoId, x.Name })
+            .IsUnique()
+            .HasFilter("\"ArchivedAt\" IS NULL");
     }
 }

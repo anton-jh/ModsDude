@@ -26,14 +26,20 @@ public static class ProfileExtensions
         return dbSet.FindAsync(GetKey(repoId, profileId), cancellationToken);
     }
 
+    /// <summary>
+    /// Whether a live profile already answers to this name. Archived ones are ignored, because an
+    /// archived profile gives up its name - the filtered unique index says the same thing, and this
+    /// is what turns the database's refusal into a message somebody can read.
+    /// </summary>
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileName name, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.ArchivedAt == null && x.Name == name, cancellationToken);
     }
 
+    /// <inheritdoc cref="CheckNameIsTaken(DbSet{Profile}, RepoId, ProfileName, CancellationToken)"/>
     public static Task<bool> CheckNameIsTaken(this DbSet<Profile> dbSet, RepoId repoId, ProfileId except, ProfileName name, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.RepoId == repoId && x.Id != except && x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.RepoId == repoId && x.ArchivedAt == null && x.Id != except && x.Name == name, cancellationToken);
     }
 
     /// <summary>

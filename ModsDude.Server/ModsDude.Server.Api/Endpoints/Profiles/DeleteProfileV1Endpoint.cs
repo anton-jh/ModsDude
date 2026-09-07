@@ -30,7 +30,7 @@ public class DeleteProfileV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
             .MapToForbidden();
         if (authResult is not null)
         {
@@ -41,6 +41,14 @@ public class DeleteProfileV1Endpoint : IEndpoint
         if (profile is null)
         {
             return TypedResults.BadRequest(Problems.NotFound);
+        }
+
+        // Reached from the archive and nowhere else. Archiving first is what makes losing a profile's
+        // whole history a second, deliberate act rather than a click away from a list somebody is
+        // browsing - see IArchivable.
+        if (profile.IsArchived is false)
+        {
+            return TypedResults.BadRequest(Problems.NotArchived("Profile", profileId));
         }
 
         // The database enforces this too - both foreign keys onto a profile from the savegame

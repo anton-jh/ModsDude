@@ -38,13 +38,18 @@ internal static class SavegameReads
     /// <summary>
     /// Every savegame in the repo, each carrying its head version and its open claim.
     /// </summary>
+    /// <param name="archived">
+    /// Which list this is. The two are disjoint - the saves page shows what the repo is using, the
+    /// Archive shows what it has put away - and everything below is identical either way.
+    /// </param>
     public static async Task<List<SavegameDto>> GetListAsync(
         ApplicationDbContext dbContext,
         RepoId repoId,
         DateTime now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool archived = false)
     {
-        var rows = await dbContext.Savegames.GetRowsAsync(repoId, cancellationToken);
+        var rows = await dbContext.Savegames.GetRowsAsync(repoId, cancellationToken, archived);
 
         if (rows.Count == 0)
         {
@@ -75,7 +80,8 @@ internal static class SavegameReads
                 row.ProfileId.Value,
                 row.Created,
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
-                checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names, now) : null))
+                checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names, now) : null,
+                row.ArchivedAt))
         ];
     }
 
@@ -114,7 +120,8 @@ internal static class SavegameReads
             savegame.ProfileId.Value,
             savegame.Created,
             head is null ? null : ToDto(savegame.RepoId, head, names),
-            checkout is null ? null : ToDto(checkout, names, now));
+            checkout is null ? null : ToDto(checkout, names, now),
+            savegame.ArchivedAt);
     }
 
     public static async Task<List<SavegameVersionDto>> ToDtosAsync(

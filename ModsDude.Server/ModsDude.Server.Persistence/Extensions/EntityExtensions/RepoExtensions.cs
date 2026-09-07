@@ -14,14 +14,19 @@ public static class RepoExtensions
         return [repoId];
     }
 
+    /// <summary>
+    /// Whether a live repo already answers to this name. Archived ones are ignored - an archived
+    /// repo gives up its name, which is what the filtered unique index enforces underneath.
+    /// </summary>
     public static Task<bool> CheckNameIsTaken(this DbSet<Repo> dbSet, RepoName name, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.Name == name, cancellationToken);
+        return dbSet.AnyAsync(x => x.ArchivedAt == null && x.Name == name, cancellationToken);
     }
 
+    /// <inheritdoc cref="CheckNameIsTaken(DbSet{Repo}, RepoName, CancellationToken)"/>
     public static Task<bool> CheckNameIsTaken(this DbSet<Repo> dbSet, RepoName name, RepoId except, CancellationToken cancellationToken)
     {
-        return dbSet.AnyAsync(x => x.Name == name && x.Id != except, cancellationToken);
+        return dbSet.AnyAsync(x => x.ArchivedAt == null && x.Name == name && x.Id != except, cancellationToken);
     }
 
     public static async Task<Repo?> GetAsync(this DbSet<Repo> dbSet, RepoId repoId, CancellationToken cancellationToken)

@@ -1,6 +1,6 @@
-﻿using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
+using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
@@ -12,20 +12,30 @@ using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
-public class DeleteRepoV1Endpoint : IEndpoint
+/// <summary>
+/// Brings an archived repo back, optionally under a new name.
+/// </summary>
+/// <remarks>
+/// Repo names are globally unique among live repos, so this is the one restore where the clash can
+/// come from somebody the caller has never met - a name freed by archiving is free for the whole
+/// server. That is the same trade the archive makes everywhere: the name is released immediately,
+/// and the cost lands here, where somebody is present to pick another.
+/// </remarks>
+public class RestoreRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapDelete("repo/{repoId:guid}", DeleteRepo)
+        return builder.MapPost("repos/{repoId:guid}/restore", Restore)
             .WithTags("Repos");
     }
 
 
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> DeleteRepo(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Restore(
         Guid repoId,
+        RestoreRequest? request,
         ClaimsPrincipal claimsPrincipal,
-        IUnitOfWork unitOfWork,
         ApplicationDbContext dbContext,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -43,22 +53,19 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        // Reached from the top-level Archive and nowhere else. A repo carries the group's whole
-        // catalog, every profile's history and every savegame, and none of it comes back.
-        if (repo.IsArchived is false)
+        RepoName? name = request?.Name is { Length: > 0 } requested
+            ? new RepoName(requested)
+            : null;
+
+        var wanted = name ?? repo.Name;
+
+        if (await dbContext.Repos.CheckNameIsTaken(wanted, repo.Id, cancellationToken))
         {
-            return TypedResults.BadRequest(Problems.NotArchived("Repo", repoId));
+            return TypedResults.BadRequest(Problems.NameTaken(wanted.Value));
         }
 
-        // The ModVersion -> Repo foreign key is Restrict, so deleting a repo that still has mods
-        // fails at the database with an unhandled exception. Refuse it here instead, with a problem
-        // the client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
-        if (await dbContext.ModVersions.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
-        {
-            return TypedResults.BadRequest(Problems.RepoNotEmpty(new RepoId(repoId)));
-        }
+        repo.Restore(name);
 
-        dbContext.Repos.Remove(repo);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();

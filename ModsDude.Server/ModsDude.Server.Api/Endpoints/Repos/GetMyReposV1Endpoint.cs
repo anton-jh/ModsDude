@@ -21,8 +21,11 @@ public class GetMyReposV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = httpContext.User.GetUserId();
+        // Live repos only. Archiving is repo state rather than membership state, so an archived repo
+        // leaves this list for everybody at once - see the top-level Archive.
         var reposQuery = dbContext.RepoMemberships
             .Where(x => x.UserId == userId)
+            .Where(x => dbContext.Repos.Any(repo => repo.Id == x.RepoId && repo.ArchivedAt == null))
             .Join(dbContext.Repos, mem => mem.RepoId, repo => repo.Id, (mem, repo) => new
             {
                 Repo = repo,

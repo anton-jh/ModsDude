@@ -263,6 +263,17 @@ public static class Problems
         Detail = $"Version {number.Value} is the current version of savegame '{savegameId.Value}'. Check in or restore another version first, or delete the whole savegame."
     };
 
+    /// <summary>
+    /// Permanent deletion is reached from the archive and nowhere else. Archiving first is what
+    /// makes it a second, deliberate act rather than a click away from a list somebody is browsing.
+    /// </summary>
+    public static CustomProblemDetails NotArchived(string what, Guid id) => new()
+    {
+        Type = ProblemType.NotArchived,
+        Title = "It has not been archived",
+        Detail = $"{what} '{id}' has to be archived before it can be permanently deleted."
+    };
+
     public static CustomProblemDetails BatchTooLarge(int size, int maximum) => new()
     {
         Type = ProblemType.BatchTooLarge,
@@ -449,6 +460,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "cannot-delete-head-savegame-version")]
         [JsonStringEnumMemberName(_typeBaseUri + "cannot-delete-head-savegame-version")]
         CannotDeleteHeadSavegameVersion,
+
+        [EnumMember(Value = _typeBaseUri + "not-archived")]
+        [JsonStringEnumMemberName(_typeBaseUri + "not-archived")]
+        NotArchived,
 
         [EnumMember(Value = _typeBaseUri + "batch-too-large")]
         [JsonStringEnumMemberName(_typeBaseUri + "batch-too-large")]

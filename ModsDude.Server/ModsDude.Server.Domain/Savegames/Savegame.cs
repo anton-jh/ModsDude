@@ -27,7 +27,7 @@ namespace ModsDude.Server.Domain.Savegames;
 /// read through its own set, and this row only ever says which version is current.
 /// </para>
 /// </remarks>
-public class Savegame
+public class Savegame : IArchivable
 {
     // ef
     private Savegame() { }
@@ -63,6 +63,36 @@ public class Savegame
     /// version, which happens in the same transaction that publishes it.
     /// </summary>
     public SavegameVersionNumber HeadVersion { get; private set; } = SavegameVersionNumber.None;
+
+    /// <inheritdoc cref="IArchivable.ArchivedAt"/>
+    public DateTime? ArchivedAt { get; private set; }
+
+    public bool IsArchived => ArchivedAt is not null;
+
+
+    /// <summary>
+    /// Puts the savegame away. Its versions and its claim log stay exactly as they were - archiving
+    /// a shared save must not quietly release somebody's hold on it. Idempotent, and it does not
+    /// restamp.
+    /// </summary>
+    public void Archive(DateTime now)
+    {
+        ArchivedAt ??= now;
+    }
+
+    /// <summary>
+    /// Brings it back, optionally under a new name - which is how a clash with a live savegame is
+    /// resolved, since an archived one gave up its name when it was archived.
+    /// </summary>
+    public void Restore(SavegameName? name = null)
+    {
+        if (name is SavegameName renamed)
+        {
+            Name = renamed;
+        }
+
+        ArchivedAt = null;
+    }
 
 
     /// <summary>

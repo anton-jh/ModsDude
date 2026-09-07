@@ -195,6 +195,12 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public Task<GetSavegameCheckoutsResponse> GetSavegameCheckoutsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+    public Task ArchiveSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    public Task RestoreSavegameV1Async(Guid repoId, Guid savegameId, RestoreRequest? request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    public Task<System.Collections.Generic.ICollection<SavegameDto>> GetArchivedSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
     public Task DeleteSavegameVersionV1Async(Guid repoId, Guid savegameId, int number, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task DeleteSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)

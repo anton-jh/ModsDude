@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
@@ -12,20 +12,36 @@ using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
-public class DeleteRepoV1Endpoint : IEndpoint
+/// <summary>
+/// Puts a repo away.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Repo state, not membership state.</b> There is no per-person version of this: archiving a repo
+/// takes it out of the list for every member at once, and it turns up in everybody's top-level
+/// Archive. A repo is the shared thing, so putting it away is a shared act.
+/// </para>
+/// <para>
+/// <b>The only way to make a repo go away.</b> Deleting one is refused until it is archived and
+/// emptied - a repo carries the group's entire catalog, every profile's history and every savegame,
+/// and none of that comes back.
+/// </para>
+/// </remarks>
+public class ArchiveRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapDelete("repo/{repoId:guid}", DeleteRepo)
+        return builder.MapPost("repos/{repoId:guid}/archive", Archive)
             .WithTags("Repos");
     }
 
 
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> DeleteRepo(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Archive(
         Guid repoId,
         ClaimsPrincipal claimsPrincipal,
-        IUnitOfWork unitOfWork,
         ApplicationDbContext dbContext,
+        ITimeService timeService,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -43,22 +59,8 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        // Reached from the top-level Archive and nowhere else. A repo carries the group's whole
-        // catalog, every profile's history and every savegame, and none of it comes back.
-        if (repo.IsArchived is false)
-        {
-            return TypedResults.BadRequest(Problems.NotArchived("Repo", repoId));
-        }
+        repo.Archive(timeService.Now());
 
-        // The ModVersion -> Repo foreign key is Restrict, so deleting a repo that still has mods
-        // fails at the database with an unhandled exception. Refuse it here instead, with a problem
-        // the client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
-        if (await dbContext.ModVersions.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
-        {
-            return TypedResults.BadRequest(Problems.RepoNotEmpty(new RepoId(repoId)));
-        }
-
-        dbContext.Repos.Remove(repo);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok();
