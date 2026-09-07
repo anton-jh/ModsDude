@@ -30,8 +30,9 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// archive a second kind of deletion wearing a gentler word.
 /// </para>
 /// <para>
-/// <b>Admin.</b> Making the group's shared work disappear from everybody's list is not part of
-/// running a repo, which is the same line permanent deletion and revision pruning sit on.
+/// <b>Member.</b> Curating the repo's profiles is what a Member is for, and archiving is reversible
+/// - it takes a profile out of a list and frees its name, and nothing else. The irreversible half,
+/// permanent deletion, is Admin.
 /// </para>
 /// </remarks>
 public class ArchiveProfileV1Endpoint : IEndpoint
@@ -53,7 +54,7 @@ public class ArchiveProfileV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {

@@ -40,7 +40,7 @@ public class RestoreSavegameV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {

@@ -17,11 +17,16 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// Brings an archived profile back into the repo's list, optionally under a new name.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>Member</b>, the same level as the archiving it undoes.
+/// </para>
+/// <para>
 /// <b>This is where a name clash is resolved.</b> An archived profile gave up its name the moment it
 /// was archived - several archived ones may share one, told apart by when they were put away - so
 /// the name it wants back may since have been taken. Refusing with <c>name-taken</c> and letting the
 /// caller supply another is the whole reason the clash was deferred to here: it is the only moment
 /// somebody is present to decide.
+/// </para>
 /// </remarks>
 public class RestoreProfileV1Endpoint : IEndpoint
 {
@@ -42,7 +47,7 @@ public class RestoreProfileV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {

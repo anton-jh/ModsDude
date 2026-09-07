@@ -70,7 +70,10 @@ public sealed class ShellNavigationService
             return false;
         }
 
-        return repoPage.TrySelectSavegames();
+        // The saves list for a live savegame, the Archive with the row picked out for an archived
+        // one - an archived savegame has no row on the saves list, and the archive row is the
+        // savegame.
+        return await repoPage.TrySelectSavegameAsync(savegameId);
     }
 
     /// <summary>

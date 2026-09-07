@@ -705,7 +705,9 @@ same moment both won; writing the archiving filter meant writing the index it fi
 | Action | Level |
 | --- | --- |
 | Read an archive | Guest — a profile that quietly vanished has to be explainable to whoever noticed |
-| Archive, restore, delete permanently | **Admin** — making the group's shared work disappear is not part of running a repo |
+| Archive or restore a **profile** or **savegame** | Member — curating a repo's profiles and saves is what a Member is for, and archiving is reversible |
+| Archive or restore a **repo** | **Admin** — it leaves every member's sidebar at once |
+| Delete permanently, all three | **Admin** — the irreversible half |
 
 **What still refuses a permanent delete** is unchanged and unrelated to archiving: a repo that holds
 mods (`repo-not-empty`), and a profile a savegame follows or was played on

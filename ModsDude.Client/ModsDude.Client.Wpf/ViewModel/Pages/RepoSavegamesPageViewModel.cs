@@ -291,7 +291,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private bool CanArchiveSelected() => CanPruneVersions && IsWorking is false && Selected is not null;
+    // Member, like publishing and checking in: archiving is reversible and is part of keeping the
+    // repo's saves tidy. CanPruneVersions is the Admin one, and gates deleting a version.
+    private bool CanArchiveSelected() => CanCheckOut && IsWorking is false && Selected is not null;
 
     /// <summary>
     /// Deletes the selected version from the savegame's history.

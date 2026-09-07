@@ -82,6 +82,9 @@ public partial class ArchivePageViewModel : PageViewModel
                     membership.Repo.Id,
                     membership.Repo.Name,
                     membership.Repo.ArchivedAt,
+                    // Both Admin for a repo: it is the one archived thing whose restore puts it back
+                    // into every member's sidebar.
+                    membership.MembershipLevel >= RepoMembershipLevel.Admin,
                     membership.MembershipLevel >= RepoMembershipLevel.Admin,
                     RestoreAsync,
                     DeleteAsync));

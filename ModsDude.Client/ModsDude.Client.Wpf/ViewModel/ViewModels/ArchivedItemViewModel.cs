@@ -13,13 +13,15 @@ public partial class ArchivedItemViewModel
         Guid id,
         string name,
         DateTime? archivedAt,
-        bool canManage,
+        bool canRestore,
+        bool canDelete,
         Func<ArchivedItemViewModel, Task> restore,
         Func<ArchivedItemViewModel, Task> delete)
     {
         Id = id;
         Name = name;
-        CanManage = canManage;
+        CanRestore = canRestore;
+        CanDelete = canDelete;
 
         _restore = restore;
         _delete = delete;
@@ -35,12 +37,25 @@ public partial class ArchivedItemViewModel
     public Guid Id { get; }
     public string Name { get; }
     public string ArchivedText { get; }
-    public bool CanManage { get; }
+    /// <summary>
+    /// Whether bringing it back is on offer. A lower bar than deleting, and deliberately: restoring
+    /// undoes an archive, and it is the same level as the archiving it undoes.
+    /// </summary>
+    public bool CanRestore { get; }
+
+    /// <summary>Whether losing it for good is on offer. Admin, everywhere, for all three kinds.</summary>
+    public bool CanDelete { get; }
+
+    /// <summary>
+    /// Whether a link picked this row out. Set once, when the page is opened by a link into
+    /// something archived; a later refresh clears it.
+    /// </summary>
+    public bool IsHighlighted { get; init; }
 
 
-    [RelayCommand(CanExecute = nameof(CanManage))]
+    [RelayCommand(CanExecute = nameof(CanRestore))]
     private Task Restore() => _restore(this);
 
-    [RelayCommand(CanExecute = nameof(CanManage))]
+    [RelayCommand(CanExecute = nameof(CanDelete))]
     private Task Delete() => _delete(this);
 }

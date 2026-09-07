@@ -608,9 +608,10 @@ a member of; `RepoArchivePage` under a repo lists its archived profiles and save
 page because they answer one question, and two pages called Archive under one repo would be two
 places to look.
 
-**Both are open to everybody; only Restore and Delete are Admin.** A profile that quietly vanished
-from the sidebar has to be explainable to whoever noticed, and hiding the archive would make "where
-did it go" a question only an admin could answer.
+**Both are open to everybody.** A profile that quietly vanished from the sidebar has to be
+explainable to whoever noticed, and hiding the archive would make "where did it go" a question only
+an admin could answer. Restoring a profile or savegame is Member - the same level as the archiving
+it undoes - while restoring a *repo* and deleting anything permanently are Admin.
 
 Every row carries **when it was archived**, and that is load-bearing rather than decorative:
 archived things do not hold their names, so several rows may be called the same thing.
@@ -618,6 +619,19 @@ archived things do not hold their names, so several rows may be called the same 
 **Restoring discovers a clash by trying, not by checking first.** A pre-check would be a second copy
 of a rule the server and its filtered index already own, and it would still be racing. `name-taken`
 comes back, `RenameModalViewModel` asks for another name, and the restore is retried once.
+
+**A link into something archived still lands on it.** `TrySelectProfileAsync` falls through to the
+archive: it fetches the archived profile and puts a transient entry in the sidebar under its own
+"From the archive" heading, so the profile's own pages open exactly as usual and a refused mod
+delete naming revision 12 can still show revision 12. The entry is dropped on the next navigation.
+It is deliberately **not** pushed into the profile list, which a synchronizer keeps - an entry that
+synchronizer never mapped is one it would never remove, and restoring the profile would leave two.
+
+A savegame has no page of its own, so `TrySelectSavegameAsync` takes the user to the list it is in:
+the saves page for a live one, the Archive with the row picked out for an archived one. Which list
+is asked of the server rather than guessed - the head-version cache would have been free, but it is
+populated as a side effect of the saves page having been visited, so on a fresh window every
+savegame would look archived.
 
 `Delete profile` and `Delete repo` are gone from the pages that had them — those buttons archive
 now. The one place a permanent delete exists is the archive, which is what makes it a second

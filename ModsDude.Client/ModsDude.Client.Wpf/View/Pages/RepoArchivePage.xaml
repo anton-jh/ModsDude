@@ -17,8 +17,20 @@
                     Margin="0 0 0 8"
                     CornerRadius="6"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                     Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <Border.Style>
+                    <!-- A link into something archived picks its row out, because the point of
+                         following one is finding the thing it named. -->
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter Property="BorderThickness" Value="2" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid ColumnDefinitions="* auto auto">
                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}"
@@ -39,7 +51,7 @@
                             VerticalAlignment="Center"
                             Content="Restore"
                             ToolTip="Brings it back into the repo. You will be asked for another name if this one has been taken since."
-                            Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding RestoreCommand}" />
 
                     <Button Grid.Column="2"
@@ -47,7 +59,7 @@
                             VerticalAlignment="Center"
                             Content="Delete for good"
                             ToolTip="Permanent. This is the only place it can be done from."
-                            Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Visibility="{Binding CanDelete, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding DeleteCommand}" />
                 </Grid>
             </Border>

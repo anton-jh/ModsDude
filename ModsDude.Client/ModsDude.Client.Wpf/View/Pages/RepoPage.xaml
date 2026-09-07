@@ -13,7 +13,7 @@
 
     <Grid ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
+        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto auto auto">
 
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
@@ -27,9 +27,21 @@
                       Style="{StaticResource SidebarList}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-            <uc:SidebarHeader Grid.Row="3" Title="Game instances" Command="" ActionIcon="&#xE72C;" />
+            <!-- At most one row, and only while a link into an archived profile is being followed.
+                 Under its own heading so it reads as reached through the archive rather than as
+                 back in the list above; it goes away on the next navigation. -->
+            <uc:SidebarHeader Grid.Row="3" Title="From the archive" Command="" ActionIcon=""
+                              Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
 
             <ListView Grid.Row="4"
+                      Style="{StaticResource SidebarList}"
+                      ItemsSource="{Binding Path=ArchivedProfiles}"
+                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                      Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+            <uc:SidebarHeader Grid.Row="5" Title="Game instances" Command="" ActionIcon="&#xE72C;" />
+
+            <ListView Grid.Row="6"
                       Style="{StaticResource SidebarList}"
                       ItemsSource="{Binding Path=Instances}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />

@@ -195,7 +195,7 @@
                                         Content="Archive"
                                         ToolTip="Moves it to the repo's Archive. Nothing about the save changes and it can be brought back."
                                         Command="{Binding ArchiveSavegameCommand}"
-                                        Visibility="{Binding CanPruneVersions, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Grid>
 

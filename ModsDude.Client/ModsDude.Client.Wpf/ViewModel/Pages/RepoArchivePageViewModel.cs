@@ -42,6 +42,8 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
     private readonly CancellationTokenSource _lifetime = new();
 
+    private Guid? _highlightOnce;
+
 
     public RepoArchivePageViewModel(
         Repo repo,
@@ -58,18 +60,32 @@ public partial class RepoArchivePageViewModel : PageViewModel
         _modalService = modalService;
         _errorReporter = errorReporter;
 
-        // Admin, like archiving itself: moving the group's shared work in or out of the archive is
-        // not part of running a repo.
-        CanManage = repo.MembershipLevel >= RepoMembershipLevel.Admin;
+        // Restoring is the same level as the archiving it undoes - curating the repo's profiles and
+        // saves is what a Member is for. Losing one for good is not.
+        CanRestore = repo.MembershipLevel >= RepoMembershipLevel.Member;
+        CanDelete = repo.MembershipLevel >= RepoMembershipLevel.Admin;
 
         RepoName = repo.Name;
     }
 
 
+    /// <summary>
+    /// Which row a link asked to be shown, used once and then forgotten.
+    /// </summary>
+    /// <remarks>
+    /// A link into an archived savegame lands here rather than on the saves list, because an
+    /// archived savegame has no row there - the archive row <em>is</em> the savegame, so picking it
+    /// out is what "take them to it" means for one.
+    /// </remarks>
+    public void HighlightOnArrival(Guid? id) => _highlightOnce = id;
+
     public string RepoName { get; }
 
-    /// <summary>Whether Restore and Delete are offered. Reading the archive is open to everybody.</summary>
-    public bool CanManage { get; }
+    /// <summary>Whether Restore is offered. Reading the archive is open to everybody.</summary>
+    public bool CanRestore { get; }
+
+    /// <summary>Whether permanent deletion is offered.</summary>
+    public bool CanDelete { get; }
 
     public ObservableCollection<ArchivedItemViewModel> Profiles { get; } = [];
     public ObservableCollection<ArchivedItemViewModel> Savegames { get; } = [];
@@ -117,14 +133,23 @@ public partial class RepoArchivePageViewModel : PageViewModel
             foreach (var profile in profiles)
             {
                 Profiles.Add(new ArchivedItemViewModel(
-                    profile.Id, profile.Name, profile.ArchivedAt, CanManage, RestoreProfileAsync, DeleteProfileAsync));
+                    profile.Id, profile.Name, profile.ArchivedAt, CanRestore, CanDelete, RestoreProfileAsync, DeleteProfileAsync)
+                {
+                    IsHighlighted = profile.Id == _highlightOnce
+                });
             }
 
             foreach (var savegame in savegames)
             {
                 Savegames.Add(new ArchivedItemViewModel(
-                    savegame.Id, savegame.Name, savegame.ArchivedAt, CanManage, RestoreSavegameAsync, DeleteSavegameAsync));
+                    savegame.Id, savegame.Name, savegame.ArchivedAt, CanRestore, CanDelete, RestoreSavegameAsync, DeleteSavegameAsync)
+                {
+                    IsHighlighted = savegame.Id == _highlightOnce
+                });
             }
+
+            // Used once: a refresh later should not keep re-pointing at where somebody arrived.
+            _highlightOnce = null;
 
             Notify();
         }

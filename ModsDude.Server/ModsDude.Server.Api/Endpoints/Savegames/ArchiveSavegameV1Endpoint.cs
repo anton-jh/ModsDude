@@ -23,6 +23,10 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// act, taken from the archive.
 /// </para>
 /// <para>
+/// <b>Member</b>, like publishing and checking in - archiving is reversible and is part of keeping a
+/// repo's saves tidy. Permanently deleting one is Admin.
+/// </para>
+/// <para>
 /// <b>The claim log is left exactly as it was.</b> Archiving a save somebody is holding must not
 /// quietly release their hold on it - if they finish playing and check in, the version should land
 /// on the savegame they took, archived or not. Only visibility and the name change.
@@ -47,7 +51,7 @@ public class ArchiveSavegameV1Endpoint : IEndpoint
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
+                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {

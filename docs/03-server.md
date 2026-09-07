@@ -468,8 +468,8 @@ everybody.
 | GET | `repos/{repoId}/profile/{profileId}` | Guest | |
 | POST | `repos/{repoId}/profiles` | Member | `CopyFrom` branches a revision of another profile off into this one |
 | PUT | `repos/{repoId}/profiles/{profileId}` | Member | Rename |
-| POST | `repos/{repoId}/profiles/{profileId}/archive` | **Admin** | Puts it away. The only way a profile goes away |
-| POST | `repos/{repoId}/profiles/{profileId}/restore` | **Admin** | Brings it back. `{ name? }` resolves a clash |
+| POST | `repos/{repoId}/profiles/{profileId}/archive` | Member | Puts it away. The only way a profile goes away |
+| POST | `repos/{repoId}/profiles/{profileId}/restore` | Member | Brings it back. `{ name? }` resolves a clash |
 | GET | `repos/{repoId}/profiles/archived` | Guest | What the repo's Archive page lists |
 | DELETE | `repos/{repoId}/profiles/{profileId}` | **Admin** | Permanent, and refused unless archived. Takes the whole history with it |
 | GET | `repos/{repoId}/profiles/{profileId}/revisions` | Guest | The history, newest first, windowed by `skip`/`limit` |
@@ -566,8 +566,8 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 | GET | `repos/{repoId}/savegames` | Guest | Each carries its head version and its open claim inline. Four queries flat, not one per row |
 | POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher |
 | PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename, or move to another profile |
-| POST | `repos/{repoId}/savegames/{savegameId}/archive` | **Admin** | Puts it away, keeping its versions and its claim log |
-| POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | **Admin** | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *version* back |
+| POST | `repos/{repoId}/savegames/{savegameId}/archive` | Member | Puts it away, keeping its versions and its claim log |
+| POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | Member | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *version* back |
 | GET | `repos/{repoId}/savegames/archived` | Guest | The archived half of the same list |
 | DELETE | `repos/{repoId}/savegames/{savegameId}` | **Admin** | Permanent, and refused unless archived |
 | DELETE | `repos/{repoId}/savegames/{savegameId}/versions/{number}` | **Admin** | Deletes one version. Refuses the head. Rows only - the blobs go to the reclamation sweep |
