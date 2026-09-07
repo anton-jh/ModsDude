@@ -9,7 +9,6 @@ using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
@@ -50,6 +49,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly ShellNavigationService _shellNavigation;
     private readonly IDialogService _dialogService;
     private readonly IModsClient _modsClient;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private readonly CancellationTokenSource _cancellation = new();
     private readonly ModRowActions _rowActions;
@@ -90,8 +90,10 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         ShellNavigationService shellNavigation,
         IDialogService dialogService,
-        IModsClient modsClient)
+        IModsClient modsClient,
+        IBackgroundTaskReporter backgroundTasks)
     {
+        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _itemFactory = itemFactory;
         _importService = importService;
@@ -492,11 +494,16 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         ImportSummary = null;
         IsImporting = true;
 
+        using var task = _backgroundTasks.Begin(
+            rows.Count == 1
+                ? $"Importing 1 mod into '{RepoName}'"
+                : $"Importing {rows.Count} mods into '{RepoName}'");
+
         try
         {
             var request = new ModImportRequest(_repo.Id, [.. pending.Select(x => x.Mod)], _repo.Adapter.VersionComparer)
             {
-                Progress = new RowProgressReporter(rows),
+                Progress = new ModImportRowProgress(rows, task),
                 ResolveArbitration = ResolveArbitrationAsync,
                 ResolveSourceConflicts = ResolveSourceConflictsAsync
             };
@@ -1158,47 +1165,6 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         RepoCount = _repoMods.Count(PassesRepo);
 
         QueuedCount = _repoMods.Count(IsPending);
-    }
-
-
-    /// <summary>
-    /// Per row, not per import: at two thousand mods a single global spinner cannot tell a working
-    /// import from a hung one.
-    /// </summary>
-    /// <remarks>
-    /// Byte counts arrive thousands of times per file, on whatever thread is doing the upload, so
-    /// anything finer than a whole percent is redraw nobody can see. WPF marshals the property
-    /// changes themselves, which is why this does not dispatch.
-    /// </remarks>
-    private sealed class RowProgressReporter(IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows)
-        : IProgress<ModImportProgress>
-    {
-        private readonly ConcurrentDictionary<ModVersionIdentity, int> _lastPercent = new();
-
-
-        public void Report(ModImportProgress value)
-        {
-            if (rows.TryGetValue(value.Identity, out var row) is false)
-            {
-                return;
-            }
-
-            if (value.Phase is ModImportPhase.Uploading && row.IsUploading)
-            {
-                var percent = value.TotalBytes > 0
-                    ? (int)(value.BytesTransferred * 100 / value.TotalBytes)
-                    : 0;
-
-                if (_lastPercent.TryGetValue(value.Identity, out var last) && last == percent)
-                {
-                    return;
-                }
-
-                _lastPercent[value.Identity] = percent;
-            }
-
-            row.Apply(value);
-        }
     }
 
 

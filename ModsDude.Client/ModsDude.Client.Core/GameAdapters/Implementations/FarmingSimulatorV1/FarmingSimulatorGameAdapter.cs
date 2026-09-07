@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using System.Reflection;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
@@ -77,6 +78,28 @@ public class FarmingSimulatorBaseGameAdapter(
         { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
         null => throw new InvalidOperationException("Base settings without a game version cannot produce an instance scope.")
     });
+
+    /// <summary>
+    /// The particular game rather than the adapter, so a sidebar grouping repos by game puts the FS22
+    /// ones somewhere other than the FS25 ones - which is the same distinction <see cref="Scope"/>
+    /// makes and has to agree with.
+    /// </summary>
+    /// <remarks>
+    /// Read off the enum member's own <see cref="TitleAttribute"/>, which is what the base settings
+    /// form already labels the choice with, so the heading reads as whatever the user picked when the
+    /// repo was created. A version this adapter has no title for falls back to the adapter's name,
+    /// which is a heading rather than a crash.
+    /// </remarks>
+    public string GameDisplayName => BaseSettings.GameVersion is FarmingSimulatorGameVersion version
+        ? EnumTitle(version) ?? DisplayName
+        : DisplayName;
+
+
+    private static string? EnumTitle(FarmingSimulatorGameVersion version)
+        => typeof(FarmingSimulatorGameVersion)
+            .GetField(version.ToString())
+            ?.GetCustomAttribute<TitleAttribute>()
+            ?.Text;
 
 
     public DynamicForm DeserializeInstanceSettings(string serializedInstanceSettings)

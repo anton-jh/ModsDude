@@ -19,8 +19,11 @@ public partial class MainWindowViewModel
         IFactory<MainPageViewModel> mainPageViewModelFactory,
         IEnumerable<IUserScopedState> userScopedState,
         DriftNotificationViewModel driftNotification,
-        BackgroundProblemViewModel backgroundProblems)
+        BackgroundProblemViewModel backgroundProblems,
+        BackgroundTaskViewModel backgroundTasks)
     {
+        BackgroundTasks = backgroundTasks;
+
         _mainPageViewModelFactory = mainPageViewModelFactory;
         _userScopedState = userScopedState.ToList();
 
@@ -44,6 +47,13 @@ public partial class MainWindowViewModel
     /// and the user is entitled to know it did.
     /// </summary>
     public BackgroundProblemViewModel BackgroundProblems { get; }
+
+    /// <summary>
+    /// Along the top edge, and about the present rather than the past: what is running right now. It
+    /// outlives the page that started the work, which is the whole reason it is here rather than on
+    /// the page - an import survives navigating away from the list that queued it.
+    /// </summary>
+    public BackgroundTaskViewModel BackgroundTasks { get; }
 
 
     [ObservableProperty]

@@ -159,22 +159,9 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
             return [];
         }
 
-        // Names for the bindings this machine holds. A slot saying "'Big Valley' has been played here"
-        // rather than naming a folder is the whole point, and the name lives on the server.
-        var names = new Dictionary<Guid, string>();
-
-        try
-        {
-            foreach (var savegame in await _savegamesClient.GetSavegamesV1Async(_repo.Id, cancellationToken))
-            {
-                names[savegame.Id] = savegame.Name;
-            }
-        }
-        catch (ApiException)
-        {
-            // Absorbed: a slot that can only say "a checked-out savegame" is still a slot with the
-            // right actions on it.
-        }
+        // Names for the bindings this machine holds, and - the same read, one extra question - whether
+        // the repo still has each of them at all.
+        var known = await ReadKnownSavegamesAsync(cancellationToken);
 
         try
         {
@@ -190,7 +177,8 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
                     slot,
                     availability,
                     binding?.SavegameId,
-                    binding is SavegameCheckoutBinding held && names.TryGetValue(held.SavegameId, out var name) ? name : null,
+                    binding is SavegameCheckoutBinding held ? known.NameOf(held.SavegameId) : null,
+                    binding is SavegameCheckoutBinding bound ? known.StandingOf(bound.SavegameId) : SavegameBindingStanding.None,
                     CanPublish && ActiveProfileName is not null,
                     CanPublish));
             }
@@ -209,6 +197,54 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// Every savegame the repo has, live and archived, so a binding can be told from a binding whose
+    /// savegame is gone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two lists, because archived is not deleted.</b> Archiving a savegame takes it out of the
+    /// repo's list and deliberately does <em>not</em> release anybody's hold on it, so a slot holding
+    /// an archived save is still holding a real thing and still checks in. Only a savegame in neither
+    /// list has actually gone, and that is the case the row had no answer for: it went on reporting
+    /// "checked out to you" against a savegame the server would answer 404 for, with Check in and
+    /// Discard both leading straight to that 404.
+    /// </para>
+    /// <para>
+    /// <b>A failed read is Unknown, never Gone.</b> The row for a savegame declared gone offers to
+    /// forget it, so guessing that from a dropped connection would offer to throw away the only record
+    /// of which save is in a slot. Absorbed the way it always was, and the row simply keeps the
+    /// wording it had.
+    /// </para>
+    /// </remarks>
+    private async Task<KnownSavegames> ReadKnownSavegamesAsync(CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<Guid, string>();
+        var archived = new HashSet<Guid>();
+
+        try
+        {
+            foreach (var savegame in await _savegamesClient.GetSavegamesV1Async(_repo.Id, cancellationToken))
+            {
+                names[savegame.Id] = savegame.Name;
+            }
+
+            foreach (var savegame in await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, cancellationToken))
+            {
+                names[savegame.Id] = savegame.Name;
+                archived.Add(savegame.Id);
+            }
+        }
+        catch (ApiException)
+        {
+            // Either read failing means nothing here can be trusted to say a savegame is missing, so
+            // the whole answer is unknown rather than the half that arrived.
+            return KnownSavegames.Unreadable;
+        }
+
+        return new KnownSavegames(names, archived);
+    }
+
     private void Publish(IReadOnlyList<SavegameSlotRowViewModel> rows)
     {
         ClearRows();
@@ -218,6 +254,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
             row.PublishRequested += OnPublishRequested;
             row.CheckInRequested += OnCheckInRequested;
             row.DiscardRequested += OnDiscardRequested;
+            row.DisconnectRequested += OnDisconnectRequested;
 
             Slots.Add(row);
         }
@@ -236,6 +273,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
             row.PublishRequested -= OnPublishRequested;
             row.CheckInRequested -= OnCheckInRequested;
             row.DiscardRequested -= OnDiscardRequested;
+            row.DisconnectRequested -= OnDisconnectRequested;
         }
 
         Slots.Clear();
@@ -355,6 +393,43 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
+    /// Cuts the local tie and leaves the save alone.
+    /// </summary>
+    /// <remarks>
+    /// The only action a row whose savegame has been deleted still has, and a way out of a checkout
+    /// for one whose savegame is fine - see <c>SavegameFlowService.DisconnectAsync</c>, which is where
+    /// the two are told apart in the wording.
+    /// </remarks>
+    private async void OnDisconnectRequested(object? sender, EventArgs e)
+    {
+        if (sender is not SavegameSlotRowViewModel row || row.SavegameId is not Guid savegameId)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var disconnected = await _flowService.DisconnectAsync(
+                _instance,
+                savegameId,
+                row.SavegameName ?? "that savegame",
+                row.Label,
+                // Unknown counts as still there. The wording it produces warns about a claim that may
+                // not exist, which is the harmless way round to be wrong.
+                stillInRepo: row.Standing is not SavegameBindingStanding.Gone);
+
+            if (disconnected is false)
+            {
+                return;
+            }
+
+            Status = $"ModsDude has let go of '{row.Label}'. Nothing on disk changed - it is an ordinary save of your own now.";
+
+            await ReloadAsync();
+        });
+    }
+
+    /// <summary>
     /// The rows raise plain events rather than running commands, so a failure has no command to carry
     /// it to the global handler and has to reach the user from here.
     /// </summary>
@@ -379,5 +454,40 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     {
         public InstanceSavegamesPageViewModel Create(Repo repo, LocalInstance instance)
             => ActivatorUtilities.CreateInstance<InstanceSavegamesPageViewModel>(serviceProvider, repo, instance);
+    }
+
+
+    /// <param name="Readable">
+    /// Whether the repo answered at all. False makes every question about a savegame
+    /// <see cref="SavegameBindingStanding.Unknown"/>, which is the answer that changes nothing about
+    /// a row - see <see cref="ReadKnownSavegamesAsync"/>.
+    /// </param>
+    private sealed record KnownSavegames(
+        IReadOnlyDictionary<Guid, string> Names,
+        IReadOnlySet<Guid> Archived,
+        bool Readable = true)
+    {
+        public static KnownSavegames Unreadable { get; } =
+            new(new Dictionary<Guid, string>(), new HashSet<Guid>(), Readable: false);
+
+
+        public string? NameOf(Guid savegameId) => Names.GetValueOrDefault(savegameId);
+
+        public SavegameBindingStanding StandingOf(Guid savegameId)
+        {
+            if (Readable is false)
+            {
+                return SavegameBindingStanding.Unknown;
+            }
+
+            if (Archived.Contains(savegameId))
+            {
+                return SavegameBindingStanding.Archived;
+            }
+
+            return Names.ContainsKey(savegameId)
+                ? SavegameBindingStanding.Live
+                : SavegameBindingStanding.Gone;
+        }
     }
 }

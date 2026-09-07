@@ -38,10 +38,13 @@
                                Margin="0 32 0 24" />
                 </Grid>
 
-                <TextBlock Text="{Binding Message}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           TextWrapping="Wrap"
-                           Margin="0 0 0 16" />
+                <!-- Selectable, like the details below it. Somebody about to report a failure should
+                     never have to retype what it said, and the Copy button in the footer is the one
+                     click version of the same thing rather than the only way to get at it. -->
+                <TextBox Text="{Binding Message, Mode=OneWay}"
+                         Style="{StaticResource SelectableText}"
+                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                         Margin="0 0 0 16" />
 
                 <!-- The developer's half, kept visually secondary and scrollable: an exception
                      message can be a paragraph, and it must not push the button off the dialog. -->
@@ -51,10 +54,10 @@
                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                         Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}">
                     <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
-                        <TextBlock Text="{Binding Details}"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   TextWrapping="Wrap"
-                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                        <TextBox Text="{Binding Details, Mode=OneWay}"
+                                 Style="{StaticResource SelectableText}"
+                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                 FontSize="12" />
                     </ScrollViewer>
                 </Border>
 
@@ -82,13 +85,23 @@
                         </TextBlock>
                     </StackPanel>
 
-                    <Button Grid.Column="1"
-                            MinWidth="120"
-                            Margin="16 0 0 0"
-                            VerticalAlignment="Center"
-                            Style="{DynamicResource AccentButtonStyle}"
-                            Content="Day: ruined"
-                            Command="{Binding DismissCommand}" />
+                    <!-- Copy sits beside the way out rather than in the body: it is about the dialog
+                         as a whole - the message, the details and the timestamp - and not about
+                         either block of text on its own. -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+
+                        <Button MinWidth="100"
+                                Margin="16 0 0 0"
+                                Content="Copy"
+                                ToolTip="Puts the message, the details and the timestamp on the clipboard."
+                                Command="{Binding CopyCommand}" />
+
+                        <Button MinWidth="120"
+                                Margin="8 0 0 0"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Day: ruined"
+                                Command="{Binding DismissCommand}" />
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>

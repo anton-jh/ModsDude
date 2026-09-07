@@ -11,7 +11,6 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -69,7 +68,29 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly DriftNotificationViewModel _driftNotification;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly ActiveProfile _activeProfile;
+
+    /// <summary>
+    /// Whether the repo's own registered versions are in the left list. On, like a source that is
+    /// always available, and switched off from the same checkbox list the folders use.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A filter over the catalog, never a change to it.</b> The pinned rows and every row's version
+    /// selector are built from the same snapshot, and a profile pins registered versions - so dropping
+    /// them from the catalog would turn every pinned row into an unresolvable placeholder. It is the
+    /// left list's <em>view</em> that hides them, which is why unticking this is instant and costs no
+    /// round trip.
+    /// </para>
+    /// <para>
+    /// <b>What it is for</b> is the question the left list could not answer: with the repo off and a
+    /// folder on, what is left is exactly the mods on this computer that this repo has never
+    /// registered - which is the set somebody adding new things to a profile is looking for, and which
+    /// was previously buried among a few thousand rows the repo already had.
+    /// </para>
+    /// </remarks>
+    private bool _includeRegistered = true;
 
     private readonly CancellationTokenSource _cancellation = new();
 
@@ -139,8 +160,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         LocalInstanceRepository localInstanceRepository,
         ProfileApplyService applyService,
         InstanceDriftMonitor driftMonitor,
-        DriftNotificationViewModel driftNotification)
+        DriftNotificationViewModel driftNotification,
+        IBackgroundTaskReporter backgroundTasks)
     {
+        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _profile = profile;
         _itemFactory = itemFactory;
@@ -682,6 +705,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             {
                 ApplyStatus = "Saved without applying. Your installed mods are untouched.";
             }
+
+            // Unconditionally, and after both branches. A save mints a revision, and every folder
+            // built against the previous one is drifted from this moment - including when the save
+            // did not apply, which is precisely the case where the drift is real and nothing else
+            // would have looked. Without this the notice waited for the next window activation, so
+            // somebody who saved and went straight back to the game never saw it.
+            await _driftMonitor.CheckAsync();
         }
         catch (OperationCanceledException)
         {
@@ -864,12 +894,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             item.ResetImportState();
         }
 
+        using var task = _backgroundTasks.Begin(
+            rows.Count == 1
+                ? $"Importing 1 mod into '{_repo.Name}'"
+                : $"Importing {rows.Count} mods into '{_repo.Name}'");
+
         var request = new ModImportRequest(
             _repo.Id,
             [.. pending.Select(x => x.SelectedVersion.Version)],
             _repo.Adapter.VersionComparer)
         {
-            Progress = new RowProgressReporter(rows),
+            Progress = new ModImportRowProgress(rows, task),
             ResolveArbitration = ResolveArbitrationAsync,
             ResolveSourceConflicts = ResolveSourceConflictsAsync
         };
@@ -1287,6 +1322,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             var dependencies = modList.Dependencies;
             Sources.Clear();
 
+            // The repo leads the list because it is the one that is on to begin with, and because the
+            // folders below it are the things it is being contrasted against.
+            Sources.Add(new ModSourceViewModel(
+                new ModSourceStatus(
+                    new ModSource(ModSourceId.Repo, _repo.Name, "Everything this repo has registered", ModSourceKind.Repo),
+                    _includeRegistered,
+                    snapshot.Versions.Count(x => x.IsOnServer),
+                    null),
+                OnSourceEnabledChanged));
+
             foreach (var status in snapshot.Sources)
             {
                 Sources.Add(new ModSourceViewModel(status, OnSourceEnabledChanged));
@@ -1447,7 +1492,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         => Pinned.FirstOrDefault(x => x.ModId == modId);
 
     private bool Passes(ModListItemViewModel mod)
-        => mod.Matches(SearchText) && _pinnedIds.Contains(mod.Mod.ModId) is false;
+        => mod.Matches(SearchText)
+        && _pinnedIds.Contains(mod.Mod.ModId) is false
+        && (_includeRegistered || mod.Mod.IsOnServer is false);
 
     /// <summary>
     /// The left list's order: what this draft has taken out of the profile first, then alphabetical.
@@ -1497,6 +1544,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
     {
+        // The repo is a filter over what the catalog already holds rather than somewhere to look, so
+        // it never reaches the catalog and never costs a reload - see _includeRegistered.
+        if (source.IsRepo)
+        {
+            _includeRegistered = enabled;
+
+            AvailableView?.Refresh();
+            RecountAvailable();
+
+            return;
+        }
+
         _catalog.SetEnabled(source.Source, enabled);
 
         // Recomposes from the scans already in memory, so this is instant for a source that has been
@@ -1539,9 +1598,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// What the left list is showing, and how much of that the profile has never held - the two the
     /// bulk buttons are counted against, and they part company as soon as something is taken out.
     /// </summary>
+    /// <remarks>
+    /// The total counts what the <em>sources</em> hold and the search does not: "42 of 900" is how
+    /// much a search is hiding, and switching a source off is not a search - it changes what the list
+    /// is of. The repo counts as a source here for exactly that reason, which is why unticking it
+    /// moves both numbers rather than only the first.
+    /// </remarks>
     private void RecountAvailable()
     {
-        AvailableTotal = _available.Count(x => _pinnedIds.Contains(x.Mod.ModId) is false);
+        AvailableTotal = _available.Count(x =>
+            _pinnedIds.Contains(x.Mod.ModId) is false
+            && (_includeRegistered || x.Mod.IsOnServer is false));
+
         AvailableCount = _available.Count(Passes);
         NewCount = _available.Count(x => Passes(x) && IsPendingRemoval(x) is false);
     }
@@ -1600,46 +1668,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         else
         {
             _navigationLock.ReleaseLock(this);
-        }
-    }
-
-
-    /// <summary>
-    /// Per row, not per save: an import of a few hundred mods needs to say which of them is moving.
-    /// </summary>
-    /// <remarks>
-    /// Byte counts arrive thousands of times per file, on whatever thread is doing the upload, so
-    /// anything finer than a whole percent is redraw nobody can see. WPF marshals the property
-    /// changes themselves, which is why this does not dispatch.
-    /// </remarks>
-    private sealed class RowProgressReporter(IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows)
-        : IProgress<ModImportProgress>
-    {
-        private readonly ConcurrentDictionary<ModVersionIdentity, int> _lastPercent = new();
-
-
-        public void Report(ModImportProgress value)
-        {
-            if (rows.TryGetValue(value.Identity, out var row) is false)
-            {
-                return;
-            }
-
-            if (value.Phase is ModImportPhase.Uploading && row.IsUploading)
-            {
-                var percent = value.TotalBytes > 0
-                    ? (int)(value.BytesTransferred * 100 / value.TotalBytes)
-                    : 0;
-
-                if (_lastPercent.TryGetValue(value.Identity, out var last) && last == percent)
-                {
-                    return;
-                }
-
-                _lastPercent[value.Identity] = percent;
-            }
-
-            row.Apply(value);
         }
     }
 

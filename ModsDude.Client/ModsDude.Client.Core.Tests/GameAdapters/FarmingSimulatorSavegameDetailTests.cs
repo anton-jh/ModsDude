@@ -136,6 +136,32 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
         Assert.Equal("Yes, 4 players have joined", Detail(SavegameDetail.Ids.Multiplayer)?.Value);
     }
 
+    /// <summary>
+    /// Four people on one farm and four people on four farms are different evenings, and it is also
+    /// what says which farm the balance belongs to.
+    /// </summary>
+    [Fact]
+    public void Players_spread_over_several_farms_say_so()
+    {
+        WriteCareer(RealCareerFile);
+        WriteFarms("""
+            <farms>
+                <farm farmId="1" name="Mine" money="1">
+                    <players>
+                        <player uniqueUserId="a" lastNickname="anton" />
+                    </players>
+                </farm>
+                <farm farmId="2" name="Theirs" money="2">
+                    <players>
+                        <player uniqueUserId="b" lastNickname="adamt" />
+                    </players>
+                </farm>
+            </farms>
+            """);
+
+        Assert.Equal("Yes, 2 players have joined across 2 farms", Detail(SavegameDetail.Ids.Multiplayer)?.Value);
+    }
+
     [Fact]
     public void One_player_reads_as_singleplayer()
     {
@@ -189,15 +215,113 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
     /// The order is the adapter's judgment about what matters, and the row shows a prefix of it - so
     /// it is a fact worth pinning rather than an accident of how the file is laid out.
     /// </summary>
+    /// <remarks>
+    /// Money is in that prefix deliberately: where and how much are what tell two saves of the same
+    /// map apart, and it used to sit fifth, which is off the row and into the tooltip.
+    /// </remarks>
     [Fact]
-    public void Where_and_when_are_said_before_anything_else()
+    public void Where_how_much_and_when_are_said_before_anything_else()
+    {
+        WriteCareer(RealCareerFile);
+        WriteFarms(RealFarmsFile);
+
+        Assert.Equal(
+            [SavegameDetail.Ids.Map, SavegameDetail.Ids.Money, SavegameDetail.Ids.LastPlayed],
+            Read().Details.Take(3).Select(x => x.Id));
+    }
+
+
+    #region Money
+
+    /// <summary>
+    /// The bug this replaced: money is a property of a farm and lives in farms.xml, so a save that
+    /// carried nothing under &lt;statistics&gt; reported no balance at all.
+    /// </summary>
+    [Fact]
+    public void Money_comes_from_the_farm_rather_than_the_career_file()
+    {
+        WriteCareer(CareerFile());
+        WriteFarms("""
+            <farms>
+                <farm farmId="1" name="Solo" money="1234567" />
+            </farms>
+            """);
+
+        Assert.Equal(1234567d.ToString("N0"), Detail(SavegameDetail.Ids.Money)?.Value);
+    }
+
+    /// <summary>Older saves in the series kept it there, and a balance is a balance.</summary>
+    [Fact]
+    public void A_save_with_no_farms_file_falls_back_to_the_career_files_statistics()
     {
         WriteCareer(RealCareerFile);
 
-        Assert.Equal(
-            [SavegameDetail.Ids.Map, SavegameDetail.Ids.LastPlayed, SavegameDetail.Ids.Started],
-            Read().Details.Take(3).Select(x => x.Id));
+        Assert.Equal(284067d.ToString("N0"), Detail(SavegameDetail.Ids.Money)?.Value);
     }
+
+    /// <summary>The farms file is the current answer, so it wins where both are there.</summary>
+    [Fact]
+    public void The_farm_wins_over_the_career_files_statistics()
+    {
+        WriteCareer(RealCareerFile);
+        WriteFarms("""
+            <farms>
+                <farm farmId="1" name="Solo" money="999" />
+            </farms>
+            """);
+
+        Assert.Equal(999d.ToString("N0"), Detail(SavegameDetail.Ids.Money)?.Value);
+    }
+
+    /// <summary>
+    /// Multiplayer has no single balance, so the first real farm's is what is shown - and it says
+    /// which farm that is, because otherwise the number is unattributable.
+    /// </summary>
+    [Fact]
+    public void With_several_farms_the_first_ones_balance_is_shown_and_named()
+    {
+        WriteCareer(CareerFile());
+        WriteFarms("""
+            <farms>
+                <farm farmId="2" name="Second" money="222" />
+                <farm farmId="1" name="First" money="111" />
+            </farms>
+            """);
+
+        Assert.Equal($"{111d:N0} (First)", Detail(SavegameDetail.Ids.Money)?.Value);
+    }
+
+    /// <summary>Farm 0 is the shop. It exists in every save and is nobody's farm.</summary>
+    [Fact]
+    public void The_shop_farm_is_not_the_first_farm()
+    {
+        WriteCareer(CareerFile());
+        WriteFarms("""
+            <farms>
+                <farm farmId="0" name="-" money="0" />
+                <farm farmId="1" name="Mine" money="5000" />
+            </farms>
+            """);
+
+        Assert.Equal(5000d.ToString("N0"), Detail(SavegameDetail.Ids.Money)?.Value);
+    }
+
+    /// <summary>A farm with no balance recorded is not a balance of nothing.</summary>
+    [Fact]
+    public void A_farm_with_no_money_attribute_falls_through_to_the_next_one()
+    {
+        WriteCareer(CareerFile());
+        WriteFarms("""
+            <farms>
+                <farm farmId="1" name="Unfinanced" />
+                <farm farmId="2" name="Second" money="42" />
+            </farms>
+            """);
+
+        Assert.Equal($"{42d:N0} (Second)", Detail(SavegameDetail.Ids.Money)?.Value);
+    }
+
+    #endregion
 
 
     private SavegameDetail? Detail(string id)

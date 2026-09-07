@@ -71,6 +71,18 @@ public sealed class StateStoreInstanceState(StateStore store) : IPersistedInstan
 public sealed class SavegameBindingStore(IPersistedInstanceState state)
 {
     /// <summary>
+    /// Raised after a binding is taken, released or forgotten.
+    /// </summary>
+    /// <remarks>
+    /// What this machine is holding is half of what the drift notice reports, and it changes without
+    /// anything touching a mod folder or a profile - so a check-out taken and a save checked back in
+    /// are both moments the notice's answer is stale and nothing else would say so. See
+    /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
+    /// </remarks>
+    public event EventHandler? BindingsChanged;
+
+
+    /// <summary>
     /// What this instance holds for one savegame, or null where it holds none.
     /// </summary>
     /// <remarks>
@@ -145,6 +157,8 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
         SetHint(instance, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.SlotId));
 
         state.Save();
+
+        BindingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -171,6 +185,51 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
         }
 
         state.Save();
+
+        BindingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Forgets a savegame entirely on this machine - the binding <em>and</em> the slot hint - without
+    /// touching the slot's contents or telling the server anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The one operation that clears the hint</b>, and the reason it is separate from
+    /// <see cref="ClearBinding"/> rather than a flag on it. A check-in releases the slot and keeps the
+    /// hint on purpose, because there is going to be a next check-out of the same save; this is the
+    /// opposite intent - there is not, and a hint pointing at a slot on behalf of a savegame the user
+    /// has disowned is a suggestion nobody asked for.
+    /// </para>
+    /// <para>
+    /// <b>Local only, and deliberately.</b> The two cases are a savegame the repo no longer has - so
+    /// there is no claim left to release and the server would answer 404 - and a save the user wants
+    /// to keep playing as their own. Neither is served by a server call, and one of them cannot have
+    /// one. Whether the claim also has to be handed back is the caller's question, and
+    /// <c>DiscardAsync</c> is the answer where it does.
+    /// </para>
+    /// </remarks>
+    /// <returns>False where this instance knew nothing about the savegame, which is idempotent rather than an error.</returns>
+    public bool Forget(Guid instanceId, Guid savegameId)
+    {
+        if (state.Find(instanceId) is not PersistedLocalInstance instance)
+        {
+            return false;
+        }
+
+        var removed = instance.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId)
+            + instance.SavegameSlotHints.RemoveAll(x => x.SavegameId == savegameId);
+
+        if (removed == 0)
+        {
+            return false;
+        }
+
+        state.Save();
+
+        BindingsChanged?.Invoke(this, EventArgs.Empty);
+
+        return true;
     }
 
     /// <summary>

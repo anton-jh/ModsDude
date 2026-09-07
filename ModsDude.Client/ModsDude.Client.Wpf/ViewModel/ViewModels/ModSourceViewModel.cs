@@ -44,6 +44,12 @@ public partial class ModSourceViewModel : ObservableObject
     /// <summary>Only an ad-hoc source can be taken away; the standing ones are switched off instead.</summary>
     public bool IsAdHoc => Source.Kind is ModSourceKind.AdHoc;
 
+    /// <summary>
+    /// Whether this row is the repo rather than a folder. It has no path, no scan and nothing to
+    /// rescan, and switching it off is a filter rather than a decision about what to read.
+    /// </summary>
+    public bool IsRepo => Source.Kind is ModSourceKind.Repo;
+
     public string? Error { get; }
     public int ModCount { get; }
 
@@ -51,10 +57,13 @@ public partial class ModSourceViewModel : ObservableObject
 
     public string CountText => HasFailed
         ? "Could not be read"
-        : ModCount == 1 ? "1 mod" : $"{ModCount} mods";
+        : IsRepo
+            ? ModCount == 1 ? "1 registered version" : $"{ModCount} registered versions"
+            : ModCount == 1 ? "1 mod" : $"{ModCount} mods";
 
     public string KindText => Source.Kind switch
     {
+        ModSourceKind.Repo => "This repo",
         ModSourceKind.Instance => "Game install",
         ModSourceKind.Downloads => "Downloads",
         _ => "Added this session"

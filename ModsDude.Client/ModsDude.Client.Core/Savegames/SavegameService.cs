@@ -127,6 +127,34 @@ public interface ISavegameService
     /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
     Task DiscardAsync(LocalInstance instance, Guid savegameId, CancellationToken ct);
 
+    /// <summary>
+    /// Cuts every local tie to a savegame: this machine stops claiming to hold it, and stops
+    /// remembering where it put it. The slot's contents are not touched and the server is not told.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The way out of a binding whose savegame is gone.</b> A save that was archived and then
+    /// permanently deleted leaves a slot on this machine still reporting "checked out to you", against
+    /// a savegame the server will not answer for - so check-in and discard both fail, and the row had
+    /// no third option. This is that option, and it is the only one that can work: there is no claim
+    /// left to release.
+    /// </para>
+    /// <para>
+    /// <b>Also the way to keep a save and stop sharing it.</b> Same act from the other end - the
+    /// folder becomes an ordinary save of the user's own, indistinguishable from one ModsDude never
+    /// wrote, which is exactly what an unrecognised slot already is.
+    /// </para>
+    /// <para>
+    /// <b>Local only, deliberately.</b> Where the savegame does still exist, this leaves the claim
+    /// standing on the server - which is honest rather than convenient: releasing a claim is
+    /// <see cref="DiscardAsync"/>, it is a thing other people are waiting on, and quietly doing it as
+    /// a side effect of tidying local state would let somebody else take a save this machine has been
+    /// playing.
+    /// </para>
+    /// </remarks>
+    /// <returns>False where this instance was holding no such savegame, which is idempotent rather than an error.</returns>
+    bool Forget(LocalInstance instance, Guid savegameId);
+
     /// <summary>Whether this instance's adapter has savegames at all.</summary>
     bool SupportsSavegames(LocalInstance instance);
 
@@ -203,6 +231,22 @@ public sealed class SavegameService(
 
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance)
         => bindings.GetBindings(instance.Id);
+
+    public bool Forget(LocalInstance instance, Guid savegameId)
+    {
+        // No adapter is required and none is asked for: this writes nothing to disk beyond local
+        // state, which is what makes it work for an instance whose scope no loaded repo serves.
+        var forgotten = bindings.Forget(instance.Id, savegameId);
+
+        if (forgotten)
+        {
+            logger.LogInformation(
+                "Instance {Instance} stopped tracking savegame {Savegame}; the slot's contents were left alone.",
+                instance.Id, savegameId);
+        }
+
+        return forgotten;
+    }
 
     public async Task<SavegameSlotId?> SuggestSlotAsync(LocalInstance instance, Guid savegameId, CancellationToken ct)
     {

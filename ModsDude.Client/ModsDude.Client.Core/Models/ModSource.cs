@@ -14,6 +14,24 @@ public record ModSource(ModSourceId Id, string Name, string Path, ModSourceKind 
 
 public enum ModSourceKind
 {
+    /// <summary>
+    /// The repo itself, as somewhere mods come from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Not a folder, and it is not scanned</b> - the catalog already holds what the repo has
+    /// registered, and this is a name for that half of the merged list so it can be switched off like
+    /// any other source. Turning it off is the only way to ask the question "what is on this computer
+    /// that this repo does not have", which is what somebody looking for things to import is asking.
+    /// </para>
+    /// <para>
+    /// It has no scan, no error state and no count of files, so nothing that walks sources ever sees
+    /// it: it is composed by the surface that offers it and consumed by that surface's filter. See
+    /// docs/09-mod-catalog.md#the-source-list.
+    /// </para>
+    /// </remarks>
+    Repo,
+
     /// <summary>An instance's mod folder. Present automatically, and disabling it here does not affect syncing to it.</summary>
     Instance,
 
@@ -46,6 +64,12 @@ public readonly record struct ModSourceId
 
     /// <summary>The one source that exists once per machine, so it needs no discriminator.</summary>
     public static ModSourceId Downloads { get; } = new("downloads");
+
+    /// <summary>
+    /// The repo itself. One per surface, which is already scoped to one repo, so it needs no
+    /// discriminator either.
+    /// </summary>
+    public static ModSourceId Repo { get; } = new("repo");
 
     public static ModSourceId ForInstance(Guid instanceId) => new($"instance:{instanceId}");
 

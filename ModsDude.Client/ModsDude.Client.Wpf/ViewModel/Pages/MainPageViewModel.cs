@@ -11,6 +11,7 @@ using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows.Data;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class MainPageViewModel
@@ -43,17 +44,18 @@ public partial class MainPageViewModel
     {
         Account = account;
 
-        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService));
+        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
+            .WithIcon(MenuIcons.CreateRepo);
 
         MenuItems = [
-            new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
+            new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")).WithIcon(MenuIcons.Home),
             _createRepoMenuItem,
-            new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create),
+            new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create).WithIcon(MenuIcons.JoinRepo),
             // Above Settings, because it is a place repos went rather than a preference. A repo
             // archived by any admin leaves every member's sidebar, so this is where somebody looks
             // when one they were using is suddenly not there.
-            new MenuItemViewModel("Archive", archivePageViewModelFactory.Create),
-            new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
+            new MenuItemViewModel("Archive", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive),
+            new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create).WithIcon(MenuIcons.Settings)
         ];
 
         // Not a membership level: creating repos is gated on User.IsTrusted, a flag granted by hand
@@ -81,6 +83,13 @@ public partial class MainPageViewModel
         Repos.CollectionChanged += OnReposChanged;
         ApplyTags();
 
+        // One heading per game, because the sidebar's repos are only interchangeable within one. An
+        // instance belongs to a game, so a Farming Simulator 22 repo and a Farming Simulator 25 repo
+        // offer disjoint instance lists and nothing that works in one works in the other; running
+        // them together in one alphabetical column made that invisible.
+        ReposView = CollectionViewSource.GetDefaultView(Repos);
+        ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.GameName)));
+
         repoService.RepoCreated += OnRepoCreated;
         NavManager.PropertyChanged += OnNavigationChanged;
 
@@ -98,6 +107,18 @@ public partial class MainPageViewModel
     public ObservableCollection<MenuItemViewModel> MenuItems { get; }
 
     public ObservableCollection<MenuItemViewModel> Repos { get; }
+
+    /// <summary>
+    /// The repo list as the sidebar draws it: the same entries, under one heading per game.
+    /// </summary>
+    /// <remarks>
+    /// <b>Grouping only, no sorting of its own.</b> The order inside a group is the synchronizer's -
+    /// naturally sorted by name, and kept that way through renames by moving the entry rather than
+    /// rebuilding the list - and adding sort descriptions here would take that ordering over and then
+    /// fail to notice a rename, which is the one thing the synchronizer exists to handle. Groups come
+    /// out in the order their first repo does, which is stable for as long as the list is.
+    /// </remarks>
+    public ICollectionView ReposView { get; }
 
 
     protected override void Init()

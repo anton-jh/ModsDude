@@ -34,6 +34,19 @@ public interface IBaseGameAdapter : IGameAdapter
     bool CanSupportSavegames { get; }
 
     /// <summary>
+    /// The <em>game</em> these base settings configure the adapter for, named for a person. An
+    /// adapter serving one game says nothing and gets its own <see cref="IGameAdapter.DisplayName"/>;
+    /// one serving several names the particular game, exactly as <see cref="Scope"/> identifies it.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="Scope"/> and it must agree with it: the sidebar groups repos by
+    /// this, and two repos in one group whose instances are not interchangeable would be the group
+    /// heading telling a lie. Farming Simulator 22 and 25 share an adapter and are two games, which
+    /// is the whole reason this is not just <see cref="IGameAdapter.DisplayName"/>.
+    /// </remarks>
+    string GameDisplayName => DisplayName;
+
+    /// <summary>
     /// The identity of the game these base settings configure the adapter for. An adapter serving
     /// one game says nothing and gets its id alone; one serving several overrides this from a base
     /// settings field, which must not be marked [CanBeModified] - see

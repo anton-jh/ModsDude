@@ -70,7 +70,8 @@ public partial class RepoPageViewModel
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _instancePageViewModelFactory = instancePageViewModelFactory;
 
-        var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo));
+        var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo))
+            .WithIcon(MenuIcons.ConnectGame);
 
         // Every entry whose page is gated end to end is closed here rather than left to fail at the
         // server. Mods is absent from this list on purpose: a guest can read the catalog, and only
@@ -79,12 +80,16 @@ public partial class RepoPageViewModel
         var isNotAdmin = repo.MembershipLevel < RepoMembershipLevel.Admin;
 
         MenuItems = [
-            new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo)),
+            new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo))
+                .WithIcon(MenuIcons.Overview),
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo))
+                .WithIcon(MenuIcons.Admin)
                 .RestrictIf(isNotAdmin, "Only an admin can rename this repo, change its game settings or delete it."),
             new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo))
+                .WithIcon(MenuIcons.Members)
                 .RestrictIf(isGuest, "Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level."),
             new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo))
+                .WithIcon(MenuIcons.Mods)
         ];
 
         // Saves is the sibling of Mods and sits next to it, and is *absent* rather than closed where
@@ -93,7 +98,8 @@ public partial class RepoPageViewModel
         // for, and a game that has no savegames is not.
         if (repo.Adapter.CanSupportSavegames)
         {
-            _savesMenuItem = new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo));
+            _savesMenuItem = new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo))
+                .WithIcon(MenuIcons.Saves);
 
             MenuItems.Add(_savesMenuItem);
         }
@@ -109,11 +115,12 @@ public partial class RepoPageViewModel
             page.HighlightOnArrival(highlight);
 
             return page;
-        });
+        }).WithIcon(MenuIcons.Archive);
 
         MenuItems.Add(_archiveMenuItem);
 
         MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+            .WithIcon(MenuIcons.CreateProfile)
             .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));
         MenuItems.Add(connectGameMenuItem);
 

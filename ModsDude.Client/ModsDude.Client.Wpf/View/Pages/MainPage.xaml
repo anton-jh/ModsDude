@@ -24,11 +24,19 @@
 
             <uc:SidebarHeader Grid.Row="1" Title="My repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" />
 
+            <!-- Grouped by game rather than one flat column: an instance belongs to a game, so two
+                 repos for different games have nothing in common that the sidebar was saying they
+                 did. ReposView is the same entries with one heading per game - see
+                 MainPageViewModel.ReposView for why it groups and deliberately does not sort. -->
             <ListView Grid.Row="2"
                       Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=Repos}"
+                      ItemsSource="{Binding Path=ReposView}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                      />
+                      >
+                <ListView.GroupStyle>
+                    <StaticResource ResourceKey="SidebarGroupStyle" />
+                </ListView.GroupStyle>
+            </ListView>
 
             <!-- The only account control there is. Signing out has no state worth reaching, so the
                  panel says who you are and offers to be somebody else instead. -->

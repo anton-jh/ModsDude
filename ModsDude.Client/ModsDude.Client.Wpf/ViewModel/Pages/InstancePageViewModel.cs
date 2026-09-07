@@ -69,6 +69,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         NavManager = navigationManager;
         MenuItems = [
             new MenuItemViewModel("Sync", () => syncPageViewModelFactory.Create(repo, instance))
+                .WithIcon(MenuIcons.Sync)
         ];
 
         // The local half of savegames: the slot list, and the one verb - publish - that is inherently
@@ -76,10 +77,12 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         // repo's Saves entry is.
         if (repo.Adapter.CanSupportSavegames)
         {
-            MenuItems.Add(new MenuItemViewModel("Saves", () => instanceSavegamesPageViewModelFactory.Create(repo, instance)));
+            MenuItems.Add(new MenuItemViewModel("Saves", () => instanceSavegamesPageViewModelFactory.Create(repo, instance))
+                .WithIcon(MenuIcons.Saves));
         }
 
-        MenuItems.Add(new MenuItemViewModel("Manage", () => editLocalInstancePageViewModelFactory.Create(repo, instance)));
+        MenuItems.Add(new MenuItemViewModel("Manage", () => editLocalInstancePageViewModelFactory.Create(repo, instance))
+            .WithIcon(MenuIcons.Manage));
 
         NavManager.Selected = MenuItems.First();
     }

@@ -29,6 +29,25 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     /// <summary>Every instance on this machine, across all scopes.</summary>
     public ObservableCollection<LocalInstance> Instances { get; }
 
+    /// <summary>
+    /// Raised after any change to an instance that is not an add or a remove.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The half <see cref="Instances"/> cannot report.</b> Adding and deleting raise
+    /// <c>CollectionChanged</c>, so a listener already hears about those; repointing an instance at a
+    /// different mod folder, or at a different profile, changes nothing about the collection and used
+    /// to be silent. Both of those change whether the folder matches what was applied to it, which is
+    /// the entire question the drift check answers - see
+    /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
+    /// </para>
+    /// <para>
+    /// Raised after the state has been written, so a listener that reads the instance back gets what
+    /// was saved rather than what is about to be.
+    /// </para>
+    /// </remarks>
+    public event EventHandler? InstanceChanged;
+
 
     public IEnumerable<LocalInstance> GetByScope(InstanceScope scope)
     {
@@ -98,12 +117,19 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
 
         instance.Update(name, instanceSettings, modFolder);
         _store.Save();
+
+        // The mod folder may have moved, which makes every answer about the old one meaningless.
+        InstanceChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetActiveProfile(LocalInstance instance, ActiveProfile? activeProfile)
     {
         instance.SetActiveProfile(activeProfile);
         _store.Save();
+
+        // A folder that was in sync with one profile is drifted from another the moment it is pointed
+        // at it, and nothing about the collection changed to say so.
+        InstanceChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -140,6 +166,8 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
 
         // One save for the batch: they were all made unusable by one event.
         _store.Save();
+
+        InstanceChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Delete(LocalInstance instance)

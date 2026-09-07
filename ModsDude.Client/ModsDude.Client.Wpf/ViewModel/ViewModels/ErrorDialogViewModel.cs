@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Wpf.Diagnostics;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -61,6 +62,43 @@ public partial class ErrorDialogViewModel(
     [ObservableProperty]
     private string _footer = $"Logged {loggedAt.ToString(TimestampFormat)}";
 
+
+    /// <summary>
+    /// Everything on the dialog, as one block of text on the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The whole dialog, not just the sentence.</b> What somebody pastes into a chat window has to
+    /// carry the developer's half and the timestamp with it - those are the two things whoever reads
+    /// the report needs, and they are precisely the parts nobody retypes.
+    /// </para>
+    /// <para>
+    /// The clipboard is genuinely refusable - another process can hold it open - so a failure says so
+    /// in the footer rather than raising a second error dialog over the first. The text is selectable
+    /// on the dialog itself either way, which is the fallback that needs nothing to work.
+    /// </para>
+    /// </remarks>
+    [RelayCommand]
+    private void Copy()
+    {
+        var text = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            new[] { Message, Details, $"Logged {LoggedAt.ToString(TimestampFormat)}" }
+                .Where(x => string.IsNullOrWhiteSpace(x) is false));
+
+        try
+        {
+            Clipboard.SetText(text);
+
+            Footer = $"Copied. Logged {LoggedAt.ToString(TimestampFormat)}";
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "Could not put an error report on the clipboard.");
+
+            Footer = $"The clipboard would not open - select the text instead. Logged {LoggedAt.ToString(TimestampFormat)}";
+        }
+    }
 
     [RelayCommand]
     private void OpenLog()

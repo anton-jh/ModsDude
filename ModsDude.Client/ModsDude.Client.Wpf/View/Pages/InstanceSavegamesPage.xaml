@@ -120,6 +120,16 @@
                                                     ToolTip="Hands the claim back without minting a version. The local copy goes to the Recycle Bin."
                                                     Command="{Binding DiscardCommand}"
                                                     Visibility="{Binding CanDiscard, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- The way out of the binding rather than out of the
+                                                 checkout, and the only action a row whose savegame
+                                                 has been deleted from the repo still has. -->
+                                            <Button Margin="8 0 0 0"
+                                                    Content="Disconnect"
+                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                    ToolTip="ModsDude forgets this save. Nothing on disk changes and the server is not told."
+                                                    Command="{Binding DisconnectCommand}"
+                                                    Visibility="{Binding CanDisconnect, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>

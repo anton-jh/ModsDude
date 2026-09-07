@@ -162,6 +162,11 @@ public partial class App : Application
         services.AddSingleton<BackgroundProblemViewModel>();
         services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<BackgroundProblemViewModel>());
 
+        // And once more for work in progress: everything long-running announces itself through the
+        // interface, and the shell draws the strip along the top out of whatever is still running.
+        services.AddSingleton<BackgroundTaskViewModel>();
+        services.AddSingleton<IBackgroundTaskReporter>(sp => sp.GetRequiredService<BackgroundTaskViewModel>());
+
         services.AddSingleton<ModListItemViewModel.Factory>();
 
         // Singleton because switching user is what replaces the shell it is drawn in.

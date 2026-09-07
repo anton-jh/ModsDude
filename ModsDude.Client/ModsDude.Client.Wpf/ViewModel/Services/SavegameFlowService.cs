@@ -25,7 +25,8 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 public sealed class SavegameFlowService(
     ISavegameService savegames,
     Lazy<IModalService> modalService,
-    IErrorReporter errorReporter)
+    IErrorReporter errorReporter,
+    IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
@@ -87,9 +88,59 @@ public sealed class SavegameFlowService(
             return false;
         }
 
+        using var task = backgroundTasks.Begin($"Giving '{savegameName}' back", "Releasing the claim, then recycling the local copy");
+
         await savegames.DiscardAsync(instance, savegameId, cancellationToken);
 
         return true;
+    }
+
+    /// <summary>
+    /// Cuts the local tie and leaves the save where it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two situations, one act, two very different confirmations.</b> Where the savegame is gone
+    /// from the repo there is nothing to warn about - the slot is claiming to hold something that does
+    /// not exist, and this is the only thing that can be done about it. Where it still exists, the
+    /// claim stays taken and somebody else is waiting on it, so that is said plainly and Discard is
+    /// named as the thing they probably meant.
+    /// </para>
+    /// <para>
+    /// Nothing in the slot is touched either way, which is the difference from Discard: that one
+    /// recycles the local copy, this one leaves an ordinary save of the user's own behind.
+    /// </para>
+    /// </remarks>
+    /// <returns>False where the dialog was dismissed, or there was nothing to forget.</returns>
+    public async Task<bool> DisconnectAsync(
+        LocalInstance instance,
+        Guid savegameId,
+        string savegameName,
+        string slotLabel,
+        bool stillInRepo)
+    {
+        var consequence = stillInRepo
+            ? $"'{slotLabel}' stays exactly where it is and becomes an ordinary save of your own - ModsDude stops recognising it. "
+              + $"The claim on '{savegameName}' is not handed back, so nobody else can take it until you do. "
+              + "Use Discard instead if what you meant was to give it back."
+            : $"'{savegameName}' is not in this repo any more, so there is no claim left to hand back and nothing to check in to. "
+              + $"'{slotLabel}' stays exactly where it is and becomes an ordinary save of your own.";
+
+        var modal = new ConfirmationDialogViewModel(
+            $"Disconnect '{slotLabel}' from ModsDude?",
+            consequence,
+            stillInRepo ? IconKind.Warning : IconKind.Question,
+            "Disconnect it - nothing on disk changes",
+            "Leave it connected");
+
+        await modalService.Value.Show(modal);
+
+        if (modal.Result is false)
+        {
+            return false;
+        }
+
+        return savegames.Forget(instance, savegameId);
     }
 
     /// <summary>
@@ -114,6 +165,10 @@ public sealed class SavegameFlowService(
             return null;
         }
 
+        // Packing and uploading a save is minutes rather than seconds, and the page it was started
+        // from is not where the user has to stay while it happens.
+        using var task = backgroundTasks.Begin($"Publishing '{name}' to {repoName}", $"Packing and uploading '{slotLabel}'");
+
         return await savegames.PublishAsync(instance, slot, name, modal.TrimmedLabel, cancellationToken);
     }
 
@@ -134,6 +189,8 @@ public sealed class SavegameFlowService(
     {
         try
         {
+            using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
+
             var version = await savegames.CheckInAsync(instance, savegameId, label, keepPlaying, force, cancellationToken);
 
             return SavegameCheckInOutcome.CheckedIn(version, keepPlaying);

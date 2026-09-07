@@ -50,7 +50,10 @@ public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplySta
 /// dialog until the user applies something, which is long after the shell exists.
 /// </para>
 /// </remarks>
-public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalService> modalService)
+public sealed class ProfileApplyService(
+    ModSyncService syncService,
+    Lazy<IModalService> modalService,
+    IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
     /// Works out what would change. Returns null where the instance cannot be applied to right now,
@@ -144,9 +147,14 @@ public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalS
             return new ProfileApplyOutcome(instance, ProfileApplyStatus.Declined, $"'{instance.Name}' was left as it is.");
         }
 
+        // Only from here: everything above is planning and asking, which is quick or is a dialog the
+        // user is already looking at. The strip is for the part that takes minutes and that they are
+        // entitled to walk away from.
+        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to '{instance.Name}'");
+
         try
         {
-            var result = await syncService.ExecuteAsync(plan, progress, cancellationToken);
+            var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
 
             return result.Completed
                 ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches.")
@@ -221,10 +229,54 @@ public sealed class ProfileApplyService(ModSyncService syncService, Lazy<IModalS
     }
 
 
+    /// <summary>
+    /// Feeds the shell strip and whatever the caller asked for from the one stream of reports.
+    /// </summary>
+    /// <remarks>
+    /// A page's own progress and the shell's are not alternatives: the page draws a row per mod and
+    /// the shell draws one line that survives navigating away from that page, and a sync started from
+    /// the drift notice has no page at all. So this forwards rather than replacing, and the caller
+    /// passing null is the ordinary case rather than the special one.
+    /// </remarks>
+    public static IProgress<ModSyncProgress> Report(IBackgroundTask task, IProgress<ModSyncProgress>? inner)
+    {
+        return new SyncProgressRelay(task, inner);
+    }
+
     private static IInstanceModAdapter? GetAdapter(Repo repo, LocalInstance instance)
     {
         return instance.GetAdapter(repo.Adapter)
             .GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>()
             ?.Invoke();
+    }
+
+
+    /// <summary>
+    /// One sync report, said twice: once to the shell strip in a sentence, once onward to whatever
+    /// the caller wanted it for.
+    /// </summary>
+    /// <remarks>
+    /// The mod count is the proportion rather than the byte count: a sync is dozens of files of very
+    /// different sizes, and a bar that jumped and stalled per file would be less informative than one
+    /// that walks. Bytes are what the <em>page's</em> per-row bars are for.
+    /// </remarks>
+    private sealed class SyncProgressRelay(IBackgroundTask task, IProgress<ModSyncProgress>? inner)
+        : IProgress<ModSyncProgress>
+    {
+        public void Report(ModSyncProgress value)
+        {
+            task.Report(Describe(value), value.Completed, value.Total);
+
+            inner?.Report(value);
+        }
+
+        private static string Describe(ModSyncProgress value)
+        {
+            var what = value.Detail ?? value.ModId;
+
+            return what is null
+                ? value.Phase.ToString()
+                : $"{value.Phase}: {what}";
+        }
     }
 }

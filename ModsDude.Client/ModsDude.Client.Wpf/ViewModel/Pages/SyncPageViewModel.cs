@@ -29,6 +29,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly ProfileService _profileService;
     private readonly ProfileApplyService _applyService;
     private readonly ModListItemViewModel.Factory _itemFactory;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private ModSyncPlan? _plan;
     private IInstanceModAdapter? _adapter;
@@ -51,8 +52,10 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         InstanceDriftMonitor driftMonitor,
         ProfileService profileService,
         ProfileApplyService applyService,
-        ModListItemViewModel.Factory itemFactory)
+        ModListItemViewModel.Factory itemFactory,
+        IBackgroundTaskReporter backgroundTasks)
     {
+        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _instance = instance;
         _syncService = syncService;
@@ -159,9 +162,13 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         ProgressValue = 0;
         ProgressText = "Starting...";
 
+        // The one sync that does not go through ProfileApplyService - this page shows the plan and
+        // executes it itself - so it announces itself rather than inheriting the announcement.
+        using var task = _backgroundTasks.Begin($"Applying '{ProfileName}' to '{InstanceName}'");
+
         try
         {
-            var progress = new Progress<ModSyncProgress>(Report);
+            var progress = ProfileApplyService.Report(task, new Progress<ModSyncProgress>(Report));
             var result = await _syncService.ExecuteAsync(plan, progress, cancellationToken);
 
             Status = Describe(result);

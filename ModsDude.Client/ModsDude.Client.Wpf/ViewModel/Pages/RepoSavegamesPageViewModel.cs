@@ -53,6 +53,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -82,8 +83,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameFlowService flowService,
         ShellNavigationService shellNavigation,
         IModalService modalService,
-        IErrorReporter errorReporter)
+        IErrorReporter errorReporter,
+        IBackgroundTaskReporter backgroundTasks)
     {
+        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _savegamesClient = savegamesClient;
         _savegameService = savegameService;
@@ -760,6 +763,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameCheckOutMode mode,
         SavegameCheckOutResult result)
     {
+        // Downloading and unpacking a save is the slow half of both verbs, and both are safe to walk
+        // away from - the claim, where there is one, is taken before the bytes move.
+        using var task = _backgroundTasks.Begin(
+            mode is SavegameCheckOutMode.TakeCopy
+                ? $"Copying '{row.Name}' into '{result.Instance.Name}'"
+                : $"Checking '{row.Name}' out into '{result.Instance.Name}'",
+            $"Version {versionNumber}");
+
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
             await _savegameService.TakeCopyAsync(result.Instance, row.Savegame, versionNumber, result.Slot.Id, _lifetime);
@@ -776,6 +787,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // has no stale base to reason about. Nothing in between is deleted.
         if (versionNumber != savegame.Head?.Number)
         {
+            task.Report($"Restoring version {versionNumber} as the newest one");
+
             await _savegamesClient.RestoreSavegameVersionV1Async(
                 _repo.Id, savegame.Id, versionNumber, new RestoreSavegameVersionRequest(), _lifetime);
 
@@ -783,6 +796,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             savegame = refreshed.FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
         }
+
+        task.Report("Writing it into the slot");
 
         await _savegameService.CheckOutAsync(result.Instance, savegame, result.Slot.Id, _lifetime);
 

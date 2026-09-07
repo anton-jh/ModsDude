@@ -3,6 +3,24 @@
 
     <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
+    <!-- Text that reads as a TextBlock and selects like a TextBox. WPF's TextBlock has no selection
+         of its own, so anything a user might want to take away - an error message, an exception - has
+         to be a read-only TextBox wearing no chrome. IsReadOnlyCaretVisible is off so it does not
+         blink an insertion point at somebody who is only reading, and the padding is zeroed because
+         a TextBox brings its own and would otherwise sit a few pixels off from the labels around it. -->
+    <Style x:Key="SelectableText" TargetType="TextBox">
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="IsReadOnlyCaretVisible" Value="False" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="IBeam" />
+    </Style>
+
     <!-- A borderless icon button, for the kind of secondary action that would be visual noise with
          full button chrome on every row of a long list. -->
     <Style x:Key="SubtleIconButton" TargetType="Button">

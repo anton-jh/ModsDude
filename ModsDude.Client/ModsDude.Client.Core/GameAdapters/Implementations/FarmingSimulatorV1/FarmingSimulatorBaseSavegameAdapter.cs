@@ -176,8 +176,14 @@ public class FarmingSimulatorInstanceSavegameAdapter(
 
     /// <summary>
     /// What this game is worth saying about a save, in the order somebody reads it: where they are
-    /// playing, when they last did, how long they have been at it, and then the rest.
+    /// playing, how the farm is doing, when they last played, and then the rest.
     /// </summary>
+    /// <remarks>
+    /// <b>Money is second because a row only shows the first few.</b> Where and how much are the two
+    /// facts that tell two saves of the same map apart at a glance - a bank balance says how far along
+    /// a farm is in a way a creation date does not - so it goes above "Started", which was pushing it
+    /// off the row and into the tooltip.
+    /// </remarks>
     private static IReadOnlyList<SavegameDetail> ReadDetails(
         XElement career, Maybe<XElement> settings, string slotPath, string careerFile, ILogger log)
     {
@@ -191,7 +197,13 @@ public class FarmingSimulatorInstanceSavegameAdapter(
             }
         }
 
+        // Under <statistics>, not <settings> - which is where playtime used to look, so every slot
+        // silently reported none at all.
+        var statistics = Maybe.From(career.Element("statistics"));
+        var farms = ReadFarms(slotPath, log);
+
         Add(SavegameDetail.Ids.Map, "Map", Text(settings, "mapTitle"));
+        Add(SavegameDetail.Ids.Money, "Money", MoneyText(farms, Text(statistics, "money"), log));
 
         // The game's own record of when it was last written, which stays honest where copying the
         // save between machines has rewritten the file's own timestamp. That timestamp is the
@@ -200,17 +212,46 @@ public class FarmingSimulatorInstanceSavegameAdapter(
             Text(settings, "saveDate") ?? LastWrittenText(careerFile, log));
 
         Add(SavegameDetail.Ids.Started, "Started", Text(settings, "creationDate"));
-
-        // Under <statistics>, not <settings> - which is where this used to look, so every slot has
-        // been silently reporting no playtime at all.
-        var statistics = Maybe.From(career.Element("statistics"));
-
         Add(SavegameDetail.Ids.Playtime, "Played", Playtime(Text(statistics, "playTime"), log));
-        Add(SavegameDetail.Ids.Money, "Money", Money(Text(statistics, "money"), log));
         Add(SavegameDetail.Ids.Difficulty, "Difficulty", Difficulty(Text(settings, "economicDifficulty")));
-        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", Multiplayer(slotPath, log));
+        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", MultiplayerText(farms));
 
         return details;
+    }
+
+    /// <summary>
+    /// One farm's balance, and which farm it is where that is a question.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Money is a property of a farm, not of a save.</b> It lives on the <c>farm</c> element in
+    /// <c>farms.xml</c>, and a multiplayer save has several - one per farm somebody started, plus the
+    /// shop's, which has no money of its own. There is no single number, so this shows the
+    /// <b>first real farm's</b>, which is the host's in every save anybody actually plays, and names
+    /// the farm whenever there is more than one so that the number is attributable rather than
+    /// mysterious.
+    /// </para>
+    /// <para>
+    /// <c>&lt;statistics&gt;&lt;money&gt;</c> in the career file is the fallback and nothing more. It
+    /// is what older saves in the series carried, it is absent or stale in the current ones, and
+    /// preferring it is how this detail came to show nothing at all.
+    /// </para>
+    /// </remarks>
+    private static string? MoneyText(IReadOnlyList<Farm> farms, string? careerMoney, ILogger log)
+    {
+        if (farms.FirstOrDefault(x => x.Money is not null) is not Farm farm)
+        {
+            return Money(careerMoney, log);
+        }
+
+        var amount = farm.Money!.Value.ToString("N0", CultureInfo.CurrentCulture);
+
+        // Named only where naming it distinguishes anything. In a singleplayer save the farm is "the
+        // farm", and appending its name to every balance would be noise on the one row that has least
+        // room for it.
+        return farms.Count > 1 && string.IsNullOrWhiteSpace(farm.Name) is false
+            ? $"{amount} ({farm.Name.Trim()})"
+            : amount;
     }
 
     /// <summary>
@@ -227,38 +268,110 @@ public class FarmingSimulatorInstanceSavegameAdapter(
     /// what somebody about to publish a save is actually asking. It cannot tell a game that was
     /// hosted and never joined from a singleplayer one, and does not pretend to.
     /// </para>
+    /// <para>
+    /// The farm count rides along where there is more than one, because that is the other half of the
+    /// same question: four people on one farm and four people on four farms are different evenings,
+    /// and it is also what says which farm the balance above belongs to.
+    /// </para>
     /// </remarks>
-    private static string? Multiplayer(string slotPath, ILogger log)
+    private static string? MultiplayerText(IReadOnlyList<Farm> farms)
     {
-        var farmsFile = Path.Combine(slotPath, _farmsFile);
-
-        if (File.Exists(farmsFile) is false)
-        {
-            return null;
-        }
-
-        var maybeFarms = ReadXml(farmsFile, log);
-        if (maybeFarms.HasValue is false)
-        {
-            return null;
-        }
-
         // Distinct across every farm: one person who has joined two farms is still one person, and
         // the shop farm carries no players at all.
-        var players = maybeFarms.Value
-            .Descendants("player")
-            .Select(x => (string?)x.Attribute("uniqueUserId"))
-            .Where(x => string.IsNullOrWhiteSpace(x) is false)
+        var players = farms
+            .SelectMany(x => x.PlayerIds)
             .Distinct(StringComparer.Ordinal)
             .Count();
+
+        var occupied = farms.Count(x => x.PlayerIds.Count > 0);
+        var across = occupied > 1 ? $" across {occupied} farms" : "";
 
         return players switch
         {
             0 => null,
             1 => "No, only ever played alone",
-            _ => $"Yes, {players} players have joined"
+            _ => $"Yes, {players} players have joined{across}"
         };
     }
+
+    /// <summary>
+    /// The save's farms, in the order the game numbers them, with the shop farm left out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read once and handed to everything that needs it. Money and the multiplayer heuristic are two
+    /// questions about the same file, and opening it twice per slot - twenty slots deep, on every
+    /// listing - is a cost with nothing to show for it.
+    /// </para>
+    /// <para>
+    /// Farm 0 is the shop rather than somebody's farm: it exists in every save, has no players and no
+    /// balance worth reporting, and including it would make "the first farm" the wrong one in every
+    /// save there is. Anything the file numbers oddly, or does not number at all, is kept - a farm
+    /// this adapter cannot place is still a farm, and dropping it would lose a balance.
+    /// </para>
+    /// <para>
+    /// Empty for a save with no <c>farms.xml</c>, which is not a fault: a savegame from a version that
+    /// did not write one still has a career file, and every detail here is optional by design.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<Farm> ReadFarms(string slotPath, ILogger log)
+    {
+        var farmsFile = Path.Combine(slotPath, _farmsFile);
+
+        if (File.Exists(farmsFile) is false)
+        {
+            return [];
+        }
+
+        var document = ReadXml(farmsFile, log);
+
+        if (document.HasValue is false)
+        {
+            return [];
+        }
+
+        var farms = new List<Farm>();
+
+        foreach (var element in document.Value.Descendants("farm"))
+        {
+            var id = Number((string?)element.Attribute("farmId"));
+
+            if (id == 0)
+            {
+                continue;
+            }
+
+            farms.Add(new Farm(
+                id,
+                (string?)element.Attribute("name"),
+                // The attribute is where the current games put it; the child element is where a
+                // version that moves it would most plausibly put it instead, and reading both costs
+                // one lookup on a document already in memory.
+                Money(element),
+                [.. element.Descendants("player")
+                    .Select(x => (string?)x.Attribute("uniqueUserId"))
+                    .Where(x => string.IsNullOrWhiteSpace(x) is false)
+                    .Select(x => x!)]));
+        }
+
+        return [.. farms.OrderBy(x => x.Id ?? int.MaxValue)];
+    }
+
+    private static double? Money(XElement farm)
+    {
+        var raw = (string?)farm.Attribute("money") ?? farm.Element("money")?.Value;
+
+        return raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var amount)
+            ? amount
+            : null;
+    }
+
+    private static int? Number(string? raw)
+        => int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+
+
+    /// <param name="Id">Null where the file numbered it in a way this adapter does not read. Sorted last, never dropped.</param>
+    private sealed record Farm(int? Id, string? Name, double? Money, IReadOnlyList<string> PlayerIds);
 
     private static string? Text(Maybe<XElement> parent, string name)
     {

@@ -487,6 +487,25 @@ nothing in it.
 Disabling an instance as a *source* has no effect on syncing to it. The two roles are
 independent; see below.
 
+#### The repo is a source too, in the profile editor
+
+The profile editor's left list is the **union** of what the repo has registered and what the
+enabled folders hold, so the repo is the one contributor to it that had no checkbox — and turning
+it off is the only way to ask "what is on this computer that this repo does not have", which is
+exactly the question somebody adding new mods to a profile is asking. It heads the source list,
+starts on, and is `ModSourceKind.Repo`.
+
+**It is a filter, not a scan.** Nothing about it reaches `ModCatalog`: the catalog still merges the
+registered half, and it is the left list's `ICollectionView` that drops rows whose
+`CatalogModVersion.IsOnServer` is true. That is not an implementation detail worth hiding, because
+it is load-bearing — the pinned rows and every row's version selector are built from the same
+snapshot, and a profile pins registered versions, so dropping them from the catalog would turn
+every pinned row into an unresolvable placeholder. Filtering the view instead is also why unticking
+it is instant and costs no round trip.
+
+The catalog page has no such checkbox and needs none: its two lists already split on exactly this
+line, and unregistered-and-local is what the left-hand one *is*.
+
 ### Scanning arbitrary folders already works
 
 `IBaseModAdapter.GetModsFromFolder(path, ct)` takes any path, and the instance variant is a

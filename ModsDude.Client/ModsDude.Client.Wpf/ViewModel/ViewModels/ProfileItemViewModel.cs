@@ -3,15 +3,28 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
-public class ProfileItemViewModel(
-    Repo repo,
-    ProfileDto profile,
-    ProfilePageViewModel.Factory profilePageViewModelFactory)
-    : MenuItemViewModel(
-        profile.Name,
-        () => profilePageViewModelFactory.Create(repo, profile))
+
+public class ProfileItemViewModel
+    : MenuItemViewModel
 {
-    public Guid Id => profile.Id;
+    private readonly ProfileDto _profile;
+
+
+    public ProfileItemViewModel(
+        Repo repo,
+        ProfileDto profile,
+        ProfilePageViewModel.Factory profilePageViewModelFactory)
+        : base(
+            profile.Name,
+            () => profilePageViewModelFactory.Create(repo, profile))
+    {
+        _profile = profile;
+
+        Icon = MenuIcons.Profile;
+    }
+
+
+    public Guid Id => _profile.Id;
 
 
     /// <summary>
@@ -22,6 +35,6 @@ public class ProfileItemViewModel(
     /// </summary>
     public void RefreshTitle()
     {
-        Title = profile.Name;
+        Title = _profile.Name;
     }
 }

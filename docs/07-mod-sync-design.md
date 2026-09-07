@@ -615,6 +615,40 @@ The notification lives in the shell, next to the modal slot `MainWindowViewModel
 but it is **not** a modal: it must not block the app, and the user has to be able to keep working
 while it is up.
 
+#### Everything that can change the answer re-asks it
+
+Startup, the folder watcher and window activation are the three mechanisms that cover drift the
+app did not cause. They are no use at all for drift it *did*: somebody who takes a mod out of the
+active profile, saves without applying and alt-tabs straight back to the game has changed what the
+notice would say, and nothing was watching. The check has to be driven by the facts changing.
+
+So the four that are not a folder listing are events, wired once in `DriftNotificationViewModel`
+rather than remembered at each call site:
+
+| Event | Raised by | Because |
+| --- | --- | --- |
+| A profile's head revision moved | `ProfileService.ProfileUpdated` | Every folder built against the previous one is drifted from that moment — whether this client saved it or a refresh brought back a teammate's save |
+| An instance was repointed | `LocalInstanceRepository.InstanceChanged` | A new mod folder, or a new active profile, makes every previous answer about it meaningless. `CollectionChanged` covers adds and removes; this covers the edits, which used to be silent |
+| A savegame was taken, handed back or forgotten | `SavegameBindingStore.BindingsChanged` | What this machine holds is the other half of what the notice reports, and it changes without anything touching a mod folder |
+| The mod list editor stopped suppressing | `DriftNotificationViewModel.Release` | It is the one page that can change the answer while being told not to say it, so the last computed result is precisely what must not be trusted there |
+
+All of them run as `DriftCheckReason.Explicit`, so the five-second activation throttle never
+swallows one: they are consequences of something the user just did, and the complaint they answer
+is a notice that arrives one alt-tab too late.
+
+#### The notice says both halves
+
+`InstanceDrift.IsDrifted` is true for a held savegame that has moved even when the mod folder is
+exactly what was installed — `SavegameDriftRules` decides which of the three ways it has, and
+`InstanceDriftReport.SavegameDrift` carries them — so the notice can be raised entirely by the
+savegame half. It therefore has to be able to *say* so: `SavegameWarning` is
+its own line, in the same caution colour as the locked-mod one because it is the same class of
+problem, and the headline names which of the two situations this is.
+
+Without it, an instance whose mod folder and profile were both empty produced a notice headlined
+"no longer matches the applied profile" with no detail underneath at all — every sentence the
+detail line could build was about file counts and revisions, and there were none.
+
 ### Saving changes re-applies by default
 
 If the user does go to the mod list editor and folds some of the drift into the profile — new

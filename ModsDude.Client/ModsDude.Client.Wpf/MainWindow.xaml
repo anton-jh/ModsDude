@@ -20,6 +20,59 @@
                NavigationUIVisibility="Hidden"
                Margin="0 12 0 0"/>
 
+        <!-- Along the top edge, and about the present rather than the past: the two notices in the
+             bottom corner both report something that has already happened and both offer a way to
+             deal with it, so this one is somewhere else on purpose. It survives navigation - an
+             import queued on one page is still visible from another - which is the half a page's own
+             progress cannot do. Nothing to dismiss: it goes when the work does. -->
+        <Border DataContext="{Binding BackgroundTasks}"
+                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                MinWidth="360" MaxWidth="560"
+                Margin="0 4 0 0"
+                Padding="16 10"
+                CornerRadius="6"
+                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+            <Border.Effect>
+                <DropShadowEffect Color="#66000000" BlurRadius="12" ShadowDepth="2" />
+            </Border.Effect>
+
+            <StackPanel Orientation="Vertical">
+
+                <Grid ColumnDefinitions="* auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Title}"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <!-- A count rather than a second bar: two bars racing each other is less legible
+                         than one and a number, and a second concurrent task is rare. -->
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Others}"
+                               Margin="12 0 0 0"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Visibility="{Binding HasOthers, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
+
+                <TextBlock Text="{Binding Detail}"
+                           Margin="0 2 0 0"
+                           TextTrimming="CharacterEllipsis"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <ProgressBar Height="3"
+                             Margin="0 8 0 0"
+                             Minimum="0" Maximum="100"
+                             Value="{Binding Progress, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsIndeterminate}" />
+            </StackPanel>
+        </Border>
+
         <!-- Beside the modal slot, not in it. Both notices have to be visible from every view and
              must not stop the user working: the drift already happened while they were in the game,
              and the background failures are things the app chose to absorb. They stack rather than
@@ -47,7 +100,8 @@
                     <TextBlock Text="{Binding Detail}"
                                Margin="0 8 0 0"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <!-- Its own line, in its own colour: a locked map at the wrong version is not a
                          tidiness problem. -->
@@ -56,6 +110,16 @@
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- The savegame half, and it can be the whole reason this notice is up: a folder
+                         that matches its profile exactly is still worth warning about while it holds
+                         an evening nobody else can see. Same colour as the locked warning, because it
+                         is the same class of problem - something on this disk only. -->
+                    <TextBlock Text="{Binding SavegameWarning}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding HasSavegameWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <TextBlock Text="{Binding ImportPrompt}"
                                Margin="0 8 0 0"
@@ -87,7 +151,7 @@
                         <Button Content="Re-apply now"
                                 Margin="0 0 8 0"
                                 Command="{Binding ReapplyCommand}"
-                                Visibility="{Binding CanReview, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                Visibility="{Binding CanReapplyBesideReview, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                         <Button Content="Re-apply now"
                                 Margin="0 0 8 0"

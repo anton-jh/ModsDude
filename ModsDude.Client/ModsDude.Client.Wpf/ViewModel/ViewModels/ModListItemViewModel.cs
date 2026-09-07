@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -287,19 +288,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
     #endregion
 
 
+    /// <summary>
+    /// Whether this row is one of the ones somebody typing <paramref name="searchTerm"/> meant.
+    /// </summary>
+    /// <remarks>
+    /// <b>The one search in the app.</b> Every filter on every mod list - both lists on the catalog
+    /// page and both on the profile editor - runs through here, which is why adopting
+    /// <see cref="FuzzySearch"/> was one edit rather than four. The three fields are passed
+    /// separately rather than joined, because a term matching across the seam between a name and an
+    /// author is a hit nobody can see the reason for.
+    /// </remarks>
     public bool Matches(string? searchTerm)
-    {
-        if (string.IsNullOrWhiteSpace(searchTerm))
-        {
-            return true;
-        }
-
-        var term = searchTerm.Trim();
-
-        return Name.Contains(term, StringComparison.OrdinalIgnoreCase)
-            || Id.Contains(term, StringComparison.OrdinalIgnoreCase)
-            || (Author?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
-    }
+        => FuzzySearch.Matches(searchTerm, Name, Id, Author);
 
     /// <summary>
     /// Reads the icon the first time the row is shown. Everything here stays cold until then - with

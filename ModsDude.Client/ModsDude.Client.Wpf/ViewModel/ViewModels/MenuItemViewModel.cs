@@ -40,6 +40,14 @@ public partial class MenuItemViewModel
     private string _title = "";
 
     /// <summary>
+    /// The glyph drawn ahead of the title, from <see cref="MenuIcons"/>. Empty rather than null on an
+    /// entry without one: the icon cell has a fixed width, so an entry that has no picture still
+    /// starts its text where every other entry does.
+    /// </summary>
+    [ObservableProperty]
+    private string _icon = "";
+
+    /// <summary>
     /// Whether the entry can be navigated to. False greys it out and refuses the click, rather than
     /// hiding it: an entry that is simply gone tells a user nothing about the level they would need
     /// to ask for.
@@ -89,6 +97,17 @@ public partial class MenuItemViewModel
     public virtual PageViewModel GetPage()
     {
         return _getPage.Invoke();
+    }
+
+    /// <summary>
+    /// Gives the entry its glyph, and hands it back so a menu can be written as one list of
+    /// expressions - the same shape <see cref="Restrict"/> already has.
+    /// </summary>
+    public MenuItemViewModel WithIcon(string icon)
+    {
+        Icon = icon;
+
+        return this;
     }
 
     /// <summary>Closes the entry, with the sentence the user sees instead of the page.</summary>

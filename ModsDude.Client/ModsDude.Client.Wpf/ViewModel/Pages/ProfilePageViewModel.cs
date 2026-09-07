@@ -88,7 +88,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _scanInstanceIdOnce = null;
 
             return profileModsEditorPageViewModelFactory.Create(repo, profile, scanInstanceId);
-        });
+        }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
         // this profile without curating it is exactly the person who wants to know what changed under
@@ -100,14 +100,16 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _selectRevisionOnce = null;
 
             return profileHistoryPageViewModelFactory.Create(repo, profile, selectRevision);
-        });
+        }).WithIcon(MenuIcons.History);
 
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
+            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile))
+                .WithIcon(MenuIcons.Overview),
             _modsMenuItem,
             _historyMenuItem,
             new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
+                .WithIcon(MenuIcons.Manage)
                 .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];
 
