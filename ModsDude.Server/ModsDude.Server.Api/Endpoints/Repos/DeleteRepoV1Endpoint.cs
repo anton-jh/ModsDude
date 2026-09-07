@@ -12,6 +12,26 @@ using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
+/// <summary>
+/// Deletes an archived repo and everything in it - the whole mod catalog, every profile with its
+/// history, every savegame with its versions and its claim log, the invites and the memberships.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Nothing inside can refuse it.</b> The rules that stand between a single mod version, profile
+/// or savegame and deletion all exist to stop one of them being taken out from under the others -
+/// a revision that pins a version, a savegame played on a revision. Deleting the repo takes the
+/// dependants and the dependencies together, so there is nothing left to protect and no partial
+/// state to protect it from. What makes this safe is not a check on the contents but that a repo
+/// can only be deleted once it has been archived, by an Admin: two deliberate acts, and the first
+/// one is visible to every member for as long as they care to notice.
+/// </para>
+/// <para>
+/// The blobs are not deleted here - neither the mod files nor the savegame bytes. They are addressed
+/// by content and shared between versions, so the reclamation sweep is what removes them once
+/// nothing refers to them. The same bargain a deleted mod or savegame already makes.
+/// </para>
+/// </remarks>
 public class DeleteRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
@@ -50,17 +70,29 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotArchived("Repo", repoId));
         }
 
-        // The ModVersion -> Repo foreign key is Restrict, so deleting a repo that still has mods
-        // fails at the database with an unhandled exception. Refuse it here instead, with a problem
-        // the client can act on. Note that mod blobs are not reclaimed by this endpoint either way.
-        if (await dbContext.ModVersions.AnyAsync(x => x.RepoId == new RepoId(repoId), cancellationToken))
-        {
-            return TypedResults.BadRequest(Problems.RepoNotEmpty(new RepoId(repoId)));
-        }
+        await DeleteContentsAsync(dbContext, unitOfWork, repo, cancellationToken);
+
+        return TypedResults.Ok();
+    }
+
+    /// <summary>
+    /// Empties the repo and drops it. <see cref="RepoExtensions.EmptyAsync"/> is where the order the
+    /// foreign keys force is written down; the transaction is what keeps the state in between -
+    /// contents gone, row still standing - something no other request and no crash can observe.
+    /// </summary>
+    private static async Task DeleteContentsAsync(
+        ApplicationDbContext dbContext,
+        IUnitOfWork unitOfWork,
+        Repo repo,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        await dbContext.EmptyAsync(repo.Id, cancellationToken);
 
         dbContext.Repos.Remove(repo);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return TypedResults.Ok();
+        await transaction.CommitAsync(cancellationToken);
     }
 }

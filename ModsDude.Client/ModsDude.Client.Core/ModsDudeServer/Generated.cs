@@ -8569,77 +8569,74 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/user-already-member")]
         UserAlreadyMember = 10,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/repo-not-empty")]
-        RepoNotEmpty = 11,
-
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/version-placement-conflict")]
-        VersionPlacementConflict = 12,
+        VersionPlacementConflict = 11,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/file-already-present")]
-        FileAlreadyPresent = 13,
+        FileAlreadyPresent = 12,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/already-registered")]
-        AlreadyRegistered = 14,
+        AlreadyRegistered = 13,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/mod-in-use")]
-        ModInUse = 15,
+        ModInUse = 14,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/cannot-delete-only-mod-version")]
-        CannotDeleteOnlyModVersion = 16,
+        CannotDeleteOnlyModVersion = 15,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/hash-mismatch")]
-        HashMismatch = 17,
+        HashMismatch = 16,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-hash")]
-        InvalidHash = 18,
+        InvalidHash = 17,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-image-set")]
-        InvalidImageSet = 19,
+        InvalidImageSet = 18,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/cannot-delete-head-savegame-version")]
-        CannotDeleteHeadSavegameVersion = 20,
+        CannotDeleteHeadSavegameVersion = 19,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-archived")]
-        NotArchived = 21,
+        NotArchived = 20,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/batch-too-large")]
-        BatchTooLarge = 22,
+        BatchTooLarge = 21,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-cursor")]
-        InvalidCursor = 23,
+        InvalidCursor = 22,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invite-not-found")]
-        InviteNotFound = 24,
+        InviteNotFound = 23,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invite-not-usable")]
-        InviteNotUsable = 25,
+        InviteNotUsable = 24,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invite-redemption-conflict")]
-        InviteRedemptionConflict = 26,
+        InviteRedemptionConflict = 25,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-invite-limits")]
-        InvalidInviteLimits = 27,
+        InvalidInviteLimits = 26,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invite-cannot-grant-admin")]
-        InviteCannotGrantAdmin = 28,
+        InviteCannotGrantAdmin = 27,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/profile-revision-stale")]
-        ProfileRevisionStale = 29,
+        ProfileRevisionStale = 28,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-version-stale")]
-        SavegameVersionStale = 30,
+        SavegameVersionStale = 29,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-checkout-conflict")]
-        SavegameCheckoutConflict = 31,
+        SavegameCheckoutConflict = 30,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-not-checked-out")]
-        SavegameNotCheckedOut = 32,
+        SavegameNotCheckedOut = 31,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/profile-in-use-by-savegame")]
-        ProfileInUseBySavegame = 33,
+        ProfileInUseBySavegame = 32,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-mod-file-name")]
-        InvalidModFileName = 34,
+        InvalidModFileName = 33,
 
     }
 

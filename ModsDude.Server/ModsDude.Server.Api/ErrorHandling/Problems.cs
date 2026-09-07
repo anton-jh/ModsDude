@@ -360,13 +360,6 @@ public static class Problems
         Detail = $"Profile '{profileId.Value}' cannot be deleted from repo '{repoId.Value}' while a savegame follows it or was played on one of its revisions."
     };
 
-    public static CustomProblemDetails RepoNotEmpty(RepoId repoId) => new()
-    {
-        Type = ProblemType.RepoNotEmpty,
-        Title = "Repo is not empty",
-        Detail = $"Repo '{repoId.Value}' still has registered mods. Remove them before deleting the repo."
-    };
-
 
     /// <summary>
     /// Every member carries the same URI twice, and both are load bearing.
@@ -420,10 +413,6 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "user-already-member")]
         [JsonStringEnumMemberName(_typeBaseUri + "user-already-member")]
         UserAlreadyMember,
-
-        [EnumMember(Value = _typeBaseUri + "repo-not-empty")]
-        [JsonStringEnumMemberName(_typeBaseUri + "repo-not-empty")]
-        RepoNotEmpty,
 
         [EnumMember(Value = _typeBaseUri + "version-placement-conflict")]
         [JsonStringEnumMemberName(_typeBaseUri + "version-placement-conflict")]

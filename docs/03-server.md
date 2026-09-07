@@ -414,7 +414,7 @@ through an invite instead.
 | PUT | `repo/{repoId}` | Admin | Rename and/or replace adapter configuration |
 | POST | `repos/{repoId}/archive` | Admin | Puts it away. The only way a repo goes away |
 | POST | `repos/{repoId}/restore` | Admin | Brings it back under its own name. No body: repo names are not unique, so nothing can have taken it |
-| DELETE | `repo/{repoId}` | Admin | Permanent, and refused unless archived. Refuses with `repo-not-empty` while the repo has mods |
+| DELETE | `repo/{repoId}` | Admin | Permanent, and refused unless archived. Takes the whole catalog, every profile's history and every savegame with it |
 
 Note the inconsistency: the collection is `repos`, the single resource is `repo`.
 

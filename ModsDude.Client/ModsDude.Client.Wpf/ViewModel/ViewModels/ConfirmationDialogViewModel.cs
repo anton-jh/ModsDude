@@ -63,6 +63,23 @@ public partial class ConfirmationDialogViewModel(
             "Keep");
     }
 
+    /// <summary>
+    /// The permanent one for a repo, which takes the group's whole mod catalog, every profile with
+    /// its history and every savegame with it. Separate from <see cref="ConfirmDelete"/> because
+    /// that is a different order of loss from one profile or one savegame, and this dialog is the
+    /// last place anybody gets told.
+    /// </summary>
+    public static ConfirmationDialogViewModel ConfirmDeleteRepo(string name)
+    {
+        return new ConfirmationDialogViewModel(
+            "Really?",
+            $"Deleting '{name}' also deletes every mod registered in it, every profile with its whole "
+                + "history, and every savegame.\nThis action cannot be undone!",
+            IconKind.Warning,
+            "Delete it all",
+            "Keep");
+    }
+
     public static ConfirmationDialogViewModel ValidationErrors(List<string> validationErrors)
     {
         string message;

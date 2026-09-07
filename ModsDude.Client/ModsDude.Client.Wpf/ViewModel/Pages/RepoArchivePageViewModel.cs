@@ -44,6 +44,9 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
     private Guid? _highlightOnce;
 
+    private IReadOnlyList<ProfileDto> _fetchedProfiles = [];
+    private IReadOnlyList<SavegameDto> _fetchedSavegames = [];
+
 
     public RepoArchivePageViewModel(
         Repo repo,
@@ -109,49 +112,95 @@ public partial class RepoArchivePageViewModel : PageViewModel
     public bool IsEmpty => IsLoading is false && HasProfiles is false && HasSavegames is false;
 
 
+    /// <summary>
+    /// The first load runs off the UI thread, so it only fetches. The rows are filled in
+    /// <see cref="OnInitCompleted"/>: both lists are bound, and a bound collection refuses to be
+    /// changed from any thread but the dispatcher's.
+    /// </summary>
     protected override async Task InitAsync()
     {
-        await ReloadAsync();
+        (_fetchedProfiles, _fetchedSavegames) = await FetchAsync();
+    }
+
+    protected override void OnInitCompleted()
+    {
+        Publish(_fetchedProfiles, _fetchedSavegames);
+
+        IsLoading = false;
+        Notify();
+    }
+
+    /// <summary>
+    /// Reported here rather than rethrown, so the modal names what was being read - and so a page
+    /// that failed to load stops claiming it is still loading.
+    /// </summary>
+    protected override void OnInitFailed(Exception exception)
+    {
+        IsLoading = false;
+        Notify();
+
+        if (exception is OperationCanceledException)
+        {
+            // Navigated away.
+            return;
+        }
+
+        _ = _errorReporter.ShowAsync(exception, "reading the repo's archive");
     }
 
     [RelayCommand]
     private async Task Refresh() => await ReloadAsync();
 
 
+    private async Task<(IReadOnlyList<ProfileDto> Profiles, IReadOnlyList<SavegameDto> Savegames)> FetchAsync()
+    {
+        var profiles = await _profileService.GetArchivedProfiles(_repo.Id, _lifetime.Token);
+        var savegames = await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, _lifetime.Token);
+
+        return (profiles, [.. savegames]);
+    }
+
+    /// <summary>Fills the two lists. Dispatcher thread only.</summary>
+    private void Publish(IReadOnlyList<ProfileDto> profiles, IReadOnlyList<SavegameDto> savegames)
+    {
+        Profiles.Clear();
+        Savegames.Clear();
+
+        foreach (var profile in profiles)
+        {
+            Profiles.Add(new ArchivedItemViewModel(
+                profile.Id, profile.Name, profile.ArchivedAt, CanRestore, CanDelete, RestoreProfileAsync, DeleteProfileAsync)
+            {
+                IsHighlighted = profile.Id == _highlightOnce
+            });
+        }
+
+        foreach (var savegame in savegames)
+        {
+            Savegames.Add(new ArchivedItemViewModel(
+                savegame.Id, savegame.Name, savegame.ArchivedAt, CanRestore, CanDelete, RestoreSavegameAsync, DeleteSavegameAsync)
+            {
+                IsHighlighted = savegame.Id == _highlightOnce
+            });
+        }
+
+        // Used once: a refresh later should not keep re-pointing at where somebody arrived.
+        _highlightOnce = null;
+    }
+
+    /// <summary>
+    /// Rereads the archive from somewhere the user is already standing - a refresh, or the tail of a
+    /// restore or a delete. Those all run on the dispatcher, so this one publishes where it stands.
+    /// </summary>
     private async Task ReloadAsync()
     {
         IsLoading = true;
 
         try
         {
-            var profiles = await _profileService.GetArchivedProfiles(_repo.Id, _lifetime.Token);
-            var savegames = await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, _lifetime.Token);
+            var (profiles, savegames) = await FetchAsync();
 
-            Profiles.Clear();
-            Savegames.Clear();
-
-            foreach (var profile in profiles)
-            {
-                Profiles.Add(new ArchivedItemViewModel(
-                    profile.Id, profile.Name, profile.ArchivedAt, CanRestore, CanDelete, RestoreProfileAsync, DeleteProfileAsync)
-                {
-                    IsHighlighted = profile.Id == _highlightOnce
-                });
-            }
-
-            foreach (var savegame in savegames)
-            {
-                Savegames.Add(new ArchivedItemViewModel(
-                    savegame.Id, savegame.Name, savegame.ArchivedAt, CanRestore, CanDelete, RestoreSavegameAsync, DeleteSavegameAsync)
-                {
-                    IsHighlighted = savegame.Id == _highlightOnce
-                });
-            }
-
-            // Used once: a refresh later should not keep re-pointing at where somebody arrived.
-            _highlightOnce = null;
-
-            Notify();
+            Publish(profiles, savegames);
         }
         catch (OperationCanceledException)
         {

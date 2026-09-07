@@ -740,10 +740,15 @@ row, now saying which *archiving* it is for a repo that has been put away more t
 | Archive or restore a **repo** | **Admin** — it leaves every member's sidebar at once |
 | Delete permanently, all three | **Admin** — the irreversible half |
 
-**What still refuses a permanent delete** is unchanged and unrelated to archiving: a repo that holds
-mods (`repo-not-empty`), and a profile a savegame follows or was played on
-(`profile-in-use-by-savegame`). A save whose mod list is gone is not restorable, which is the only
-thing that made keeping it worth anything.
+**What still refuses a permanent delete** is unchanged and unrelated to archiving: a profile a
+savegame follows or was played on (`profile-in-use-by-savegame`). A save whose mod list is gone is
+not restorable, which is the only thing that made keeping it worth anything.
+
+**Deleting a repo is the exception, and takes everything in it** — the whole mod catalog, every
+profile with its history, every savegame with its versions and its claim log. Those refusals exist
+to stop one thing being taken out from under another; deleting the repo takes the dependants and
+the dependencies together, so there is nothing left to protect. Being archived first, by an Admin,
+is what makes it deliberate. `DeleteRepoV1Endpoint` names the order the foreign keys force.
 
 ## Client-side models
 

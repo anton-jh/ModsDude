@@ -31,6 +31,8 @@ public partial class ArchivePageViewModel : PageViewModel
 
     private readonly CancellationTokenSource _lifetime = new();
 
+    private IReadOnlyList<RepoMembershipDto> _fetched = [];
+
 
     public ArchivePageViewModel(
         RepoRepository repoRepository,
@@ -61,42 +63,84 @@ public partial class ArchivePageViewModel : PageViewModel
     public bool IsEmpty => IsLoading is false && Repos.Count == 0;
 
 
-    protected override async Task InitAsync() => await ReloadAsync();
+    /// <summary>
+    /// The first load runs off the UI thread, so it only fetches. The rows are filled in
+    /// <see cref="OnInitCompleted"/>: the list is bound, and a bound collection refuses to be
+    /// changed from any thread but the dispatcher's.
+    /// </summary>
+    protected override async Task InitAsync()
+    {
+        _fetched = await _repoRepository.GetArchivedRepos(_lifetime.Token);
+    }
+
+    protected override void OnInitCompleted()
+    {
+        Publish(_fetched);
+
+        IsLoading = false;
+        OnPropertyChanged(nameof(IsEmpty));
+    }
+
+    /// <summary>
+    /// Reported here rather than rethrown, so the modal names what was being read - and so a page
+    /// that failed to load stops claiming it is still loading.
+    /// </summary>
+    protected override void OnInitFailed(Exception exception)
+    {
+        IsLoading = false;
+        OnPropertyChanged(nameof(IsEmpty));
+
+        if (exception is OperationCanceledException)
+        {
+            // Navigated away.
+            return;
+        }
+
+        _ = _errorReporter.ShowAsync(exception, "reading the archive");
+    }
 
     [RelayCommand]
     private async Task Refresh() => await ReloadAsync();
 
 
+    /// <summary>Fills the list. Dispatcher thread only.</summary>
+    private void Publish(IReadOnlyList<RepoMembershipDto> archived)
+    {
+        // The archive is where two repos of a name are most likely to meet: it collects every
+        // one this user has put away, from every group they are in.
+        var ambiguous = RepoDisplay.FindAmbiguous(archived.Select(x => (x.Repo.Id, x.Repo.Name)));
+
+        Repos.Clear();
+
+        foreach (var membership in archived)
+        {
+            Repos.Add(new ArchivedItemViewModel(
+                membership.Repo.Id,
+                membership.Repo.Name,
+                membership.Repo.ArchivedAt,
+                // Both Admin for a repo: it is the one archived thing whose restore puts it back
+                // into every member's sidebar.
+                membership.MembershipLevel >= RepoMembershipLevel.Admin,
+                membership.MembershipLevel >= RepoMembershipLevel.Admin,
+                RestoreAsync,
+                DeleteAsync)
+            {
+                Tag = ambiguous.Contains(membership.Repo.Id) ? membership.Repo.Tag : null
+            });
+        }
+    }
+
+    /// <summary>
+    /// Rereads the archive from somewhere the user is already standing - a refresh, or the tail of a
+    /// restore or a delete. Those all run on the dispatcher, so this one publishes where it stands.
+    /// </summary>
     private async Task ReloadAsync()
     {
         IsLoading = true;
 
         try
         {
-            var archived = await _repoRepository.GetArchivedRepos(_lifetime.Token);
-
-            // The archive is where two repos of a name are most likely to meet: it collects every
-            // one this user has put away, from every group they are in.
-            var ambiguous = RepoDisplay.FindAmbiguous(archived.Select(x => (x.Repo.Id, x.Repo.Name)));
-
-            Repos.Clear();
-
-            foreach (var membership in archived)
-            {
-                Repos.Add(new ArchivedItemViewModel(
-                    membership.Repo.Id,
-                    membership.Repo.Name,
-                    membership.Repo.ArchivedAt,
-                    // Both Admin for a repo: it is the one archived thing whose restore puts it back
-                    // into every member's sidebar.
-                    membership.MembershipLevel >= RepoMembershipLevel.Admin,
-                    membership.MembershipLevel >= RepoMembershipLevel.Admin,
-                    RestoreAsync,
-                    DeleteAsync)
-                {
-                    Tag = ambiguous.Contains(membership.Repo.Id) ? membership.Repo.Tag : null
-                });
-            }
+            Publish(await _repoRepository.GetArchivedRepos(_lifetime.Token));
         }
         catch (OperationCanceledException)
         {
@@ -147,7 +191,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
     private async Task DeleteAsync(ArchivedItemViewModel item)
     {
-        var confirmation = ConfirmationDialogViewModel.ConfirmDelete(item.Name);
+        var confirmation = ConfirmationDialogViewModel.ConfirmDeleteRepo(item.Name);
 
         await _modalService.Show(confirmation);
 
@@ -165,15 +209,6 @@ public partial class ArchivePageViewModel : PageViewModel
             Status = $"'{item.Name}' is gone for good.";
 
             await ReloadAsync();
-        }
-        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.RepoNotEmpty)
-        {
-            // The mod versions hold it: every one is a blob somebody could still be syncing, and a
-            // repo row deleted out from under them would strand the lot.
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                "It still holds mods",
-                $"'{item.Name}' cannot be deleted while it has registered mods. Delete those from its "
-                    + "Mods page first - it is still reachable while it is archived."));
         }
         catch (OperationCanceledException)
         {
