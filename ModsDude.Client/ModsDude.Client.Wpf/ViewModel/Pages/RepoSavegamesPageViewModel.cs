@@ -132,6 +132,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
+    [NotifyCanExecuteChangedFor(nameof(ArchiveSavegameCommand))]
     private SavegameListItemViewModel? _selected;
 
     [ObservableProperty]
@@ -242,6 +243,55 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             await StartAsync(row, number, SavegameCheckOutMode.TakeCopy);
         }
     }
+
+    /// <summary>
+    /// Puts the selected savegame in the repo's Archive.
+    /// </summary>
+    /// <remarks>
+    /// The only way a savegame goes away, and deliberately not a delete: what it carries is backups
+    /// of somebody's play. It keeps its versions and its claim log - archiving a save somebody is
+    /// holding must not quietly release their hold on it.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanArchiveSelected))]
+    private async Task ArchiveSavegame()
+    {
+        if (Selected is not SavegameListItemViewModel row)
+        {
+            return;
+        }
+
+        var confirmation = ConfirmationDialogViewModel.ConfirmArchive(row.Name, "savegame");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            await _savegamesClient.ArchiveSavegameV1Async(_repo.Id, row.Id, _pageLifetime.Token);
+
+            await ReloadAsync(null);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "archiving a savegame");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    private bool CanArchiveSelected() => CanPruneVersions && IsWorking is false && Selected is not null;
 
     /// <summary>
     /// Deletes the selected version from the savegame's history.

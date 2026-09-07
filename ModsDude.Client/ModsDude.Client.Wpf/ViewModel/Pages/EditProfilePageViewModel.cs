@@ -42,13 +42,18 @@ public partial class EditProfilePageViewModel(
         OnPropertyChanged(nameof(OriginalName));
     }
     
+    /// <summary>
+    /// Puts the profile in the repo's Archive rather than deleting it. A profile carries a history
+    /// that makes every one of its revisions reproducible, and that is not something to lose from a
+    /// page somebody opened to rename it.
+    /// </summary>
     [RelayCommand]
-    public async Task DeleteRepo(CancellationToken cancellationToken)
+    public async Task ArchiveProfile(CancellationToken cancellationToken)
     {
-        if (await ConfirmDelete())
+        if (await ConfirmArchive())
         {
             navigationLockService.ReleaseLock(this);
-            await profileService.DeleteProfile(profile.RepoId, profile.Id, cancellationToken);
+            await profileService.ArchiveProfile(profile.RepoId, profile.Id, cancellationToken);
         }
     }
 
@@ -70,9 +75,9 @@ public partial class EditProfilePageViewModel(
     }
 
 
-    private async Task<bool> ConfirmDelete()
+    private async Task<bool> ConfirmArchive()
     {
-        var modal = ConfirmationDialogViewModel.ConfirmDelete(OriginalName);
+        var modal = ConfirmationDialogViewModel.ConfirmArchive(OriginalName, "profile");
 
         await modalService.Show(modal);
 

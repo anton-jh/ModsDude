@@ -141,6 +141,8 @@ public partial class App : Application
         services.AddSingleton<SyncPageViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
+        services.AddSingleton<RepoArchivePageViewModel.Factory>();
+        services.AddFactory<ArchivePageViewModel>();
         services.AddSingleton<InstanceSavegamesPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();

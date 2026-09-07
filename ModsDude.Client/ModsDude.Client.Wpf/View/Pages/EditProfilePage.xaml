@@ -32,7 +32,9 @@
                     Content="Save changes" Command="{Binding SaveChangesCommand}" />
 
             <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
-                    Content="Delete profile" Command="{Binding DeleteRepoCommand}" />
+                    Content="Archive profile"
+                    ToolTip="Takes it out of the sidebar and frees its name. Everything else stays, and it can be brought back from the Archive."
+                    Command="{Binding ArchiveProfileCommand}" />
         </StackPanel>
 
     </Grid>

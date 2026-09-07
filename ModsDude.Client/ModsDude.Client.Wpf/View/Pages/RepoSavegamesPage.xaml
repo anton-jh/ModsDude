@@ -183,11 +183,20 @@
                             <!-- Into the profile's own history, where two revisions can be compared
                                  properly. Repeating a cut-down comparison here would be a second
                                  answer to keep true. -->
-                            <Button Grid.Column="1"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Content="See the profile's history"
-                                    ToolTip="Opens this save's profile, where any two revisions can be compared."
-                                    Command="{Binding CompareRevisionsCommand}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Style="{DynamicResource SubtleMenuButton}"
+                                        Content="See the profile's history"
+                                        ToolTip="Opens this save's profile, where any two revisions can be compared."
+                                        Command="{Binding CompareRevisionsCommand}" />
+
+                                <!-- The only way a savegame goes away. It keeps its versions and
+                                     whoever holds it; it leaves this list and frees its name. -->
+                                <Button Style="{DynamicResource SubtleMenuButton}"
+                                        Content="Archive"
+                                        ToolTip="Moves it to the repo's Archive. Nothing about the save changes and it can be brought back."
+                                        Command="{Binding ArchiveSavegameCommand}"
+                                        Visibility="{Binding CanPruneVersions, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
                         </Grid>
 
                         <Grid Grid.Row="1">

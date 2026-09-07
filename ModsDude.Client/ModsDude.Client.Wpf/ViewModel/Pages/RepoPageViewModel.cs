@@ -47,6 +47,7 @@ public partial class RepoPageViewModel
         CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
+        RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ProfileService profileService,
         LastSelectionRepository lastSelectionRepository,
         NavigationLockService navigationLockService,
@@ -89,6 +90,10 @@ public partial class RepoPageViewModel
 
             MenuItems.Add(_savesMenuItem);
         }
+
+        // Open to everybody: a profile that quietly vanished from the sidebar has to be explainable
+        // to whoever noticed, and only an admin can move anything in or out of it anyway.
+        MenuItems.Add(new MenuItemViewModel("Archive", () => repoArchivePageViewModelFactory.Create(repo)));
 
         MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
             .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));

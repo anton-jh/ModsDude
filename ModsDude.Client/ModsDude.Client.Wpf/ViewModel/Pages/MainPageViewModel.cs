@@ -36,7 +36,8 @@ public partial class MainPageViewModel
         ShellNavigationService shellNavigationService,
         AccountViewModel account,
         IDialogService dialogService,
-        IModalService modalService)
+        IModalService modalService,
+        IFactory<ArchivePageViewModel> archivePageViewModelFactory)
     {
         Account = account;
 
@@ -46,6 +47,10 @@ public partial class MainPageViewModel
             new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")),
             _createRepoMenuItem,
             new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create),
+            // Above Settings, because it is a place repos went rather than a preference. A repo
+            // archived by any admin leaves every member's sidebar, so this is where somebody looks
+            // when one they were using is suddenly not there.
+            new MenuItemViewModel("Archive", archivePageViewModelFactory.Create),
             new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
         ];
 

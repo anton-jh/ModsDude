@@ -106,6 +106,42 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
         _store.Save();
     }
 
+    /// <summary>
+    /// Stops every instance tracking a profile that no longer exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Called when a profile is permanently deleted from a repo's archive. An <em>archived</em>
+    /// profile is deliberately still tracked - it exists, and everything pointing at it goes on
+    /// pointing at it - so this is the one event that lets go, and it is the deletion rather than
+    /// the archiving.
+    /// </para>
+    /// <para>
+    /// Local state, which is why it lives here: the server has no idea which machines were pointed
+    /// at the profile, and an instance whose active profile is a dangling id would report drift
+    /// against a mod list nobody can read.
+    /// </para>
+    /// </remarks>
+    public void StopTracking(Guid profileId)
+    {
+        var affected = Instances
+            .Where(x => x.ActiveProfile?.ProfileId == profileId)
+            .ToList();
+
+        if (affected.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var instance in affected)
+        {
+            instance.SetActiveProfile(null);
+        }
+
+        // One save for the batch: they were all made unusable by one event.
+        _store.Save();
+    }
+
     public void Delete(LocalInstance instance)
     {
         _state.Instances.Remove(instance.Id);

@@ -143,14 +143,75 @@ public class ProfileService(
         }
     }
 
+    /// <summary>
+    /// Permanently deletes an archived profile. Refused by the server for one that is still live -
+    /// deleting is reached from the Archive and nowhere else.
+    /// </summary>
     public async Task DeleteProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
         await profileClient.DeleteProfileV1Async(repoId, profileId, cancellationToken);
 
+        // Ordinarily already absent - it was archived to get here - but a stale page is cheap to
+        // tolerate and expensive to assume away.
         if (FindProfile(profileId) is ProfileDto removed)
         {
             Profiles.Remove(removed);
         }
+    }
+
+    /// <summary>
+    /// Puts a profile away. It leaves the sidebar and gives up its name; everything else about it
+    /// stays exactly as it was - see the server's <c>IArchivable</c>.
+    /// </summary>
+    public async Task ArchiveProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    {
+        await profileClient.ArchiveProfileV1Async(repoId, profileId, cancellationToken);
+
+        // The live collection is the sidebar, so an archived profile leaves it the same way a
+        // deleted one used to. It has not gone anywhere - the Archive page reads its own list.
+        if (FindProfile(profileId) is ProfileDto archived)
+        {
+            Profiles.Remove(archived);
+        }
+    }
+
+    /// <summary>
+    /// Brings one back, optionally under a new name.
+    /// </summary>
+    /// <remarks>
+    /// An archived profile gave up its name, so the one it wants back may since have been taken.
+    /// That comes out of here as a <see cref="UserFriendlyException"/> the caller turns into the
+    /// rename prompt - the clash is deferred to this moment precisely because it is the only one
+    /// with somebody present to resolve it.
+    /// </remarks>
+    public async Task<ProfileDto> RestoreProfile(Guid repoId, Guid profileId, string? name, CancellationToken cancellationToken)
+    {
+        ProfileDto restored;
+
+        try
+        {
+            restored = await profileClient.RestoreProfileV1Async(
+                repoId, profileId, new RestoreRequest { Name = name }, cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
+        {
+            throw new UserFriendlyException("Name taken", null, ex);
+        }
+
+        Profiles.Add(restored);
+
+        ProfileCreated?.Invoke(restored.Id);
+
+        return restored;
+    }
+
+    /// <summary>
+    /// The repo's archived profiles. Read on demand rather than held: the Archive is a page somebody
+    /// visits, not a thing the shell is built from.
+    /// </summary>
+    public async Task<IReadOnlyList<ProfileDto>> GetArchivedProfiles(Guid repoId, CancellationToken cancellationToken)
+    {
+        return [.. await profileClient.GetArchivedProfilesV1Async(repoId, cancellationToken)];
     }
 
 

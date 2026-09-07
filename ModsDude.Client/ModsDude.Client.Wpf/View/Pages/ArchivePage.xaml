@@ -1,0 +1,105 @@
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.ArchivePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      xmlns:vmv="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      mc:Ignorable="d"
+      d:DataContext="{d:DesignInstance Type=vm:ArchivePageViewModel, IsDesignTimeCreatable=False}"
+      Title="Archive">
+
+    <Page.Resources>
+        <!-- One row shape for both lists: an archived profile and an archived savegame are the same
+             three things - what it was called, when it was put away, and the two verbs. -->
+        <DataTemplate x:Key="ArchivedRow" DataType="{x:Type vmv:ArchivedItemViewModel}">
+            <Border Padding="12"
+                    Margin="0 0 0 8"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <Grid ColumnDefinitions="* auto auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                        <!-- Not decoration: archived things do not hold their names, so several may
+                             be called this, and when they were put away is what tells them apart. -->
+                        <TextBlock Text="{Binding ArchivedText}"
+                                   Margin="0 2 0 0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Margin="8 0 0 0"
+                            VerticalAlignment="Center"
+                            Content="Restore"
+                            ToolTip="Brings it back into the repo. You will be asked for another name if this one has been taken since."
+                            Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Command="{Binding RestoreCommand}" />
+
+                    <Button Grid.Column="2"
+                            Margin="8 0 0 0"
+                            VerticalAlignment="Center"
+                            Content="Delete for good"
+                            ToolTip="Permanent. This is the only place it can be done from."
+                            Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Command="{Binding DeleteCommand}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Grid RowDefinitions="auto auto auto auto *">
+
+            <TextBlock Grid.Row="0"
+                       Style="{DynamicResource TitleTextBlockStyle}"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="Archive" />
+
+            <TextBlock Grid.Row="1"
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                       Text="Repos"
+                       Margin="0 8 0 16" />
+
+            <TextBlock Grid.Row="2"
+                       Margin="0 0 0 16"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="Repos the group has put away. Archiving a repo takes it out of everybody's sidebar at once - it is not a personal hidden list - and it can be brought back at any time." />
+
+            <Border Grid.Row="3"
+                    Margin="0 0 0 16"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock Text="{Binding Status}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Border>
+
+            <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Repos}"
+                                  ItemTemplate="{StaticResource ArchivedRow}" />
+
+                    <TextBlock Margin="0 24 0 0"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="You have no archived repos."
+                               Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</Page>

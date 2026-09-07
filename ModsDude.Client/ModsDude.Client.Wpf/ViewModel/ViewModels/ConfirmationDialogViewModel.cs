@@ -34,6 +34,25 @@ public partial class ConfirmationDialogViewModel(
     }
 
 
+    /// <summary>
+    /// Putting something away, which is the only way a repo, profile or savegame ever goes away. It
+    /// is reversible, so it asks far less insistently than a delete - the weight belongs on the
+    /// permanent one, taken later from the archive.
+    /// </summary>
+    public static ConfirmationDialogViewModel ConfirmArchive(string name, string what)
+    {
+        return new ConfirmationDialogViewModel(
+            $"Archive this {what}?",
+            $"'{name}' leaves the list and gives up its name. Nothing else about it changes, and it can be "
+                + "brought back from the Archive at any time.",
+            IconKind.Question,
+            "Archive it",
+            "Keep it here");
+    }
+
+    /// <summary>
+    /// The permanent one, reached from the archive. This is the dialog that gets to be alarming.
+    /// </summary>
     public static ConfirmationDialogViewModel ConfirmDelete(string name)
     {
         return new ConfirmationDialogViewModel(

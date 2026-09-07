@@ -132,6 +132,10 @@ public class RepoRepository(
         }
     }
 
+    /// <summary>
+    /// Permanently deletes an archived repo. Refused by the server for one that is still live, and
+    /// for one that still holds mods.
+    /// </summary>
     public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)
     {
         await repoClient.DeleteRepoV1Async(id, cancellationToken);
@@ -140,6 +144,50 @@ public class RepoRepository(
         {
             Remove(removed);
         }
+    }
+
+    /// <summary>
+    /// Puts a repo away, for everybody. Archiving is repo state rather than membership state, so
+    /// this is not a personal "hide it from me" - it leaves every member's sidebar at once.
+    /// </summary>
+    public async Task ArchiveRepo(Guid id, CancellationToken cancellationToken)
+    {
+        await repoClient.ArchiveRepoV1Async(id, cancellationToken);
+
+        if (FindRepo(id) is Repo archived)
+        {
+            Remove(archived);
+        }
+    }
+
+    /// <summary>
+    /// Brings one back, optionally under a new name - which is what a clash is resolved by, since an
+    /// archived repo gave up its name and repo names are unique across the whole server.
+    /// </summary>
+    public async Task RestoreRepo(Guid id, string? name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await repoClient.RestoreRepoV1Async(id, new RestoreRequest { Name = name }, cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
+        {
+            throw new UserFriendlyException("Name taken", null, ex);
+        }
+
+        // Refetched rather than constructed here: a Repo wraps a membership, hydrates an adapter and
+        // holds a collection synchronizer, and half-building one from a restore response is how the
+        // two get to disagree.
+        await RefreshRepos(cancellationToken);
+    }
+
+    /// <summary>
+    /// The archived repos this user is a member of. Read on demand: the Archive is a page somebody
+    /// visits, not part of the shell.
+    /// </summary>
+    public async Task<IReadOnlyList<RepoMembershipDto>> GetArchivedRepos(CancellationToken cancellationToken)
+    {
+        return [.. await repoClient.GetArchivedReposV1Async(cancellationToken)];
     }
 
 

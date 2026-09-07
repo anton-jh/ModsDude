@@ -673,6 +673,45 @@ because nothing runs to close it and a job that did would be inventing an event 
 what actually happened outranks what would have happened. The distinction is the point of the type:
 "Anton has had this since 3 March" must not read as "Anton has this".
 
+## Archiving
+
+Repos, profiles and savegames are **never deleted directly**. Each is the thing a group's shared
+work hangs off, and each takes something irreplaceable with it — a profile's history, a savegame's
+backups, a repo's whole catalog. Archiving is how one goes away; permanent deletion is a second act,
+reached from an archive and refused outright on anything still live (`not-archived`).
+
+`IArchivable` is the whole contract: a nullable `ArchivedAt`, `Archive(now)`, and `Restore(name?)`.
+
+**Archiving changes exactly two things: visibility, and the name.** The entity still exists, still
+answers to its id, and everything pointing at it keeps pointing at it — an instance goes on tracking
+an archived profile, a savegame goes on following one, a claim on an archived savegame is not
+released. Anything more would make the archive a second kind of deletion wearing a gentler word.
+
+**An archived entity does not hold its name.** The uniqueness indexes are filtered
+(`WHERE "ArchivedAt" IS NULL`), the same shape as the checkout log's one-open-row index, so a name
+is free the instant it is archived and any number of archived things may share one. They are told
+apart by **when they were archived**, which is why `ArchivedAt` is on the DTO rather than being an
+implementation detail.
+
+The cost lands on the way back. `Restore` takes an optional new name, and restoring into a name
+something live has since taken is refused with `name-taken` — the clash is deferred to the one
+moment somebody is present to decide. `Archive` is idempotent and does **not** restamp: the
+timestamp is what orders somebody's archive, so archiving twice must not move it.
+
+Repo names gained a unique index here for the first time. They have always been documented as
+globally unique and were only ever checked by the endpoint, so two people creating one name at the
+same moment both won; writing the archiving filter meant writing the index it filters.
+
+| Action | Level |
+| --- | --- |
+| Read an archive | Guest — a profile that quietly vanished has to be explainable to whoever noticed |
+| Archive, restore, delete permanently | **Admin** — making the group's shared work disappear is not part of running a repo |
+
+**What still refuses a permanent delete** is unchanged and unrelated to archiving: a repo that holds
+mods (`repo-not-empty`), and a profile a savegame follows or was played on
+(`profile-in-use-by-savegame`). A save whose mod list is gone is not restorable, which is the only
+thing that made keeping it worth anything.
+
 ## Client-side models
 
 The client does not reuse the server's entities. It has its own, in

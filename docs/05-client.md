@@ -601,6 +601,35 @@ Both dialogs close themselves before navigating, and regardless of whether navig
 page holding unsaved changes is entitled to say no, and reopening a dialog over the page the user is
 still standing on would be the app arguing with itself.
 
+## The archive, on the client
+
+Two pages, both called Archive. `ArchivePage` at the top level lists the archived repos this user is
+a member of; `RepoArchivePage` under a repo lists its archived profiles and savegames together — one
+page because they answer one question, and two pages called Archive under one repo would be two
+places to look.
+
+**Both are open to everybody; only Restore and Delete are Admin.** A profile that quietly vanished
+from the sidebar has to be explainable to whoever noticed, and hiding the archive would make "where
+did it go" a question only an admin could answer.
+
+Every row carries **when it was archived**, and that is load-bearing rather than decorative:
+archived things do not hold their names, so several rows may be called the same thing.
+
+**Restoring discovers a clash by trying, not by checking first.** A pre-check would be a second copy
+of a rule the server and its filtered index already own, and it would still be racing. `name-taken`
+comes back, `RenameModalViewModel` asks for another name, and the restore is retried once.
+
+`Delete profile` and `Delete repo` are gone from the pages that had them — those buttons archive
+now. The one place a permanent delete exists is the archive, which is what makes it a second
+deliberate act rather than a click away from a list somebody is browsing.
+
+**Deleting a profile makes every instance let go of it.** `LocalInstanceRepository.StopTracking`
+clears the active profile of any instance pointed at it — local state the server knows nothing
+about, and an instance whose active profile is a dangling id would report drift against a mod list
+nobody can read. An *archived* profile is deliberately still tracked: it exists, and everything
+pointing at it goes on pointing at it. It is the deletion that lets go, not the archiving.
+
+
 ## Telling two users with one name apart
 
 Display names are not unique — see
@@ -696,7 +725,9 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |
 | `RepoOverviewPage` | Working | Instance status and profiles at a glance |
-| `RepoAdminPage` | Working | Rename repo, edit base settings, delete repo |
+| `RepoAdminPage` | Working | Rename repo, edit base settings, archive repo |
+| `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |
+| `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
 | `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |

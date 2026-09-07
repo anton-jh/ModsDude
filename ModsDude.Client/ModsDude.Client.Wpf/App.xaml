@@ -92,6 +92,12 @@
             <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
                 <p:RepoModsPage />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:ArchivePageViewModel}">
+                <p:ArchivePage />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type pvm:RepoArchivePageViewModel}">
+                <p:RepoArchivePage />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:SettingsPageViewModel}">
                 <p:SettingsPage />
             </DataTemplate>
@@ -125,6 +131,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ProfileLockedUpdatesModalViewModel}">
                 <uc:ProfileLockedUpdatesDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:RenameModalViewModel}">
+                <uc:RenameDialog />
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ProfileSaveAsModalViewModel}">
                 <uc:ProfileSaveAsDialog />

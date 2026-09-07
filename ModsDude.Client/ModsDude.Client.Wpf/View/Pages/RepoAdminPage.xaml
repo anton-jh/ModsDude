@@ -50,7 +50,9 @@
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
 
             <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
-                    Content="Delete repo" Command="{Binding Path=DeleteRepoCommand}" />
+                    Content="Archive repo"
+                    ToolTip="Takes it out of everybody's sidebar and frees its name. It can be brought back from the Archive."
+                    Command="{Binding Path=ArchiveRepoCommand}" />
         </StackPanel>
 
     </Grid>

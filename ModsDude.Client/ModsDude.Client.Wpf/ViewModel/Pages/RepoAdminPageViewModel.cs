@@ -62,13 +62,17 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(OriginalName));
     }
 
+    /// <summary>
+    /// Puts the repo in the top-level Archive rather than deleting it - for every member at once,
+    /// since archiving is repo state and not membership state.
+    /// </summary>
     [RelayCommand]
-    public async Task DeleteRepo(CancellationToken cancellationToken)
+    public async Task ArchiveRepo(CancellationToken cancellationToken)
     {
-        if (await ConfirmDelete())
+        if (await ConfirmArchive())
         {
             _navigationLockService.ReleaseLock(this);
-            await _repoService.DeleteRepo(_repo.Id, cancellationToken);
+            await _repoService.ArchiveRepo(_repo.Id, cancellationToken);
         }
     }
 
@@ -98,9 +102,9 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         return errors;
     }
 
-    private async Task<bool> ConfirmDelete()
+    private async Task<bool> ConfirmArchive()
     {
-        var modal = ConfirmationDialogViewModel.ConfirmDelete(OriginalName);
+        var modal = ConfirmationDialogViewModel.ConfirmArchive(OriginalName, "repo");
 
         await _modalService.Show(modal);
 
