@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
@@ -9,9 +11,20 @@ using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
-public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
+public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null) : IBaseModAdapter
 {
     private static readonly string[] _imageExtensions = [".dds", ".png", ".jpg", ".jpeg"];
+
+    /// <summary>
+    /// A folder scan skips what it cannot read, which is correct and also silent - in a mod folder
+    /// every skip is a mod that has vanished from the catalog. Debug, because in Downloads most
+    /// files are not mods and this would say so a thousand times; that is exactly the level to turn
+    /// on when a mod is missing and nobody can say why.
+    /// </summary>
+    protected ILogger Log { get; } = loggerFactory?.CreateLogger<FarmingSimulatorBaseModAdapter>()
+        ?? NullLogger<FarmingSimulatorBaseModAdapter>.Instance;
+
+    protected ILoggerFactory? Loggers { get; } = loggerFactory;
 
 
     /// <summary>
@@ -43,7 +56,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
             };
 
             // Indexed rather than collected, so the results keep the order of the folder.
-            Parallel.For(0, files.Count, options, i => mods[i] = GetModFromFile(files[i], cancellationToken));
+            Parallel.For(0, files.Count, options, i => mods[i] = GetModFromFile(files[i], Log, cancellationToken));
 
             return mods.OfType<LocalMod>().ToList();
         }, cancellationToken);
@@ -55,7 +68,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     /// still has open, and archives whose central directory does not add up - so a file that cannot
     /// be read as a mod is skipped rather than taking the whole folder's scan down with it.
     /// </summary>
-    private static LocalMod? GetModFromFile(string path, CancellationToken cancellationToken)
+    private static LocalMod? GetModFromFile(string path, ILogger log, CancellationToken cancellationToken)
     {
         try
         {
@@ -64,6 +77,8 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or XmlException)
         {
             // A filter rather than a catch body, so a cancelled scan still unwinds.
+            log.LogDebug(ex, "Skipped {File}: it could not be read as a mod.", path);
+
             return null;
         }
     }
@@ -279,7 +294,7 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
     {
         var instanceSettings = FarmingSimulatorInstanceSettings.Deserialize(serializedInstanceSettings);
         instanceSettings.EnsureValid();
-        return new FarmingSimulatorInstanceModAdapter(instanceSettings);
+        return new FarmingSimulatorInstanceModAdapter(instanceSettings, Loggers);
     }
 
     public IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings)
@@ -289,13 +304,15 @@ public class FarmingSimulatorBaseModAdapter : IBaseModAdapter
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
         }
         settings.EnsureValid();
-        return new FarmingSimulatorInstanceModAdapter(settings);
+        return new FarmingSimulatorInstanceModAdapter(settings, Loggers);
     }
 }
 
 
-public class FarmingSimulatorInstanceModAdapter(FarmingSimulatorInstanceSettings instanceSettings)
-    : FarmingSimulatorBaseModAdapter, IInstanceModAdapter
+public class FarmingSimulatorInstanceModAdapter(
+    FarmingSimulatorInstanceSettings instanceSettings,
+    ILoggerFactory? loggerFactory = null)
+    : FarmingSimulatorBaseModAdapter(loggerFactory), IInstanceModAdapter
 {
     public string ModFolder => Path.Combine(
         instanceSettings.GameDataFolder ?? throw new InvalidOperationException("Instance settings carry no game data folder."),

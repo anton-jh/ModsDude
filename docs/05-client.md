@@ -130,12 +130,24 @@ re-fetch or a leftover temp file. `ModImportService` logs at `Record`, the one f
 unfinished item passes through, which is why the four catch sites above it write nothing
 themselves.
 
-Three deliberate exceptions, all of them expected high-volume fallbacks rather than swallowed
-failures: `FileLinks` and `KnownFolders` probing for OS APIs that may not exist,
-`ModSyncPlanner` failing to hash a file the running game holds open, and the Farming Simulator
-mod adapter skipping the non-mods that make up most of a Downloads folder. Logging any of them
-per occurrence would bury everything else. Where the *outcome* matters it is logged once by the
-caller instead — `ModSyncService` records falling back from hardlinks to copying.
+Two deliberate exceptions, both OS capability probes rather than swallowed failures: `FileLinks`
+and `KnownFolders` asking for APIs that may not exist, and `ModSyncPlanner` failing to hash a file
+the running game holds open. Where the *outcome* of one matters it is logged once by the caller
+instead — `ModSyncService` records falling back from hardlinks to copying.
+
+**The game adapters log too.** They were the awkward case: they are built by capability factories
+rather than by the container, so there was no obvious seam for a logger. There is one — the
+Farming Simulator adapter is a DI singleton like every other `IGameAdapter`, so it takes an
+`ILoggerFactory` and hands it down through `WithBaseSettings` and `WithInstanceSettings` to the mod
+and savegame adapters it builds. No interface changed; the capability lists stopped being static,
+which is the whole cost.
+
+It was worth it because those adapters degrade rather than throw, by design, and a degraded result
+is indistinguishable from an ordinary one. A slot whose career file will not parse reads as
+"a save this game will not name" — a `Warning`, because the user can see something is wrong and had
+no other way to find out why. A folder scan that skips a file reads as a mod that is simply not
+there — `Debug`, because in Downloads most files are not mods and it would say so a thousand times,
+which makes it exactly the level to turn on when a mod is missing and nobody can say why.
 
 ### Absorbed is not hidden
 

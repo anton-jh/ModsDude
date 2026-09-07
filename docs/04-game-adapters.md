@@ -394,6 +394,15 @@ so it is counted from the players who have connected to each farm. More than one
 been shared; one is a save somebody has only ever played alone. It cannot tell a game that was
 hosted and never joined from a singleplayer one, and the wording does not pretend to.
 
+**The adapter is handed an `ILoggerFactory`.** It is a DI singleton like every other `IGameAdapter`,
+and it passes the factory down to the mod and savegame adapters its capability factories build - so
+the capability lists are instance fields rather than static ones. That matters here more than
+anywhere: every read in this file degrades rather than throws, and a degraded slot is
+indistinguishable on screen from an ordinary one. A career file that will not parse is a `Warning`;
+a field that is merely absent says nothing, and one that is present and unreadable is a `Debug`,
+because the difference between "this save records no playtime" and "this adapter no longer
+understands the layout" is exactly what a silent fallback hides.
+
 Every line is optional and independent. A field this adapter cannot read costs that line and
 nothing else, and a career file that will not parse at all still leaves the slot **occupied** — the
 one mistake that matters, since an empty slot is the one the engine writes into without asking.

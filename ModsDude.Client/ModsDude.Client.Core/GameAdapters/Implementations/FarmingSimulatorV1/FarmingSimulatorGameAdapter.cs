@@ -1,10 +1,19 @@
-﻿using ModsDude.Client.Core.Exceptions;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
-public class FarmingSimulatorGameAdapter : IGameAdapter
+public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null) : IGameAdapter
 {
+    /// <summary>
+    /// Handed down to the capability adapters, which read files somebody else wrote and degrade
+    /// rather than throw when one will not parse - so without this the degrading is invisible.
+    /// Optional, and null in a designer or a test that constructs an adapter directly.
+    /// </summary>
+    protected ILoggerFactory Loggers { get; } = loggerFactory ?? NullLoggerFactory.Instance;
+
     public GameAdapterId Id { get; } = new("_farming_simulator", 1);
     public string DisplayName { get; } = "Farming Simulator";
     public string Description { get; } = "For Farming Simulator 22 and 25.";
@@ -22,7 +31,7 @@ public class FarmingSimulatorGameAdapter : IGameAdapter
 
         settings.EnsureValid();
 
-        return new FarmingSimulatorBaseGameAdapter(settings);
+        return new FarmingSimulatorBaseGameAdapter(settings, Loggers);
     }
 
     public IBaseGameAdapter WithBaseSettings(DynamicForm baseSettings)
@@ -34,17 +43,21 @@ public class FarmingSimulatorGameAdapter : IGameAdapter
 
         settings.EnsureValid();
 
-        return new FarmingSimulatorBaseGameAdapter(settings);
+        return new FarmingSimulatorBaseGameAdapter(settings, Loggers);
     }
 }
 
 public class FarmingSimulatorBaseGameAdapter(
-    FarmingSimulatorBaseSettings settings)
-    : FarmingSimulatorGameAdapter, IBaseGameAdapter
+    FarmingSimulatorBaseSettings settings,
+    ILoggerFactory? loggerFactory = null)
+    : FarmingSimulatorGameAdapter(loggerFactory), IBaseGameAdapter
 {
-    private static readonly List<object> _capabilities = [
-        new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter()),
-        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter())
+    // Instance rather than static, now that the adapters it builds are handed a logger: a static
+    // list would close over whichever adapter happened to build it first and hand those loggers to
+    // every other.
+    private readonly List<object> _capabilities = [
+        new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter(loggerFactory)),
+        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(loggerFactory))
         ];
 
 
@@ -93,7 +106,7 @@ public class FarmingSimulatorBaseGameAdapter(
             ?? throw new ArgumentException("Could not deserialize instance settings");
         instanceSettings.EnsureValid();
 
-        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, instanceSettings);
+        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, instanceSettings, Loggers);
     }
 
     public IInstanceGameAdapter WithInstanceSettings(DynamicForm instanceSettings)
@@ -102,20 +115,21 @@ public class FarmingSimulatorBaseGameAdapter(
         {
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
         }
-        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, settings);
+        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, settings, Loggers);
     }
 }
 
 
 public class FarmingSimulatorInstanceGameAdapter(
     FarmingSimulatorBaseSettings baseSettings,
-    FarmingSimulatorInstanceSettings instanceSettings)
-    : FarmingSimulatorBaseGameAdapter(baseSettings), IInstanceGameAdapter
+    FarmingSimulatorInstanceSettings instanceSettings,
+    ILoggerFactory? loggerFactory = null)
+    : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory), IInstanceGameAdapter
 {
     // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
     private readonly List<object> _capabilities = [
-        new Func<IInstanceModAdapter>(() => new FarmingSimulatorInstanceModAdapter(instanceSettings)),
-        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter(instanceSettings))
+        new Func<IInstanceModAdapter>(() => new FarmingSimulatorInstanceModAdapter(instanceSettings, loggerFactory)),
+        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter(instanceSettings, loggerFactory))
         ];
 
 

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
@@ -8,8 +10,18 @@ using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
-public class FarmingSimulatorBaseSavegameAdapter : IBaseSavegameAdapter
+public class FarmingSimulatorBaseSavegameAdapter(ILoggerFactory? loggerFactory = null) : IBaseSavegameAdapter
 {
+    /// <summary>
+    /// Everything here degrades rather than throws, so a slot that reads as unnamed and
+    /// undescribed looks exactly like one the user has never touched. This is where the difference
+    /// is written down.
+    /// </summary>
+    protected ILogger Log { get; } = loggerFactory?.CreateLogger<FarmingSimulatorBaseSavegameAdapter>()
+        ?? NullLogger<FarmingSimulatorBaseSavegameAdapter>.Instance;
+
+    protected ILoggerFactory? Loggers { get; } = loggerFactory;
+
     /// <summary>
     /// Farming Simulator has a fixed set of numbered folders and no way to add another, so a save
     /// always fills or displaces one that is already there.
@@ -21,7 +33,7 @@ public class FarmingSimulatorBaseSavegameAdapter : IBaseSavegameAdapter
     {
         var instanceSettings = FarmingSimulatorInstanceSettings.Deserialize(serializedInstanceSettings);
         instanceSettings.EnsureValid();
-        return new FarmingSimulatorInstanceSavegameAdapter(instanceSettings);
+        return new FarmingSimulatorInstanceSavegameAdapter(instanceSettings, Loggers);
     }
 
     public IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings)
@@ -31,13 +43,15 @@ public class FarmingSimulatorBaseSavegameAdapter : IBaseSavegameAdapter
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
         }
         settings.EnsureValid();
-        return new FarmingSimulatorInstanceSavegameAdapter(settings);
+        return new FarmingSimulatorInstanceSavegameAdapter(settings, Loggers);
     }
 }
 
 
-public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSettings instanceSettings)
-    : FarmingSimulatorBaseSavegameAdapter, IInstanceSavegameAdapter
+public class FarmingSimulatorInstanceSavegameAdapter(
+    FarmingSimulatorInstanceSettings instanceSettings,
+    ILoggerFactory? loggerFactory = null)
+    : FarmingSimulatorBaseSavegameAdapter(loggerFactory), IInstanceSavegameAdapter
 {
     /// <summary>
     /// The game offers this many slots and no more. A number about one game, which is exactly why it
@@ -97,7 +111,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             Parallel.For(0, _slotCount, options, i =>
             {
                 var id = new SavegameSlotId($"savegame{i + 1}");
-                slots[i] = ReadSlot(id, GetSlotPath(id), cancellationToken);
+                slots[i] = ReadSlot(id, GetSlotPath(id), Log, cancellationToken);
             });
 
             return slots;
@@ -120,7 +134,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
     /// because an empty slot is the one the engine writes to without asking. Every detail is likewise
     /// optional - a field this adapter cannot read costs that one line and nothing else.
     /// </remarks>
-    internal static SavegameSlot ReadSlot(SavegameSlotId id, string slotPath, CancellationToken cancellationToken)
+    internal static SavegameSlot ReadSlot(SavegameSlotId id, string slotPath, ILogger log, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -131,9 +145,14 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             return new SavegameSlot(id, null, false, []);
         }
 
-        var maybeCareer = ReadCareer(careerFile);
+        var maybeCareer = ReadCareer(careerFile, log);
         if (maybeCareer.HasValue is false)
         {
+            // Warning rather than debug: the user is looking at "a save this game will not name" and
+            // has no other way to find out why. A game that is mid-write is the innocent cause and
+            // the reason this is not louder still.
+            log.LogWarning("Slot {Slot} has a career file that could not be read; it will show as unnamed.", id.Value);
+
             return new SavegameSlot(id, null, true, []);
         }
 
@@ -151,7 +170,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             id,
             name.HasValue ? name.Value : null,
             true,
-            ReadDetails(career, settings, slotPath, careerFile));
+            ReadDetails(career, settings, slotPath, careerFile, log));
     }
 
 
@@ -160,7 +179,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
     /// playing, when they last did, how long they have been at it, and then the rest.
     /// </summary>
     private static IReadOnlyList<SavegameDetail> ReadDetails(
-        XElement career, Maybe<XElement> settings, string slotPath, string careerFile)
+        XElement career, Maybe<XElement> settings, string slotPath, string careerFile, ILogger log)
     {
         var details = new List<SavegameDetail>();
 
@@ -178,7 +197,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
         // save between machines has rewritten the file's own timestamp. That timestamp is the
         // fallback, because a save with no saveDate still has a "when" worth showing.
         Add(SavegameDetail.Ids.LastPlayed, "Last played",
-            Text(settings, "saveDate") ?? LastWrittenText(careerFile));
+            Text(settings, "saveDate") ?? LastWrittenText(careerFile, log));
 
         Add(SavegameDetail.Ids.Started, "Started", Text(settings, "creationDate"));
 
@@ -186,10 +205,10 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
         // been silently reporting no playtime at all.
         var statistics = Maybe.From(career.Element("statistics"));
 
-        Add(SavegameDetail.Ids.Playtime, "Played", Playtime(Text(statistics, "playTime")));
-        Add(SavegameDetail.Ids.Money, "Money", Money(Text(statistics, "money")));
+        Add(SavegameDetail.Ids.Playtime, "Played", Playtime(Text(statistics, "playTime"), log));
+        Add(SavegameDetail.Ids.Money, "Money", Money(Text(statistics, "money"), log));
         Add(SavegameDetail.Ids.Difficulty, "Difficulty", Difficulty(Text(settings, "economicDifficulty")));
-        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", Multiplayer(slotPath));
+        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", Multiplayer(slotPath, log));
 
         return details;
     }
@@ -209,7 +228,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
     /// hosted and never joined from a singleplayer one, and does not pretend to.
     /// </para>
     /// </remarks>
-    private static string? Multiplayer(string slotPath)
+    private static string? Multiplayer(string slotPath, ILogger log)
     {
         var farmsFile = Path.Combine(slotPath, _farmsFile);
 
@@ -218,7 +237,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             return null;
         }
 
-        var maybeFarms = ReadXml(farmsFile);
+        var maybeFarms = ReadXml(farmsFile, log);
         if (maybeFarms.HasValue is false)
         {
             return null;
@@ -257,10 +276,19 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
     /// Playtime is minutes, as an invariant decimal. Anything else is a layout this adapter does not
     /// know, and an unreadable playtime costs a line rather than a slot.
     /// </summary>
-    private static string? Playtime(string? raw)
+    private static string? Playtime(string? raw, ILogger log)
     {
-        if (raw is null || double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) is false)
+        if (raw is null)
         {
+            return null;
+        }
+
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) is false)
+        {
+            // The element was there and this adapter could not read it, which is a layout change
+            // rather than a save that simply does not record playtime. Worth telling apart.
+            log.LogDebug("Could not read '{Value}' as a playtime in minutes.", raw);
+
             return null;
         }
 
@@ -273,11 +301,21 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             : $"{played.TotalHours:N0} h";
     }
 
-    private static string? Money(string? raw)
+    private static string? Money(string? raw, ILogger log)
     {
-        return raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var amount)
-            ? amount.ToString("N0", CultureInfo.CurrentCulture)
-            : null;
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var amount) is false)
+        {
+            log.LogDebug("Could not read '{Value}' as a money balance.", raw);
+
+            return null;
+        }
+
+        return amount.ToString("N0", CultureInfo.CurrentCulture);
     }
 
     /// <summary>The game writes these in caps, which reads as shouting in a list of sentences.</summary>
@@ -288,7 +326,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
             : string.Concat(raw[..1].ToUpperInvariant(), raw[1..].ToLowerInvariant());
     }
 
-    private static string? LastWrittenText(string careerFile)
+    private static string? LastWrittenText(string careerFile, ILogger log)
     {
         try
         {
@@ -296,6 +334,8 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            log.LogDebug(exception, "Could not read when {File} was last written.", careerFile);
+
             return null;
         }
     }
@@ -305,15 +345,15 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
     /// unnamed slot. A game that is mid-write holds the file, and a save from a version this adapter
     /// does not know may not carry the element at all.
     /// </summary>
-    private static Maybe<XElement> ReadCareer(string careerFile)
+    private static Maybe<XElement> ReadCareer(string careerFile, ILogger log)
     {
         return
-            from document in ReadXml(careerFile)
+            from document in ReadXml(careerFile, log)
             from root in Maybe.From(document.Element("careerSavegame"))
             select root;
     }
 
-    private static Maybe<XDocument> ReadXml(string path)
+    private static Maybe<XDocument> ReadXml(string path, ILogger log)
     {
         try
         {
@@ -329,6 +369,11 @@ public class FarmingSimulatorInstanceSavegameAdapter(FarmingSimulatorInstanceSet
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
         {
+            // The caller decides how loudly this matters - a career file that will not open is a
+            // slot the user can see is wrong, and farms.xml is one missing line - so the exception
+            // itself is recorded here and the consequence is said there.
+            log.LogDebug(ex, "Could not read {File} as XML.", path);
+
             return Maybe<XDocument>.None;
         }
     }

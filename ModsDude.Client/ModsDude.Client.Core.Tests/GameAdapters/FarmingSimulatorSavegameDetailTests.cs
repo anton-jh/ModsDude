@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Tests.Sync;
@@ -204,7 +205,7 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
 
     private SavegameSlot Read()
         => FarmingSimulatorInstanceSavegameAdapter.ReadSlot(
-            new SavegameSlotId("savegame1"), _directory.Path, CancellationToken.None);
+            new SavegameSlotId("savegame1"), _directory.Path, NullLogger.Instance, CancellationToken.None);
 
     private void WriteCareer(string xml)
         => File.WriteAllText(Path.Combine(_directory.Path, "careerSavegame.xml"), xml);
