@@ -613,12 +613,18 @@ explainable to whoever noticed, and hiding the archive would make "where did it 
 an admin could answer. Restoring a profile or savegame is Member - the same level as the archiving
 it undoes - while restoring a *repo* and deleting anything permanently are Admin.
 
-Every row carries **when it was archived**, and that is load-bearing rather than decorative:
-archived things do not hold their names, so several rows may be called the same thing.
+Every row carries **when it was archived**, and that is load-bearing rather than decorative: an
+archived profile or savegame does not hold its name, so several rows may be called the same thing.
 
-**Restoring discovers a clash by trying, not by checking first.** A pre-check would be a second copy
-of a rule the server and its filtered index already own, and it would still be racing. `name-taken`
-comes back, `RenameModalViewModel` asks for another name, and the restore is retried once.
+**Restoring a profile or savegame discovers a clash by trying, not by checking first.** A pre-check
+would be a second copy of a rule the server and its filtered index already own, and it would still
+be racing. `name-taken` comes back, `RenameModalViewModel` asks for another name, and the restore is
+retried once.
+
+**Restoring a repo asks nothing.** Repo names are not unique, so an archived repo never gave its
+name up and nothing can have taken it — `RestoreRepo` has no name parameter and no retry. Two
+archived repos of a name are separated the way the sidebar separates two live ones: by `RepoTag`,
+via `RepoDisplay.FindAmbiguous` over the rows on the page.
 
 **A link into something archived still lands on it.** `TrySelectProfileAsync` falls through to the
 archive: it fetches the archived profile and puts a transient entry in the sidebar under its own
@@ -666,6 +672,34 @@ other one the duplicate.
 
 The avatar is drawn either way. It is an identity, not a warning, and it is the same colour for
 the same person in the member list and in their own account panel.
+
+## Telling two repos with one name apart
+
+The same problem, one level up, and solved the same way. Repo names are not unique either — see
+[02 — Domain model](02-domain-model.md#repo-names-are-not-unique-either) — so a user can be a member
+of two repos both called Vanilla. `Core/Repos/RepoDisplay.FindAmbiguous` answers, for a given list,
+which repos in it share a name; the ones that do show `RepoTag`'s four digits dimmed after the name,
+and the ones that do not show nothing.
+
+Two lists ask. `ArchivePageViewModel` asks once per load, like the member list does. **The sidebar
+is the one that cannot.** Its list changes while the user is looking at it — joining a repo,
+archiving one, or renaming one can make a pair collide or stop colliding — so `MainPageViewModel`
+subscribes to `Repos.CollectionChanged` and to each entry's `Title`, and recomputes on both.
+`RepoItemViewModel.ShowTagIf` is what sets or clears the tag, and setting it does not republish
+`Title`, so the recomputation cannot feed itself.
+
+The tag rides on `MenuItemViewModel` rather than on the repo entry alone, because the `SidebarList`
+template is shared by every sidebar in the app. `TagText` is what the template draws — `" #1234"`,
+its separating space included, and empty on every entry without a tag, so nothing has to be hidden.
+
+It is drawn in **its own cell**, dimmed to `TextFillColorTertiaryBrush`, so that a name long enough
+to be trimmed loses its tail rather than the digits that say which repo it is. Getting that without
+stranding the tag at the sidebar's edge is a layout trick worth knowing: the template's `Grid` is
+`HorizontalAlignment="Left"` with `MaxWidth` bound to the row, so it is arranged at its own desired
+width. The star column then collapses onto a short name — the tag follows immediately after it and
+the row reads `Vanilla #1234` — while a long name is measured against the cap less the tag, which is
+what makes it trim while the tag keeps its space. An entry with no tag has an empty second column
+and is drawn exactly as it was before any of this.
 
 ## Mod imagery
 

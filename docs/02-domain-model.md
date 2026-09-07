@@ -58,10 +58,38 @@ game.
 | Field | Notes |
 | --- | --- |
 | `Id` | `RepoId(Guid)`, minted client-side in the constructor |
-| `Name` | `RepoName(string)`, **globally unique across all repos**, not per-user |
+| `Name` | `RepoName(string)`, **not unique** — see below |
 | `AdapterData` | `(AdapterIdentifier Id, AdapterConfiguration Configuration)` — an EF complex property |
 | `Created` | |
 | `_memberships` | Private set, mapped by EF through the backing field and auto-included |
+
+### Repo names are not unique either
+
+Same rule as display names, for the same reason. Two groups who both called theirs Vanilla
+both have a Vanilla — there is no index forbidding the second one, and no endpoint asking
+whether a name is free.
+
+Uniqueness bought nothing. Nothing looks a repo up by name: the only way into one is an
+invite code, so the name is display text. What it charged for that was a rename forced on
+whoever happened to name their repo second, by a clash with a repo they cannot see and a
+group they have never met.
+
+What separates them is `RepoTag` — the same four-digit derivation as `UserTag`, over the
+repo id:
+
+```csharp
+RepoTag.For(new RepoId(...)) // "4821"
+```
+
+Both share `Domain/Tags/FourDigitTag.cs`. Derived from the id rather than from creation
+order, so of two Vanillas neither is the original; it is the same four digits for every
+member of the repo, and it survives a rename — which matters more here than for users,
+since renaming is the thing somebody reaches for to escape a clash.
+
+A client shows the tag **only where a list actually holds two of a name**, and shows it on
+every repo in that group rather than on the latecomer. That decision is
+`RepoDisplay.FindAmbiguous`, the repo twin of `UserDisplay.FindAmbiguous`, and it is made
+at the moment of rendering because ambiguity is a property of the list, not of the repo.
 
 `AdapterData.Id` is a serialized `GameAdapterId` such as `_farming_simulator@1`.
 `AdapterData.Configuration` is an opaque JSON string — **the server never parses it**. It is
@@ -680,27 +708,30 @@ work hangs off, and each takes something irreplaceable with it — a profile's h
 backups, a repo's whole catalog. Archiving is how one goes away; permanent deletion is a second act,
 reached from an archive and refused outright on anything still live (`not-archived`).
 
-`IArchivable` is the whole contract: a nullable `ArchivedAt`, `Archive(now)`, and `Restore(name?)`.
+`IArchivable` is the whole contract: a nullable `ArchivedAt`, `Archive(now)`, and a `Restore` that
+takes a replacement name for the two kinds that need one.
 
 **Archiving changes exactly two things: visibility, and the name.** The entity still exists, still
 answers to its id, and everything pointing at it keeps pointing at it — an instance goes on tracking
 an archived profile, a savegame goes on following one, a claim on an archived savegame is not
 released. Anything more would make the archive a second kind of deletion wearing a gentler word.
 
-**An archived entity does not hold its name.** The uniqueness indexes are filtered
-(`WHERE "ArchivedAt" IS NULL`), the same shape as the checkout log's one-open-row index, so a name
-is free the instant it is archived and any number of archived things may share one. They are told
-apart by **when they were archived**, which is why `ArchivedAt` is on the DTO rather than being an
-implementation detail.
+**An archived profile or savegame does not hold its name.** Those two are unique within their repo,
+and the indexes enforcing that are filtered (`WHERE "ArchivedAt" IS NULL`), the same shape as the
+checkout log's one-open-row index — so a name is free the instant it is archived and any number of
+archived things may share one. They are told apart by **when they were archived**, which is why
+`ArchivedAt` is on the DTO rather than being an implementation detail.
 
 The cost lands on the way back. `Restore` takes an optional new name, and restoring into a name
 something live has since taken is refused with `name-taken` — the clash is deferred to the one
 moment somebody is present to decide. `Archive` is idempotent and does **not** restamp: the
 timestamp is what orders somebody's archive, so archiving twice must not move it.
 
-Repo names gained a unique index here for the first time. They have always been documented as
-globally unique and were only ever checked by the endpoint, so two people creating one name at the
-same moment both won; writing the archiving filter meant writing the index it filters.
+**Repos are the exception, because their names are not unique to begin with.** Nothing is freed by
+archiving one and nothing can take its name while it is away, so `Repo.Restore()` takes no name and
+cannot fail on one, and the repo Archive page has no rename prompt. Two rows there called the same
+are told apart by `RepoTag`, the same four digits the sidebar shows — `ArchivedAt` is still on the
+row, now saying which *archiving* it is for a repo that has been put away more than once.
 
 | Action | Level |
 | --- | --- |

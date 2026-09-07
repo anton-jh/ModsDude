@@ -2,12 +2,14 @@ using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -73,6 +75,12 @@ public partial class MainPageViewModel
         _shellNavigationService = shellNavigationService;
         _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
 
+        // Two repos reading the same is a property of this list, and this list changes while the
+        // user is looking at it - joining one, archiving one, or renaming one can make a pair
+        // collide or stop colliding. So it is answered again on both, rather than once at build.
+        Repos.CollectionChanged += OnReposChanged;
+        ApplyTags();
+
         repoService.RepoCreated += OnRepoCreated;
         NavManager.PropertyChanged += OnNavigationChanged;
 
@@ -104,6 +112,12 @@ public partial class MainPageViewModel
         Account.PropertyChanged -= OnAccountChanged;
         _repoService.RepoCreated -= OnRepoCreated;
         NavManager.PropertyChanged -= OnNavigationChanged;
+        Repos.CollectionChanged -= OnReposChanged;
+
+        foreach (var entry in Repos.OfType<RepoItemViewModel>())
+        {
+            entry.PropertyChanged -= OnRepoEntryChanged;
+        }
 
         _reposSynchronizer.Dispose();
         NavManager.Dispose();
@@ -201,6 +215,52 @@ public partial class MainPageViewModel
         if (Repos.OfType<RepoItemViewModel>().FirstOrDefault(x => x.Id == repoId) is RepoItemViewModel repo)
         {
             NavManager.Selected = repo;
+        }
+    }
+
+    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // The synchronizer inserts and removes one entry at a time, and a rename arrives as a Move,
+        // so every action here is one where the set of names may have changed.
+        foreach (var entry in e.OldItems?.OfType<RepoItemViewModel>() ?? [])
+        {
+            entry.PropertyChanged -= OnRepoEntryChanged;
+        }
+
+        foreach (var entry in e.NewItems?.OfType<RepoItemViewModel>() ?? [])
+        {
+            entry.PropertyChanged -= OnRepoEntryChanged;
+            entry.PropertyChanged += OnRepoEntryChanged;
+        }
+
+        ApplyTags();
+    }
+
+    /// <summary>
+    /// A renamed repo republishes its title, which is the only thing that can make two entries read
+    /// the same without the list itself changing.
+    /// </summary>
+    private void OnRepoEntryChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MenuItemViewModel.Title))
+        {
+            ApplyTags();
+        }
+    }
+
+    /// <summary>
+    /// Puts a tag on every repo that shares its name with another one here, and takes it off every
+    /// repo that does not. Setting <c>Tag</c> does not republish <c>Title</c>, so this cannot feed
+    /// itself through <see cref="OnRepoEntryChanged"/>.
+    /// </summary>
+    private void ApplyTags()
+    {
+        var entries = Repos.OfType<RepoItemViewModel>().ToList();
+        var ambiguous = RepoDisplay.FindAmbiguous(entries.Select(x => (x.Id, x.Name)));
+
+        foreach (var entry in entries)
+        {
+            entry.ShowTagIf(ambiguous.Contains(entry.Id));
         }
     }
 

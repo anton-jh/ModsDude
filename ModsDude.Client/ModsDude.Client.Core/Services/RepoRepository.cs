@@ -1,4 +1,3 @@
-using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
@@ -55,22 +54,16 @@ public class RepoRepository(
 
     public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
-        RepoDto repo;
-
         var request = new CreateRepoRequest()
         {
             Name = name,
             AdapterId = adapterId,
             AdapterConfiguration = baseSettings.Serialize(),
         };
-        try
-        {
-            repo = await repoClient.CreateRepoV1Async(request, cancellationToken);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
-        {
-            throw new UserFriendlyException("Name taken", null, ex);
-        }
+
+        // No name to lose the race for: repo names are not unique, so the only reason this could
+        // come back a failure is one the error reporter can say better than a catch here.
+        var repo = await repoClient.CreateRepoV1Async(request, cancellationToken);
 
         // The creator is the repo's first Admin, so the response carries everything the list needs.
         Repos.Add(MapRepoModel(new RepoMembershipDto()
@@ -106,16 +99,7 @@ public class RepoRepository(
             AdapterConfiguration = baseSettings.Serialize()
         };
 
-        RepoDto updated;
-
-        try
-        {
-            updated = await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
-        {
-            throw new UserFriendlyException("Name taken", null, ex);
-        }
+        var updated = await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
 
         repo.Apply(updated);
     }
@@ -161,19 +145,13 @@ public class RepoRepository(
     }
 
     /// <summary>
-    /// Brings one back, optionally under a new name - which is what a clash is resolved by, since an
-    /// archived repo gave up its name and repo names are unique across the whole server.
+    /// Brings one back, under the name it went away with. Unlike restoring a profile or a savegame
+    /// this takes no name and cannot fail on one: repo names are not unique, so an archived repo
+    /// never gave its name up for anybody else to take.
     /// </summary>
-    public async Task RestoreRepo(Guid id, string? name, CancellationToken cancellationToken)
+    public async Task RestoreRepo(Guid id, CancellationToken cancellationToken)
     {
-        try
-        {
-            await repoClient.RestoreRepoV1Async(id, new RestoreRequest { Name = name }, cancellationToken);
-        }
-        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NameTaken)
-        {
-            throw new UserFriendlyException("Name taken", null, ex);
-        }
+        await repoClient.RestoreRepoV1Async(id, cancellationToken);
 
         // Refetched rather than constructed here: a Repo wraps a membership, hydrates an adapter and
         // holds a collection synchronizer, and half-building one from a restore response is how the

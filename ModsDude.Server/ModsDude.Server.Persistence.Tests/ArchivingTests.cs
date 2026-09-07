@@ -9,9 +9,10 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 namespace ModsDude.Server.Persistence.Tests;
 
 /// <summary>
-/// What archiving does to a name, which is the half of it only a database can answer: the uniqueness
-/// indexes are filtered on <c>ArchivedAt</c>, so "an archived entity does not hold its name" is a
-/// partial index rather than anything the model can enforce.
+/// What archiving does to a name, which is the half of it only a database can answer: a profile's
+/// and a savegame's uniqueness index is filtered on <c>ArchivedAt</c>, so "an archived entity does
+/// not hold its name" is a partial index rather than anything the model can enforce. Repos have no
+/// such index and no such rule, and the tests here say so.
 /// </summary>
 [Collection(nameof(DatabaseCollection))]
 public class ArchivingTests(DatabaseFixture fixture)
@@ -171,30 +172,37 @@ public class ArchivingTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// Repo names are documented as globally unique and were only ever checked by the endpoint, so
-    /// two people creating one name at the same moment both won. The filtered index is the first
-    /// thing that actually enforces it.
+    /// Unlike profiles and savegames, whose names are unique within their repo, repo names are not
+    /// unique at all - so archiving one frees nothing, and there is nothing here for the archive to
+    /// defer to a restore.
     /// </summary>
     [Fact]
-    public async Task Two_live_repos_cannot_share_a_name()
+    public async Task Two_live_repos_may_share_a_name()
     {
         var name = $"repo-{Guid.NewGuid()}";
 
-        await GivenARepo(name);
+        var first = await GivenARepo(name);
 
         using var dbContext = fixture.CreateDbContext();
 
         AddRepo(dbContext, name);
 
-        // Specifically the unique index, not any old failure: the repo carries a membership whose
-        // user has to exist, and a missing one throws the same exception type for a different reason.
-        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        Assert.Contains("IX_Repos_Name", exception.InnerException?.Message ?? "");
+        var both = await dbContext.Repos
+            .Where(x => x.Name == new RepoName(name))
+            .ToListAsync(CancellationToken.None);
+
+        Assert.Equal(2, both.Count);
+
+        // The whole point of allowing it: they are still told apart, by something neither of them
+        // had to be renamed for.
+        Assert.NotEqual(RepoTag.For(both[0].Id), RepoTag.For(both[1].Id));
+        Assert.Contains(both, x => x.Id == first);
     }
 
     [Fact]
-    public async Task An_archived_repo_frees_its_name()
+    public async Task An_archived_repo_comes_back_under_its_own_name()
     {
         var name = $"repo-{Guid.NewGuid()}";
         var repoId = await GivenARepo(name);
@@ -208,13 +216,25 @@ public class ArchivingTests(DatabaseFixture fixture)
             await dbContext.SaveChangesAsync(CancellationToken.None);
         }
 
+        // Somebody else takes the name while it is away, which is exactly the case that used to cost
+        // the restore a rename.
         using (var dbContext = fixture.CreateDbContext())
         {
-            Assert.False(await dbContext.Repos.CheckNameIsTaken(new RepoName(name), CancellationToken.None));
-
             AddRepo(dbContext, name);
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var repo = (await dbContext.Repos.GetAsync(repoId, CancellationToken.None))!;
+
+            repo.Restore();
+
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+
+            Assert.Equal(new RepoName(name), repo.Name);
+            Assert.False(repo.IsArchived);
         }
     }
 

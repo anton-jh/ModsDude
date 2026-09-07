@@ -159,10 +159,9 @@ endpoints therefore authorize to the floor that check can never fall below *befo
 anything, so a non-member learns nothing from the responses.
 
 `CreateRepo()` exists so that repo creation refuses in the same shape, at the same status, with
-the same problem body as everything else. `POST repos/check-name-taken` is gated on it too:
-repo names are unique system-wide, so answering it for anyone signed in would be an existence
-oracle over every repo name there is, and its only purpose is naming a repo you are about to
-create.
+the same problem body as everything else. It gates one endpoint now: `POST repos/check-name-taken`
+is gone along with the uniqueness it answered for, which also retires the existence oracle it was
+— an authenticated stranger could probe any repo name on the server, and the gate was the mitigation.
 
 ### Two statuses, and which is which
 
@@ -411,11 +410,10 @@ through an invite instead.
 | GET | `repos` | — | The caller's live repos with their membership level, ordered by name |
 | GET | `repos/archived` | — | The archived ones. A repo is archived for every member at once |
 | POST | `repos/create` | — | Requires `User.IsTrusted`. Creator becomes Admin |
-| POST | `repos/check-name-taken` | — | No repo-scoped check; any authenticated user can probe any name |
 | GET | `repo/{repoId}` | Member | Repo details including the member list |
 | PUT | `repo/{repoId}` | Admin | Rename and/or replace adapter configuration |
 | POST | `repos/{repoId}/archive` | Admin | Puts it away. The only way a repo goes away |
-| POST | `repos/{repoId}/restore` | Admin | Brings it back. `{ name? }` resolves a clash |
+| POST | `repos/{repoId}/restore` | Admin | Brings it back under its own name. No body: repo names are not unique, so nothing can have taken it |
 | DELETE | `repo/{repoId}` | Admin | Permanent, and refused unless archived. Refuses with `repo-not-empty` while the repo has mods |
 
 Note the inconsistency: the collection is `repos`, the single resource is `repo`.

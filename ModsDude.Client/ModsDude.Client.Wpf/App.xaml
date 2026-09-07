@@ -200,24 +200,54 @@
                     <Setter.Value>
                         <DataTemplate DataType="{x:Type vm:MenuItemViewModel}">
                             <Grid ClipToBounds="True">
-                                <TextBlock Text="{Binding Path=Title}"
-                                           Padding="12 8"
-                                           Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
-                                           TextTrimming="CharacterEllipsis"
-                                           TextWrapping="NoWrap">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Style.Triggers>
-                                                <!-- Fluent's ListViewItem has no disabled appearance of
-                                                     its own, so a closed entry would otherwise be
-                                                     indistinguishable from an open one. -->
-                                                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
-                                                    <Setter Property="Opacity" Value="0.4" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Style.Triggers>
+                                            <!-- Fluent's ListViewItem has no disabled appearance of its
+                                                 own, so a closed entry would otherwise be
+                                                 indistinguishable from an open one. On the row rather
+                                                 than the title, so a tag dims along with it. -->
+                                            <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                <Setter Property="Opacity" Value="0.4" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+
+                                <!-- Two cells rather than two runs of one TextBlock, so that the tag
+                                     survives a name long enough to be trimmed. It is the half that
+                                     says which of the two repos this is, so it must not be the half
+                                     the ellipsis eats.
+
+                                     The layout is what keeps it beside the name rather than out at
+                                     the sidebar's edge. Left-aligned and capped at the row's width,
+                                     the Grid is arranged at its own desired width: the star column
+                                     collapses onto a short name and the tag follows immediately
+                                     after it, while a long name is measured against the cap less the
+                                     tag - which is what makes the name trim and the tag keep its
+                                     space. An entry without one has an empty second column and is
+                                     drawn exactly as before. -->
+                                <Grid HorizontalAlignment="Left"
+                                      MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Path=Title}"
+                                               Padding="12 8 0 8"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap" />
+
+                                    <!-- TagText carries its own leading space, so the row reads
+                                         "Vanilla #1234" and the tooltip spells it the same way. -->
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Path=TagText}"
+                                               Padding="0 8 12 8"
+                                               FontFamily="Consolas"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </Grid>
                             </Grid>
                         </DataTemplate>
                     </Setter.Value>

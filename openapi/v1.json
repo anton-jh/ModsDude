@@ -91,24 +91,6 @@
         },
         "type": "object"
       },
-      "CheckNameTakenRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "CheckNameTakenResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "isTaken": {
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
       "CheckOutSavegameResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1082,6 +1064,9 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "tag": {
             "type": "string"
           }
         },
@@ -2317,63 +2302,6 @@
         ]
       }
     },
-    "/api/v1/repos/check-name-taken": {
-      "post": {
-        "operationId": "CheckNameTakenV1",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CheckNameTakenRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-name": "request",
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckNameTakenResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Repos"
-        ]
-      }
-    },
     "/api/v1/repos/create": {
       "post": {
         "operationId": "CreateRepoV1",
@@ -2395,16 +2323,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RepoDto"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
                 }
               }
             },
@@ -4752,17 +4670,6 @@
             "x-position": 1
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RestoreRequest"
-              }
-            }
-          },
-          "x-name": "request",
-          "x-position": 2
-        },
         "responses": {
           "200": {
             "description": ""

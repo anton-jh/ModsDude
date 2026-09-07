@@ -28,6 +28,7 @@ public class Repo
         _localInstanceRepository = localInstanceRepository;
         Id = repoMembershipDto.Repo.Id;
         Name = repoMembershipDto.Repo.Name;
+        Tag = repoMembershipDto.Repo.Tag;
         MembershipLevel = repoMembershipDto.MembershipLevel;
 
         LocalInstances = [];
@@ -41,6 +42,14 @@ public class Repo
 
     public Guid Id { get; }
     public string Name { get; private set; }
+
+    /// <summary>
+    /// Four digits that separate this repo from another one called the same. Not observable and
+    /// never reassigned: it follows the id, so a rename does not move it - see
+    /// <see cref="Repos.RepoDisplay"/> for where it is drawn and where it is not.
+    /// </summary>
+    public string Tag { get; }
+
     public RepoMembershipLevel MembershipLevel { get; private set; }
     public ObservableCollection<LocalInstance> LocalInstances { get; }
     public IBaseGameAdapter Adapter { get; private set; }

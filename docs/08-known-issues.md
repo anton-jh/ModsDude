@@ -223,10 +223,10 @@ depends on them:
 
 - Collection routes are plural (`repos`, `repos/{id}/profiles`) while single-resource routes
   are singular (`repo/{id}`, `repos/{id}/profile/{id}`).
-- `POST repos/create` and `POST repos/check-name-taken` are RPC-shaped among otherwise RESTful
-  routes; `POST repos` would be the consistent form.
-- `CheckNameTakenV1Endpoint` and `CreateRepoV1Endpoint` call `.RequireAuthorization()`
-  redundantly — the whole group already requires it.
+- `POST repos/create` is RPC-shaped among otherwise RESTful routes; `POST repos` would be the
+  consistent form.
+- `CreateRepoV1Endpoint` calls `.RequireAuthorization()` redundantly — the whole group already
+  requires it.
 - `Profile.Created` and `ProfileRevision.Created` are `DateTime` while
   `ModVersion.Created`/`Updated` are `DateTimeOffset`.
   `ITimeService.Now()` returns `DateTime` and the mod timestamps go through an implicit

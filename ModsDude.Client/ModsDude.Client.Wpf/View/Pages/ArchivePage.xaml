@@ -33,13 +33,25 @@
                 </Border.Style>
                 <Grid ColumnDefinitions="* auto auto">
                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
-                        <!-- Not decoration: archived things do not hold their names, so several may
-                             be called this, and when they were put away is what tells them apart. -->
+                            <!-- Only where another row here reads the same, and spelled the way the
+                                 sidebar spells it, so the row and the entry are recognisably one
+                                 repo. -->
+                            <TextBlock Text="{Binding Tag, StringFormat=#{0}}"
+                                       Margin="6 0 0 0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Consolas"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding HasTag, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+
+                        <!-- Not decoration: it is what says which archiving this row is, for a repo
+                             somebody put away, restored and put away again. -->
                         <TextBlock Text="{Binding ArchivedText}"
                                    Margin="0 2 0 0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -50,7 +62,7 @@
                             Margin="8 0 0 0"
                             VerticalAlignment="Center"
                             Content="Restore"
-                            ToolTip="Brings it back into the repo. You will be asked for another name if this one has been taken since."
+                            ToolTip="Brings it back into every member's sidebar, under the name it went away with."
                             Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding RestoreCommand}" />
 

@@ -58,10 +58,32 @@ public partial class MenuItemViewModel
     private string? _unavailableReason;
 
     /// <summary>
-    /// One tooltip per row, so it does double duty: the reason when there is one, and otherwise the
-    /// title, which the sidebar trims to its width and would otherwise leave unreadable.
+    /// A few characters drawn dimmed after the title, for an entry that would otherwise read the
+    /// same as another one in the same list. Null on every entry that does not need it, which is
+    /// almost all of them - see <c>RepoDisplay</c> for why this is decided per list rather than
+    /// carried by the thing being named.
     /// </summary>
-    public string ToolTip => UnavailableReason ?? Title;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTag))]
+    [NotifyPropertyChangedFor(nameof(TagText))]
+    [NotifyPropertyChangedFor(nameof(ToolTip))]
+    private string? _tag;
+
+    public bool HasTag => Tag is not null;
+
+    /// <summary>
+    /// The tag as it is read - <c>" #1234"</c>, its own separating space included. Empty rather than
+    /// null on an entry without one, because it is drawn inline with the title and an empty run
+    /// takes no space; nothing has to be hidden.
+    /// </summary>
+    public string TagText => Tag is null ? "" : $" #{Tag}";
+
+    /// <summary>
+    /// One tooltip per row, so it does double duty: the reason when there is one, and otherwise the
+    /// title, which the sidebar trims to its width and would otherwise leave unreadable. The tag
+    /// rides along with it, because a name long enough to be trimmed takes its tag with it.
+    /// </summary>
+    public string ToolTip => UnavailableReason ?? $"{Title}{TagText}";
 
 
     public virtual PageViewModel GetPage()

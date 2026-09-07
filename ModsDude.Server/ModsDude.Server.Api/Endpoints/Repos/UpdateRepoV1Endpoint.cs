@@ -44,16 +44,7 @@ public class UpdateRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        var newName = new RepoName(request.Name);
-        if (repo.Name != newName)
-        {
-            if (await dbContext.Repos.CheckNameIsTaken(newName, cancellationToken))
-            {
-                return TypedResults.BadRequest(Problems.NameTaken(request.Name));
-            }
-            repo.Name = newName;
-        }
-
+        repo.Name = new RepoName(request.Name);
         repo.AdapterData = repo.AdapterData with { Configuration = new(request.AdapterConfiguration) };
 
         await unitOfWork.CommitAsync(cancellationToken);

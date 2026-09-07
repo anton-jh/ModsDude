@@ -52,6 +52,16 @@ public partial class ArchivedItemViewModel
     /// </summary>
     public bool IsHighlighted { get; init; }
 
+    /// <summary>
+    /// Four digits shown beside the name where another row here reads the same, and null otherwise.
+    /// <see cref="ArchivedText"/> already separates two rows, but it separates them by when somebody
+    /// happened to archive each - the tag is the one the repo carries everywhere else too, so a row
+    /// here and a sidebar entry can be recognised as the same repo.
+    /// </summary>
+    public string? Tag { get; init; }
+
+    public bool HasTag => Tag is not null;
+
 
     [RelayCommand(CanExecute = nameof(CanRestore))]
     private Task Restore() => _restore(this);

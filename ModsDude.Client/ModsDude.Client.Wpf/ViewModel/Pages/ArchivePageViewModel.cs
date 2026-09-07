@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -74,6 +75,10 @@ public partial class ArchivePageViewModel : PageViewModel
         {
             var archived = await _repoRepository.GetArchivedRepos(_lifetime.Token);
 
+            // The archive is where two repos of a name are most likely to meet: it collects every
+            // one this user has put away, from every group they are in.
+            var ambiguous = RepoDisplay.FindAmbiguous(archived.Select(x => (x.Repo.Id, x.Repo.Name)));
+
             Repos.Clear();
 
             foreach (var membership in archived)
@@ -87,7 +92,10 @@ public partial class ArchivePageViewModel : PageViewModel
                     membership.MembershipLevel >= RepoMembershipLevel.Admin,
                     membership.MembershipLevel >= RepoMembershipLevel.Admin,
                     RestoreAsync,
-                    DeleteAsync));
+                    DeleteAsync)
+                {
+                    Tag = ambiguous.Contains(membership.Repo.Id) ? membership.Repo.Tag : null
+                });
             }
         }
         catch (OperationCanceledException)
@@ -106,8 +114,9 @@ public partial class ArchivePageViewModel : PageViewModel
     }
 
     /// <summary>
-    /// Restores, asking for another name where this one has been taken since. Repo names are unique
-    /// across the whole server, so the clash can come from somebody the caller has never met.
+    /// Restores, under the repo's own name. Unlike the profile and savegame restores on the repo's
+    /// own Archive page there is no rename to ask for: repo names are not unique, so nothing can
+    /// have taken this one while it was away.
     /// </summary>
     private async Task RestoreAsync(ArchivedItemViewModel item)
     {
@@ -116,31 +125,9 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            try
-            {
-                await _repoRepository.RestoreRepo(item.Id, null, _lifetime.Token);
+            await _repoRepository.RestoreRepo(item.Id, _lifetime.Token);
 
-                Status = $"'{item.Name}' is back in your repos.";
-            }
-            catch (Core.Exceptions.UserFriendlyException exception) when (exception.Message == "Name taken")
-            {
-                var modal = new RenameModalViewModel(
-                    "That name is taken",
-                    $"Another repo is called '{item.Name}' now - repo names are unique across the whole "
-                        + "server, so it may not even be one of yours. Give this one another name to bring it back.",
-                    $"{item.Name} (restored)");
-
-                await _modalService.Show(modal);
-
-                if (modal.Result is not string renamed)
-                {
-                    return;
-                }
-
-                await _repoRepository.RestoreRepo(item.Id, renamed, _lifetime.Token);
-
-                Status = $"'{renamed}' is back in your repos.";
-            }
+            Status = $"'{item.Name}' is back in your repos.";
 
             await ReloadAsync();
         }

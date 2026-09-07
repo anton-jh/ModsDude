@@ -32,8 +32,8 @@ public class Repo : IArchivable
 
     /// <summary>
     /// Puts the repo away for everybody - it is repo state, not membership state, so there is no
-    /// per-person version of this. Idempotent, and it does not restamp: the timestamp is what tells
-    /// two archived repos of the same name apart.
+    /// per-person version of this. Idempotent, and it does not restamp: an archive holding several
+    /// repos of the same name is read by when each of them was put away.
     /// </summary>
     public void Archive(DateTime now)
     {
@@ -41,16 +41,11 @@ public class Repo : IArchivable
     }
 
     /// <summary>
-    /// Brings it back, optionally under a new name - which is how a clash with a live repo is
-    /// resolved, since an archived one gave up its name when it was archived.
+    /// Brings it back under the name it went away with. Nothing can be in the way: repo names are
+    /// not unique, so an archived repo never gave its name up and never has to ask for another.
     /// </summary>
-    public void Restore(RepoName? name = null)
+    public void Restore()
     {
-        if (name is RepoName renamed)
-        {
-            Name = renamed;
-        }
-
         ArchivedAt = null;
     }
 
@@ -126,6 +121,12 @@ public class Repo : IArchivable
 }
 
 public readonly record struct RepoId(Guid Value);
+
+/// <summary>
+/// What a repo is called. Nothing makes it unique and nothing here tries to: two groups who both
+/// called theirs Vanilla both have a Vanilla, and a list showing both of them disambiguates at the
+/// point of display with <see cref="RepoTag"/> rather than by making somebody rename theirs.
+/// </summary>
 public readonly record struct RepoName(string Value);
 
 public record AdapterData(AdapterIdentifier Id, AdapterConfiguration Configuration);

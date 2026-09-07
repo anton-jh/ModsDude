@@ -21,7 +21,7 @@ public class CreateRepoV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateRepo(
+    private static async Task<Results<Ok<RepoDto>, Forbidden<CustomProblemDetails>>> CreateRepo(
         CreateRepoRequest request,
         IUnitOfWork unitOfWork,
         ITimeService timeService,
@@ -40,11 +40,8 @@ public class CreateRepoV1Endpoint : IEndpoint
             return authResult;
         }
 
-        if (await dbContext.Repos.CheckNameIsTaken(new RepoName(request.Name), cancellationToken))
-        {
-            return TypedResults.BadRequest(Problems.NameTaken(request.Name));
-        }
-
+        // Nothing to check the name against. Somebody else's repo may already be called this, and so
+        // may one of the caller's own - RepoTag is what keeps the two apart in a list.
         var repo = new Repo(new RepoName(request.Name), timeService.Now(), userId)
         {
             AdapterData = new AdapterData(
