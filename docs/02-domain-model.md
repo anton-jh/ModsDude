@@ -561,6 +561,7 @@ profile's revisions. It is the distinction `ActiveProfile` draws against the syn
 As with a profile, **there is no navigation to the versions**. A savegame's history is read through
 its own set; this row only ever says which version is current.
 
+
 ## Savegame versions
 
 `ModsDude.Server.Domain/Savegames/SavegameVersion.cs`
@@ -580,6 +581,31 @@ One immutable version, keyed `(RepoId, SavegameId, Number)`.
 Read-only by the same mechanism a profile revision is: **nothing addresses one to write to it**. A
 check-in produces a successor and a restore copies an old one forward, so no route names a version
 and there is no `IsReadOnly` column for fifteen places to remember to check.
+
+
+### What a version says about itself
+
+`SavegameVersion` carries an owned collection of **`SavegameDetail`** — `(Key, Label, Value,
+Position)` — written by the client's game adapter and **never parsed by the server**. Same bargain
+as `ModAttribute` and the repo's adapter configuration, and it is what lets a new game describe its
+saves without a server deployment: Farming Simulator has a map, a difficulty and a money balance,
+another game has a seed and a chapter, a third has neither.
+
+**The same rule applies as to attributes: nothing may depend on one.** A fact the system needs in
+order to behave correctly is a real property with a real column — `ContentHash` and
+`ProfileRevision` are what that looks like. Details exist to be displayed, and a client that ignores
+them entirely is still correct.
+
+**`Key` is not shown, and that is the point.** A label is prose: rewordable, translatable,
+shortenable because a column got narrow. The key is the stable name for "this is the map", so a
+fact that turns out to be worth promoting to a real column later can be found and migrated rather
+than parsed back out of a sentence.
+
+**On the version, not the savegame.** A map, a playtime and a money balance describe the bytes
+somebody checked in — two versions of one save legitimately disagree about every one of them.
+`Position` is stored because "map, then when, then how long" is a judgment the adapter made and a
+set has no order to recover it from; a restore copies them forward with the bytes, since the same
+bytes were played on the same map and the server has never looked inside a savegame.
 
 ### The blob is addressed by content, not by number
 

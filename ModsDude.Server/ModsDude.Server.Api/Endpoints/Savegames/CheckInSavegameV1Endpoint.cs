@@ -162,7 +162,8 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             basedOn,
             // Null where somebody else holds the save, which is the ordinary shape of a forced
             // check-in: the version was not checked in against any claim of this person's.
-            checkout?.Id);
+            checkout?.Id,
+            SavegameDetails.From(request.Details));
 
         dbContext.SavegameVersions.Add(version);
 
@@ -224,6 +225,10 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// head's is how "nothing was played" is recognised, and it costs nothing to send.
     /// </param>
     /// <param name="Label">What to call this version in the history. Optional; most check-ins are not named.</param>
+    /// <param name="Details">
+    /// What the client's adapter says about the save as it stands now. Recorded per version rather
+    /// than per savegame, because a map and a playtime describe the bytes being checked in.
+    /// </param>
     /// <param name="Force">
     /// Check in anyway over a base that is no longer the head. Never a default: it supersedes
     /// somebody's play, so it is a decision a person makes after being told what they are about to
@@ -235,5 +240,6 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         string ContentHash,
         long SizeBytes,
         string? Label,
-        bool Force);
+        bool Force,
+        IEnumerable<SavegameDetailDto>? Details);
 }

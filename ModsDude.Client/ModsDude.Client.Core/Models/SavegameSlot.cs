@@ -23,16 +23,17 @@ namespace ModsDude.Client.Core.Models;
 /// thought in. Null where the slot is empty, or where the save could not be read - a slot whose
 /// contents are unreadable is still a slot, and still occupied.
 /// </param>
-/// <param name="Playtime">
-/// How long the save in this slot has been played, where the game records it. Shown beside the name
-/// so somebody can tell two farms apart; never depended on.
+/// <param name="Details">
+/// Whatever the adapter thinks is worth saying about the save in this slot, in the order it wants
+/// them read - the map, when it was last played, how long for. Shown beside the name so somebody
+/// can tell two farms apart, and <b>never depended on</b>: see <see cref="SavegameDetail"/>. Empty
+/// for a slot that is free, or whose contents could not be read.
 /// </param>
 public record SavegameSlot(
     SavegameSlotId Id,
     string? DisplayName,
     bool IsOccupied,
-    DateTime? LastModified,
-    TimeSpan? Playtime);
+    IReadOnlyList<SavegameDetail> Details);
 
 
 /// <summary>

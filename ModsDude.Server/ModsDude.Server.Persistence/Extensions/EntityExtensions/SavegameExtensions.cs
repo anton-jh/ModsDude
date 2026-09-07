@@ -211,6 +211,9 @@ public static class SavegameExtensions
         CancellationToken cancellationToken)
     {
         return dbSet
+            // Owned entities cannot be tracked without the owner they hang off, and Details is
+            // projected out of a row that deliberately never materializes a version.
+            .AsNoTracking()
             .Where(x => x.RepoId == repoId && x.SavegameId == savegameId)
             .OrderByDescending(x => x.Number)
             .Skip(skip)
@@ -227,7 +230,10 @@ public static class SavegameExtensions
                 x.Label,
                 x.Origin,
                 x.BaseVersion,
-                x.CheckoutId))
+                x.CheckoutId)
+            {
+                Details = x.Details.OrderBy(y => y.Position).ToList()
+            })
             .ToListAsync(cancellationToken);
     }
 
@@ -251,6 +257,7 @@ public static class SavegameExtensions
         CancellationToken cancellationToken)
     {
         return dbSet
+            .AsNoTracking()
             .Where(x => x.RepoId == repoId && x.SavegameId == savegameId && x.Number == number)
             .Select(x => new SavegameVersionRow(
                 x.SavegameId,
@@ -264,7 +271,10 @@ public static class SavegameExtensions
                 x.Label,
                 x.Origin,
                 x.BaseVersion,
-                x.CheckoutId))
+                x.CheckoutId)
+            {
+                Details = x.Details.OrderBy(y => y.Position).ToList()
+            })
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -301,6 +311,7 @@ public static class SavegameExtensions
         var numbers = heads.Values.Distinct().ToList();
 
         var rows = await dbSet
+            .AsNoTracking()
             .Where(x => x.RepoId == repoId && savegameIds.Contains(x.SavegameId) && numbers.Contains(x.Number))
             .Select(x => new SavegameVersionRow(
                 x.SavegameId,
@@ -314,7 +325,10 @@ public static class SavegameExtensions
                 x.Label,
                 x.Origin,
                 x.BaseVersion,
-                x.CheckoutId))
+                x.CheckoutId)
+            {
+                Details = x.Details.OrderBy(y => y.Position).ToList()
+            })
             .ToListAsync(cancellationToken);
 
         return [.. rows.Where(x => heads[x.SavegameId] == x.Number)];
@@ -439,4 +453,11 @@ public record SavegameVersionRow(
     string? Label,
     SavegameVersionOrigin Origin,
     SavegameVersionNumber? BaseVersion,
-    SavegameCheckoutId? CheckoutId);
+    SavegameCheckoutId? CheckoutId)
+{
+    /// <summary>
+    /// What the adapter said about this version, in its own order. Projected rather than left to
+    /// the owned collection's own loading, because nothing here materializes a version.
+    /// </summary>
+    public IReadOnlyList<SavegameDetail> Details { get; init; } = [];
+}

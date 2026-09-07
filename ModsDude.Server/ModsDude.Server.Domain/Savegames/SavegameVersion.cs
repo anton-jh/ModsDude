@@ -53,7 +53,8 @@ public class SavegameVersion
         string? label,
         SavegameVersionOrigin origin,
         SavegameVersionNumber? baseVersion,
-        SavegameCheckoutId? checkoutId)
+        SavegameCheckoutId? checkoutId,
+        IEnumerable<SavegameDetail>? details = null)
     {
         if (label is { Length: > MaximumLabelLength })
         {
@@ -80,6 +81,10 @@ public class SavegameVersion
         Origin = origin;
         BaseVersion = baseVersion;
         CheckoutId = checkoutId;
+
+        // Opaque, so there is nothing to validate beyond keeping the adapter's own ordering: the
+        // server has no idea what a "map" is and is not entitled to an opinion about it.
+        _details = [.. (details ?? []).OrderBy(x => x.Position)];
     }
 
 
@@ -132,6 +137,19 @@ public class SavegameVersion
     /// made without holding the save.
     /// </summary>
     public SavegameCheckoutId? CheckoutId { get; private set; }
+
+    /// <summary>
+    /// What the adapter said about this version, in the order it wanted them read. Empty for a
+    /// version checked in by a client whose adapter describes nothing, which is a perfectly ordinary
+    /// thing for an adapter to do.
+    /// </summary>
+    /// <remarks>
+    /// An owned collection, like <c>ModVersion.Attributes</c>, and read-only from the outside: a
+    /// version is immutable, so the details of one are decided when it is minted and never after.
+    /// </remarks>
+    public IReadOnlyCollection<SavegameDetail> Details => _details;
+
+    private readonly List<SavegameDetail> _details = [];
 }
 
 

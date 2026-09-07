@@ -33,14 +33,14 @@ public sealed class SavegameSlotOptionViewModel
         OccupyingSavegameName = occupyingSavegameName;
 
         SaveName = slot.DisplayName;
-        PlaytimeText = SavegameWording.Playtime(slot.Playtime);
+        Details = slot.Details;
 
         Label = slot.IsOccupied
             ? slot.DisplayName is { Length: > 0 } name ? name : "A save this game will not name"
             : "Empty slot";
 
         Detail = BuildDetail();
-        ToolTip = $"{Label}\n{Id.Value}";
+        ToolTip = SavegameSlotWording.DescribeFully(Label, Id, Details);
 
         IsRefused = SavegameSlotStates.IsRefused(availability);
         NeedsConfirmation = SavegameSlotStates.RequiresConfirmation(availability);
@@ -61,7 +61,13 @@ public sealed class SavegameSlotOptionViewModel
     /// <summary>The second line: playtime, and what ModsDude knows about who put this here.</summary>
     public string Detail { get; }
 
-    public string? PlaytimeText { get; }
+    /// <summary>
+    /// What the adapter says about the save here - the map, when it was last played, how long for.
+    /// Free-form and in the adapter's own order; see <see cref="SavegameDetail"/>.
+    /// </summary>
+    public IReadOnlyList<SavegameDetail> Details { get; }
+
+    public bool HasDetails => Details.Count > 0;
 
     public string ToolTip { get; }
 
@@ -94,10 +100,10 @@ public sealed class SavegameSlotOptionViewModel
     {
         var parts = new List<string>();
 
-        if (PlaytimeText is not null)
-        {
-            parts.Add(PlaytimeText);
-        }
+        // The adapter's own values lead - "Zielonka · 45 h" is what tells two farms apart - and only
+        // the first few, because a row is one line. The adapter's order is its priority order, which
+        // is the whole reason it is preserved; the rest are on the tooltip.
+        parts.AddRange(Details.Take(SavegameSlotWording.DetailsOnTheRow).Select(x => x.Value));
 
         parts.Add(Availability switch
         {

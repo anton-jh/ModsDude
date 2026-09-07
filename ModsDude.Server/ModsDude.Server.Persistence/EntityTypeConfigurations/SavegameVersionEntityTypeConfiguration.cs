@@ -52,5 +52,15 @@ internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration
         // unique: a version's bytes are addressed by content, so a restore copies an old version
         // forward under the same hash and several versions legitimately share one blob.
         builder.HasIndex(x => new { x.RepoId, x.SavegameId, x.ContentHash });
+
+        // Owned, like ModVersion.Attributes, and mapped through the backing field because the entity
+        // exposes them read-only - a version is immutable, so its details are decided when it is
+        // minted and never after. The key is left to EF, as the attributes' is: uniqueness per key
+        // is the writer's business, and SavegameDetails.From is where it is enforced.
+        builder.OwnsMany(x => x.Details, x => x.ToTable("SavegameVersionDetails"));
+
+        // Through the backing field, because the navigation is read-only: a version is immutable, so
+        // its details are decided when it is minted and never after.
+        builder.Navigation(x => x.Details).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

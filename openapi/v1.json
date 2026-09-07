@@ -66,6 +66,13 @@
           "contentHash": {
             "type": "string"
           },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameDetailDto"
+            },
+            "nullable": true,
+            "type": "array"
+          },
           "force": {
             "type": "boolean"
           },
@@ -952,6 +959,13 @@
           "contentHash": {
             "type": "string"
           },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameDetailDto"
+            },
+            "nullable": true,
+            "type": "array"
+          },
           "label": {
             "nullable": true,
             "type": "string"
@@ -1249,6 +1263,21 @@
           "Ended"
         ]
       },
+      "SavegameDetailDto": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SavegameDto": {
         "additionalProperties": false,
         "properties": {
@@ -1312,6 +1341,12 @@
           },
           "createdBy": {
             "$ref": "#/components/schemas/UserDto"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameDetailDto"
+            },
+            "type": "array"
           },
           "label": {
             "nullable": true,

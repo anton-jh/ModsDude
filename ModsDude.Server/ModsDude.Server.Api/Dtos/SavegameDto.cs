@@ -65,7 +65,17 @@ public record SavegameVersionDto(
     string? Label,
     SavegameVersionOrigin Origin,
     int? BaseVersion,
-    Guid? CheckoutId);
+    Guid? CheckoutId,
+    IEnumerable<SavegameDetailDto> Details);
+
+
+/// <summary>
+/// One thing a client's game adapter chose to say about a version - the map, when it was played,
+/// how long for. <b>The server never parses one</b>; see <c>SavegameDetail</c>.
+/// </summary>
+/// <param name="Key">Stable and machine-readable. Never rendered - it exists so a fact can be found again later.</param>
+/// <param name="Label">What to print beside the value. Prose, and safe to reword.</param>
+public record SavegameDetailDto(string Key, string Label, string Value);
 
 
 /// <summary>

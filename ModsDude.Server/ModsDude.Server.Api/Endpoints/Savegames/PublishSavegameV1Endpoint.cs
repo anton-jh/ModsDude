@@ -125,7 +125,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
             userId,
             now,
             request.Label,
-            SavegameVersionOrigin.Created);
+            SavegameVersionOrigin.Created,
+            details: SavegameDetails.From(request.Details));
 
         // The version carries no CheckoutId even though a claim is opened beside it. CheckoutId
         // names the claim a version was checked in *against*, and this claim starts here rather
@@ -173,6 +174,10 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to.
     /// </param>
     /// <param name="Label">What to call this first version in the history. Optional.</param>
+    /// <param name="Details">
+    /// What the client's adapter says about the save - the map, when it was played. Opaque here and
+    /// never parsed; optional, because an adapter that describes nothing is a perfectly ordinary one.
+    /// </param>
     public record PublishSavegameRequest(
         Guid SavegameId,
         string Name,
@@ -180,5 +185,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
         int ProfileRevision,
         string ContentHash,
         long SizeBytes,
-        string? Label);
+        string? Label,
+        IEnumerable<SavegameDetailDto>? Details);
 }

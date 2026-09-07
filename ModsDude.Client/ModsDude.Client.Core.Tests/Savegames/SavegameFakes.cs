@@ -336,8 +336,7 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
                 new SavegameSlotId(id),
                 DisplayNames.GetValueOrDefault(id),
                 IsOccupied(id),
-                null,
-                null))
+                []))
         ];
 
         return Task.FromResult(slots);

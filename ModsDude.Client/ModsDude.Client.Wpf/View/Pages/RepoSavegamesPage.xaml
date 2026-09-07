@@ -94,6 +94,17 @@
                                                        Style="{DynamicResource CaptionTextBlockStyle}"
                                                        Text="{Binding Summary}" />
 
+                                            <!-- What the game says about the head version, recorded
+                                                 by whoever checked it in. The half of the row that
+                                                 is about the save rather than about sharing it. -->
+                                            <TextBlock Margin="0 2 0 0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding GameSummary}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Text="{Binding GameSummary}"
+                                                       Visibility="{Binding HasGameSummary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                             <ItemsControl Margin="0 6 0 0" ItemsSource="{Binding Chips}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -261,6 +272,31 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Text="{Binding RevisionText}"
                                            Visibility="{Binding HasRevision, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!-- Whatever the adapter chose to record about this version. Labels
+                                     and values both come from it, so nothing here knows what a map
+                                     is - see SavegameDetail. -->
+                                <ItemsControl Margin="0 6 0 0"
+                                              ItemsSource="{Binding Details}"
+                                              Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="110 *" Margin="0 0 0 2">
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding Label}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Value}"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
                                 <TextBlock Margin="0 2 0 0"
                                            TextWrapping="Wrap"

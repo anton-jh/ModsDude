@@ -189,8 +189,7 @@ public class SavegameSlotStateTests
         new SavegameSlotId(id),
         occupied ? "Blackthorn Valley" : null,
         occupied,
-        occupied ? DateTime.UtcNow : null,
-        occupied ? TimeSpan.FromHours(12) : null);
+        occupied ? [new SavegameDetail(SavegameDetail.Ids.Playtime, "Played", "12 h")] : []);
 
     private static SavegameCheckoutBinding Binding(string slotId, string hash) => new(
         Guid.NewGuid(),

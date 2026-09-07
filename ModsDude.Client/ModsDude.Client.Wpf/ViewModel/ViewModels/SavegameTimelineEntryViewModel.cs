@@ -62,6 +62,14 @@ public sealed class SavegameTimelineEntryViewModel
     public bool HasSize => SizeText is { Length: > 0 };
     public bool HasRevision => RevisionText is { Length: > 0 };
 
+    /// <summary>
+    /// What the adapter recorded about this version, in its own order. Empty for a check-out row, and
+    /// for a version checked in by a client whose adapter describes nothing.
+    /// </summary>
+    public IReadOnlyList<SavegameDetailDto> Details { get; private init; } = [];
+
+    public bool HasDetails => Details.Count > 0;
+
 
     public static SavegameTimelineEntryViewModel ForVersion(SavegameVersionDto version, bool isHead)
     {
@@ -76,6 +84,7 @@ public sealed class SavegameTimelineEntryViewModel
             Label = version.Label,
             SizeText = SavegameWording.Size(version.SizeBytes),
             RevisionText = $"Played on revision {version.ProfileRevision}",
+            Details = [.. version.Details],
             ProfileRevision = version.ProfileRevision
         };
     }

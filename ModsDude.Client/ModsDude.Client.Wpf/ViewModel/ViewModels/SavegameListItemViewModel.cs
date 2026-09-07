@@ -82,6 +82,17 @@ public partial class SavegameListItemViewModel : ObservableObject
         ? $"Version {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}"
         : "No versions yet";
 
+    /// <summary>
+    /// What the game says about the head version - the map, the hours in it - recorded by whoever
+    /// checked it in and read here by everybody else. It is the half of a savegame row that is about
+    /// the save rather than about the sharing of it.
+    /// </summary>
+    public string? GameSummary => Savegame.Head is SavegameVersionDto head && head.Details.Count > 0
+        ? string.Join(" · ", head.Details.Select(x => x.Value))
+        : null;
+
+    public bool HasGameSummary => GameSummary is not null;
+
     /// <summary>Whoever holds it, or null where nobody does.</summary>
     public SavegameCheckoutDto? Holder => Savegame.Checkout is SavegameCheckoutDto checkout
         && checkout.Status is not SavegameCheckoutStatus.Ended

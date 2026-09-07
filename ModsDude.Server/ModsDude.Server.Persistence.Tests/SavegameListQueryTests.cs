@@ -206,6 +206,67 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
+    /// What an adapter said about a version, round-tripped in its own order. Owned collections and a
+    /// projection that never materializes the version are the two things that could quietly lose
+    /// them - and the order is a judgment the adapter made, so it is not the database's to reshuffle.
+    /// </summary>
+    [Fact]
+    public async Task A_versions_details_survive_in_the_order_the_adapter_wanted_them_read()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegame(repoId, profileId);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
+
+            dbContext.SavegameVersions.Add(savegame.CreateVersion(
+                profileId,
+                new RevisionNumber(1),
+                HashOf('1'),
+                sizeBytes: 4096,
+                _author,
+                _takenAt,
+                details:
+                [
+                    // Deliberately handed over out of order, so what comes back is Position's doing
+                    // rather than the insertion order's.
+                    new SavegameDetail("playtime", "Played", "45 h", 2),
+                    new SavegameDetail("map", "Map", "Zielonka", 0),
+                    new SavegameDetail("last-played", "Last played", "2024-11-30", 1)
+                ]));
+
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        using var verification = fixture.CreateDbContext();
+
+        var row = await verification.SavegameVersions.GetRowAsync(
+            repoId, savegameId, new SavegameVersionNumber(1), CancellationToken.None);
+
+        Assert.Equal(["map", "last-played", "playtime"], row!.Details.Select(x => x.Key));
+        Assert.Equal(["Map", "Last played", "Played"], row.Details.Select(x => x.Label));
+        Assert.Equal(["Zielonka", "2024-11-30", "45 h"], row.Details.Select(x => x.Value));
+    }
+
+    /// <summary>An adapter that describes nothing is an ordinary adapter, not a broken one.</summary>
+    [Fact]
+    public async Task A_version_with_no_details_reads_as_having_none()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegame(repoId, profileId);
+
+        await GivenVersions(repoId, profileId, savegameId, HashOf('1'));
+
+        using var verification = fixture.CreateDbContext();
+
+        var row = await verification.SavegameVersions.GetRowAsync(
+            repoId, savegameId, new SavegameVersionNumber(1), CancellationToken.None);
+
+        Assert.Empty(row!.Details);
+    }
+
+    /// <summary>
     /// The first version of a savegame was built on nothing and was not checked in against a claim,
     /// so both nullable columns have to survive as nulls rather than as a zeroth version somebody
     /// could try to restore.

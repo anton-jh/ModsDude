@@ -105,7 +105,11 @@ public class RestoreSavegameVersionV1Endpoint : IEndpoint
             // that was kept.
             request?.Label,
             SavegameVersionOrigin.Restored,
-            sourceNumber);
+            sourceNumber,
+            // Copied forward with the bytes. A restore is the same save, so the map it was played on
+            // and the hours in it are the same facts - re-deriving them is impossible here anyway,
+            // since the server has never looked inside a savegame.
+            details: source.Details);
 
         dbContext.SavegameVersions.Add(version);
 

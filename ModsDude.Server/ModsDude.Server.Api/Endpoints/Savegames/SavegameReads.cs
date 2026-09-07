@@ -224,7 +224,8 @@ internal static class SavegameReads
             row.Label,
             row.Origin,
             row.BaseVersion?.Value,
-            row.CheckoutId?.Value);
+            row.CheckoutId?.Value,
+            [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))]);
     }
 
     private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, DisplayName> names, DateTime now)
@@ -233,5 +234,28 @@ internal static class SavegameReads
             checkout,
             Describe(checkout.UserId, names.TryGetValue(checkout.UserId, out var name) ? name : null),
             now);
+    }
+}
+
+/// <summary>
+/// Turns what a client's adapter said into what the version stores. The server does not look inside
+/// - see <see cref="SavegameDetail"/> - so this only drops the empties and keeps the order sent.
+/// </summary>
+internal static class SavegameDetails
+{
+    /// <summary>
+    /// Bounded because a request body is not a place to accept an unbounded list, and because
+    /// anything past this is not something a person is reading off a row.
+    /// </summary>
+    private const int _maximum = 24;
+
+    public static IEnumerable<SavegameDetail> From(IEnumerable<SavegameDetailDto>? details)
+    {
+        return (details ?? [])
+            .Where(x => string.IsNullOrWhiteSpace(x.Key) is false && string.IsNullOrWhiteSpace(x.Value) is false)
+            // The order the adapter sent them in is the order it wanted them read.
+            .Select((x, index) => new SavegameDetail(x.Key.Trim(), x.Label.Trim(), x.Value.Trim(), index))
+            .DistinctBy(x => x.Key)
+            .Take(_maximum);
     }
 }

@@ -358,7 +358,46 @@ the only one that exists.
 | `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => false` |
 | `FarmingSimulatorInstanceModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
-| `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and timed from its own `careerSavegame.xml`. `CanCreateSlots => false`. Untested against the real game — see [08](08-known-issues.md) |
+| `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
+
+### How a savegame is described
+
+`SavegameSlot.Details` is an **adapter-supplied list of `(Id, Label, Value)`** — free-form, in the
+adapter's own order, already worded for a person to read. Nothing above the adapter knows what a
+map is, which is the point: the games do not agree on what is worth saying about a save, and a
+schema with a column per game is a schema with a hole in it for every game nobody has written yet.
+
+`Id` is stable, lowercase and never rendered; `Label` is prose and safe to reword. That split is
+what makes a fact findable later — if one turns out to be worth promoting to a real property, the
+recorded values can be migrated rather than parsed back out of a sentence. **Nothing may depend on
+one**, exactly as with `ModAttribute`.
+
+**The order is the priority order.** A slot row shows the first few and puts the rest on its
+tooltip, so an adapter that says the most useful thing first gets the most useful row.
+
+What the Farming Simulator adapter reads, from `careerSavegame.xml` unless noted:
+
+| Id | From |
+| --- | --- |
+| `map` | `settings/mapTitle` — the title, not `mapId` |
+| `last-played` | `settings/saveDate`, falling back to the career file's own timestamp |
+| `started` | `settings/creationDate` |
+| `playtime` | **`statistics/playTime`**, in minutes, rendered as hours past the first one |
+| `money` | `statistics/money` |
+| `difficulty` | `settings/economicDifficulty`, un-shouted |
+| `multiplayer` | `farms.xml` — distinct `player/@uniqueUserId` across every farm |
+
+Two of those are worth knowing about. **Playtime is under `statistics`, not `settings`**, which is
+where this used to look — so every slot silently reported no playtime at all until it was checked
+against a real save. And **multiplayer is a heuristic**: the career file records nothing about it,
+so it is counted from the players who have connected to each farm. More than one is a save that has
+been shared; one is a save somebody has only ever played alone. It cannot tell a game that was
+hosted and never joined from a singleplayer one, and the wording does not pretend to.
+
+Every line is optional and independent. A field this adapter cannot read costs that line and
+nothing else, and a career file that will not parse at all still leaves the slot **occupied** — the
+one mistake that matters, since an empty slot is the one the engine writes into without asking.
+
 
 ### How a mod is read
 

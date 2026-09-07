@@ -366,6 +366,10 @@ public sealed class SavegameService(
         var slot = new SavegameSlotId(binding.SlotId);
         var packed = await packer.PackAsync(adapter, slot, ct);
 
+        // Read from the slot these bytes came from, before the upload rather than after: the details
+        // describe the version being minted.
+        var details = await DescribeAsync(adapter, slot, ct);
+
         SavegameVersionDto version;
 
         try
@@ -379,7 +383,8 @@ public sealed class SavegameService(
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
                 Label = label,
-                Force = force
+                Force = force,
+                Details = details
             }, ct);
         }
         finally
@@ -455,6 +460,8 @@ public sealed class SavegameService(
         var savegameId = Guid.NewGuid();
         var packed = await packer.PackAsync(adapter, slot, ct);
 
+        var details = await DescribeAsync(adapter, slot, ct);
+
         SavegameDto savegame;
 
         try
@@ -469,7 +476,8 @@ public sealed class SavegameService(
                 ProfileRevision = revision,
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
-                Label = label
+                Label = label,
+                Details = details
             }, ct);
         }
         finally
@@ -620,7 +628,7 @@ public sealed class SavegameService(
             // A slot the adapter does not list, for a game that can mint them. Nothing is there, so
             // there is nothing to lose - and a game that cannot mint them will refuse the write when
             // it comes to it, which is its call to make and not this one's.
-            ?? new SavegameSlot(slotId, null, false, null, null);
+            ?? new SavegameSlot(slotId, null, false, []);
 
         var binding = bindings.GetBindingForSlot(instance.Id, slot.Id);
 
@@ -825,6 +833,42 @@ public sealed class SavegameService(
         {
             // The game holding a file open in a save that has just been checked in. Left where it is.
             logger.LogWarning(exception, "Could not clear slot {Slot} after checking in.", slot.Value);
+        }
+    }
+
+    /// <summary>
+    /// What the adapter says about the save in a slot, in the shape the server stores it - opaque,
+    /// ordered, and read only to be displayed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read at the moment of publish or check-in, from the slot the bytes are being packed out of,
+    /// so what is recorded describes the version being minted rather than whatever that slot holds
+    /// later.
+    /// </para>
+    /// <para>
+    /// <b>Never allowed to fail the write.</b> A map name is decoration; the save is the thing. An
+    /// adapter that throws, or a slot the game is holding open, costs the details and nothing else -
+    /// same treatment mod imagery gets, and for the same reason.
+    /// </para>
+    /// </remarks>
+    private async Task<List<SavegameDetailDto>> DescribeAsync(
+        IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
+    {
+        try
+        {
+            var slots = await adapter.GetSlots(ct);
+
+            return [.. slots
+                .FirstOrDefault(x => x.Id == slot)?.Details
+                    .Select(x => new SavegameDetailDto { Key = x.Id, Label = x.Label, Value = x.Value })
+                ?? []];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Could not describe slot {Slot}; the version will carry no details.", slot.Value);
+
+            return [];
         }
     }
 

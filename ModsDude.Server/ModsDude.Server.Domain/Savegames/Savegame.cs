@@ -94,7 +94,8 @@ public class Savegame
         string? label = null,
         SavegameVersionOrigin origin = SavegameVersionOrigin.CheckedIn,
         SavegameVersionNumber? baseVersion = null,
-        SavegameCheckoutId? checkoutId = null)
+        SavegameCheckoutId? checkoutId = null,
+        IEnumerable<SavegameDetail>? details = null)
     {
         var number = HeadVersion.Next();
 
@@ -111,7 +112,8 @@ public class Savegame
             label,
             origin,
             baseVersion,
-            checkoutId);
+            checkoutId,
+            details);
 
         HeadVersion = number;
 
