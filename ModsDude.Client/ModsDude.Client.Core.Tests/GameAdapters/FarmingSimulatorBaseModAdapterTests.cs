@@ -68,6 +68,50 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
     }
 
 
+    /// <summary>
+    /// A mod folder legitimately holds files that are none of the app's business - Farming Simulator
+    /// keeps a <c>mods.json</c> beside the archives. Those are not mods that failed to read, they
+    /// are not candidates, and the difference is the one this scan has to keep straight.
+    /// </summary>
+    [Fact]
+    public async Task Files_that_are_not_mod_archives_are_ignored_without_being_opened()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+
+        File.WriteAllText(Path.Combine(_folder, "mods.json"), "{ \"not\": \"a mod\" }");
+        File.WriteAllText(Path.Combine(_folder, "notes.txt"), "shopping list");
+
+        Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
+    }
+
+    /// <summary>A zip that carries no modDesc is a determination, not a fault: it is simply not a mod.</summary>
+    [Fact]
+    public async Task A_zip_that_is_not_a_mod_is_skipped()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+
+        using (var zip = ZipFile.Open(Path.Combine(_folder, "holiday-photos.zip"), ZipArchiveMode.Create))
+        {
+            zip.CreateEntry("beach.jpg");
+        }
+
+        Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
+    }
+
+    /// <summary>
+    /// The third case, and the only one worth telling anybody about: something shaped like a mod
+    /// that cannot be read. One of them must not take the rest of the folder down with it.
+    /// </summary>
+    [Fact]
+    public async Task An_unreadable_archive_is_skipped_and_the_rest_of_the_folder_still_scans()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+
+        File.WriteAllBytes(Path.Combine(_folder, "FS25_Broken.zip"), [0x00, 0x01, 0x02, 0x03]);
+
+        Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
+    }
+
     private async Task<LocalMod> ScanOne()
     {
         return Assert.Single(await Scan());

@@ -145,9 +145,11 @@ which is the whole cost.
 It was worth it because those adapters degrade rather than throw, by design, and a degraded result
 is indistinguishable from an ordinary one. A slot whose career file will not parse reads as
 "a save this game will not name" — a `Warning`, because the user can see something is wrong and had
-no other way to find out why. A folder scan that skips a file reads as a mod that is simply not
-there — `Debug`, because in Downloads most files are not mods and it would say so a thousand times,
-which makes it exactly the level to turn on when a mod is missing and nobody can say why.
+no other way to find out why. A folder scan tells three outcomes apart, which is what makes
+its one `Warning` meaningful: a file that is not shaped like a mod archive is never opened, a zip
+that carries no `modDesc` is a determination rather than a fault, and only an archive that *should*
+have been readable and was not gets logged - in a mod folder that is a mod which has silently left
+the catalog.
 
 ### Absorbed is not hidden
 

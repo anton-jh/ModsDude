@@ -421,6 +421,15 @@ archive in the folder and extracts:
 | `modDesc/description/en` (or first child) | `Description`, normalised |
 | `modDesc/author` | `Author` |
 | Whether `modDesc` declares maps | `Locked` — the mod is version-sensitive |
+
+**Three outcomes, and only one is a fault.** A mod is a `.zip`, so anything else in the folder is
+not a mod that failed to read — it is not a candidate, and is ignored without being opened. A mod
+folder legitimately holds files that are none of the app's business: Farming Simulator keeps a
+`mods.json` beside the archives. A zip that opens and carries no `modDesc.xml` is a zip that is not
+a mod, which is a determination and equally silent. Only an archive that will not open, or whose
+`modDesc` will not parse, is worth reporting — in a mod folder that is a mod which has silently left
+the catalog — and even then the scan skips it rather than letting one bad archive take a thousand
+good ones down.
 | `modDesc/iconFilename`, or any `icon_*` image | `Icon` |
 | Any `store_*` image | `Images` |
 

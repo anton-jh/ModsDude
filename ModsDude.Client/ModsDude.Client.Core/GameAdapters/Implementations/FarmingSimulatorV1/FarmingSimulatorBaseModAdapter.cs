@@ -37,6 +37,19 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
     public bool SupportsHardlinks => false;
 
 
+    /// <summary>
+    /// What a Farming Simulator mod is packaged as. Anything else in the folder is not a mod that
+    /// failed to read - it is not a candidate at all, and telling those two apart is the whole point
+    /// of filtering here rather than finding out by trying to open it.
+    /// </summary>
+    /// <remarks>
+    /// A mod folder legitimately holds files that are none of the app's business: Farming Simulator
+    /// keeps a <c>mods.json</c> beside the archives, and a source can be any folder the user points
+    /// at. Those are ignored in silence, because there is nothing wrong with them.
+    /// </remarks>
+    private static readonly string[] _modArchiveExtensions = [".zip"];
+
+
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
         // Each file gets its own archive handle, so reading them in parallel is safe, and a mod
@@ -46,7 +59,10 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
         // app shares - to the scan for as long as it runs.
         return Task.Run<IEnumerable<LocalMod>>(() =>
         {
-            var files = Directory.EnumerateFiles(path).ToList();
+            var files = Directory.EnumerateFiles(path)
+                .Where(IsCandidate)
+                .ToList();
+
             var mods = new LocalMod?[files.Count];
 
             var options = new ParallelOptions
@@ -62,12 +78,27 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
         }, cancellationToken);
     }
 
+    /// <summary>Whether this file is even shaped like a mod. See <see cref="_modArchiveExtensions"/>.</summary>
+    private static bool IsCandidate(string path)
+        => _modArchiveExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
-    /// Null for anything that is not a readable mod archive. A source is now any folder the user
-    /// points at - Downloads holds installers, documents, half-finished downloads another process
-    /// still has open, and archives whose central directory does not add up - so a file that cannot
-    /// be read as a mod is skipped rather than taking the whole folder's scan down with it.
+    /// One candidate archive, or null where it is not a mod.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Three outcomes, and only one of them is a fault.</b> A file that is not a mod archive at
+    /// all never reaches here - <see cref="IsCandidate"/> filtered it. An archive that opens and
+    /// carries no <c>modDesc.xml</c> is a zip that is not a mod, which is a determination rather
+    /// than a problem, so it returns null in silence. An archive that will not open, or whose
+    /// <c>modDesc</c> will not parse, is the third case: something claiming to be a mod that this
+    /// adapter cannot read, and the only one worth telling anybody about.
+    /// </para>
+    /// <para>
+    /// Skipped rather than thrown either way, because a source is any folder the user points at and
+    /// one bad archive must not take a thousand good ones down with it.
+    /// </para>
+    /// </remarks>
     private static LocalMod? GetModFromFile(string path, ILogger log, CancellationToken cancellationToken)
     {
         try
@@ -77,7 +108,11 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or XmlException)
         {
             // A filter rather than a catch body, so a cancelled scan still unwinds.
-            log.LogDebug(ex, "Skipped {File}: it could not be read as a mod.", path);
+            //
+            // Warning, not Debug: this is a mod archive that could not be read, so in a mod folder it
+            // is a mod that has silently left the catalog. Half-written downloads and archives a
+            // process still holds open land here too, which is why it does not stop the scan.
+            log.LogWarning(ex, "{File} looks like a mod archive but could not be read; it is not in the catalog.", path);
 
             return null;
         }
