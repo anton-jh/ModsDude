@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -16,7 +17,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// one version. The mod itself is rendered by the shared list row, so it looks the same here as it
 /// does everywhere else and its icon loads the same way.
 /// </remarks>
-public partial class ProfileModRowViewModel : ObservableObject
+public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 {
     private readonly Guid _repoId;
     private readonly ModListItemViewModel.Factory _itemFactory;
@@ -46,7 +47,7 @@ public partial class ProfileModRowViewModel : ObservableObject
         _selectedVersion = Versions.FirstOrDefault(x => x.Version.VersionId == selected.VersionId)
             ?? new ProfileModVersionOption(selected);
         _lockedByProfile = lockedByProfile;
-        _item = CreateItem(_selectedVersion);
+        _item = CreateItem(_selectedVersion, selected: false);
     }
 
 
@@ -63,6 +64,18 @@ public partial class ProfileModRowViewModel : ObservableObject
     /// selection changes.
     /// </summary>
     public bool Matches(string? searchTerm) => Item.Matches(searchTerm);
+
+    /// <summary>
+    /// Whether the editor has this row picked. Kept on <see cref="Item"/> rather than here, because
+    /// the checkbox the user clicks belongs to the shared list row - and because that is what makes
+    /// a mod picked on one side still picked when it is moved to the other. Changing the version
+    /// replaces the item, so <see cref="CreateItem"/> carries the flag over.
+    /// </summary>
+    public bool IsSelected
+    {
+        get => Item.IsSelected;
+        set => Item.IsSelected = value;
+    }
 
     /// <summary>
     /// The shared list row for whatever version is selected. Replaced rather than mutated when the
@@ -201,7 +214,11 @@ public partial class ProfileModRowViewModel : ObservableObject
     {
         _selectedVersion = value;
 
-        Item = CreateItem(value);
+        var previous = Item;
+
+        previous.PropertyChanged -= OnItemChanged;
+
+        Item = CreateItem(value, previous.IsSelected);
 
         OnPropertyChanged(nameof(SelectedVersion));
         OnPropertyChanged(nameof(LockedByAdapter));
@@ -220,13 +237,34 @@ public partial class ProfileModRowViewModel : ObservableObject
             DispatcherPriority.DataBind);
     }
 
-    private ModListItemViewModel CreateItem(ProfileModVersionOption option)
+    /// <param name="selected">
+    /// Carried over from the item being replaced. A version change must not put a picked row down:
+    /// the user picked the <em>mod</em>, and which version it sits at is a different decision.
+    /// </param>
+    private ModListItemViewModel CreateItem(ProfileModVersionOption option, bool selected)
     {
         var item = _itemFactory.Create(_repoId, option.Version);
 
-        item.IsSelectable = false;
+        // The mod list editor is the only page that builds these rows, and it picks rows on both
+        // sides.
+        item.IsSelectable = true;
+        item.IsSelected = selected;
+
+        item.PropertyChanged += OnItemChanged;
 
         return item;
+    }
+
+    /// <summary>
+    /// Re-raises the one thing about the item that is also a fact about this row. The page listens
+    /// to rows, not to the items inside them, so a click on the checkbox has to arrive here.
+    /// </summary>
+    private void OnItemChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ModListItemViewModel.IsSelected))
+        {
+            OnPropertyChanged(nameof(IsSelected));
+        }
     }
 }
 

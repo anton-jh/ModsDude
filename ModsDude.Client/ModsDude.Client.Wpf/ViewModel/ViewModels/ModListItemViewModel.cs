@@ -21,7 +21,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// Wraps a <see cref="CatalogModVersion"/> rather than a local mod, which is what lets one row type
 /// serve a list that mixes what is on disk, what the repo holds, and what is both.
 /// </remarks>
-public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
+public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISelectableRow
 {
     private readonly Guid _repoId;
     private readonly IModImageProvider _imageProvider;

@@ -94,8 +94,8 @@ Whether the game's mod files are safe to hardlink into the content store. False 
 or its updater may **rewrite a mod file in place**, which through a hardlink would corrupt the
 store blob shared with every other repo and instance on that volume. False also means "nobody
 has checked yet" — it is deliberately the default, because the failure is silent and the
-blast radius is every repo on the disk. `_farming_simulator@1` declares `false` explicitly, to
-say the answer is unknown rather than assumed. See
+blast radius is every repo on the disk. `_farming_simulator@1` declares `true`: its in-game
+updater was tested and renames a new file over the old one, which breaks the link harmlessly. See
 [07 — Mod sync design](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
 The adapter is also responsible for deciding whether a newly registered mod is
@@ -356,7 +356,7 @@ the only one that exists.
 | `FarmingSimulatorInstanceGameAdapter` | + instance settings, exposes instance capability factories |
 | `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [instance scope](#instance-scope) |
 | `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
-| `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => false` |
+| `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
 | `FarmingSimulatorInstanceModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
 | `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
 

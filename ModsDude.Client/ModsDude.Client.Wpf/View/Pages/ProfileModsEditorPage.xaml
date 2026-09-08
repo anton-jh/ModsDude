@@ -6,9 +6,11 @@
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       Title="ProfileModsEditorPage"
+      PreviewKeyDown="PageKeyDown"
       d:DataContext="{d:DesignInstance Type=pvm:ProfileModsEditorPageViewModel, IsDesignTimeCreatable=False}">
 
     <Page.Resources>
@@ -118,6 +120,90 @@
             </Setter>
         </Style>
 
+        <!-- The container for a row in either list. It draws two different things that a plain list
+             would draw as one: what is *picked*, which is a property of the row and survives the
+             search, and which row is *current*, which is the framework's and is only a focus ring.
+             Explorer draws the same distinction, and for the same reason - the arrow keys have to be
+             able to move without that meaning the set has changed. -->
+        <Style x:Key="ModRow" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <!-- The accent at low opacity rather than a named fill: it reads as a
+                                 selection in both themes, and it is the one colour on the row that
+                                 cannot be confused with the hover state under it. -->
+                            <Border x:Name="Fill"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Opacity="0" />
+
+                            <Rectangle x:Name="Bar"
+                                       Width="3"
+                                       Margin="0 6"
+                                       RadiusX="1.5" RadiusY="1.5"
+                                       HorizontalAlignment="Left"
+                                       Visibility="Collapsed"
+                                       Fill="{DynamicResource AccentFillColorDefaultBrush}" />
+
+                            <ContentPresenter />
+
+                            <Border x:Name="Focus"
+                                    BorderThickness="0"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Fill" Property="Opacity" Value="0.16" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Both lists, which have to behave identically: taking mods out of a profile is the same
+             job as putting them in, seen from the other side.
+             SelectionMode stays Single on purpose. The list's own selection is only ever the current
+             item - what is picked lives on the rows, because a list control drops from its selection
+             whatever the collection view filters out, and that would mean one more character in the
+             search box quietly discarding the set being assembled. See ListSelection. -->
+        <Style x:Key="ModList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ModRow}" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
+        </Style>
+
+        <!-- The box a list sits in, which is also the target a drag from the other list lands on.
+             Nothing here is ordered, so a drop has no position to mean and the whole box lights up
+             rather than a line between two rows. -->
+        <Style x:Key="ListFrame" TargetType="Border">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+        </Style>
+
+        <!-- The strip under a list while something is picked. Absent at zero, so the lists keep
+             their height until there is something to say. -->
+        <Style x:Key="SelectionBar" TargetType="Border">
+            <Setter Property="Margin" Value="0 8 0 0" />
+            <Setter Property="Padding" Value="10 8" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+        </Style>
+
     </Page.Resources>
 
     <Grid RowDefinitions="*, auto">
@@ -149,11 +235,14 @@
                      reached only the left one answered half the question - and the half it could
                      not answer was "is this already in the profile?". Same shape as the repo mods
                      page, which has the same two lists and the same question. -->
-                <Grid Grid.Row="3" Margin="0 0 0 12">
+                <StackPanel Grid.Row="3" Margin="0 0 0 12">
+
+                <Grid>
 
                     <!-- Right padding keeps the text from running under the clear button. The rest
                          matches the theme's own TextBox padding. -->
                     <TextBox x:Name="SearchBox"
+                             PreviewKeyDown="SearchBoxKeyDown"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
                              Padding="10 5 32 6"
                              VerticalAlignment="Center" />
@@ -199,15 +288,40 @@
                     </Button>
                 </Grid>
 
+                    <!-- What a paste or a copy found. Sits under the search box because that is
+                         where the reader's eyes already are, and stays until the next one - a report
+                         about a selection has to be readable for as long as the selection is. -->
+                    <Border Margin="0 8 0 0"
+                            Padding="12 8"
+                            CornerRadius="4"
+                            Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                            Visibility="{Binding HasSelectionStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="{Binding SelectionStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </Border>
+
+                </StackPanel>
+
                 <Grid Grid.Row="4" ColumnDefinitions="* 16 *">
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
-                    <Grid Grid.Column="0" RowDefinitions="auto * auto auto">
+                    <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto auto">
+                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
 
-                            <TextBlock Grid.Column="0"
+                            <!-- Selecting everything the list is showing, which is what the search
+                                 and the chips below exist to define. Three-valued because a
+                                 part-selected list is the state it spends most of its time in, and
+                                 a two-state box would have to round that to a lie. -->
+                            <CheckBox Grid.Column="0"
+                                      Margin="12 0 10 0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding AvailableSelection.AllShownSelected, Mode=TwoWay}"
+                                      ToolTip="Select everything this list is showing" />
+
+                            <TextBlock Grid.Column="1"
                                        Text="Not in this profile"
                                        VerticalAlignment="Center"
                                        ToolTip="Registered in this repo or found on this computer, and not pinned here."
@@ -217,7 +331,7 @@
                             <!-- Says why the top of this list is not alphabetical: what the draft has
                                  taken out of the profile is back here, and looks exactly like a mod
                                  that was never in it. -->
-                            <TextBlock Grid.Column="1"
+                            <TextBlock Grid.Column="2"
                                        Margin="12 0 0 0"
                                        VerticalAlignment="Center"
                                        Text="{Binding RemovalText}"
@@ -225,46 +339,74 @@
                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                        Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                            <TextBlock Grid.Column="2"
+                            <TextBlock Grid.Column="3"
                                        Margin="12 0 0 0"
                                        VerticalAlignment="Center"
                                        Text="{Binding AvailableCountText}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
-                        <Border Grid.Row="1"
-                                CornerRadius="6"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <!-- Chips rather than a dropdown: they compose with the search into one
+                             well-defined set, and every bulk action and count on this side is
+                             stated against that set. -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+                            <RadioButton GroupName="AvailableFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="All"
+                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
+                            <RadioButton GroupName="AvailableFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="New to the repo"
+                                         ToolTip="Found on this computer and not registered here. Saving imports these."
+                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=New}" />
+                            <RadioButton GroupName="AvailableFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Taken out"
+                                         ToolTip="Mods this draft has removed from the profile"
+                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=TakenOut}" />
+                            <RadioButton GroupName="AvailableFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Conflicts"
+                                         ToolTip="Two sources hold different files for this version"
+                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Conflicts}" />
+                        </StackPanel>
+
+                        <Border Grid.Row="2">
+
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource ListFrame}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Path=(b:ModListDrag.IsOver), ElementName=AvailableList}" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+
                             <Grid>
 
                                 <!-- Virtualized with recycling: a mod folder can easily hold a few
                                      thousand archives. -->
-                                <ItemsControl ItemsSource="{Binding AvailableView}"
-                                              VirtualizingStackPanel.IsVirtualizing="True"
-                                              VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                              ScrollViewer.CanContentScroll="True">
-                                    <ItemsControl.Template>
-                                        <ControlTemplate TargetType="ItemsControl">
-                                            <ScrollViewer CanContentScroll="True"
-                                                          Focusable="False"
-                                                          VerticalScrollBarVisibility="Auto"
-                                                          HorizontalScrollBarVisibility="Disabled">
-                                                <ItemsPresenter />
-                                            </ScrollViewer>
-                                        </ControlTemplate>
-                                    </ItemsControl.Template>
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <VirtualizingStackPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
+                                <ListBox x:Name="AvailableList"
+                                         Style="{StaticResource ModList}"
+                                         ItemsSource="{Binding AvailableView}"
+                                         b:ListSelection.Controller="{Binding AvailableSelection}"
+                                         b:ModListDrag.Kind="Available"
+                                         b:ModListDrag.DropCommand="{Binding RemoveSelectedCommand}">
+
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Add the selected mods" Command="{Binding AddSelectedCommand}" />
+                                            <Separator />
+                                            <MenuItem Header="Select everything shown" Command="{Binding SelectAllShownAvailableCommand}" />
+                                            <MenuItem Header="Clear the selection" Command="{Binding ClearAvailableSelectionCommand}" />
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
 
                                     <!-- The shared row, plus the one thing this list adds to it. The
                                          inner presenter picks up the implicit template, so a mod
                                          looks the same here as it does everywhere else. -->
-                                    <ItemsControl.ItemTemplate>
+                                    <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:ModListItemViewModel}">
                                             <Grid ColumnDefinitions="* auto">
                                                 <ContentPresenter Grid.Column="0" Content="{Binding}" />
@@ -279,8 +421,8 @@
                                                         CommandParameter="{Binding}" />
                                             </Grid>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
 
                                 <TextBlock Text="Reading the repo and scanning the sources…"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -289,22 +431,76 @@
                             </Grid>
                         </Border>
 
+                        <!-- Only while something is picked. What it says it will move is everything
+                             selected, including rows the search is hiding - so it says how many
+                             those are and offers to put them down, rather than acting on mods
+                             nobody can see. -->
+                        <Border Grid.Row="3"
+                                Style="{StaticResource SelectionBar}"
+                                Visibility="{Binding AvailableSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid RowDefinitions="auto auto">
+
+                                <Grid Grid.Row="0" ColumnDefinitions="* auto">
+                                    <Button Grid.Column="0"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{DynamicResource AccentButtonStyle}"
+                                            Content="{Binding AvailableSelection.ActionText}"
+                                            Command="{Binding AddSelectedCommand}" />
+                                    <Button Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Content="Clear"
+                                            Command="{Binding ClearAvailableSelectionCommand}" />
+                                </Grid>
+
+                                <Grid Grid.Row="1"
+                                      Margin="0 8 0 0"
+                                      ColumnDefinitions="* auto"
+                                      Visibility="{Binding AvailableSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding AvailableSelection.HiddenText}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Button Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Content="{Binding AvailableSelection.DeselectHiddenText}"
+                                            Command="{Binding DeselectHiddenAvailableCommand}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+
                         <!-- The bulk moves, against the list they read rather than in the save bar:
-                             what they take is what is on screen above them, and the search is how a
-                             subset of it is picked. -->
-                        <Grid Grid.Row="2" Margin="0 8 0 0" ColumnDefinitions="* *">
-                            <Button Grid.Column="0"
+                             what they take is what is on screen above them, and the search and the
+                             chips are how a subset of it is picked. -->
+                        <Grid Grid.Row="4" Margin="0 8 0 0" RowDefinitions="auto auto" ColumnDefinitions="* *">
+                            <Button Grid.Row="0" Grid.Column="0"
                                     Margin="0 0 4 0"
                                     HorizontalAlignment="Stretch"
                                     Content="Add all shown new"
                                     ToolTip="Add every mod the list above is showing that this profile has never held"
                                     Command="{Binding AddAllShownNewCommand}" />
-                            <Button Grid.Column="1"
+                            <Button Grid.Row="0" Grid.Column="1"
                                     Margin="4 0 0 0"
                                     HorizontalAlignment="Stretch"
                                     Content="Restore removed"
                                     ToolTip="Put back everything this draft has taken out, at the version and lock the profile still holds"
                                     Command="{Binding RestoreRemovedCommand}" />
+
+                            <!-- The two ways of not picking mods one at a time at all. Under the
+                                 left list because both of them bring things into the profile, and
+                                 next to the bulk moves because they answer the same question. -->
+                            <Button Grid.Row="1" Grid.Column="0"
+                                    Margin="0 8 4 0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="Copy from a profile…"
+                                    ToolTip="Take the mod list from another profile in this repo"
+                                    Command="{Binding CopyFromProfileCommand}" />
+                            <Button Grid.Row="1" Grid.Column="1"
+                                    Margin="4 8 0 0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="Paste a list…"
+                                    ToolTip="Paste mod names or ids and select everything that matches"
+                                    Command="{Binding PasteListCommand}" />
                         </Grid>
 
                         <!-- The sources feed this list and nothing else, so they sit under it.
@@ -312,7 +508,7 @@
                         <!-- Not collapsible. Sources start switched off, so the one control that
                              explains why the left list is empty is exactly the one a collapsed pane
                              would hide. -->
-                        <Grid Grid.Row="3" Margin="0 16 0 0" RowDefinitions="auto auto auto">
+                        <Grid Grid.Row="5" Margin="0 16 0 0" RowDefinitions="auto auto auto">
 
                             <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto">
                                 <TextBlock Grid.Column="0"
@@ -396,19 +592,48 @@
 
                     <!-- The profile itself. Updates live here rather than on the left, so a mod with
                          a newer version is never on both sides at once. -->
-                    <Grid Grid.Column="2" RowDefinitions="auto auto *">
+                    <Grid Grid.Column="2" RowDefinitions="auto auto auto * auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto">
-                            <TextBlock Grid.Column="0"
+                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto">
+
+                            <CheckBox Grid.Column="0"
+                                      Margin="12 0 10 0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding PinnedSelection.AllShownSelected, Mode=TwoWay}"
+                                      ToolTip="Select everything this list is showing" />
+
+                            <TextBlock Grid.Column="1"
                                        Text="In this profile"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                        Style="{DynamicResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Grid.Column="1"
+                            <TextBlock Grid.Column="2"
                                        VerticalAlignment="Center"
                                        Text="{Binding PinnedCountText}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+                            <RadioButton GroupName="PinnedFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="All"
+                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
+                            <RadioButton GroupName="PinnedFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Updates"
+                                         ToolTip="Mods the repo holds a newer version of"
+                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
+                            <RadioButton GroupName="PinnedFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Locked"
+                                         ToolTip="Mods held at their version, by you or by the game adapter"
+                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Locked}" />
+                            <RadioButton GroupName="PinnedFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Pending"
+                                         ToolTip="Pinned at a version the repo does not hold yet. Saving imports these."
+                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Pending}" />
+                        </StackPanel>
 
                         <!-- The batch action applies to unlocked mods only, and says how many it
                              left alone. The skipped count is a link to the same dialog the per-row
@@ -417,7 +642,7 @@
                              people come to this page to answer, and a section that is absent when
                              the answer is no never answers it - it just leaves them looking. It also
                              keeps the list below from moving as the count changes. -->
-                        <Border Grid.Row="1"
+                        <Border Grid.Row="2"
                                 Margin="0 0 0 8"
                                 Padding="12 8"
                                 CornerRadius="4"
@@ -445,34 +670,41 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="2"
-                                CornerRadius="6"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <Border Grid.Row="3">
+
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource ListFrame}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Path=(b:ModListDrag.IsOver), ElementName=PinnedList}" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+
                             <Grid>
 
-                                <ItemsControl ItemsSource="{Binding PinnedView}"
-                                              VirtualizingStackPanel.IsVirtualizing="True"
-                                              VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                              ScrollViewer.CanContentScroll="True">
-                                    <ItemsControl.Template>
-                                        <ControlTemplate TargetType="ItemsControl">
-                                            <ScrollViewer CanContentScroll="True"
-                                                          Focusable="False"
-                                                          VerticalScrollBarVisibility="Auto"
-                                                          HorizontalScrollBarVisibility="Disabled">
-                                                <ItemsPresenter />
-                                            </ScrollViewer>
-                                        </ControlTemplate>
-                                    </ItemsControl.Template>
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <VirtualizingStackPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
+                                <ListBox x:Name="PinnedList"
+                                         Style="{StaticResource ModList}"
+                                         ItemsSource="{Binding PinnedView}"
+                                         b:ListSelection.Controller="{Binding PinnedSelection}"
+                                         b:ModListDrag.Kind="Pinned"
+                                         b:ModListDrag.DropCommand="{Binding AddSelectedCommand}">
 
-                                    <ItemsControl.ItemTemplate>
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Take the selected mods out" Command="{Binding RemoveSelectedCommand}" />
+                                            <Separator />
+                                            <MenuItem Header="Update the selected mods" Command="{Binding UpdateSelectedCommand}" />
+                                            <MenuItem Header="Lock the selected mods" Command="{Binding LockSelectedCommand}" />
+                                            <MenuItem Header="Unlock the selected mods" Command="{Binding UnlockSelectedCommand}" />
+                                            <Separator />
+                                            <MenuItem Header="Select everything shown" Command="{Binding SelectAllShownPinnedCommand}" />
+                                            <MenuItem Header="Clear the selection" Command="{Binding ClearPinnedSelectionCommand}" />
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
+
+                                    <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:ProfileModRowViewModel}">
                                             <Grid ColumnDefinitions="* auto">
 
@@ -525,12 +757,12 @@
                                                 </StackPanel>
                                             </Grid>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
 
                                 <!-- Two messages, because the box is empty for two different
                                      reasons now that the search reaches this side. -->
-                                <TextBlock Text="No mods in this profile match your search."
+                                <TextBlock Text="Nothing in this profile matches the search and the filter."
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            TextAlignment="Center"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
@@ -572,12 +804,100 @@
                                 </TextBlock>
                             </Grid>
                         </Border>
+
+                        <!-- The mirror of the bar under the left list, and deliberately so: taking
+                             mods out has to cost exactly what putting them in costs. -->
+                        <Border Grid.Row="4"
+                                Style="{StaticResource SelectionBar}"
+                                Visibility="{Binding PinnedSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid RowDefinitions="auto auto auto">
+
+                                <Grid Grid.Row="0" ColumnDefinitions="* auto">
+                                    <Button Grid.Column="0"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{DynamicResource AccentButtonStyle}"
+                                            Content="{Binding PinnedSelection.ActionText}"
+                                            Command="{Binding RemoveSelectedCommand}" />
+                                    <Button Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Content="Clear"
+                                            Command="{Binding ClearPinnedSelectionCommand}" />
+                                </Grid>
+
+                                <!-- The three things a picked pin can have done to it that are not
+                                     taking it out. Locked rows are skipped by the update rather than
+                                     asked about, exactly as the batch action above does it. -->
+                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* * *">
+                                    <Button Grid.Column="0"
+                                            Margin="0 0 4 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="Update"
+                                            ToolTip="Move the selected mods to the newest version the repo holds, leaving locked ones alone"
+                                            Command="{Binding UpdateSelectedCommand}" />
+                                    <Button Grid.Column="1"
+                                            Margin="4 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="Lock"
+                                            ToolTip="Hold the selected mods at their versions in this profile"
+                                            Command="{Binding LockSelectedCommand}" />
+                                    <Button Grid.Column="2"
+                                            Margin="4 0 0 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="Unlock"
+                                            ToolTip="Release this profile's own lock on the selected mods"
+                                            Command="{Binding UnlockSelectedCommand}" />
+                                </Grid>
+
+                                <Grid Grid.Row="2"
+                                      Margin="0 8 0 0"
+                                      ColumnDefinitions="* auto"
+                                      Visibility="{Binding PinnedSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding PinnedSelection.HiddenText}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Button Grid.Column="1"
+                                            Margin="8 0 0 0"
+                                            Content="{Binding PinnedSelection.DeselectHiddenText}"
+                                            Command="{Binding DeselectHiddenPinnedCommand}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <Button Grid.Row="5"
+                                Margin="0 8 0 0"
+                                HorizontalAlignment="Stretch"
+                                Content="Take out everything shown"
+                                ToolTip="Take every mod the list above is showing out of this profile"
+                                Command="{Binding RemoveAllShownCommand}" />
                     </Grid>
                 </Grid>
             </Grid>
         </Border>
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
+
+            <!-- What the last bulk move did, and the way back from it. A move of two hundred rows
+                 has to be reversible by something other than doing it again backwards, and the
+                 offer retires itself: the next change of any kind clears it, because the draft it
+                 holds stops being an undo the moment anything is built on top of it. -->
+            <Border Margin="32 0 32 0"
+                    Padding="12 8"
+                    CornerRadius="4"
+                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    Visibility="{Binding HasBulkUndo, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid ColumnDefinitions="* auto">
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="{Binding BulkUndo.Text}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <Button Grid.Column="1"
+                            Margin="12 0 0 0"
+                            Content="Undo"
+                            Command="{Binding UndoBulkCommand}" />
+                </Grid>
+            </Border>
 
             <!-- Read-only, and only from two instances upwards. The targets of a re-apply are
                  derived, so this discloses them rather than offering a choice. -->

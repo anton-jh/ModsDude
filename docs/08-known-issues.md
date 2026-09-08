@@ -39,18 +39,22 @@ from inside the app; the consequence is that the refusal says only that it was r
 
 ## Unbuilt, and known to be
 
-### Hardlinking is switched off, so every sync copies
+### Hardlinking is on, and store blobs are still writable
 
-`FarmingSimulatorBaseModAdapter.SupportsHardlinks` is `false`, and store blobs are left writable,
-because nobody has tested whether Farming Simulator's in-game updater rewrites a mod file **in
-place** or renames a new one over it. In-place through a hardlink would corrupt a store blob
-shared with every repo on the volume; rename-over breaks the link harmlessly.
+`FarmingSimulatorBaseModAdapter.SupportsHardlinks` is now `true`: the in-game updater was tested
+against the real game and renames a new file over the old one rather than rewriting in place, so
+the hardlink breaks harmlessly and the store blob is untouched. Farming Simulator materialises by
+hardlink again wherever a disk is served by its own store.
 
-The consequence is real and measurable: materialising a 2,000-mod profile is a full copy of tens
-of gigabytes rather than seconds of directory operations, on every install and replace. That is
-the right way round — a slow sync is visible and recoverable, a corrupted store is neither — but
-it is a cost being paid for an unanswered question, and the question needs the actual game to
-answer. See [07](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
+What did **not** change is that store blobs are left writable, and that decision was originally
+justified by hardlinking being off — with nothing linked, a writable blob had no shared file to
+corrupt. That justification is gone. The residual risk is narrow but real: if any update path, in
+any version of the game, does write into an existing mod file, it now writes straight through into
+a blob shared with every repo on the volume, silently. Read-only blobs would turn that into a loud
+failure — at the cost of stopping the in-game updater outright, which is why it was not taken.
+
+Deciding that trade is the open part. See
+[07](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
 ### A drift notice can outlive the account that could act on it
 

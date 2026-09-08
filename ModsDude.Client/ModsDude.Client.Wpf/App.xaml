@@ -132,6 +132,12 @@
             <DataTemplate DataType="{x:Type vm:ProfileLockedUpdatesModalViewModel}">
                 <uc:ProfileLockedUpdatesDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:CopyProfileModsModalViewModel}">
+                <uc:CopyProfileModsDialog />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:PasteModListModalViewModel}">
+                <uc:PasteModListDialog />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:RenameModalViewModel}">
                 <uc:RenameDialog />
             </DataTemplate>

@@ -742,6 +742,73 @@ is a row about to gain something and the other a row about to lose it. It is a
 `ModDisplayStatus`, which is where a per-page judgment about a row belongs. Neither is a live sort; the left re-sorts on every recount, and the right when a save stops at
 a failed import.
 
+#### Picking mods in bulk
+
+A profile is dozens to hundreds of mods. Building one by clicking **+** on every row, and unbuilding
+one by clicking **−** on every row, is not a workflow — so both lists carry a real selection, and
+every bulk action on the page is stated against **what the list is showing**.
+
+**Selection lives on the rows, not in the list control.** `ModListItemViewModel.IsSelected` is the
+flag; `ProfileModRowViewModel` forwards to the item inside it, so a mod stays picked through a
+version change and reads the same on both sides. It is not the `ListBox`'s own selection, and that is
+the whole point: a list control drops from its selection whatever the collection view filters out, so
+binding to it would mean **one more character in the search box silently discarding the set being
+assembled**. Carrying a selection across several searches — narrow, pick, clear, narrow again, act on
+the union — is precisely what makes the selection worth having.
+
+The consequence is that some picked rows are off screen, and the page must never quietly act on rows
+nobody can see. So everything is counted twice, against the rows and against the view:
+`ModListSelection` reports **"47 selected, 12 of them are not shown"** and offers **Deselect hidden**
+next to it. The bar is worded as a fact rather than a warning — those rows were picked on purpose —
+and its only job is to make sure the count on the button is never a surprise.
+
+`ListSelection` (an attached behaviour) turns gestures into calls on that selection: click,
+ctrl-click, shift-click a range in view order, arrow keys, shift-arrow, `Ctrl+A`, space, Escape,
+Enter and double-click to move. The `ListBox` keeps `SelectionMode="Single"` and its selection means
+only **which row is current** — rendered as a focus ring, never as a fill. That is the same
+distinction Explorer draws between the focus rectangle and the picked set, and it exists for the same
+reason: the arrow keys have to be able to move without that meaning the set has changed. A press on a
+row that is *already* picked defers its click to the mouse-up, because that press is also how a drag
+of the whole selection starts.
+
+**Filter chips compose with the search** rather than replacing it, which is what keeps "everything
+shown" a single well-defined set for the counts, the bulk buttons and the header's three-state box to
+be stated against. They are deliberately few, and each names a set somebody would want to act on all
+of — a filter nobody would bulk-move is a filter that earns nothing.
+
+**Both directions cost the same.** *Take out everything shown* is the mirror of *Add all shown new*,
+and the right-hand selection bar carries Update, Lock and Unlock beside it. A page where adding forty
+mods is one click and removing forty is forty clicks has not solved the problem, it has picked a
+side.
+
+**Every bulk move is undoable, and the undo is the whole draft.** `RunBulk` snapshots the pins,
+runs the change, and offers what it turned out to do — "Added 47 mods", counted after the fact,
+because how many were skipped as already-present is only known once it has run. A snapshot rather
+than a reverse replay means one mechanism covers adds, removals, a copied list and a batch of version
+changes alike, and cannot half-succeed. The offer retires itself: **any** subsequent change clears it
+(`Recount`), because the draft it holds stops being an undo the moment something is built on top of
+it, and a 15-second timer catches the rest.
+
+**Two ways of not picking mods one at a time at all**, which between them beat any selection UI for
+the cases they cover:
+
+- **Copy from a profile** takes another profile's list at its head — *add what is missing* by
+  default, *replace* as a deliberate second choice, since the two read almost the same in a sentence
+  and are very different in effect. Nothing is written until Save, so even the destructive one is
+  recoverable by discarding, by the undo, or by not saving.
+- **Paste a list** takes text off a forum post or a modpack manifest. `ModListPaste` is forgiving
+  about shape — bullets, numbering, quotes, commas — and the matching that follows is *exact*, ids
+  before names: a fuzzy match would quietly pin the wrong mod, and "3 not found: Foo, Bar, Baz" is a
+  far better outcome than three plausible mistakes nobody notices until the game does. It **selects
+  and reports; it never adds**. Somebody else's list is a suggestion, and the step between reading it
+  and committing to it is exactly where a person wants to see what matched, what is already here and
+  what is missing.
+
+Dragging between the panes is offered too, and is never the only way to do anything: a two-pane drag
+is undiscoverable, awkward over a long list and impossible without a pointer. The payload is only the
+name of the side it started on — what moves is whatever that side has selected, which the view model
+already knows — which makes the rule for a valid drop simply that the two sides differ.
+
 ### Import on save
 
 Nothing is uploaded until Save. A local-only mod moved rightward is a **pending** row; Save

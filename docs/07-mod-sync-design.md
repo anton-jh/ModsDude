@@ -1,8 +1,10 @@
 # Mod sync design
 
-**Status: implemented.** The exceptions are called out where they occur, and the largest of them
-is that [hardlinking is switched off](#hardlink-support-is-an-adapter-property) until somebody
-tests what Farming Simulator's in-game updater does to a mod file.
+**Status: implemented.** The exceptions are called out where they occur. The largest of them is
+closed: Farming Simulator's in-game updater has been tested, it renames over mod files rather than
+rewriting them in place, and
+[hardlinking is switched on](#hardlink-support-is-an-adapter-property) for it. What remains open
+there is the narrower question of read-only store blobs.
 
 Applying a profile to a game installation is the reason ModsDude exists. This document is the
 design the implementation was built against, and it is kept as the reasoning rather than
@@ -220,13 +222,14 @@ Two caveats the implementation must handle:
   exFAT, a network path, a filesystem without hardlink support — is a misconfiguration worth
   surfacing, because the user is paying the copy cost while believing they are not.
 - **Both names are the same file.** Under hardlinking, anything that rewrites an archive in
-  the mod folder rewrites the stored copy, which is now shared across repos. Marking stored
-  blobs read-only would turn that from silent corruption into a loud failure — but it would also
-  stop an in-game updater working at all, and whether that updater rewrites in place is
-  [still an open question](#hardlink-support-is-an-adapter-property). **Blobs are therefore left
-  writable**, and the safety is carried instead by `SupportsHardlinks` defaulting to false, which
-  means nothing is hardlinked until somebody has tested the game. Copy-served
-  disks are unaffected either way — the mod folder holds its own bytes.
+  the mod folder rewrites the stored copy, which is now shared across repos. The safety is carried
+  by `SupportsHardlinks`, which defaults to false and is set true only where somebody has tested
+  that the game's updater renames over mod files rather than rewriting them
+  ([the adapter property](#hardlink-support-is-an-adapter-property)). Marking stored blobs
+  read-only would additionally turn an unexpected in-place rewrite from silent corruption into a
+  loud failure, but it would stop an in-game updater working at all, so **blobs are left
+  writable** — the one piece of this still open. Copy-served disks are unaffected either way — the
+  mod folder holds its own bytes.
 
 ### Ingestion
 
@@ -447,8 +450,8 @@ Reminding people harder is not the fix. Making the drift visible is.
 > and on window activation, and the surfacing described from [Surfacing it](#surfacing-it) through
 > [When to check](#when-to-check) — the app-level notification, save-and-apply, activation from
 > either end — is in the shell.
-> [Hardlink support](#hardlink-support-is-an-adapter-property) is the exception: an open question
-> that needs the real game.
+> [Hardlink support](#hardlink-support-is-an-adapter-property) is settled too: the updater was
+> tested and Farming Simulator hardlinks. Only read-only store blobs remain open.
 
 ### What sync records, and why it has to
 
@@ -840,22 +843,25 @@ behaviour, because the failure mode is silent corruption of data shared across e
 volume, discovered long afterwards. Setting it true is an opt-in that means *someone tested this
 game's updater*.
 
-That includes Farming Simulator: `_farming_simulator@1` declares `false` until somebody
-verifies what the in-game updater actually does. That costs the main game its fast path for
-now, which is the right way round — a slow sync is visible and recoverable, a corrupted store is
-neither.
+`_farming_simulator@1` declares **`true`**, and it is an opt-in of exactly that kind: the in-game
+updater was watched against the real game, and it writes a new file and renames over the old one.
+The directory entry is replaced, the hardlink breaks harmlessly, and the blob keeps the bytes every
+other repo on the volume is relying on. The main game therefore materialises by hardlink wherever a
+disk is served by its own store — seconds of directory operations for a 2,000-mod profile instead
+of tens of gigabytes copied on every install and replace.
 
 Marking store blobs read-only is a complementary guard: an in-place rewrite then fails loudly
 rather than corrupting silently. It also stops the in-game updater working at all, which users
-may not want, so it is a separate decision from `SupportsHardlinks` and best made after the same
-testing. **It was left alone for exactly that reason** — blobs are writable, and the safety is
-carried entirely by the flag defaulting to false.
+may not want, so it is a separate decision from `SupportsHardlinks`. **Blobs are still writable.**
 
-> **Both of these are still open, and answering them needs the real game.** Nobody has watched
-> what Farming Simulator's updater does to a mod file, so `SupportsHardlinks` is false, blobs are
-> writable, and **every install and replace is a full copy** — tens of gigabytes for a 2,000-mod
-> profile where it could have been seconds of directory operations. That is the cost of an
-> unanswered question, and it is the right way to be wrong.
+> **The remaining exposure, stated plainly.** While `SupportsHardlinks` was false, writable blobs
+> cost nothing — nothing was linked, so there was no shared file to write through to. Switching the
+> flag on removes that cover. The test answered what the updater does today, in the paths it was
+> watched on; it cannot answer for every update path in every future version. If one of them ever
+> writes into an existing mod file, it now reaches a shared blob, and it does so silently. Read-only
+> blobs are the guard that would make it loud, and the reason not to take them — breaking the
+> in-game updater — is unchanged. That trade is the open question here now, and it is a much smaller
+> one than the question it replaced.
 
 One consequence for the store assignment UI: for an adapter without hardlink support, same-disk
 and cross-disk both copy, so the choice becomes a plain speed-versus-space trade — a same-disk

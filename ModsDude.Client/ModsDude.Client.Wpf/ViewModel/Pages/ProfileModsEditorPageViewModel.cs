@@ -16,6 +16,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -139,10 +140,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly List<LocalInstance> _watchedInstances = [];
 
     /// <summary>
-    /// Set while the list is being rebuilt wholesale - from the server, or by a bulk add. Every add
-    /// into <see cref="Pinned"/> would otherwise recount against a draft that is only half written.
+    /// Set while the list is being rebuilt wholesale - from the server, or by a bulk move. Every add
+    /// into <see cref="Pinned"/> would otherwise recount against a draft that is only half written,
+    /// and every row a bulk move touches would recount the selection it is part of.
     /// </summary>
     private bool _publishing;
+
+    /// <summary>
+    /// How long an undone bulk move stays offered. Long enough to notice a move of two hundred rows
+    /// was not what was meant, short enough that the bar is not permanent furniture - and the draft
+    /// it would restore goes stale the moment anything else changes, which is what actually retires
+    /// it most of the time. See <see cref="Recount"/>.
+    /// </summary>
+    private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(15) };
 
 
     public ProfileModsEditorPageViewModel(
@@ -192,9 +202,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // One box over both lists, as on the repo mods page. A mod is only ever on one side, so a
         // search that reached only the left one answered half the question somebody was asking -
         // and the half it answered was the side they were least likely to be looking for.
-        PinnedView.Filter = x => x is ProfileModRowViewModel row && row.Matches(SearchText);
+        PinnedView.Filter = x => x is ProfileModRowViewModel row && PassesPinned(row);
 
         Pinned.CollectionChanged += (_, _) => OnPinnedChanged();
+
+        // Both lists get the same selection, because taking mods out of a profile has to be as
+        // cheap as putting them in - the two are the same job seen from opposite sides, and a page
+        // that made one of them a per-row click would just move the tedium rather than remove it.
+        AvailableSelection = new ModListSelection(() => AvailableView, () => _available, AddRows, "Add");
+        PinnedSelection = new ModListSelection(() => PinnedView, PinnedRows, RemoveRows, "Take out");
+
+        AvailableSelection.Changed += OnSelectionChanged;
+        PinnedSelection.Changed += OnSelectionChanged;
+
+        _undoTimer.Tick += (_, _) => BulkUndo = null;
 
         _repo.LocalInstances.CollectionChanged += OnLocalInstancesChanged;
         RefreshApplyTargets();
@@ -217,6 +238,44 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <summary>What is not in the profile yet, registered or merely on disk.</summary>
     [ObservableProperty]
     private ICollectionView? _availableView;
+
+    /// <summary>
+    /// What the user has picked on each side. Selection lives on the rows rather than in the list
+    /// controls, which is what lets it survive the search - see <see cref="ModListSelection"/>.
+    /// </summary>
+    public ModListSelection AvailableSelection { get; }
+
+    public ModListSelection PinnedSelection { get; }
+
+    /// <summary>
+    /// Narrows the left list to one kind of row, on top of whatever the search is doing. Every bulk
+    /// action on this page is counted against what the list is <em>showing</em>, so a filter is
+    /// simply another way of saying which mods a bulk action is about.
+    /// </summary>
+    [ObservableProperty]
+    private AvailableModFilter _availableFilter = AvailableModFilter.All;
+
+    /// <inheritdoc cref="AvailableFilter"/>
+    [ObservableProperty]
+    private PinnedModFilter _pinnedFilter = PinnedModFilter.All;
+
+    /// <summary>
+    /// What the last bulk move did, and the draft that would put it back. Cleared by the next change
+    /// of any kind, because the draft it holds is only an undo for as long as nothing else has
+    /// happened on top of it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBulkUndo))]
+    private BulkUndo? _bulkUndo;
+
+    /// <summary>
+    /// What a paste or a copy found, in a sentence. Held until the next one rather than shown as a
+    /// dialog: it is a report about a selection the user is now looking at, and a modal in front of
+    /// that selection would be a report about something hidden behind it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectionStatus))]
+    private string? _selectionStatus;
 
     [ObservableProperty]
     private bool _isLoading = true;
@@ -254,6 +313,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PinnedCountText))]
     [NotifyPropertyChangedFor(nameof(HasVisiblePinnedMods))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveAllShownCommand))]
     private int _pinnedVisibleCount;
 
     [ObservableProperty]
@@ -306,6 +366,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAllShownNewCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestoreRemovedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveAllShownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LockSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UnlockSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UpdateSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyFromProfileCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PasteListCommand))]
     private bool _isSaving;
 
     /// <summary>What the last save did, kept until something changes again.</summary>
@@ -376,6 +444,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public bool HasPending => PendingCount > 0;
     public bool HasSkippedUpdates => SkippedUpdateCount > 0;
     public bool HasSaveSummary => SaveSummary is not null;
+    public bool HasBulkUndo => BulkUndo is not null;
+    public bool HasSelectionStatus => SelectionStatus is not null;
 
     public string AvailableCountText => Describe(AvailableCount, AvailableTotal);
 
@@ -437,29 +507,64 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             return;
         }
 
+        Pin(row);
+    }
+
+    /// <summary>
+    /// Adds a row the caller has already established is not pinned. Split out because the scan that
+    /// establishes it is linear, and a bulk move that repeated it per row would be quadratic in a
+    /// list that routinely runs to a couple of thousand.
+    /// </summary>
+    private void Pin(ModListItemViewModel row)
+    {
         var versions = _versionsByMod.TryGetValue(row.Mod.ModId, out var known) ? known : [row.Mod];
+
+        // Moving a mod across always drops it from the selection it was moved out of - including
+        // when it was moved by its own button - so the left list is never left holding a picked row
+        // that is no longer in it.
+        row.IsSelected = false;
 
         Pinned.Add(CreatePinnedRow(versions, row.Mod, lockedByProfile: false));
     }
 
     /// <summary>
-    /// Every mod the left list is showing that this draft has not just taken out, so a search is how
-    /// a subset is picked. Putting a removal back is <see cref="RestoreRemoved"/>: it is an undo, and
-    /// it has a version and a lock to restore rather than a default to pick.
+    /// Every mod the left list is showing that this draft has not just taken out, so the search and
+    /// the filter together are how a subset is picked. Putting a removal back is
+    /// <see cref="RestoreRemoved"/>: it is an undo, and it has a version and a lock to restore rather
+    /// than a default to pick.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanAddAllShownNew))]
     private void AddAllShownNew()
     {
-        InBulk(() =>
+        RunBulk(() =>
         {
-            foreach (var row in _available.Where(x => Passes(x) && IsPendingRemoval(x) is false).ToList())
+            // Passes already excludes what is pinned, and the left list holds one row per mod, so
+            // nothing here can collide and none of it needs re-checking.
+            var rows = _available.Where(x => Passes(x) && IsPendingRemoval(x) is false).ToList();
+
+            foreach (var row in rows)
             {
-                Add(row);
+                Pin(row);
             }
+
+            return Describe("Added", rows.Count);
         });
     }
 
     private bool CanAddAllShownNew() => NewCount > 0 && IsSaving is false;
+
+    /// <summary>
+    /// Takes out everything the right list is showing. The counterpart of <see cref="AddAllShownNew"/>
+    /// and deliberately its equal: a page where adding forty mods is one click and taking forty out
+    /// is forty has not solved the problem, it has picked a side.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemoveAllShown))]
+    private void RemoveAllShown()
+    {
+        RunBulk(() => Describe("Took out", RemoveMany(Pinned.Where(PassesPinned))));
+    }
+
+    private bool CanRemoveAllShown() => PinnedVisibleCount > 0 && IsSaving is false;
 
     /// <summary>
     /// Puts back everything this draft has taken out, at the version and lock the profile still holds
@@ -470,27 +575,114 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanRestoreRemoved))]
     private void RestoreRemoved()
     {
-        InBulk(() =>
+        RunBulk(() =>
         {
-            foreach (var pin in _original.Where(x => _pendingRemovals.Contains(x.ModId)).ToList())
+            var restored = _original.Where(x => _pendingRemovals.Contains(x.ModId)).ToList();
+
+            foreach (var pin in restored)
             {
-                var versions = _versionsByMod.GetValueOrDefault(pin.ModId, []);
-                var selected = versions.FirstOrDefault(x => x.VersionId == pin.VersionId);
-
-                if (selected is null)
-                {
-                    // The same stand-in a load builds for a pin this catalog has not heard of, and
-                    // for the same reason: the row has to be there to be removable again.
-                    selected = Placeholder(pin.ModId, pin.VersionId);
-                    versions = [selected, .. versions];
-                }
-
-                Pinned.Add(CreatePinnedRow(versions, selected, pin.Lock.ByProfile));
+                Pinned.Add(CreatePinnedRow(pin));
             }
+
+            return Describe("Put back", restored.Count);
         });
     }
 
     private bool CanRestoreRemoved() => RemovalCount > 0 && IsSaving is false;
+
+
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private void AddSelected() => AddRows(AvailableSelection.Picked());
+
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private void RemoveSelected() => RemoveRows(PinnedSelection.Picked());
+
+    /// <summary>
+    /// Moves picked rows into the profile and lets go of them on the way, so the left list is not
+    /// left holding a selection of rows that are no longer in it.
+    /// </summary>
+    /// <remarks>
+    /// Acts on everything picked, including rows the search or the filter is currently hiding - which
+    /// is the whole point of a selection that outlives the search, and why the bar above says how
+    /// many of them are off screen and offers to put those down.
+    /// </remarks>
+    private void AddRows(IReadOnlyList<ISelectableRow> rows)
+    {
+        RunBulk(() =>
+        {
+            // A picked row may have been added by its own button in the meantime, so this does have
+            // to be checked - once, against a set, rather than by re-scanning the draft per row.
+            var pinned = new HashSet<ModKey>(Pinned.Select(x => x.ModId));
+            var added = 0;
+
+            foreach (var row in rows.OfType<ModListItemViewModel>())
+            {
+                if (pinned.Add(row.Mod.ModId))
+                {
+                    Pin(row);
+
+                    added++;
+                }
+
+                row.IsSelected = false;
+            }
+
+            return Describe("Added", added);
+        });
+    }
+
+    private void RemoveRows(IReadOnlyList<ISelectableRow> rows)
+    {
+        RunBulk(() => Describe("Took out", RemoveMany(rows.OfType<ProfileModRowViewModel>())));
+    }
+
+    /// <summary>
+    /// Takes out several rows in one backwards pass, and answers how many. Walking the draft once
+    /// rather than searching it per row keeps a bulk removal linear, and taking the survivors as they
+    /// stand - rather than rebuilding the list from its pins - is what keeps their loaded artwork and
+    /// their own selection intact.
+    /// </summary>
+    private int RemoveMany(IEnumerable<ProfileModRowViewModel> rows)
+    {
+        var doomed = new HashSet<ProfileModRowViewModel>(rows);
+        var removed = 0;
+
+        for (var index = Pinned.Count - 1; index >= 0; index--)
+        {
+            var row = Pinned[index];
+
+            if (doomed.Contains(row) is false)
+            {
+                continue;
+            }
+
+            row.PropertyChanged -= OnPinnedRowChanged;
+
+            Pinned.RemoveAt(index);
+
+            removed++;
+        }
+
+        return removed;
+    }
+
+    [RelayCommand]
+    private void DeselectHiddenAvailable() => AvailableSelection.DeselectHidden();
+
+    [RelayCommand]
+    private void DeselectHiddenPinned() => PinnedSelection.DeselectHidden();
+
+    [RelayCommand]
+    private void ClearAvailableSelection() => AvailableSelection.ClearSelection();
+
+    [RelayCommand]
+    private void ClearPinnedSelection() => PinnedSelection.ClearSelection();
+
+    [RelayCommand]
+    private void SelectAllShownAvailable() => AvailableSelection.SelectAllShown();
+
+    [RelayCommand]
+    private void SelectAllShownPinned() => PinnedSelection.SelectAllShown();
 
     /// <summary>
     /// Runs a bulk change to the profile and recounts once. At a couple of thousand mods, recounting
@@ -512,6 +704,61 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         Recount();
     }
 
+    /// <summary>
+    /// A bulk change that can be taken back, described by whatever it turned out to do. The change
+    /// returns its own wording because the count is only known once it has run - "Added 47 mods"
+    /// where 47 is what was left after the ones already in the profile were skipped - and returns
+    /// null when it changed nothing, which is what keeps an empty move from offering an undo.
+    /// </summary>
+    /// <remarks>
+    /// The undo is the whole draft, not the individual rows: a snapshot restores exactly what was
+    /// there, whatever the move did to it, and one mechanism then covers every bulk action on the
+    /// page including the ones that only change versions. What it does not restore is the selection,
+    /// deliberately - undoing a move is about the profile, and re-picking two hundred rows the user
+    /// has since let go of would be a second surprise on top of the first.
+    /// </remarks>
+    private void RunBulk(Func<string?> change)
+    {
+        var before = Snapshot();
+        string? description = null;
+
+        InBulk(() => description = change());
+
+        if (description is not null)
+        {
+            BulkUndo = new BulkUndo(description, before);
+        }
+    }
+
+    [RelayCommand]
+    private void UndoBulk()
+    {
+        if (BulkUndo is not BulkUndo undo)
+        {
+            return;
+        }
+
+        InBulk(() => RestoreDraft(undo.Draft));
+    }
+
+    private IReadOnlyList<ProfileModPin> Snapshot() => [.. Pinned.Select(x => x.Pin)];
+
+    /// <summary>Makes the draft equal to a set of pins, rebuilding every row from the catalog.</summary>
+    private void RestoreDraft(IReadOnlyList<ProfileModPin> pins)
+    {
+        foreach (var row in Pinned)
+        {
+            row.PropertyChanged -= OnPinnedRowChanged;
+        }
+
+        Pinned.Clear();
+
+        foreach (var pin in pins)
+        {
+            Pinned.Add(CreatePinnedRow(pin));
+        }
+    }
+
     [RelayCommand]
     private void Remove(ProfileModRowViewModel? row)
     {
@@ -524,6 +771,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         Pinned.Remove(row);
     }
+
+    /// <summary>
+    /// What a bulk move says it did, or null for one that did nothing. Every one of these reads as a
+    /// completed act rather than as an instruction, because it is shown next to the button that would
+    /// take it back.
+    /// </summary>
+    private static string? Describe(string verb, int count) => count switch
+    {
+        <= 0 => null,
+        1 => $"{verb} 1 mod",
+        _ => $"{verb} {count} mods"
+    };
+
+    private bool NotSaving() => IsSaving is false;
 
     #endregion
 
@@ -538,13 +799,102 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanApplyAllUpdates))]
     private void ApplyAllUpdates()
     {
-        foreach (var update in _updates.Available)
+        RunBulk(() =>
         {
-            FindPinned(update.ModId)?.SetVersion(update.To);
-        }
+            var moved = 0;
+
+            foreach (var update in _updates.Available)
+            {
+                if (FindPinned(update.ModId) is ProfileModRowViewModel row)
+                {
+                    row.SetVersion(update.To);
+
+                    moved++;
+                }
+            }
+
+            return Describe("Updated", moved);
+        });
     }
 
     private bool CanApplyAllUpdates() => ApplicableUpdateCount > 0 && IsSaving is false;
+
+    /// <summary>
+    /// The same move, over the picked rows instead of over all of them. Locked mods are left alone
+    /// here as they are in the batch action - a lock is not a question the selection gets to answer -
+    /// and the count of what was skipped goes into what the undo bar says happened.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private void UpdateSelected()
+    {
+        RunBulk(() =>
+        {
+            var moved = 0;
+            var skipped = 0;
+
+            foreach (var row in PinnedSelection.Picked().OfType<ProfileModRowViewModel>())
+            {
+                if (row.UpdateTo is not ModVersionKey target)
+                {
+                    continue;
+                }
+
+                if (row.IsLocked)
+                {
+                    skipped++;
+
+                    continue;
+                }
+
+                row.SetVersion(target);
+
+                moved++;
+            }
+
+            return (Describe("Updated", moved), skipped) switch
+            {
+                (null, 0) => null,
+                (null, var left) => $"Nothing updated - {Locked(left)}",
+                (var text, 0) => text,
+                (var text, var left) => $"{text}, {Locked(left)}"
+            };
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private void LockSelected() => SetLockOnSelected(true);
+
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private void UnlockSelected() => SetLockOnSelected(false);
+
+    /// <summary>
+    /// Holds or releases the picked pins. Only the profile's own flag moves: the adapter's is a fact
+    /// about the mod file that no page may overwrite, so a row it holds stays locked and is simply
+    /// not one of the rows this changed.
+    /// </summary>
+    private void SetLockOnSelected(bool locked)
+    {
+        RunBulk(() =>
+        {
+            var changed = 0;
+
+            foreach (var row in PinnedSelection.Picked().OfType<ProfileModRowViewModel>())
+            {
+                if (row.LockedByProfile == locked)
+                {
+                    continue;
+                }
+
+                row.LockedByProfile = locked;
+
+                changed++;
+            }
+
+            return Describe(locked ? "Locked" : "Unlocked", changed);
+        });
+    }
+
+    private static string Locked(int count) => count == 1 ? "1 was locked and skipped" : $"{count} were locked and skipped";
 
     /// <summary>
     /// One row's update. Locked here means the move is a deliberate act on this row, carrying the
@@ -1128,6 +1478,226 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #endregion
 
 
+    #region Bringing a list in from somewhere else
+
+    /// <summary>
+    /// Starts this profile's list from another one's. The fastest way to build a profile is almost
+    /// never to pick its mods one at a time - it is to take the profile next to it and change what
+    /// differs.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private async Task CopyFromProfile()
+    {
+        try
+        {
+            var profiles = await _profilesClient.GetProfilesV1Async(_repo.Id, _cancellation.Token);
+
+            var others = profiles
+                .Where(x => x.Id != _profile.Id)
+                .OrderBy(x => x.Name, NaturalOrder.Comparer)
+                .ToList();
+
+            var modal = new CopyProfileModsModalViewModel(others, ProfileName);
+
+            await _modalService.Show(modal);
+
+            if (modal.Result is not ProfileDto source)
+            {
+                return;
+            }
+
+            var list = await _dependenciesClient.GetModDependenciesV1Async(
+                _repo.Id, source.Id, null, _cancellation.Token);
+
+            // Read at that profile's head. This is a copy of what it holds now, not a link to it -
+            // the two lists have nothing to do with each other after this.
+            var pins = list.Dependencies
+                .Select(x => new ProfileModPin(
+                    ModKey.From(x.ModId),
+                    ModVersionKey.From(x.ModVersionId),
+                    new ProfileModLock(false, x.Locked)))
+                .ToList();
+
+            CopyIn(source.Name, modal.ResultMode, pins);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away mid-request.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "copying a mod list from another profile");
+        }
+    }
+
+    private void CopyIn(string sourceName, CopyProfileModsMode mode, IReadOnlyList<ProfileModPin> pins)
+    {
+        if (mode is CopyProfileModsMode.Replace)
+        {
+            RunBulk(() =>
+            {
+                RestoreDraft(pins);
+
+                return $"Replaced this list with {sourceName}";
+            });
+
+            SelectionStatus = pins.Count == 1
+                ? $"This profile now holds the one mod {sourceName} does."
+                : $"This profile now holds the {pins.Count} mods {sourceName} does.";
+
+            return;
+        }
+
+        var added = 0;
+        var already = 0;
+
+        RunBulk(() =>
+        {
+            foreach (var pin in pins)
+            {
+                // Read before the bulk began, which is what it should be: a profile holds one pin
+                // per mod, so nothing added inside this loop can collide with anything else in it.
+                if (_pinnedIds.Contains(pin.ModId))
+                {
+                    already++;
+
+                    continue;
+                }
+
+                Pinned.Add(CreatePinnedRow(pin));
+
+                added++;
+            }
+
+            return Describe("Added", added) is string text ? $"{text} from {sourceName}" : null;
+        });
+
+        SelectionStatus = added == 0
+            ? $"Nothing to copy - this profile already holds everything {sourceName} does."
+            : already == 0
+                ? $"Copied {added} {Mods(added)} from {sourceName}."
+                : $"Copied {added} {Mods(added)} from {sourceName}. {already} {Were(already)} already here.";
+    }
+
+    /// <summary>
+    /// Turns a pasted list into a selection on the left. It picks and reports; it never adds - see
+    /// <see cref="PasteModListModalViewModel"/> for why the step in between is the point.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(NotSaving))]
+    private async Task PasteList()
+    {
+        var modal = new PasteModListModalViewModel();
+
+        await _modalService.Show(modal);
+
+        if (modal.Result.Count > 0)
+        {
+            ApplyPastedList(modal.Result);
+        }
+    }
+
+    private void ApplyPastedList(IReadOnlyList<string> terms)
+    {
+        // Cleared first, so what was matched is on screen to look at. A selection made behind a
+        // search that hides it is a report with nothing to read.
+        SearchText = string.Empty;
+        AvailableFilter = AvailableModFilter.All;
+
+        var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in Pinned)
+        {
+            pinned.Add(row.ModId.Value);
+            pinned.Add(row.Name);
+        }
+
+        // Ids win over names, and the first row to claim either keeps it. Matching is exact in both:
+        // a fuzzy match here would quietly pick the wrong mod, and "not found" is the better answer.
+        var byId = new Dictionary<string, ModListItemViewModel>(StringComparer.OrdinalIgnoreCase);
+        var byName = new Dictionary<string, ModListItemViewModel>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in _available)
+        {
+            byId.TryAdd(row.Id, row);
+            byName.TryAdd(row.Name, row);
+        }
+
+        var matched = new HashSet<ModListItemViewModel>();
+        var already = 0;
+        var missing = new List<string>();
+
+        foreach (var term in terms)
+        {
+            if (pinned.Contains(term))
+            {
+                already++;
+            }
+            else if (byId.TryGetValue(term, out var row) || byName.TryGetValue(term, out row))
+            {
+                matched.Add(row);
+            }
+            else
+            {
+                missing.Add(term);
+            }
+        }
+
+        // Replaces whatever was picked rather than adding to it: a pasted list is a statement about
+        // the whole set somebody wants, not another handful on top of one.
+        _publishing = true;
+
+        try
+        {
+            foreach (var row in _available)
+            {
+                row.IsSelected = matched.Contains(row);
+            }
+        }
+        finally
+        {
+            _publishing = false;
+        }
+
+        AvailableSelection.Recount();
+
+        SelectionStatus = DescribePaste(terms.Count, matched.Count, already, missing);
+    }
+
+    /// <summary>
+    /// What a paste found, in one sentence. Names the ones it could not find rather than only
+    /// counting them: a list that says "3 were not found" and stops leaves the reader to diff two
+    /// lists by eye, which is the work they came here to avoid.
+    /// </summary>
+    private static string DescribePaste(int asked, int matched, int already, IReadOnlyList<string> missing)
+    {
+        var text = matched == 0
+            ? $"Nothing in the left list matches the {asked} {Names(asked)} you pasted."
+            : $"Selected {matched} of the {asked} {Names(asked)} you pasted.";
+
+        if (already > 0)
+        {
+            text += $" {already} {Were(already)} already in this profile.";
+        }
+
+        if (missing.Count > 0)
+        {
+            var shown = missing.Take(5).ToList();
+            var rest = missing.Count - shown.Count;
+
+            text += $" {missing.Count} not found: {string.Join(", ", shown)}";
+            text += rest > 0 ? $", and {rest} more." : ".";
+        }
+
+        return text;
+    }
+
+    private static string Mods(int count) => count == 1 ? "mod" : "mods";
+    private static string Names(int count) => count == 1 ? "name" : "names";
+    private static string Were(int count) => count == 1 ? "was" : "were";
+
+    #endregion
+
+
     #region Sources
 
     [RelayCommand]
@@ -1207,6 +1777,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         _navigationLock.ReleaseLock(this);
         _driftNotification.Release(_activeProfile);
+
+        _undoTimer.Stop();
+
+        foreach (var row in _available)
+        {
+            row.PropertyChanged -= OnAvailableRowChanged;
+        }
+
+        foreach (var row in Pinned)
+        {
+            row.PropertyChanged -= OnPinnedRowChanged;
+        }
 
         _repo.LocalInstances.CollectionChanged -= OnLocalInstancesChanged;
 
@@ -1354,28 +1936,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             foreach (var dependency in dependencies)
             {
-                var modId = ModKey.From(dependency.ModId);
-                var versionId = ModVersionKey.From(dependency.ModVersionId);
-                var versions = _versionsByMod.GetValueOrDefault(modId, []);
-                var selected = versions.FirstOrDefault(x => x.VersionId == versionId);
-
-                if (selected is null)
-                {
-                    // This catalog has not heard of the version the profile names - which is a fact
-                    // about this client, not about the repo. It stays in the row's selector, at the
-                    // front so it cannot read as the newest, because a row that silently vanished
-                    // would leave the profile pinned to it with no way to say so.
-                    selected = Placeholder(modId, versionId);
-                    versions = [selected, .. versions];
-                }
-
-                Pinned.Add(CreatePinnedRow(versions, selected, dependency.Locked));
+                Pinned.Add(CreatePinnedRow(new ProfileModPin(
+                    ModKey.From(dependency.ModId),
+                    ModVersionKey.From(dependency.ModVersionId),
+                    new ProfileModLock(false, dependency.Locked))));
             }
 
             _original = [.. Pinned.Select(x => x.Pin)];
 
             // With a single source every row would name the same one, which is just noise.
             var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
+
+            foreach (var row in _available)
+            {
+                row.PropertyChanged -= OnAvailableRowChanged;
+            }
+
+            // A reload is a new catalog and new rows, so nothing that was picked survives it - and a
+            // report about a selection that no longer exists would outlive what it described.
+            SelectionStatus = null;
 
             _available = [.. _versionsByMod.Values
                 // The newest known version stands for the mod on the left. Picking a different one
@@ -1444,7 +2023,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var item = _itemFactory.Create(_repo.Id, version);
 
         item.Status = version.GetImportStatus();
-        item.IsSelectable = false;
+
+        // Unlike the management page, this list is for picking rather than for browsing.
+        item.IsSelectable = true;
+        item.PropertyChanged += OnAvailableRowChanged;
 
         if (showSources && version.FoundIn.Count > 0)
         {
@@ -1452,6 +2034,28 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         return item;
+    }
+
+    /// <summary>
+    /// A pinned row from a pin, tolerating a version this client's catalog has never heard of. Used
+    /// by everything that builds the draft - the load, the undo, a restored removal and a copied
+    /// list - so all four treat an unknown version the same way.
+    /// </summary>
+    private ProfileModRowViewModel CreatePinnedRow(ProfileModPin pin)
+    {
+        var versions = _versionsByMod.GetValueOrDefault(pin.ModId, []);
+        var selected = versions.FirstOrDefault(x => x.VersionId == pin.VersionId);
+
+        if (selected is null)
+        {
+            // A fact about this client, not about the repo. It stays in the row's selector, at the
+            // front so it cannot read as the newest, because a row that silently vanished would
+            // leave the profile pinned to it with no way to say so.
+            selected = Placeholder(pin.ModId, pin.VersionId);
+            versions = [selected, .. versions];
+        }
+
+        return CreatePinnedRow(versions, selected, pin.Lock.ByProfile);
     }
 
     private ProfileModRowViewModel CreatePinnedRow(
@@ -1499,7 +2103,39 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool Passes(ModListItemViewModel mod)
         => mod.Matches(SearchText)
         && _pinnedIds.Contains(mod.Mod.ModId) is false
-        && (_includeRegistered || mod.Mod.IsOnServer is false);
+        && (_includeRegistered || mod.Mod.IsOnServer is false)
+        && PassesFilter(mod);
+
+    /// <summary>
+    /// The left list's filter chip. Composes with the search rather than replacing it, which is what
+    /// makes "everything shown" a single well-defined set for the bulk actions and the selection to
+    /// be counted against.
+    /// </summary>
+    private bool PassesFilter(ModListItemViewModel mod) => AvailableFilter switch
+    {
+        AvailableModFilter.New => mod.Mod.IsOnServer is false,
+        AvailableModFilter.TakenOut => IsPendingRemoval(mod),
+        AvailableModFilter.Conflicts => mod.HasSourceConflict,
+        _ => true
+    };
+
+    /// <summary>Everything the right list is showing: the same search, and its own chip.</summary>
+    private bool PassesPinned(ProfileModRowViewModel row)
+        => row.Matches(SearchText)
+        && PinnedFilter switch
+        {
+            PinnedModFilter.Updates => row.HasUpdate,
+            PinnedModFilter.Locked => row.IsLocked,
+            PinnedModFilter.Pending => row.IsPending,
+            _ => true
+        };
+
+    /// <summary>
+    /// The pinned rows as a plain list. <see cref="ObservableCollection{T}"/> is invariant, so the
+    /// selection - which knows nothing about what kind of row it holds - cannot be handed it as it
+    /// stands.
+    /// </summary>
+    private IReadOnlyList<ISelectableRow> PinnedRows() => [.. Pinned];
 
     /// <summary>
     /// The left list's order: what this draft has taken out of the profile first, then alphabetical.
@@ -1570,6 +2206,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void OnPinnedRowChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // A bulk move writes many rows and recounts once at the end, so nothing here runs inside one.
+        if (_publishing)
+        {
+            return;
+        }
+
+        // Picking a row changes nothing about the profile, so it recounts the selection and stops
+        // there - a full recount would re-plan every update for a tick in a checkbox.
+        if (e.PropertyName is nameof(ProfileModRowViewModel.IsSelected))
+        {
+            PinnedSelection.Recount();
+
+            return;
+        }
+
         // Only the two things a row can change about the profile. Everything else it raises - its
         // nested list row, the lock wording, the update marker this very method sets - either says
         // nothing about what is pinned or would recount from inside the recount that set it.
@@ -1578,6 +2229,52 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             Recount();
         }
+    }
+
+    /// <summary>
+    /// The only thing a row on the left can change by itself: its own checkbox. Rows on that side
+    /// are otherwise read-only, so unlike the right-hand rows there is nothing here that could ask
+    /// for a full recount.
+    /// </summary>
+    private void OnAvailableRowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_publishing is false && e.PropertyName is nameof(ModListItemViewModel.IsSelected))
+        {
+            AvailableSelection.Recount();
+        }
+    }
+
+    private void OnSelectionChanged()
+    {
+        AddSelectedCommand.NotifyCanExecuteChanged();
+        RemoveSelectedCommand.NotifyCanExecuteChanged();
+        LockSelectedCommand.NotifyCanExecuteChanged();
+        UnlockSelectedCommand.NotifyCanExecuteChanged();
+        UpdateSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// The undo bar's clock. Restarted by every offer and stopped when there is nothing to offer, so
+    /// the timer only ever runs while the bar is on screen.
+    /// </summary>
+    partial void OnBulkUndoChanged(BulkUndo? value)
+    {
+        _undoTimer.Stop();
+
+        if (value is not null)
+        {
+            _undoTimer.Start();
+        }
+    }
+
+    partial void OnAvailableFilterChanged(AvailableModFilter value)
+    {
+        RefreshViews();
+    }
+
+    partial void OnPinnedFilterChanged(PinnedModFilter value)
+    {
+        RefreshViews();
     }
 
     private void OnPinnedChanged()
@@ -1592,11 +2289,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     partial void OnSearchTextChanged(string value)
     {
+        RefreshViews();
+    }
+
+    /// <summary>
+    /// What both lists do when the set they are showing changes without the draft changing - a
+    /// search, or a filter chip. The selections are recounted rather than touched: a row that has
+    /// scrolled out of the view is still picked, and how many of those there are is exactly what the
+    /// bar above each list has to be able to say.
+    /// </summary>
+    private void RefreshViews()
+    {
         AvailableView?.Refresh();
         PinnedView.Refresh();
 
         RecountAvailable();
         RecountPinnedVisible();
+
+        AvailableSelection.Recount();
+        PinnedSelection.Recount();
     }
 
     /// <summary>
@@ -1622,11 +2333,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <summary>How many of the profile's mods the search is showing. The total is PinnedCount.</summary>
     private void RecountPinnedVisible()
     {
-        PinnedVisibleCount = Pinned.Count(x => x.Matches(SearchText));
+        PinnedVisibleCount = Pinned.Count(PassesPinned);
     }
 
     private void Recount()
     {
+        // Anything at all having changed retires the offer: the draft it holds was an undo for the
+        // move that had just happened, and one edit later it is a way of throwing that edit away.
+        // The bulk move that armed it sets it again once this has run - see RunBulk.
+        BulkUndo = null;
+
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
         _pendingRemovals = [.. _original.Select(x => x.ModId).Where(x => _pinnedIds.Contains(x) is false)];
 
@@ -1663,6 +2379,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ApplicableUpdateCount = _updates.Available.Count;
         SkippedUpdateCount = _updates.Skipped.Count;
 
+        // Last, because both of them count against the views this method has just re-filtered.
+        AvailableSelection.Recount();
+        PinnedSelection.Recount();
+
         HasUnsavedChanges = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin)).IsEmpty is false;
 
         if (HasUnsavedChanges)
@@ -1698,4 +2418,52 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             return page;
         }
     }
+}
+
+/// <summary>
+/// A bulk move that has happened and can still be taken back, with the whole draft as it stood
+/// before it.
+/// </summary>
+/// <remarks>
+/// The draft rather than the individual rows, because one mechanism then covers every bulk action on
+/// the page - adds, removals, a copied list, a batch of version changes - and because restoring a
+/// snapshot cannot half-succeed the way replaying a move in reverse can.
+/// </remarks>
+public sealed record BulkUndo(string Text, IReadOnlyList<ProfileModPin> Draft);
+
+/// <summary>
+/// What the left list is narrowed to, on top of the search.
+/// </summary>
+/// <remarks>
+/// Deliberately few, and each of them a question somebody actually arrives with. A filter here is
+/// not only a way of finding one mod - the search does that - it is a way of naming a <em>set</em>
+/// for the bulk actions and the selection to be applied to, so a filter that nobody would want to
+/// act on all of is a filter that earns nothing.
+/// </remarks>
+public enum AvailableModFilter
+{
+    All,
+
+    /// <summary>On this computer but not in the repo: what a save would have to import.</summary>
+    New,
+
+    /// <summary>Back on this side because this draft took it out of the profile.</summary>
+    TakenOut,
+
+    /// <summary>Two sources hold different files for this version, and importing will ask which.</summary>
+    Conflicts
+}
+
+/// <inheritdoc cref="AvailableModFilter"/>
+public enum PinnedModFilter
+{
+    All,
+
+    /// <summary>A newer version is registered, whether or not the pin is free to move.</summary>
+    Updates,
+
+    Locked,
+
+    /// <summary>Pinned at a version the repo does not hold yet, so a save has to import it.</summary>
+    Pending
 }

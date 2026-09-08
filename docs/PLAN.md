@@ -521,14 +521,18 @@ The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md)
 - [x] Let the drift notice double as an import prompt — the drifted files are by definition
       versions the user now has and the repo may not, so "the game updated 6 mods, import them?"
       is the next step of the flow they were about to perform anyway.
-- [ ] **Deliberately open: test whether the in-game updater rewrites mod files in place or renames
-      over them.** In-place rewriting through a hardlink corrupts the shared store blob; rename-over
-      breaks the link harmlessly. Answering it needs the real game, which no amount of reading the
-      code substitutes for, so it was left alone — and with it the read-only-blobs trade-off, which
-      depends on the answer: read-only fails loudly instead of corrupting, but also stops the
-      in-game updater working. Until then `FarmingSimulatorBaseModAdapter.SupportsHardlinks` stays
-      `false` and store blobs stay writable, which costs the main game its fast path and is the
-      right way round.
+- [x] **Test whether the in-game updater rewrites mod files in place or renames over them.**
+      In-place rewriting through a hardlink corrupts the shared store blob; rename-over breaks the
+      link harmlessly. Answering it needed the real game, which no amount of reading the code
+      substitutes for. It renames over, so
+      `FarmingSimulatorBaseModAdapter.SupportsHardlinks` is `true` and the main game has its fast
+      path: a hardlink wherever a disk is served by its own store.
+- [ ] **Deliberately open: decide whether store blobs should be read-only.** Read-only fails
+      loudly instead of corrupting silently, but also stops the in-game updater working. While
+      hardlinking was off the question was moot — nothing was linked, so a writable blob had no
+      shared file to be written through. Now that it is on, this is the only thing standing between
+      an unexpected in-place rewrite and silent corruption across every repo on the volume. The
+      test covered the updater's behaviour today, not every path in every future version.
 
 **Done means:** two people on two machines pick the same profile and end up with byte-identical
 mod folders, and neither loses a file they cannot get back.

@@ -28,13 +28,21 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
 
 
     /// <summary>
-    /// Declared false rather than inherited, to say that the answer is unknown rather than assumed.
-    /// Farming Simulator downloads and updates mods from inside the game, and whether that updater
-    /// rewrites an archive in place - which through a hardlink would corrupt a store blob shared
-    /// with every repo on the volume - has not been tested against the real game. That costs the
-    /// main game its fast path for now, which is the right way round.
+    /// True because it was tested, not assumed. Farming Simulator downloads and updates mods from
+    /// inside the game, and the question that gates hardlinking is whether that updater rewrites an
+    /// archive in place - which through a hardlink would corrupt a store blob shared with every repo
+    /// on the volume. It does not: it writes a new file and renames over the old one, so the
+    /// directory entry is replaced, the link breaks harmlessly, and the blob is untouched.
     /// </summary>
-    public bool SupportsHardlinks => false;
+    /// <remarks>
+    /// This is the one opt-in the interface's default deliberately refuses to make on an adapter's
+    /// behalf, so it is worth saying what would take it back: evidence that some update path, in
+    /// some version of the game, writes into an existing mod file. That failure would be silent and
+    /// would reach every repo on the volume, so this is a fact about the game rather than a
+    /// preference, and it belongs with the testing that established it.
+    /// See docs/07-mod-sync-design.md#hardlink-support-is-an-adapter-property.
+    /// </remarks>
+    public bool SupportsHardlinks => true;
 
 
     /// <summary>
