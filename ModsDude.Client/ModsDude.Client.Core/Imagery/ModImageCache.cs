@@ -162,6 +162,83 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
 
 
     /// <summary>
+    /// How much the cache is holding, for a settings page to report.
+    /// </summary>
+    /// <remarks>
+    /// Walks the directory, so it belongs off the drawing thread. Reported as-is rather than
+    /// remembered: the folder is the only record of what is in there, and a cached number would be
+    /// wrong the moment a sweep ran.
+    /// </remarks>
+    public ModImageCacheUsage Measure()
+    {
+        try
+        {
+            var path = getSettings().Path;
+
+            if (Directory.Exists(path) is false)
+            {
+                return ModImageCacheUsage.Empty;
+            }
+
+            var entries = new DirectoryInfo(path).EnumerateFiles("*.img", SearchOption.TopDirectoryOnly).ToList();
+
+            return new ModImageCacheUsage(entries.Count, entries.Sum(x => x.Length));
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not measure the image cache.");
+
+            return ModImageCacheUsage.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Empties the cache.
+    /// </summary>
+    /// <remarks>
+    /// Costs nothing but re-fetching: every entry is either a server derivative addressed by its own
+    /// hash or a rendition decoded out of a local archive, so both come back on demand. Files
+    /// something is reading are skipped and swept later.
+    /// </remarks>
+    /// <returns>The bytes reclaimed.</returns>
+    public long Clear()
+    {
+        long reclaimed = 0;
+
+        try
+        {
+            var path = getSettings().Path;
+
+            if (Directory.Exists(path) is false)
+            {
+                return 0;
+            }
+
+            foreach (var entry in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    var length = entry.Length;
+
+                    entry.Delete();
+                    reclaimed += length;
+                }
+                catch (Exception exception)
+                {
+                    logger.LogDebug(exception, "Could not delete the cached image {File}.", entry.FullName);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not clear the image cache.");
+        }
+
+        return reclaimed;
+    }
+
+
+    /// <summary>
     /// Flat, and named by a digest of the key rather than by the key: a key holds a file path, and
     /// a downloaded derivative's key is already a hash, so neither is something to build a path out
     /// of directly.
@@ -190,4 +267,10 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
             logger.LogDebug(exception, "Could not touch the cached image {File}.", path);
         }
     }
+}
+
+/// <summary>What the image cache is holding, for a settings page to report.</summary>
+public sealed record ModImageCacheUsage(int Entries, long TotalBytes)
+{
+    public static ModImageCacheUsage Empty { get; } = new(0, 0);
 }

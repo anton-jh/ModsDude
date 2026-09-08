@@ -45,6 +45,19 @@ public sealed record ModImportRequest(
     /// keep each other going indefinitely.
     /// </summary>
     public int MaxPlacementRetries { get; init; } = 4;
+
+    /// <summary>
+    /// The mod folders these mods are being imported for - the instances on this machine whose scope
+    /// is the repo's. Used for one thing: deciding which content store an imported file is copied
+    /// into, so the sync that follows does not fetch back bytes that never left.
+    /// </summary>
+    /// <remarks>
+    /// Folders rather than a store, because the store is a consequence of the folder: which disk
+    /// serves which is machine-wide settings that an import has no business reading. Empty is
+    /// legitimate - a repo whose game is not installed here - and seeds nothing.
+    /// See docs/07-mod-sync-design.md#ingestion.
+    /// </remarks>
+    public IReadOnlyList<string> ModFolders { get; init; } = [];
 }
 
 /// <returns>
@@ -84,6 +97,12 @@ public enum ModImportPhase
     Linking,
     Uploading,
     Registering,
+
+    /// <summary>
+    /// Registered, and being copied into the content store the sync that follows reads from. Past
+    /// the point where anything can fail the version, exactly like <see cref="PublishingImagery"/>.
+    /// </summary>
+    Storing,
 
     /// <summary>Registered already; whatever happens here cannot fail the version.</summary>
     PublishingImagery,

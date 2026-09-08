@@ -240,12 +240,14 @@ Full design in [09 — Mod representation and the catalog](09-mod-catalog.md).
       distinguish a working import from a hung one.
 - [x] Compute the SHA-256 while uploading and send it with registration. It comes off the same
       buffer the upload blocks are cut from, so the file is read once.
-- [ ] **Not done: write imported files into the content store as they go**, so importing an
-      existing install leaves the store warm. This was written when the store did not exist and
-      the bullet asked to pull it forward; the store landed in Phase 3 instead, and `ModImportService`
-      still writes nothing into it. The first import after a fresh install therefore leaves a cold
-      store, and the first sync re-downloads bytes the machine already has. `ModImportService` names
-      the seam this attaches to.
+- [x] **Write imported files into the content store as they go**, so importing an existing install
+      leaves the store warm. Written when the store did not exist and closed once it did: a
+      registered version is copied into the store serving the repo's mod folders, verified against
+      the hash the registration recorded, after the registration and never able to fail it.
+      **A file that is already in one of those mod folders is skipped** — sync keeps it where it is,
+      so copying it into the store would duplicate tens of gigabytes to save nothing, and it reaches
+      the store for free on the uninstall that displaces it. The case this is for is the other one:
+      a mod imported from Downloads, which the first sync used to fetch back from the server.
 - [x] **Store the icon and every store image server-side**, so a mod nobody has locally still
       renders with its artwork instead of initials and an empty details dialog. Full design in
       [09](09-mod-catalog.md#mod-imagery).

@@ -109,4 +109,14 @@ public partial class ConfirmationDialogViewModel(
     {
         return new ConfirmationDialogViewModel(title, message, IconKind.Warning, "Ok", "Ok");
     }
+
+    /// <summary>
+    /// What happened, once it has. The same shape as <see cref="Refusal"/> and deliberately not the
+    /// same icon: reporting a finished piece of housekeeping under a warning teaches people that the
+    /// warning means nothing.
+    /// </summary>
+    public static ConfirmationDialogViewModel Notice(string title, string message)
+    {
+        return new ConfirmationDialogViewModel(title, message, IconKind.None, "Ok", "Ok");
+    }
 }

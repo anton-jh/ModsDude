@@ -232,11 +232,18 @@ Two caveats the implementation must handle:
 
 Four paths put bytes into a store, and only one is a download:
 
-1. **Import.** A mod uploaded from an instance's mod folder should be placed into the store as it
-   goes. The user already has the bytes; fetching them back is absurd. **Not implemented:**
-   `ModImportService` writes nothing into a store, so the first import after a fresh install
-   leaves a cold one and the first sync re-downloads bytes the machine already has. See
-   [PLAN.md](PLAN.md#phase-1--the-mod-catalog-and-the-upload-loop).
+1. **Import.** A mod uploaded from a folder the game does not read — Downloads, an archive
+   folder, anywhere the user keeps mods — is copied into the store serving the repo's mod folders
+   as it goes. The user already has the bytes; fetching them back is absurd. It happens after the
+   registration, verified against the hash that registration recorded, and it can never fail a
+   version: a store that could not be written is a cold store, not a failed import.
+
+   **A file already sitting in one of those mod folders is deliberately not copied.** Sync will
+   find it there and keep it, so a store copy would duplicate the archive to save nothing — and
+   across a 2,000-mod install that is tens of gigabytes of nothing. It reaches the store for free
+   later, by path 2, on the uninstall that displaces it. Which store is chosen follows the same
+   rule as everywhere else: the one serving the disk the file is already on where that is one of
+   them, otherwise the store those folders are served by.
 2. **Uninstall.** A registered mod being uninstalled is moved into the store — but only if
    **no store on the machine** already holds that hash. If any other disk's store has it, the
    bytes are already recoverable without a download and the mod folder's copy is simply
@@ -246,8 +253,9 @@ Four paths put bytes into a store, and only one is a download:
    copied across rather than downloaded. See *Install* below.
 4. **Download**, for anything the first three did not supply.
 
-The practical effect, once path 1 exists, is that a member who imports their existing 2,000-mod
-install ends up with a fully warm store having downloaded nothing.
+The practical effect is that a member who imports their existing 2,000-mod install and then
+applies a profile made of it downloads nothing: what was already in the mod folder stays there,
+and what came from anywhere else is in the store by the time sync looks.
 
 On the uninstall path, prefer checking whether some store already holds the expected hash over
 hashing the file — one usually does, and rehashing 2,000 archives to discover that is minutes
@@ -288,6 +296,31 @@ therefore re-downloadable — unlike the quarantine path below, which handles fi
 not. Exempt entries serving an active profile on any disk **this** store serves; evicting one
 would not break the installation, since a hardlinked file survives losing its store name and a
 copied one holds its own bytes, but it would guarantee a re-download on the next sync.
+
+### The user has to be able to see it and take it back
+
+Automatic eviction is not enough on its own, for two reasons that are not about the algorithm.
+
+The cap is a number somebody accepted once, and a hundred gigabytes agreed to in the abstract
+is a different thing from a hundred gigabytes on a disk that is now full. And **eviction only
+ever runs on the store a sync is using** — so a disk that used to hold a game keeps its whole
+cache indefinitely once the instance pointing at it is gone or repointed. Nothing sweeps it,
+because nothing syncs through it.
+
+So settings reports what every store on this machine is holding — the ones serving a mod folder
+now and the ones only the settings still name — and offers two actions per store: **sweep**,
+which is the eviction a sync would do, sparing what the folders it serves are running according
+to their manifests; and **empty**, which drops the lot. Both are safe to hand to the user for the
+same reason eviction is: the cost is bandwidth, never data. The image cache gets the same
+treatment for the same reason.
+
+Two numbers are reported per store, not one — what it holds and what emptying it would actually
+reclaim — because on a hardlink-served disk those differ, and a store that says it holds 40 GB
+while freeing 3 GB would otherwise look broken.
+
+The **quarantine folder is the exception and is handled as one**: it is the only part of a store
+that nothing can fetch back, since a quarantined file is precisely a mod no repo registers. It is
+reported separately, deleted separately, and its dialog is the only alarming one on the page.
 
 ## Reconciliation
 

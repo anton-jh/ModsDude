@@ -232,6 +232,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable
             ModImportPhase.Linking => "Preparing",
             ModImportPhase.Uploading => $"Uploading {ImportProgress:P0}",
             ModImportPhase.Registering => "Registering",
+            ModImportPhase.Storing => "Storing",
             ModImportPhase.PublishingImagery => "Publishing images",
             ModImportPhase.Completed => "Done",
             ModImportPhase.Failed => "Failed",

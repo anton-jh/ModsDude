@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -21,6 +22,18 @@ public partial class ImageCacheViewModel(
 
     [ObservableProperty]
     private double _maxSizeGigabytes = maxSizeGigabytes;
+
+    /// <summary>What is on disk, once somebody has counted it. Null while that is still running.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UsageSummary))]
+    private ModImageCacheUsage? _usage;
+
+    public string UsageSummary => Usage switch
+    {
+        null => "Measuring...",
+        { Entries: 0 } => "Empty",
+        _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} images"
+    };
 
 
     [RelayCommand]

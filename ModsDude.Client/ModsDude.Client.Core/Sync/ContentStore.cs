@@ -252,6 +252,99 @@ public sealed class ContentStore
     }
 
     /// <summary>
+    /// What the store is currently holding, in the terms the size limit is expressed in.
+    /// </summary>
+    /// <remarks>
+    /// Walks the whole blob tree and reads a link count per file, so it belongs off whatever thread
+    /// is drawing - it is a settings page's answer, not something to ask during a sync.
+    /// </remarks>
+    public ContentStoreUsage Measure()
+    {
+        var entries = Enumerate();
+
+        return new ContentStoreUsage(
+            entries.Count,
+            entries.Sum(x => x.Length),
+            entries.Where(x => x.IsUniquelyHeld).Sum(x => x.Length),
+            MeasureDirectory(Path.Combine(RootPath, _temporaryDirectory)),
+            MeasureDirectory(Path.Combine(RootPath, _quarantineDirectory)));
+    }
+
+    /// <summary>
+    /// Drops every blob, and every temporary file a failed write left behind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Safe to offer as a button because everything in a store is registered in some repo and
+    /// therefore re-downloadable - the same property that lets eviction run without asking anybody.
+    /// It costs downloads, never data.
+    /// </para>
+    /// <para>
+    /// <b>The quarantine folder is not touched</b>, which is the whole distinction between the two:
+    /// blobs are copies of something a server holds, and quarantined files are the ones sync found
+    /// that <em>nothing</em> holds. See <see cref="ClearQuarantine"/>.
+    /// </para>
+    /// <para>
+    /// A file that will not delete - one open in the game through a hardlink, say - is counted and
+    /// skipped rather than throwing. Clearing a store is housekeeping, and a store that is emptied
+    /// except for the two files something is reading is the outcome that was wanted.
+    /// </para>
+    /// </remarks>
+    public ContentStoreClearResult Clear(CancellationToken cancellationToken)
+    {
+        var deleted = 0;
+        var failed = 0;
+        long reclaimed = 0;
+
+        foreach (var entry in Enumerate())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                File.Delete(entry.Path);
+
+                deleted++;
+
+                // Only what deleting it actually gave back. A blob hardlinked into a live mod folder
+                // loses a name and no bytes, and reporting those would be a number the disk
+                // disagrees with.
+                if (entry.IsUniquelyHeld)
+                {
+                    reclaimed += entry.Length;
+                }
+            }
+            catch (Exception exception)
+            {
+                Log.LogDebug(exception, "Could not delete the store blob {File}.", entry.Path);
+
+                failed++;
+            }
+        }
+
+        reclaimed += DeleteDirectory(Path.Combine(RootPath, _temporaryDirectory));
+
+        return new ContentStoreClearResult(deleted, reclaimed, failed);
+    }
+
+    /// <summary>
+    /// Deletes the files sync rescued here because they could not be recycled.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Clear"/> and asked about separately, because this is the one part of
+    /// a store that is not re-downloadable: a quarantined file is a mod nothing in the repo
+    /// registers, which is exactly why it was moved here instead of deleted.
+    /// </remarks>
+    /// <returns>The bytes reclaimed.</returns>
+    public long ClearQuarantine()
+    {
+        return DeleteDirectory(Path.Combine(RootPath, _quarantineDirectory));
+    }
+
+    /// <summary>Where rescued files pile up, whether or not it exists yet.</summary>
+    public string QuarantinePath => Path.Combine(RootPath, _quarantineDirectory);
+
+    /// <summary>
     /// Drops least-recently-used entries until the store is back inside its size limit.
     /// </summary>
     /// <param name="pinned">
@@ -409,6 +502,45 @@ public sealed class ContentStore
         }
     }
 
+    /// <summary>The bytes under a directory, or zero where there is no such directory.</summary>
+    private long MeasureDirectory(string path)
+    {
+        try
+        {
+            return Directory.Exists(path)
+                ? new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories).Sum(x => x.Length)
+                : 0;
+        }
+        catch (Exception exception)
+        {
+            // A folder that cannot be walked is reported as empty rather than failing the page it
+            // was measured for.
+            Log.LogDebug(exception, "Could not measure {Directory}.", path);
+
+            return 0;
+        }
+    }
+
+    /// <returns>The bytes the directory held, whether or not every last file went.</returns>
+    private long DeleteDirectory(string path)
+    {
+        var size = MeasureDirectory(path);
+
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.LogDebug(exception, "Could not delete {Directory}.", path);
+        }
+
+        return size - MeasureDirectory(path);
+    }
+
     private static string Normalize(string hash)
     {
         if (hash.Length < 3 || hash.Any(x => char.IsAsciiHexDigit(x) is false))
@@ -431,6 +563,32 @@ public sealed record ContentStoreEntry(string Hash, string Path, long Length, Da
 
 /// <param name="RemainingBytes">What the store uniquely holds afterwards - the number the limit is about.</param>
 public sealed record ContentStoreEvictionResult(int EntriesEvicted, long BytesReclaimed, long RemainingBytes);
+
+/// <summary>
+/// What one store is holding right now.
+/// </summary>
+/// <param name="TotalBytes">Every blob, whether or not deleting it would give the bytes back.</param>
+/// <param name="ReclaimableBytes">
+/// Only the entries the store uniquely holds - which is what the size limit counts, and the only
+/// number emptying the store would actually free. Equal to <paramref name="TotalBytes"/> on a
+/// copy-served disk, where nothing is hardlinked into a mod folder.
+/// </param>
+/// <param name="QuarantineBytes">
+/// Files sync rescued because they could not be recycled. Not part of the store's size limit and not
+/// re-downloadable, so they are reported apart from everything else.
+/// </param>
+public sealed record ContentStoreUsage(
+    int Entries,
+    long TotalBytes,
+    long ReclaimableBytes,
+    long TemporaryBytes,
+    long QuarantineBytes)
+{
+    public static ContentStoreUsage Empty { get; } = new(0, 0, 0, 0, 0);
+}
+
+/// <param name="Failed">Blobs something else was holding open. Swept the next time.</param>
+public sealed record ContentStoreClearResult(int EntriesDeleted, long BytesReclaimed, int Failed);
 
 
 /// <summary>

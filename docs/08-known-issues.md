@@ -52,14 +52,6 @@ the right way round — a slow sync is visible and recoverable, a corrupted stor
 it is a cost being paid for an unanswered question, and the question needs the actual game to
 answer. See [07](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
-### Import leaves the content store cold
-
-`ModImportService` does not write the files it uploads into a local content store. Importing an
-existing 2,000-mod install therefore leaves the store empty, and the first sync re-downloads
-bytes that were on the machine the whole time. The design calls this out as one of four ingestion
-paths; it is the one that is missing. See
-[07](07-mod-sync-design.md#ingestion).
-
 ### A drift notice can outlive the account that could act on it
 
 Instances and their active profiles are machine state and survive a **Switch user** — correctly,

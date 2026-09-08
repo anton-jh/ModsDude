@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -100,7 +101,49 @@ public partial class ContentStoreViewModel(
         }
     }
 
-    public string ServedSummary => $"Serves {string.Join(", ", Served)}";
+    /// <summary>
+    /// A store with nothing to serve is listed rather than hidden. It is the one somebody is most
+    /// likely to want emptied - a disk that used to hold a game and now holds only its cache.
+    /// </summary>
+    public string ServedSummary => Served.Count == 0
+        ? "Not serving any mod folder right now"
+        : $"Serves {string.Join(", ", Served)}";
+
+    /// <summary>
+    /// What is on disk, once somebody has measured it. Null while that is still being counted, which
+    /// on a full store is a walk of tens of thousands of files.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UsageSummary))]
+    [NotifyPropertyChangedFor(nameof(QuarantineSummary))]
+    [NotifyPropertyChangedFor(nameof(HasQuarantine))]
+    private ContentStoreUsage? _usage;
+
+    /// <summary>
+    /// Both numbers, because they differ for a reason worth showing: what the store holds, and what
+    /// emptying it would actually give back. On a hardlink-served disk the second is the smaller,
+    /// since an entry the mod folder also names costs no bytes of its own.
+    /// </summary>
+    public string UsageSummary => Usage switch
+    {
+        null => "Measuring...",
+        { Entries: 0 } => "Empty",
+        { TotalBytes: var total, ReclaimableBytes: var free } when total == free
+            => $"{ByteSize.Describe(total)} in {Usage.Entries} files",
+        _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} files, {ByteSize.Describe(Usage.ReclaimableBytes)} of it reclaimable"
+    };
+
+    public bool HasQuarantine => Usage?.QuarantineBytes > 0;
+
+    /// <summary>
+    /// Said in full, because this is the one part of a store that is not re-downloadable: these are
+    /// files sync found in a mod folder that no repo registers, moved here because the Recycle Bin
+    /// would not take them.
+    /// </summary>
+    public string QuarantineSummary => Usage is null
+        ? string.Empty
+        : $"{ByteSize.Describe(Usage.QuarantineBytes)} of rescued files that sync could not recycle. "
+          + "Nothing in the repo holds these, so deleting them is the one thing here that cannot be undone.";
 
 
     [RelayCommand]

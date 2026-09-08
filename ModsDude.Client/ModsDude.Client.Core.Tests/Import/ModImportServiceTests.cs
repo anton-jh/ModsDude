@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Tests.Sync;
 using System.Text;
@@ -8,7 +9,7 @@ using static ModsDude.Client.Core.Tests.Keys;
 
 namespace ModsDude.Client.Core.Tests.Import;
 
-public class ModImportServiceTests
+public class ModImportServiceTests : IDisposable
 {
     private static readonly ModSource _downloads =
         new(ModSourceId.Downloads, "Downloads", @"C:\Downloads", ModSourceKind.Downloads);
@@ -20,13 +21,26 @@ public class ModImportServiceTests
     private readonly RecordingModImagePublisher _imagery = new();
     private readonly FakeModFileUploader _uploader;
     private readonly FakeRecycleBin _recycleBin = new();
+    private readonly TempDirectory _temp = new("import");
+    private readonly ContentStore _store;
     private readonly ModImportService _service;
 
 
     public ModImportServiceTests()
     {
         _uploader = new FakeModFileUploader(_server);
-        _service = new ModImportService(_server, _server, _uploader, _imagery, _recycleBin, NullLogger<ModImportService>.Instance);
+        _store = new ContentStore(@"C:\", _temp.CreateSubdirectory("store"), long.MaxValue);
+        _service = new ModImportService(
+            _server, _server, _uploader, _imagery, _recycleBin,
+            new FakeStoreProvider(_store),
+            NullLogger<ModImportService>.Instance);
+    }
+
+
+    public void Dispose()
+    {
+        _temp.Dispose();
+        GC.SuppressFinalize(this);
     }
 
 
@@ -168,6 +182,44 @@ public class ModImportServiceTests
 
         Assert.Equal(ModImportStatus.ContentMismatch, Assert.Single(result.Items).Status);
         Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+    }
+
+    [Fact]
+    public async Task A_mod_imported_from_a_secondary_source_lands_in_the_store_that_will_serve_it()
+    {
+        var version = Local("FS25_Plough", "1.0", source: _downloads);
+
+        var result = await ImportAsync([version]);
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+
+        // Without this the first sync downloads back bytes that were on the machine the whole time.
+        Assert.True(_store.Contains(await HashOf(version)), "the imported file never reached the store");
+    }
+
+    [Fact]
+    public async Task A_mod_imported_out_of_the_mod_folder_is_not_copied_into_the_store()
+    {
+        var version = Local("FS25_Plough", "1.0", source: _instance);
+
+        await ImportAsync([version]);
+
+        // Sync keeps that file where it is, so a store copy would duplicate the archive for nothing
+        // - and across a 2,000-mod install, tens of gigabytes of nothing.
+        Assert.False(_store.Contains(await HashOf(version)), "the mod folder's own file was duplicated into the store");
+    }
+
+    [Fact]
+    public async Task Seeding_the_store_is_skipped_where_no_mod_folder_on_this_machine_wants_it()
+    {
+        var version = Local("FS25_Plough", "1.0", source: _downloads);
+
+        // A repo whose game is not installed here. There is no store that would ever serve these
+        // bytes, so writing one would only be a folder nothing reads.
+        var result = await ImportAsync([version], x => x with { ModFolders = [] });
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+        Assert.False(_store.Contains(await HashOf(version)));
     }
 
     [Fact]
@@ -526,7 +578,12 @@ public class ModImportServiceTests
         Func<ModImportRequest, ModImportRequest>? configure = null,
         CancellationToken cancellationToken = default)
     {
-        var request = new ModImportRequest(_server.RepoId, versions, DefaultModVersionComparer.Instance);
+        var request = new ModImportRequest(_server.RepoId, versions, DefaultModVersionComparer.Instance)
+        {
+            // The instance source's folder, so every test in here runs with store seeding live -
+            // the point of which is that it is invisible: nothing about an import changes.
+            ModFolders = [_instance.Path]
+        };
 
         return _service.ImportAsync(configure?.Invoke(request) ?? request, cancellationToken);
     }

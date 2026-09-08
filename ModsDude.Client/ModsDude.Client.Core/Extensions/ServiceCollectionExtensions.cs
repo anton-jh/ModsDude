@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SyncManifestStore>();
         services.AddSingleton<InstanceDriftService>();
         services.AddSingleton<ModSyncService>();
+        services.AddSingleton<ContentStoreMaintenance>();
         services.AddSingleton<Savegames.ISavegamePacker, Savegames.SavegamePacker>();
 
         // StateStore itself is registered by the host (App.xaml.cs), so this only names the seam the

@@ -347,6 +347,13 @@ repo settings is what stops the "same thing configured in several places, then d
 problem from reappearing. `LocalState.Settings` was the first genuinely global client setting;
 `SettingsPage`, reached from the top-level sidebar, is where it is edited.
 
+The same page is where the stores are **managed**, not only configured: it reports what each one
+holds and what emptying it would actually reclaim, and offers a sweep and an empty per store plus
+an empty for the image cache. That is there because the two things automatic eviction cannot do
+are exactly the two things a user needs — reconsider a cap they agreed to once, and reclaim a
+store on a disk no instance points at any more, which nothing sweeps because nothing syncs
+through it. See [07](07-mod-sync-design.md#the-user-has-to-be-able-to-see-it-and-take-it-back).
+
 There is no migration. The system has no users yet, so `Version` gets bumped and old state
 is discarded. `Store<T>` takes an optional compatibility predicate for exactly this, and
 `StateStore` passes `state => state.Version == LocalState.CurrentVersion` — without it a bumped
@@ -768,7 +775,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | --- | --- | --- |
 | `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
 | `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account panel with **Switch user** |
-| `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache |
+| `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, and the usage/sweep/empty controls for both |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |

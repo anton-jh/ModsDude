@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
@@ -28,10 +29,10 @@ namespace ModsDude.Client.Core.Import;
 /// landed, so concurrency stays at the level of distinct mods - which is where it was anyway.
 /// </para>
 /// <para>
-/// Nothing here writes the imported file into a local content store. That would leave the store warm
-/// after importing an existing install, but the store, its per-volume assignment and the settings
-/// behind it are later phases; this is the seam it will attach to, once those exist.
-/// See docs/PLAN.md Phase 1.
+/// A registered file is then <b>copied into the store that will serve it</b>, so the sync that
+/// follows an import does not download bytes that never left the machine. That is housekeeping and
+/// is treated as such: it happens after the registration it can no longer affect, it never fails a
+/// version, and it is skipped where it would only duplicate - see <c>SeedStoreAsync</c>.
 /// </para>
 /// </remarks>
 public sealed class ModImportService(
@@ -40,11 +41,12 @@ public sealed class ModImportService(
     IModFileUploader uploader,
     IModImagePublisher imagePublisher,
     IRecycleBin recycleBin,
+    IContentStoreProvider storeProvider,
     ILogger<ModImportService> logger)
 {
     public Task<ModImportResult> ImportAsync(ModImportRequest request, CancellationToken cancellationToken)
     {
-        return new ImportRun(filesClient, modsClient, uploader, imagePublisher, request, logger).RunAsync(cancellationToken);
+        return new ImportRun(filesClient, modsClient, uploader, imagePublisher, storeProvider, request, logger).RunAsync(cancellationToken);
     }
 
     /// <summary>
@@ -122,6 +124,7 @@ public sealed class ModImportService(
         IModsClient modsClient,
         IModFileUploader uploader,
         IModImagePublisher imagePublisher,
+        IContentStoreProvider storeProvider,
         ModImportRequest request,
         ILogger logger)
     {
@@ -132,6 +135,15 @@ public sealed class ModImportService(
         private readonly SemaphoreSlim _refetch = new(1, 1);
         private readonly Lock _results = new();
         private readonly List<ModImportItemResult> _items = [];
+
+        /// <summary>
+        /// The stores that will serve this repo's mod folders, one per distinct store, worked out
+        /// once for the run. Lazy so an import that registers nothing never reads the settings.
+        /// </summary>
+        private readonly Lazy<IReadOnlyList<ContentStore>> _seedTargets = new(() =>
+            [.. request.ModFolders
+                .Select(storeProvider.GetStoreServing)
+                .DistinctBy(x => FileSystemHelper.NormalizePathForComparison(x.RootPath))]);
 
         /// <summary>Which file each version is imported from, once that has been settled.</summary>
         private readonly Dictionary<ModVersionIdentity, ModOccurrence> _chosen = [];
@@ -691,12 +703,84 @@ public sealed class ModImportService(
                 return VersionOutcome.Done;
             }
 
+            await SeedStoreAsync(version, contentHash, cancellationToken);
+
             var imageryError = await PublishImageryAsync(version, cancellationToken);
 
             Record(version, ModImportStatus.Registered, imageryError);
             Report(version, ModImportPhase.Completed);
 
             return VersionOutcome.Done;
+        }
+
+        /// <summary>
+        /// Copies the file that was just registered into the store that will serve it, so applying a
+        /// profile containing it does not download bytes the machine already had.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Verified on the way in, like every other path into a store.</b> It streams through
+        /// <see cref="ContentStore.IngestAsync"/> against the hash the registration recorded, which
+        /// is the one check that makes a store shared between repos safe - and here it also costs
+        /// nothing extra, since the bytes are being read to be copied anyway.
+        /// </para>
+        /// <para>
+        /// <b>A file already sitting in one of these mod folders is left alone.</b> Sync will find it
+        /// there and keep it, so copying it into the store would duplicate the archive for no gain -
+        /// and on a 2,000-mod install that is tens of gigabytes. It reaches the store for free later,
+        /// on the uninstall that displaces it. The case this exists for is the other one: a mod
+        /// imported from Downloads or any folder the game does not read, which sync would otherwise
+        /// have to fetch back from the server.
+        /// </para>
+        /// <para>
+        /// <b>Never fails a version, and never fails the run.</b> The registration has already
+        /// landed and is what the import was for; a store that could not be written is a cold store,
+        /// not a failed import, so everything here is logged and swallowed - a cancellation included,
+        /// since by this point the version's outcome is settled either way.
+        /// </para>
+        /// </remarks>
+        private async Task SeedStoreAsync(CatalogModVersion version, string contentHash, CancellationToken cancellationToken)
+        {
+            if (_seedTargets.Value.Count == 0)
+            {
+                return;
+            }
+
+            var source = Chosen(version);
+            var directory = Path.GetDirectoryName(source.FilePath);
+
+            if (request.ModFolders.Any(x => FileSystemHelper.ArePathsEqual(directory, x)))
+            {
+                return;
+            }
+
+            // The store serving the disk the file is already on where there is one, so seeding is a
+            // same-disk copy rather than a crossing. Otherwise the first, which is the only store
+            // there is in every configuration but a multi-disk one.
+            var target = _seedTargets.Value.FirstOrDefault(x =>
+                string.Equals(x.VolumeRoot, FileSystemHelper.NormalizeVolumeRoot(source.FilePath), StringComparison.OrdinalIgnoreCase))
+                ?? _seedTargets.Value[0];
+
+            if (target.Contains(contentHash))
+            {
+                return;
+            }
+
+            try
+            {
+                Report(version, ModImportPhase.Storing);
+
+                await using var content = source.OpenStream();
+
+                await target.IngestAsync(content, contentHash, null, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(
+                    exception,
+                    "Could not copy {Mod} {Version} into the content store at {Store} after importing it.",
+                    version.ModId.Value, version.VersionId.Value, target.RootPath);
+            }
         }
 
         /// <returns>Why imagery did not make it, or null. Never a reason to fail the version.</returns>

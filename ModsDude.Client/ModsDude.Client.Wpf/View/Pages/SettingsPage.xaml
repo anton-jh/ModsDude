@@ -70,30 +70,61 @@
                             CornerRadius="4"
                             Padding="16"
                             Margin="0 16 0 0"
-                            Visibility="{Binding HasVolumes, Converter={StaticResource BoolToVisibilityConverter}}">
+                            Visibility="{Binding HasStores, Converter={StaticResource BoolToVisibilityConverter}}">
                         <GroupBox Header="Stores" Padding="0 16 0 16">
-                            <ItemsControl ItemsSource="{Binding Stores}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:ContentStoreViewModel}">
-                                        <StackPanel Orientation="Vertical" Margin="0 0 0 16">
-                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       Text="{Binding VolumeRoot}" />
-                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding ServedSummary}" />
+                            <StackPanel Orientation="Vertical">
 
-                                            <Label Content="Folder" Margin="0 12 0 8" />
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Content="Pick folder" Command="{Binding PickPathCommand}" />
-                                                <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="320" Margin="8 0 0 0" />
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Margin="0 0 0 8"
+                                           Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Text="{Binding ManagementBlockedReason}" />
+
+                                <ItemsControl ItemsSource="{Binding Stores}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:ContentStoreViewModel}">
+                                            <StackPanel Orientation="Vertical" Margin="0 0 0 16">
+                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           Text="{Binding VolumeRoot}" />
+                                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding ServedSummary}" />
+                                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding UsageSummary}" />
+
+                                                <Label Content="Folder" Margin="0 12 0 8" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Content="Pick folder" Command="{Binding PickPathCommand}" />
+                                                    <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="320" Margin="8 0 0 0" />
+                                                </StackPanel>
+
+                                                <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
+                                                <TextBox Width="120" HorizontalAlignment="Left"
+                                                         Text="{Binding MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                                <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
+                                                    <Button Content="Sweep to limit"
+                                                            Command="{Binding DataContext.SweepStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Content="Empty store" Margin="8 0 0 0"
+                                                            Command="{Binding DataContext.EmptyStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+
+                                                <StackPanel Orientation="Vertical" Margin="0 12 0 0"
+                                                            Visibility="{Binding HasQuarantine, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                               Text="{Binding QuarantineSummary}" />
+                                                    <Button Content="Delete rescued files" HorizontalAlignment="Left" Margin="0 8 0 0"
+                                                            Command="{Binding DataContext.EmptyQuarantineCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
                                             </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
-                                            <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
-                                            <TextBox Width="120" HorizontalAlignment="Left"
-                                                     Text="{Binding MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            </StackPanel>
                         </GroupBox>
                     </Border>
 
@@ -108,6 +139,10 @@
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                            Text="Mod icons and store images are kept in one cache for the whole machine, shared by every repo and disk. Everything in it can be fetched again, so it is emptied oldest-first once it reaches its limit." />
 
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0 8 0 0"
+                                           Text="{Binding ImageCache.UsageSummary}" />
+
                                 <Label Content="Folder" Margin="0 12 0 8" />
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Pick folder" Command="{Binding ImageCache.PickPathCommand}" />
@@ -117,6 +152,9 @@
                                 <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
                                 <TextBox Width="120" HorizontalAlignment="Left"
                                          Text="{Binding ImageCache.MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <Button Content="Empty cache" HorizontalAlignment="Left" Margin="0 12 0 0"
+                                        Command="{Binding EmptyImageCacheCommand}" />
 
                             </StackPanel>
                         </GroupBox>

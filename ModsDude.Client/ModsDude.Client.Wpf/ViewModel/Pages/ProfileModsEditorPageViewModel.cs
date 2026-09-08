@@ -906,7 +906,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             Progress = new ModImportRowProgress(rows, task),
             ResolveArbitration = ResolveArbitrationAsync,
-            ResolveSourceConflicts = ResolveSourceConflictsAsync
+            ResolveSourceConflicts = ResolveSourceConflictsAsync,
+
+            // So the import leaves the store warm: what is uploaded from a folder the game does not
+            // read is copied into the store these folders are served by, and the apply that follows
+            // this save finds it there instead of downloading it back.
+            ModFolders = [.. _repo.LocalInstances.Select(x => x.ModFolder).OfType<string>()]
         };
 
         // The overload that invalidates the catalog afterwards: a partly failed import still

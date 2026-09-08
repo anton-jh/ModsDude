@@ -95,27 +95,7 @@ public static class SavegameWording
         => moment.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
 
     /// <summary>A blob size in the units somebody thinks about a savegame in.</summary>
-    public static string Size(long bytes)
-    {
-        if (bytes < 1024)
-        {
-            return $"{bytes} B";
-        }
-
-        double value = bytes;
-
-        foreach (var unit in new[] { "kB", "MB", "GB" })
-        {
-            value /= 1024;
-
-            if (value < 1024)
-            {
-                return string.Create(CultureInfo.CurrentCulture, $"{value:0.#} {unit}");
-            }
-        }
-
-        return string.Create(CultureInfo.CurrentCulture, $"{value:0.#} TB");
-    }
+    public static string Size(long bytes) => ByteSize.Describe(bytes);
 
     /// <summary>
     /// How long a save has been played, as the game recorded it. Null where the game does not say -

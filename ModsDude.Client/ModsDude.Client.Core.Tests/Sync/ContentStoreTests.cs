@@ -229,6 +229,60 @@ public class ContentStoreTests
     }
 
 
+    [Fact]
+    public async Task Measuring_separates_what_is_held_from_what_emptying_would_give_back()
+    {
+        using var root = new TempDirectory("store-measure");
+        var modFolder = root.CreateSubdirectory("mods");
+        var store = new ContentStore("C:\\", root.Path, _oneGigabyte);
+
+        var installedHash = await Store(store, "this one is installed and hardlinked");
+        await Store(store, "this one is only in the store");
+
+        Assert.True(
+            FileLinks.TryCreateHardLink(Path.Combine(modFolder, "fs25_a.zip"), store.GetBlobPath(installedHash)),
+            $"Could not create a hardlink under '{root.Path}'; the accounting cannot be verified here.");
+
+        var usage = store.Measure();
+
+        Assert.Equal(2, usage.Entries);
+        Assert.Equal(Bytes("this one is installed and hardlinked").Length + Bytes("this one is only in the store").Length, usage.TotalBytes);
+
+        // The number the size limit is about, and the only one deleting would actually free: the
+        // hardlinked entry costs no bytes of its own.
+        Assert.Equal(Bytes("this one is only in the store").Length, usage.ReclaimableBytes);
+    }
+
+    [Fact]
+    public async Task Clearing_drops_every_blob_and_leaves_the_rescued_files_alone()
+    {
+        using var root = new TempDirectory("store-clear");
+        var store = new ContentStore("C:\\", root.Path, _oneGigabyte);
+
+        var first = await Store(store, "one mod");
+        var second = await Store(store, "another mod");
+
+        var quarantine = store.GetQuarantineDirectory(DateTimeOffset.UtcNow);
+        Directory.CreateDirectory(quarantine);
+        File.WriteAllText(Path.Combine(quarantine, "something-nobody-registered.zip"), "rescued");
+
+        var result = store.Clear(CancellationToken.None);
+
+        Assert.Equal(2, result.EntriesDeleted);
+        Assert.Equal(0, result.Failed);
+        Assert.False(store.Contains(first));
+        Assert.False(store.Contains(second));
+
+        // The one part of a store that nothing can fetch back, so emptying the store never touches
+        // it - deleting it is a separate act with its own question.
+        Assert.True(File.Exists(Path.Combine(quarantine, "something-nobody-registered.zip")));
+        Assert.True(store.Measure().QuarantineBytes > 0);
+
+        store.ClearQuarantine();
+
+        Assert.False(Directory.Exists(store.QuarantinePath));
+    }
+
     private static async Task<string> Store(ContentStore store, string content)
     {
         var bytes = Bytes(content);
