@@ -15,6 +15,7 @@ concentrates on the things the code does not tell you.
 | [07 — Mod sync design](07-mod-sync-design.md) | The core feature: the content store, reconciliation, uninstall rules and drift |
 | [08 — Known issues](08-known-issues.md) | What is still wrong or unbuilt in the current tree |
 | [09 — Mod representation and the catalog](09-mod-catalog.md) | Local vs registered mods, the merged model, mod imagery, the sources, and the import protocol |
+| [10 — Savegames and profile revisions](10-savegame-profile-binding.md) | *Design.* One current savegame per profile, and how a version learns which revision it was played on |
 | [PLAN](PLAN.md) | Roadmap, phased |
 
 ## Conventions used here
