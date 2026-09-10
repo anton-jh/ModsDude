@@ -70,6 +70,13 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// </summary>
     public void FollowNoProfile() => _savegame = _savegame with { ProfileId = null };
 
+    /// <summary>
+    /// Makes this savegame a past one: somebody published a new farm to its profile, and that one is
+    /// current now. Nothing about this savegame's own history changes - a past savegame is not
+    /// read-only, and the single restriction is that its profile revision does not move.
+    /// </summary>
+    public void Supersede() => _savegame = _savegame with { SupersededAt = DateTime.UtcNow };
+
     /// <summary>Puts a version and its bytes on the server - a publish that happened before the test.</summary>
     public SavegameVersionDto Seed(byte[] content, int? profileRevision = 1)
     {

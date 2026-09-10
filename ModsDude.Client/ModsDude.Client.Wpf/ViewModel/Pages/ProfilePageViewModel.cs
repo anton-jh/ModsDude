@@ -224,7 +224,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
             // The intent is recorded whatever the folder ended up doing: an instance that could not be
             // reached is still meant to follow this profile, and the drift notice covers the rest.
-            if (outcome.Status is not ProfileApplyStatus.Declined)
+            if (outcome.RecordsIntent)
             {
                 _localInstanceRepository.SetActiveProfile(instance, target);
             }

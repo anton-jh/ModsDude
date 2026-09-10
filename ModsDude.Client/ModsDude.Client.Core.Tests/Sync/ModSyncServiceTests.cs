@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
 
@@ -504,14 +505,14 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
-        Assert.Equal([null], fixture.PlayObserver.Observed);
+        Assert.Equal([null], fixture.Held.Observed);
 
         fixture.Server.HeadRevision = 1004;
         fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
-        Assert.Equal([null, 4], fixture.PlayObserver.Observed);
+        Assert.Equal([null, 4], fixture.Held.Observed);
         Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
     }
 
@@ -537,8 +538,88 @@ public class ModSyncServiceTests
 
         await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
-        Assert.Equal([null, 4], fixture.PlayObserver.Observed);
+        Assert.Equal([null, 4], fixture.Held.Observed);
         Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// <b>The apply that would take a farm off its mod list, resolved rather than refused.</b> An
+    /// instance holding a past savegame is pinned to that farm's revision, and every caller asks for
+    /// nothing in particular - so the one place all of them pass through is where head stops being the
+    /// answer. Nobody had to know a savegame was involved.
+    /// </summary>
+    [Fact]
+    public async Task An_instance_holding_a_past_savegame_gets_its_revision_rather_than_head()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 1004;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Held.Hold(fixture.InstanceId, fixture.Server.ProfileId, targetRevision: 4);
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal([4], fixture.Server.RevisionsRequested);
+        Assert.Equal(4, plan.ProfileRevision);
+
+        await fixture.ExecuteAsync(plan);
+
+        // Which is then what the drift check compares against, so the instance is not permanently
+        // behind head by construction.
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// A caller that names a revision has said something the instance cannot know better than - the
+    /// check-out dialog previewing a farm nothing is holding yet - so it is taken at its word, and
+    /// then checked against what <em>is</em> held.
+    /// </summary>
+    [Fact]
+    public async Task A_named_revision_that_a_held_past_savegame_forbids_is_refused()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Held.Hold(fixture.InstanceId, fixture.Server.ProfileId, targetRevision: 4);
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync(revision: 1004));
+
+        Assert.Contains("runs on one revision", exception.UserMessage);
+        Assert.Empty(fixture.Server.RevisionsRequested);
+    }
+
+    /// <summary>
+    /// The active-profile switch, refused at the one place no apply path gets past. Nothing is planned
+    /// and the repo is never asked: a farm following another mod list is not a state a plan could
+    /// describe safely.
+    /// </summary>
+    [Fact]
+    public async Task Applying_another_profile_while_a_savegame_is_held_is_refused()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Held.Hold(fixture.InstanceId, Guid.NewGuid());
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync());
+
+        Assert.Contains("another mod list", exception.UserMessage);
+        Assert.Empty(fixture.Server.RevisionsRequested);
+    }
+
+    /// <summary>
+    /// A savegame following no mod list claims nothing about the folder, so an instance holding one is
+    /// an instance holding nothing as far as any of this is concerned.
+    /// </summary>
+    [Fact]
+    public async Task A_held_savegame_with_no_profile_constrains_no_apply()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 1004;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Held.HoldWithNoProfile(fixture.InstanceId);
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal([null], fixture.Server.RevisionsRequested);
+        Assert.Equal(1004, plan.ProfileRevision);
     }
 
     /// <summary>
@@ -555,7 +636,7 @@ public class ModSyncServiceTests
         var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
 
         Assert.False(result.Completed);
-        Assert.Empty(fixture.PlayObserver.Observed);
+        Assert.Empty(fixture.Held.Observed);
     }
 
 
@@ -582,7 +663,7 @@ public class ModSyncServiceTests
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
-            PlayObserver = new FakeSavegamePlayObserver(Manifests);
+            Held = new FakeHeldSavegames(Manifests);
 
             Service = new ModSyncService(
                 Server,
@@ -593,7 +674,7 @@ public class ModSyncServiceTests
                 Manifests,
                 RecycleBin,
                 new FakeInstanceModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
-                PlayObserver,
+                Held,
                 NullLogger<ModSyncService>.Instance);
         }
 
@@ -605,7 +686,7 @@ public class ModSyncServiceTests
         public FakeRecycleBin RecycleBin { get; }
         public SyncManifestStore Manifests { get; }
         public InstanceDriftService Drift { get; }
-        public FakeSavegamePlayObserver PlayObserver { get; }
+        public FakeHeldSavegames Held { get; }
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
         public ContentStore OtherStore { get; }

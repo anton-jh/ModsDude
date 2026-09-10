@@ -108,7 +108,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     private readonly InstanceDriftService _driftService;
     private readonly SyncManifestStore _manifestStore;
     private readonly IProfileRevisions? _profileRevisions;
-    private readonly ISavegameService? _savegames;
+    private readonly IHeldSavegames? _savegames;
     private readonly StoreIntegrityService? _storeIntegrity;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
@@ -136,7 +136,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         SyncManifestStore manifestStore,
         IProfileRevisions? profileRevisions = null,
         TimeProvider? timeProvider = null,
-        ISavegameService? savegames = null,
+        IHeldSavegames? savegames = null,
         StoreIntegrityService? storeIntegrity = null,
         ILogger<InstanceDriftMonitor>? logger = null)
     {
@@ -276,7 +276,14 @@ public sealed class InstanceDriftMonitor : IDisposable
                 candidate.InstanceId,
                 active,
                 candidate.ModFolder,
-                currentRevision: _profileRevisions?.GetHeadRevision(active),
+                // A past savegame held here pins the folder to its own revision, and that is what
+                // "up to date" means for this instance until it is checked in. Nothing is suppressed
+                // to achieve it: the comparison is against the number the instance is supposed to be
+                // on, and it comes out equal on its own. Against head instead, an instance holding a
+                // past savegame would report drift permanently and offer a re-apply to head that the
+                // apply table refuses.
+                currentRevision: _savegames?.GetRequiredRevision(candidate.InstanceId, active.ProfileId)
+                    ?? _profileRevisions?.GetHeadRevision(active),
                 savegameDrift: savegameDrift);
 
             // Runs off what the folder comparison just found changed, which is the only set of files

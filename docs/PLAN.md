@@ -1285,16 +1285,38 @@ One thing fell out of the boxes above rather than being added to one:
 
 ### 3. The rules
 
-- [ ] **Check-out targets** the profile's head for a current savegame, the pinned revision for a
-      past one, and nothing for one with no profile.
-- [ ] **The apply table** — current follows, past only re-applies its own revision, a different
-      profile is refused.
-- [ ] **Holding a past savegame is stored state**, and its instance passes that revision into
+- [x] **Check-out targets** the profile's head for a current savegame, the pinned revision for a
+      past one, and nothing for one with no profile. `SavegameCheckoutBinding.TargetRevision` records
+      which at the one moment the savegame's current-or-past state is in hand, and a number there is
+      the whole of "this instance is holding a past savegame".
+- [x] **The apply table** — current follows, past only re-applies its own revision, a different
+      profile is refused. `SavegameHoldRules` is the rule; `ModSyncService.PlanAsync` is where no
+      apply path gets past it. The profile-switch refusal falls out of the same table rather than
+      being a check on `SetActiveProfile`: every switch in the app applies first, and a refused apply
+      does not record the intent.
+- [x] **Holding a past savegame is stored state**, and its instance passes that revision into
       `InstanceDriftService.Check` in place of head. Nothing is suppressed; the comparison comes out
       equal on its own.
-- [ ] **Narrow `HasMovedOffItsModList`** to compare against the savegame's target rather than the
-      binding's check-out value, which fires on the ordinary follow-the-profile flow today.
-- [ ] **The checkout limit counts savegames with a profile**, not savegames.
+- [x] **Narrow `HasMovedOffItsModList`** to compare against the savegame's target rather than the
+      binding's check-out value, which fired on the ordinary follow-the-profile flow.
+- [x] **The checkout limit counts savegames with a profile**, not savegames — and it turned out never
+      to have been enforced at all, only assumed. Refused in `CheckOutAsync` and `PublishAsync`,
+      before the claim in one and before the pack in the other.
+
+Three things fell out of the boxes above rather than being added to them:
+
+- **`ModSyncRequest.Revision` null stopped meaning head.** It means "whatever this instance must be
+  on", resolved in `PlanAsync` from what is held there — so the drift notice's re-apply, the mod list
+  editor's save and the instance page's apply all target a held past savegame's revision without any
+  of them knowing what a savegame is. Only the check-out dialog names a number, because it previews
+  the apply for a farm nothing is holding yet.
+- **`ISavegamePlayObserver` became `IHeldSavegames`** and took `CheckDriftAsync` with it, so the drift
+  monitor stopped depending on the whole savegame client for two facts about held slots. It is now
+  the whole of what sync and the monitor know about savegames, which is what the seam claimed to be.
+- **`ProfileApplyStatus.Refused`, and `ProfileApplyOutcome.RecordsIntent` with it.** "Could not be
+  reached" was the only answer a refusal could have got, and it is the wrong one — waiting does not
+  fix it. The intent flag went the same way: recording a profile switch that a held farm forbids
+  applying would leave an instance whose standing profile it can never be put on.
 
 ### 4. Interface
 
@@ -1317,10 +1339,10 @@ Worth knowing before starting, so none of it gets rediscovered:
 - **`SavegameBindingStore` is already plural**, and every `GetBindings` call site treats it as a
   list. Holding several savegames needs no storage change.
 - **`InstanceDriftService.Check` already takes `currentRevision` and `profileDependencies`** as
-  parameters. Slice 3 changes what callers pass, not the signature.
+  parameters. Slice 3 changed what callers pass, not the signature.
 - **The no-mods branch already exists** in `RepoSavegamesPageViewModel.ApplyProfileAsync`.
-- **`GetModDependenciesV1Endpoint` already serves any revision**, and since slice 2 the client can
-  ask for one. Slice 3 decides which.
+- **`GetModDependenciesV1Endpoint` already serves any revision**, the client can ask for one since
+  slice 2, and slice 3 decides which. Nothing is left here.
 - **Pruning already refuses** a revision a savegame version holds, so a past savegame stays
   reproducible with no new guarantee.
 

@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.IO;
@@ -19,6 +20,13 @@ public enum ProfileApplyStatus
     Declined,
 
     /// <summary>
+    /// A savegame checked out on the instance follows another mod list. Not a "not now" like
+    /// <see cref="Unavailable"/> - nothing about waiting changes it, and the way out is to check that
+    /// savegame in.
+    /// </summary>
+    Refused,
+
+    /// <summary>
     /// A dedicated server mid-session, a folder held by a running game, an unplugged drive. Reported
     /// and left drifted - which is a "not now", and which the drift notice already covers.
     /// </summary>
@@ -30,6 +38,24 @@ public enum ProfileApplyStatus
 public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplyStatus Status, string Message)
 {
     public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched;
+
+    /// <summary>
+    /// Whether the instance should now be recorded as following this profile.
+    /// </summary>
+    /// <remarks>
+    /// <b>True even where the folder could not be touched</b>, which is the long-standing rule: the
+    /// instance is still meant to follow this profile and being left drifted is what the notice is
+    /// for. False for the two answers that are not "not now" - the user backing out, and a savegame
+    /// held here that refuses the switch outright. Recording the intent for that second one would
+    /// leave an instance whose standing profile is one its own held farm forbids applying.
+    /// </remarks>
+    public bool RecordsIntent => Status is not (ProfileApplyStatus.Declined or ProfileApplyStatus.Refused);
+
+    /// <summary>
+    /// The savegame whose hold refused this, so a caller that has the list can name it. Null for
+    /// every other status.
+    /// </summary>
+    public Guid? BlockedBySavegameId { get; init; }
 }
 
 
@@ -52,18 +78,24 @@ public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplySta
 /// </remarks>
 public sealed class ProfileApplyService(
     ModSyncService syncService,
+    IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
     IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
-    /// Works out what would change. Returns null where the instance cannot be applied to right now,
-    /// with the reason in <paramref name="unavailable"/>.
+    /// Works out what would change. Returns null where the instance cannot be applied to right now.
     /// </summary>
+    /// <param name="revision">
+    /// Which revision to plan against, or null to let the instance decide - a past savegame held
+    /// there pins the folder to its own revision, and everything else follows head. Named only by the
+    /// check-out dialog, which is previewing the apply for a farm nothing is holding yet.
+    /// </param>
     public async Task<ModSyncPlan?> TryPlanAsync(
         Repo repo,
         LocalInstance instance,
         Guid profileId,
         string? profileName,
+        int? revision,
         CancellationToken cancellationToken)
     {
         if (GetAdapter(repo, instance) is not IInstanceModAdapter adapter)
@@ -74,7 +106,7 @@ public sealed class ProfileApplyService(
         try
         {
             return await syncService.PlanAsync(
-                new ModSyncRequest(instance.Id, adapter, repo.Id, profileId) { ProfileName = profileName },
+                new ModSyncRequest(instance.Id, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -107,11 +139,25 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken)
     {
+        // Asked before anything is planned, because this refusal is not about the folder and reading
+        // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
+        // can get past; this one is the sentence somebody can act on.
+        if (heldSavegames.DecideApply(instance.Id, profileId, revision: null) is { IsAllowed: false } refusal)
+        {
+            return new ProfileApplyOutcome(
+                instance,
+                ProfileApplyStatus.Refused,
+                $"'{instance.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.")
+            {
+                BlockedBySavegameId = refusal.SavegameId
+            };
+        }
+
         ModSyncPlan? plan;
 
         try
         {
-            plan = await TryPlanAsync(repo, instance, profileId, profileName, cancellationToken);
+            plan = await TryPlanAsync(repo, instance, profileId, profileName, revision: null, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -134,7 +180,8 @@ public sealed class ProfileApplyService(
             // re-applying can never clear, while telling the user the folder already matches.
             await syncService.RecordAlreadyMatchedAsync(plan);
 
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches.");
+            return new ProfileApplyOutcome(
+                instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches{Pinned(instance, profileId)}.");
         }
 
         if (confirmPlan && await ConfirmPlanAsync(instance, plan) is false)
@@ -157,7 +204,7 @@ public sealed class ProfileApplyService(
             var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
 
             return result.Completed
-                ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches.")
+                ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches{Pinned(instance, profileId)}.")
                 : new ProfileApplyOutcome(
                     instance,
                     ProfileApplyStatus.Failed,
@@ -242,6 +289,20 @@ public sealed class ProfileApplyService(
     {
         return new SyncProgressRelay(task, inner);
     }
+
+    /// <summary>
+    /// Which revision an apply ended on, said out loud only where it is not the profile's latest.
+    /// </summary>
+    /// <remarks>
+    /// "Now matches" is a sentence about following the profile, and it stops being true on its own
+    /// terms the moment a past savegame pins the folder somewhere behind head. Saying the number is
+    /// what keeps the ordinary case silent and the pinned one honest, without the caller having to
+    /// know a savegame is involved.
+    /// </remarks>
+    private string Pinned(LocalInstance instance, Guid profileId)
+        => heldSavegames.GetRequiredRevision(instance.Id, profileId) is int revision
+            ? $" revision {revision}, which is what the savegame checked out there runs on"
+            : "";
 
     private static IInstanceModAdapter? GetAdapter(Repo repo, LocalInstance instance)
     {

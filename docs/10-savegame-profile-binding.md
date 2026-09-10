@@ -1,12 +1,13 @@
 # 10 — Savegames and profile revisions
 
-*The server half is built, and play attribution with it.* Schema, publish, the swap and the rename
-are in the tree ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)), and so are the two hashes, the
-observation and the revision a sync installs
-([slice 2](PLAN.md#2-play-attribution-on-the-client)). What is still a design is everything that
-*acts* on the attribution — check-out targets, the apply table, the drift rules, the interface. For
-what the client does today see [07 — Mod sync design](07-mod-sync-design.md#drift) and
-[08 — Known issues](08-known-issues.md).
+*Everything but the interface is built.* Schema, publish, the swap and the rename are in the tree
+([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)); the two hashes, the observation and the
+revision a sync installs are ([slice 2](PLAN.md#2-play-attribution-on-the-client)); and so are the
+check-out targets, the apply table, the drift rules and the one-mod-list-per-instance limit
+([slice 3](PLAN.md#3-the-rules)). What is still a design is the [interface](#interface) — the chips,
+the two row actions, the wording of the notices and the three dialogs. The rules those would explain
+already hold; nothing yet explains them, so a refusal reaches the user as a sentence from the engine
+rather than as a button that was never offered.
 
 The application is in early development. Nothing here migrates existing local or server state,
 and no shape below is constrained by what an older client wrote.
@@ -74,6 +75,10 @@ those may be held alongside — bounded only by the slots the adapter offers, an
 
 Stating it this way needs no adapter-capability check. In a repo whose adapter has no mod support
 no savegame has a profile, so nothing is ever limited.
+
+Enforced by `CheckOutAsync` and by `PublishAsync`, before either takes a claim. It had been assumed
+rather than checked until then: nothing but the slot safety check stood between two farms and one mod
+folder, and two farms in two slots never touched it.
 
 A savegame's profile is fixed at publish. **There is no operation that moves a savegame to a
 different profile** — `UpdateSavegameV1Endpoint` becomes a rename. Moving one would make
@@ -219,10 +224,14 @@ A past savegame gets the `(ProfileId, ProfileRevision)` pair from its head versi
 number alone. With no operation that moves a savegame between profiles, that `ProfileId` always
 equals `Savegame.ProfileId`.
 
-`ModSyncService.GetDesiredAsync` used to pass `null` as the revision, which always resolved to head.
-It is `ModSyncRequest.Revision` now — null still means head, and
-`GET repos/{repoId}/profiles/{profileId}/modDependencies?revision=` had served any revision all
-along. What is not built is a caller that asks for one: that is the table above.
+`ModSyncService.GetDesiredAsync` used to pass `null` as the revision, which always resolved to head;
+`GET repos/{repoId}/profiles/{profileId}/modDependencies?revision=` had served any revision all along.
+
+The table is enforced by resolution rather than by every caller reading it. `ModSyncRequest.Revision`
+null means "whatever this instance must be on", and `PlanAsync` resolves it from what the instance is
+holding — so the drift notice's re-apply, the mod list editor's save and the instance page's apply all
+target a past savegame's revision without any of them knowing what a savegame is. The one caller that
+names a number is the check-out dialog, previewing the apply for a farm nothing is holding yet.
 
 ### Two actions, not one
 
@@ -234,9 +243,11 @@ Where the instance is already there — the ordinary case for a current savegame
 that follows its profile — Check out is enabled on arrival and the flow is one click. The second
 click appears only when the mod folder is genuinely wrong.
 
-`SavegameService.CheckOutAsync` is unchanged: mods stay outside it, and no sync is folded into a
-claim. Apply keeps its own dialog, so a plan that would quarantine files the repo does not know
-about is still shown before anything is written.
+**Mods stay outside `SavegameService.CheckOutAsync`**, and no sync is folded into a claim. Apply keeps
+its own dialog, so a plan that would quarantine files the repo does not know about is still shown
+before anything is written. What check-out gained is bookkeeping and a refusal, not a sync: it records
+`TargetRevision` from the savegame's current-or-past state, and it refuses a second savegame that
+claims the same mod folder.
 
 ### Applying to an instance that holds a savegame
 
@@ -259,11 +270,14 @@ state the design expects.
 ### Holding a past savegame is stored state
 
 That an instance holds a past savegame is recorded on the instance, not inferred from revision
-numbers. Two things read it: the apply table above, and the drift check.
+numbers: it is `SavegameCheckoutBinding.TargetRevision`, written at check-out from the savegame's own
+current-or-past state and read back off local state afterwards. Inferring it would need the server's
+answer to "is this still its profile's current farm?", and the two things that read it — the apply
+table above and the drift check — both have to work offline and cost a directory listing.
 
-`InstanceDriftService.Check` already takes the revision and the dependencies to compare against
-as parameters (`currentRevision`, `profileDependencies`), and its callers pass the profile's head.
-For an instance holding a past savegame they pass **the revision that savegame targets** instead.
+`InstanceDriftService.Check` already took the revision and the dependencies to compare against as
+parameters (`currentRevision`, `profileDependencies`), and its callers passed the profile's head. For
+an instance holding a past savegame they pass **the revision that savegame targets** instead.
 
 Nothing in the drift check is suppressed. `profileHasMoved` compares the applied revision against
 the targeted one and finds them equal; `CompareProfile` diffs the manifest against that revision's
@@ -569,10 +583,10 @@ A past savegame's revision therefore stays reproducible with no further guarante
 `SavegameDriftKind.PlayedOnAnotherModList` is retained, and its rule changes what it compares
 against.
 
-`SavegameDriftRules.HasMovedOffItsModList` currently compares the binding's revision — the one
-check-out applied — against the applied one. That fires on the ordinary follow-the-profile flow:
-the farm is checked out at rev 1000, the profile is applied at rev 1004, and the two numbers
-differ because the farm is following its profile exactly as intended.
+`SavegameDriftRules.HasMovedOffItsModList` used to compare the binding's revision — the one check-out
+applied — against the applied one. That fired on the ordinary follow-the-profile flow: the farm is
+checked out at rev 1000, the profile is applied at rev 1004, and the two numbers differ because the
+farm is following its profile exactly as intended.
 
 It compares against the savegame's **target** instead:
 
@@ -585,6 +599,13 @@ It compares against the savegame's **target** instead:
 
 The binding's `ProfileRevision` is then read for play attribution only, and by nothing that
 decides drift.
+
+`TargetRevision` is this machine's record of what the server said at check-out, and the server can
+move underneath it: somebody else publishing to this profile supersedes the farm held here, and the
+binding goes on calling it current. The cost is one apply to head that should have been an apply to a
+pin, which the drift check then reports as having left its mod list. Reconciling the binding against
+a freshly fetched savegame list belongs to whatever loads that list, which is the
+[interface](#interface).
 
 ### A savegame never targets a revision older than it was played on
 

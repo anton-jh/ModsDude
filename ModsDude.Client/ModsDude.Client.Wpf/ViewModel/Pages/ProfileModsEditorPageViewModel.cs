@@ -1201,7 +1201,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             progress: null,
             cancellationToken);
 
-        if (outcome.Status is not ProfileApplyStatus.Declined)
+        if (outcome.RecordsIntent)
         {
             _localInstanceRepository.SetActiveProfile(instance, _activeProfile);
             RefreshApplyTargets();

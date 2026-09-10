@@ -81,6 +81,27 @@ public readonly record struct SavegameCheckoutBinding(
     }
 
     /// <summary>
+    /// The revision of <see cref="ProfileId"/> this savegame runs on, or null where it follows
+    /// whatever the profile's head is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A number here is the whole of "this instance is holding a past savegame".</b> Stored rather
+    /// than inferred from revision numbers, because inferring it needs the server's answer to "is this
+    /// still its profile's current farm?" and the two things that read it - the apply table and the
+    /// drift check - both have to work offline and cost a directory listing.
+    /// </para>
+    /// <para>
+    /// <b>Not <see cref="ProfileRevision"/>, which it happens to equal at check-out.</b> That one is
+    /// what the held version was <em>played</em> on and belongs to play attribution; this is what the
+    /// mod folder has to be on and belongs to the rules. A current savegame's are already different -
+    /// it was played on some older revision and runs on head - and nothing that decides drift reads
+    /// the other.
+    /// </para>
+    /// </remarks>
+    public int? TargetRevision { get; init; }
+
+    /// <summary>
     /// The newest profile revision play has actually been observed on, or null until any has been.
     /// </summary>
     /// <remarks>

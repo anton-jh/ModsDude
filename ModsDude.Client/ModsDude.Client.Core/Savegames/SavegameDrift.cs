@@ -34,10 +34,16 @@ public enum SavegameDriftKind
     TakenOverAndCheckedIn,
 
     /// <summary>
-    /// The save was checked out against a mod list this folder is no longer on - either the profile
-    /// moved, or the instance was applied to a different profile entirely. The case that corrupts
-    /// saves, and the reason the locking exists at all.
+    /// The folder is not on the mod list this save runs on - the instance was applied to a different
+    /// profile entirely, or a past savegame's folder was moved off the revision it is pinned to. The
+    /// case that corrupts saves, and the reason the locking exists at all.
     /// </summary>
+    /// <remarks>
+    /// <b>Not "the profile moved".</b> A current savegame follows its profile, so head moving ahead of
+    /// the folder is the instance being behind - which <c>profileHasMoved</c> already reports, at the
+    /// level it belongs to. Saying it here as well would fire this on the ordinary
+    /// check-out-then-apply flow and spend the loudest warning in the app on the intended case.
+    /// </remarks>
     PlayedOnAnotherModList
 }
 
@@ -66,6 +72,17 @@ public sealed record SavegameDrift(
 
     /// <summary>The revision the mod folder is actually on, from the sync manifest.</summary>
     public int? AppliedRevision { get; init; }
+
+    /// <summary>
+    /// The revision this save runs on, where it pins one - a past savegame's. Null for a current one,
+    /// which follows its profile and pins nothing.
+    /// </summary>
+    /// <remarks>
+    /// What a re-apply offered from the notice has to target. Head is the wrong answer for a past
+    /// savegame and the apply table refuses it, so a notice that could not name this number would be
+    /// offering a button that fails.
+    /// </remarks>
+    public int? TargetRevision { get; init; }
 }
 
 
@@ -154,21 +171,30 @@ public static class SavegameDriftRules
 
 
     /// <summary>
-    /// Whether the folder this save is sitting in still runs the mod list it was checked out against.
+    /// Whether the folder this save is sitting in still runs the mod list the save runs on.
     /// </summary>
     /// <remarks>
-    /// <b>Costs no I/O at all</b>, which is why it is worth having: both numbers are already on disk
-    /// in local state, so this one fires for a save the user has not touched, on a machine that is
+    /// <para>
+    /// <b>Against the savegame's target, never against the revision it was checked out at.</b> Those
+    /// differ on the ordinary flow - a farm checked out at rev 1000 on a profile applied at rev 1004
+    /// is a farm following its profile exactly as intended - and comparing the check-out value would
+    /// report that as the state that corrupts saves. The binding's <c>ProfileRevision</c> is read for
+    /// play attribution and by nothing that decides drift.
+    /// </para>
+    /// <para>
+    /// <b>Costs no I/O at all</b>, which is why it is worth having: both facts are already on disk in
+    /// local state, so this one fires for a save the user has not touched, on a machine that is
     /// offline, before anything has been hashed.
+    /// </para>
     /// </remarks>
     private static bool HasMovedOffItsModList(
         SavegameCheckoutBinding binding,
         Guid? appliedProfileId,
         int? appliedRevision)
     {
-        // A binding written before the revision was recorded, or a folder that has never been
-        // synced, leaves the question unasked. Neither is evidence of anything.
-        if (binding.ProfileRevision is not int played || appliedRevision is not int applied)
+        // A savegame claiming no mod list has none for the folder to be off, and a folder that has
+        // never been synced leaves the question unasked. Neither is evidence of anything.
+        if (binding.ProfileId is not Guid profileId || appliedProfileId is not Guid appliedProfile)
         {
             return false;
         }
@@ -176,11 +202,20 @@ public static class SavegameDriftRules
         // Two revision numbers of two different profiles are not comparable at all: revision 6 of
         // 'Season 4' and revision 6 of 'Vanilla' are different mod lists that happen to share an
         // integer. A different profile is therefore drift on its own, without looking at the numbers.
-        if (binding.ProfileId is Guid playedProfile && appliedProfileId is Guid appliedProfile)
+        if (profileId != appliedProfile)
         {
-            return playedProfile != appliedProfile || played != applied;
+            return true;
         }
 
-        return played != applied;
+        // A current savegame pins nothing: it runs on whatever its profile says now, and the folder
+        // being behind head is the instance's business rather than this save's.
+        if (binding.TargetRevision is not int pinned)
+        {
+            return false;
+        }
+
+        // A past savegame's revision does not move, and the apply table forbids moving it - so a
+        // mismatch here is an interrupted sync or discarded local state, not somebody's choice.
+        return appliedRevision is int applied && applied != pinned;
     }
 }

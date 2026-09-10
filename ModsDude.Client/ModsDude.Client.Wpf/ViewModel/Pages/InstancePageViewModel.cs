@@ -199,7 +199,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
             // The intent is recorded even where the folder could not be touched: the instance is still
             // meant to follow this profile, and being left drifted is what the notice is for.
-            if (outcome.Status is not ProfileApplyStatus.Declined)
+            if (outcome.RecordsIntent)
             {
                 _localInstanceRepository.SetActiveProfile(_instance, option.Value);
                 HasDanglingActiveProfile = false;

@@ -69,15 +69,17 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
 
 
 /// <summary>
-/// The half of the savegame engine the mod sync engine needs: play in a held slot has to be
-/// attributed before an apply moves the folder to another revision.
+/// What the savegames an instance is holding are to everything that is <em>not</em> the savegame
+/// engine: a mod folder that may not be moved without the play in it being attributed first, one that
+/// may not be moved at all, and a slot worth telling somebody about.
 /// </summary>
 /// <remarks>
-/// A seam of one method for the same reason <see cref="IInstanceModFolders"/> is one: the sync engine
-/// depends on the single fact it uses rather than on the savegame client, and it can be exercised
-/// without a signed-in one. It is the whole of what sync knows about savegames.
+/// A seam for the same reason <see cref="IInstanceModFolders"/> and <see cref="IProfileRevisions"/>
+/// are: the sync engine and the drift monitor depend on the facts they actually use rather than on
+/// the savegame client, and both can be exercised without a signed-in one. It is the whole of what
+/// either of them knows about savegames.
 /// </remarks>
-public interface ISavegamePlayObserver
+public interface IHeldSavegames
 {
     /// <summary>
     /// Looks at every slot this instance is holding and, where the bytes have moved since the last
@@ -97,6 +99,22 @@ public interface ISavegamePlayObserver
     /// </para>
     /// </remarks>
     Task ObserveAsync(Guid instanceId, CancellationToken ct);
+
+    /// <inheritdoc cref="SavegameHoldRules.RequiredRevision"/>
+    int? GetRequiredRevision(Guid instanceId, Guid profileId);
+
+    /// <inheritdoc cref="SavegameHoldRules.DecideApply"/>
+    SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision);
+
+    /// <summary>
+    /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the id rather than the instance because the drift monitor walks
+    /// <see cref="DriftCandidate"/>s, which exist for instances no loaded repo serves. One of those
+    /// reports nothing, quietly.
+    /// </remarks>
+    Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct);
 }
 
 
@@ -119,7 +137,7 @@ public interface ISavegamePlayObserver
 /// mod half needs asked.
 /// </para>
 /// </remarks>
-public interface ISavegameService : ISavegamePlayObserver
+public interface ISavegameService : IHeldSavegames
 {
     /// <summary>Every slot this instance has, occupied or not, in the order a picker should show them.</summary>
     Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(LocalInstance instance, CancellationToken ct);
@@ -202,16 +220,6 @@ public interface ISavegameService : ISavegamePlayObserver
 
     /// <summary>Everything this instance currently holds. Short by construction.</summary>
     IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance);
-
-    /// <summary>
-    /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
-    /// </summary>
-    /// <remarks>
-    /// Keyed on the id rather than the instance because the drift monitor walks
-    /// <see cref="DriftCandidate"/>s, which exist for instances no loaded repo serves. One of those
-    /// reports nothing, quietly.
-    /// </remarks>
-    Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct);
 }
 
 
@@ -263,6 +271,36 @@ public sealed class SavegameService(
 
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance)
         => bindings.GetBindings(instance.Id);
+
+    public int? GetRequiredRevision(Guid instanceId, Guid profileId)
+        => SavegameHoldRules.RequiredRevision(bindings.GetBindings(instanceId), profileId);
+
+    public SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision)
+        => SavegameHoldRules.DecideApply(bindings.GetBindings(instanceId), profileId, revision);
+
+    /// <summary>
+    /// Which revision of its profile a savegame runs on: <b>head for a current one, its own pinned
+    /// revision for a past one</b>, and nothing for one that follows no mod list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Static and public because the check-out dialog needs the answer for a savegame this machine is
+    /// not holding yet, and it must be the same answer the binding will carry a moment later. Two
+    /// computations of "which list does this farm run on" is how a preview comes to describe a
+    /// different apply from the one that runs.
+    /// </para>
+    /// <para>
+    /// <b>The head version's revision is not the answer for a current savegame.</b> It names the last
+    /// list the farm was <em>played</em> on, which is older than head whenever anybody has edited the
+    /// profile since - and a current savegame follows its profile, which is what current means.
+    /// Preparing the mod list before a session and then checking the farm out is the ordinary case,
+    /// and it must not be undone by the check-out.
+    /// </para>
+    /// </remarks>
+    public static int? TargetRevisionOf(SavegameDto savegame)
+        // Superseded implies a profile - the server refuses the other pairing - so this needs no
+        // separate check for one.
+        => savegame.SupersededAt is null ? null : savegame.Head?.ProfileRevision;
 
     public bool Forget(LocalInstance instance, Guid savegameId)
     {
@@ -336,7 +374,10 @@ public sealed class SavegameService(
     /// you already hold is not a conflict.
     /// </para>
     /// </remarks>
-    /// <exception cref="UserFriendlyException">The slot holds play nobody has checked in.</exception>
+    /// <exception cref="UserFriendlyException">
+    /// The slot holds play nobody has checked in, or this instance already holds a savegame that
+    /// claims its mod folder.
+    /// </exception>
     public async Task CheckOutAsync(LocalInstance instance, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct)
     {
         var adapter = RequireAdapter(instance);
@@ -344,6 +385,11 @@ public sealed class SavegameService(
             ?? throw new UserFriendlyException(
                 $"'{savegame.Name}' has nothing to check out",
                 $"Savegame '{savegame.Id}' has no head version, so there is nothing to write into a slot.");
+
+        // Read off the version rather than the savegame, because that is what the binding will record
+        // a moment later and the limit has to count what the binding claims. The server keeps the two
+        // in step - a version's profile is its savegame's - so they cannot disagree.
+        EnsureModFolderIsFree(instance, savegame.Id, head.ProfileId, savegame.Name);
 
         await EnsureWritable(instance, adapter, slot, savegame.Name, ct);
 
@@ -364,6 +410,10 @@ public sealed class SavegameService(
         {
             ProfileId = head.ProfileId,
             ProfileRevision = head.ProfileRevision,
+            // What the mod folder now has to be on, decided here because this is the last moment the
+            // savegame's own current-or-past state is in hand. Everything afterwards - the apply, the
+            // drift check - reads it back off the binding and never asks the server again.
+            TargetRevision = TargetRevisionOf(savegame),
             // The bytes just written are the first observation, and nothing has been played on
             // anything yet - which is what makes a check-in that follows immediately record the
             // folder's own revision rather than inventing a session that never happened.
@@ -535,7 +585,10 @@ public sealed class SavegameService(
     /// to ask.
     /// </para>
     /// </remarks>
-    /// <exception cref="UserFriendlyException">The instance has never had a profile applied to it.</exception>
+    /// <exception cref="UserFriendlyException">
+    /// The instance has never had a profile applied to it, or it already holds a savegame that claims
+    /// its mod folder.
+    /// </exception>
     public async Task<SavegameDto> PublishAsync(LocalInstance instance, SavegameSlotId slot, string name, string? label, CancellationToken ct)
     {
         var adapter = RequireAdapter(instance);
@@ -549,6 +602,12 @@ public sealed class SavegameService(
 
         var revision = RequireAppliedRevision(instance, active);
         var savegameId = Guid.NewGuid();
+
+        // The check-out limit reached from the other end rather than a rule of its own: a publish
+        // opens a claim in the same transaction as the savegame, so it leaves this instance holding
+        // one - and it is publishing *to a profile*, which is the half that claims the mod folder.
+        EnsureModFolderIsFree(instance, savegameId, active.ProfileId, name);
+
         var packed = await packer.PackAsync(adapter, slot, ct);
 
         var details = await DescribeAsync(adapter, slot, ct);
@@ -589,6 +648,10 @@ public sealed class SavegameService(
         {
             ProfileId = active.ProfileId,
             ProfileRevision = revision,
+            // Null, not the revision just declared: publishing to a profile makes this its current
+            // savegame - superseding whatever was - and a current savegame follows its profile from
+            // then on rather than staying where it was published.
+            TargetRevision = null,
             // The same clean slate a check-out leaves. The bytes in the slot are what was just
             // published, and whatever produced them happened before ModsDude saw this save at all -
             // which is why the first version's revision is declared rather than observed.
@@ -729,7 +792,8 @@ public sealed class SavegameService(
                 HeldVersion = binding.Version,
                 HeadVersion = head,
                 PlayedRevision = binding.ProfileRevision,
-                AppliedRevision = manifest?.ProfileRevision
+                AppliedRevision = manifest?.ProfileRevision,
+                TargetRevision = binding.TargetRevision
             }));
         }
 
@@ -806,6 +870,40 @@ public sealed class SavegameService(
         var manifest = manifestStore.TryRead(instanceId);
 
         return Observe(instanceId, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// Refuses to take a second savegame that claims this instance's mod folder.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The limit is about the folder, not about savegames.</b> One mod folder can only be on one
+    /// revision, so two farms following two mod lists cannot both be played out of one instance - and
+    /// that is the whole of the reason. A savegame with no profile makes no claim on the folder, so it
+    /// neither counts nor is counted against; any number of those may be held at once.
+    /// </para>
+    /// <para>
+    /// Refused here rather than only in the interface, because the interface is where it is
+    /// <em>explained</em> and this is where it is true. The claim is taken on the server a moment
+    /// later, and a claim taken for a check-out that then refuses itself is one somebody has to
+    /// discard by hand.
+    /// </para>
+    /// </remarks>
+    private void EnsureModFolderIsFree(LocalInstance instance, Guid savegameId, Guid? profileId, string savegameName)
+    {
+        if (profileId is null)
+        {
+            return;
+        }
+
+        if (SavegameHoldRules.FindConflictingHold(bindings.GetBindings(instance.Id), savegameId) is not SavegameCheckoutBinding blocking)
+        {
+            return;
+        }
+
+        throw new UserFriendlyException(
+            $"'{instance.Name}' is already holding a savegame",
+            $"Savegame '{blocking.SavegameId}' is checked out in instance '{instance.Id}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
     }
 
     /// <summary>

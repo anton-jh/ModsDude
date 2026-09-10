@@ -100,15 +100,29 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// The case that corrupts saves, and the reason the locking exists at all - and it costs no I/O
-    /// whatsoever, because both numbers are already in local state.
+    /// A past savegame's revision does not move, and the apply table forbids moving it - so a folder
+    /// that is off it is an interrupted sync or discarded local state rather than anybody's choice.
+    /// The case that corrupts saves, and it costs no I/O whatsoever: both numbers are already in local
+    /// state.
     /// </summary>
     [Fact]
-    public void A_folder_on_another_revision_than_the_save_was_checked_out_on_is_drift()
+    public void A_past_savegame_whose_folder_left_its_revision_is_drift()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(revision: 6), "aaaa", headVersion: 4, _profileId, appliedRevision: 8);
+        var kinds = SavegameDriftRules.Classify(Binding(target: 6), "aaaa", headVersion: 4, _profileId, appliedRevision: 8);
 
         Assert.Equal([SavegameDriftKind.PlayedOnAnotherModList], kinds);
+    }
+
+    /// <summary>
+    /// <b>The false alarm this rule used to fire.</b> A farm checked out at revision 6 whose profile is
+    /// then applied at revision 8 is a farm following its profile exactly as intended - that is what
+    /// current means - and reporting it here spends the app's loudest warning on the ordinary flow.
+    /// Being behind head is the instance's business, and <c>profileHasMoved</c> already says it there.
+    /// </summary>
+    [Fact]
+    public void A_current_savegame_whose_profile_moved_underneath_it_is_not_this_drift()
+    {
+        Assert.Empty(SavegameDriftRules.Classify(Binding(revision: 6), "aaaa", headVersion: 4, _profileId, appliedRevision: 8));
     }
 
     /// <summary>
@@ -199,18 +213,33 @@ public class SavegameDriftTests
     /// local state. It is the reason this state is worth having at all.
     /// </summary>
     [Fact]
-    public async Task A_folder_re_synced_onto_another_revision_is_reported()
+    public async Task A_past_savegame_whose_folder_was_re_synced_off_its_revision_is_reported()
+    {
+        using var harness = new DriftHarness();
+
+        harness.Hold(await harness.WriteAndHashAsync("a farm"), revision: 6, target: 6);
+        harness.WriteManifest(revision: 8);
+
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
+
+        Assert.Equal(SavegameDriftKind.PlayedOnAnotherModList, drift.Kind);
+        Assert.Equal(6, drift.TargetRevision);
+        Assert.Equal(8, drift.AppliedRevision);
+    }
+
+    /// <summary>
+    /// The same two integers for a savegame that is its profile's current farm say nothing at all: it
+    /// follows the profile, so the folder moving to a newer revision of it is the intended flow.
+    /// </summary>
+    [Fact]
+    public async Task A_current_savegame_whose_folder_moved_to_a_newer_revision_reports_nothing()
     {
         using var harness = new DriftHarness();
 
         harness.Hold(await harness.WriteAndHashAsync("a farm"), revision: 6);
         harness.WriteManifest(revision: 8);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
-
-        Assert.Equal(SavegameDriftKind.PlayedOnAnotherModList, drift.Kind);
-        Assert.Equal(6, drift.PlayedRevision);
-        Assert.Equal(8, drift.AppliedRevision);
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
     }
 
     /// <summary>
@@ -260,7 +289,12 @@ public class SavegameDriftTests
     }
 
 
-    private static SavegameCheckoutBinding Binding(int version = 4, string hash = "aaaa", int? revision = 6) => new(
+    /// <param name="target">
+    /// What the savegame runs on. A number is a past savegame, pinned; null is a current one, which
+    /// follows its profile and pins nothing.
+    /// </param>
+    private static SavegameCheckoutBinding Binding(
+        int version = 4, string hash = "aaaa", int? revision = 6, int? target = null) => new(
         _repoId,
         _savegameId,
         _slot.Value,
@@ -269,7 +303,8 @@ public class SavegameDriftTests
         DateTime.UtcNow)
     {
         ProfileId = _profileId,
-        ProfileRevision = revision
+        ProfileRevision = revision,
+        TargetRevision = target
     };
 
 
@@ -342,7 +377,8 @@ public class SavegameDriftTests
         });
 
         /// <summary>Records that this machine holds the savegame in the slot, at a known hash.</summary>
-        public void Hold(string contentHash, int version = 1, int revision = 6)
+        /// <param name="target">A number makes it a past savegame, pinned to that revision.</param>
+        public void Hold(string contentHash, int version = 1, int revision = 6, int? target = null)
             => _bindings.SetBinding(Instance.Id, new SavegameCheckoutBinding(
                 _repoId,
                 _savegameId,
@@ -352,7 +388,8 @@ public class SavegameDriftTests
                 DateTime.UtcNow)
             {
                 ProfileId = _profileId,
-                ProfileRevision = revision
+                ProfileRevision = revision,
+                TargetRevision = target
             });
 
         /// <summary>Writes the slot and returns what the packer says it hashes to.</summary>

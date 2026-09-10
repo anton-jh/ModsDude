@@ -66,6 +66,48 @@ public class InstanceDriftMonitorTests
     }
 
     /// <summary>
+    /// An instance holding a past savegame is behind head <em>by construction</em> - that farm's
+    /// revision does not move - so comparing it against head would report drift permanently, and offer
+    /// a re-apply to head that the apply table refuses. The comparison is against the revision the
+    /// savegame targets instead, and nothing is suppressed to achieve it: it comes out equal on its
+    /// own.
+    /// </summary>
+    [Fact]
+    public void An_instance_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(4, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 1004;
+        fixture.Held.Hold(fixture.Candidates.InstanceId, _profileId, targetRevision: 4);
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    /// <summary>
+    /// Folder drift under a past savegame still reports, and against that savegame's revision - the
+    /// re-apply it offers has to target the list the farm needs rather than head.
+    /// </summary>
+    [Fact]
+    public void Folder_drift_under_a_past_savegame_still_reports_against_its_revision()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(4, ("fs25_a.zip", "one"));
+
+        fixture.Revisions.Head = 1004;
+        fixture.Held.Hold(fixture.Candidates.InstanceId, _profileId, targetRevision: 4);
+        fixture.Folder.WriteFile("fs25_b.zip", "two");
+        fixture.Monitor.Check();
+
+        var drift = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(["fs25_b.zip"], drift.Report.Added);
+        Assert.False(drift.Report.ProfileHasMoved);
+        Assert.Equal(4, drift.Report.CurrentRevision);
+    }
+
+    /// <summary>
     /// The client holds one repo's profiles at a time, so the head is unknown for every other repo -
     /// and unknown has to read as "not asked" rather than as "unchanged" or as drift.
     /// </summary>
@@ -417,7 +459,9 @@ public class InstanceDriftMonitorTests
                     NullLogger<StoreIntegrityService>.Instance);
             }
 
-            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time, storeIntegrity: Integrity);
+            Held = new FakeHeldSavegames(Manifests);
+
+            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
         }
 
 
@@ -433,6 +477,9 @@ public class InstanceDriftMonitorTests
 
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();
+
+        /// <summary>Holding nothing by default, which is nearly every instance nearly all the time.</summary>
+        public FakeHeldSavegames Held { get; }
 
         public InstanceDriftMonitor Monitor { get; }
 

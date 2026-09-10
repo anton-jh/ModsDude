@@ -61,18 +61,29 @@ public class SavegameServiceTests
     /// The refusal that is the point of the whole safety check. The slot holds an evening that exists
     /// nowhere else, and the remedy is to check that savegame in - which is an action, not a warning.
     /// </summary>
+    /// <remarks>
+    /// The savegame being taken follows no mod list, so the folder limit has nothing to say about it
+    /// and this is the slot check refusing on its own. A second one that <em>did</em> claim the folder
+    /// would be refused a step earlier, for a different reason - see the test below.
+    /// </remarks>
     [Fact]
     public async Task Checking_out_over_unpublished_play_is_refused_before_the_claim_is_taken()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a farm");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         // An evening in the slot: the contents no longer hash to what was written there.
         harness.WriteSlotFile(_slot1, "a farm, and a barn");
 
-        var other = harness.Server.Savegame with { Id = Guid.NewGuid(), Name = "Season 5" };
+        var other = harness.Server.Savegame with
+        {
+            Id = Guid.NewGuid(),
+            Name = "Season 5",
+            ProfileId = null,
+            Head = head with { ProfileId = null, ProfileRevision = null }
+        };
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.Service.CheckOutAsync(harness.Instance, other, _slot1, CancellationToken.None));
@@ -83,6 +94,146 @@ public class SavegameServiceTests
         // and the slot still holds the evening.
         Assert.Equal(1, harness.Server.CheckoutsTaken);
         Assert.Equal("a farm, and a barn", harness.ReadSlotFile(_slot1));
+    }
+
+    /// <summary>
+    /// A current savegame follows its profile, so it pins the mod folder to nothing and the apply that
+    /// comes after the check-out installs head. The head version's revision is emphatically not the
+    /// answer: it names the last list this farm was <em>played</em> on, which is older than head
+    /// whenever anybody has edited the profile since - which is the ordinary case, since preparing the
+    /// mod list and then checking the farm out is how a session starts.
+    /// </summary>
+    [Fact]
+    public async Task Checking_out_the_profiles_current_savegame_pins_the_mod_folder_to_nothing()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Null(harness.Binding(harness.Server.SavegameId).TargetRevision);
+        Assert.Null(harness.Service.GetRequiredRevision(harness.Instance.Id, harness.ProfileId));
+    }
+
+    /// <summary>
+    /// A past savegame's revision does not move, so checking one out is what makes its instance hold a
+    /// mod folder pinned to that revision. Recorded on the binding rather than worked out later:
+    /// asking the server whether this is still its profile's current farm is a network call in an apply
+    /// rule and a drift check that both have to work offline.
+    /// </summary>
+    [Fact]
+    public async Task Checking_out_a_past_savegame_pins_the_mod_folder_to_its_own_revision()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+
+        harness.Server.Supersede();
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(4, harness.Binding(harness.Server.SavegameId).TargetRevision);
+        Assert.Equal(4, harness.Service.GetRequiredRevision(harness.Instance.Id, harness.ProfileId));
+
+        // And the apply table now says head is not on offer for this instance.
+        Assert.Equal(
+            SavegameApplyRefusal.PastSavegameIsHeld,
+            harness.Service.DecideApply(harness.Instance.Id, harness.ProfileId, 1004).Refusal);
+    }
+
+    /// <summary>
+    /// Publishing to a profile makes the new farm its current one - superseding whatever was - so it
+    /// follows the profile from then on rather than staying on the revision it was published at.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_leaves_the_mod_folder_pinned_to_nothing()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+
+        harness.WriteSlotFile(_slot1, "a brand new farm");
+
+        var savegame = await harness.Service.PublishAsync(harness.Instance, _slot1, "Season 5", null, CancellationToken.None);
+
+        Assert.Equal(4, Assert.Single(harness.Server.Publishes).ProfileRevision);
+        Assert.Null(harness.Binding(savegame.Id).TargetRevision);
+    }
+
+    /// <summary>
+    /// One mod folder can only be on one revision, so two farms following two mod lists cannot both be
+    /// played out of one instance. Refused before the claim and before the slot is even looked at:
+    /// this costs a list read, and a claim taken for a check-out that then refuses itself is one
+    /// somebody has to discard by hand.
+    /// </summary>
+    [Fact]
+    public async Task A_second_savegame_that_claims_the_mod_folder_is_refused()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a farm");
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        var other = harness.Server.Savegame with { Id = Guid.NewGuid(), Name = "Season 5" };
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.Service.CheckOutAsync(harness.Instance, other, _slot2, CancellationToken.None));
+
+        Assert.Contains("already holding a savegame", exception.UserMessage);
+
+        // The free slot is still free, and nothing was claimed.
+        Assert.Equal(1, harness.Server.CheckoutsTaken);
+        Assert.Equal(SavegameSlotAvailability.Free, await harness.Service.ClassifySlotAsync(harness.Instance, _slot2, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The same limit reached from the other side rather than a rule of its own: a publish opens a
+    /// claim in the same transaction as the savegame, so publishing to a profile would leave this
+    /// instance holding two farms that both want its mod folder.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_to_a_profile_while_a_savegame_is_held_is_refused()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a farm");
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot2, "a brand new farm");
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.Service.PublishAsync(harness.Instance, _slot2, "Season 5", null, CancellationToken.None));
+
+        Assert.Contains("already holding a savegame", exception.UserMessage);
+
+        // Refused before the bytes were packed, so nothing was uploaded and no orphan blob was left
+        // for the reclamation sweep.
+        Assert.Empty(harness.Server.Publishes);
+        Assert.Equal(0, harness.Uploader.Uploads);
+    }
+
+    /// <summary>
+    /// The limit counts mod lists, not savegames. A savegame following none makes no claim on the
+    /// folder and cannot conflict with anything, so any number may be held alongside - which is also
+    /// what makes the limit vacuous in a repo whose adapter has no mods, with no capability check
+    /// anywhere.
+    /// </summary>
+    [Fact]
+    public async Task A_savegame_with_no_profile_may_be_held_beside_one_that_has_one()
+    {
+        using var harness = new Harness();
+        var head = await harness.SeedHeadAsync("a farm");
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        var unmanaged = harness.Server.Savegame with
+        {
+            Id = Guid.NewGuid(),
+            Name = "A farm of my own",
+            ProfileId = null,
+            Head = head with { ProfileId = null, ProfileRevision = null }
+        };
+
+        await harness.Service.CheckOutAsync(harness.Instance, unmanaged, _slot2, CancellationToken.None);
+
+        Assert.Equal(2, harness.Service.GetBindings(harness.Instance).Count);
     }
 
     [Fact]
@@ -600,12 +751,11 @@ public class SavegameServiceTests
 
         await harness.ApplyAsync(1004);
 
-        var kinds = (await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None))
-            .Select(x => x.Kind);
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
 
-        // Contains rather than Single: the folder is on 1004 and the binding still names 4, which is
-        // the follow-the-profile drift the check-out targets have yet to narrow.
-        Assert.Contains(SavegameDriftKind.UncheckedInPlay, kinds);
+        // One kind and not two: the folder is on 1004 and the binding was checked out at 4, which is
+        // this farm following its profile rather than leaving its mod list.
+        Assert.Equal(SavegameDriftKind.UncheckedInPlay, drift.Kind);
     }
 
     /// <summary>

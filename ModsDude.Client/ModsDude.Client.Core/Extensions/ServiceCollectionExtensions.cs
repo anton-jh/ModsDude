@@ -48,10 +48,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<Savegames.IInstanceSavegameAdapters, Savegames.RepoSavegameAdapters>();
         services.AddSingleton<Savegames.ISavegameService, Savegames.SavegameService>();
 
-        // The one fact the sync engine knows about savegames, resolved to the same instance rather
-        // than to a second engine: play has to be attributed before an apply moves the manifest, and
-        // an observer with its own binding store would attribute it to a copy nobody reads.
-        services.AddSingleton<Savegames.ISavegamePlayObserver>(sp => sp.GetRequiredService<Savegames.ISavegameService>());
+        // What the sync engine knows about savegames, resolved to the same instance rather than to a
+        // second engine: play has to be attributed before an apply moves the manifest, and a seam
+        // with its own binding store would attribute it to a copy nobody reads - and would answer
+        // the apply table from a set of holds nobody took.
+        services.AddSingleton<Savegames.IHeldSavegames>(sp => sp.GetRequiredService<Savegames.ISavegameService>());
 
         // One per app: the drift answer is app-level, and every view reads the same one.
         services.AddSingleton<InstanceDriftMonitor>();

@@ -278,19 +278,40 @@ internal sealed class FakeInstanceModFolders(params InstanceModFolder[] folders)
 
 
 /// <summary>
-/// The savegame engine's one duty to sync, reduced to what the ordering guarantees: it records the
-/// revision the manifest said this folder was on at the moment it was asked.
+/// What the sync engine knows about savegames, over a list of holds a test writes directly.
 /// </summary>
 /// <remarks>
-/// Reading the manifest here rather than counting calls is the point. "Observed before the manifest
-/// was rewritten" is not a fact about call order that a test can see from outside - it is a fact
-/// about which revision the observer could still have read, and that is the number play gets
-/// attributed to.
+/// <para>
+/// The rules themselves are not faked - <see cref="SavegameHoldRules"/> is pure and is the same code
+/// the app runs, so a test that stubbed the answers would prove only that the stub was consulted.
+/// What is replaced is the binding store behind them.
+/// </para>
+/// <para>
+/// The observation records the revision the manifest said this folder was on at the moment it was
+/// asked, which is the whole of what the ordering guarantees. Reading the manifest rather than
+/// counting calls is the point: "observed before the manifest was rewritten" is not a fact about call
+/// order that a test can see from outside - it is a fact about which revision the observer could
+/// still have read, and that is the number play gets attributed to.
+/// </para>
 /// </remarks>
-internal sealed class FakeSavegamePlayObserver(SyncManifestStore manifests) : ISavegamePlayObserver
+internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSavegames
 {
+    private readonly List<SavegameCheckoutBinding> _held = [];
+
+
     /// <summary>What the folder was on at each observation, oldest first. Null is "never synced".</summary>
     public List<int?> Observed { get; } = [];
+
+
+    /// <summary>
+    /// Records that this instance is holding a savegame following one profile.
+    /// </summary>
+    /// <param name="targetRevision">A number makes it past, pinned there; null makes it current.</param>
+    public void Hold(Guid instanceId, Guid profileId, int? targetRevision = null)
+        => Add(profileId, targetRevision);
+
+    /// <summary>One following no mod list, which claims nothing about the folder.</summary>
+    public void HoldWithNoProfile(Guid instanceId) => Add(null, null);
 
 
     public Task ObserveAsync(Guid instanceId, CancellationToken ct)
@@ -299,6 +320,29 @@ internal sealed class FakeSavegamePlayObserver(SyncManifestStore manifests) : IS
 
         return Task.CompletedTask;
     }
+
+    public int? GetRequiredRevision(Guid instanceId, Guid profileId)
+        => SavegameHoldRules.RequiredRevision(_held, profileId);
+
+    public SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision)
+        => SavegameHoldRules.DecideApply(_held, profileId, revision);
+
+    /// <summary>
+    /// Nothing: what the notice says about a held slot is <see cref="SavegameDriftRules"/>'s and is
+    /// exercised where that lives. A hold recorded here is about the mod folder, not about the slot.
+    /// </summary>
+    public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<SavegameDrift>>([]);
+
+
+    private void Add(Guid? profileId, int? targetRevision)
+        => _held.Add(new SavegameCheckoutBinding(
+            Guid.NewGuid(), Guid.NewGuid(), "savegame1", 1, "aaaa", DateTime.UtcNow)
+        {
+            ProfileId = profileId,
+            ProfileRevision = targetRevision ?? 1,
+            TargetRevision = targetRevision
+        });
 }
 
 

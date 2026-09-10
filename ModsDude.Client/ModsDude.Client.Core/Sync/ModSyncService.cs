@@ -20,14 +20,15 @@ public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter
     public string? ProfileName { get; init; }
 
     /// <summary>
-    /// Which revision of the profile to install, or null for whatever its head is now.
+    /// Which revision of the profile to install, or null to let the instance's own state decide.
     /// </summary>
     /// <remarks>
-    /// Head is the ordinary answer and the one an instance following its profile always wants. A
-    /// number is for an instance that is pinned to an older list and has to stay there - an
-    /// instance holding a past savegame, whose revision does not move - where applying head would
-    /// silently take the farm off the mod list it runs on. The repo has served any revision all
-    /// along; only this client insisted on head.
+    /// <b>Null is the ordinary answer and the one nearly every caller gives.</b> It resolves to the
+    /// revision a past savegame held here pins the folder to, and to the profile's head where nothing
+    /// pins it - so a re-apply from the drift notice, from the mod list editor and from the instance
+    /// page all target the right list without any of them knowing what a savegame is. A number is for
+    /// the one caller that knows better than the instance does: the check-out dialog, previewing the
+    /// apply for a farm this machine is not holding yet.
     /// </remarks>
     public int? Revision { get; init; }
 }
@@ -73,7 +74,7 @@ public sealed class ModSyncService(
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IInstanceModFolders instanceModFolders,
-    ISavegamePlayObserver playObserver,
+    IHeldSavegames heldSavegames,
     ILogger<ModSyncService> logger)
 {
     /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
@@ -91,7 +92,8 @@ public sealed class ModSyncService(
                 $"'{modFolder}' does not exist right now. An unplugged drive or an offline network path looks like this; nothing has been changed.");
         }
 
-        var (desired, revision) = await GetDesiredAsync(request, cancellationToken);
+        var target = ResolveTargetRevision(request);
+        var (desired, revision) = await GetDesiredAsync(request, target, cancellationToken);
         var installed = await GetInstalledAsync(request.Adapter, cancellationToken);
         var manifest = manifestStore.TryRead(request.InstanceId);
 
@@ -569,7 +571,7 @@ public sealed class ModSyncService(
         // Deliberately not the caller's token. By this point the folder is already what the profile
         // asked for and the manifest is about to say so; abandoning the attribution here would credit
         // everything played on the outgoing revision to the incoming one, quietly and permanently.
-        await playObserver.ObserveAsync(plan.InstanceId, CancellationToken.None);
+        await heldSavegames.ObserveAsync(plan.InstanceId, CancellationToken.None);
 
         var entries = new List<SyncManifestEntry>();
 
@@ -671,6 +673,44 @@ public sealed class ModSyncService(
 
 
     /// <summary>
+    /// Which revision this instance's folder is to end up on, refusing the apply outright where a
+    /// savegame it is holding says it may not move at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Resolved here rather than at each caller, for the reason the observation is.</b> Every apply
+    /// in the app reaches this method, and an apply that quietly installs head under a farm pinned to
+    /// revision 4 is the state the whole design exists to prevent - so the one place all of them pass
+    /// through is where the question gets asked. A caller that names a revision has said something
+    /// this cannot know better than, and is taken at its word and then checked.
+    /// </para>
+    /// <para>
+    /// The refusal is a backstop and not the explanation. An interface that offers a button and then
+    /// throws this has already failed; it consults the same rule beforehand and says what would enable
+    /// the apply instead - see docs/10-savegame-profile-binding.md#two-actions-not-one.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="UserFriendlyException">A savegame held here refuses this apply.</exception>
+    private int? ResolveTargetRevision(ModSyncRequest request)
+    {
+        var revision = request.Revision ?? heldSavegames.GetRequiredRevision(request.InstanceId, request.ProfileId);
+        var decision = heldSavegames.DecideApply(request.InstanceId, request.ProfileId, revision);
+
+        return decision.Refusal switch
+        {
+            SavegameApplyRefusal.None => revision,
+
+            SavegameApplyRefusal.AnotherProfileIsHeld => throw new UserFriendlyException(
+                "A savegame checked out here follows another mod list",
+                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that farm off the mod list it runs on. Check it in first."),
+
+            _ => throw new UserFriendlyException(
+                "That savegame runs on one revision, and this is not it",
+                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
+        };
+    }
+
+    /// <summary>
     /// What the profile pins at the requested revision, and which revision that is - recorded in the
     /// manifest so a folder can say which version of the list it was made to match.
     /// </summary>
@@ -678,9 +718,10 @@ public sealed class ModSyncService(
     /// The revision is answered back rather than assumed from what was asked, because null means head
     /// and only the server knows which number that is.
     /// </remarks>
-    private async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(ModSyncRequest request, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
+        ModSyncRequest request, int? revision, CancellationToken cancellationToken)
     {
-        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, request.Revision, cancellationToken);
+        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, revision, cancellationToken);
 
         // Normalized where the ids enter the client, as everywhere else, and the file name checked
         // in the same breath: it came off somebody else's disk and is about to be interpolated into

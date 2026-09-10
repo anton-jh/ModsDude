@@ -818,6 +818,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// adapter has mods, and is simply "write the slot" where it does not - and a user who wanders off
     /// after the claim still holds the save and has it on disk.
     /// </summary>
+    /// <remarks>
+    /// <b>Which revision is not decided here.</b> The binding was written a moment ago and carries what
+    /// this farm runs on - head for the profile's current savegame, its own pinned revision for a past
+    /// one - and every apply resolves it from there. Working it out a second time in this method is how
+    /// the check-out comes to install a different list from the one the drift check then expects.
+    /// </remarks>
     private async Task ApplyProfileAsync(LocalInstance instance, SavegameDto savegame)
     {
         if (_repo.Adapter.CanSupportMods is false)
@@ -830,7 +836,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var plan = await _applyService.TryPlanAsync(_repo, instance, profile.Id, profile.Name, _lifetime);
+        var plan = await _applyService.TryPlanAsync(_repo, instance, profile.Id, profile.Name, revision: null, _lifetime);
 
         if (plan is null)
         {
@@ -846,7 +852,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             var outcome = await _applyService.ApplyAsync(
                 _repo, instance, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
 
-            RecordActiveProfile(instance, profile, outcome.Status is not ProfileApplyStatus.Declined);
+            RecordActiveProfile(instance, profile, outcome.RecordsIntent);
 
             Status += $" {outcome.Message}";
 
@@ -990,7 +996,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return null;
         }
 
-        var plan = await _applyService.TryPlanAsync(_repo, instance, profile.Id, profile.Name, cancellationToken);
+        // Named rather than resolved from the instance: nothing is holding this savegame yet, so the
+        // instance has no opinion about it - and the plan shown here has to be the plan that runs.
+        var plan = await _applyService.TryPlanAsync(
+            _repo, instance, profile.Id, profile.Name, SavegameService.TargetRevisionOf(row.Savegame), cancellationToken);
 
         if (plan is null)
         {
