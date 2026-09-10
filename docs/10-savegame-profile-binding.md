@@ -275,6 +275,16 @@ current-or-past state and read back off local state afterwards. Inferring it wou
 answer to "is this still its profile's current farm?", and the two things that read it — the apply
 table above and the drift check — both have to work offline and cost a directory listing.
 
+**Decided once, and it does not move under the holder.** Somebody else can publish to this profile
+while the farm is checked out here, which supersedes it; the binding goes on saying what it said at
+check-out, and that is the answer this design wants. The two things that change which savegame is
+current are both stated before they run, and somebody else's publish is not stated to a holder — so
+the alternative is the apply button and the drift notice quietly changing meaning because of an action
+the person looking at them did not take. Nothing breaks either way: the farm goes on following its
+profile until it is checked in, the version that check-in mints records the revision it was genuinely
+played on, and its target moves forward to that revision with it, so the invariant below still holds.
+The next check-out reads the truth.
+
 `InstanceDriftService.Check` already took the revision and the dependencies to compare against as
 parameters (`currentRevision`, `profileDependencies`), and its callers passed the profile's head. For
 an instance holding a past savegame they pass **the revision that savegame targets** instead.
@@ -599,13 +609,6 @@ It compares against the savegame's **target** instead:
 
 The binding's `ProfileRevision` is then read for play attribution only, and by nothing that
 decides drift.
-
-`TargetRevision` is this machine's record of what the server said at check-out, and the server can
-move underneath it: somebody else publishing to this profile supersedes the farm held here, and the
-binding goes on calling it current. The cost is one apply to head that should have been an apply to a
-pin, which the drift check then reports as having left its mod list. Reconciling the binding against
-a freshly fetched savegame list belongs to whatever loads that list, which is the
-[interface](#interface).
 
 ### A savegame never targets a revision older than it was played on
 
