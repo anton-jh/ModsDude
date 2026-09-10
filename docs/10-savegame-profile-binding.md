@@ -61,7 +61,15 @@ is an ordering the two updates must guarantee rather than leave to the change tr
 A profile is durable identity across a succession of savegames. "Old-school" stays one profile
 when the group starts a new farm on it; the previous farm becomes past.
 
-An instance holds **at most one checked-out savegame** at a time.
+An instance holds **at most one checked-out savegame that has a profile**.
+
+The limit is not about savegames but about the mod folder, which can only be on one revision. A
+savegame with no profile makes no claim on it and cannot conflict with anything, so any number of
+those may be held alongside — bounded only by the slots the adapter offers, and by
+`SavegameBindingStore`'s existing one-binding-per-slot rule.
+
+Stating it this way needs no adapter-capability check. In a repo whose adapter has no mod support
+no savegame has a profile, so nothing is ever limited.
 
 A savegame's profile is fixed at publish. **There is no operation that moves a savegame to a
 different profile** — `UpdateSavegameV1Endpoint` becomes a rename. Moving one would make
@@ -141,7 +149,7 @@ Nothing in this document applies to such a repo.
 | --- | --- |
 | Current and past | Do not exist. No savegame does |
 | Applying a profile | Always applies head. Never refused on savegame grounds |
-| One checkout per instance | Vacuous |
+| One checkout per instance | Vacuous. The limit counts savegames with a profile, and none has one. Any number may be held at once |
 | `Observe()`, `LastObservedHash`, `LastPlayedRevision` | Never run and never written. They live on the checkout binding, and no binding is ever taken |
 | `SyncManifest.ProfileRevision` | Still recorded, as it is today. It describes the folder, not a savegame |
 
@@ -224,14 +232,17 @@ about is still shown before anything is written.
 
 ### Applying to an instance that holds a savegame
 
+Only savegames **with a profile** appear here. One holding nothing but profile-less savegames is
+the "Nothing" row: they claim no mod list, so nothing about the mod folder is theirs to constrain.
+
 | Instance holds | Apply |
 | --- | --- |
-| Nothing | Unchanged |
+| Nothing, or only savegames with no profile | Unchanged |
 | The **current** savegame of the profile being applied | Allowed. This is how a farm follows its profile |
 | A **past** savegame | Allowed only for that savegame's own revision — re-applying it, repairing folder drift. Any other revision is refused |
-| Any savegame, and the apply names a **different** profile | Refused. This is the active-profile switch below |
+| A savegame with a profile, and the apply names a **different** profile | Refused. This is the active-profile switch below |
 
-Switching an instance's active profile is refused while a savegame is checked out.
+Switching an instance's active profile is refused while a savegame with a profile is checked out.
 
 An instance's mod folder never changes. Keeping the folder fixed across a settings change is the
 adapter's responsibility, so `SyncManifest.ModFolder` is checked defensively rather than as a
@@ -390,9 +401,12 @@ answers with the existing head.
 
 ## Publishing
 
-No savegame may be checked out on the instance when one is published.
 `PublishSavegameV1Endpoint` opens a claim on the new savegame in the same transaction as the
-savegame and its first version, so a publish always leaves exactly one savegame held.
+savegame and its first version, so a publish always leaves the new savegame held.
+
+Publishing **to a profile** therefore requires that no savegame with a profile is already checked
+out on the instance — the same limit as check-out, reached from the other side, rather than a rule
+of its own. Publishing without a profile has no such precondition.
 
 The publish dialog offers every profile in the repo, and **no profile** as an explicit choice.
 `PublishSavegameRequest.ProfileId` becomes nullable. The profile need not be the instance's active
@@ -426,8 +440,8 @@ A slot occupied by a savegame this machine never checked out is `SavegameSlotAva
 Writing to one is a confirmation naming the save, and the folder goes to the Recycle Bin rather
 than being deleted.
 
-Such savegames do not count towards the one-checkout-per-instance limit, and they do not affect
-which profile may be active or whether a profile may be applied.
+Such savegames are not held by ModsDude at all, so they do not count towards the limit, and they
+do not affect which profile may be active or whether a profile may be applied.
 
 ## Interface
 
@@ -463,12 +477,13 @@ Two buttons, `Apply profile` and `Check out`, with the disabled reason carrying 
 | --- | --- |
 | Past savegame, folder elsewhere | *Apply Old-school rev 4 first* |
 | Current savegame, instance on another profile | *Apply Old-school first* |
-| Another savegame held here | *Riverbend is checked out on this instance* |
+| Another savegame **with a profile** held here | *Riverbend is checked out on this instance* |
 | No instance for this game | *No instance for this game* |
 
 ### Instance page
 
-The profile dropdown is **disabled** while any savegame is checked out.
+The profile dropdown is **disabled** while a savegame with a profile is checked out. Profile-less
+savegames leave it alone.
 
 The apply button's meaning changes while a **past** savegame is held. It normally applies the
 profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job is repairing
