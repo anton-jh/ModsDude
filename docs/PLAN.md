@@ -28,7 +28,7 @@ out right; that slice is now closed end to end.
 | Mod upload / download | Working, both directions, straight to blob storage |
 | Profile → instance sync | Working — content store, plan, execute, manifest |
 | Drift | Detected at startup and on window activation, surfaced app-wide, re-appliable in one click |
-| Savegames | Server built — entities, migration, endpoints, blob storage, sweep. Adapter reads slots. No client engine and no UI |
+| Savegames | Working end to end — publish, check out, check in, force, keep playing, take a copy, discard. Packing, the checkout binding and slot safety on the client; savegame drift folded into the app-wide notice; repo and instance pages with their dialogs. [Phase 9](#phase-9--one-current-savegame-per-profile) reworks which revision a save runs on |
 | Tests | Three projects: server domain, server persistence (needs PostgreSQL), client core |
 | CI | Two jobs — Linux for the server and the OpenAPI diff, Windows for the client |
 | Deployment | None |
