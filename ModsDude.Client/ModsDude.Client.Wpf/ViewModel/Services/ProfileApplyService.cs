@@ -132,7 +132,7 @@ public sealed class ProfileApplyService(
             // then imported and pinned makes the folder right and the manifest wrong, and drift is
             // measured against the manifest. Without this the notice reports an addition that
             // re-applying can never clear, while telling the user the folder already matches.
-            syncService.RecordAlreadyMatched(plan);
+            await syncService.RecordAlreadyMatchedAsync(plan);
 
             return new ProfileApplyOutcome(instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches.");
         }

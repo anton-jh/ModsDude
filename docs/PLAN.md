@@ -1249,15 +1249,39 @@ Two things fell out of the boxes above rather than being added to them:
 
 ### 2. Play attribution on the client
 
-- [ ] **`LastObservedHash` and `LastPlayedRevision`** on `SavegameCheckoutBinding`, and its
-      `ProfileId`/`ProfileRevision` paired the same way the server rows are.
-- [ ] **`Observe()`**, at two call sites: before an apply rewrites the manifest, so it reads the
-      outgoing revision, and at check-in.
-- [ ] **Invert `ResolveAppliedRevision`** to prefer the binding over the manifest.
-- [ ] **Thread the revision through `ModSyncService.GetDesiredAsync`**, which passes `null` today
-      and therefore always resolves to head.
-- [ ] **One hash format.** `Observe()` must not lean on `ModContentHasher.Matches` being
-      case-insensitive; two parts of the client spelling a hash differently is a bug at the writer.
+- [x] **`LastObservedHash` and `LastPlayedRevision`** on `SavegameCheckoutBinding`, and its
+      `ProfileId`/`ProfileRevision` paired the same way the server rows are. `LastObservedHash` is
+      unset-reads-as-`ContentHash` rather than an assignment every construction site has to remember,
+      so a binding taken by some future route cannot leave the boundary unrecorded and report a fresh
+      check-out as an evening. Checking in and carrying on resets both halves, because that is a
+      check-out in every respect that matters.
+- [x] **`Observe()`**, at two call sites: inside the manifest write, so it reads the outgoing
+      revision, and at check-in, where the packed hash is the observation and costs no second pass.
+      Folded into the write rather than called beside it — no apply path can then rewrite the
+      manifest without attributing the play first, and the no-work path had to be covered too, since
+      a revision can move without a single mod doing so.
+- [x] **Invert `ResolveAppliedRevision`** to prefer the binding over the manifest. It answers `int?`
+      with it: a savegame following no mod list sends no revision, and the server refuses one that
+      does. `Observe()` inherited the manifest guard the old order carried — a folder synced to a
+      *different* profile has no number this savegame can record, so the play is seen and the number
+      withheld, rather than `LastPlayedRevision` becoming a way around the check.
+- [x] **Thread the revision through `ModSyncService.GetDesiredAsync`**, which passed `null` and
+      therefore always resolved to head. `ModSyncRequest.Revision` carries it; null still means head,
+      which is what an instance following its profile wants, and the number the server answers with is
+      what the manifest records.
+- [x] **One hash format.** The tolerance came out of `ModContentHasher.Matches` rather than being
+      routed around: two parts of the client spelling a hash differently is a bug at the writer, and
+      absorbing it at every comparison site hides that bug while inviting the next comparison to lean
+      on it. The slot safety check and the drift rules got stricter with it, which is the right
+      direction for both — the safety check now errs towards refusing a write.
+
+One thing fell out of the boxes above rather than being added to one:
+
+- **The sync engine now knows one fact about savegames.** `ISavegamePlayObserver`, a seam of one
+  method in the shape `IInstanceModFolders` already had, and `RecordAlreadyMatched` became
+  `RecordAlreadyMatchedAsync` with it. The observation is uncancellable on purpose: by the time it
+  runs the folder is already what the profile asked for, and abandoning it would credit everything
+  played on the outgoing revision to the incoming one, quietly and permanently.
 
 ### 3. The rules
 
@@ -1295,7 +1319,8 @@ Worth knowing before starting, so none of it gets rediscovered:
 - **`InstanceDriftService.Check` already takes `currentRevision` and `profileDependencies`** as
   parameters. Slice 3 changes what callers pass, not the signature.
 - **The no-mods branch already exists** in `RepoSavegamesPageViewModel.ApplyProfileAsync`.
-- **`GetModDependenciesV1Endpoint` already serves any revision.** Only the client hardcodes head.
+- **`GetModDependenciesV1Endpoint` already serves any revision**, and since slice 2 the client can
+  ask for one. Slice 3 decides which.
 - **Pruning already refuses** a revision a savegame version holds, so a past savegame stays
   reproducible with no new guarantee.
 

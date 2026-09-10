@@ -64,8 +64,14 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     public SavegameVersionDto? Head => _savegame.Head;
 
 
+    /// <summary>
+    /// Makes this savegame follow no mod list, which publish offers as a choice and which every
+    /// adapter with savegames but no mods gets by default. Its versions then record no revision.
+    /// </summary>
+    public void FollowNoProfile() => _savegame = _savegame with { ProfileId = null };
+
     /// <summary>Puts a version and its bytes on the server - a publish that happened before the test.</summary>
-    public SavegameVersionDto Seed(byte[] content, int profileRevision = 1)
+    public SavegameVersionDto Seed(byte[] content, int? profileRevision = 1)
     {
         var hash = HashOf(content);
 
@@ -115,6 +121,15 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             // The server refuses a version whose blob is absent, because that is a head nobody can
             // check out. Reproduced so that a client which skips the upload wrongly fails here.
             throw Problem(ProblemType.NotFound, $"No savegame blob '{request.ContentHash}'.");
+        }
+
+        // The pairing, refused in either direction rather than resolved in one: a savegame following
+        // no mod list has no revision to send, and one that follows a mod list has to name which.
+        if ((_savegame.ProfileId is null) != (request.ProfileRevision is null))
+        {
+            throw Problem(
+                ProblemType.SavegameProfileNotPaired,
+                $"Savegame '{_savegame.Id}' {(_savegame.ProfileId is null ? "follows no profile but a revision was sent" : "follows a profile but no revision was sent")}.");
         }
 
         var head = _savegame.Head;

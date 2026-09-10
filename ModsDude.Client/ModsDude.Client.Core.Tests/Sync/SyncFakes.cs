@@ -3,6 +3,7 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using System.Security.Cryptography;
 using System.Text;
@@ -96,9 +97,29 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     public byte[] Blob(string link) => _blobs[link];
 
 
-    /// <summary>The profile is always on revision 1 here: sync reads a mod list, not a history.</summary>
+    /// <summary>What the head is, for the client that asks for no revision in particular.</summary>
+    public int HeadRevision { get; set; } = 1;
+
+    /// <summary>Every revision the client asked for, null being "whatever head is".</summary>
+    public List<int?> RevisionsRequested { get; } = [];
+
+
+    /// <summary>
+    /// The mod list at one revision. The dependencies are the same whichever is asked for - sync
+    /// reads a list and not a history - but the number is answered back exactly as the real endpoint
+    /// does, so a client that hardcodes head cannot pass by accident.
+    /// </summary>
     public Task<GetModDependenciesResponse> GetModDependenciesV1Async(Guid repoId, Guid profileId, int? revision = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(new GetModDependenciesResponse { Revision = 1, IsHead = true, Dependencies = [.. _dependencies] });
+    {
+        RevisionsRequested.Add(revision);
+
+        return Task.FromResult(new GetModDependenciesResponse
+        {
+            Revision = revision ?? HeadRevision,
+            IsHead = (revision ?? HeadRevision) == HeadRevision,
+            Dependencies = [.. _dependencies]
+        });
+    }
 
     public Task<GetModsResponse> GetModsV1Async(Guid repoId, DateTime? updatedAfter = null, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
         => Task.FromResult(new GetModsResponse { Mods = [.. _registered], NextCursor = null });
@@ -253,6 +274,31 @@ internal sealed class FakeRecycleBin(bool available = true) : IRecycleBin
 internal sealed class FakeInstanceModFolders(params InstanceModFolder[] folders) : IInstanceModFolders
 {
     public IReadOnlyList<InstanceModFolder> GetAll() => folders;
+}
+
+
+/// <summary>
+/// The savegame engine's one duty to sync, reduced to what the ordering guarantees: it records the
+/// revision the manifest said this folder was on at the moment it was asked.
+/// </summary>
+/// <remarks>
+/// Reading the manifest here rather than counting calls is the point. "Observed before the manifest
+/// was rewritten" is not a fact about call order that a test can see from outside - it is a fact
+/// about which revision the observer could still have read, and that is the number play gets
+/// attributed to.
+/// </remarks>
+internal sealed class FakeSavegamePlayObserver(SyncManifestStore manifests) : ISavegamePlayObserver
+{
+    /// <summary>What the folder was on at each observation, oldest first. Null is "never synced".</summary>
+    public List<int?> Observed { get; } = [];
+
+
+    public Task ObserveAsync(Guid instanceId, CancellationToken ct)
+    {
+        Observed.Add(manifests.TryRead(instanceId)?.ProfileRevision);
+
+        return Task.CompletedTask;
+    }
 }
 
 

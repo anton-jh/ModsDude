@@ -39,19 +39,20 @@ public class SavegameSlotStateTests
     }
 
     /// <summary>
-    /// The hex casing is a formatting choice of whoever wrote the value, not part of the hash. A
-    /// comparison that disagreed would report unpublished play on every launch, which is the warning
-    /// everybody learns to click past.
+    /// There is one hash format and the hasher is the only thing that mints it, so a hash spelled any
+    /// other way is not this slot's hash. Absorbing the difference here would hide a bug in whichever
+    /// part of the client wrote the odd spelling, and would err towards <em>writing</em> over a slot -
+    /// the direction the safety check exists to refuse.
     /// </summary>
     [Fact]
-    public void A_hash_recorded_in_different_casing_is_still_the_same_bytes()
+    public void A_hash_in_another_casing_is_another_hash()
     {
         var state = SavegameSlotStates.Classify(
             Slot("savegame3", occupied: true),
             Binding("savegame3", hash: "ABCD"),
             currentContentHash: "abcd");
 
-        Assert.Equal(SavegameSlotAvailability.HeldClean, state);
+        Assert.Equal(SavegameSlotAvailability.HeldWithUnpublishedPlay, state);
     }
 
     [Fact]

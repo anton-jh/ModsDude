@@ -567,7 +567,7 @@ And one that is easy to miss: **"nothing to do" is not "nothing to record."** Ap
 folder that already matches it and no file changes, but the manifest may still be out of date —
 the case being a mod dropped in by hand and then imported and pinned, which is precisely the
 journey the drift notice sends people on. The folder ends up right, the plan comes back with no
-work, and the manifest still does not mention the file. `ModSyncService.RecordAlreadyMatched` is
+work, and the manifest still does not mention the file. `ModSyncService.RecordAlreadyMatchedAsync` is
 what closes that: applying is the moment the user has said the folder is what they want, so it is
 the moment the record catches up. Without it the notice reports an addition that its own re-apply
 button can never clear, while the status line underneath says the folder already matches.

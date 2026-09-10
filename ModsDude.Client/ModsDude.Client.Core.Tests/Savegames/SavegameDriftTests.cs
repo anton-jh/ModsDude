@@ -40,14 +40,33 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// The hash is recorded lowercase by one part of the client and could be read back by another. A
-    /// casing difference reporting an evening that is not there is the false alarm that teaches people
-    /// to click the notice away.
+    /// Every hash in the client is minted by <c>ModContentHasher</c> in one format, so two spellings
+    /// are not one hash written twice - they are a bug in whichever part wrote the odd one. Absorbing
+    /// the difference here would hide that, and would leave the next comparison free to lean on the
+    /// same leniency.
     /// </summary>
     [Fact]
-    public void Hash_casing_is_not_a_difference()
+    public void A_hash_in_another_casing_is_another_hash()
     {
-        Assert.Empty(SavegameDriftRules.Classify(Binding(hash: "AAAA"), "aaaa", null, null, null));
+        Assert.Equal(
+            [SavegameDriftKind.UncheckedInPlay],
+            SavegameDriftRules.Classify(Binding(hash: "AAAA"), "aaaa", null, null, null));
+    }
+
+    /// <summary>
+    /// The two hashes answer two questions, and this is the one that is asked here: does the slot
+    /// still hold the version the server has? An apply has just moved the observation boundary to the
+    /// played bytes - so nothing further will be attributed - and the evening is still an evening
+    /// that exists on this disk and nowhere else. One field could not say both.
+    /// </summary>
+    [Fact]
+    public void An_observation_since_the_check_out_does_not_answer_this_question()
+    {
+        var binding = Binding(hash: "aaaa") with { LastObservedHash = "bbbb" };
+
+        Assert.Equal(
+            [SavegameDriftKind.UncheckedInPlay],
+            SavegameDriftRules.Classify(binding, "bbbb", headVersion: 4, _profileId, appliedRevision: 6));
     }
 
     /// <summary>

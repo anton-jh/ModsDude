@@ -128,8 +128,9 @@ public static class SavegameDriftRules
     {
         var kinds = new List<SavegameDriftKind>();
 
-        // Matches() rather than a string comparison, so a hash written by one part of the client and
-        // compared by another cannot disagree over hex casing and report an evening that is not there.
+        // Against the check-out value, never against LastObservedHash: this asks whether the slot
+        // still matches the version the server holds, which an apply refreshing the observation
+        // boundary does not answer. Collapsing the two would stop this reporting play entirely.
         if (currentContentHash is not null && ModContentHasher.Matches(currentContentHash, binding.ContentHash) is false)
         {
             kinds.Add(SavegameDriftKind.UncheckedInPlay);

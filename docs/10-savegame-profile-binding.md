@@ -1,9 +1,11 @@
 # 10 — Savegames and profile revisions
 
-*The server half is built; the client half is not.* Schema, publish, the swap and the rename are in
-the tree ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)). Everything below about the client —
-play attribution, check-out targets, the apply table, the drift rules, the interface — is still a
-design. For what the client does today see [07 — Mod sync design](07-mod-sync-design.md#drift) and
+*The server half is built, and play attribution with it.* Schema, publish, the swap and the rename
+are in the tree ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)), and so are the two hashes, the
+observation and the revision a sync installs
+([slice 2](PLAN.md#2-play-attribution-on-the-client)). What is still a design is everything that
+*acts* on the attribution — check-out targets, the apply table, the drift rules, the interface. For
+what the client does today see [07 — Mod sync design](07-mod-sync-design.md#drift) and
 [08 — Known issues](08-known-issues.md).
 
 The application is in early development. Nothing here migrates existing local or server state,
@@ -217,9 +219,10 @@ A past savegame gets the `(ProfileId, ProfileRevision)` pair from its head versi
 number alone. With no operation that moves a savegame between profiles, that `ProfileId` always
 equals `Savegame.ProfileId`.
 
-`ModSyncService.GetDesiredAsync` currently passes `null` as the revision, which always resolves
-to head. The revision becomes a parameter;
-`GET repos/{repoId}/profiles/{profileId}/modDependencies?revision=` already serves any revision.
+`ModSyncService.GetDesiredAsync` used to pass `null` as the revision, which always resolved to head.
+It is `ModSyncRequest.Revision` now — null still means head, and
+`GET repos/{repoId}/profiles/{profileId}/modDependencies?revision=` had served any revision all
+along. What is not built is a caller that asks for one: that is the table above.
 
 ### Two actions, not one
 
@@ -291,7 +294,14 @@ what a sync actually installed. They diverge on a failed or partial apply.
 Refusing to switch profile while a savegame is held keeps them from diverging for the life of a
 binding, and Check out being disabled until the profile is applied means a binding is only ever
 taken when a matching manifest already exists. `Observe()` reads the manifest under those two
-conditions and needs no further guard.
+conditions and needs no further guard about *whether* the folder has been synced.
+
+It does check *which list* the folder holds. A manifest naming another profile carries a number this
+savegame cannot record — revision 6 of two lists is one integer and two mod lists, and the server
+refuses a revision that is not the savegame's profile's. That reading is the same one
+`ResolveAppliedRevision` has always applied to the manifest, and `LastPlayedRevision` must not become
+a way around it. The play is still observed; only the number is withheld, and the check-in falls back
+to the list the save was handed over on.
 
 ### Two hashes, two questions
 
@@ -326,20 +336,27 @@ correct.
 Every hash is produced and compared through `ModContentHasher`, in one format. Comparisons are
 ordinary equality on that format.
 
-`ModContentHasher.Matches` is currently case-insensitive so that two parts of the client cannot
-disagree over hex casing. Two parts of one application disagreeing on the spelling of a hash is a
-bug in whichever one writes the odd spelling, not a case to absorb at every comparison site —
-`Matches` hides it, and `Observe()` relying on the same leniency would spread it. The hasher is
-the single place a hash string is minted, and the tolerance comes out of the comparison.
+`ModContentHasher.Matches` was case-insensitive so that two parts of the client could not disagree
+over hex casing. Two parts of one application disagreeing on the spelling of a hash is a bug in
+whichever one writes the odd spelling, not a case to absorb at every comparison site — `Matches` hid
+it, and `Observe()` relying on the same leniency would have spread it. The hasher is the single place
+a hash string is minted, so the tolerance came out of the comparison instead. The slot safety check
+and the drift rules got stricter with it; for the safety check that means erring towards refusing a
+write, which is the direction it errs in everywhere else.
 
 ### State
 
-Two fields are added to `SavegameCheckoutBinding`:
+Two fields on `SavegameCheckoutBinding`:
 
 | Field | Set at check-out | Meaning |
 | --- | --- | --- |
 | `LastObservedHash` | `= ContentHash` | The slot's bytes when last examined |
 | `LastPlayedRevision` | `= null` | Newest revision play has been confirmed on. Null until play is observed |
+
+Publishing and checking in while carrying on playing leave the same pair, for the same reason: the
+version on the server is these bytes, so the next evening is the first that has not been recorded
+anywhere. `LastObservedHash` unset reads as `ContentHash`, which is what makes that hold for any
+route into a binding rather than only the three that exist.
 
 `ProfileId` and `ProfileRevision` on that record stay nullable, and are set together or not at
 all — a binding for a savegame with no profile has neither. The pairing is the same constraint the
@@ -363,12 +380,17 @@ Two call sites:
 
 | Site | Order |
 | --- | --- |
-| Apply | `Observe()` runs **before** sync rewrites the manifest, so it reads the outgoing revision |
+| Apply | `Observe()` runs **inside** the manifest write, before it, so it reads the outgoing revision |
 | Check-in | `Observe()` runs first; the version is then sent with `LastPlayedRevision ?? AppliedRevision` |
 
-`SavegameService.ResolveAppliedRevision` currently prefers the manifest and falls back to the
-binding. That order inverts: the binding's `LastPlayedRevision` is preferred, the manifest is the
-fallback.
+Inside the write rather than beside it, so that no path can move the revision without attributing the
+play first — including the one that installs nothing, since a revision can move without a single mod
+doing so. Sync reaches it through `ISavegamePlayObserver`, one method, which is the whole of what the
+sync engine knows about savegames.
+
+`SavegameService.ResolveAppliedRevision` used to prefer the manifest and fall back to the binding.
+That order is inverted: the binding's `LastPlayedRevision` is preferred, the manifest is the fallback,
+and the binding's check-out revision is the last resort.
 
 ### Worked examples
 

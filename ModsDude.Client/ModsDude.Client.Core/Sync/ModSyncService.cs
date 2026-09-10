@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Core.Sync;
@@ -17,6 +18,18 @@ public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter
     /// without a repo's profile list to hand. Optional: sync itself has no use for it.
     /// </summary>
     public string? ProfileName { get; init; }
+
+    /// <summary>
+    /// Which revision of the profile to install, or null for whatever its head is now.
+    /// </summary>
+    /// <remarks>
+    /// Head is the ordinary answer and the one an instance following its profile always wants. A
+    /// number is for an instance that is pinned to an older list and has to stay there - an
+    /// instance holding a past savegame, whose revision does not move - where applying head would
+    /// silently take the farm off the mod list it runs on. The repo has served any revision all
+    /// along; only this client insisted on head.
+    /// </remarks>
+    public int? Revision { get; init; }
 }
 
 
@@ -60,6 +73,7 @@ public sealed class ModSyncService(
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IInstanceModFolders instanceModFolders,
+    ISavegamePlayObserver playObserver,
     ILogger<ModSyncService> logger)
 {
     /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
@@ -146,7 +160,7 @@ public sealed class ModSyncService(
 
         if (completed)
         {
-            WriteManifest(plan);
+            await WriteManifestAsync(plan);
         }
 
         var eviction = Evict(plan, cancellationToken);
@@ -525,7 +539,7 @@ public sealed class ModSyncService(
     /// writes the manifest itself.
     /// </para>
     /// </remarks>
-    public void RecordAlreadyMatched(ModSyncPlan plan)
+    public async Task RecordAlreadyMatchedAsync(ModSyncPlan plan)
     {
         if (plan.HasWork)
         {
@@ -533,15 +547,30 @@ public sealed class ModSyncService(
                 "A plan with work in it has to be executed; executing it is what records the result.");
         }
 
-        WriteManifest(plan);
+        await WriteManifestAsync(plan);
     }
 
     /// <summary>
     /// Records what is now installed, so the next drift check is a directory listing rather than
-    /// 2,000 archives opened.
+    /// 2,000 archives opened - and, first, closes the revision the folder is leaving.
     /// </summary>
-    private void WriteManifest(ModSyncPlan plan)
+    /// <remarks>
+    /// <b>The observation goes here rather than at the callers because this is where the revision
+    /// moves.</b> The manifest is the only thing that says which mod list this folder runs, so once
+    /// it has been rewritten an evening played before the apply is indistinguishable from one played
+    /// after, and the savegame's next check-in would name a list it never ran on. Folding the two
+    /// together means no path can rewrite the manifest without attributing the play first - the same
+    /// by-construction argument the binding store's one-per-slot rule rests on. Nothing is skipped for
+    /// a plan that changed no files: a revision can move without a single mod doing so, and the
+    /// no-work path rewrites the manifest too.
+    /// </remarks>
+    private async Task WriteManifestAsync(ModSyncPlan plan)
     {
+        // Deliberately not the caller's token. By this point the folder is already what the profile
+        // asked for and the manifest is about to say so; abandoning the attribution here would credit
+        // everything played on the outgoing revision to the incoming one, quietly and permanently.
+        await playObserver.ObserveAsync(plan.InstanceId, CancellationToken.None);
+
         var entries = new List<SyncManifestEntry>();
 
         foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Install or ModSyncAction.Replace))
@@ -642,12 +671,16 @@ public sealed class ModSyncService(
 
 
     /// <summary>
-    /// What the profile pins now, and which revision that is - recorded in the manifest so a folder
-    /// can say which version of the list it was made to match.
+    /// What the profile pins at the requested revision, and which revision that is - recorded in the
+    /// manifest so a folder can say which version of the list it was made to match.
     /// </summary>
+    /// <remarks>
+    /// The revision is answered back rather than assumed from what was asked, because null means head
+    /// and only the server knows which number that is.
+    /// </remarks>
     private async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(ModSyncRequest request, CancellationToken cancellationToken)
     {
-        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, null, cancellationToken);
+        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, request.Revision, cancellationToken);
 
         // Normalized where the ids enter the client, as everywhere else, and the file name checked
         // in the same breath: it came off somebody else's disk and is about to be interpolated into

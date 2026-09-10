@@ -69,6 +69,38 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
 
 
 /// <summary>
+/// The half of the savegame engine the mod sync engine needs: play in a held slot has to be
+/// attributed before an apply moves the folder to another revision.
+/// </summary>
+/// <remarks>
+/// A seam of one method for the same reason <see cref="IInstanceModFolders"/> is one: the sync engine
+/// depends on the single fact it uses rather than on the savegame client, and it can be exercised
+/// without a signed-in one. It is the whole of what sync knows about savegames.
+/// </remarks>
+public interface ISavegamePlayObserver
+{
+    /// <summary>
+    /// Looks at every slot this instance is holding and, where the bytes have moved since the last
+    /// look, records that the play happened on the revision the mod folder is on <em>now</em>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Called before the manifest is rewritten, never after.</b> The manifest is what says which
+    /// revision this folder runs, and it is the only thing that does - so once an apply has moved it,
+    /// the evening that was played before the apply is indistinguishable from one played after, and
+    /// the check-in would name the wrong mod list. See
+    /// docs/10-savegame-profile-binding.md#play-attribution.
+    /// </para>
+    /// <para>
+    /// Costs one hash per held savegame, and an instance holding none - which is nearly all of them,
+    /// nearly all the time - costs one list read.
+    /// </para>
+    /// </remarks>
+    Task ObserveAsync(Guid instanceId, CancellationToken ct);
+}
+
+
+/// <summary>
 /// The four verbs of a savegame - publish, check out, check in, discard - plus the slot questions the
 /// picker asks before any of them.
 /// </summary>
@@ -87,7 +119,7 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
 /// mod half needs asked.
 /// </para>
 /// </remarks>
-public interface ISavegameService
+public interface ISavegameService : ISavegamePlayObserver
 {
     /// <summary>Every slot this instance has, occupied or not, in the order a picker should show them.</summary>
     Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(LocalInstance instance, CancellationToken ct);
@@ -331,7 +363,12 @@ public sealed class SavegameService(
             DateTime.UtcNow)
         {
             ProfileId = head.ProfileId,
-            ProfileRevision = head.ProfileRevision
+            ProfileRevision = head.ProfileRevision,
+            // The bytes just written are the first observation, and nothing has been played on
+            // anything yet - which is what makes a check-in that follows immediately record the
+            // folder's own revision rather than inventing a session that never happened.
+            LastObservedHash = head.ContentHash,
+            LastPlayedRevision = null
         });
     }
 
@@ -410,6 +447,11 @@ public sealed class SavegameService(
         var slot = new SavegameSlotId(binding.SlotId);
         var packed = await packer.PackAsync(adapter, slot, ct);
 
+        // The last observation, and the packed hash is exactly what one would compute - the packer
+        // hashes what it writes - so it costs no second pass over the folder. Play since the previous
+        // look belongs to the revision this folder is on now, which is what the version will name.
+        binding = Observe(instance.Id, binding, packed.ContentHash);
+
         // Read from the slot these bytes came from, before the upload rather than after: the details
         // describe the version being minted.
         var details = await DescribeAsync(adapter, slot, ct);
@@ -450,7 +492,12 @@ public sealed class SavegameService(
                 ContentHash = version.ContentHash,
                 WrittenAt = DateTime.UtcNow,
                 ProfileId = version.ProfileId,
-                ProfileRevision = version.ProfileRevision
+                ProfileRevision = version.ProfileRevision,
+                // Both boundaries move together, because this is a check-out in every respect that
+                // matters: the version on the server is these bytes, and the next evening is the
+                // first that has not been recorded anywhere.
+                LastObservedHash = version.ContentHash,
+                LastPlayedRevision = null
             });
 
             return version;
@@ -541,7 +588,12 @@ public sealed class SavegameService(
             DateTime.UtcNow)
         {
             ProfileId = active.ProfileId,
-            ProfileRevision = revision
+            ProfileRevision = revision,
+            // The same clean slate a check-out leaves. The bytes in the slot are what was just
+            // published, and whatever produced them happened before ModsDude saw this save at all -
+            // which is why the first version's revision is declared rather than observed.
+            LastObservedHash = packed.ContentHash,
+            LastPlayedRevision = null
         });
 
         return savegame;
@@ -571,6 +623,58 @@ public sealed class SavegameService(
 
         bindings.ClearBinding(instance.Id, savegameId);
         Recycle(adapter, new SavegameSlotId(binding.SlotId));
+    }
+
+    public async Task ObserveAsync(Guid instanceId, CancellationToken ct)
+    {
+        var held = bindings.GetBindings(instanceId);
+
+        // The overwhelmingly common answer, for one list read - the same bargain the drift check
+        // strikes, and for the same reason: nearly every apply is to an instance holding nothing.
+        if (held.Count == 0)
+        {
+            return;
+        }
+
+        // An instance whose scope no loaded repo serves observes nothing, quietly - the same answer
+        // the drift check gives for a folder it cannot reach.
+        var adapter = adapters.TryGet(instanceId);
+
+        if (adapter is null)
+        {
+            return;
+        }
+
+        // Read once, before anything is hashed: it is the same folder for every binding, and it is
+        // the outgoing revision only until the caller rewrites it.
+        var manifest = manifestStore.TryRead(instanceId);
+        var slots = await ReadSlotsOrNothing(adapter, ct);
+
+        foreach (var binding in held)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // A savegame with no profile records nothing. It claims no mod list, so there is no
+            // revision its play could belong to and nothing a check-in of it would send.
+            if (binding.ProfileId is null)
+            {
+                continue;
+            }
+
+            var slot = slots.FirstOrDefault(x => string.Equals(x.Id.Value, binding.SlotId, StringComparison.OrdinalIgnoreCase));
+
+            // A slot somebody deleted from inside the game has no contents to have moved, and hashing
+            // a missing folder would attribute the empty archive to this revision as an evening.
+            if (slot?.IsOccupied is not true)
+            {
+                continue;
+            }
+
+            if (await HashOrNothing(adapter, new SavegameSlotId(binding.SlotId), ct) is string current)
+            {
+                Observe(instanceId, binding, current, manifest?.ProfileId, manifest?.ProfileRevision);
+            }
+        }
     }
 
     public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct)
@@ -632,6 +736,77 @@ public sealed class SavegameService(
         return drift;
     }
 
+
+    /// <summary>
+    /// One observation: if the slot's bytes have moved since the last look, the play that moved them
+    /// happened on the revision the folder is on now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The whole rule, and it is this short on purpose.</b> Attribution is by observation and not
+    /// by timestamps: nothing here asks when anything happened, only whether the bytes are the ones
+    /// last seen. Whether the folder has been synced at all is somebody else's guard - Check out is
+    /// not offered until the profile has been applied, so a binding is only ever taken where a
+    /// matching manifest already exists. See docs/10-savegame-profile-binding.md#the-procedure.
+    /// </para>
+    /// <para>
+    /// Writes nothing when nothing moved. A binding rewritten on every apply would wake the drift
+    /// notice for an answer that has not changed, and <see cref="SavegameBindingStore"/> saves the
+    /// whole of local state per call.
+    /// </para>
+    /// <para>
+    /// A folder with no revision this savegame can use leaves
+    /// <see cref="SavegameCheckoutBinding.LastPlayedRevision"/> where it was rather than clearing it:
+    /// there is nothing to attribute this evening to, and forgetting the list the last one ran on
+    /// would be worse than not recording this one. The hash still moves, because the bytes still did.
+    /// </para>
+    /// </remarks>
+    /// <param name="appliedProfileId">
+    /// The profile the mod folder was last made to match. A revision of a <em>different</em> profile
+    /// is not a number this savegame can record - revision 6 of two lists is one integer and two mod
+    /// lists - and it would be refused by the server as not being the savegame's profile's.
+    /// </param>
+    /// <param name="appliedRevision">Which revision of it, from the manifest.</param>
+    /// <returns>The binding as it now stands, so a caller holding one does not go on reading a stale copy.</returns>
+    private SavegameCheckoutBinding Observe(
+        Guid instanceId,
+        SavegameCheckoutBinding binding,
+        string currentContentHash,
+        Guid? appliedProfileId,
+        int? appliedRevision)
+    {
+        if (binding.ProfileId is not Guid profileId || ModContentHasher.Matches(currentContentHash, binding.LastObservedHash))
+        {
+            return binding;
+        }
+
+        // The folder's revision, where the folder is on this savegame's own mod list - see the
+        // parameter. Anything else is a number this savegame cannot record.
+        var played = profileId == appliedProfileId ? appliedRevision : null;
+
+        var observed = binding with
+        {
+            LastObservedHash = currentContentHash,
+            LastPlayedRevision = played ?? binding.LastPlayedRevision
+        };
+
+        bindings.SetBinding(instanceId, observed);
+
+        logger.LogInformation(
+            "Savegame {Savegame} in instance {Instance} has been played since it was last looked at; attributed to profile revision {Revision}.",
+            binding.SavegameId, instanceId, observed.LastPlayedRevision);
+
+        return observed;
+    }
+
+    /// <inheritdoc cref="Observe(Guid, SavegameCheckoutBinding, string, Guid?, int?)"/>
+    /// <remarks>Reads the manifest itself, for the caller that has not already.</remarks>
+    private SavegameCheckoutBinding Observe(Guid instanceId, SavegameCheckoutBinding binding, string currentContentHash)
+    {
+        var manifest = manifestStore.TryRead(instanceId);
+
+        return Observe(instanceId, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
+    }
 
     /// <summary>
     /// Refuses to write into a slot holding play nobody has checked in.
@@ -811,22 +986,44 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Which revision of the profile this folder is on, for the version a check-in is about to mint.
+    /// Which revision the version a check-in is about to mint was played on, or null where the
+    /// savegame follows no mod list and there is no such thing.
     /// </summary>
     /// <remarks>
-    /// The manifest is the truth about what is <em>installed</em>, so it is preferred - but only when
-    /// it describes the same profile the save was checked out against. Two revision numbers belonging
-    /// to two different profiles are not comparable, and the server rejects a revision that is not
-    /// the savegame's profile's, so sending one because the user re-pointed the instance would fail
-    /// the check-in with a message about a profile they were not thinking about. Falling back to what
-    /// the binding recorded keeps the version honest: it says which list the save was handed over on.
+    /// <para>
+    /// <b>What was observed beats what is installed.</b> The binding's
+    /// <see cref="SavegameCheckoutBinding.LastPlayedRevision"/> is the revision the folder was on the
+    /// last time the slot's bytes actually moved, which is the question a version answers; the
+    /// manifest only says what the folder runs at this instant, and an apply between the last evening
+    /// and the hand-back moves it without anybody playing on it. Preferring the manifest would credit
+    /// a fortnight-old session to a mod list it never ran on.
+    /// </para>
+    /// <para>
+    /// The manifest is the fallback rather than the answer, and only where it describes the same
+    /// profile the save was checked out against: two revision numbers belonging to two different
+    /// profiles are not comparable, and the server rejects a revision that is not the savegame's
+    /// profile's, so sending one because the user re-pointed the instance would fail the check-in with
+    /// a message about a profile they were not thinking about. What the binding recorded at check-out
+    /// is the last resort, and it is still honest - it says which list the save was handed over on.
+    /// </para>
     /// </remarks>
-    private int ResolveAppliedRevision(LocalInstance instance, SavegameCheckoutBinding binding)
+    private int? ResolveAppliedRevision(LocalInstance instance, SavegameCheckoutBinding binding)
     {
+        // A savegame following no mod list sends no revision at all, and the server refuses one that
+        // does. Nothing was attributed to it either: Observe() leaves such a binding alone.
+        if (binding.ProfileId is not Guid profileId)
+        {
+            return null;
+        }
+
+        if (binding.LastPlayedRevision is int played)
+        {
+            return played;
+        }
+
         var manifest = manifestStore.TryRead(instance.Id);
 
-        if (manifest?.ProfileRevision is int applied &&
-            (binding.ProfileId is not Guid played || played == manifest.ProfileId))
+        if (manifest?.ProfileRevision is int applied && profileId == manifest.ProfileId)
         {
             return applied;
         }
@@ -834,10 +1031,19 @@ public sealed class SavegameService(
         return binding.ProfileRevision
             ?? throw new UserFriendlyException(
                 $"'{instance.Name}' has no record of which mod list it is on",
-                $"Neither the sync manifest for instance '{instance.Id}' nor the checkout binding records a profile revision, and every savegame version has to name one. Apply the profile to this instance and check in again.");
+                $"Neither the sync manifest for instance '{instance.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this instance and check in again.");
     }
 
-    /// <inheritdoc cref="ResolveAppliedRevision"/>
+    /// <summary>
+    /// Which revision of the profile this folder is on, for the first version of a savegame being
+    /// published out of it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here is observed, and nothing can be: the bytes existed before ModsDude saw them, so
+    /// no arrangement of the publish flow recovers what was in the mod folder while they were played.
+    /// The folder's current revision is declared instead, and only a completed sync knows it - which
+    /// is why an instance that has never been synced to its profile is refused rather than guessed at.
+    /// </remarks>
     private int RequireAppliedRevision(LocalInstance instance, ActiveProfile active)
     {
         var manifest = manifestStore.TryRead(instance.Id);

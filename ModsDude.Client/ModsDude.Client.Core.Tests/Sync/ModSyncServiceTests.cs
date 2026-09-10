@@ -355,7 +355,7 @@ public class ModSyncServiceTests
         Assert.False(plan.HasWork);
         Assert.Equal(2, plan.KeepCount);
 
-        fixture.Service.RecordAlreadyMatched(plan);
+        await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
         Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
     }
@@ -441,7 +441,121 @@ public class ModSyncServiceTests
         var plan = await fixture.PlanAsync();
 
         Assert.True(plan.HasWork);
-        Assert.Throws<InvalidOperationException>(() => fixture.Service.RecordAlreadyMatched(plan));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Service.RecordAlreadyMatchedAsync(plan));
+    }
+
+
+    /// <summary>
+    /// Head is what an instance following its profile wants, and asking for nothing is how the client
+    /// says so. The endpoint has served any revision all along; this is only the client no longer
+    /// insisting.
+    /// </summary>
+    [Fact]
+    public async Task Applying_without_a_revision_asks_for_head_and_records_what_head_turned_out_to_be()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 1004;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal([null], fixture.Server.RevisionsRequested);
+        Assert.Equal(1004, plan.ProfileRevision);
+
+        await fixture.ExecuteAsync(plan);
+
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// The other half: an instance that has to stay on an older list - one holding a past savegame,
+    /// whose revision does not move - gets that revision installed and recorded, rather than being
+    /// quietly taken to head by the only apply the client used to know how to do.
+    /// </summary>
+    [Fact]
+    public async Task Applying_a_named_revision_asks_for_it_and_records_it()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 1004;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync(revision: 4);
+
+        Assert.Equal([4], fixture.Server.RevisionsRequested);
+        Assert.Equal(4, plan.ProfileRevision);
+
+        await fixture.ExecuteAsync(plan);
+
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// <b>The ordering play attribution rests on.</b> The manifest is the only thing that says which
+    /// mod list this folder runs, so an observation taken after it has been rewritten cannot tell an
+    /// evening played before the apply from one played after. What it must see is the outgoing
+    /// revision, and here that is 4 while the apply is moving the folder to 1004.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_observes_savegame_play_while_the_manifest_still_says_the_old_revision()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 4;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Equal([null], fixture.PlayObserver.Observed);
+
+        fixture.Server.HeadRevision = 1004;
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Equal([null, 4], fixture.PlayObserver.Observed);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// A revision can move without a single mod doing so - a thousand edits that cancel out, or an
+    /// unrelated pin added and removed. The no-work path rewrites the manifest too, so it has to
+    /// attribute the play first or an evening would be credited to a list it never ran on.
+    /// </summary>
+    [Fact]
+    public async Task A_plan_with_no_work_observes_before_it_records_the_match()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.HeadRevision = 4;
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        fixture.Server.HeadRevision = 1004;
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.False(plan.HasWork);
+
+        await fixture.Service.RecordAlreadyMatchedAsync(plan);
+
+        Assert.Equal([null, 4], fixture.PlayObserver.Observed);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// A sync that failed never wrote the manifest, so the folder is still on the revision it was -
+    /// and there is nothing to close.
+    /// </summary>
+    [Fact]
+    public async Task A_sync_that_fails_observes_nothing()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.CorruptDownload = _ => SyncTestContent.Bytes(Mod("1.0.0", "hostile"));
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.False(result.Completed);
+        Assert.Empty(fixture.PlayObserver.Observed);
     }
 
 
@@ -468,6 +582,7 @@ public class ModSyncServiceTests
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
+            PlayObserver = new FakeSavegamePlayObserver(Manifests);
 
             Service = new ModSyncService(
                 Server,
@@ -478,6 +593,7 @@ public class ModSyncServiceTests
                 Manifests,
                 RecycleBin,
                 new FakeInstanceModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
+                PlayObserver,
                 NullLogger<ModSyncService>.Instance);
         }
 
@@ -489,14 +605,17 @@ public class ModSyncServiceTests
         public FakeRecycleBin RecycleBin { get; }
         public SyncManifestStore Manifests { get; }
         public InstanceDriftService Drift { get; }
+        public FakeSavegamePlayObserver PlayObserver { get; }
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
         public ContentStore OtherStore { get; }
         public Guid InstanceId { get; } = Guid.NewGuid();
 
 
-        public Task<ModSyncPlan> PlanAsync()
-            => Service.PlanAsync(new ModSyncRequest(InstanceId, Adapter, Server.RepoId, Server.ProfileId), CancellationToken.None);
+        public Task<ModSyncPlan> PlanAsync(int? revision = null)
+            => Service.PlanAsync(
+                new ModSyncRequest(InstanceId, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
+                CancellationToken.None);
 
         public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan)
             => Service.ExecuteAsync(plan, null, CancellationToken.None);

@@ -18,9 +18,9 @@ namespace ModsDude.Client.Core.Models;
 /// </remarks>
 /// <param name="Version">The version that was written into the slot - what a check-in is based on.</param>
 /// <param name="ContentHash">
-/// What was written, so that the slot having moved since is a comparison rather than a guess. This
-/// is the half that could be recomputed by rehashing the slot, and the only reason it is stored is
-/// to make the check cheap.
+/// What was written at check-out, so that the slot having moved since is a comparison rather than a
+/// guess. This is the half that could be recomputed by rehashing the slot, and the only reason it is
+/// stored is to make the check cheap.
 /// </param>
 public readonly record struct SavegameCheckoutBinding(
     Guid RepoId,
@@ -30,6 +30,9 @@ public readonly record struct SavegameCheckoutBinding(
     string ContentHash,
     DateTime WrittenAt)
 {
+    private readonly string? _lastObservedHash;
+
+
     /// <summary>
     /// The profile the version being held was played on, and which revision of it.
     /// </summary>
@@ -41,16 +44,53 @@ public readonly record struct SavegameCheckoutBinding(
     /// runs" - the state that actually corrupts saves - costs no I/O whatsoever.
     /// </para>
     /// <para>
-    /// Nullable, and appended as properties rather than as positional members: a binding persisted
-    /// before this existed deserializes with both null, which reads as "not recorded" and leaves the
-    /// question unasked. Discarding those bindings instead would lose the ability to check the saves
-    /// they name back in at all, which is a far worse trade than one drift state going unreported.
+    /// <b>Both set or both null</b>, which is the constraint the server rows carry too. A savegame
+    /// following no mod list has neither: it records no revision, is in no succession, and takes no
+    /// part in play attribution. A revision without the profile it belongs to is not a number
+    /// anything can compare - revision 6 of two different lists is one integer and two mod lists.
     /// </para>
     /// </remarks>
     public Guid? ProfileId { get; init; }
 
     /// <inheritdoc cref="ProfileId"/>
     public int? ProfileRevision { get; init; }
+
+    /// <summary>
+    /// The slot's bytes when they were last examined - the boundary "has this been played since we
+    /// last looked?" is measured from.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not <see cref="ContentHash"/>, and the two must not be collapsed into one field.</b> They
+    /// answer different questions and have different lifetimes: <see cref="ContentHash"/> is what the
+    /// server holds and never moves while the save is held, so the drift notice compares against it
+    /// to report play that exists on this disk and nowhere else; this one is rewritten at every
+    /// observation. One field would compare equal to itself the moment an apply refreshed it, and
+    /// unchecked-in play would silently stop being reported. See
+    /// docs/10-savegame-profile-binding.md#two-hashes-two-questions.
+    /// </remarks>
+    /// <value>
+    /// Unset reads as <see cref="ContentHash"/>, because the bytes written at check-out are exactly
+    /// what the first observation has to compare against. Every way of taking a binding says so
+    /// anyway; this is what makes it impossible for a new one to leave the boundary unrecorded and
+    /// report a fresh check-out as an evening.
+    /// </value>
+    public string LastObservedHash
+    {
+        get => _lastObservedHash ?? ContentHash;
+        init => _lastObservedHash = value;
+    }
+
+    /// <summary>
+    /// The newest profile revision play has actually been observed on, or null until any has been.
+    /// </summary>
+    /// <remarks>
+    /// What a check-in records the version as played on, in preference to whatever the folder happens
+    /// to be on when the save is handed back: an apply between the last evening and the check-in moves
+    /// the folder and not the play, and the interval between the two does not enter into it. Null is
+    /// the never-played case and falls back to the folder's revision, where the slot's bytes still
+    /// equal the held version's and the server mints nothing anyway.
+    /// </remarks>
+    public int? LastPlayedRevision { get; init; }
 }
 
 
