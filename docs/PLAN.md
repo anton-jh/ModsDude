@@ -1175,6 +1175,94 @@ Three things settled with it, and deliberately not built:
 - **No backwards compatibility anywhere in this phase.** One developer, no users, no data worth
   migrating.
 
+## Phase 9 — One current savegame per profile
+
+Designed in full in [10 — Savegames and profile revisions](10-savegame-profile-binding.md). That
+document is the specification; this is the order to build it in.
+
+A profile gets at most one *current* savegame and a succession of past ones, and which revision a
+savegame was played on stops being guessed from the folder and starts being observed. It closes
+the drift notice nobody could act on — *"checked out against revision 1 and this folder is on
+revision 5"*, where re-apply did not help because re-apply always applies head.
+
+**Slice 1 goes first and alone.** Everything after it needs the regenerated OpenAPI client.
+
+### 1. Server schema and API
+
+- [ ] **`Savegame.SupersededAt`**, with a filtered unique index on `(RepoId, ProfileId)` where it
+      is null. Not also filtered on `ArchivedAt`, unlike the name index beside it — an archived
+      savegame still holds its profile's slot.
+- [ ] **`ProfileId` and `ProfileRevision` nullable** on `Savegame` and `SavegameVersion`, with a
+      check constraint making each pair all-or-nothing.
+- [ ] **Publish supersedes.** `PublishSavegameRequest.ProfileId` becomes nullable; publishing to a
+      profile that has a current savegame supersedes it in the same transaction.
+- [ ] **Make a past savegame current.** A swap: the incumbent is superseded before the incoming row
+      is cleared, or the unique index rejects the intermediate state.
+- [ ] **`UpdateSavegameV1Endpoint` becomes a rename.** Moving a savegame between profiles would put
+      `Savegame.ProfileId` and its versions' `ProfileId` in disagreement.
+- [ ] **Regenerate the client.**
+
+### 2. Play attribution on the client
+
+- [ ] **`LastObservedHash` and `LastPlayedRevision`** on `SavegameCheckoutBinding`, and its
+      `ProfileId`/`ProfileRevision` paired the same way the server rows are.
+- [ ] **`Observe()`**, at two call sites: before an apply rewrites the manifest, so it reads the
+      outgoing revision, and at check-in.
+- [ ] **Invert `ResolveAppliedRevision`** to prefer the binding over the manifest.
+- [ ] **Thread the revision through `ModSyncService.GetDesiredAsync`**, which passes `null` today
+      and therefore always resolves to head.
+- [ ] **One hash format.** `Observe()` must not lean on `ModContentHasher.Matches` being
+      case-insensitive; two parts of the client spelling a hash differently is a bug at the writer.
+
+### 3. The rules
+
+- [ ] **Check-out targets** the profile's head for a current savegame, the pinned revision for a
+      past one, and nothing for one with no profile.
+- [ ] **The apply table** — current follows, past only re-applies its own revision, a different
+      profile is refused.
+- [ ] **Holding a past savegame is stored state**, and its instance passes that revision into
+      `InstanceDriftService.Check` in place of head. Nothing is suppressed; the comparison comes out
+      equal on its own.
+- [ ] **Narrow `HasMovedOffItsModList`** to compare against the savegame's target rather than the
+      binding's check-out value, which fires on the ordinary follow-the-profile flow today.
+- [ ] **The checkout limit counts savegames with a profile**, not savegames.
+
+### 4. Interface
+
+- [ ] **Chips and the savegames list** — past is `Neutral`, never `Caution`; a *Show past farms*
+      toggle, off by default.
+- [ ] **Row actions**, two buttons with the disabled reason carrying the explanation.
+- [ ] **Instance page** — the apply button's meaning changes while a past savegame is held, and the
+      profile dropdown is disabled while one with a profile is.
+- [ ] **Drift notice** — never "behind the profile" for a held past savegame, and its action reads
+      *Re-apply rev 4*.
+- [ ] **The three dialogs** — check-out names the revision it will run on, check-in names what it
+      recorded, publish carries the profile picker, the declared revision and the supersede notice.
+- [ ] **Profile page** — its current savegame, a count of past ones, and the archived-current case
+      with its three ways out.
+
+### Already shaped for this
+
+Worth knowing before starting, so none of it gets rediscovered:
+
+- **`SavegameBindingStore` is already plural**, and every `GetBindings` call site treats it as a
+  list. Holding several savegames needs no storage change.
+- **`InstanceDriftService.Check` already takes `currentRevision` and `profileDependencies`** as
+  parameters. Slice 3 changes what callers pass, not the signature.
+- **The no-mods branch already exists** in `RepoSavegamesPageViewModel.ApplyProfileAsync`.
+- **`GetModDependenciesV1Endpoint` already serves any revision.** Only the client hardcodes head.
+- **Pruning already refuses** a revision a savegame version holds, so a past savegame stays
+  reproducible with no new guarantee.
+
+### Settled with it
+
+- **Mods-less repos still get no implicit profile**, and now never will — the savegame-to-profile
+  relationship is optional on both ends instead. This supersedes the note under
+  [Still open](#still-open).
+- **A published savegame's first version carries a declared revision.** The bytes existed before
+  ModsDude saw them; no arrangement of the publish flow recovers what was in the folder at the
+  time. Every version after it is observed.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint
