@@ -43,6 +43,12 @@ public partial class SettingsPageViewModel
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
+    /// The running verification pass, so Stop has something to cancel. Only ever one: the buttons are
+    /// held down while it runs, and two passes over one disk would only make each other slower.
+    /// </summary>
+    private CancellationTokenSource? _verification;
+
+    /// <summary>
     /// The stores as they are actually configured on disk, keyed by volume, refreshed whenever they
     /// are measured. What a row displays and what a row's buttons act on are deliberately two
     /// different things - see the remarks on this class.
@@ -121,6 +127,7 @@ public partial class SettingsPageViewModel
     [NotifyPropertyChangedFor(nameof(CanManage))]
     [NotifyPropertyChangedFor(nameof(ManagementBlockedReason))]
     [NotifyCanExecuteChangedFor(nameof(SweepStoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VerifyStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyQuarantineCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyImageCacheCommand))]
@@ -129,6 +136,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanManage))]
     [NotifyCanExecuteChangedFor(nameof(SweepStoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VerifyStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyQuarantineCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyImageCacheCommand))]
@@ -137,7 +145,7 @@ public partial class SettingsPageViewModel
     public bool CanManage => HasUnsavedChanges is false && IsBusy is false;
 
     public string ManagementBlockedReason => HasUnsavedChanges
-        ? "Save your changes to sweep or empty a store - these act on the folders as they are saved."
+        ? "Save your changes to sweep, verify or empty a store - these act on the folders as they are saved."
         : string.Empty;
 
 
@@ -211,6 +219,150 @@ public partial class SettingsPageViewModel
                   + "Everything removed is registered in a repo, so it comes back on demand.");
 
         await RefreshUsageAsync();
+    }
+
+    /// <summary>
+    /// Reads every file in a store and drops the ones that are no longer what their name says.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The exhaustive counterpart to the check that rides along with drift, which only ever looks at
+    /// files a mod folder reported changed. This one catches what nothing was watching: a failing
+    /// disk, or a tool that rewrote a blob without going near a mod folder.
+    /// </para>
+    /// <para>
+    /// Asked about first, and not because it is dangerous - it is the safest button on the page,
+    /// since everything it can remove is re-downloadable - but because it is <em>slow</em>. It reads
+    /// every byte in the store, which on a full one is tens of gigabytes, and a button that silently
+    /// pins the page for six minutes is a button people press twice.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanManage))]
+    public async Task VerifyStore(ContentStoreViewModel row)
+    {
+        if (FindStore(row) is not ContentStore store)
+        {
+            return;
+        }
+
+        var size = row.Usage is ContentStoreUsage usage && usage.TotalBytes > 0
+            ? $"about {ByteSize.Describe(usage.TotalBytes)} across {usage.Entries} files"
+            : "every file in it";
+
+        var confirmation = new ConfirmationDialogViewModel(
+            $"Verify the store on {row.VolumeRoot}?",
+            $"Every mod file is read back and checked against what it is filed as - {size}, so this takes a "
+                + "while and works the disk. You can stop it part way; what it has already checked still counts."
+                + "\n\nAnything that fails is dropped and downloads again when a profile needs it.",
+            IconKind.Question,
+            "Verify it",
+            "Not now");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+
+        _verification = cancellation;
+        row.VerifyProgress = "Starting...";
+        CancelVerifyCommand.NotifyCanExecuteChanged();
+
+        // Marshalled back by the progress callback's capture of the UI context, which is where this
+        // method was entered from. The posts are asynchronous, so one can land after the pass has
+        // already finished or been stopped - and a stale line would keep the Stop button under it on
+        // screen with nothing left to stop. Only the run that is still current may write.
+        var progress = new Progress<ContentStoreVerificationProgress>(x =>
+        {
+            if (ReferenceEquals(_verification, cancellation))
+            {
+                row.VerifyProgress = $"Checked {x.Checked} of {x.Total} files, "
+                    + $"{ByteSize.Describe(x.BytesRead)} of {ByteSize.Describe(x.TotalBytes)}";
+            }
+        });
+
+        try
+        {
+            var report = await RunCancellableAsync(() => _maintenance.VerifyAsync(store, progress, cancellation.Token));
+
+            await ReportVerificationAsync(row, report);
+        }
+        catch (OperationCanceledException)
+        {
+            // Not a failure. A partial pass checked real files and removed anything it found, so it
+            // is reported rather than swallowed - and the rest is one more press away.
+            await ReportAsync(
+                "Stopped",
+                "The check was stopped part way. Anything it found before that was already dealt with, "
+                    + "and running it again starts from the top.");
+        }
+        finally
+        {
+            _verification = null;
+            row.VerifyProgress = null;
+            CancelVerifyCommand.NotifyCanExecuteChanged();
+        }
+
+        await RefreshUsageAsync();
+    }
+
+    /// <summary>Stops the running pass. Live only while one is running, unlike every other button here.</summary>
+    [RelayCommand(CanExecute = nameof(CanCancelVerify))]
+    public void CancelVerify()
+    {
+        _verification?.Cancel();
+    }
+
+    public bool CanCancelVerify() => _verification is not null;
+
+    /// <summary>
+    /// What a finished pass found, and - the part that matters - where to go next.
+    /// </summary>
+    /// <remarks>
+    /// Dropping a bad blob repairs the store and <b>not</b> the mod folders hardlinked to it, which
+    /// are still holding the same wrong bytes under the same names. A report that said only "removed
+    /// 2 files" would read as done when it is half done, so the folders that need re-applying are
+    /// named.
+    /// </remarks>
+    private async Task ReportVerificationAsync(ContentStoreViewModel row, StoreVerificationReport? report)
+    {
+        if (report is null)
+        {
+            return;
+        }
+
+        var result = report.Result;
+
+        if (result.FoundProblems is false)
+        {
+            await ReportAsync(
+                "All good",
+                $"Read {result.Checked} files on {row.VolumeRoot} and every one of them is still what it is filed as."
+                    + (result.Unreadable > 0
+                        ? $"\n\n{result.Unreadable} could not be read - something has them open - and are worth another pass later."
+                        : string.Empty));
+
+            return;
+        }
+
+        var kept = result.Corrupt.Count - result.Removed;
+
+        var affected = report.Affected.Count > 0
+            ? "\n\nThese mod folders are still running the bad files, and dropping the cached copy does not fix them - "
+                + "re-apply each one:\n"
+                + string.Join('\n', report.Affected.Select(x =>
+                    $"  • {x.ModFolder}{(x.ProfileName is string name ? $" ({name})" : "")} - {x.Mods} mod{(x.Mods == 1 ? "" : "s")}"))
+            : "\n\nNothing on this machine is running them, so dropping them is the whole repair.";
+
+        await ReportAsync(
+            "Found damage",
+            $"{result.Corrupt.Count} of {result.Checked} files no longer match what they are filed as. "
+                + $"{result.Removed} were dropped and download again on demand."
+                + (kept > 0 ? $" {kept} could not be dropped because something has them open." : string.Empty)
+                + affected);
     }
 
     /// <summary>
@@ -390,6 +542,37 @@ public partial class SettingsPageViewModel
         try
         {
             return await Task.Run(work);
+        }
+        catch (Exception exception)
+        {
+            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
+
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
+    /// <remarks>
+    /// The asynchronous form, and the one that lets a cancellation straight through: stopping a
+    /// verification pass on purpose is not a failure, and turning it into "that did not work" would
+    /// be the app calling the user's own decision an error.
+    /// </remarks>
+    private async Task<T?> RunCancellableAsync<T>(Func<Task<T>> work)
+        where T : class
+    {
+        IsBusy = true;
+
+        try
+        {
+            return await Task.Run(work);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {

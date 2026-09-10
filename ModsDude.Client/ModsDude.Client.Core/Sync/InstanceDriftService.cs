@@ -126,6 +126,28 @@ public sealed record InstanceDriftReport(
     public IReadOnlyList<Savegames.SavegameDrift> SavegameDrift { get; init; } = [];
 
     public bool HasSavegameDrift => SavegameDrift.Count > 0;
+
+    /// <summary>
+    /// Store blobs that turned out to have been rewritten in place through a hardlink, and were
+    /// dropped for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Carried here because this is where the evidence turns up - a changed file in this instance's
+    /// folder - but it is emphatically <b>not a fact about this instance</b>. A store is shared by
+    /// every repo and instance on its volume, so anything named here was being served to all of
+    /// them. <see cref="CorruptedBlob.VolumeRoot"/> is on the record so a notice can say that
+    /// rather than implying one mod folder is the extent of it.
+    /// </para>
+    /// <para>
+    /// <b>Computed elsewhere and passed in</b>, like <see cref="SavegameDrift"/> and for the same
+    /// reason: <see cref="StoreIntegrityService"/> needs the store provider and reads file bytes,
+    /// and this class opens nothing.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<CorruptedBlob> StoreCorruption { get; init; } = [];
+
+    public bool HasStoreCorruption => StoreCorruption.Count > 0;
 }
 
 

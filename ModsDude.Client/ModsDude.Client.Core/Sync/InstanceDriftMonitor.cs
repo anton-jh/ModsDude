@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
 
@@ -108,6 +109,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     private readonly SyncManifestStore _manifestStore;
     private readonly IProfileRevisions? _profileRevisions;
     private readonly ISavegameService? _savegames;
+    private readonly StoreIntegrityService? _storeIntegrity;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -117,11 +119,16 @@ public sealed class InstanceDriftMonitor : IDisposable
     private DateTimeOffset? _lastCheck;
     private string? _dismissedSignature;
     private IReadOnlyList<InstanceDrift> _results = [];
+    private readonly List<CorruptedBlob> _corruption = [];
 
 
     /// <param name="savegames">
     /// Where the savegame half of the answer comes from. Optional, and absent for a build with no
     /// savegame support composed - the notice then says exactly what it has always said.
+    /// </param>
+    /// <param name="storeIntegrity">
+    /// The rewritten-blob check, run against whatever the folder comparison found changed. Optional
+    /// on the same terms as <paramref name="savegames"/>.
     /// </param>
     public InstanceDriftMonitor(
         IDriftCandidateSource candidates,
@@ -130,6 +137,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         IProfileRevisions? profileRevisions = null,
         TimeProvider? timeProvider = null,
         ISavegameService? savegames = null,
+        StoreIntegrityService? storeIntegrity = null,
         ILogger<InstanceDriftMonitor>? logger = null)
     {
         _logger = logger ?? (ILogger)NullLogger.Instance;
@@ -138,6 +146,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         _manifestStore = manifestStore;
         _profileRevisions = profileRevisions;
         _savegames = savegames;
+        _storeIntegrity = storeIntegrity;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -168,14 +177,45 @@ public sealed class InstanceDriftMonitor : IDisposable
         {
             lock (_lock)
             {
-                return _dismissedSignature is not null && _dismissedSignature == Signature(_results);
+                return _dismissedSignature is not null && _dismissedSignature == Signature(_results, _corruption);
             }
         }
     }
 
     public bool HasDrift => Drifted.Count > 0;
 
-    public bool ShouldNotify => IsDismissed is false && HasDrift;
+    /// <summary>
+    /// Every rewritten store blob this session has caught, whether or not the check that found it was
+    /// the most recent one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Accumulated rather than recomputed</b>, which is the opposite of how everything else here
+    /// works and is the point. A corrupt blob is deleted the moment it is found, so the very next
+    /// check cannot see it - the evidence destroys itself, by design, because leaving it would go on
+    /// serving wrong bytes to every repo on the volume. A finding that vanished on the next alt-tab
+    /// would be one nobody ever read.
+    /// </para>
+    /// <para>
+    /// It also means something bigger than the mod it names: the game's updater wrote through a
+    /// hardlink, which is the assumption <c>SupportsHardlinks</c> is set on. That is worth keeping on
+    /// screen until somebody waves it away.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<CorruptedBlob> StoreCorruption
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _corruption];
+            }
+        }
+    }
+
+    public bool HasStoreCorruption => StoreCorruption.Count > 0;
+
+    public bool ShouldNotify => IsDismissed is false && (HasDrift || HasStoreCorruption);
 
 
     /// <summary>
@@ -239,6 +279,13 @@ public sealed class InstanceDriftMonitor : IDisposable
                 currentRevision: _profileRevisions?.GetHeadRevision(active),
                 savegameDrift: savegameDrift);
 
+            // Runs off what the folder comparison just found changed, which is the only set of files
+            // that can have been written to since the sync.
+            report = report with
+            {
+                StoreCorruption = await CheckStoreAsync(candidate, report.Changed)
+            };
+
             // Only a drifted instance needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
             var profileName = report.Status is InstanceDriftStatus.Drifted
@@ -252,8 +299,21 @@ public sealed class InstanceDriftMonitor : IDisposable
 
         lock (_lock)
         {
-            changed = Signature(_results) != Signature(results);
+            var before = Signature(_results, _corruption);
+
+            // Kept rather than replaced - see StoreCorruption. Deduplicated by address, since two
+            // instances served by one store can both reach a blob before it is gone.
+            foreach (var blob in results.SelectMany(x => x.Report.StoreCorruption))
+            {
+                if (_corruption.Any(x => ModContentHasher.Matches(x.Hash, blob.Hash)) is false)
+                {
+                    _corruption.Add(blob);
+                }
+            }
+
             _results = results;
+
+            changed = before != Signature(_results, _corruption);
         }
 
         if (changed)
@@ -294,6 +354,38 @@ public sealed class InstanceDriftMonitor : IDisposable
     }
 
     /// <summary>
+    /// The rewritten-blob half, or nothing where this build has none.
+    /// </summary>
+    /// <remarks>
+    /// Swallows its failures for the same reason <see cref="CheckSavegamesAsync"/> does, and it has
+    /// one more of its own to swallow: a mod folder on a drive that went away between the listing
+    /// and the identity read. Nothing found means nothing said, which is also the honest answer for
+    /// a filesystem that cannot report file identities at all.
+    /// </remarks>
+    private async Task<IReadOnlyList<CorruptedBlob>> CheckStoreAsync(DriftCandidate candidate, IReadOnlyList<string> changed)
+    {
+        if (_storeIntegrity is null || candidate.ModFolder is null || changed.Count == 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            return await _storeIntegrity.CheckAsync(
+                candidate.InstanceId,
+                candidate.ModFolder,
+                changed,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not check store integrity for instance {Instance}.", candidate.InstanceId);
+
+            return [];
+        }
+    }
+
+    /// <summary>
     /// Silences the notice for the drift that is on screen right now, and nothing else. There is no
     /// permanent form of this on purpose.
     /// </summary>
@@ -301,7 +393,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     {
         lock (_lock)
         {
-            _dismissedSignature = Signature(_results);
+            _dismissedSignature = Signature(_results, _corruption);
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
@@ -392,7 +484,22 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// a timestamp so that the same drift stays dismissed across re-checks while a new mod going
     /// wrong brings the notice straight back.
     /// </summary>
-    private static string Signature(IReadOnlyList<InstanceDrift> results)
+    /// <param name="corruption">
+    /// The <em>accumulated</em> set, never the per-check one. A corrupt blob is deleted as it is
+    /// found, so the reports empty out on the next pass; signing against them would un-dismiss the
+    /// notice every time a finding aged out, which is the exact opposite of what dismissal means.
+    /// </param>
+    private static string Signature(IReadOnlyList<InstanceDrift> results, IReadOnlyList<CorruptedBlob> corruption)
+    {
+        return string.Join(
+            "//",
+            SignatureOfDrift(results),
+            // So that a second blob going wrong under a dismissed notice brings it straight back.
+            // This is the one thing here that outlives the check that found it.
+            string.Join(',', corruption.Select(x => x.Hash).Order(StringComparer.OrdinalIgnoreCase)));
+    }
+
+    private static string SignatureOfDrift(IReadOnlyList<InstanceDrift> results)
     {
         return string.Join(
             '|',

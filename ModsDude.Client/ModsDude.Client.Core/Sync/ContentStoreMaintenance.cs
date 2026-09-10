@@ -3,9 +3,22 @@ using ModsDude.Client.Core.Helpers;
 
 namespace ModsDude.Client.Core.Sync;
 
+/// <param name="ModFolder">The folder still holding the bad bytes, whatever the store now says.</param>
+/// <param name="ProfileName">What the manifest recorded was applied there, where it recorded one.</param>
+/// <param name="Mods">How many of the failed addresses that folder is running.</param>
+public sealed record AffectedModFolder(string ModFolder, string? ProfileName, int Mods);
+
+/// <param name="Affected">
+/// The mod folders that need re-applying. Empty is the good answer and the usual one - a corrupt
+/// blob nothing was running is repaired completely by dropping it.
+/// </param>
+public sealed record StoreVerificationReport(
+    ContentStoreVerificationResult Result,
+    IReadOnlyList<AffectedModFolder> Affected);
+
 /// <summary>
 /// The store housekeeping a settings page offers: what is on this machine, how much of it there is,
-/// and the two ways to make it smaller.
+/// whether it is still what it claims to be, and the two ways to make it smaller.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -61,6 +74,79 @@ public sealed class ContentStoreMaintenance(
     public ContentStoreEvictionResult Sweep(ContentStore store, CancellationToken cancellationToken)
     {
         return store.Evict(GetPinnedHashes(store), cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads every blob in a store, drops the ones that no longer match their address, and says which
+    /// mod folders are still running them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The half a store cannot answer for itself. <see cref="ContentStore.VerifyAllAsync"/> reports
+    /// addresses, because a store deliberately knows nothing about what a file <em>is</em>; the
+    /// manifests here turn those into folders and profile names. That matters because <b>removing the
+    /// blob is not the repair</b>. Where the entry was hardlinked into a mod folder, that folder is
+    /// still holding the same wrong bytes under the same name, and only re-applying its profile
+    /// replaces them - so a pass that found something has to be able to say where to go next.
+    /// </para>
+    /// <para>
+    /// Answered from the manifests, so it asks the network nothing and works offline - the same
+    /// bargain <see cref="Sweep"/> makes.
+    /// </para>
+    /// </remarks>
+    public async Task<StoreVerificationReport> VerifyAsync(
+        ContentStore store,
+        IProgress<ContentStoreVerificationProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var result = await store.VerifyAllAsync(progress, cancellationToken);
+
+        return new StoreVerificationReport(result, FindAffectedFolders(store, result.Corrupt));
+    }
+
+    /// <summary>
+    /// Which mod folders this store serves are running one of the bad addresses.
+    /// </summary>
+    /// <remarks>
+    /// Every served instance is asked, not only the drifted ones. A folder whose file still matches
+    /// its manifest exactly is the <em>worst</em> case here, not the safe one: it means nothing has
+    /// noticed, and under hardlinking that file is the blob that just failed.
+    /// </remarks>
+    private List<AffectedModFolder> FindAffectedFolders(ContentStore store, IReadOnlyList<string> corrupt)
+    {
+        if (corrupt.Count == 0)
+        {
+            return [];
+        }
+
+        var bad = new HashSet<string>(corrupt, StringComparer.OrdinalIgnoreCase);
+        var affected = new List<AffectedModFolder>();
+
+        foreach (var instance in instanceModFolders.GetAll())
+        {
+            try
+            {
+                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(instance.ModFolder).RootPath, store.RootPath) is false)
+                {
+                    continue;
+                }
+
+                var manifest = manifestStore.TryRead(instance.InstanceId);
+                var hits = manifest?.Entries.Count(x => bad.Contains(x.ContentHash)) ?? 0;
+
+                if (hits > 0)
+                {
+                    affected.Add(new AffectedModFolder(instance.ModFolder, manifest?.ProfileName, hits));
+                }
+            }
+            catch (Exception exception)
+            {
+                // One instance that cannot be resolved costs its name in the report, not the report.
+                logger.LogDebug(exception, "Could not tell whether instance {Instance} is running a bad blob.", instance.InstanceId);
+            }
+        }
+
+        return affected;
     }
 
     /// <summary>

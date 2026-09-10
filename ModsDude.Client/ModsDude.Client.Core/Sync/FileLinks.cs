@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
-/// The two filesystem facts the content store depends on and .NET does not expose: creating a
-/// hardlink, and how many names a file already has.
+/// The filesystem facts the content store depends on and .NET does not expose: creating a hardlink,
+/// how many names a file already has, and which file on disk a name actually refers to.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,8 +15,16 @@ namespace ModsDude.Client.Core.Sync;
 /// See docs/07-mod-sync-design.md#store-eviction-and-the-size-limit.
 /// </para>
 /// <para>
-/// Both calls are Windows-only. Everywhere else - and on any filesystem that refuses a link, which
-/// is what exFAT and network paths do - the caller falls back to copying, which is correct
+/// <see cref="TryGetFileIdentity"/> is what tells an in-place rewrite from a rename-over. Both leave
+/// a mod folder holding different bytes than the last sync installed; only the first wrote
+/// <em>through</em> the hardlink into the shared store blob. The difference is visible in one fact
+/// and no others - whether the file in the mod folder is still the same file as the blob - and a
+/// link count cannot answer it, because a rename-over leaves the blob with a perfectly ordinary
+/// count of one. See docs/07-mod-sync-design.md#detecting-a-rewritten-blob.
+/// </para>
+/// <para>
+/// All three calls are Windows-only. Everywhere else - and on any filesystem that refuses a link,
+/// which is what exFAT and network paths do - the caller falls back to copying, which is correct
 /// everywhere and only ever costs bytes.
 /// </para>
 /// </remarks>
@@ -54,6 +62,36 @@ public static partial class FileLinks
     /// </returns>
     public static int? TryGetLinkCount(string path)
     {
+        return TryGetInformation(path) is ByHandleFileInformation information
+            ? (int)information.NumberOfLinks
+            : null;
+    }
+
+    /// <summary>
+    /// Which file on which volume this name refers to. Two names of one hardlinked file give equal
+    /// identities; two separate files holding identical bytes do not.
+    /// </summary>
+    /// <returns>
+    /// Null where it cannot be established - a platform without the call, a filesystem that reports
+    /// no stable index, a file that will not open. Callers treat that as "cannot tell" and do
+    /// nothing, which is the safe end of this particular question: the act it gates is deleting a
+    /// store blob.
+    /// </returns>
+    public static FileIdentity? TryGetFileIdentity(string path)
+    {
+        if (TryGetInformation(path) is not ByHandleFileInformation information)
+        {
+            return null;
+        }
+
+        return new FileIdentity(
+            information.VolumeSerialNumber,
+            ((ulong)information.FileIndexHigh << 32) | information.FileIndexLow);
+    }
+
+
+    private static ByHandleFileInformation? TryGetInformation(string path)
+    {
         if (OperatingSystem.IsWindows() is false)
         {
             return null;
@@ -62,7 +100,7 @@ public static partial class FileLinks
         try
         {
             // Shared for read, write and delete: the file may be open in the game at this moment,
-            // and asking how many names it has must not interfere with that.
+            // and asking what it is must not interfere with that.
             using SafeFileHandle handle = File.OpenHandle(
                 path,
                 FileMode.Open,
@@ -70,7 +108,7 @@ public static partial class FileLinks
                 FileShare.ReadWrite | FileShare.Delete);
 
             return GetFileInformationByHandle(handle, out var information)
-                ? (int)information.NumberOfLinks
+                ? information
                 : null;
         }
         catch (Exception)
@@ -90,8 +128,8 @@ public static partial class FileLinks
 
 
     /// <summary>
-    /// <c>BY_HANDLE_FILE_INFORMATION</c>. Only the link count is read; the rest is here because the
-    /// struct has to match the one the API writes into.
+    /// <c>BY_HANDLE_FILE_INFORMATION</c>. Only the link count, the volume serial and the file index
+    /// are read; the rest is here because the struct has to match the one the API writes into.
     /// </summary>
     /// <remarks>
     /// Timestamps are pairs of 32-bit halves rather than a 64-bit field, deliberately: a native
@@ -117,3 +155,15 @@ public static partial class FileLinks
         public uint FileIndexLow;
     }
 }
+
+
+/// <summary>
+/// Which file, on which volume. The pair NTFS uses to mean one file record, and therefore the thing
+/// every name of a hardlinked file has in common.
+/// </summary>
+/// <remarks>
+/// Only ever compared against another identity read at about the same moment. A file index is stable
+/// while the file exists and explicitly not stable across deletion and recreation, so this is not
+/// something to persist and compare against later.
+/// </remarks>
+public readonly record struct FileIdentity(uint VolumeSerialNumber, ulong FileIndex);

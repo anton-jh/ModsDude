@@ -305,18 +305,119 @@ public class InstanceDriftMonitorTests
     }
 
 
+    /// <summary>
+    /// A blob the game wrote through survives the check that can no longer see it.
+    /// </summary>
+    /// <remarks>
+    /// The subtle half of the design. Finding a rewritten blob deletes it - leaving it would go on
+    /// serving wrong bytes to every repo on the volume - so the very next check has no evidence left
+    /// and reports nothing. If the notice were rebuilt from the latest check alone, the one warning
+    /// that says the updater writes through hardlinks would vanish on the next alt-tab.
+    /// </remarks>
+    [Fact]
+    public void A_rewritten_blob_stays_reported_after_the_evidence_is_gone()
+    {
+        using var fixture = new MonitorFixture(withStore: true);
+        var hash = fixture.SyncLinked("fs25_a.zip", "one");
+
+        // Written through the mod folder's name, which under hardlinking is the blob itself.
+        fixture.Folder.WriteFile("fs25_a.zip", "the game wrote straight through the link");
+
+        fixture.Monitor.Check();
+
+        var found = Assert.Single(fixture.Monitor.StoreCorruption);
+
+        Assert.Equal(hash, found.Hash);
+        Assert.True(found.Removed);
+        Assert.False(fixture.Store!.Contains(hash));
+
+        // The second check finds nothing - there is nothing left to find - and the monitor still
+        // says it happened.
+        fixture.Monitor.Check();
+
+        Assert.Empty(fixture.Monitor.Drifted.Single().Report.StoreCorruption);
+        Assert.Single(fixture.Monitor.StoreCorruption);
+        Assert.True(fixture.Monitor.HasStoreCorruption);
+    }
+
+    [Fact]
+    public void An_in_game_update_that_renames_over_leaves_the_store_uncorrupted()
+    {
+        using var fixture = new MonitorFixture(withStore: true);
+        var hash = fixture.SyncLinked("fs25_a.zip", "one");
+
+        // What Farming Simulator does: a new file, moved onto the old name. The link breaks, the
+        // blob keeps its bytes.
+        var staged = fixture.Folder.WriteFile("staged.tmp", "a newer build");
+        File.Move(staged, fixture.Folder.Combine("fs25_a.zip"), overwrite: true);
+
+        fixture.Monitor.Check();
+
+        // Drift, because the folder changed. No corruption, because the store was never written to.
+        Assert.True(fixture.Monitor.HasDrift);
+        Assert.False(fixture.Monitor.HasStoreCorruption);
+        Assert.True(fixture.Store!.Contains(hash));
+    }
+
+    /// <summary>
+    /// Dismissing waves away what is on screen. A second blob going wrong is not that.
+    /// </summary>
+    [Fact]
+    public void A_second_rewritten_blob_brings_a_dismissed_notice_back()
+    {
+        using var fixture = new MonitorFixture(withStore: true);
+        fixture.SyncLinked("fs25_a.zip", "one");
+
+        fixture.Folder.WriteFile("fs25_a.zip", "written through");
+        fixture.Monitor.Check();
+
+        fixture.Monitor.Dismiss();
+
+        Assert.True(fixture.Monitor.IsDismissed);
+        Assert.False(fixture.Monitor.ShouldNotify);
+
+        // A different mod, going the same way.
+        fixture.SyncLinked("fs25_b.zip", "two");
+        fixture.Folder.WriteFile("fs25_b.zip", "written through as well");
+        fixture.Monitor.Check();
+
+        Assert.Equal(2, fixture.Monitor.StoreCorruption.Count);
+        Assert.False(fixture.Monitor.IsDismissed);
+        Assert.True(fixture.Monitor.ShouldNotify);
+    }
+
+
     private sealed class MonitorFixture : IDisposable
     {
+        private const long _oneGigabyte = 1024L * 1024 * 1024;
+
         private readonly TempDirectory _manifests = new("monitor-manifests");
+        private readonly TempDirectory _storeRoot = new("monitor-store");
 
 
-        public MonitorFixture()
+        /// <param name="withStore">
+        /// Whether this fixture's disk is served by its own store, and therefore whether the
+        /// rewritten-blob check has anything to look at. Off by default: it is the only thing here
+        /// that needs a real store on a real volume.
+        /// </param>
+        public MonitorFixture(bool withStore = false)
         {
             Folder = new TempDirectory("monitor-mods");
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
-            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time);
+
+            if (withStore)
+            {
+                Store = new ContentStore("C:\\", _storeRoot.Path, _oneGigabyte);
+
+                Integrity = new StoreIntegrityService(
+                    new FakeStoreProvider(Store),
+                    Manifests,
+                    NullLogger<StoreIntegrityService>.Instance);
+            }
+
+            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time, storeIntegrity: Integrity);
         }
 
 
@@ -325,6 +426,10 @@ public class InstanceDriftMonitorTests
         public SyncManifestStore Manifests { get; }
         public InstanceDriftService Drift { get; }
         public TestTimeProvider Time { get; } = new();
+
+        /// <summary>Null unless this fixture was built with one - see the constructor.</summary>
+        public ContentStore? Store { get; }
+        public StoreIntegrityService? Integrity { get; }
 
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();
@@ -346,15 +451,63 @@ public class InstanceDriftMonitorTests
                 var path = Folder.WriteFile(name, content);
                 var info = new FileInfo(path);
 
-                entries.Add(new SyncManifestEntry(
-                    Path.GetFileNameWithoutExtension(name),
-                    "1.0.0",
-                    ModContentHasher.Format(SHA256.HashData(Encoding.UTF8.GetBytes(content))),
-                    name,
-                    info.Length,
-                    info.LastWriteTimeUtc));
+                entries.Add(Entry(name, content, info));
             }
 
+            WriteManifest(entries, revision);
+        }
+
+        /// <summary>
+        /// Installs a mod the way a disk served by its own store does: one file on disk, named both
+        /// from the store and from the mod folder.
+        /// </summary>
+        /// <returns>The address the blob is filed under.</returns>
+        public string SyncLinked(string name, string content)
+        {
+            var bytes = Encoding.UTF8.GetBytes(content);
+            var hash = ModContentHasher.Format(SHA256.HashData(bytes));
+
+            Store!.IngestAsync(new MemoryStream(bytes), hash, null, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+
+            var path = Folder.Combine(name);
+
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            Assert.True(FileLinks.TryCreateHardLink(path, Store.GetBlobPath(hash)), "the test needs a real hardlink");
+
+            WriteManifest([Entry(name, content, new FileInfo(path))], null);
+
+            return hash;
+        }
+
+        /// <summary>A second monitor over the same state - what the next launch has.</summary>
+        public InstanceDriftMonitor Restart()
+            => new(Candidates, Drift, Manifests, Revisions, Time, storeIntegrity: Integrity);
+
+        public void Dispose()
+        {
+            Monitor.Dispose();
+            Folder.Dispose();
+            _manifests.Dispose();
+            _storeRoot.Dispose();
+        }
+
+
+        private static SyncManifestEntry Entry(string name, string content, FileInfo info) => new(
+            Path.GetFileNameWithoutExtension(name),
+            "1.0.0",
+            ModContentHasher.Format(SHA256.HashData(Encoding.UTF8.GetBytes(content))),
+            name,
+            info.Length,
+            info.LastWriteTimeUtc);
+
+        private void WriteManifest(IReadOnlyList<SyncManifestEntry> entries, int? revision)
+        {
             Manifests.Write(new SyncManifest
             {
                 InstanceId = Candidates.InstanceId,
@@ -366,17 +519,6 @@ public class InstanceDriftMonitorTests
                 ModFolder = Folder.Path,
                 Entries = entries
             });
-        }
-
-        /// <summary>A second monitor over the same state - what the next launch has.</summary>
-        public InstanceDriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Revisions, Time);
-
-        public void Dispose()
-        {
-            Monitor.Dispose();
-            Folder.Dispose();
-            _manifests.Dispose();
         }
     }
 }

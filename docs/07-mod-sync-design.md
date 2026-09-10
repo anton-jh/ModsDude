@@ -3,8 +3,9 @@
 **Status: implemented.** The exceptions are called out where they occur. The largest of them is
 closed: Farming Simulator's in-game updater has been tested, it renames over mod files rather than
 rewriting them in place, and
-[hardlinking is switched on](#hardlink-support-is-an-adapter-property) for it. What remains open
-there is the narrower question of read-only store blobs.
+[hardlinking is switched on](#hardlink-support-is-an-adapter-property) for it. The narrower question
+of read-only store blobs is closed too, and the answer was no:
+[a rewritten blob is caught rather than prevented](#detecting-a-rewritten-blob).
 
 Applying a profile to a game installation is the reason ModsDude exists. This document is the
 design the implementation was built against, and it is kept as the reasoning rather than
@@ -32,6 +33,8 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | `IInstanceModAdapter` write side | `ModFolder`, `GetModFilePath`, `GetInstalledModPath` — paths only |
 | Upload half of import | `ModImportService` |
 | Drift | `InstanceDriftService`, `SyncManifest`, `SyncManifestStore` |
+| Rewritten-blob detection | `StoreIntegrityService` off the drift check, `ContentStore.VerifyAllAsync` on demand |
+| Store housekeeping | `ContentStoreMaintenance` — sweep, verify, and what a store is costing |
 | The UI | `SyncPage`, under the instance's own `InstancePage` |
 
 ## Content hashing
@@ -225,11 +228,11 @@ Two caveats the implementation must handle:
   the mod folder rewrites the stored copy, which is now shared across repos. The safety is carried
   by `SupportsHardlinks`, which defaults to false and is set true only where somebody has tested
   that the game's updater renames over mod files rather than rewriting them
-  ([the adapter property](#hardlink-support-is-an-adapter-property)). Marking stored blobs
-  read-only would additionally turn an unexpected in-place rewrite from silent corruption into a
-  loud failure, but it would stop an in-game updater working at all, so **blobs are left
-  writable** — the one piece of this still open. Copy-served disks are unaffected either way — the
-  mod folder holds its own bytes.
+  ([the adapter property](#hardlink-support-is-an-adapter-property)). **Blobs are left writable**,
+  and the residual exposure is answered by
+  [catching a rewritten blob](#detecting-a-rewritten-blob) rather than by preventing one — read-only
+  blobs would break the very rename-over the updater depends on. Copy-served disks are unaffected
+  either way — the mod folder holds its own bytes.
 
 ### Ingestion
 
@@ -451,7 +454,9 @@ Reminding people harder is not the fix. Making the drift visible is.
 > [When to check](#when-to-check) — the app-level notification, save-and-apply, activation from
 > either end — is in the shell.
 > [Hardlink support](#hardlink-support-is-an-adapter-property) is settled too: the updater was
-> tested and Farming Simulator hardlinks. Only read-only store blobs remain open.
+> tested and Farming Simulator hardlinks, and the exposure that opens is answered by
+> [catching a rewritten blob](#detecting-a-rewritten-blob) — which rides on this same check, off the
+> files it already found changed.
 
 ### What sync records, and why it has to
 
@@ -850,23 +855,108 @@ other repo on the volume is relying on. The main game therefore materialises by 
 disk is served by its own store — seconds of directory operations for a 2,000-mod profile instead
 of tens of gigabytes copied on every install and replace.
 
-Marking store blobs read-only is a complementary guard: an in-place rewrite then fails loudly
-rather than corrupting silently. It also stops the in-game updater working at all, which users
-may not want, so it is a separate decision from `SupportsHardlinks`. **Blobs are still writable.**
-
-> **The remaining exposure, stated plainly.** While `SupportsHardlinks` was false, writable blobs
-> cost nothing — nothing was linked, so there was no shared file to write through to. Switching the
-> flag on removes that cover. The test answered what the updater does today, in the paths it was
-> watched on; it cannot answer for every update path in every future version. If one of them ever
-> writes into an existing mod file, it now reaches a shared blob, and it does so silently. Read-only
-> blobs are the guard that would make it loud, and the reason not to take them — breaking the
-> in-game updater — is unchanged. That trade is the open question here now, and it is a much smaller
-> one than the question it replaced.
+**The residual exposure, stated plainly.** While `SupportsHardlinks` was false, writable blobs cost
+nothing — nothing was linked, so there was no shared file to write through to. Switching the flag on
+removes that cover. The test answered what the updater does today, in the paths it was watched on;
+it cannot answer for every update path in every future version. If one of them ever writes into an
+existing mod file, it reaches a shared blob. [The next section](#detecting-a-rewritten-blob) is what
+happens then.
 
 One consequence for the store assignment UI: for an adapter without hardlink support, same-disk
 and cross-disk both copy, so the choice becomes a plain speed-versus-space trade — a same-disk
 copy is faster, a cross-disk store keeps the cache off the game's drive. Present it that way for
 those adapters rather than implying a fast path that does not exist.
+
+### Detecting a rewritten blob
+
+The guard against the exposure above is **detection, not prevention**, and the reason is that
+prevention was tried on paper and does not survive contact with Windows.
+
+Making blobs read-only was the obvious move: an in-place rewrite would fail loudly instead of
+corrupting silently. It fails for a reason that has nothing to do with the bytes. On NTFS the
+read-only attribute lives in the file record, which every hardlink shares — so marking the blob
+marks the mod folder's file, because they are one file. And on Windows the attribute does not only
+block writing; it blocks `DeleteFile` and `MoveFileEx`'s replace. **Unlinking the name is exactly
+the harmless thing the updater does**, so read-only blobs break rename-over — the one update path
+the test confirmed works. It would also break `Evict` and `Clear`, silently, since both swallow a
+failed delete.
+
+An ACL denying `WriteData|AppendData` while leaving `DELETE` granted separates the two and is the
+version that could work. It was not taken: it puts Windows-only security code into `ContentStore`,
+which is otherwise pure `System.IO`; it degrades silently on non-NTFS volumes and on a store copied
+between machines, whose SIDs no longer resolve; the file's owner can strip it anyway; and whether it
+keeps the updater working depends on which replace API the game calls, which the test did not
+capture. It would cost another session with the real game to find out.
+
+So the store stays writable and answers the question afterwards instead. **Everything in a store is
+registered in some repo and re-downloadable** — the same property eviction and *empty the store*
+already lean on — so a corrupt blob found promptly costs a download, which is close enough to what
+preventing it would have bought.
+
+**The cheap discriminator.** Both an in-place rewrite and a rename-over leave the mod folder holding
+different bytes than the manifest recorded, and drift already finds both. They differ in one fact:
+
+| What the updater did | The mod folder's file | The blob |
+| --- | --- | --- |
+| Renamed a new file over the old one | A **new** file | Untouched, one name, still hashes to its address |
+| Wrote through the existing file | **Is** the blob | Rewritten, no longer hashes to its address |
+
+So the test is *whether the installed file is still the same file as the blob* — the volume serial
+and file index from `GetFileInformationByHandle`, which `FileLinks.TryGetFileIdentity` exposes.
+Two handle opens, no bytes read. A link count cannot answer it: a rename-over leaves the blob with a
+perfectly ordinary count of one.
+
+This matters because an in-game update-all changes hundreds of files, and hashing them would be tens
+of gigabytes. Only a file that fails the identity comparison — normally none of them — is ever read.
+
+**Then, and only then, the hash decides.** A blob that reaches that point is re-hashed against its
+own address. Identity says something wrote through; the hash says whether it changed anything, and a
+file whose timestamp moved but whose bytes did not keeps its place. Nothing is deleted on suspicion.
+
+**A confirmed one is deleted.** Removing the store's name is the whole repair: under hardlinking the
+mod folder's name for those same bytes survives, so the user keeps the file the game gave them, and
+the address goes back to being re-downloadable. Leaving it would go on serving the wrong bytes to
+every repo on the volume under an address they all trust.
+
+`StoreIntegrityService` runs this off whatever the folder comparison found changed, and
+`InstanceDriftMonitor` **accumulates** what it finds rather than recomputing it. That is deliberate
+and is the one piece of state here that outlives the check that produced it: finding a corrupt blob
+destroys the evidence, so a notice rebuilt from the latest check alone would drop the warning on the
+next alt-tab. It is also the warning least worth dropping — it means the game's updater writes
+through hardlinks, which is the assumption `SupportsHardlinks` is set on.
+
+**What this does not do.** Corruption still happens; it is caught rather than prevented, and between
+the rewrite and the next drift check the wrong bytes are installable. A copy-served disk has nothing
+to detect and falls out of the check for free, by failing the identity comparison — which is also
+what happens on a filesystem that cannot report identities at all.
+
+### Verifying a whole store
+
+The check above is narrow on purpose: it only ever looks at files a mod folder reported changed. That
+is what makes it free enough to run on every window activation, and it is also its blind spot — a
+blob damaged by a failing disk, or rewritten by some tool that never went near a mod folder, leaves
+no trail for it to follow.
+
+So **Verify store** in the settings does the exhaustive version. `ContentStore.VerifyAllAsync` reads
+every blob and re-hashes it against its own address; anything that fails is dropped, on the same
+reasoning as *Empty the store* — the bytes are provably not what the address names, and what should
+have been there is registered in a repo and downloads again.
+
+It is a **button, not a schedule.** A pass reads every byte in the store, which is tens of gigabytes
+on a full one, so nothing runs it in the background and the command is asked about before it starts
+— not because it is dangerous, but because a button that silently pins the page for six minutes is
+one people press twice. It takes progress in both files and bytes, since one mod is 4 KB and the next
+is 400 MB and either count alone misleads, and it is cancellable: a stopped pass is a partial pass,
+never an undone one, so whatever it repaired before stopping stays repaired.
+
+**Dropping the blob is not the whole repair, and the report has to say so.** Where the entry was
+hardlinked into a mod folder, that folder still holds the same wrong bytes under the same name;
+removing the store's copy fixes what would be *served next*, not what is installed now. Only
+re-applying that profile replaces the file. A store cannot work out which folders those are — it
+deliberately knows nothing about what a blob *is* — so `ContentStore.VerifyAllAsync` reports bare
+addresses and `ContentStoreMaintenance.VerifyAsync` turns them into mod folders and profile names off
+the manifests. Every served instance is consulted, not only the drifted ones: a folder whose file
+still matches its manifest exactly is the *worst* case here, because it means nothing has noticed.
 
 ## Server support required
 

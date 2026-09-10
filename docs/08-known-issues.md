@@ -28,6 +28,31 @@ Until it is regenerated, a newly added problem type cannot be matched by the cli
 it branches on `CustomProblemDetails.Type`. See
 [03 — Server](03-server.md#regenerating-the-client).
 
+### A rewritten store blob is caught after the fact, not prevented
+
+`FarmingSimulatorBaseModAdapter.SupportsHardlinks` is `true` — the in-game updater was tested and
+renames a new file over the old one — so a mod folder file and a store blob are frequently one file.
+Blobs are left writable, deliberately: read-only ones would break the updater's rename-over, since
+on Windows the attribute blocks unlinking a name as well as writing.
+
+`StoreIntegrityService` therefore detects instead. It rides on the drift check, compares file
+identities to tell an in-place rewrite from a rename-over, re-hashes only what fails that, and drops
+a blob that no longer matches its address. **Verify store** in the settings does the exhaustive
+version on demand, which is what covers a blob damaged by something that never went near a mod
+folder.
+
+The limits are the ones detection always has. **There is a window** between the rewrite and the next
+drift check in which the wrong bytes are installable into other instances on that volume. Nothing
+verifies a store on a schedule, because a pass reads every byte in it — so the exhaustive answer
+exists only when somebody asks for it. And **dropping a blob does not repair a mod folder**: where
+the entry was hardlinked, the folder still holds the same wrong bytes under the same name, and only
+re-applying that profile replaces them. The verification report names the folders that need it,
+which is the most it can do from here.
+
+The consequence is bounded by the store's central property: everything in it is registered in some
+repo and re-downloadable, so the cost of a caught blob is a download. See
+[07](07-mod-sync-design.md#detecting-a-rewritten-blob).
+
 ### `IsTrusted` has no write path
 
 `User.IsTrusted` has a private setter and nothing sets it to `true`. Repo creation is
@@ -38,23 +63,6 @@ unlike a membership level there is no threshold to report and nothing the user c
 from inside the app; the consequence is that the refusal says only that it was refused.
 
 ## Unbuilt, and known to be
-
-### Hardlinking is on, and store blobs are still writable
-
-`FarmingSimulatorBaseModAdapter.SupportsHardlinks` is now `true`: the in-game updater was tested
-against the real game and renames a new file over the old one rather than rewriting in place, so
-the hardlink breaks harmlessly and the store blob is untouched. Farming Simulator materialises by
-hardlink again wherever a disk is served by its own store.
-
-What did **not** change is that store blobs are left writable, and that decision was originally
-justified by hardlinking being off — with nothing linked, a writable blob had no shared file to
-corrupt. That justification is gone. The residual risk is narrow but real: if any update path, in
-any version of the game, does write into an existing mod file, it now writes straight through into
-a blob shared with every repo on the volume, silently. Read-only blobs would turn that into a loud
-failure — at the cost of stopping the in-game updater outright, which is why it was not taken.
-
-Deciding that trade is the open part. See
-[07](07-mod-sync-design.md#hardlink-support-is-an-adapter-property).
 
 ### A drift notice can outlive the account that could act on it
 

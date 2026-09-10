@@ -121,6 +121,15 @@
                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                Visibility="{Binding HasSavegameWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                    <!-- The shared cache was written through, which is the one problem here that is
+                         not about this instance at all - every repo on that drive was being served
+                         those bytes. Critical rather than caution for exactly that reason. -->
+                    <TextBlock Text="{Binding StoreWarning}"
+                               Margin="0 8 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                               Visibility="{Binding HasStoreWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                     <TextBlock Text="{Binding ImportPrompt}"
                                Margin="0 8 0 0"
                                TextWrapping="Wrap"

@@ -775,7 +775,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | --- | --- | --- |
 | `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
 | `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account panel with **Switch user** |
-| `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, and the usage/sweep/empty controls for both |
+| `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |

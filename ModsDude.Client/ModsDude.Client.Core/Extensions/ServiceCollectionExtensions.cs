@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRecycleBin, ShellRecycleBin>();
         services.AddSingleton<SyncManifestStore>();
         services.AddSingleton<InstanceDriftService>();
+        services.AddSingleton<StoreIntegrityService>();
         services.AddSingleton<ModSyncService>();
         services.AddSingleton<ContentStoreMaintenance>();
         services.AddSingleton<Savegames.ISavegamePacker, Savegames.SavegamePacker>();

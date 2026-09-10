@@ -105,9 +105,25 @@
                                                     <Button Content="Sweep to limit"
                                                             Command="{Binding DataContext.SweepStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
+                                                    <Button Content="Verify store" Margin="8 0 0 0"
+                                                            Command="{Binding DataContext.VerifyStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
                                                     <Button Content="Empty store" Margin="8 0 0 0"
                                                             Command="{Binding DataContext.EmptyStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
+                                                </StackPanel>
+
+                                                <!-- Only up while a pass is running. Stop is the one
+                                                     button on this page that is live *because*
+                                                     something is busy rather than despite it. -->
+                                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0"
+                                                            Visibility="{Binding IsVerifying, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="{Binding VerifyProgress}"
+                                                               VerticalAlignment="Center"
+                                                               TextWrapping="Wrap" MaxWidth="520"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    <Button Content="Stop" Margin="12 0 0 0"
+                                                            Command="{Binding DataContext.CancelVerifyCommand, RelativeSource={RelativeSource AncestorType=Page}}" />
                                                 </StackPanel>
 
                                                 <StackPanel Orientation="Vertical" Margin="0 12 0 0"

@@ -527,12 +527,21 @@ The core feature. Full design in [07 — Mod sync design](07-mod-sync-design.md)
       substitutes for. It renames over, so
       `FarmingSimulatorBaseModAdapter.SupportsHardlinks` is `true` and the main game has its fast
       path: a hardlink wherever a disk is served by its own store.
-- [ ] **Deliberately open: decide whether store blobs should be read-only.** Read-only fails
-      loudly instead of corrupting silently, but also stops the in-game updater working. While
-      hardlinking was off the question was moot — nothing was linked, so a writable blob had no
-      shared file to be written through. Now that it is on, this is the only thing standing between
-      an unexpected in-place rewrite and silent corruption across every repo on the volume. The
-      test covered the updater's behaviour today, not every path in every future version.
+- [x] **Decide whether store blobs should be read-only. They are not — the exposure is detected
+      instead.** Read-only fails loudly instead of corrupting silently, but on Windows the attribute
+      also blocks unlinking a name, which is precisely the harmless thing the updater does when it
+      renames over a mod file; it would break the one update path the test confirmed, and silently
+      break `Evict` and `Clear` besides. An ACL denying writes while leaving delete granted would
+      separate the two, and was rejected for putting Windows-only security code into an otherwise
+      pure-`System.IO` `ContentStore`, for degrading silently on non-NTFS volumes, and for needing
+      another session with the real game to confirm which replace API it calls.
+      `StoreIntegrityService` catches the rewrite instead: a rename-over leaves the mod folder a
+      *new* file, so comparing file identities — two handle opens, no bytes read — tells the two
+      apart, and only a blob that fails that is re-hashed against its address. A confirmed one is
+      dropped, which leaves the user's updated file alone and costs a re-download. Findings are
+      accumulated on the monitor rather than recomputed, because deleting the bad blob destroys the
+      evidence that produced them. See
+      [the design](07-mod-sync-design.md#detecting-a-rewritten-blob).
 
 **Done means:** two people on two machines pick the same profile and end up with byte-identical
 mod folders, and neither loses a file they cannot get back.

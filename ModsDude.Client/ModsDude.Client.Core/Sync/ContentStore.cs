@@ -23,11 +23,14 @@ namespace ModsDude.Client.Core.Sync;
 /// See docs/07-mod-sync-design.md#cache-isolation.
 /// </para>
 /// <para>
-/// Blobs are deliberately left writable. Marking them read-only would turn an in-place rewrite
-/// through a hardlink into a loud failure rather than silent corruption, but it also stops an
-/// in-game updater working at all, and which of those a game does is still an open question -
-/// docs/07-mod-sync-design.md#hardlink-support-is-an-adapter-property. Until somebody tests it, the
-/// adapter's <c>SupportsHardlinks</c> defaulting to false is what carries the safety.
+/// Blobs are deliberately left writable, and the exposure that opens is answered by <b>detection
+/// rather than prevention</b> - see <see cref="VerifyAsync"/>. Marking them read-only would turn an
+/// in-place rewrite through a hardlink into a loud failure rather than silent corruption, but on
+/// Windows the read-only attribute also blocks unlinking the name, which is exactly the harmless
+/// thing an in-game updater does when it renames over a mod file. Everything here is
+/// re-downloadable by construction, so catching a rewritten blob promptly costs a download and
+/// lands in nearly the same place as preventing one.
+/// See docs/07-mod-sync-design.md#detecting-a-rewritten-blob.
 /// </para>
 /// </remarks>
 public sealed class ContentStore
@@ -198,6 +201,85 @@ public sealed class ContentStore
     }
 
     /// <summary>
+    /// Re-reads a blob and asks whether it still hashes to the address it is filed under.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one question a content-addressed store can always answer about itself, and the reason
+    /// blobs can be left writable: an entry rewritten in place through a hardlink stops matching its
+    /// own name, and nothing else in the system can make that happen.
+    /// </para>
+    /// <para>
+    /// It reads the whole file, so <b>it is never run across a store</b> - a sweep over a full one is
+    /// tens of gigabytes. <see cref="StoreIntegrityService"/> narrows to the entries that can
+    /// actually have been rewritten first, which is normally none of them.
+    /// </para>
+    /// </remarks>
+    public async Task<BlobVerification> VerifyAsync(string hash, CancellationToken cancellationToken)
+    {
+        var path = GetBlobPath(hash);
+
+        if (File.Exists(path) is false)
+        {
+            return BlobVerification.Absent;
+        }
+
+        try
+        {
+            return ModContentHasher.Matches(await HashFileAsync(path, cancellationToken), hash)
+                ? BlobVerification.Intact
+                : BlobVerification.Corrupt;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // A blob the game has open exclusively, or a drive pulled mid-read. Unknown, and
+            // deliberately not corrupt: the caller's response to corrupt is to delete it.
+            Log.LogDebug(exception, "Could not verify the store blob {Hash}.", hash);
+
+            return BlobVerification.Unreadable;
+        }
+    }
+
+    /// <summary>
+    /// Drops one blob by address, whatever its place in the eviction order.
+    /// </summary>
+    /// <remarks>
+    /// For a blob that has failed <see cref="VerifyAsync"/>, where the bytes at that address are
+    /// provably not the content the address names. Deleting the store's name is the whole repair:
+    /// under hardlinking the mod folder's name for those same bytes survives untouched, so the
+    /// user keeps the file the game updated, and the address goes back to being re-downloadable.
+    /// </remarks>
+    /// <returns>False where the entry was already gone or would not delete.</returns>
+    public bool Remove(string hash)
+    {
+        try
+        {
+            var path = GetBlobPath(hash);
+
+            if (File.Exists(path) is false)
+            {
+                return false;
+            }
+
+            File.Delete(path);
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            // Left in place and reported. It fails verification again on the next check, which is
+            // the right amount of persistence for something that costs a download to fix.
+            Log.LogWarning(exception, "Could not remove the store blob {Hash}.", hash);
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Records that an entry was used, so eviction drops the ones nothing has wanted for longest.
     /// </summary>
     /// <remarks>
@@ -225,6 +307,78 @@ public sealed class ContentStore
             // Losing a touch costs an entry its place in the eviction order and nothing else.
             Log.LogDebug(exception, "Could not touch the store blob {Hash}.", hash);
         }
+    }
+
+    /// <summary>
+    /// Re-reads every blob in the store and drops the ones that no longer hash to their own address.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The exhaustive form of <see cref="VerifyAsync"/>, and <b>the only thing here that catches a
+    /// blob nothing was watching</b>. The drift-driven check in <see cref="StoreIntegrityService"/>
+    /// only ever looks at files a mod folder reported changed, so a blob damaged by a failing disk or
+    /// rewritten by some tool that never touched a mod folder is invisible to it. This looks at all
+    /// of them.
+    /// </para>
+    /// <para>
+    /// It costs a full read of the store - tens of gigabytes on a large one - which is why nothing
+    /// calls it on a schedule and why it takes a <paramref name="cancellationToken"/> that is
+    /// expected to be used. It is a button somebody presses.
+    /// </para>
+    /// <para>
+    /// A corrupt entry is deleted, on the same reasoning as <see cref="Clear"/>: the bytes at that
+    /// address are provably not what the address names, so the entry is worse than useless - every
+    /// repo on the volume would be served it - and what it should have held is registered in a repo
+    /// and downloads again. <b>What this cannot repair is a mod folder</b>: where the entry was
+    /// hardlinked, the folder's name for those same bytes is still there and still wrong, and only
+    /// re-applying that profile fixes it.
+    /// </para>
+    /// </remarks>
+    public async Task<ContentStoreVerificationResult> VerifyAllAsync(
+        IProgress<ContentStoreVerificationProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var entries = Enumerate();
+        var total = entries.Sum(x => x.Length);
+
+        var corrupt = new List<string>();
+        var removed = 0;
+        var unreadable = 0;
+        var done = 0;
+        long read = 0;
+
+        foreach (var entry in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            switch (await VerifyEntryAsync(entry, cancellationToken))
+            {
+                case BlobVerification.Corrupt:
+                    Log.LogWarning("The store blob {Hash} no longer matches its address. Removing it.", entry.Hash);
+
+                    corrupt.Add(entry.Hash);
+
+                    if (Remove(entry.Hash))
+                    {
+                        removed++;
+                    }
+
+                    break;
+
+                // Absent counts here too: something deleted it between the listing and the read,
+                // which is not damage and not worth reporting as any kind of failure.
+                case BlobVerification.Unreadable:
+                    unreadable++;
+                    break;
+            }
+
+            done++;
+            read += entry.Length;
+
+            progress?.Report(new ContentStoreVerificationProgress(done, entries.Count, read, total));
+        }
+
+        return new ContentStoreVerificationResult(done, read, corrupt, removed, unreadable);
     }
 
     /// <summary>
@@ -424,6 +578,29 @@ public sealed class ContentStore
 
 
     /// <summary>
+    /// One entry of a full pass, tolerating a name that is not an address at all.
+    /// </summary>
+    /// <remarks>
+    /// Only a walk of the directory can turn up such a name - every other route in is keyed by a
+    /// hash the caller supplied. It is reported as unreadable and left alone: something put it there,
+    /// this is not the code that knows what, and a verification pass is not the place to start
+    /// deleting files it does not understand.
+    /// </remarks>
+    private async Task<BlobVerification> VerifyEntryAsync(ContentStoreEntry entry, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await VerifyAsync(entry.Hash, cancellationToken);
+        }
+        catch (ArgumentException exception)
+        {
+            Log.LogDebug(exception, "The store holds {File}, which is not a content address.", entry.Path);
+
+            return BlobVerification.Unreadable;
+        }
+    }
+
+    /// <summary>
     /// Moves a verified temporary file to its address. An entry that appeared meanwhile is left
     /// alone rather than overwritten: the content is the same by construction, and replacing the
     /// file would break every hardlink already pointing at it.
@@ -561,6 +738,28 @@ public sealed class ContentStore
 /// </param>
 public sealed record ContentStoreEntry(string Hash, string Path, long Length, DateTime LastUsedUtc, bool IsUniquelyHeld);
 
+/// <summary>Whether a blob still is what its address says it is.</summary>
+public enum BlobVerification
+{
+    /// <summary>It hashes to its own name. Nothing has written through it.</summary>
+    Intact,
+
+    /// <summary>
+    /// It does not. The bytes at a verified address are not the content that address names, which
+    /// makes the entry worse than useless - every repo on the volume would be served it.
+    /// </summary>
+    Corrupt,
+
+    /// <summary>The store does not hold that address, so there was nothing to check.</summary>
+    Absent,
+
+    /// <summary>
+    /// It could not be read - open in the game, or a drive that went away mid-check. Unknown, and
+    /// pointedly not <see cref="Corrupt"/>: the response to corrupt is deletion.
+    /// </summary>
+    Unreadable
+}
+
 /// <param name="RemainingBytes">What the store uniquely holds afterwards - the number the limit is about.</param>
 public sealed record ContentStoreEvictionResult(int EntriesEvicted, long BytesReclaimed, long RemainingBytes);
 
@@ -589,6 +788,36 @@ public sealed record ContentStoreUsage(
 
 /// <param name="Failed">Blobs something else was holding open. Swept the next time.</param>
 public sealed record ContentStoreClearResult(int EntriesDeleted, long BytesReclaimed, int Failed);
+
+/// <param name="Checked">Entries read to the end, so a cancelled pass says how far it got.</param>
+/// <param name="Corrupt">
+/// The addresses whose bytes no longer hash to them. Addresses and nothing else, because a store
+/// does not know what a file <em>is</em> - naming the mods needs the manifests, which is
+/// <see cref="ContentStoreMaintenance"/>'s half of the answer.
+/// </param>
+/// <param name="Removed">
+/// How many of those actually went. Lower than <paramref name="Corrupt"/> where something has the
+/// file open; the rest are caught by the next pass.
+/// </param>
+/// <param name="Unreadable">
+/// Entries that could not be read, or that vanished mid-pass, or whose name is not a content address
+/// at all. Not damage, and pointedly not counted as corrupt.
+/// </param>
+public sealed record ContentStoreVerificationResult(
+    int Checked,
+    long BytesRead,
+    IReadOnlyList<string> Corrupt,
+    int Removed,
+    int Unreadable)
+{
+    public bool FoundProblems => Corrupt.Count > 0;
+}
+
+/// <summary>
+/// How far a verification pass has got. Both counts and both byte totals, because file counts and
+/// bytes disagree wildly across a store where one mod is 4 KB and the next is 400 MB.
+/// </summary>
+public sealed record ContentStoreVerificationProgress(int Checked, int Total, long BytesRead, long TotalBytes);
 
 
 /// <summary>

@@ -131,6 +131,19 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     private string? _savegameWarning;
 
     /// <summary>
+    /// A store blob the game rewrote in place through a hardlink, caught and dropped.
+    /// </summary>
+    /// <remarks>
+    /// Read off the monitor's accumulated set rather than off this instance's report, and
+    /// deliberately: a corrupt blob is deleted the moment it is found, so the report that carried it
+    /// is empty by the next check. It is also the only line here that is not about one instance - a
+    /// store is shared by every repo on its volume - which is why it names the drive.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStoreWarning))]
+    private string? _storeWarning;
+
+    /// <summary>
     /// The drifted files are by definition versions the user now has and the repo may not, so the
     /// warning doubles as the first step of the flow they came back to perform anyway.
     /// </summary>
@@ -182,6 +195,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
     public bool HasLockedWarning => LockedWarning is not null;
     public bool HasSavegameWarning => SavegameWarning is not null;
+    public bool HasStoreWarning => StoreWarning is not null;
     public bool HasImportPrompt => ImportPrompt is not null;
     public bool HasStatus => Status is not null;
 
@@ -404,6 +418,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         Detail = Describe(report, files);
         LockedWarning = DescribeLocked(report);
         SavegameWarning = DescribeSavegames(report);
+        StoreWarning = DescribeStoreCorruption(_monitor.StoreCorruption);
         ImportPrompt = files > 0 && CanReview
             ? "The versions now on disk may not be in the repo. Opening the mod list is where they get imported."
             : null;
@@ -498,6 +513,31 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             : "";
 
         return $"{what} Hosting a savegame on it may damage that save.{more}";
+    }
+
+    /// <summary>
+    /// The one warning here that is not about this instance. Named for the blast radius rather than
+    /// the mod, because the mod is the symptom and the shared cache is the problem.
+    /// </summary>
+    private static string? DescribeStoreCorruption(IReadOnlyList<CorruptedBlob> corruption)
+    {
+        if (corruption.Count == 0)
+        {
+            return null;
+        }
+
+        var first = corruption[0];
+
+        var outcome = first.Removed
+            ? "The bad copy has been dropped and will be downloaded again when something needs it."
+            : "It could not be dropped - something still has the file open - and will be caught again on the next check.";
+
+        var more = corruption.Count > 1
+            ? $" {corruption.Count - 1} more were found the same way."
+            : "";
+
+        return $"The game wrote '{first.DisplayName}' directly into the mod cache on {first.VolumeRoot}, " +
+            $"which every repo on that drive shares. {outcome}{more}";
     }
 
     /// <summary>

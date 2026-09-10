@@ -136,6 +136,20 @@ public partial class ContentStoreViewModel(
     public bool HasQuarantine => Usage?.QuarantineBytes > 0;
 
     /// <summary>
+    /// How far a verification pass has got, or null when none is running.
+    /// </summary>
+    /// <remarks>
+    /// On the row rather than on the page because verifying is the one piece of housekeeping here
+    /// slow enough to need saying out loud - it reads every byte of the store - and because the row
+    /// is where somebody started it. It doubles as the flag for the Stop button.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsVerifying))]
+    private string? _verifyProgress;
+
+    public bool IsVerifying => VerifyProgress is not null;
+
+    /// <summary>
     /// Said in full, because this is the one part of a store that is not re-downloadable: these are
     /// files sync found in a mod folder that no repo registers, moved here because the Recycle Bin
     /// would not take them.
