@@ -47,6 +47,20 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// a server-minted id would address a blob nobody had written to. It is a fresh GUID either way; the
 /// only difference is which end says it first.
 /// </para>
+/// <para>
+/// <b>Publishing to a profile supersedes whatever farm it was following</b>, in the same transaction
+/// as everything else here. A profile has at most one current savegame, so the new one taking the
+/// slot and the old one leaving it are one event and not two - and a publish that committed the new
+/// row first would be refused by the one-current-savegame index rather than doing half the job. The
+/// old savegame is untouched otherwise: still playable, still holding its history, still on the
+/// revision it was last played on.
+/// </para>
+/// <para>
+/// <b>A profile is a choice, not a requirement.</b> Publishing without one produces a savegame that
+/// follows no mod list: nothing is superseded, no revision is recorded, and every rule about
+/// revisions leaves it alone. That is the only shape available to an adapter with savegame support
+/// and no mod support, and it is offered in a mod-capable repo too.
+/// </para>
 /// </remarks>
 public class PublishSavegameV1Endpoint : IEndpoint
 {
@@ -79,8 +93,17 @@ public class PublishSavegameV1Endpoint : IEndpoint
         }
 
         var savegameId = new SavegameId(request.SavegameId);
-        var profileId = new ProfileId(request.ProfileId);
-        var profileRevision = new RevisionNumber(request.ProfileRevision);
+
+        // Both or neither. Half a pair is refused here rather than at the check constraint behind
+        // it, because "a revision of which profile?" is a question the request cannot answer and a
+        // database error is not the way to say so.
+        if (request.ProfileId is null != request.ProfileRevision is null)
+        {
+            return TypedResults.BadRequest(Problems.SavegameProfileNotPaired);
+        }
+
+        var profileId = request.ProfileId is Guid chosen ? new ProfileId(chosen) : (ProfileId?)null;
+        var profileRevision = request.ProfileRevision is int declared ? new RevisionNumber(declared) : (RevisionNumber?)null;
 
         if (await dbContext.Savegames.CheckNameIsTaken(new RepoId(repoId), new SavegameName(request.Name), cancellationToken))
         {
@@ -90,7 +113,11 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // The revision has to exist before the version can name it: the foreign key onto it is
         // Restrict, so a revision that is not there surfaces as a database error rather than as the
         // answer "that mod list is not one of this profile's".
-        if (!await dbContext.ProfileRevisions.ExistsAsync(new RepoId(repoId), profileId, profileRevision, cancellationToken))
+        // Both patterns, though the check above already made them one condition: the pair being set
+        // together is a fact about the request, and stating it here is what lets the compiler agree
+        // rather than being told to.
+        if (profileId is ProfileId profile && profileRevision is RevisionNumber declaredRevision
+            && !await dbContext.ProfileRevisions.ExistsAsync(new RepoId(repoId), profile, declaredRevision, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{request.ProfileId}' has no revision {request.ProfileRevision}"));
         }
@@ -110,6 +137,12 @@ public class PublishSavegameV1Endpoint : IEndpoint
 
         var now = timeService.Now();
 
+        // At most one - the index says so - and found whether or not it is archived, since archiving
+        // does not hand a profile's slot back.
+        var superseded = profileId is ProfileId target
+            ? await dbContext.Savegames.GetCurrentAsync(new RepoId(repoId), target, cancellationToken)
+            : null;
+
         var savegame = new Savegame(new RepoId(repoId), new SavegameName(request.Name), profileId, now)
         {
             Id = savegameId
@@ -118,7 +151,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // Origin.Created rather than CheckedIn: this version was not built on anything, which is
         // also why it is the one version whose BaseVersion is null.
         var version = savegame.CreateVersion(
-            profileId,
             profileRevision,
             request.ContentHash,
             request.SizeBytes,
@@ -133,6 +165,18 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // than ending here - the play it will eventually record has not happened yet.
         var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now);
 
+        // Two writes rather than one, and the order is the point: the outgoing savegame has to leave
+        // the profile's slot before the new one takes it, or the one-current-savegame index refuses
+        // the instant where both are current. A change tracker promises no order between an update
+        // and an insert, so this states it - the same shape MoveModVersionV1Endpoint uses to take an
+        // ordering through a unique index. The transaction is what makes the halfway state, where
+        // the profile has no current savegame at all, something no other request and no crash can
+        // observe.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        superseded?.Supersede(now);
+        await unitOfWork.CommitAsync(cancellationToken);
+
         dbContext.Savegames.Add(savegame);
         dbContext.SavegameVersions.Add(version);
         dbContext.SavegameCheckouts.Add(checkout);
@@ -141,8 +185,17 @@ public class PublishSavegameV1Endpoint : IEndpoint
         {
             await unitOfWork.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
         {
+            // Somebody else published to this profile in the same instant, superseded the same
+            // incumbent, and got their row in first. The read above cannot see it - it committed
+            // after this request read - so the index is what decides, and the loser is told what has
+            // changed rather than being told about a name they did not clash with.
+            if (profileId is ProfileId contested && SavegameConflicts.IsCurrentSavegameConflict(exception))
+            {
+                return TypedResults.BadRequest(Problems.SavegameCurrentConflict(contested));
+            }
+
             // Two people published the same name in the same instant. The check above is what gives
             // the good error message; the unique index on (RepoId, Name) is what makes one of them
             // lose rather than both succeeding. A client re-sending a publish it already made lands
@@ -150,6 +203,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
             // one, since the savegame it is asking for exists.
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, now, cancellationToken));
     }
@@ -160,15 +215,24 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// remarks on the endpoint for why this end chooses it.
     /// </param>
     /// <param name="ProfileId">
-    /// The profile this save follows from now on, and the one its first version was played on. The
-    /// two are the same thing at publish time and diverge only later, when somebody moves the save
-    /// onto a branched profile.
+    /// The profile this save follows from now on, and the one its first version was played on -
+    /// which is the same profile for the whole of its life, since nothing moves a save between them.
+    /// <para>
+    /// <c>null</c> is <b>no mod list</b>, offered in the publish dialog as an explicit choice rather
+    /// than being what an omitted field falls back to. The save is then unmanaged: nothing about
+    /// revisions, current or past applies to it.
+    /// </para>
     /// </param>
     /// <param name="ProfileRevision">
-    /// Which revision of that profile the save was actually played against. Never derived from the
-    /// profile's current head here: the folder this was packed from was on whatever revision it was
-    /// applied at, and claiming otherwise is how a save ends up reproducible against a mod list it
-    /// has never seen.
+    /// Which revision of that profile the save was played against, or <c>null</c> with a null
+    /// <paramref name="ProfileId"/>. Half a pair is refused.
+    /// <para>
+    /// <b>Declared rather than observed</b>, and the only version in the system of which that is
+    /// true: the bytes predate ModsDude, so nothing knows which mods were in the folder while that
+    /// farm was actually played, and requiring the profile to be applied first would only observe a
+    /// different moment. Never derived from the profile's head here either - the client sends the
+    /// number it showed the person, so the declaration is one they saw.
+    /// </para>
     /// </param>
     /// <param name="ContentHash">
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to.
@@ -181,8 +245,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
     public record PublishSavegameRequest(
         Guid SavegameId,
         string Name,
-        Guid ProfileId,
-        int ProfileRevision,
+        Guid? ProfileId,
+        int? ProfileRevision,
         string ContentHash,
         long SizeBytes,
         string? Label,

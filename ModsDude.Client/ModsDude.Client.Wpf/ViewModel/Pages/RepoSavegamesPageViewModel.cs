@@ -372,12 +372,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     [RelayCommand]
     private async Task CompareRevisions()
     {
-        if (Selected is not SavegameListItemViewModel row)
+        // A savegame that follows no mod list has no revisions to compare, the same way an
+        // unselected row has nothing to open.
+        if (Selected is not SavegameListItemViewModel row || row.Savegame.ProfileId is not Guid profileId)
         {
             return;
         }
 
-        if (await _shellNavigation.GoToProfileHistoryAsync(_repo.Id, row.Savegame.ProfileId) is false)
+        if (await _shellNavigation.GoToProfileHistoryAsync(_repo.Id, profileId) is false)
         {
             Status = $"'{row.ProfileName}' could not be opened from here.";
         }
@@ -494,12 +496,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             _lifetime.ThrowIfCancellationRequested();
 
             if (row.Savegame.Head is not SavegameVersionDto head ||
+                head.ProfileRevision is not int played ||
                 FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
             {
                 continue;
             }
 
-            var behind = profile.HeadRevision - head.ProfileRevision;
+            var behind = profile.HeadRevision - played;
 
             if (behind <= 0)
             {
@@ -508,7 +511,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             row.SetRevisionDrift(
                 behind,
-                await LockedPinMovedAsync(profile.Id, head.ProfileRevision, profile.HeadRevision));
+                await LockedPinMovedAsync(profile.Id, played, profile.HeadRevision));
         }
     }
 
@@ -667,9 +670,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         try
         {
             // The instance already following this save's profile is the likeliest target, and it is
-            // also the one whose mod folder is already right.
+            // also the one whose mod folder is already right. A save that follows no mod list has no
+            // such instance, and any of them will do.
             var preferred = instances.FirstOrDefault(x =>
-                x.ActiveProfile == new ActiveProfile(_repo.Id, row.Savegame.ProfileId)) ?? instances[0];
+                row.Savegame.ProfileId is Guid profileId
+                && x.ActiveProfile == new ActiveProfile(_repo.Id, profileId)) ?? instances[0];
 
             var context = await BuildContextAsync(row, preferred, mode, _lifetime);
 
@@ -1027,15 +1032,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private async Task<SavegameRevisionNote?> BuildRevisionNoteAsync(SavegameListItemViewModel row)
     {
         if (row.Savegame.Head is not SavegameVersionDto head ||
+            head.ProfileRevision is not int played ||
             FindProfile(row.Savegame.ProfileId) is not ProfileDto profile ||
-            profile.HeadRevision <= head.ProfileRevision)
+            profile.HeadRevision <= played)
         {
             return null;
         }
 
-        var moved = await LockedPinMovedAsync(profile.Id, head.ProfileRevision, profile.HeadRevision);
+        var moved = await LockedPinMovedAsync(profile.Id, played, profile.HeadRevision);
 
-        var text = $"Last played on revision {head.ProfileRevision}; {profile.Name} is now at {profile.HeadRevision}.";
+        var text = $"Last played on revision {played}; {profile.Name} is now at {profile.HeadRevision}.";
 
         return new SavegameRevisionNote(
             moved
@@ -1044,8 +1050,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             moved);
     }
 
-    private ProfileDto? FindProfile(Guid profileId)
-        => _profileService.Profiles.FirstOrDefault(x => x.Id == profileId && x.RepoId == _repo.Id);
+    /// <summary>
+    /// The profile a savegame follows, or <c>null</c> where it follows none. The same answer as a
+    /// profile this member cannot see, and deliberately so: every caller wants the same thing from
+    /// both, which is to say nothing about mod lists on that row.
+    /// </summary>
+    private ProfileDto? FindProfile(Guid? profileId)
+        => profileId is Guid id
+            ? _profileService.Profiles.FirstOrDefault(x => x.Id == id && x.RepoId == _repo.Id)
+            : null;
 
 
     public class Factory(IServiceProvider serviceProvider)

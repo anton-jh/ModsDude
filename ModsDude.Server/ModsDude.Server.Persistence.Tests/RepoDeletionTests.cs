@@ -165,7 +165,6 @@ public class RepoDeletionTests(DatabaseFixture fixture)
 
         dbContext.Savegames.Add(savegame);
         dbContext.SavegameVersions.Add(savegame.CreateVersion(
-            profileId,
             new RevisionNumber(1),
             new string('1', ModImageHash.Length),
             sizeBytes: 1024,

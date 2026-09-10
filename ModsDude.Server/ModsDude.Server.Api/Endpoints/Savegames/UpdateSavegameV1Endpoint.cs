@@ -5,7 +5,6 @@ using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
-using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
@@ -16,19 +15,22 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// Renames a savegame, or moves it onto a different profile.
+/// Renames a savegame. That is the whole of it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Moving a savegame changes intent, not history.</b> <see cref="Savegame.ProfileId"/> is the
-/// standing statement that this save follows that profile; every version keeps naming the revision
-/// it was actually played on. Branch a profile, move the save onto the branch, and the old versions
-/// still honestly say which mod list produced them - rewriting them to agree with the new profile
-/// would be inventing play that never happened.
+/// <b>There is no operation that moves a savegame to another profile</b>, and this used to be it.
+/// Moving one would put <see cref="Savegame.ProfileId"/> and every version's
+/// <see cref="SavegameVersion.ProfileId"/> in disagreement, and the versions are the honest half -
+/// they name the mod lists that actually produced those bytes. It would also make a save's target
+/// revision incomparable with its own history, since revision numbers of two profiles have nothing
+/// to do with each other.
 /// </para>
 /// <para>
-/// So this endpoint touches no version, and the client's next check-in is the first one that records
-/// a revision of the new profile.
+/// A person who wants the effect republishes the farm onto the profile they want, which is three
+/// operations that already exist: check it out, discard it - handing the claim back and clearing the
+/// binding - and publish that slot as a new savegame with its own history. The original stays where
+/// it is, intact. See docs/10-savegame-profile-binding.md#cardinality.
 /// </para>
 /// </remarks>
 public class UpdateSavegameV1Endpoint : IEndpoint
@@ -65,23 +67,14 @@ public class UpdateSavegameV1Endpoint : IEndpoint
         }
 
         // The overload that excludes this savegame, so that saving the row unchanged - which is what
-        // moving it to another profile does to the name - is not refused as a clash with itself.
+        // renaming something to what it is already called does - is not refused as a clash with
+        // itself.
         if (await dbContext.Savegames.CheckNameIsTaken(new RepoId(repoId), savegame.Id, new SavegameName(request.Name), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
-        var profileId = new ProfileId(request.ProfileId);
-
-        // Checked rather than left to the foreign key, which is Restrict and would surface as a
-        // database error rather than as the answer "that profile is not in this repo".
-        if (await dbContext.Profiles.GetAsync(new RepoId(repoId), profileId, cancellationToken) is null)
-        {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{request.ProfileId}' found in repo '{repoId}'"));
-        }
-
         savegame.Name = new SavegameName(request.Name);
-        savegame.ProfileId = profileId;
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -89,10 +82,5 @@ public class UpdateSavegameV1Endpoint : IEndpoint
     }
 
 
-    /// <param name="ProfileId">
-    /// The profile the save follows from now on. Sent whole rather than as an optional change,
-    /// because a rename and a move are the same edit on the same form and a client that could omit
-    /// one would have to be trusted to know which.
-    /// </param>
-    public record UpdateSavegameRequest(string Name, Guid ProfileId);
+    public record UpdateSavegameRequest(string Name);
 }

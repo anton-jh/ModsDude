@@ -572,19 +572,28 @@ same aggregate placement as `Profile`, and for the same reasons.
 | --- | --- |
 | `Id`, `RepoId` | The composite key |
 | `Name` | `SavegameName(string)`, unique within the repo |
-| `ProfileId` | The profile this save **follows**. Intent, not history — see below |
+| `ProfileId` | The profile this save **follows**, or null where it follows none — see below |
 | `Created` | |
 | `HeadVersion` | `SavegameVersionNumber(int)` — which version is current |
+| `SupersededAt` | When the profile stopped following this farm. Null while it still does |
 
 **A savegame is not owned by a profile.** It sits beside profiles in the repo, and it is the
 *version* that records the one profile revision it was played on. A save moves from revision 6 to
 revision 7 as the group updates its mods, so pinning a revision on the savegame would either forbid
 that or lie about it.
 
-`ProfileId` is therefore a different fact from the version's, and the two may legitimately disagree:
-branch a profile, move the save onto the branch, and the older versions still honestly name the old
-profile's revisions. It is the distinction `ActiveProfile` draws against the sync manifest in
-[07 — Mod sync design](07-mod-sync-design.md#what-sync-records-and-why-it-has-to), one aggregate over.
+**The profile is fixed at publish**, and nothing moves a savegame onto another one — a move would
+put this row and every version's `ProfileId` in disagreement, and two profiles' revision numbers are
+not comparable. Republishing the farm is the route, and it is three operations that already exist.
+
+**A profile has at most one current savegame** and a succession of past ones. Current is
+`SupersededAt IS NULL`, enforced by a filtered unique index on `(RepoId, ProfileId)`; a past savegame
+is still playable and simply stops following the mod list. `SupersededAt` is a different fact from
+`ArchivedAt`, so a savegame can be current or past, archived or not, in any combination.
+
+**`ProfileId` is optional.** A savegame that follows no mod list is unmanaged by the publisher's
+choice: its versions record no revision, and it is neither current nor past. Full design in
+[10 — Savegames and profile revisions](10-savegame-profile-binding.md).
 
 As with a profile, **there is no navigation to the versions**. A savegame's history is read through
 its own set; this row only ever says which version is current.
@@ -599,7 +608,7 @@ One immutable version, keyed `(RepoId, SavegameId, Number)`.
 | Field | Notes |
 | --- | --- |
 | `Number` | `SavegameVersionNumber(int)`. One-based, and **not contiguous** — see below |
-| `ProfileId`, `ProfileRevision` | What it was played on. Never null. FK is `Restrict` |
+| `ProfileId`, `ProfileRevision` | What it was played on. Both null or both set, by check constraint; `ProfileId` is always the savegame's. FK is `Restrict` |
 | `ContentHash`, `SizeBytes` | SHA-256 of the packed save, and what it weighs |
 | `CreatedBy`, `Created`, `Label` | `Label` is optional, and is what exempts a version from pruning |
 | `Origin` | `Created \| CheckedIn \| Forced \| Restored` |
@@ -657,6 +666,8 @@ out loud, and renumbering would make yesterday's sentence point at a different s
 
 `SavegameVersion`'s foreign key onto `ProfileRevision` is `Restrict`, and `Savegame`'s onto `Profile`
 is too — so a profile any savegame follows, or any version was ever played on, cannot be deleted.
+Both are optional now that a savegame may follow no mod list, and a key with a null in it is simply
+not checked, which is what lets those rows exist without a second code path anywhere.
 The same bargain as a pinned mod version, one aggregate up, and accepted for the same reason: a save
 whose mod list is gone is not restorable, which is the only thing that made keeping it worth
 anything. `DeleteProfileV1Endpoint` reports it; the database refuses it again underneath.

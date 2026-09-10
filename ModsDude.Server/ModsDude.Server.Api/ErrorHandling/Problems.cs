@@ -74,6 +74,43 @@ public static class Problems
         Detail = $"Savegame '{savegameId.Value}' was claimed by somebody else while this request was being made. Reload and decide again."
     };
 
+    /// <summary>
+    /// Two people put a farm in the same profile's one current slot at the same instant, and the
+    /// one-current-savegame index let exactly one through. Reported apart from a name clash because
+    /// the two look identical from the database and mean entirely different things to the person:
+    /// this one is about a profile they may not have been thinking about at all.
+    /// </summary>
+    public static CustomProblemDetails SavegameCurrentConflict(ProfileId profileId) => new()
+    {
+        Type = ProblemType.SavegameCurrentConflict,
+        Title = "The profile started following another farm at the same moment",
+        Detail = $"Profile '{profileId.Value}' took a different current savegame while this request was being made. Reload and decide again."
+    };
+
+    /// <summary>
+    /// Asked to place a savegame in a succession it is not in. A savegame with no mod list is
+    /// neither current nor past, and nothing connects an existing one to a profile - the route from
+    /// there is republishing the farm, which is three operations the client already has.
+    /// </summary>
+    public static CustomProblemDetails SavegameHasNoProfile(SavegameId savegameId) => new()
+    {
+        Type = ProblemType.SavegameHasNoProfile,
+        Title = "The savegame follows no mod list",
+        Detail = $"Savegame '{savegameId.Value}' was published without a mod list, so it is neither current nor past. Publish the farm again against the profile you want it on."
+    };
+
+    /// <summary>
+    /// A savegame either follows a mod list or it does not, and a revision number is only readable
+    /// against the profile that issued it. Refused here rather than at the check constraint behind
+    /// it, so the answer names the pair rather than an index.
+    /// </summary>
+    public static CustomProblemDetails SavegameProfileNotPaired => new()
+    {
+        Type = ProblemType.SavegameProfileNotPaired,
+        Title = "A profile and a revision go together",
+        Detail = "Send both a profile and the revision the save was played on, or neither - a savegame with no mod list records no revision."
+    };
+
     public static CustomProblemDetails SavegameNotCheckedOut(SavegameId savegameId) => new()
     {
         Type = ProblemType.SavegameNotCheckedOut,
@@ -505,5 +542,17 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invalid-mod-file-name")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-mod-file-name")]
         InvalidModFileName,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-current-conflict")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-current-conflict")]
+        SavegameCurrentConflict,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-profile-not-paired")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-profile-not-paired")]
+        SavegameProfileNotPaired,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-has-no-profile")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-has-no-profile")]
+        SavegameHasNoProfile,
     }
 }

@@ -93,14 +93,25 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
 
         var basedOn = new SavegameVersionNumber(request.BasedOn);
-        var profileRevision = new RevisionNumber(request.ProfileRevision);
 
-        // The version is played on a revision of the profile the savegame follows - the standing
-        // intent - rather than on one the request names, so a check-in cannot quietly move a save to
-        // a different profile. Moving it is a separate, deliberate act; see UpdateSavegameV1Endpoint.
-        if (!await dbContext.ProfileRevisions.ExistsAsync(savegame.RepoId, savegame.ProfileId, profileRevision, cancellationToken))
+        // Paired with the savegame's own profile rather than checked on its own: a save that follows
+        // no mod list records no revision, and one that follows a mod list has to record which. The
+        // request cannot decide either way - the savegame does - so a mismatch is refused rather
+        // than being resolved in one direction or the other.
+        if (savegame.ProfileId is null != request.ProfileRevision is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{savegame.ProfileId.Value}' has no revision {request.ProfileRevision}"));
+            return TypedResults.BadRequest(Problems.SavegameProfileNotPaired);
+        }
+
+        var profileRevision = request.ProfileRevision is int sent ? new RevisionNumber(sent) : (RevisionNumber?)null;
+
+        // The revision is looked up against the profile the savegame follows rather than one the
+        // request names, so a check-in cannot quietly move a save onto another profile. Nothing
+        // moves a save between profiles at all; see UpdateSavegameV1Endpoint.
+        if (savegame.ProfileId is ProfileId profileId && profileRevision is RevisionNumber played
+            && !await dbContext.ProfileRevisions.ExistsAsync(savegame.RepoId, profileId, played, cancellationToken))
+        {
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId.Value}' has no revision {request.ProfileRevision}"));
         }
 
         // Before storage sees it, and before the version's own constructor does. Both validate the
@@ -151,7 +162,6 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         var checkout = await EndOwnCheckoutAsync(dbContext, savegame, userId, now, cancellationToken);
 
         var version = savegame.CreateVersion(
-            savegame.ProfileId,
             profileRevision,
             request.ContentHash,
             request.SizeBytes,
@@ -219,6 +229,11 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// Which revision of the savegame's profile the folder was actually on when this was played.
     /// Recorded rather than derived, because the truth about a save is the mod list it ran against
     /// and not the one the profile happens to be at now.
+    /// <para>
+    /// <c>null</c>, and only null, for a savegame that follows no mod list: there is no revision to
+    /// name and nothing observed one. Sending it for such a save, or omitting it for one that does
+    /// follow a list, is refused rather than guessed at.
+    /// </para>
     /// </param>
     /// <param name="ContentHash">
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to. Equal to the
@@ -236,7 +251,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// </param>
     public record CheckInSavegameRequest(
         int BasedOn,
-        int ProfileRevision,
+        int? ProfileRevision,
         string ContentHash,
         long SizeBytes,
         string? Label,

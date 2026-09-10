@@ -1,7 +1,9 @@
 # 10 — Savegames and profile revisions
 
-*Not implemented.* This describes a design, not the current tree. For what the code does
-today see [07 — Mod sync design](07-mod-sync-design.md#drift) and
+*The server half is built; the client half is not.* Schema, publish, the swap and the rename are in
+the tree ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)). Everything below about the client —
+play attribution, check-out targets, the apply table, the drift rules, the interface — is still a
+design. For what the client does today see [07 — Mod sync design](07-mod-sync-design.md#drift) and
 [08 — Known issues](08-known-issues.md).
 
 The application is in early development. Nothing here migrates existing local or server state,
@@ -111,7 +113,10 @@ the publisher's choice.
 
 A null revision is a valid state meaning "this version is not connected to a profile". The
 invalid state is a half-set pair, and it is a database check constraint: `ProfileId` and
-`ProfileRevision` are both null or both set, on `Savegame` and on `SavegameVersion`.
+`ProfileRevision` are both null or both set on `SavegameVersion`, which is the only row carrying
+both. `Savegame` pins no revision — that is the whole of the two-successions argument above — so
+what it carries instead is the other half of the same idea: `SupersededAt` requires a `ProfileId`,
+since a savegame following no mod list is in no succession and is neither current nor past.
 
 A savegame cannot acquire or lose a profile, since nothing moves one between profiles. A history
 mixing versions that name a revision with versions that do not therefore cannot arise.

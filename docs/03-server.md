@@ -562,8 +562,9 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
 | GET | `repos/{repoId}/savegames` | Guest | Each carries its head version and its open claim inline. Four queries flat, not one per row |
-| POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher |
-| PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename, or move to another profile |
+| POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher. The profile is optional, and publishing to one supersedes whatever farm it was following |
+| PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename. Nothing moves a savegame to another profile — see below |
+| POST | `repos/{repoId}/savegames/{savegameId}/makeCurrent` | Member | Points the profile back at this past farm, superseding whatever held the slot. Answers with both |
 | POST | `repos/{repoId}/savegames/{savegameId}/archive` | Member | Puts it away, keeping its versions and its claim log |
 | POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | Member | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *version* back |
 | GET | `repos/{repoId}/savegames/archived` | Guest | The archived half of the same list |
@@ -579,6 +580,21 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 **The client mints the savegame id**, as it does a repo id. The blob lives at
 `{repoId}/{savegameId}/{contentHash}`, so a server-minted id would name a blob nobody could have
 uploaded to: mint a GUID, upload, publish with it.
+
+**A profile has at most one current savegame**, enforced by a filtered unique index on
+`(RepoId, ProfileId) WHERE "SupersededAt" IS NULL`. Publish and `makeCurrent` are the same swap from
+either end, and both write it as two commits inside one transaction: the incumbent leaves the slot
+before anything takes it, or the index refuses the instant where two rows claim it. Nothing
+supersedes a savegame on its own. The index is deliberately **not** filtered on `ArchivedAt` — an
+archived savegame still holds its profile's slot — and savegames with no profile fall out of it,
+since nulls in a unique index are distinct.
+
+**The profile is chosen at publish and never after**, which is why `PUT` is only a rename. Moving a
+savegame would put its row and its versions in disagreement, and two profiles' revision numbers are
+not comparable. Republishing the farm is the route, and it is three operations the client already
+has. `ProfileId` and `ProfileRevision` are nullable and paired — both set or both null, by check
+constraint — so a savegame that follows no mod list records no revision and takes no part in any of
+the above. See [10 — Savegames and profile revisions](10-savegame-profile-binding.md).
 
 `BasedOn` names the version the check-in was built on, and a stale one is refused with
 `savegame-version-stale` carrying the head. **Forcing past it is allowed** and records the fork as

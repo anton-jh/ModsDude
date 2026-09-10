@@ -82,6 +82,7 @@
           },
           "profileRevision": {
             "format": "int32",
+            "nullable": true,
             "type": "integer"
           },
           "sizeBytes": {
@@ -462,6 +463,23 @@
           "Revoked"
         ]
       },
+      "MakeSavegameCurrentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "savegame": {
+            "$ref": "#/components/schemas/SavegameDto"
+          },
+          "superseded": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameDto"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ModAttributeDto": {
         "additionalProperties": false,
         "properties": {
@@ -724,7 +742,10 @@
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
           "https://server.modsdude.com/api/problems/savegame-not-checked-out",
           "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
-          "https://server.modsdude.com/api/problems/invalid-mod-file-name"
+          "https://server.modsdude.com/api/problems/invalid-mod-file-name",
+          "https://server.modsdude.com/api/problems/savegame-current-conflict",
+          "https://server.modsdude.com/api/problems/savegame-profile-not-paired",
+          "https://server.modsdude.com/api/problems/savegame-has-no-profile"
         ],
         "type": "string",
         "x-enumNames": [
@@ -761,7 +782,10 @@
           "SavegameCheckoutConflict",
           "SavegameNotCheckedOut",
           "ProfileInUseBySavegame",
-          "InvalidModFileName"
+          "InvalidModFileName",
+          "SavegameCurrentConflict",
+          "SavegameProfileNotPaired",
+          "SavegameHasNoProfile"
         ]
       },
       "ProfileDependentDto": {
@@ -962,10 +986,12 @@
           },
           "profileId": {
             "format": "guid",
+            "nullable": true,
             "type": "string"
           },
           "profileRevision": {
             "format": "int32",
+            "nullable": true,
             "type": "integer"
           },
           "savegameId": {
@@ -1320,10 +1346,16 @@
           },
           "profileId": {
             "format": "guid",
+            "nullable": true,
             "type": "string"
           },
           "repoId": {
             "format": "guid",
+            "type": "string"
+          },
+          "supersededAt": {
+            "format": "date-time",
+            "nullable": true,
             "type": "string"
           }
         },
@@ -1371,10 +1403,12 @@
           },
           "profileId": {
             "format": "guid",
+            "nullable": true,
             "type": "string"
           },
           "profileRevision": {
             "format": "int32",
+            "nullable": true,
             "type": "integer"
           },
           "repoId": {
@@ -1471,10 +1505,6 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "type": "string"
-          },
-          "profileId": {
-            "format": "guid",
             "type": "string"
           }
         },
@@ -5356,6 +5386,83 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/makeCurrent": {
+      "post": {
+        "operationId": "MakeSavegameCurrentV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MakeSavegameCurrentResponse"
+                }
+              }
+            },
             "description": ""
           },
           "400": {

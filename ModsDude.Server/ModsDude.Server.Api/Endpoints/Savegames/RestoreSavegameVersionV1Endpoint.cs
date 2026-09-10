@@ -33,9 +33,9 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <para>
 /// <b>No bytes move.</b> A version is addressed by content, so the restored version names the hash
 /// it was copied from and the blob it points at is already there - which is what makes restoring a
-/// 400 MB save a metadata write. It carries the source's <c>ProfileId</c> and
-/// <c>ProfileRevision</c> too, because those describe the play in the file rather than the moment
-/// the restore was clicked.
+/// 400 MB save a metadata write. It carries the source's <c>ProfileRevision</c> too, because that
+/// describes the play in the file rather than the moment the restore was clicked; the profile comes
+/// from the savegame, which is the same one either way since nothing moves a save between them.
 /// </para>
 /// <para>
 /// Member, like any other check-in. It discards nothing, and the history makes it visible and
@@ -94,7 +94,6 @@ public class RestoreSavegameVersionV1Endpoint : IEndpoint
         // so anything that would fail here has failed for the source too - and a restore is the one
         // thing that can still be useful when a blob has gone: it moves nothing.
         var version = savegame.CreateVersion(
-            source.ProfileId,
             source.ProfileRevision,
             source.ContentHash,
             source.SizeBytes,

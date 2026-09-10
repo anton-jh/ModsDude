@@ -1211,18 +1211,41 @@ revision 5"*, where re-apply did not help because re-apply always applies head.
 
 ### 1. Server schema and API
 
-- [ ] **`Savegame.SupersededAt`**, with a filtered unique index on `(RepoId, ProfileId)` where it
+- [x] **`Savegame.SupersededAt`**, with a filtered unique index on `(RepoId, ProfileId)` where it
       is null. Not also filtered on `ArchivedAt`, unlike the name index beside it — an archived
-      savegame still holds its profile's slot.
-- [ ] **`ProfileId` and `ProfileRevision` nullable** on `Savegame` and `SavegameVersion`, with a
-      check constraint making each pair all-or-nothing.
-- [ ] **Publish supersedes.** `PublishSavegameRequest.ProfileId` becomes nullable; publishing to a
-      profile that has a current savegame supersedes it in the same transaction.
-- [ ] **Make a past savegame current.** A swap: the incumbent is superseded before the incoming row
+      savegame still holds its profile's slot. Named `IX_Savegames_OneCurrentPerProfile` rather than
+      left to convention, because publish reads the name back off a unique violation to tell a name
+      clash from somebody else's publish. It replaces the plain foreign-key index EF had made over
+      the same two columns, so the one query that wants past savegames too — "does anything follow
+      this profile?", asked once by `DeleteProfileV1Endpoint` — scans a repo's handful of rows.
+- [x] **`ProfileId` and `ProfileRevision` nullable** on `Savegame` and `SavegameVersion`, with a
+      check constraint making each pair all-or-nothing. The pair only exists on `SavegameVersion`,
+      which is where that constraint went: a savegame pins no revision, and pinning one on it would
+      be the thing `Savegame`'s own remarks refuse. `Savegame` carries the constraint that is
+      available to it instead — superseded implies a profile, since a savegame following no mod list
+      is in no succession and is neither current nor past.
+- [x] **Publish supersedes.** `PublishSavegameRequest.ProfileId` becomes nullable; publishing to a
+      profile that has a current savegame supersedes it in the same transaction. Two commits inside
+      it, in order, for the reason the box below gives.
+- [x] **Make a past savegame current.** A swap: the incumbent is superseded before the incoming row
       is cleared, or the unique index rejects the intermediate state.
-- [ ] **`UpdateSavegameV1Endpoint` becomes a rename.** Moving a savegame between profiles would put
-      `Savegame.ProfileId` and its versions' `ProfileId` in disagreement.
-- [ ] **Regenerate the client.**
+      `POST repos/{repoId}/savegames/{savegameId}/makeCurrent`, answering with both savegames so the
+      client can name what it displaced. Two commits inside one transaction, the shape
+      `MoveModVersionV1Endpoint` already uses to take an ordering through a unique index.
+- [x] **`UpdateSavegameV1Endpoint` becomes a rename.** Moving a savegame between profiles would put
+      `Savegame.ProfileId` and its versions' `ProfileId` in disagreement. `CreateVersion` stopped
+      taking a profile at all with it: the version's is the savegame's, so nothing can pass one that
+      disagrees, and the pairing became one rule at the single place versions are minted.
+- [x] **Regenerate the client.** `openapi/v1.json` and `Generated.cs` both.
+
+Two things fell out of the boxes above rather than being added to them:
+
+- **Check-in's revision is nullable too.** Otherwise box 2 would leave a savegame with no mod list
+  publishable and never checkable in. The request sends a revision exactly when the savegame follows
+  a profile, and either mismatch is refused rather than resolved in one direction.
+- **Three problem types**: `savegame-current-conflict` for losing a profile's slot to a publish in
+  the same instant, `savegame-profile-not-paired` for half a pair, `savegame-has-no-profile` for
+  asking to place a savegame in a succession it is not in.
 
 ### 2. Play attribution on the client
 

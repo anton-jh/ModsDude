@@ -32,6 +32,9 @@ internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration
         // ProfileRevisionEntityTypeConfiguration makes for the same reason. The delete endpoints
         // should report it the way CheckIfVersionIsDependedOn reports its own, so this fires only
         // for a version checked in between the check and the commit.
+        // Optional, because a version of a savegame that follows no mod list names no revision. A
+        // foreign key with a null in it is not checked, which is what lets those rows exist without
+        // a second nullable-aware code path anywhere.
         builder.HasOne<ProfileRevision>()
             .WithMany()
             .HasForeignKey(x => new { x.RepoId, x.ProfileId, x.ProfileRevision })
@@ -62,5 +65,14 @@ internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration
         // Through the backing field, because the navigation is read-only: a version is immutable, so
         // its details are decided when it is minted and never after.
         builder.Navigation(x => x.Details).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // The pairing, stated once where it cannot be forgotten. Null means "this version is not
+        // connected to a mod list" and is a state a publisher chooses; a half-set pair means
+        // nothing, since a revision number is only readable against the profile that numbered it.
+        // Savegame.CreateVersion refuses the same thing, and this is what makes it a fact rather
+        // than a convention - the pair is written by three endpoints and read by the client.
+        builder.ToTable(x => x.HasCheckConstraint(
+            "CK_SavegameVersions_ProfileAndRevisionAreSetTogether",
+            "(\"ProfileId\" IS NULL) = (\"ProfileRevision\" IS NULL)"));
     }
 }

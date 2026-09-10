@@ -17,11 +17,13 @@ namespace ModsDude.Server.Domain.Savegames;
 /// anything. There is no flag anybody has to remember to check.
 /// </para>
 /// <para>
-/// <b><see cref="ProfileRevision"/> is never optional.</b> A version that could not say which mod
-/// list it was played on would make the one warning that matters - your folder is on a list this
-/// save has never seen - unanswerable. A repo whose adapter has no mods still has one implicit
-/// profile with one revision, so the column stays honest rather than nullable; see
-/// docs/PLAN.md#phase-8--savegames.
+/// <b><see cref="ProfileId"/> and <see cref="ProfileRevision"/> are set together or not at all.</b>
+/// Both null is a version of a savegame that follows no mod list, which is a state a publisher
+/// chooses and every rule about revisions then leaves alone. A half-set pair is the state that means
+/// nothing: a revision without the profile it numbers is unreadable, and a profile without one makes
+/// the warning that matters - your folder is on a list this save has never seen - unanswerable. The
+/// pairing is refused by <see cref="Savegame.CreateVersion"/> and again by a check constraint in the
+/// database.
 /// </para>
 /// </remarks>
 public class SavegameVersion
@@ -44,8 +46,8 @@ public class SavegameVersion
         RepoId repoId,
         SavegameId savegameId,
         SavegameVersionNumber number,
-        ProfileId profileId,
-        RevisionNumber profileRevision,
+        ProfileId? profileId,
+        RevisionNumber? profileRevision,
         string contentHash,
         long sizeBytes,
         UserId createdBy,
@@ -92,15 +94,20 @@ public class SavegameVersion
     public SavegameId SavegameId { get; private set; }
     public SavegameVersionNumber Number { get; private set; }
 
-    /// <summary>The profile whose revision this version was played on.</summary>
-    public ProfileId ProfileId { get; private set; }
+    /// <summary>
+    /// The profile whose revision this version was played on, or <c>null</c> where the savegame
+    /// follows none. Always equal to <see cref="Savegame.ProfileId"/>: nothing moves a save between
+    /// profiles, and <see cref="Savegame.CreateVersion"/> takes this from the savegame rather than
+    /// from a caller who could disagree with it.
+    /// </summary>
+    public ProfileId? ProfileId { get; private set; }
 
     /// <summary>
-    /// The revision that profile was at. The foreign key onto it is <c>Restrict</c>, so a profile
-    /// that has been played can no longer be deleted - the same bargain as a pinned mod version, one
-    /// aggregate up.
+    /// The revision that profile was at, or <c>null</c> where there is no profile. The foreign key
+    /// onto it is <c>Restrict</c>, so a profile that has been played can no longer be deleted - the
+    /// same bargain as a pinned mod version, one aggregate up.
     /// </summary>
-    public RevisionNumber ProfileRevision { get; private set; }
+    public RevisionNumber? ProfileRevision { get; private set; }
 
     /// <summary>
     /// SHA-256 of the packed save, lowercase hex, and <b>the address the blob is stored at</b>

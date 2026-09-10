@@ -178,7 +178,6 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
             var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
             dbContext.SavegameVersions.Add(savegame.CreateVersion(
-                profileId,
                 new RevisionNumber(1),
                 HashOf('2'),
                 sizeBytes: 4096,
@@ -221,7 +220,6 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
             var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
             dbContext.SavegameVersions.Add(savegame.CreateVersion(
-                profileId,
                 new RevisionNumber(1),
                 HashOf('1'),
                 sizeBytes: 4096,
@@ -390,9 +388,19 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
         return (repo.Id, profile.Id);
     }
 
+    /// <summary>
+    /// The same write a publish makes. A profile has one current savegame, so a second farm on one
+    /// profile supersedes the first rather than sitting beside it - and the two writes are ordered,
+    /// because the index refuses the instant where both are current.
+    /// </summary>
     private async Task<SavegameId> GivenASavegame(RepoId repoId, ProfileId profileId, string? name = null)
     {
         using var dbContext = fixture.CreateDbContext();
+
+        var superseded = await dbContext.Savegames.GetCurrentAsync(repoId, profileId, CancellationToken.None);
+
+        superseded?.Supersede(DateTime.UtcNow);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
 
         var savegame = new Savegame(repoId, new SavegameName(name ?? $"save-{Guid.NewGuid()}"), profileId, DateTime.UtcNow);
 
@@ -412,7 +420,6 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
             var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
             var version = savegame.CreateVersion(
-                profileId,
                 new RevisionNumber(1),
                 contentHash,
                 sizeBytes: 1024,

@@ -10,7 +10,6 @@ public class SavegameTests
 {
     private static readonly RepoId _repoId = new(Guid.NewGuid());
     private static readonly ProfileId _profileId = new(Guid.NewGuid());
-    private static readonly ProfileId _otherProfileId = new(Guid.NewGuid());
     private static readonly UserId _author = new("author");
     private static readonly DateTime _now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -31,7 +30,7 @@ public class SavegameTests
         Assert.Equal(SavegameVersionNumber.None, savegame.HeadVersion);
         Assert.Equal(0, savegame.HeadVersion.Value);
 
-        savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
 
         Assert.Equal(new SavegameVersionNumber(1), savegame.HeadVersion);
     }
@@ -41,8 +40,8 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
-        var second = savegame.CreateVersion(_profileId, new RevisionNumber(1), _otherHash, 2048, _author, _now);
+        savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        var second = savegame.CreateVersion(new RevisionNumber(1), _otherHash, 2048, _author, _now);
 
         Assert.Equal(second.Number, savegame.HeadVersion);
         Assert.Equal(2, second.Number.Value);
@@ -59,8 +58,8 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        var first = savegame.CreateVersion(_profileId, new RevisionNumber(6), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
-        var second = savegame.CreateVersion(_profileId, new RevisionNumber(7), _otherHash, 1024, _author, _now);
+        var first = savegame.CreateVersion(new RevisionNumber(6), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        var second = savegame.CreateVersion(new RevisionNumber(7), _otherHash, 1024, _author, _now);
 
         Assert.Equal(new RevisionNumber(6), first.ProfileRevision);
         Assert.Equal(new RevisionNumber(7), second.ProfileRevision);
@@ -69,19 +68,174 @@ public class SavegameTests
     }
 
     /// <summary>
-    /// The version names the profile it was played on, and the savegame names the one it follows.
-    /// The two are allowed to disagree - branch a profile, move the save onto the branch, and the
-    /// older versions still honestly name the old profile's revisions.
+    /// The version's profile is the savegame's, taken rather than passed. Nothing moves a save
+    /// between profiles, so a caller able to name one could only ever disagree with the row - and
+    /// two profiles' revision numbers mean nothing to each other, so the disagreement would be
+    /// unreadable rather than merely wrong.
     /// </summary>
     [Fact]
-    public void A_version_can_name_a_different_profile_from_the_one_the_savegame_follows()
+    public void A_version_names_the_profile_its_savegame_follows()
     {
         var savegame = CreateSavegame();
 
-        var version = savegame.CreateVersion(_otherProfileId, new RevisionNumber(1), _hash, 1024, _author, _now);
+        var version = savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now);
 
-        Assert.Equal(_otherProfileId, version.ProfileId);
+        Assert.Equal(_profileId, version.ProfileId);
         Assert.Equal(_profileId, savegame.ProfileId);
+    }
+
+    /// <summary>
+    /// A savegame published without a mod list records no revision on any of its versions. It is
+    /// unmanaged by the publisher's choice, and a null revision is what says so.
+    /// </summary>
+    [Fact]
+    public void A_savegame_with_no_profile_makes_versions_that_name_no_revision()
+    {
+        var savegame = CreateSavegameWithNoProfile();
+
+        var version = savegame.CreateVersion(null, _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+
+        Assert.Null(version.ProfileId);
+        Assert.Null(version.ProfileRevision);
+        Assert.Equal(new SavegameVersionNumber(1), savegame.HeadVersion);
+    }
+
+    /// <summary>
+    /// The pairing, from both sides. A revision without the profile that numbered it is unreadable,
+    /// and a profile without a revision leaves the one warning that matters - your folder is on a
+    /// list this save has never seen - unanswerable. Both halves are refused before the check
+    /// constraint behind them ever sees the row.
+    /// </summary>
+    [Fact]
+    public void A_savegame_with_no_profile_refuses_a_version_that_names_a_revision()
+    {
+        var savegame = CreateSavegameWithNoProfile();
+
+        Assert.Throws<DomainValidationException>(
+            () => savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now));
+
+        Assert.Equal(SavegameVersionNumber.None, savegame.HeadVersion);
+    }
+
+    /// <inheritdoc cref="A_savegame_with_no_profile_refuses_a_version_that_names_a_revision"/>
+    [Fact]
+    public void A_savegame_with_a_profile_refuses_a_version_that_names_no_revision()
+    {
+        var savegame = CreateSavegame();
+
+        Assert.Throws<DomainValidationException>(
+            () => savegame.CreateVersion(null, _hash, 1024, _author, _now));
+
+        Assert.Equal(SavegameVersionNumber.None, savegame.HeadVersion);
+    }
+
+
+    /// <summary>
+    /// A savegame is its profile's current one from the moment it is published, without anybody
+    /// saying so. Current is the unmarked default; past is the state something has to do.
+    /// </summary>
+    [Fact]
+    public void A_new_savegame_is_its_profiles_current_one()
+    {
+        var savegame = CreateSavegame();
+
+        Assert.True(savegame.IsCurrent);
+        Assert.False(savegame.IsPast);
+        Assert.Null(savegame.SupersededAt);
+    }
+
+    /// <summary>
+    /// Neither word applies to a savegame that follows no mod list. It is in no succession, so
+    /// reading it as current would put it in one - and would make it the answer to "which farm is
+    /// this profile following?" for a profile it has nothing to do with.
+    /// </summary>
+    [Fact]
+    public void A_savegame_with_no_profile_is_neither_current_nor_past()
+    {
+        var savegame = CreateSavegameWithNoProfile();
+
+        Assert.False(savegame.IsCurrent);
+        Assert.False(savegame.IsPast);
+        Assert.Null(savegame.SupersededAt);
+    }
+
+    [Fact]
+    public void Superseding_makes_a_savegame_past()
+    {
+        var savegame = CreateSavegame();
+
+        savegame.Supersede(_now);
+
+        Assert.True(savegame.IsPast);
+        Assert.False(savegame.IsCurrent);
+        Assert.Equal(_now, savegame.SupersededAt);
+    }
+
+    /// <summary>
+    /// The stamp says when the profile moved on, and a second caller saying so did not move it -
+    /// the same rule <see cref="Savegame.Archive"/> follows, and for the same reason.
+    /// </summary>
+    [Fact]
+    public void Superseding_twice_does_not_restamp()
+    {
+        var savegame = CreateSavegame();
+
+        savegame.Supersede(_now);
+        savegame.Supersede(_now.AddDays(30));
+
+        Assert.Equal(_now, savegame.SupersededAt);
+    }
+
+    /// <summary>
+    /// The other half of the swap. A past savegame is not read-only and never was; making it current
+    /// again changes only which revision it runs on.
+    /// </summary>
+    [Fact]
+    public void A_past_savegame_can_be_made_current_again()
+    {
+        var savegame = CreateSavegame();
+
+        savegame.Supersede(_now);
+        savegame.MakeCurrent();
+
+        Assert.True(savegame.IsCurrent);
+        Assert.Null(savegame.SupersededAt);
+    }
+
+    /// <summary>
+    /// Neither half of the swap means anything for a savegame in no succession, and both refuse
+    /// rather than writing a stamp nothing could read. The database says the same thing underneath,
+    /// with a check constraint.
+    /// </summary>
+    [Fact]
+    public void A_savegame_with_no_profile_can_be_neither_superseded_nor_made_current()
+    {
+        var savegame = CreateSavegameWithNoProfile();
+
+        Assert.Throws<InvalidOperationException>(() => savegame.Supersede(_now));
+        Assert.Throws<InvalidOperationException>(savegame.MakeCurrent);
+
+        Assert.Null(savegame.SupersededAt);
+    }
+
+    /// <summary>
+    /// Two unrelated facts. Archiving is the repo-wide visibility state; past is which farm a profile
+    /// follows. A profile whose current savegame is archived still has a current savegame, which is
+    /// the case that has to be said out loud rather than quietly resolved.
+    /// </summary>
+    [Fact]
+    public void Archiving_does_not_change_current_or_past()
+    {
+        var savegame = CreateSavegame();
+
+        savegame.Archive(_now);
+
+        Assert.True(savegame.IsArchived);
+        Assert.True(savegame.IsCurrent);
+
+        savegame.Restore();
+
+        Assert.True(savegame.IsCurrent);
     }
 
     /// <summary>
@@ -93,11 +247,10 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
-        savegame.CreateVersion(_profileId, new RevisionNumber(1), _otherHash, 1024, _author, _now);
+        savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        savegame.CreateVersion(new RevisionNumber(1), _otherHash, 1024, _author, _now);
 
         var forced = savegame.CreateVersion(
-            _profileId,
             new RevisionNumber(1),
             _hash,
             1024,
@@ -121,11 +274,10 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        var original = savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
-        savegame.CreateVersion(_profileId, new RevisionNumber(2), _otherHash, 1024, _author, _now);
+        var original = savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        savegame.CreateVersion(new RevisionNumber(2), _otherHash, 1024, _author, _now);
 
         var restored = savegame.CreateVersion(
-            _profileId,
             new RevisionNumber(2),
             original.ContentHash,
             original.SizeBytes,
@@ -150,8 +302,8 @@ public class SavegameTests
         var savegame = CreateSavegame();
         var checkoutId = new SavegameCheckoutId(Guid.NewGuid());
 
-        var published = savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
-        var checkedIn = savegame.CreateVersion(_profileId, new RevisionNumber(1), _otherHash, 1024, _author, _now, checkoutId: checkoutId);
+        var published = savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        var checkedIn = savegame.CreateVersion(new RevisionNumber(1), _otherHash, 1024, _author, _now, checkoutId: checkoutId);
 
         Assert.Null(published.CheckoutId);
         Assert.Equal(checkoutId, checkedIn.CheckoutId);
@@ -164,7 +316,7 @@ public class SavegameTests
 
         Assert.Throws<DomainValidationException>(
             () => savegame.CreateVersion(
-                _profileId, new RevisionNumber(1), _hash, 1024, _author, _now,
+                new RevisionNumber(1), _hash, 1024, _author, _now,
                 new string('x', SavegameVersion.MaximumLabelLength + 1)));
     }
 
@@ -173,7 +325,7 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        Assert.Null(savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, "   ").Label);
+        Assert.Null(savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, "   ").Label);
     }
 
     /// <summary>
@@ -187,7 +339,7 @@ public class SavegameTests
 
         Assert.Equal(
             "Before the flood",
-            savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, "  Before the flood  ").Label);
+            savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, "  Before the flood  ").Label);
     }
 
     /// <summary>
@@ -203,7 +355,7 @@ public class SavegameTests
         var savegame = CreateSavegame();
 
         Assert.Throws<DomainValidationException>(
-            () => savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, sizeBytes, _author, _now));
+            () => savegame.CreateVersion(new RevisionNumber(1), _hash, sizeBytes, _author, _now));
     }
 
     /// <summary>
@@ -220,7 +372,7 @@ public class SavegameTests
         var savegame = CreateSavegame();
 
         Assert.Throws<DomainValidationException>(
-            () => savegame.CreateVersion(_profileId, new RevisionNumber(1), contentHash, 1024, _author, _now));
+            () => savegame.CreateVersion(new RevisionNumber(1), contentHash, 1024, _author, _now));
     }
 
     /// <summary>
@@ -232,10 +384,10 @@ public class SavegameTests
     {
         var savegame = CreateSavegame();
 
-        savegame.CreateVersion(_profileId, new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
+        savegame.CreateVersion(new RevisionNumber(1), _hash, 1024, _author, _now, origin: SavegameVersionOrigin.Created);
 
         Assert.Throws<DomainValidationException>(
-            () => savegame.CreateVersion(_profileId, new RevisionNumber(1), _otherHash, 0, _author, _now));
+            () => savegame.CreateVersion(new RevisionNumber(1), _otherHash, 0, _author, _now));
 
         Assert.Equal(new SavegameVersionNumber(1), savegame.HeadVersion);
     }
@@ -296,4 +448,7 @@ public class SavegameTests
 
     private static Savegame CreateSavegame()
         => new(_repoId, new SavegameName("Big Valley"), _profileId, _now);
+
+    private static Savegame CreateSavegameWithNoProfile()
+        => new(_repoId, new SavegameName("Big Valley"), null, _now);
 }

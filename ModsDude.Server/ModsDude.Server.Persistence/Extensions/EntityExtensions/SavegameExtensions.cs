@@ -108,8 +108,39 @@ public static class SavegameExtensions
             // that is the only thing telling them apart.
             .OrderBy(x => archived ? x.ArchivedAt : null)
             .ThenBy(x => x.Name)
-            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadVersion, x.ArchivedAt))
+            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadVersion, x.SupersededAt, x.ArchivedAt))
             .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The profile's current savegame, or <c>null</c> where it has none. Tracked, because the only
+    /// caller that asks is about to supersede it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There is at most one, and that is a database fact rather than an assumption this query has to
+    /// defend: a filtered unique index permits one row per profile with no <c>SupersededAt</c> - see
+    /// <see cref="EntityTypeConfigurations.SavegameEntityTypeConfiguration"/>.
+    /// </para>
+    /// <para>
+    /// <b>Archived savegames are not excluded.</b> Archiving is the repo-wide visibility state and
+    /// says nothing about which farm a profile follows, so an archived current savegame is still the
+    /// one holding the slot - and a publish that skipped it would leave two rows current and be
+    /// refused by the index instead. Same reason the index carries no <c>ArchivedAt</c> filter.
+    /// </para>
+    /// <para>
+    /// The predicate tests the columns rather than <see cref="Savegame.IsCurrent"/>, which is
+    /// computed and has nothing for a provider to translate. It is also what makes the query match
+    /// the index's filter.
+    /// </para>
+    /// </remarks>
+    public static Task<Savegame?> GetCurrentAsync(
+        this DbSet<Savegame> dbSet,
+        RepoId repoId, ProfileId profileId,
+        CancellationToken cancellationToken)
+    {
+        return dbSet
+            .FirstOrDefaultAsync(x => x.RepoId == repoId && x.ProfileId == profileId && x.SupersededAt == null, cancellationToken);
     }
 
     /// <summary>
@@ -445,9 +476,10 @@ public static class SavegameExtensions
 public record SavegameRow(
     SavegameId Id,
     SavegameName Name,
-    ProfileId ProfileId,
+    ProfileId? ProfileId,
     DateTime Created,
     SavegameVersionNumber HeadVersion,
+    DateTime? SupersededAt,
     DateTime? ArchivedAt);
 
 
@@ -459,8 +491,8 @@ public record SavegameRow(
 public record SavegameVersionRow(
     SavegameId SavegameId,
     SavegameVersionNumber Number,
-    ProfileId ProfileId,
-    RevisionNumber ProfileRevision,
+    ProfileId? ProfileId,
+    RevisionNumber? ProfileRevision,
     string ContentHash,
     long SizeBytes,
     DateTime Created,

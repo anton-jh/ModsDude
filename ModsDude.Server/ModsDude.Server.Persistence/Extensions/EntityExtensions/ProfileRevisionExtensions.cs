@@ -260,18 +260,29 @@ public static class ProfileRevisionExtensions
     /// Which savegame versions were played on a profile revision. The other half of what stops a
     /// revision being deleted, and the only one the user can do anything about.
     /// </summary>
-    public static Task<List<SavegameRevisionDependency>> GetDependentSavegameVersionsAsync(
+    public static async Task<List<SavegameRevisionDependency>> GetDependentSavegameVersionsAsync(
         this DbSet<Domain.Savegames.SavegameVersion> dbSet,
         RepoId repoId, ProfileId profileId, IReadOnlyCollection<RevisionNumber> revisions,
         CancellationToken cancellationToken)
     {
-        return dbSet
+        // Widened to the column's own nullability rather than unwrapping the column to the
+        // parameter's, because a null revision is a version of a savegame that follows no mod list -
+        // it matches nothing here, and the list holding no null is what says so. Unwrapping instead
+        // would put a Nullable.Value in the predicate for the provider to make sense of.
+        var wanted = revisions.Select(x => (RevisionNumber?)x).ToList();
+
+        var rows = await dbSet
             .Where(x => x.RepoId == repoId
                 && x.ProfileId == profileId
-                && revisions.Contains(x.ProfileRevision))
+                && wanted.Contains(x.ProfileRevision))
             .OrderBy(x => x.SavegameId).ThenBy(x => x.Number)
-            .Select(x => new SavegameRevisionDependency(x.SavegameId, x.Number, x.ProfileRevision))
+            .Select(x => new { x.SavegameId, x.Number, x.ProfileRevision })
             .ToListAsync(cancellationToken);
+
+        // The revision is never null in these rows - the predicate matched it against a list of real
+        // ones - so the dependency says so rather than passing the nullability on to every caller
+        // that has to name a number in a refusal.
+        return [.. rows.Select(x => new SavegameRevisionDependency(x.SavegameId, x.Number, x.ProfileRevision!.Value))];
     }
 
     /// <summary>

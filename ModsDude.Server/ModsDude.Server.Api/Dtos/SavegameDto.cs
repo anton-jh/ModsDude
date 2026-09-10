@@ -12,9 +12,18 @@ namespace ModsDude.Server.Api.Dtos;
 /// <c>GET repos/{repoId}/savegames/{savegameId}/versions</c>.
 /// </remarks>
 /// <param name="ProfileId">
-/// The profile this save follows - the standing intent, which is a different fact from the revision
-/// its head version was played on. The two may legitimately disagree once somebody moves a save onto
-/// a branched profile.
+/// The profile this save follows, or <c>null</c> where it follows none. Decided when the save was
+/// published and never after, so it agrees with every version's own profile by construction.
+/// </param>
+/// <param name="SupersededAt">
+/// When the profile stopped following this farm, or <c>null</c> while it still does. Null for a
+/// savegame with no profile too, which is neither current nor past - the client reads the pair, not
+/// this field alone.
+/// <para>
+/// A different fact from <paramref name="ArchivedAt"/>, and carried separately for that reason: a
+/// savegame can be current or past, archived or not, in any combination, and a profile whose current
+/// farm is archived still has a current farm.
+/// </para>
 /// </param>
 /// <param name="Checkout">
 /// The open claim, or <c>null</c> where nobody holds it. A claim past its expiry is still reported -
@@ -25,10 +34,11 @@ public record SavegameDto(
     Guid Id,
     Guid RepoId,
     string Name,
-    Guid ProfileId,
+    Guid? ProfileId,
     DateTime Created,
     SavegameVersionDto? Head,
     SavegameCheckoutDto? Checkout,
+    DateTime? SupersededAt,
     DateTime? ArchivedAt);
 
 
@@ -39,6 +49,10 @@ public record SavegameDto(
 /// The revision of <paramref name="ProfileId"/> this version was played on. It is what lets a client
 /// say that a mod folder is on a list this save has never seen, which is the one kind of drift no
 /// directory listing could find.
+/// <para>
+/// Null exactly when <paramref name="ProfileId"/> is - the two are set together or not at all, and
+/// both are null for a savegame that follows no mod list. Nothing about revisions applies to one.
+/// </para>
 /// </param>
 /// <param name="ContentHash">
 /// SHA-256 of the packed save, and the address its blob is stored at. The client needs it to ask for
@@ -57,8 +71,8 @@ public record SavegameVersionDto(
     Guid RepoId,
     Guid SavegameId,
     int Number,
-    Guid ProfileId,
-    int ProfileRevision,
+    Guid? ProfileId,
+    int? ProfileRevision,
     string ContentHash,
     long SizeBytes,
     DateTime Created,

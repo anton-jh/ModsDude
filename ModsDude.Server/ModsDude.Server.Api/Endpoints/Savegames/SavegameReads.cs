@@ -77,10 +77,11 @@ internal static class SavegameReads
                 row.Id.Value,
                 repoId.Value,
                 row.Name.Value,
-                row.ProfileId.Value,
+                row.ProfileId?.Value,
                 row.Created,
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
                 checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names, now) : null,
+                row.SupersededAt,
                 row.ArchivedAt))
         ];
     }
@@ -117,10 +118,11 @@ internal static class SavegameReads
             savegame.Id.Value,
             savegame.RepoId.Value,
             savegame.Name.Value,
-            savegame.ProfileId.Value,
+            savegame.ProfileId?.Value,
             savegame.Created,
             head is null ? null : ToDto(savegame.RepoId, head, names),
             checkout is null ? null : ToDto(checkout, names, now),
+            savegame.SupersededAt,
             savegame.ArchivedAt);
     }
 
@@ -222,8 +224,8 @@ internal static class SavegameReads
             repoId.Value,
             row.SavegameId.Value,
             row.Number.Value,
-            row.ProfileId.Value,
-            row.ProfileRevision.Value,
+            row.ProfileId?.Value,
+            row.ProfileRevision?.Value,
             row.ContentHash,
             row.SizeBytes,
             row.Created,

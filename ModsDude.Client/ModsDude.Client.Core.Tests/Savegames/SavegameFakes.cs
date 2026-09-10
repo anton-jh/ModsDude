@@ -207,6 +207,8 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         => throw new NotSupportedException();
     public Task<SavegameDto> UpdateSavegameV1Async(Guid repoId, Guid savegameId, UpdateSavegameRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+    public Task<MakeSavegameCurrentResponse> MakeSavegameCurrentV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
     public Task<ICollection<SavegameDto>> GetSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<SavegameVersionDto> RestoreSavegameVersionV1Async(Guid repoId, Guid savegameId, int number, RestoreSavegameVersionRequest? request = null, CancellationToken cancellationToken = default)
@@ -222,7 +224,9 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     private SavegameVersionDto AddVersion(
         string contentHash,
         long sizeBytes,
-        int profileRevision,
+        // Nullable like the wire shape it stands in for: a savegame that follows no mod list records
+        // no revision, and the pair is null together with the profile above it.
+        int? profileRevision,
         SavegameVersionOrigin origin,
         int? baseVersion,
         string? label = null)
