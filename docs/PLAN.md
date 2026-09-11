@@ -1389,9 +1389,14 @@ they did not claim were not:
   now. Every other surface asking the hold question is rebuilt by navigating to where a check-in
   happens, so none of them needs the subscription.
 
-One thing was found and left alone: **`UpdateSavegameV1Endpoint` has no client caller either**, but
-it never had one - renaming a savegame was unreachable before this phase started, and slice 1 only
-narrowed the endpoint to that verb. It belongs to Phase 8's ledger, not this one.
+A fifth was found the same way and is Phase 8's rather than this phase's: **`UpdateSavegameV1Endpoint`
+had no client caller either**, and never had one - renaming a savegame was unreachable before Phase 9
+started, and slice 1 only narrowed the endpoint to that verb. It has one now, on the repo's saves list
+beside Archive. `RenameModalViewModel` was already the name prompt the archive uses and took a
+confirm-label parameter to be it for both, since "Restore it" over a rename is a button somebody has
+to read twice. The clash stays the server's to find: names are unique behind a filtered index, so
+checking first would be a second copy of a rule that would still be racing somebody else's rename -
+losing that race re-opens the dialog with what they typed instead of an error to start over from.
 
 ### Already shaped for this
 

@@ -300,7 +300,8 @@ public partial class RepoArchivePageViewModel : PageViewModel
         var modal = new RenameModalViewModel(
             "That name is taken",
             $"Something else in this repo is called '{item.Name}' now. Give this {what} another name to bring it back.",
-            $"{item.Name} (restored)");
+            $"{item.Name} (restored)",
+            "Restore it");
 
         await _modalService.Show(modal);
 

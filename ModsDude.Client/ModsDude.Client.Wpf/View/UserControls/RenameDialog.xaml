@@ -41,7 +41,7 @@
                     <Button Grid.Column="0"
                             Margin="0 0 4 0"
                             Style="{DynamicResource AccentButtonStyle}"
-                            Content="Restore it"
+                            Content="{Binding ConfirmLabel}"
                             HorizontalAlignment="Stretch"
                             IsDefault="True"
                             Command="{Binding ConfirmCommand}" />

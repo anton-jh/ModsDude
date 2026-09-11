@@ -245,6 +245,14 @@
                                         ToolTip="Opens this save's profile, where any two revisions can be compared."
                                         Command="{Binding CompareRevisionsCommand}" />
 
+                                <!-- A name and nothing else. A savegame cannot be moved between
+                                     profiles, so there is no second field to grow here. -->
+                                <Button Style="{DynamicResource SubtleMenuButton}"
+                                        Content="Rename"
+                                        ToolTip="Changes what everybody in this repo sees this save called. Its history and whoever holds it are untouched."
+                                        Command="{Binding RenameSavegameCommand}"
+                                        Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                 <!-- The only way a savegame goes away. It keeps its versions and
                                      whoever holds it; it leaves this list and frees its name. -->
                                 <Button Style="{DynamicResource SubtleMenuButton}"
