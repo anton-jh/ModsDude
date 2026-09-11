@@ -78,11 +78,27 @@ public sealed record SavegameDrift(
     /// which follows its profile and pins nothing.
     /// </summary>
     /// <remarks>
-    /// What a re-apply offered from the notice has to target. Head is the wrong answer for a past
-    /// savegame and the apply table refuses it, so a notice that could not name this number would be
-    /// offering a button that fails.
+    /// <b>The number <see cref="SavegameDriftKind.PlayedOnAnotherModList"/> was decided by</b>, where
+    /// it was decided by a number at all. <see cref="PlayedRevision"/> is not it: that one is what the
+    /// save was checked out against and belongs to play attribution, and the two differ on the
+    /// ordinary follow-the-profile flow. A notice explaining this drift with the check-out value would
+    /// be naming a number nothing compared.
     /// </remarks>
     public int? TargetRevision { get; init; }
+
+    /// <summary>
+    /// Whether the mod folder is on a <em>different profile</em> than the one this save follows, as
+    /// opposed to a different revision of the same one.
+    /// </summary>
+    /// <remarks>
+    /// The two halves of <see cref="SavegameDriftKind.PlayedOnAnotherModList"/>, told apart for the
+    /// sentence rather than for the rule - which is why they are one kind and not two. It matters
+    /// because <b>two profiles' revision numbers are not comparable</b>: revision 6 of 'Season 4' and
+    /// revision 6 of 'Vanilla' are different mod lists that happen to share an integer, so a notice
+    /// putting this folder's number beside this save's would be inviting exactly the arithmetic the
+    /// design refuses.
+    /// </remarks>
+    public bool RunsOnAnotherProfile { get; init; }
 }
 
 

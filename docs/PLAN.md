@@ -1361,6 +1361,38 @@ Three things fell out of the boxes above rather than being added to them:
   how a dialog comes to name a number the version does not have. The refusal stayed on the check-in:
   what a dialog has to say about a savegame whose revision nothing on this machine knows is nothing.
 
+### Verified after slice 4
+
+A pass over all four slices against the code. Everything the boxes claim is in the tree; four things
+they did not claim were not:
+
+- **`makeCurrent` had no client.** Slice 1 built the endpoint and said it answers with both savegames
+  "so the client can name what it displaced"; no slice built that client, so a server verb the design
+  names as one of the *two* things that change which farm a profile follows was unreachable. It is a
+  third row action on a past farm now, with the confirmation the design asks for. Making a farm
+  current while holding it clears its pin: a current farm follows its profile, and a number left
+  behind would hold that folder at its old revision forever and refuse every apply that tried to move
+  it. That is not "the hold moves under its holder" — that argument is about somebody else's
+  publish, which is not stated to whoever is playing.
+- **The drift notice explained `PlayedOnAnotherModList` with the wrong numbers.** It named the
+  binding's check-out revision against the folder's, which is neither of the pairs the rule compares:
+  slice 3 narrowed the rule to the savegame's *target*, and the other way the rule fires is a
+  different profile entirely, where two revision numbers are not comparable at all. One kind, two
+  sentences, and `SavegameDrift.RunsOnAnotherProfile` to tell them apart — which also made
+  `TargetRevision` load-bearing rather than written and never read.
+- **The profile page's activation control was offered and then refused.** The instance page's
+  dropdown is disabled while a held farm forbids the switch; this is the same switch from the other
+  end and was not, so the refusal arrived after the click. It asks `DecideApply` too now.
+- **The instance page went stale on a check-in from its own sub-page.** The slot list is a child of
+  that page, so checking a savegame in there left the shell above it showing a disabled dropdown and
+  a *Re-apply rev 4* about a hold that had ended. It listens to `SavegameBindingStore.BindingsChanged`
+  now. Every other surface asking the hold question is rebuilt by navigating to where a check-in
+  happens, so none of them needs the subscription.
+
+One thing was found and left alone: **`UpdateSavegameV1Endpoint` has no client caller either**, but
+it never had one - renaming a savegame was unreachable before this phase started, and slice 1 only
+narrowed the endpoint to that verb. It belongs to Phase 8's ledger, not this one.
+
 ### Already shaped for this
 
 Worth knowing before starting, so none of it gets rediscovered:

@@ -189,6 +189,35 @@ public interface ISavegameService : IHeldSavegames
     /// <summary>Hands a held savegame back, minting a version from whatever is in its slot now.</summary>
     Task<SavegameVersionDto> CheckInAsync(LocalInstance instance, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
 
+    /// <summary>
+    /// Puts a past savegame back in its profile's current slot, and lets go of the revision it was
+    /// pinned to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The other half of the swap publishing performs.</b> Whichever farm held the slot becomes
+    /// past in the same transaction - the server orders the two writes, because the instant where
+    /// both are current is what the one-current-savegame index refuses.
+    /// </para>
+    /// <para>
+    /// <b>The holder's pin goes with it.</b> A past farm pins the mod folder to its own revision, and
+    /// a farm that is current again follows its profile - so a binding still naming a number would
+    /// hold this instance behind head forever and refuse every apply that tried to move it. That the
+    /// hold is otherwise <em>decided once and does not move under the holder</em> is about somebody
+    /// else's publish, which is not stated to whoever is playing; this is the opposite case, stated
+    /// to the person doing it.
+    /// </para>
+    /// </remarks>
+    /// <param name="instances">
+    /// Every installation that might be holding it, since the pin lives in local state per instance
+    /// and this verb is about a savegame rather than about a folder. Passing none is legitimate - a
+    /// repo whose farms nobody here has checked out.
+    /// </param>
+    Task<MakeSavegameCurrentResponse> MakeCurrentAsync(
+        IReadOnlyList<LocalInstance> instances,
+        SavegameDto savegame,
+        CancellationToken ct);
+
     /// <summary>Turns whatever is in a slot into a new savegame in the repo.</summary>
     /// <param name="target">
     /// Which mod list the new savegame follows and the revision its first version declares, or null
@@ -649,6 +678,34 @@ public sealed class SavegameService(
         return version;
     }
 
+    /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
+    public async Task<MakeSavegameCurrentResponse> MakeCurrentAsync(
+        IReadOnlyList<LocalInstance> instances,
+        SavegameDto savegame,
+        CancellationToken ct)
+    {
+        var response = await savegamesClient.MakeSavegameCurrentV1Async(savegame.RepoId, savegame.Id, ct);
+
+        // After the server, and only after: a pin cleared against a swap that was then refused would
+        // leave this instance free to apply head under a farm that is still past.
+        foreach (var instance in instances)
+        {
+            if (bindings.GetBinding(instance.Id, savegame.Id) is not SavegameCheckoutBinding binding
+                || binding.TargetRevision is null)
+            {
+                continue;
+            }
+
+            bindings.SetBinding(instance.Id, binding with { TargetRevision = null });
+
+            logger.LogInformation(
+                "Savegame {Savegame} is current again; instance {Instance} stopped pinning its mod folder to revision {Revision}.",
+                savegame.Id, instance.Id, binding.TargetRevision);
+        }
+
+        return response;
+    }
+
     /// <summary>
     /// Turns whatever is in a slot into a new savegame in the repo, and leaves this machine holding
     /// it.
@@ -881,7 +938,12 @@ public sealed class SavegameService(
                 HeadVersion = head,
                 PlayedRevision = binding.ProfileRevision,
                 AppliedRevision = manifest?.ProfileRevision,
-                TargetRevision = binding.TargetRevision
+                TargetRevision = binding.TargetRevision,
+                // Computed here rather than reported by the rule, because the caller already holds
+                // both halves and the rule answers kinds rather than reasons.
+                RunsOnAnotherProfile = binding.ProfileId is not null
+                    && manifest?.ProfileId is not null
+                    && binding.ProfileId != manifest.ProfileId
             }));
         }
 

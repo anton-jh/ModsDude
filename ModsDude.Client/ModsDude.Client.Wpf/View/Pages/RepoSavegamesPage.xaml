@@ -175,6 +175,17 @@
                                                     Style="{DynamicResource SubtleMenuButton}"
                                                     ToolTip="Writes it into a slot and claims nothing. Whoever holds it keeps holding it."
                                                     Command="{Binding TakeCopyCommand}" />
+
+                                            <!-- Only on a past farm, and the other end of the swap a
+                                                 publish performs. It displaces somebody's current
+                                                 farm, so it asks first. -->
+                                            <Button Margin="0 4 0 0"
+                                                    Content="Make current"
+                                                    HorizontalAlignment="Stretch"
+                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                    ToolTip="Puts this farm back in its profile's current slot, so it follows the mod list again. Whichever farm is there becomes past."
+                                                    Command="{Binding MakeCurrentCommand}"
+                                                    Visibility="{Binding CanMakeCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

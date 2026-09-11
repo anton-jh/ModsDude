@@ -487,6 +487,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             row.CheckOutRequested += OnCheckOutRequested;
             row.TakeCopyRequested += OnTakeCopyRequested;
             row.ApplyProfileRequested += OnApplyProfileRequested;
+            row.MakeCurrentRequested += OnMakeCurrentRequested;
 
             Savegames.Add(row);
         }
@@ -513,6 +514,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             row.CheckOutRequested -= OnCheckOutRequested;
             row.TakeCopyRequested -= OnTakeCopyRequested;
             row.ApplyProfileRequested -= OnApplyProfileRequested;
+            row.MakeCurrentRequested -= OnMakeCurrentRequested;
         }
 
         Savegames.Clear();
@@ -810,6 +812,95 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             await StartAsync(row, row.Savegame.Head?.Number ?? 0, SavegameCheckOutMode.TakeCopy);
         }
+    }
+
+    /// <summary>
+    /// Puts a past farm back in its profile's current slot.
+    /// </summary>
+    /// <remarks>
+    /// <b>Stated before it runs</b>, like the publish that performs the same swap from the other end:
+    /// this is one of the two things that change which farm a profile is following, and the one it
+    /// displaces is somebody's. The incumbent is named from this list where it is in it - an archived
+    /// one is not, and still holds the slot - and the server's answer names it exactly afterwards.
+    /// </remarks>
+    private async void OnMakeCurrentRequested(object? sender, EventArgs e)
+    {
+        if (sender is not SavegameListItemViewModel row)
+        {
+            return;
+        }
+
+        var incumbent = _fetched.FirstOrDefault(x =>
+            x.ProfileId == row.Savegame.ProfileId && x.SupersededAt is null);
+
+        var confirmation = new ConfirmationDialogViewModel(
+            $"Make '{row.Name}' {row.ProfileName}'s current farm?",
+            DescribeSwap(row, incumbent),
+            IconKind.Question,
+            "Make it current",
+            "Leave it as it is");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            var result = await _savegameService.MakeCurrentAsync(
+                [.. _repo.LocalInstances], row.Savegame, _lifetime);
+
+            Status = result.Superseded is SavegameDto displaced
+                ? $"'{row.Name}' is {row.ProfileName}'s current farm and follows it from here. '{displaced.Name}' is past - still playable, and its mod list no longer moves."
+                : $"'{row.Name}' is {row.ProfileName}'s current farm and follows it from here.";
+
+            await _driftMonitor.CheckAsync();
+            await ReloadAsync(row.Id);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "making a savegame current");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    /// <summary>
+    /// What the swap costs, in the one paragraph that says it.
+    /// </summary>
+    /// <remarks>
+    /// Past is not archived and not read-only, and the sentence has to carry that or it reads like a
+    /// deletion: the displaced farm stays playable, stays checkable-out, and the one thing that
+    /// changes is that its revision stops moving.
+    /// </remarks>
+    private string DescribeSwap(SavegameListItemViewModel row, SavegameDto? incumbent)
+    {
+        var moves = row.PinnedRevision is int pinned
+            ? $"'{row.Name}' stops being pinned to rev {pinned} and follows {row.ProfileName} again."
+            : $"'{row.Name}' follows {row.ProfileName} again.";
+
+        if (incumbent is null)
+        {
+            // Either the profile has no current farm - its last one was deleted - or it has one this
+            // list is not showing, which means archived. Both are honest without a name.
+            return $"{moves} Whichever farm {row.ProfileName} is following becomes past: it stays playable, and its mod list stops moving.";
+        }
+
+        var stays = incumbent.Head?.ProfileRevision is int revision
+            ? $"it stays playable and stays on rev {revision}"
+            : "it stays playable, and its mod list stops moving";
+
+        return $"'{incumbent.Name}' is {row.ProfileName}'s current farm. This swaps them: {moves} '{incumbent.Name}' becomes past - {stays}.";
     }
 
     /// <summary>

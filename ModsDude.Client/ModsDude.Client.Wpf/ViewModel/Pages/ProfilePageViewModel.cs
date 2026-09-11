@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Navigation;
@@ -28,6 +29,12 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// one on another profile or none is being moved, and moving it uninstalls whatever the previous
 /// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-instance.
 /// </para>
+/// <para>
+/// <b>And refused before the click where a held farm forbids it.</b> This is the instance page's
+/// disabled profile dropdown seen from the other end - the same switch, the same rule - and the apply
+/// table refuses it either way. A control that offers the move and then reports a refusal is the
+/// thing slice 4 set out to remove, so it is asked here too.
+/// </para>
 /// </remarks>
 public partial class ProfilePageViewModel : PageViewModel, IDisposable
 {
@@ -35,6 +42,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly ProfileDto _profile;
     private readonly LocalInstanceRepository _localInstanceRepository;
     private readonly ProfileApplyService _applyService;
+    private readonly IHeldSavegames _heldSavegames;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
@@ -58,6 +66,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         NavigationManager navigationManager,
         LocalInstanceRepository localInstanceRepository,
         ProfileApplyService applyService,
+        IHeldSavegames heldSavegames,
         InstanceDriftMonitor driftMonitor,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
@@ -69,6 +78,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         _profile = profile;
         _localInstanceRepository = localInstanceRepository;
         _applyService = applyService;
+        _heldSavegames = heldSavegames;
         _driftMonitor = driftMonitor;
 
         // One entry, two pages. Editing a profile's mod list needs Member, but *seeing* it needs
@@ -138,6 +148,23 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private LocalInstance? _selectedInstance;
 
+    /// <summary>
+    /// Why the selected instance cannot be put on this profile, where it cannot. Null - nearly
+    /// always - where nothing is in the way.
+    /// </summary>
+    /// <remarks>
+    /// Asked of <see cref="IHeldSavegames.DecideApply"/>, which is the rule the sync engine refuses
+    /// with. A second copy of it here is one that eventually disagrees with the button it is greying
+    /// out.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHoldRefusal))]
+    [NotifyPropertyChangedFor(nameof(ActivationDescription))]
+    [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
+    private string? _holdRefusal;
+
+    public bool HasHoldRefusal => HoldRefusal is not null;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasInstanceChoice))]
     [NotifyPropertyChangedFor(nameof(HasActivation))]
@@ -181,6 +208,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             if (BlockedByUnsavedChanges)
             {
                 return "The mod list has unsaved changes. Use 'Save and apply' there instead - this would apply the last saved version behind them.";
+            }
+
+            if (HoldRefusal is string refused)
+            {
+                return refused;
             }
 
             if (SelectedInstance is not LocalInstance instance)
@@ -243,7 +275,34 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private bool CanActivate() => SelectedInstance is not null && IsApplying is false && BlockedByUnsavedChanges is false;
+    private bool CanActivate()
+        => SelectedInstance is not null
+        && IsApplying is false
+        && BlockedByUnsavedChanges is false
+        && HasHoldRefusal is false;
+
+    /// <summary>
+    /// Whether a savegame checked out on the selected instance forbids putting it on this profile.
+    /// </summary>
+    /// <remarks>
+    /// Only the outright refusal is a block. A <em>past</em> farm of this very profile pins the folder
+    /// to its own revision without forbidding the apply - re-applying that revision is what repairs
+    /// folder drift under it - and <see cref="ProfileApplyService.ApplyAsync"/> installs the pinned one
+    /// on its own, so the button keeps working and its message names the number.
+    /// </remarks>
+    private void RefreshHoldRefusal()
+    {
+        if (SelectedInstance is not LocalInstance instance)
+        {
+            HoldRefusal = null;
+
+            return;
+        }
+
+        HoldRefusal = _heldSavegames.DecideApply(instance.Id, _profile.Id, revision: null) is { IsAllowed: false }
+            ? $"'{instance.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."
+            : null;
+    }
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
@@ -314,6 +373,20 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         NavManager.Dispose();
     }
 
+
+    /// <summary>
+    /// Re-asks the hold question for whichever instance is selected now.
+    /// </summary>
+    /// <remarks>
+    /// Selection is the only thing that can change the answer while this page is up: checking a
+    /// savegame in happens on a repo's Saves list or an instance's own, and reaching either means
+    /// leaving this page - which rebuilds it. Subscribing to the binding store as well would be
+    /// covering a window that does not exist.
+    /// </remarks>
+    partial void OnSelectedInstanceChanged(LocalInstance? value)
+    {
+        RefreshHoldRefusal();
+    }
 
     private void OnInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

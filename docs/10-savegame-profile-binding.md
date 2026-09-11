@@ -547,10 +547,21 @@ Which instance the pair acts on is the one that could host the farm now, failing
 following its profile, failing that the first. A row that answers about a folder its buttons do not
 act on is a puzzle rather than an answer, so the check-out dialog opens on that same instance.
 
+A **past** row carries a third: `Make current`. It is the other end of the swap a publish performs,
+so it is stated before it runs the same way — a confirmation naming the farm it displaces, what
+happens to it (past, still playable, and its mod list stops moving), and that this one stops being
+pinned. Nothing about this machine gates it: which farm a profile follows is a decision about the
+repo. Where this machine <em>is</em> holding it, the swap clears the pin, because a farm that is
+current again follows its profile and a number left behind would hold that folder at revision 4
+forever. That is not the hold moving under its holder — the argument against that is about
+somebody else's publish, which nobody states to whoever is playing.
+
 ### Instance page
 
 The profile dropdown is **disabled** while a savegame with a profile is checked out. Profile-less
-savegames leave it alone.
+savegames leave it alone. The profile's own activation control is the same switch seen from the other
+end and is refused the same way, since a control that offers the move and then reports a refusal is
+the thing this section exists to remove.
 
 The apply button's meaning changes while a **past** savegame is held. It normally applies the
 profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job is repairing
@@ -568,6 +579,13 @@ Two rules, both about not crying wolf:
   achieve this — the targeted revision is passed into `InstanceDriftService.Check` instead of head,
   so the comparison simply comes out equal.
 - Folder drift still reports, and its action reads `Re-apply rev 4`, never "apply latest".
+
+`SavegameDriftKind.PlayedOnAnotherModList` gets **two sentences for the one kind**, because the rule
+reaches it two ways and only one of them is about numbers. A past farm on the wrong revision names
+its own target against the folder's; a farm following a different profile entirely names no numbers
+at all, since revision 6 of 'Season 4' and revision 6 of 'Vanilla' are different mod lists that share
+an integer. Neither names `SavegameDrift.PlayedRevision`: that is what the save was checked out
+against, it belongs to play attribution, and it is not what the comparison used.
 
 ### Check-out dialog
 

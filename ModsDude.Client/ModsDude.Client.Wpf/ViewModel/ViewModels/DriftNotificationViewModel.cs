@@ -619,8 +619,17 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
                 $"{save} has been checked in by somebody else - they are on version {first.HeadVersion}, this machine is holding version "
                     + $"{first.HeldVersion}. Checking in from here forks it, and will be refused unless you force it.",
 
+            // Two sentences for one kind, because the rule reaches it two ways and only one of them
+            // is about numbers. Against another profile entirely, putting the two revisions side by
+            // side would be comparing integers belonging to different mod lists - which is the thing
+            // the design refuses, said by the notice meant to explain it.
+            SavegameDriftKind.PlayedOnAnotherModList when first.RunsOnAnotherProfile =>
+                $"{save} follows a different mod list from the one this mod folder is on. Playing it on the wrong mod list is what damages a save.",
+
+            // The savegame's own target, never the revision it was checked out against: those differ
+            // on the ordinary follow-the-profile flow, and the target is what the comparison used.
             SavegameDriftKind.PlayedOnAnotherModList =>
-                $"{save} was checked out against revision {first.PlayedRevision} of its profile and this mod folder is on revision "
+                $"{save} runs on revision {first.TargetRevision} of its mod list and this mod folder is on revision "
                     + $"{first.AppliedRevision}. Playing it on the wrong mod list is what damages a save.",
 
             _ => $"{save} no longer agrees with what the repo holds."

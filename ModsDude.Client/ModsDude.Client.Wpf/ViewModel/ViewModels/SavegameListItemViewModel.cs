@@ -75,6 +75,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     public event EventHandler? CheckOutRequested;
     public event EventHandler? TakeCopyRequested;
     public event EventHandler? ApplyProfileRequested;
+    public event EventHandler? MakeCurrentRequested;
 
 
     public SavegameDto Savegame { get; }
@@ -112,6 +113,16 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>Whether putting the mod folder on this farm's list is on offer. Member, like check-out.</summary>
     public bool CanApplyProfile => IsMember && _offer.CanApply;
+
+    /// <summary>
+    /// Whether this farm can be put back in its profile's current slot.
+    /// </summary>
+    /// <remarks>
+    /// Only a past one has anywhere to go: a current farm is already there, and one following no mod
+    /// list is in no succession. Nothing about this machine gates it - which farm a profile follows is
+    /// a decision about the repo, like publishing, and is gated the same way.
+    /// </remarks>
+    public bool CanMakeCurrent => IsMember && IsPast;
 
     /// <summary>
     /// The installation both buttons act on, decided by the page.
@@ -197,6 +208,18 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanApplyProfile))]
     private void ApplyProfile() => ApplyProfileRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Puts this farm back in its profile's current slot, displacing whichever one is there.
+    /// </summary>
+    /// <remarks>
+    /// One of the two things that change which savegame a profile is following, and the other way
+    /// round from publishing - same swap, seen from the other end. Both are stated before they run,
+    /// which is why this opens a confirmation naming what it displaces rather than acting on the
+    /// click. See docs/10-savegame-profile-binding.md#current-and-past-savegames.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanMakeCurrent))]
+    private void MakeCurrent() => MakeCurrentRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
     /// Open to everybody, Guest included. It is what makes the list worth showing to somebody who

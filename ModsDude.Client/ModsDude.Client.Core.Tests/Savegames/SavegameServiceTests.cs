@@ -579,6 +579,56 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// A past farm made current again follows its profile from here, so the pin that held this
+    /// instance's mod folder at revision 4 has to go with it.
+    /// </summary>
+    /// <remarks>
+    /// The one case where a hold <em>does</em> move under its holder, and it is not a contradiction:
+    /// "decided once" is about somebody else's publish, which nobody states to whoever is playing.
+    /// This is the same swap stated to the person performing it. Left behind, the number would hold
+    /// the folder at revision 4 forever and refuse every apply that tried to move it forward.
+    /// </remarks>
+    [Fact]
+    public async Task Making_a_past_savegame_current_lets_go_of_the_revision_it_pinned()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+
+        harness.Server.Supersede();
+
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(4, harness.Binding(harness.Server.SavegameId).TargetRevision);
+
+        await harness.Service.MakeCurrentAsync([harness.Instance], harness.Server.Savegame, CancellationToken.None);
+
+        Assert.Equal(1, harness.Server.MadeCurrent);
+        Assert.Null(harness.Binding(harness.Server.SavegameId).TargetRevision);
+
+        // And with the pin gone, the apply table stops refusing head - which is the whole point of
+        // clearing it.
+        Assert.True(harness.Service.DecideApply(harness.Instance.Id, harness.ProfileId, 1004).IsAllowed);
+    }
+
+    /// <summary>
+    /// Nothing here is holding it, which is the ordinary case: the swap is about a savegame, and the
+    /// pin is a fact about a mod folder that may be on somebody else's machine entirely.
+    /// </summary>
+    [Fact]
+    public async Task Making_a_savegame_current_touches_no_instance_that_is_not_holding_it()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+
+        harness.Server.Supersede();
+
+        await harness.Service.MakeCurrentAsync([harness.Instance], harness.Server.Savegame, CancellationToken.None);
+
+        Assert.Equal(1, harness.Server.MadeCurrent);
+        Assert.Null(harness.Service.GetBinding(harness.Instance, harness.Server.SavegameId));
+    }
+
+    /// <summary>
     /// The revision a first version declares: what the folder is actually on where the chosen profile
     /// is the one it is on, and that profile's head otherwise - which is the honest answer, since the
     /// alternative is a number belonging to a different mod list.

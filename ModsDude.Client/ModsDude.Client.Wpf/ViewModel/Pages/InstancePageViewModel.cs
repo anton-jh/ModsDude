@@ -10,6 +10,7 @@ using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -46,6 +47,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
     private readonly ISavegameService _savegameService;
+    private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
 
@@ -66,6 +68,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         InstanceDriftMonitor driftMonitor,
         ProfileApplyService applyService,
         ISavegameService savegameService,
+        SavegameBindingStore bindingStore,
         ProfileService profileService,
         ISavegamesClient savegamesClient,
         SyncPageViewModel.Factory syncPageViewModelFactory,
@@ -80,8 +83,14 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         _driftMonitor = driftMonitor;
         _applyService = applyService;
         _savegameService = savegameService;
+        _bindingStore = bindingStore;
         _profileService = profileService;
         _savegamesClient = savegamesClient;
+
+        // This page outlives a check-in, unlike every other surface that asks the hold question: the
+        // slot list is its own sub-page, so checking a savegame in there leaves this shell standing
+        // with a disabled dropdown and a Re-apply rev 4 that are both about a hold that has ended.
+        _bindingStore.BindingsChanged += OnBindingsChanged;
 
         InstanceName = instance.Name;
         ModFolder = instance.ModFolder ?? "No mod folder configured";
@@ -298,9 +307,25 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     {
         ApplyCancelCommand.Execute(null);
 
+        _bindingStore.BindingsChanged -= OnBindingsChanged;
+
         NavManager.Dispose();
     }
 
+
+    /// <summary>
+    /// A savegame taken or handed back, here or anywhere else on this machine.
+    /// </summary>
+    /// <remarks>
+    /// Dispatched, because a check-in completing is not guaranteed to be on the UI thread and
+    /// everything it changes is bound. The names are not re-read: a hold that has just ended needs no
+    /// name, and one taken while this page stood open is named the next time it is opened - which is
+    /// cheaper than a round trip per check-out and no less true.
+    /// </remarks>
+    private void OnBindingsChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshHolding);
+    }
 
     /// <summary>
     /// What the savegames checked out here demand of the mod folder, read off local state.
