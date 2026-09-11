@@ -38,7 +38,7 @@ public class InstanceActivationTests
 
     /// <summary>
     /// While a past savegame is held, the button's only remaining job is repairing folder drift back
-    /// to that farm's revision - applying the profile's latest is exactly what the apply table
+    /// to that savegame's revision - applying the profile's latest is exactly what the apply table
     /// refuses - so it says which revision rather than implying the newest one.
     /// </summary>
     [Fact]

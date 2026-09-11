@@ -21,7 +21,7 @@ namespace ModsDude.Server.Domain.Savegames;
 /// <b>The profile is fixed at publish.</b> Nothing moves a savegame onto another one - a move would
 /// put this row and every version's <see cref="SavegameVersion.ProfileId"/> in disagreement, and two
 /// profiles' revision numbers are not comparable anyway. Somebody who wants the effect republishes
-/// the farm, which is three operations that already exist; see
+/// the savegame, which is three operations that already exist; see
 /// docs/10-savegame-profile-binding.md#cardinality.
 /// </para>
 /// <para>
@@ -78,7 +78,7 @@ public class Savegame : IArchivable
     /// </summary>
     /// <remarks>
     /// <b>A different fact from <see cref="ArchivedAt"/>.</b> Archived is the repo-wide visibility
-    /// state every <see cref="IArchivable"/> carries; this says which farm a profile is following
+    /// state every <see cref="IArchivable"/> carries; this says which savegame a profile is following
     /// now. A savegame can be current or past, archived or not, in any combination - which is why
     /// the one-current-savegame index is deliberately not filtered on <see cref="ArchivedAt"/> the
     /// way the name index beside it is. An archived savegame still holds its profile's slot, and a
@@ -92,7 +92,7 @@ public class Savegame : IArchivable
     public bool IsArchived => ArchivedAt is not null;
 
     /// <summary>
-    /// Whether this is the farm its profile is following. Both this and <see cref="IsPast"/> are
+    /// Whether this is the savegame its profile is following. Both this and <see cref="IsPast"/> are
     /// false for a savegame with no profile: it is not in a succession, so neither word applies to
     /// it.
     /// </summary>
@@ -128,13 +128,13 @@ public class Savegame : IArchivable
 
 
     /// <summary>
-    /// Makes this a past savegame. Its profile is following some other farm from now on, and this
+    /// Makes this a past savegame. Its profile is following some other savegame from now on, and this
     /// one stays on the revision it was last played on rather than moving with the mod list.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Only ever half of a swap.</b> Nothing supersedes a savegame on its own, because that would
-    /// leave the profile with no current farm - a state only deleting the current savegame is meant
+    /// leave the profile with no current savegame - a state only deleting the current savegame is meant
     /// to reach. Whoever calls this is the same caller that puts something else in the slot, in the
     /// same transaction.
     /// </para>

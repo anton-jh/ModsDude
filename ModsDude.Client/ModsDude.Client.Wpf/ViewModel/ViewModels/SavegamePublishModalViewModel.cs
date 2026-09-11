@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// One answer to "which mod list does this farm follow": a profile in the repo, or none of them.
+/// One answer to "which mod list does this savegame follow": a profile in the repo, or none of them.
 /// </summary>
 /// <remarks>
 /// <b>No mod list is a choice rather than a fallback.</b> Adapters with savegame support and no mod
@@ -19,10 +19,10 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// Null only for <see cref="NoModList"/>, whose pair is null on both halves.
 /// </param>
 /// <param name="CurrentSavegameName">
-/// The farm this profile is following right now, which publishing displaces. Null where the profile
+/// The savegame this profile is following right now, which publishing displaces. Null where the profile
 /// has none - the ordinary starting state, where there is nothing to supersede and nothing to say.
 /// </param>
-/// <param name="CurrentSavegameRevision">The revision that farm stays on once it is past.</param>
+/// <param name="CurrentSavegameRevision">The revision that savegame stays on once it is past.</param>
 /// <param name="FolderIsOnIt">
 /// Whether the mod folder is actually on this profile. Where it is not, the revision below is a
 /// declaration about a list this folder has never run - which the dialog says out loud.
@@ -53,18 +53,18 @@ public sealed record SavegamePublishOption(
 /// <remarks>
 /// <para>
 /// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new version of that thing"
-/// have opposite failure modes, and one button doing both is how somebody's farm ends up as a version
+/// have opposite failure modes, and one button doing both is how somebody's savegame ends up as a version
 /// of somebody else's. This one is only ever reached from a slot, and it names the thing being made.
 /// </para>
 /// <para>
 /// <b>It asks about the profile, and every answer is legitimate.</b> The instance's active one is only
-/// the likeliest: a farm can be published to a list it is not currently on, and to no list at all. The
+/// the likeliest: a savegame can be published to a list it is not currently on, and to no list at all. The
 /// answer cannot be revised afterwards - nothing moves a savegame between profiles - which is why it
 /// is asked here rather than derived from whatever the folder happens to be on.
 /// </para>
 /// <para>
 /// <b>Three consequences, stated inline rather than as a second dialog.</b> The revision this declares,
-/// the farm it supersedes, and the folder being on a different list are all things somebody would want
+/// the savegame it supersedes, and the folder being on a different list are all things somebody would want
 /// to have seen before pressing the button, and a confirmation that appears afterwards is one that
 /// gets clicked through.
 /// </para>
@@ -143,31 +143,31 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// </summary>
     /// <remarks>
     /// <b>A declaration, which is why it is shown rather than implied.</b> The bytes predate ModsDude,
-    /// so nothing knows which mods were in the folder while this farm was played, and no arrangement of
+    /// so nothing knows which mods were in the folder while this savegame was played, and no arrangement of
     /// this dialog recovers it. Every version after this one is observed.
     /// </remarks>
     public string? RevisionText => SelectedProfile switch
     {
         null => null,
         { DeclaredRevision: int revision } profile =>
-            $"This first version is recorded as played on {profile.Name} rev {revision}. Nothing checks that this farm can actually run on it - nothing can.",
+            $"This first version is recorded as played on {profile.Name} rev {revision}. Nothing checks that this savegame can actually run on it - nothing can.",
         _ => "This save follows no mod list. It records no revision, no profile is ever applied on its behalf, and nothing reports it as drifted. It cannot be given one later."
     };
 
     public bool HasRevisionText => RevisionText is not null;
 
     /// <summary>
-    /// That this publish displaces the farm the profile is following now.
+    /// That this publish displaces the savegame the profile is following now.
     /// </summary>
     /// <remarks>
-    /// Inline rather than a second dialog, and worded for what actually happens to the other farm:
+    /// Inline rather than a second dialog, and worded for what actually happens to the other savegame:
     /// past is not archived and not read-only. It stays playable, it stays checkable-out, and the one
     /// thing that changes is that its revision stops moving.
     /// </remarks>
     public string? SupersedeNotice => SelectedProfile is { CurrentSavegameName: { Length: > 0 } current } profile
         ? profile.CurrentSavegameRevision is int revision
-            ? $"'{current}' is {profile.Name}'s current farm. Publishing this makes it past - it stays playable and stays on rev {revision}."
-            : $"'{current}' is {profile.Name}'s current farm. Publishing this makes it past - it stays playable, and its mod list stops moving."
+            ? $"'{current}' is {profile.Name}'s current savegame. Publishing this makes it past - it stays playable and stays on rev {revision}."
+            : $"'{current}' is {profile.Name}'s current savegame. Publishing this makes it past - it stays playable, and its mod list stops moving."
         : null;
 
     public bool HasSupersedeNotice => SupersedeNotice is not null;
@@ -175,7 +175,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <summary>The folder is on one list and this is being recorded against another.</summary>
     public string? MismatchNotice => SelectedProfile is { ProfileId: not null, FolderIsOnIt: false } profile
         ? FolderProfileName is { Length: > 0 } folder
-            ? $"This folder is on '{folder}'. Nothing checks that this farm can run on {profile.Name}."
+            ? $"This folder is on '{folder}'. Nothing checks that this savegame can run on {profile.Name}."
             : $"This folder has never been synced to a mod list, so {profile.Name}'s latest revision is what gets recorded."
         : null;
 
@@ -183,7 +183,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
     /// <summary>
     /// The two things that have to be answered: the name everybody else will see, and which mod list
-    /// this farm follows for the rest of its life.
+    /// this savegame follows for the rest of its life.
     /// </summary>
     public bool IsValid => string.IsNullOrWhiteSpace(Name) is false && SelectedProfile is not null;
 

@@ -202,7 +202,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// What the re-apply button says.
     /// </summary>
     /// <remarks>
-    /// <b>Never "apply latest" for an instance holding a past farm.</b> Head is exactly what the apply
+    /// <b>Never "apply latest" for an instance holding a past savegame.</b> Head is exactly what the apply
     /// table refuses there, so a button offering it would be one that fails when pressed - and the
     /// revision it does target is a number worth seeing before pressing anything, since the folder is
     /// deliberately behind head and staying there.

@@ -17,12 +17,12 @@ and no shape below is constrained by what an older client wrote.
 Two different things advance over time, and this document is about how they relate.
 
 **Versions of one savegame.** A `Savegame` has a linear history of `SavegameVersion` rows,
-numbered from 1. A check-in mints one. They are snapshots of the same farm at different points,
+numbered from 1. A check-in mints one. They are snapshots of the same savegame at different points,
 and its head is the newest. Each version records the profile revision it was played on.
 
 **Savegames on one profile.** A `Profile` has a succession of `Savegame` rows. These are
-separate farms — separate names, separate claims, separate version histories numbered from 1
-each. Starting a second farm on "Old-school" creates a second `Savegame`; it does not add a
+separate savegames — separate names, separate claims, separate version histories numbered from 1
+each. Starting a second savegame on "Old-school" creates a second `Savegame`; it does not add a
 version to the first.
 
 | | Versions | Savegames on a profile |
@@ -64,7 +64,7 @@ both are current. The outgoing row has to be superseded before the incoming one 
 is an ordering the two updates must guarantee rather than leave to the change tracker.
 
 A profile is durable identity across a succession of savegames. "Old-school" stays one profile
-when the group starts a new farm on it; the previous farm becomes past.
+when the group starts a new savegame on it; the previous savegame becomes past.
 
 An instance holds **at most one checked-out savegame that has a profile**.
 
@@ -77,8 +77,8 @@ Stating it this way needs no adapter-capability check. In a repo whose adapter h
 no savegame has a profile, so nothing is ever limited.
 
 Enforced by `CheckOutAsync` and by `PublishAsync`, before either takes a claim. It had been assumed
-rather than checked until then: nothing but the slot safety check stood between two farms and one mod
-folder, and two farms in two slots never touched it.
+rather than checked until then: nothing but the slot safety check stood between two savegames and one mod
+folder, and two savegames in two slots never touched it.
 
 A savegame's profile is fixed at publish. **There is no operation that moves a savegame to a
 different profile** — `UpdateSavegameV1Endpoint` becomes a rename. Moving one would make
@@ -86,7 +86,7 @@ different profile** — `UpdateSavegameV1Endpoint` becomes a rename. Moving one 
 profiles are not comparable
 ([SavegameDrift.cs:168](../ModsDude.Client/ModsDude.Client.Core/Savegames/SavegameDrift.cs)).
 
-A user who wants the effect republishes the farm, which is three existing operations:
+A user who wants the effect republishes the savegame, which is three existing operations:
 
 1. Check it out, so the play is in a slot.
 2. `DiscardAsync` — hands the claim back and clears the binding, leaving the slot as an ordinary
@@ -100,7 +100,7 @@ moved and nothing is rewritten.
 The same three steps are the only route from a savegame with no profile to one that has a
 profile, since nothing connects an existing savegame to one.
 
-Running two farms in parallel on one mod list is done by branching the profile —
+Running two savegames in parallel on one mod list is done by branching the profile —
 `POST repos/{repoId}/profiles` with `CopyFrom`, which exists today
 ([CreateProfileV1Endpoint.cs](../ModsDude.Server/ModsDude.Server.Api/Endpoints/Profiles/CreateProfileV1Endpoint.cs)).
 
@@ -220,11 +220,11 @@ savegame is two steps — archive, then delete — and it remains current in bet
 | **No profile** | Nothing. No profile is applied |
 
 A current savegame follows its profile — that is what current means — so it gets whatever the
-profile says now. Preparing the mod list before a session and then checking the farm out is the
+profile says now. Preparing the mod list before a session and then checking the savegame out is the
 ordinary case, and it must not be undone by the check-out.
 
 The head version's revision is **not** the right target for a current savegame: it names the last
-list the farm was *played* on, which is older than head whenever the profile has been edited since.
+list the savegame was *played* on, which is older than head whenever the profile has been edited since.
 
 A past savegame gets the `(ProfileId, ProfileRevision)` pair from its head version, never the
 number alone. With no operation that moves a savegame between profiles, that `ProfileId` always
@@ -237,7 +237,7 @@ The table is enforced by resolution rather than by every caller reading it. `Mod
 null means "whatever this instance must be on", and `PlanAsync` resolves it from what the instance is
 holding — so the drift notice's re-apply, the mod list editor's save and the instance page's apply all
 target a past savegame's revision without any of them knowing what a savegame is. The one caller that
-names a number is the check-out dialog, previewing the apply for a farm nothing is holding yet.
+names a number is the check-out dialog, previewing the apply for a savegame nothing is holding yet.
 
 ### Two actions, not one
 
@@ -263,7 +263,7 @@ the "Nothing" row: they claim no mod list, so nothing about the mod folder is th
 | Instance holds | Apply |
 | --- | --- |
 | Nothing, or only savegames with no profile | Unchanged |
-| The **current** savegame of the profile being applied | Allowed. This is how a farm follows its profile |
+| The **current** savegame of the profile being applied | Allowed. This is how a savegame follows its profile |
 | A **past** savegame | Allowed only for that savegame's own revision — re-applying it, repairing folder drift. Any other revision is refused |
 | A savegame with a profile, and the apply names a **different** profile | Refused. This is the active-profile switch below |
 
@@ -278,15 +278,15 @@ state the design expects.
 That an instance holds a past savegame is recorded on the instance, not inferred from revision
 numbers: it is `SavegameCheckoutBinding.TargetRevision`, written at check-out from the savegame's own
 current-or-past state and read back off local state afterwards. Inferring it would need the server's
-answer to "is this still its profile's current farm?", and the two things that read it — the apply
+answer to "is this still its profile's current savegame?", and the two things that read it — the apply
 table above and the drift check — both have to work offline and cost a directory listing.
 
 **Decided once, and it does not move under the holder.** Somebody else can publish to this profile
-while the farm is checked out here, which supersedes it; the binding goes on saying what it said at
+while the savegame is checked out here, which supersedes it; the binding goes on saying what it said at
 check-out, and that is the answer this design wants. The two things that change which savegame is
 current are both stated before they run, and somebody else's publish is not stated to a holder — so
 the alternative is the apply button and the drift notice quietly changing meaning because of an action
-the person looking at them did not take. Nothing breaks either way: the farm goes on following its
+the person looking at them did not take. Nothing breaks either way: the savegame goes on following its
 profile until it is checked in, the version that check-in mints records the revision it was genuinely
 played on, and its target moves forward to that revision with it, so the invariant below still holds.
 The next check-out reads the truth.
@@ -472,7 +472,7 @@ one.
 **A first version's revision is declared, not observed**, and this is the only version in the
 system of which that is true. The bytes predate ModsDude: there is no binding, no
 `LastObservedHash` and no prior state, so nothing knows which mods were in the folder while that
-farm was actually played. Requiring the target profile to be applied first would not change that —
+savegame was actually played. Requiring the target profile to be applied first would not change that —
 it would observe the folder at the moment of publishing, which is not the same fact — so it is not
 required.
 
@@ -482,7 +482,7 @@ declaration is on screen rather than implied.
 
 Every version after the first is observed, through `Observe()`.
 
-Nothing checks that the farm can actually run on the profile it is published to, and nothing can.
+Nothing checks that the savegame can actually run on the profile it is published to, and nothing can.
 The dialog says so.
 
 A savegame published with no profile records no revision, and `ProfileRevision` goes with
@@ -508,7 +508,7 @@ do not affect which profile may be active or whether a profile may be applied.
 *"spending it on ordinary staleness is what teaches people to ignore it"*
 ([SavegameChip.cs:16](../ModsDude.Client/ModsDude.Client.Wpf/ViewModel/ViewModels/SavegameChip.cs)).
 
-**Past is `Neutral`, always.** It is a fact about which farm a profile is following, not a problem
+**Past is `Neutral`, always.** It is a fact about which savegame a profile is following, not a problem
 with either.
 
 ### Savegames list
@@ -522,7 +522,7 @@ Current is the unmarked default. Only the exception carries a chip.
 | Held by you | existing | Accent |
 | Unchecked-in play | existing | Caution |
 
-A **Show past farms** toggle, off by default. Past savegames stay findable without filling the
+A **Show past savegames** toggle, off by default. Past savegames stay findable without filling the
 list, and the toggle keeps this the one repo-level list rather than reintroducing a per-profile
 one.
 
@@ -538,20 +538,20 @@ Two buttons, `Apply profile` and `Check out`, with the disabled reason carrying 
 | No instance for this game | *No instance for this game* |
 
 **Apply profile** is refused by only two of those. A held savegame blocks it as well, since no apply
-clears that one; the folder being elsewhere is the thing it is *for*. Its own case is a farm with no
+clears that one; the folder being elsewhere is the thing it is *for*. Its own case is a savegame with no
 mod list: *This save follows no mod list*. It names the revision it would install, so the apply a past
-farm needs is the apply that runs — letting the instance decide resolves to head, which is correct
-for a current farm and wrong for the one this button exists to prepare for.
+savegame needs is the apply that runs — letting the instance decide resolves to head, which is correct
+for a current savegame and wrong for the one this button exists to prepare for.
 
-Which instance the pair acts on is the one that could host the farm now, failing that the one already
+Which instance the pair acts on is the one that could host the savegame now, failing that the one already
 following its profile, failing that the first. A row that answers about a folder its buttons do not
 act on is a puzzle rather than an answer, so the check-out dialog opens on that same instance.
 
 A **past** row carries a third: `Make current`. It is the other end of the swap a publish performs,
-so it is stated before it runs the same way — a confirmation naming the farm it displaces, what
+so it is stated before it runs the same way — a confirmation naming the savegame it displaces, what
 happens to it (past, still playable, and its mod list stops moving), and that this one stops being
-pinned. Nothing about this machine gates it: which farm a profile follows is a decision about the
-repo. Where this machine <em>is</em> holding it, the swap clears the pin, because a farm that is
+pinned. Nothing about this machine gates it: which savegame a profile follows is a decision about the
+repo. Where this machine <em>is</em> holding it, the swap clears the pin, because a savegame that is
 current again follows its profile and a number left behind would hold that folder at revision 4
 forever. That is not the hold moving under its holder — the argument against that is about
 somebody else's publish, which nobody states to whoever is playing.
@@ -581,8 +581,8 @@ Two rules, both about not crying wolf:
 - Folder drift still reports, and its action reads `Re-apply rev 4`, never "apply latest".
 
 `SavegameDriftKind.PlayedOnAnotherModList` gets **two sentences for the one kind**, because the rule
-reaches it two ways and only one of them is about numbers. A past farm on the wrong revision names
-its own target against the folder's; a farm following a different profile entirely names no numbers
+reaches it two ways and only one of them is about numbers. A past savegame on the wrong revision names
+its own target against the folder's; a savegame following a different profile entirely names no numbers
 at all, since revision 6 of 'Season 4' and revision 6 of 'Vanilla' are different mod lists that share
 an integer. Neither names `SavegameDrift.PlayedRevision`: that is what the save was checked out
 against, it belongs to play attribution, and it is not what the comparison used.
@@ -591,10 +591,10 @@ against, it belongs to play attribution, and it is not what the comparison used.
 
 One added line naming the revision the folder will be on: *"Will run on Old-school rev 1004."*
 
-Worth showing even for a current savegame, since that number can differ from the one the farm was
+Worth showing even for a current savegame, since that number can differ from the one the savegame was
 last played on whenever the profile has moved since.
 
-For a past savegame: *"This farm stays on rev 4. Playing it does not move it forward."*
+For a past savegame: *"This savegame stays on rev 4. Playing it does not move it forward."*
 
 ### Check-in dialog
 
@@ -606,9 +606,9 @@ becomes visible, at the moment it is recorded and while a wrong one can still be
 - Profile picker: every profile in the repo, plus an explicit **No mod list**.
 - The revision that will be recorded, shown as a number, since it is a declaration.
 - Superseding, stated inline rather than as a second dialog: *"**Season 4** is Old-school's current
-  farm. Publishing this makes it past — it stays playable and stays on rev 1004."*
+  savegame. Publishing this makes it past — it stays playable and stays on rev 1004."*
 - Where the chosen profile is not the one the folder is on: *"This folder is on **Vanilla**.
-  Nothing checks that this farm can run on Old-school."*
+  Nothing checks that this savegame can run on Old-school."*
 
 ### Profile page
 
@@ -616,7 +616,7 @@ Its current savegame by name, with whoever holds it. Past ones as a count linkin
 list with the toggle on.
 
 The archived-current case stated with its three ways out: *"**Season 4** is this profile's current
-farm and is archived. Un-archive it, delete it, or publish a new farm."*
+savegame and is archived. Un-archive it, delete it, or publish a new savegame."*
 
 ## Consequences elsewhere
 
@@ -628,9 +628,9 @@ A past savegame's revision therefore stays reproducible with no further guarante
 against.
 
 `SavegameDriftRules.HasMovedOffItsModList` used to compare the binding's revision — the one check-out
-applied — against the applied one. That fired on the ordinary follow-the-profile flow: the farm is
+applied — against the applied one. That fired on the ordinary follow-the-profile flow: the savegame is
 checked out at rev 1000, the profile is applied at rev 1004, and the two numbers differ because the
-farm is following its profile exactly as intended.
+savegame is following its profile exactly as intended.
 
 It compares against the savegame's **target** instead:
 
@@ -653,8 +653,8 @@ decides drift.
 | Past, played and checked in | unchanged | unchanged | ✓ |
 | Past made current | head | ≤ head | ✓ |
 
-Superseding lowers the target — from head down to the revision the farm was actually played on —
-and that is correct rather than a violation: the farm was never played on the revisions it was
+Superseding lowers the target — from head down to the revision the savegame was actually played on —
+and that is correct rather than a violation: the savegame was never played on the revisions it was
 following as current.
 
 The invariant is about revision *numbers*. `RestoreProfileRevisionV1Endpoint` mints a new revision
@@ -674,4 +674,4 @@ play costs another. Both are ordinary syncs against the content store.
 
 A published savegame's first version carries a declared revision rather than an observed one. The
 bytes existed before ModsDude saw them, and no arrangement of the publish flow can recover which
-mods were in the folder while that farm was played.
+mods were in the folder while that savegame was played.

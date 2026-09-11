@@ -156,7 +156,7 @@ public sealed class SavegameFlowService(
     /// <remarks>
     /// The profile is asked for here rather than taken from the instance - see
     /// <see cref="SavegamePublishModalViewModel"/> - so this is also where the repo's profiles, the
-    /// farm each is currently following and what the mod folder is on are gathered.
+    /// savegame each is currently following and what the mod folder is on are gathered.
     /// </remarks>
     /// <returns>The savegame that was created, or null where the dialog was dismissed.</returns>
     public async Task<SavegameDto?> PublishAsync(
@@ -201,7 +201,7 @@ public sealed class SavegameFlowService(
     /// </summary>
     /// <remarks>
     /// <b>Archived savegames count towards "current".</b> Archiving is the repo-wide visibility state
-    /// and deliberately does not release a profile's slot, so a profile whose current farm is archived
+    /// and deliberately does not release a profile's slot, so a profile whose current savegame is archived
     /// still has one - and a publish still supersedes it. Reading only the live list would leave that
     /// consequence unsaid.
     /// </remarks>
@@ -240,7 +240,7 @@ public sealed class SavegameFlowService(
     }
 
     /// <summary>
-    /// Which farm each profile is following right now, keyed by profile.
+    /// Which savegame each profile is following right now, keyed by profile.
     /// </summary>
     /// <remarks>
     /// A failed read costs the supersede notice and nothing else, which is the same bargain every

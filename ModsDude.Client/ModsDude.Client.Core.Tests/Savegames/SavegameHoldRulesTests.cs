@@ -23,7 +23,7 @@ public class SavegameHoldRulesTests
 
     /// <summary>
     /// A current savegame follows its profile - that is what current means - so preparing the mod list
-    /// before a session and then checking the farm out has to leave the new list in place.
+    /// before a session and then checking the savegame out has to leave the new list in place.
     /// </summary>
     [Fact]
     public void A_current_savegame_pins_nothing_and_refuses_nothing()
@@ -41,7 +41,7 @@ public class SavegameHoldRulesTests
 
         Assert.Equal(4, SavegameHoldRules.RequiredRevision(held, _profileId));
 
-        // Re-applying it is the whole point: that is how folder drift under a past farm gets repaired.
+        // Re-applying it is the whole point: that is how folder drift under a past savegame gets repaired.
         Assert.True(SavegameHoldRules.DecideApply(held, _profileId, 4).IsAllowed);
     }
 

@@ -15,10 +15,10 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
 /// What the profile looks like from here: how many mods it pins, which game instances on this
-/// machine are set to match it, whether each of them still does, and which farm it is following.
+/// machine are set to match it, whether each of them still does, and which savegame it is following.
 /// </summary>
 /// <remarks>
-/// <b>The farms are read here and listed elsewhere.</b> A profile's current savegame is a fact about
+/// <b>The savegames are read here and listed elsewhere.</b> A profile's current savegame is a fact about
 /// the profile and belongs on its page; the savegames themselves stay on the one repo-level list, so
 /// the past ones are a count and a link into that list rather than a second list of rows to keep true.
 /// See docs/10-savegame-profile-binding.md#profile-page.
@@ -35,7 +35,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private int? _fetchedModCount;
     private IReadOnlyList<SavegameDto> _fetchedSavegames = [];
 
-    /// <summary>Whether the repo answered at all. Unknown is not the same as "no farm here".</summary>
+    /// <summary>Whether the repo answered at all. Unknown is not the same as "no savegame here".</summary>
     private bool _savegamesUnreadable;
 
 
@@ -78,7 +78,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private string _modSummary = "Counting mods...";
 
     /// <summary>
-    /// The farm this profile is following, by name and with whoever holds it.
+    /// The savegame this profile is following, by name and with whoever holds it.
     /// </summary>
     /// <remarks>
     /// A profile with no current savegame is the ordinary starting state rather than a special one -
@@ -86,21 +86,21 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// instead of reading like something missing.
     /// </remarks>
     [ObservableProperty]
-    private string _currentSavegame = "Reading this profile's farms...";
+    private string _currentSavegame = "Reading this profile's savegames...";
 
     /// <summary>
-    /// The current farm is archived, with the three ways out.
+    /// The current savegame is archived, with the three ways out.
     /// </summary>
     /// <remarks>
     /// Archiving is the repo-wide visibility state and deliberately does <em>not</em> release a
-    /// profile's slot, so the profile still has a current farm and the next publish still supersedes
+    /// profile's slot, so the profile still has a current savegame and the next publish still supersedes
     /// it. That is a state somebody can be stuck in without a sentence saying what to do about it.
     /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasArchivedWarning))]
     private string? _archivedWarning;
 
-    /// <summary>How many farms this profile has moved on from, for the link into the saves list.</summary>
+    /// <summary>How many savegames this profile has moved on from, for the link into the saves list.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPastSavegames))]
     [NotifyPropertyChangedFor(nameof(PastSavegamesText))]
@@ -110,8 +110,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     public bool HasPastSavegames => PastSavegameCount > 0;
 
     public string PastSavegamesText => PastSavegameCount == 1
-        ? "1 past farm"
-        : $"{PastSavegameCount} past farms";
+        ? "1 past savegame"
+        : $"{PastSavegameCount} past savegames";
 
 
     public void Dispose()
@@ -123,7 +123,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// Into the repo's saves list with the past farms showing, which is where they live.
+    /// Into the repo's saves list with the past savegames showing, which is where they live.
     /// </summary>
     /// <remarks>
     /// The toggle is turned on by the link rather than left to be found: a count that lands on a list
@@ -132,7 +132,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     [RelayCommand]
     private async Task ShowPastSavegames()
     {
-        if (await _navigation.GoToPastFarmsAsync(_repo.Id) is false)
+        if (await _navigation.GoToPastSavegamesAsync(_repo.Id) is false)
         {
             ArchivedWarning ??= "The repo's saves list could not be opened from here - pick it in the sidebar.";
         }
@@ -154,10 +154,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Both lists, because archived is not deleted: an archived savegame still holds its profile's
-    /// slot, so a profile whose current farm is archived still has one.
+    /// slot, so a profile whose current savegame is archived still has one.
     /// </summary>
     /// <remarks>
-    /// A failed read leaves the section saying so rather than saying the profile has no farm. "No
+    /// A failed read leaves the section saying so rather than saying the profile has no savegame. "No
     /// current savegame" is a real state with real consequences - the next publish creates one - and
     /// guessing it from a dropped connection would be a sentence somebody acts on.
     /// </remarks>
@@ -184,7 +184,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Which farm this profile is following, said the way the savegames list says it: current is the
+    /// Which savegame this profile is following, said the way the savegames list says it: current is the
     /// unmarked default and past is a count.
     /// </summary>
     private void DescribeSavegames(IReadOnlyList<SavegameDto> savegames)
@@ -208,8 +208,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         if (current is null)
         {
             CurrentSavegame = PastSavegameCount > 0
-                ? "No current farm. The next save published to this profile becomes one."
-                : "No farm has been published to this profile yet.";
+                ? "No current savegame. The next save published to this profile becomes one."
+                : "No savegame has been published to this profile yet.";
 
             ArchivedWarning = null;
 
@@ -220,11 +220,11 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             ? $" Checked out to {checkout.User.DisplayName}."
             : " Nobody is holding it.";
 
-        CurrentSavegame = $"'{current.Name}' is this profile's current farm.{holder}";
+        CurrentSavegame = $"'{current.Name}' is this profile's current savegame.{holder}";
 
         ArchivedWarning = current.ArchivedAt is null
             ? null
-            : $"'{current.Name}' is this profile's current farm and is archived. Un-archive it, delete it, or publish a new farm.";
+            : $"'{current.Name}' is this profile's current savegame and is archived. Un-archive it, delete it, or publish a new savegame.";
     }
 
     /// <summary>

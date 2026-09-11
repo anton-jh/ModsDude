@@ -124,7 +124,7 @@ public static class SavegameExtensions
     /// </para>
     /// <para>
     /// <b>Archived savegames are not excluded.</b> Archiving is the repo-wide visibility state and
-    /// says nothing about which farm a profile follows, so an archived current savegame is still the
+    /// says nothing about which savegame a profile follows, so an archived current savegame is still the
     /// one holding the slot - and a publish that skipped it would leave two rows current and be
     /// refused by the index instead. Same reason the index carries no <c>ArchivedAt</c> filter.
     /// </para>

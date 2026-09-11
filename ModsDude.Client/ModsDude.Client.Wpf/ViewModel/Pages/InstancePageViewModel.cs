@@ -137,7 +137,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     /// line. Null - nearly always - where nothing with a profile is checked out here.
     /// </summary>
     /// <remarks>
-    /// Neutral on purpose. Holding a past farm is a state somebody chose and is playing in, not a
+    /// Neutral on purpose. Holding a past savegame is a state somebody chose and is playing in, not a
     /// problem with the instance, so it reads like the mod-folder path underneath it rather than like
     /// the locked-mod warning above it.
     /// </remarks>
@@ -193,7 +193,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Whether the instance may be pointed at a different profile at all. False while a savegame with
-    /// a profile is checked out here: every switch in the app applies first, a held farm refuses that
+    /// a profile is checked out here: every switch in the app applies first, a held savegame refuses that
     /// apply, and a dropdown whose every other entry leads to a refusal is worse than one that says so
     /// and does not open. Savegames following no mod list leave it alone.
     /// </summary>

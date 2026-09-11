@@ -28,7 +28,7 @@ public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter
     /// pins it - so a re-apply from the drift notice, from the mod list editor and from the instance
     /// page all target the right list without any of them knowing what a savegame is. A number is for
     /// the one caller that knows better than the instance does: the check-out dialog, previewing the
-    /// apply for a farm this machine is not holding yet.
+    /// apply for a savegame this machine is not holding yet.
     /// </remarks>
     public int? Revision { get; init; }
 }
@@ -679,7 +679,7 @@ public sealed class ModSyncService(
     /// <remarks>
     /// <para>
     /// <b>Resolved here rather than at each caller, for the reason the observation is.</b> Every apply
-    /// in the app reaches this method, and an apply that quietly installs head under a farm pinned to
+    /// in the app reaches this method, and an apply that quietly installs head under a savegame pinned to
     /// revision 4 is the state the whole design exists to prevent - so the one place all of them pass
     /// through is where the question gets asked. A caller that names a revision has said something
     /// this cannot know better than, and is taken at its word and then checked.
@@ -702,7 +702,7 @@ public sealed class ModSyncService(
 
             SavegameApplyRefusal.AnotherProfileIsHeld => throw new UserFriendlyException(
                 "A savegame checked out here follows another mod list",
-                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that farm off the mod list it runs on. Check it in first."),
+                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
 
             _ => throw new UserFriendlyException(
                 "That savegame runs on one revision, and this is not it",

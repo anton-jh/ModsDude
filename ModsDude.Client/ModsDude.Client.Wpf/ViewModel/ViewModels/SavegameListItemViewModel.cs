@@ -61,7 +61,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         ShowHolderTag = isAmbiguous;
 
         // Recorded here because the row's two actions need it and because it is what the binding will
-        // carry a moment later - two answers to "which list does this farm run on" is how a row comes
+        // carry a moment later - two answers to "which list does this savegame run on" is how a row comes
         // to describe a different apply from the one that runs.
         PinnedRevision = SavegameService.TargetRevisionOf(savegame);
 
@@ -71,8 +71,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     }
 
 
-    /// <summary>Raised when the row's own action is clicked. The page owns all three flows.</summary>
+    /// <summary>Raised when the row's own action is clicked. The page owns all of the flows.</summary>
     public event EventHandler? CheckOutRequested;
+    public event EventHandler? CheckInRequested;
     public event EventHandler? TakeCopyRequested;
     public event EventHandler? ApplyProfileRequested;
     public event EventHandler? MakeCurrentRequested;
@@ -88,7 +89,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool IsMember { get; }
 
     /// <summary>
-    /// The revision this farm runs on where it pins one, from
+    /// The revision this savegame runs on where it pins one, from
     /// <see cref="SavegameService.TargetRevisionOf"/>. Null for a current savegame, which follows its
     /// profile, and for one that follows no mod list.
     /// </summary>
@@ -96,13 +97,13 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>Whether this is a <em>past</em> savegame - one its profile has moved on from.</summary>
     /// <remarks>
-    /// A fact about which farm a profile is following, not a problem with either, which is why the
+    /// A fact about which savegame a profile is following, not a problem with either, which is why the
     /// chip saying it is <see cref="SavegameChipTone.Neutral"/> and why the list hides these rows by
     /// default rather than colouring them.
     /// </remarks>
     public bool IsPast => Savegame.SupersededAt is not null;
 
-    /// <summary>Whether this farm follows a mod list at all.</summary>
+    /// <summary>Whether this savegame follows a mod list at all.</summary>
     public bool HasProfile => Savegame.ProfileId is not null;
 
     /// <summary>
@@ -111,15 +112,15 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public bool CanCheckOut => IsMember && _offer.CanCheckOut;
 
-    /// <summary>Whether putting the mod folder on this farm's list is on offer. Member, like check-out.</summary>
+    /// <summary>Whether putting the mod folder on this savegame's list is on offer. Member, like check-out.</summary>
     public bool CanApplyProfile => IsMember && _offer.CanApply;
 
     /// <summary>
-    /// Whether this farm can be put back in its profile's current slot.
+    /// Whether this savegame can be put back in its profile's current slot.
     /// </summary>
     /// <remarks>
-    /// Only a past one has anywhere to go: a current farm is already there, and one following no mod
-    /// list is in no succession. Nothing about this machine gates it - which farm a profile follows is
+    /// Only a past one has anywhere to go: a current savegame is already there, and one following no mod
+    /// list is in no succession. Nothing about this machine gates it - which savegame a profile follows is
     /// a decision about the repo, like publishing, and is gated the same way.
     /// </remarks>
     public bool CanMakeCurrent => IsMember && IsPast;
@@ -134,6 +135,53 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </remarks>
     public LocalInstance? Host { get; set; }
 
+    /// <summary>
+    /// The installation on this machine whose slot actually holds this savegame, or null where none
+    /// does - including where the claim is yours but you took it somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// <b>A different question from <see cref="Host"/>, and not interchangeable with it.</b> Host is
+    /// where a check-out <em>would</em> write, chosen by the page from whichever instance can accept
+    /// one; this is where the copy already is, and a check-in has no choice about it at all - a save
+    /// is handed back from the slot it is in or not handed back here. The two differ the moment a
+    /// check-out would rather use some other instance, and swapping them is how a row comes to check
+    /// one machine's copy in against another machine's folder.
+    /// </remarks>
+    public LocalInstance? HeldHere { get; private set; }
+
+    public bool IsHeldHere => HeldHere is not null;
+
+    /// <summary>
+    /// Whether handing the save back is what this row offers - which needs the claim to be yours
+    /// <em>and</em> the copy to be on this machine.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, because they come apart: a claim taken on the desktop is still yours on the
+    /// laptop, and there is nothing there to check in. That row falls back to checking out, which is
+    /// the honest offer - it fetches the save onto this machine and renews the claim it already has.
+    /// </remarks>
+    public bool CanCheckIn => IsMember && IsHeldByMe && IsHeldHere;
+
+    /// <summary>
+    /// Whether taking the save is the row's accent button. Exactly one of this and
+    /// <see cref="CanCheckIn"/> is ever true, so a row always has one obvious thing to do rather than
+    /// two competing for the eye.
+    /// </summary>
+    public bool ChecksOutAsPrimary => IsMember && CanCheckIn is false;
+
+    /// <summary>
+    /// Whether taking it <em>again</em> is offered quietly beside Check in. That is a real thing to
+    /// want - it is how a save moves to a different slot - but it is not what somebody holding a save
+    /// usually came to do, so it does not get the accent.
+    /// </summary>
+    public bool ChecksOutAsSecondary => CanCheckIn;
+
+    /// <summary>
+    /// The check-out button's own word. "Again" wherever the claim is already yours, because a button
+    /// offering to check out a save the row has just said you have is one that reads as a bug.
+    /// </summary>
+    public string CheckOutLabel => IsHeldByMe ? "Check out again" : "Check out";
+
     public string? CheckOutBlockedReason
         => SavegameRowRules.Explain(_offer.CheckOut, ProfileName, _offer.PinnedRevision, _blockingSavegameName);
 
@@ -143,7 +191,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <summary>
     /// What the row says under its buttons: the check-out refusal, which is the one somebody is
     /// acting on. Applying is the way out of it, so its own refusal is only worth a line where it is
-    /// the one that differs - which is a farm following no mod list, where there is nothing to apply.
+    /// the one that differs - which is a savegame following no mod list, where there is nothing to apply.
     /// </summary>
     public string? BlockedReason => CheckOutBlockedReason ?? ApplyBlockedReason;
 
@@ -154,12 +202,21 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
     /// </summary>
     public string CheckOutToolTip => CheckOutBlockedReason
-        ?? "Takes the claim and writes it into a slot. Nobody else can take it until you check it in.";
+        ?? (IsHeldByMe
+            ? "Writes the newest version into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
+            : "Takes the claim and writes it into a slot. Nobody else can take it until you check it in.");
+
+    /// <summary>
+    /// Never a refusal: the button is only there when the save is yours and on this machine, which is
+    /// the whole of what checking in needs.
+    /// </summary>
+    public string CheckInToolTip =>
+        "Uploads what is in the slot as a new version and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.";
 
     public string ApplyToolTip => ApplyBlockedReason
         ?? (PinnedRevision is int revision
-            ? $"Puts this game's mod folder on '{ProfileName}' revision {revision}, which is what this farm runs on."
-            : $"Puts this game's mod folder on '{ProfileName}', which is what this farm runs on.");
+            ? $"Puts this game's mod folder on '{ProfileName}' revision {revision}, which is what this savegame runs on."
+            : $"Puts this game's mod folder on '{ProfileName}', which is what this savegame runs on.");
 
     public ObservableCollection<SavegameChip> Chips { get; }
 
@@ -201,6 +258,17 @@ public partial class SavegameListItemViewModel : ObservableObject
     private void CheckOut() => CheckOutRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
+    /// Hands the save back from the slot holding it, as a new version.
+    /// </summary>
+    /// <remarks>
+    /// The same flow the instance's own slot list runs, reached from here because this is the list
+    /// somebody is looking at when they finish an evening - and a row saying "You have it" whose only
+    /// button offered to take it again was the thing that sent them hunting for the other page.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanCheckIn))]
+    private void CheckIn() => CheckInRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
     /// The other half of the pair. Two actions rather than one because checking a save out never
     /// syncs mods: a plan that would quarantine files the repo has never seen has to be shown before
     /// anything is written, and folding it into a claim is how that disclosure gets skipped. See
@@ -210,7 +278,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     private void ApplyProfile() => ApplyProfileRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
-    /// Puts this farm back in its profile's current slot, displacing whichever one is there.
+    /// Puts this savegame back in its profile's current slot, displacing whichever one is there.
     /// </summary>
     /// <remarks>
     /// One of the two things that change which savegame a profile is following, and the other way
@@ -258,6 +326,33 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// What the savegame already claiming the mod folder is called, where the page could find it in
     /// its own list.
     /// </param>
+    /// <summary>
+    /// Records which installation on this machine is holding the local copy - the fact that decides
+    /// whether this row's primary action is Check in or Check out.
+    /// </summary>
+    /// <remarks>
+    /// Arrives from outside for the same reason the offer does: it is not a fact about the savegame.
+    /// It needs every instance this repo offers and what each one's binding store says it is holding,
+    /// none of which a row has.
+    /// </remarks>
+    public void SetHeldHere(LocalInstance? instance)
+    {
+        if (ReferenceEquals(HeldHere, instance))
+        {
+            return;
+        }
+
+        HeldHere = instance;
+
+        OnPropertyChanged(nameof(HeldHere));
+        OnPropertyChanged(nameof(IsHeldHere));
+        OnPropertyChanged(nameof(CanCheckIn));
+        OnPropertyChanged(nameof(ChecksOutAsPrimary));
+        OnPropertyChanged(nameof(ChecksOutAsSecondary));
+
+        CheckInCommand.NotifyCanExecuteChanged();
+    }
+
     public void SetOffer(SavegameRowOffer offer, string? blockingSavegameName)
     {
         _offer = offer;
@@ -301,7 +396,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         Chips.Add(BuildStateChip());
 
         // Current is the unmarked default, so only the exception carries one of these. Both are
-        // Neutral and neither is ever Caution: which farm a profile is following, and whether a farm
+        // Neutral and neither is ever Caution: which savegame a profile is following, and whether a savegame
         // follows one at all, are facts rather than problems - and spending the loud tone on them is
         // what teaches people to ignore it where it does mean a damaged save.
         if (IsPast)

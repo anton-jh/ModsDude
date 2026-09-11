@@ -53,7 +53,7 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 /// </summary>
 /// <param name="RunsOn">
 /// Which mod list the folder will be on once this check-out and the apply beside it have run - one
-/// line, and the number said out loud. Null for a copy, which applies nothing, and for a farm that
+/// line, and the number said out loud. Null for a copy, which applies nothing, and for a savegame that
 /// follows no mod list.
 /// </param>
 public sealed record SavegameCheckOutContext(
@@ -214,9 +214,9 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     /// </summary>
     /// <remarks>
     /// <b>Shown even where nothing is wrong</b>, unlike <see cref="Revision"/> beneath it. A current
-    /// farm's number can differ from the one it was last played on whenever anybody has edited the
+    /// savegame's number can differ from the one it was last played on whenever anybody has edited the
     /// profile since, and that is exactly the case where somebody wants to have seen the number before
-    /// the evening rather than after it. For a past farm it says the opposite thing: the number does
+    /// the evening rather than after it. For a past savegame it says the opposite thing: the number does
     /// not move, and playing it will not move it.
     /// </remarks>
     [ObservableProperty]

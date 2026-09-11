@@ -266,7 +266,7 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The same write a publish makes. A profile has one current savegame, so a second farm on one
+    /// The same write a publish makes. A profile has one current savegame, so a second savegame on one
     /// profile supersedes the first rather than sitting beside it - and the two writes are ordered,
     /// because the index refuses the instant where both are current.
     /// </summary>

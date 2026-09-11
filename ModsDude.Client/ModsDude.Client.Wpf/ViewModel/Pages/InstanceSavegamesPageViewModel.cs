@@ -30,7 +30,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <para>
 /// <b>Check-in asks nothing about the slot either.</b> The row it is clicked on is the slot, and the
 /// open checkout names it. Choosing between twenty near-identical folders from memory is precisely
-/// where a wrong answer publishes somebody else's farm under this save's name.
+/// where a wrong answer publishes somebody else's slot under this save's name.
 /// </para>
 /// </remarks>
 public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable

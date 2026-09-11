@@ -11,6 +11,171 @@
       Title="RepoSavegamesPage"
       FontSize="14">
 
+    <Page.Resources>
+
+        <!-- A version: something the savegame still has, and the only kind of row the buttons under
+             the list can act on. It gets the height, the weight and a solid marker, because picking
+             one out of an evening's worth of claim rows is what somebody opens this panel to do. -->
+        <DataTemplate x:Key="TimelineVersionRow" DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
+            <Grid Margin="14 10" ColumnDefinitions="20 * auto">
+
+                <!-- The spine. Solid here and hollow on an event row, which is the distinction at a
+                     glance from across the panel, before any of the words are read. -->
+                <Ellipse Grid.Column="0"
+                         Width="9" Height="9"
+                         Margin="0 5 0 0"
+                         HorizontalAlignment="Left" VerticalAlignment="Top"
+                         Fill="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Title}"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                    <TextBlock Margin="0 2 0 0"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding Detail}"
+                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <TextBlock Margin="0 2 0 0"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Style="{DynamicResource CaptionTextBlockStyle}">
+                        <Run Text="{Binding Who, Mode=OneWay}" />
+                        <Run Text="·" />
+                        <Run Text="{Binding AgoText, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+
+                <Border Grid.Column="2"
+                        Margin="8 0 0 0"
+                        VerticalAlignment="Top"
+                        Style="{StaticResource StatusChip}"
+                        Background="{DynamicResource AccentFillColorSecondaryBrush}"
+                        Visibility="{Binding IsHead, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Current"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                               Style="{DynamicResource CaptionTextBlockStyle}" />
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <!-- A claim taken or a claim ended: something that merely happened to the save. One line,
+             half the height and none of the weight, so a run of them reads as a margin note beside
+             the versions rather than competing with them. -->
+        <DataTemplate x:Key="TimelineEventRow" DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
+            <Grid Margin="14 5" ColumnDefinitions="20 auto * auto">
+
+                <Ellipse Grid.Column="0"
+                         Width="7" Height="7"
+                         Margin="1 0 0 0"
+                         HorizontalAlignment="Left" VerticalAlignment="Center"
+                         Fill="Transparent"
+                         Stroke="{DynamicResource TextFillColorTertiaryBrush}"
+                         StrokeThickness="1.2" />
+
+                <!-- Struck through once the claim is over. The check-out keeps its own date and its
+                     own row that way, instead of being restamped or reworded by something that
+                     happened to it hours later. Foreground is a setter rather than an attribute so
+                     the trigger can win - a local value would outrank it. -->
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Text="{Binding Title}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsClosed}" Value="True">
+                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <TextBlock Grid.Column="2"
+                           Margin="8 0 0 0"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Detail}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <TextBlock Grid.Column="3"
+                           Margin="12 0 0 0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Style="{DynamicResource CaptionTextBlockStyle}">
+                    <Run Text="{Binding Who, Mode=OneWay}" />
+                    <Run Text="·" />
+                    <Run Text="{Binding AgoText, Mode=OneWay}" />
+                </TextBlock>
+            </Grid>
+        </DataTemplate>
+
+        <!-- The container both lists on this page use, which is where the rules that have to hold for
+             every row live: the hairline between rows, the hover, and the two accents that say which
+             row is selected. Same shape as the mod rows - a divider and a subtle fill - so a list in
+             this app looks like a list, and so the saves and their history read as one surface rather
+             than as two controls that happen to sit side by side.
+
+             It knows nothing about what a row contains: the padding belongs to the row templates,
+             because a save is four lines and a claim is one. -->
+        <Style x:Key="ListRow" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Row"
+                                Background="Transparent"
+                                BorderThickness="0 0 0 1"
+                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                            <Grid>
+                                <!-- The accent at low opacity rather than a named fill, so it reads as
+                                     a selection in both themes and cannot be mistaken for the hover
+                                     underneath it. -->
+                                <Border x:Name="Fill"
+                                        Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                        Opacity="0" />
+
+                                <Rectangle x:Name="Bar"
+                                           Width="3"
+                                           Margin="0 4"
+                                           RadiusX="1.5" RadiusY="1.5"
+                                           HorizontalAlignment="Left"
+                                           Visibility="Collapsed"
+                                           Fill="{DynamicResource AccentFillColorDefaultBrush}" />
+
+                                <ContentPresenter />
+
+                                <Border x:Name="Focus"
+                                        BorderThickness="0"
+                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Fill" Property="Opacity" Value="0.16" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Page.Resources>
+
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
         <Grid RowDefinitions="auto auto auto auto *">
 
@@ -50,15 +215,15 @@
                         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
                     <Grid RowDefinitions="auto * auto auto">
 
-                        <!-- Past farms are hidden by default: they stay findable without filling a
+                        <!-- Past savegames are hidden by default: they stay findable without filling a
                              list somebody opened to find the one they are playing tonight. The count
                              is said out loud, because a filter nobody can see is a list that is
                              quietly wrong. -->
                         <Grid Grid.Row="0" Margin="12 10 12 4" ColumnDefinitions="auto *">
                             <CheckBox Grid.Column="0"
-                                      Content="Show past farms"
-                                      ToolTip="Farms their profile has moved on from. They are still playable, and their mod list does not move."
-                                      IsChecked="{Binding ShowPastFarms, Mode=TwoWay}" />
+                                      Content="Show past savegames"
+                                      ToolTip="Savegames their profile has moved on from. They are still playable, and their mod list does not move."
+                                      IsChecked="{Binding ShowPastSavegames, Mode=TwoWay}" />
 
                             <TextBlock Grid.Column="1"
                                        Margin="8 0 0 0"
@@ -74,12 +239,17 @@
                                  ItemsSource="{Binding Savegames}"
                                  SelectedItem="{Binding Selected, Mode=TwoWay}"
                                  BorderThickness="0"
+                                 Padding="0"
                                  Background="Transparent"
                                  HorizontalContentAlignment="Stretch"
+                                 ItemContainerStyle="{StaticResource ListRow}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:SavegameListItemViewModel}">
-                                    <Grid Margin="0 6" ColumnDefinitions="auto * auto">
+
+                                    <!-- The inset the container no longer provides, and it clears the
+                                         selection bar rather than sitting under it. -->
+                                    <Grid Margin="12 10" ColumnDefinitions="auto * auto">
 
                                         <!-- Whoever holds it, drawn the same way they are drawn in the
                                              member list. An identity, not a warning. -->
@@ -148,23 +318,51 @@
                                              mods, so the apply that makes the folder right is its own
                                              button with its own dialog. Neither of the first two is offered to a guest -
                                              a control leading to a refusal is worse than one never
-                                             offered - and each carries its own reason when disabled. -->
+                                             offered - and each carries its own reason when disabled.
+
+                                             An accent primary and three ordinary buttons, which is the
+                                             pairing the version footer already uses. Not SubtleMenuButton:
+                                             that one is transparent until hovered, which is right for the
+                                             page's own menu verbs - Rename, Archive, Refresh - where the
+                                             surrounding chrome says a control is there. Out here each
+                                             button is alone against a row of prose, and one that reads as
+                                             text until the pointer finds it is one nobody knows to press. -->
                                         <StackPanel Grid.Column="2"
                                                     Margin="8 0 0 0"
                                                     MinWidth="140"
                                                     VerticalAlignment="Top">
 
-                                            <Button Content="Check out"
+                                            <!-- Exactly one accent button, and which one is the whole
+                                                 of what the row is for: a save you are holding on this
+                                                 machine is one you have come here to hand back, not one
+                                                 to take again. -->
+                                            <Button Content="Check in"
+                                                    HorizontalAlignment="Stretch"
+                                                    Style="{DynamicResource AccentButtonStyle}"
+                                                    ToolTip="{Binding CheckInToolTip}"
+                                                    Command="{Binding CheckInCommand}"
+                                                    Visibility="{Binding CanCheckIn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <Button Content="{Binding CheckOutLabel}"
                                                     HorizontalAlignment="Stretch"
                                                     Style="{DynamicResource AccentButtonStyle}"
                                                     ToolTip="{Binding CheckOutToolTip}"
                                                     Command="{Binding CheckOutCommand}"
-                                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                    Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- The same command again, quietly, beside Check in. It is
+                                                 how a held save moves to another slot without being
+                                                 handed back first. -->
+                                            <Button Margin="0 4 0 0"
+                                                    Content="{Binding CheckOutLabel}"
+                                                    HorizontalAlignment="Stretch"
+                                                    ToolTip="{Binding CheckOutToolTip}"
+                                                    Command="{Binding CheckOutCommand}"
+                                                    Visibility="{Binding ChecksOutAsSecondary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                             <Button Margin="0 4 0 0"
                                                     Content="Apply profile"
                                                     HorizontalAlignment="Stretch"
-                                                    Style="{DynamicResource SubtleMenuButton}"
                                                     ToolTip="{Binding ApplyToolTip}"
                                                     Command="{Binding ApplyProfileCommand}"
                                                     Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -172,18 +370,16 @@
                                             <Button Margin="0 4 0 0"
                                                     Content="Take a copy"
                                                     HorizontalAlignment="Stretch"
-                                                    Style="{DynamicResource SubtleMenuButton}"
                                                     ToolTip="Writes it into a slot and claims nothing. Whoever holds it keeps holding it."
                                                     Command="{Binding TakeCopyCommand}" />
 
-                                            <!-- Only on a past farm, and the other end of the swap a
+                                            <!-- Only on a past savegame, and the other end of the swap a
                                                  publish performs. It displaces somebody's current
-                                                 farm, so it asks first. -->
+                                                 savegame, so it asks first. -->
                                             <Button Margin="0 4 0 0"
                                                     Content="Make current"
                                                     HorizontalAlignment="Stretch"
-                                                    Style="{DynamicResource SubtleMenuButton}"
-                                                    ToolTip="Puts this farm back in its profile's current slot, so it follows the mod list again. Whichever farm is there becomes past."
+                                                    ToolTip="Puts this savegame back in its profile's current slot, so it follows the mod list again. Whichever savegame is there becomes past."
                                                     Command="{Binding MakeCurrentCommand}"
                                                     Visibility="{Binding CanMakeCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
@@ -267,43 +463,31 @@
                             <ListBox ItemsSource="{Binding Timeline}"
                                      SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                                      BorderThickness="0"
+                                     Padding="0"
                                      Background="Transparent"
                                      HorizontalContentAlignment="Stretch"
+                                     ItemContainerStyle="{StaticResource ListRow}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
+
+                                    <!-- Which of the two row designs a row gets. The template is chosen
+                                         by a setter rather than an attribute, because a local value on
+                                         the element would outrank the trigger and every row would come
+                                         out an event. -->
                                     <DataTemplate DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
-                                        <Grid Margin="0 4" ColumnDefinitions="* auto">
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="{Binding Title}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
-
-                                                <TextBlock Margin="0 2 0 0"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Detail}" />
-
-                                                <TextBlock Margin="0 2 0 0"
-                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                           Style="{DynamicResource CaptionTextBlockStyle}">
-                                                    <Run Text="{Binding Who, Mode=OneWay}" />
-                                                    <Run Text="·" />
-                                                    <Run Text="{Binding AgoText, Mode=OneWay}" />
-                                                </TextBlock>
-                                            </StackPanel>
-
-                                            <Border Grid.Column="1"
-                                                    Margin="8 0 0 0"
-                                                    VerticalAlignment="Top"
-                                                    Style="{StaticResource StatusChip}"
-                                                    Background="{DynamicResource AccentFillColorSecondaryBrush}"
-                                                    Visibility="{Binding IsHead, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <TextBlock Text="Current"
-                                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                                           Style="{DynamicResource CaptionTextBlockStyle}" />
-                                            </Border>
-                                        </Grid>
+                                        <ContentControl Content="{Binding}">
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl">
+                                                    <Setter Property="Focusable" Value="False" />
+                                                    <Setter Property="ContentTemplate" Value="{StaticResource TimelineEventRow}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsVersion}" Value="True">
+                                                            <Setter Property="ContentTemplate" Value="{StaticResource TimelineVersionRow}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ContentControl.Style>
+                                        </ContentControl>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
@@ -325,6 +509,14 @@
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                            Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                <!-- What the row said, repeated here because a claim row has nothing
+                                     else to show in this panel - no size, no revision, no details. -->
+                                <TextBlock Margin="0 4 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding Detail}"
+                                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                 <TextBlock Margin="0 4 0 0"
                                            TextWrapping="Wrap"

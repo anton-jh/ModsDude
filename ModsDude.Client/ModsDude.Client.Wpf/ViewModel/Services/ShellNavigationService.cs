@@ -77,11 +77,11 @@ public sealed class ShellNavigationService
     }
 
     /// <summary>
-    /// Into a repo's saves list with the past farms showing. Reached from a profile's count of them,
+    /// Into a repo's saves list with the past savegames showing. Reached from a profile's count of them,
     /// whose only useful destination is a list that does not filter them out again.
     /// </summary>
     /// <returns>False where the shell is not up yet, the repo has no savegames, or navigation was refused.</returns>
-    public async Task<bool> GoToPastFarmsAsync(Guid repoId)
+    public async Task<bool> GoToPastSavegamesAsync(Guid repoId)
     {
         if (_shell is not MainPageViewModel shell)
         {
@@ -93,7 +93,7 @@ public sealed class ShellNavigationService
             return false;
         }
 
-        return repoPage.TrySelectSavegames(showPastFarms: true);
+        return repoPage.TrySelectSavegames(showPastSavegames: true);
     }
 
     /// <summary>

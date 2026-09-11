@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.Savegames;
 /// </summary>
 /// <remarks>
 /// Both refusals are about the same thing: <b>one mod folder can only be on one revision</b>, and a
-/// held savegame has already said which. Neither is a warning - a farm quietly taken off the mod list
+/// held savegame has already said which. Neither is a warning - a savegame quietly taken off the mod list
 /// it runs on is the state this whole design exists to prevent, and there is no wording that makes a
 /// button doing it safe.
 /// </remarks>
@@ -18,7 +18,7 @@ public enum SavegameApplyRefusal
 
     /// <summary>
     /// A savegame following a <em>different</em> profile is checked out here. This is the
-    /// active-profile switch, refused: applying another list under a held farm is the case that
+    /// active-profile switch, refused: applying another list under a held savegame is the case that
     /// corrupts saves.
     /// </summary>
     AnotherProfileIsHeld,
@@ -26,7 +26,7 @@ public enum SavegameApplyRefusal
     /// <summary>
     /// A past savegame is checked out here, and it runs on one revision only. Re-applying that
     /// revision is allowed - repairing folder drift is exactly what it is for - and anything else,
-    /// head included, would move a farm whose revision does not move.
+    /// head included, would move a savegame whose revision does not move.
     /// </summary>
     PastSavegameIsHeld
 }
@@ -58,7 +58,7 @@ public sealed record SavegameApplyDecision(
 /// <para>
 /// <b>Pure, for the same reason <see cref="SavegameSlotStates"/> is.</b> Reading the bindings out of
 /// local state, asking the server what is current and running the sync all happen around these,
-/// never inside them - so the rules that decide whether a farm gets taken off its mod list are three
+/// never inside them - so the rules that decide whether a savegame gets taken off its mod list are three
 /// short functions with one copy each.
 /// </para>
 /// <para>

@@ -543,8 +543,8 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
-    /// <b>The apply that would take a farm off its mod list, resolved rather than refused.</b> An
-    /// instance holding a past savegame is pinned to that farm's revision, and every caller asks for
+    /// <b>The apply that would take a savegame off its mod list, resolved rather than refused.</b> An
+    /// instance holding a past savegame is pinned to that savegame's revision, and every caller asks for
     /// nothing in particular - so the one place all of them pass through is where head stops being the
     /// answer. Nobody had to know a savegame was involved.
     /// </summary>
@@ -570,7 +570,7 @@ public class ModSyncServiceTests
 
     /// <summary>
     /// A caller that names a revision has said something the instance cannot know better than - the
-    /// check-out dialog previewing a farm nothing is holding yet - so it is taken at its word, and
+    /// check-out dialog previewing a savegame nothing is holding yet - so it is taken at its word, and
     /// then checked against what <em>is</em> held.
     /// </summary>
     [Fact]
@@ -588,7 +588,7 @@ public class ModSyncServiceTests
 
     /// <summary>
     /// The active-profile switch, refused at the one place no apply path gets past. Nothing is planned
-    /// and the repo is never asked: a farm following another mod list is not a state a plan could
+    /// and the repo is never asked: a savegame following another mod list is not a state a plan could
     /// describe safely.
     /// </summary>
     [Fact]

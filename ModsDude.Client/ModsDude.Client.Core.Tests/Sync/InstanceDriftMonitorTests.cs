@@ -66,7 +66,7 @@ public class InstanceDriftMonitorTests
     }
 
     /// <summary>
-    /// An instance holding a past savegame is behind head <em>by construction</em> - that farm's
+    /// An instance holding a past savegame is behind head <em>by construction</em> - that savegame's
     /// revision does not move - so comparing it against head would report drift permanently, and offer
     /// a re-apply to head that the apply table refuses. The comparison is against the revision the
     /// savegame targets instead, and nothing is suppressed to achieve it: it comes out equal on its
@@ -87,7 +87,7 @@ public class InstanceDriftMonitorTests
 
     /// <summary>
     /// Folder drift under a past savegame still reports, and against that savegame's revision - the
-    /// re-apply it offers has to target the list the farm needs rather than head.
+    /// re-apply it offers has to target the list the savegame needs rather than head.
     /// </summary>
     [Fact]
     public void Folder_drift_under_a_past_savegame_still_reports_against_its_revision()

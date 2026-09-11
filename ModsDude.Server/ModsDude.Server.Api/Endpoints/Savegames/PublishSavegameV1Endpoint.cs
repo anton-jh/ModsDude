@@ -30,7 +30,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// <b>Publishing leaves the save checked out to the publisher.</b> Somebody who has just uploaded
-/// the farm they are playing has not handed it back, and a publish that left the slot free would
+/// the savegame they are playing has not handed it back, and a publish that left the slot free would
 /// invite the next person to take a save whose owner is still in it. The claim is opened in the same
 /// transaction as the savegame and its first version, so there is no window in which the save exists
 /// unheld.
@@ -48,7 +48,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// only difference is which end says it first.
 /// </para>
 /// <para>
-/// <b>Publishing to a profile supersedes whatever farm it was following</b>, in the same transaction
+/// <b>Publishing to a profile supersedes whatever savegame it was following</b>, in the same transaction
 /// as everything else here. A profile has at most one current savegame, so the new one taking the
 /// slot and the old one leaving it are one event and not two - and a publish that committed the new
 /// row first would be refused by the one-current-savegame index rather than doing half the job. The
@@ -229,7 +229,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// <para>
     /// <b>Declared rather than observed</b>, and the only version in the system of which that is
     /// true: the bytes predate ModsDude, so nothing knows which mods were in the folder while that
-    /// farm was actually played, and requiring the profile to be applied first would only observe a
+    /// savegame was actually played, and requiring the profile to be applied first would only observe a
     /// different moment. Never derived from the profile's head here either - the client sends the
     /// number it showed the person, so the declaration is one they saw.
     /// </para>

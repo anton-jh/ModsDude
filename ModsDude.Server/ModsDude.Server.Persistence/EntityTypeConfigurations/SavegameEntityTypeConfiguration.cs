@@ -63,7 +63,7 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
         // At most one current savegame per profile, in the database rather than in the endpoints
         // that swap them - the same shape as the one-open-claim index in
         // SavegameCheckoutEntityTypeConfiguration, and there for the same reason: two people
-        // publishing to one profile in the same instant produce one current farm and one refusal.
+        // publishing to one profile in the same instant produce one current savegame and one refusal.
         // It is also what makes a swap have to be ordered, since the instant where both rows are
         // current is exactly what this refuses.
         //
@@ -89,7 +89,7 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
             // to somebody else's publish in the same instant, and the two need different sentences.
             .HasDatabaseName(SavegameIndexNames.OneCurrentSavegamePerProfile);
 
-        // Superseded means "this profile is following some other farm now", which is a sentence
+        // Superseded means "this profile is following some other savegame now", which is a sentence
         // about a profile. A savegame that follows none is neither current nor past, so a stamp on
         // one would say nothing - and would then be read as a state by everything that asks.
         builder.ToTable(x => x.HasCheckConstraint(

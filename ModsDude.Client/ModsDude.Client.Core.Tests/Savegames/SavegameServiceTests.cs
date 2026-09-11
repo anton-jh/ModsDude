@@ -31,12 +31,12 @@ public class SavegameServiceTests
     public async Task Checking_out_takes_the_claim_writes_the_slot_and_records_what_it_wrote()
     {
         using var harness = new Harness();
-        var head = await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         Assert.Equal(1, harness.Server.CheckoutsTaken);
-        Assert.Equal("a farm", harness.ReadSlotFile(_slot1));
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
 
         var binding = harness.Service.GetBinding(harness.Instance, harness.Server.SavegameId);
 
@@ -70,12 +70,12 @@ public class SavegameServiceTests
     public async Task Checking_out_over_unpublished_play_is_refused_before_the_claim_is_taken()
     {
         using var harness = new Harness();
-        var head = await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         // An evening in the slot: the contents no longer hash to what was written there.
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         var other = harness.Server.Savegame with
         {
@@ -93,21 +93,21 @@ public class SavegameServiceTests
         // The destructive step is local and comes first, so nothing was claimed on anybody's behalf
         // and the slot still holds the evening.
         Assert.Equal(1, harness.Server.CheckoutsTaken);
-        Assert.Equal("a farm, and a barn", harness.ReadSlotFile(_slot1));
+        Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
     }
 
     /// <summary>
     /// A current savegame follows its profile, so it pins the mod folder to nothing and the apply that
     /// comes after the check-out installs head. The head version's revision is emphatically not the
-    /// answer: it names the last list this farm was <em>played</em> on, which is older than head
+    /// answer: it names the last list this savegame was <em>played</em> on, which is older than head
     /// whenever anybody has edited the profile since - which is the ordinary case, since preparing the
-    /// mod list and then checking the farm out is how a session starts.
+    /// mod list and then checking the savegame out is how a session starts.
     /// </summary>
     [Fact]
     public async Task Checking_out_the_profiles_current_savegame_pins_the_mod_folder_to_nothing()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -118,14 +118,14 @@ public class SavegameServiceTests
     /// <summary>
     /// A past savegame's revision does not move, so checking one out is what makes its instance hold a
     /// mod folder pinned to that revision. Recorded on the binding rather than worked out later:
-    /// asking the server whether this is still its profile's current farm is a network call in an apply
+    /// asking the server whether this is still its profile's current savegame is a network call in an apply
     /// rule and a drift check that both have to work offline.
     /// </summary>
     [Fact]
     public async Task Checking_out_a_past_savegame_pins_the_mod_folder_to_its_own_revision()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         harness.Server.Supersede();
 
@@ -141,7 +141,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// Publishing to a profile makes the new farm its current one - superseding whatever was - so it
+    /// Publishing to a profile makes the new savegame its current one - superseding whatever was - so it
     /// follows the profile from then on rather than staying on the revision it was published at.
     /// </summary>
     [Fact]
@@ -149,7 +149,7 @@ public class SavegameServiceTests
     {
         using var harness = new Harness(appliedRevision: 4);
 
-        harness.WriteSlotFile(_slot1, "a brand new farm");
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         var savegame = await harness.Service.PublishAsync(
             harness.Instance, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), CancellationToken.None);
@@ -159,7 +159,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// One mod folder can only be on one revision, so two farms following two mod lists cannot both be
+    /// One mod folder can only be on one revision, so two savegames following two mod lists cannot both be
     /// played out of one instance. Refused before the claim and before the slot is even looked at:
     /// this costs a list read, and a claim taken for a check-out that then refuses itself is one
     /// somebody has to discard by hand.
@@ -168,7 +168,7 @@ public class SavegameServiceTests
     public async Task A_second_savegame_that_claims_the_mod_folder_is_refused()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -187,17 +187,17 @@ public class SavegameServiceTests
     /// <summary>
     /// The same limit reached from the other side rather than a rule of its own: a publish opens a
     /// claim in the same transaction as the savegame, so publishing to a profile would leave this
-    /// instance holding two farms that both want its mod folder.
+    /// instance holding two savegames that both want its mod folder.
     /// </summary>
     [Fact]
     public async Task Publishing_to_a_profile_while_a_savegame_is_held_is_refused()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot2, "a brand new farm");
+        harness.WriteSlotFile(_slot2, "a brand new savegame");
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.Service.PublishAsync(
@@ -221,14 +221,14 @@ public class SavegameServiceTests
     public async Task A_savegame_with_no_profile_may_be_held_beside_one_that_has_one()
     {
         using var harness = new Harness();
-        var head = await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         var unmanaged = harness.Server.Savegame with
         {
             Id = Guid.NewGuid(),
-            Name = "A farm of my own",
+            Name = "A save of my own",
             ProfileId = null,
             Head = head with { ProfileId = null, ProfileRevision = null }
         };
@@ -245,7 +245,7 @@ public class SavegameServiceTests
 
         Assert.Equal(SavegameSlotAvailability.Free, await harness.Service.ClassifySlotAsync(harness.Instance, _slot1, CancellationToken.None));
 
-        harness.WriteSlotFile(_slot1, "somebody's own farm");
+        harness.WriteSlotFile(_slot1, "somebody's own savegame");
 
         Assert.Equal(SavegameSlotAvailability.Unrecognised, await harness.Service.ClassifySlotAsync(harness.Instance, _slot1, CancellationToken.None));
     }
@@ -259,7 +259,7 @@ public class SavegameServiceTests
     public async Task A_slot_just_checked_out_into_reads_as_held_and_clean()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -270,7 +270,7 @@ public class SavegameServiceTests
     public async Task The_picker_pre_selects_the_remembered_slot_and_falls_back_to_the_first_free_one()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         // Nothing remembered yet: the first free slot.
         Assert.Equal(_slot1, await harness.Service.SuggestSlotAsync(harness.Instance, harness.Server.SavegameId, CancellationToken.None));
@@ -283,7 +283,7 @@ public class SavegameServiceTests
 
         // And when the remembered slot is taken by something else, the first free one instead. The
         // hint is left exactly as it was; nothing here repairs it.
-        harness.WriteSlotFile(_slot2, "somebody's own farm");
+        harness.WriteSlotFile(_slot2, "somebody's own savegame");
 
         Assert.Equal(_slot1, await harness.Service.SuggestSlotAsync(harness.Instance, harness.Server.SavegameId, CancellationToken.None));
     }
@@ -293,8 +293,8 @@ public class SavegameServiceTests
     {
         using var harness = new Harness();
 
-        harness.WriteSlotFile(_slot1, "one farm");
-        harness.WriteSlotFile(_slot2, "another farm");
+        harness.WriteSlotFile(_slot1, "one savegame");
+        harness.WriteSlotFile(_slot2, "another savegame");
 
         Assert.Null(await harness.Service.SuggestSlotAsync(harness.Instance, harness.Server.SavegameId, CancellationToken.None));
     }
@@ -308,7 +308,7 @@ public class SavegameServiceTests
     public async Task Checking_in_unchanged_bytes_skips_the_upload_entirely()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -327,17 +327,17 @@ public class SavegameServiceTests
     public async Task Checking_in_played_bytes_uploads_them_and_mints_a_version_based_on_what_was_held()
     {
         using var harness = new Harness();
-        var head = await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var version = await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, "after the barn", keepPlaying: false, force: false, CancellationToken.None);
+        var version = await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal(head.Number + 1, version.Number);
-        Assert.Equal("after the barn", version.Label);
+        Assert.Equal("after playing", version.Label);
 
         // Based on the version that was actually in the slot, which is the mechanical half of the
         // one-holder-at-a-time guarantee - the checkout is only the social half.
@@ -355,11 +355,11 @@ public class SavegameServiceTests
     public async Task Checking_in_recycles_the_local_copy_only_after_the_commit()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
@@ -379,11 +379,11 @@ public class SavegameServiceTests
     public async Task A_refused_check_in_recycles_nothing_and_keeps_the_binding()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         // Somebody took the save over and checked in while this machine was playing.
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
@@ -396,7 +396,7 @@ public class SavegameServiceTests
         Assert.True(SavegameService.IsVersionStale(exception));
 
         Assert.Empty(harness.RecycleBin.Recycled);
-        Assert.Equal("a farm, and a barn", harness.ReadSlotFile(_slot1));
+        Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
         Assert.NotNull(harness.Service.GetBinding(harness.Instance, harness.Server.SavegameId));
     }
 
@@ -404,11 +404,11 @@ public class SavegameServiceTests
     public async Task Forcing_past_a_moved_head_checks_in_and_records_the_fork()
     {
         using var harness = new Harness();
-        var head = await harness.SeedHeadAsync("a farm");
+        var head = await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
 
         var version = await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
@@ -426,11 +426,11 @@ public class SavegameServiceTests
     public async Task Checking_in_and_carrying_on_keeps_the_binding_and_rebases_it()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         var version = await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
@@ -446,7 +446,7 @@ public class SavegameServiceTests
         Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Service.ClassifySlotAsync(harness.Instance, _slot1, CancellationToken.None));
 
         // And a second check-in is based on the first, not on the version that was checked out.
-        harness.WriteSlotFile(_slot1, "a farm, a barn, and a field");
+        harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
         await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
@@ -472,7 +472,7 @@ public class SavegameServiceTests
     public async Task Discarding_ends_the_checkout_and_mints_no_version()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -496,7 +496,7 @@ public class SavegameServiceTests
     {
         using var harness = new Harness();
 
-        harness.WriteSlotFile(_slot1, "a brand new farm");
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         var savegame = await harness.Service.PublishAsync(
             harness.Instance, harness.Server.RepoId, _slot1, "Season 5", "the beginning", harness.Target(), CancellationToken.None);
@@ -526,7 +526,7 @@ public class SavegameServiceTests
 
     /// <summary>
     /// A first version's revision is declared rather than observed, so a folder that has never been
-    /// synced is not an obstacle: nothing knows which mods were in it while that farm was played
+    /// synced is not an obstacle: nothing knows which mods were in it while that savegame was played
     /// either way, and requiring a sync first would observe the folder at the moment of publishing -
     /// which is a different fact, not a better one.
     /// </summary>
@@ -535,7 +535,7 @@ public class SavegameServiceTests
     {
         using var harness = new Harness(writeManifest: false);
 
-        harness.WriteSlotFile(_slot1, "a brand new farm");
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         await harness.Service.PublishAsync(
             harness.Instance, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(headRevision: 7), CancellationToken.None);
@@ -547,7 +547,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// The other answer the picker offers, and the first thing on this client that publishes a farm
+    /// The other answer the picker offers, and the first thing on this client that publishes a savegame
     /// following no mod list at all. It records no revision, claims no mod folder, and is therefore
     /// not subject to the limit that refuses a second savegame.
     /// </summary>
@@ -555,13 +555,13 @@ public class SavegameServiceTests
     public async Task Publishing_without_a_profile_records_neither_half_of_the_pair()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         // Already holding one that claims the mod folder, which a publish *to a profile* is refused
         // for. This one claims nothing.
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot2, "an unmanaged farm");
+        harness.WriteSlotFile(_slot2, "an unmanaged savegame");
 
         var savegame = await harness.Service.PublishAsync(
             harness.Instance, harness.Server.RepoId, _slot2, "Scratch", null, target: null, CancellationToken.None);
@@ -579,7 +579,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// A past farm made current again follows its profile from here, so the pin that held this
+    /// A past savegame made current again follows its profile from here, so the pin that held this
     /// instance's mod folder at revision 4 has to go with it.
     /// </summary>
     /// <remarks>
@@ -592,7 +592,7 @@ public class SavegameServiceTests
     public async Task Making_a_past_savegame_current_lets_go_of_the_revision_it_pinned()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         harness.Server.Supersede();
 
@@ -618,7 +618,7 @@ public class SavegameServiceTests
     public async Task Making_a_savegame_current_touches_no_instance_that_is_not_holding_it()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         harness.Server.Supersede();
 
@@ -651,13 +651,13 @@ public class SavegameServiceTests
     public async Task Taking_a_copy_claims_nothing_and_binds_nothing()
     {
         using var harness = new Harness();
-        var first = await harness.SeedHeadAsync("a farm");
+        var first = await harness.SeedHeadAsync("a savegame");
 
-        harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a farm, and a barn"));
+        harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a savegame, played once"));
 
         await harness.Service.TakeCopyAsync(harness.Instance, harness.Server.Savegame, first.Number, _slot1, CancellationToken.None);
 
-        Assert.Equal("a farm", harness.ReadSlotFile(_slot1));
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
         Assert.Equal(0, harness.Server.CheckoutsTaken);
         Assert.Empty(harness.Service.GetBindings(harness.Instance));
 
@@ -670,7 +670,7 @@ public class SavegameServiceTests
     public async Task Taking_a_copy_of_a_pruned_version_says_so()
     {
         using var harness = new Harness();
-        await harness.SeedHeadAsync("a farm");
+        await harness.SeedHeadAsync("a savegame");
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.Service.TakeCopyAsync(harness.Instance, harness.Server.Savegame, 99, _slot1, CancellationToken.None));
@@ -690,12 +690,12 @@ public class SavegameServiceTests
     public async Task Play_either_side_of_an_apply_is_attributed_to_the_revision_it_ran_on()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         // An evening on revision 4, while a thousand edits move the profile's head to 1004.
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         await harness.ApplyAsync(1004);
 
@@ -705,7 +705,7 @@ public class SavegameServiceTests
         Assert.Equal(await harness.HashSlotAsync(_slot1), observed.LastObservedHash);
 
         // A second evening, this time on the list the folder now runs.
-        harness.WriteSlotFile(_slot1, "a farm, a barn, and a field");
+        harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
         await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
@@ -722,11 +722,11 @@ public class SavegameServiceTests
     public async Task An_apply_after_the_last_evening_does_not_move_what_that_evening_was_played_on()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         await harness.ApplyAsync(1005);
         await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
@@ -743,7 +743,7 @@ public class SavegameServiceTests
     public async Task A_savegame_that_was_never_played_records_the_revision_the_folder_is_on_now()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
         await harness.ApplyAsync(1004);
@@ -770,7 +770,7 @@ public class SavegameServiceTests
 
         harness.Server.FollowNoProfile();
 
-        await harness.SeedHeadAsync("a farm", profileRevision: null);
+        await harness.SeedHeadAsync("a savegame", profileRevision: null);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -781,7 +781,7 @@ public class SavegameServiceTests
 
         // Played, and the mod folder moved underneath it - neither of which is any of this savegame's
         // business.
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         await harness.ApplyAsync(1004);
 
@@ -802,11 +802,11 @@ public class SavegameServiceTests
     public async Task Play_on_a_folder_that_belongs_to_another_profile_is_attributed_to_no_revision()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.PointTheFolderAtAnotherProfile(revision: 9);
 
         await harness.Service.ObserveAsync(harness.Instance.Id, CancellationToken.None);
@@ -829,7 +829,7 @@ public class SavegameServiceTests
     public async Task An_apply_that_finds_no_play_records_nothing()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
@@ -851,18 +851,18 @@ public class SavegameServiceTests
     public async Task An_observation_does_not_stop_the_notice_reporting_play_nobody_has_checked_in()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         await harness.ApplyAsync(1004);
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
 
         // One kind and not two: the folder is on 1004 and the binding was checked out at 4, which is
-        // this farm following its profile rather than leaving its mod list.
+        // this savegame following its profile rather than leaving its mod list.
         Assert.Equal(SavegameDriftKind.UncheckedInPlay, drift.Kind);
     }
 
@@ -876,11 +876,11 @@ public class SavegameServiceTests
     public async Task Carrying_on_playing_starts_the_attribution_over()
     {
         using var harness = new Harness(appliedRevision: 4);
-        await harness.SeedHeadAsync("a farm", profileRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
         await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        harness.WriteSlotFile(_slot1, "a farm, and a barn");
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         var version = await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
@@ -892,7 +892,7 @@ public class SavegameServiceTests
         // Tonight's evening happens after the folder moved, and is recorded against where it is now.
         await harness.ApplyAsync(1004);
 
-        harness.WriteSlotFile(_slot1, "a farm, a barn, and a field");
+        harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
         await harness.Service.CheckInAsync(harness.Instance, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
@@ -970,7 +970,7 @@ public class SavegameServiceTests
 
 
     /// <summary>
-    /// What the publish dialog settles: which mod list the new farm follows, and the revision its
+    /// What the publish dialog settles: which mod list the new savegame follows, and the revision its
     /// first version declares.
     /// </summary>
     /// <remarks>

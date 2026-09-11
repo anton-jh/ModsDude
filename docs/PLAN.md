@@ -981,7 +981,7 @@ database error.
       have opposite failure modes, and the old MVP made them one button.
 - [x] **Check-in asks nothing.** It acts on the slot the open checkout already names. Choosing
       between twenty near-identical folders from memory is where the MVP went wrong, and it is
-      precisely the moment where a wrong answer publishes somebody else's farm under this save's
+      precisely the moment where a wrong answer publishes somebody else's slot under this save's
       name and burns a version doing it.
 - [x] **Discard ends a checkout without minting a version** — taken by mistake, never played.
       Without it the only ways out are a junk version or waiting to be taken over.
@@ -1309,25 +1309,25 @@ Three things fell out of the boxes above rather than being added to them:
   on", resolved in `PlanAsync` from what is held there — so the drift notice's re-apply, the mod list
   editor's save and the instance page's apply all target a held past savegame's revision without any
   of them knowing what a savegame is. Only the check-out dialog names a number, because it previews
-  the apply for a farm nothing is holding yet.
+  the apply for a savegame nothing is holding yet.
 - **`ISavegamePlayObserver` became `IHeldSavegames`** and took `CheckDriftAsync` with it, so the drift
   monitor stopped depending on the whole savegame client for two facts about held slots. It is now
   the whole of what sync and the monitor know about savegames, which is what the seam claimed to be.
 - **`ProfileApplyStatus.Refused`, and `ProfileApplyOutcome.RecordsIntent` with it.** "Could not be
   reached" was the only answer a refusal could have got, and it is the wrong one — waiting does not
-  fix it. The intent flag went the same way: recording a profile switch that a held farm forbids
+  fix it. The intent flag went the same way: recording a profile switch that a held savegame forbids
   applying would leave an instance whose standing profile it can never be put on.
 
 ### 4. Interface
 
-- [x] **Chips and the savegames list** — past is `Neutral`, never `Caution`; a *Show past farms*
+- [x] **Chips and the savegames list** — past is `Neutral`, never `Caution`; a *Show past savegames*
       toggle, off by default, with the count it is hiding said out loud beside it. A filter nobody can
       see is a list that is quietly wrong, and the toggle is what keeps this the one repo-level list
       rather than reintroducing a per-profile one.
 - [x] **Row actions**, two buttons with the disabled reason carrying the explanation.
       `SavegameRowRules` is the rule and the wording, tested in Core the way `SavegameHoldRules` is;
       the page supplies the instance, what it holds and what its folder is on. It picks the instance
-      that *could* host the farm now over the one following its profile, because a row that answers
+      that *could* host the savegame now over the one following its profile, because a row that answers
       about a folder the buttons do not act on is a puzzle rather than an answer.
 - [x] **Instance page** — the apply button's meaning changes while a past savegame is held, and the
       profile dropdown is disabled while one with a profile is. The label came from
@@ -1342,7 +1342,7 @@ Three things fell out of the boxes above rather than being added to them:
       and `PublishAsync` takes a repo rather than deriving one from a profile it no longer requires.
 - [x] **Profile page** — its current savegame, a count of past ones, and the archived-current case
       with its three ways out. On Overview, and it reads both savegame lists: archiving does not
-      release a profile's slot, so an archived farm is still its current one.
+      release a profile's slot, so an archived savegame is still its current one.
 
 Three things fell out of the boxes above rather than being added to them:
 
@@ -1352,8 +1352,8 @@ Three things fell out of the boxes above rather than being added to them:
   moment of publishing — a different fact, not a better one. The number is now
   `SavegameService.DeclaredRevisionFor`, shown in the dialog before it is recorded.
 - **`ProfileApplyService.ApplyAsync` gained a revision.** The row's *Apply profile* prepares the folder
-  for a farm nothing is holding yet, so "let the instance decide" resolves to head — correct for a
-  current farm and wrong for a past one, whose check-out a moment later would leave the folder drifted
+  for a savegame nothing is holding yet, so "let the instance decide" resolves to head — correct for a
+  current savegame and wrong for a past one, whose check-out a moment later would leave the folder drifted
   against the revision it had just pinned. The same number goes into `DecideApply`, so the refusal and
   the apply are asked the same question.
 - **`ISavegameService.GetPlayedRevision`**, and `ResolveAppliedRevision` split in two to answer it. The
@@ -1368,9 +1368,9 @@ they did not claim were not:
 
 - **`makeCurrent` had no client.** Slice 1 built the endpoint and said it answers with both savegames
   "so the client can name what it displaced"; no slice built that client, so a server verb the design
-  names as one of the *two* things that change which farm a profile follows was unreachable. It is a
-  third row action on a past farm now, with the confirmation the design asks for. Making a farm
-  current while holding it clears its pin: a current farm follows its profile, and a number left
+  names as one of the *two* things that change which savegame a profile follows was unreachable. It is a
+  third row action on a past savegame now, with the confirmation the design asks for. Making a savegame
+  current while holding it clears its pin: a current savegame follows its profile, and a number left
   behind would hold that folder at its old revision forever and refuse every apply that tried to move
   it. That is not "the hold moves under its holder" — that argument is about somebody else's
   publish, which is not stated to whoever is playing.
@@ -1381,7 +1381,7 @@ they did not claim were not:
   sentences, and `SavegameDrift.RunsOnAnotherProfile` to tell them apart — which also made
   `TargetRevision` load-bearing rather than written and never read.
 - **The profile page's activation control was offered and then refused.** The instance page's
-  dropdown is disabled while a held farm forbids the switch; this is the same switch from the other
+  dropdown is disabled while a held savegame forbids the switch; this is the same switch from the other
   end and was not, so the refusal arrived after the click. It asks `DecideApply` too now.
 - **The instance page went stale on a check-in from its own sub-page.** The slot list is a child of
   that page, so checking a savegame in there left the shell above it showing a disabled dropdown and

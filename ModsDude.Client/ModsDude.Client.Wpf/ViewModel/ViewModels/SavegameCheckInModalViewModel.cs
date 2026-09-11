@@ -11,7 +11,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// <b>It asks nothing about the slot.</b> The open checkout already names it. Choosing between twenty
 /// near-identical folders from memory is precisely where a wrong answer publishes somebody else's
-/// farm under this save's name and burns a version doing it.
+/// savegame under this save's name and burns a version doing it.
 /// </para>
 /// <para>
 /// <b>Keep playing is the mid-session backup.</b> The same version is minted, but the local copy and

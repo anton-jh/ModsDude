@@ -16,13 +16,13 @@ namespace ModsDude.Server.Api.Dtos;
 /// published and never after, so it agrees with every version's own profile by construction.
 /// </param>
 /// <param name="SupersededAt">
-/// When the profile stopped following this farm, or <c>null</c> while it still does. Null for a
+/// When the profile stopped following this savegame, or <c>null</c> while it still does. Null for a
 /// savegame with no profile too, which is neither current nor past - the client reads the pair, not
 /// this field alone.
 /// <para>
 /// A different fact from <paramref name="ArchivedAt"/>, and carried separately for that reason: a
 /// savegame can be current or past, archived or not, in any combination, and a profile whose current
-/// farm is archived still has a current farm.
+/// savegame is archived still has a current savegame.
 /// </para>
 /// </param>
 /// <param name="Checkout">

@@ -195,13 +195,13 @@ public interface ISavegameService : IHeldSavegames
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The other half of the swap publishing performs.</b> Whichever farm held the slot becomes
+    /// <b>The other half of the swap publishing performs.</b> Whichever savegame held the slot becomes
     /// past in the same transaction - the server orders the two writes, because the instant where
     /// both are current is what the one-current-savegame index refuses.
     /// </para>
     /// <para>
-    /// <b>The holder's pin goes with it.</b> A past farm pins the mod folder to its own revision, and
-    /// a farm that is current again follows its profile - so a binding still naming a number would
+    /// <b>The holder's pin goes with it.</b> A past savegame pins the mod folder to its own revision, and
+    /// a savegame that is current again follows its profile - so a binding still naming a number would
     /// hold this instance behind head forever and refuse every apply that tried to move it. That the
     /// hold is otherwise <em>decided once and does not move under the holder</em> is about somebody
     /// else's publish, which is not stated to whoever is playing; this is the opposite case, stated
@@ -211,7 +211,7 @@ public interface ISavegameService : IHeldSavegames
     /// <param name="instances">
     /// Every installation that might be holding it, since the pin lives in local state per instance
     /// and this verb is about a savegame rather than about a folder. Passing none is legitimate - a
-    /// repo whose farms nobody here has checked out.
+    /// repo whose savegames nobody here has checked out.
     /// </param>
     Task<MakeSavegameCurrentResponse> MakeCurrentAsync(
         IReadOnlyList<LocalInstance> instances,
@@ -365,14 +365,14 @@ public sealed class SavegameService(
     /// <para>
     /// Static and public because the check-out dialog needs the answer for a savegame this machine is
     /// not holding yet, and it must be the same answer the binding will carry a moment later. Two
-    /// computations of "which list does this farm run on" is how a preview comes to describe a
+    /// computations of "which list does this savegame run on" is how a preview comes to describe a
     /// different apply from the one that runs.
     /// </para>
     /// <para>
     /// <b>The head version's revision is not the answer for a current savegame.</b> It names the last
-    /// list the farm was <em>played</em> on, which is older than head whenever anybody has edited the
+    /// list the savegame was <em>played</em> on, which is older than head whenever anybody has edited the
     /// profile since - and a current savegame follows its profile, which is what current means.
-    /// Preparing the mod list before a session and then checking the farm out is the ordinary case,
+    /// Preparing the mod list before a session and then checking the savegame out is the ordinary case,
     /// and it must not be undone by the check-out.
     /// </para>
     /// </remarks>
@@ -390,7 +390,7 @@ public sealed class SavegameService(
     /// <para>
     /// <b>Declared rather than observed, and nothing can change that.</b> The bytes predate ModsDude:
     /// there is no binding, no <see cref="SavegameCheckoutBinding.LastObservedHash"/> and no prior
-    /// state, so nothing knows which mods were in the folder while that farm was played. Requiring the
+    /// state, so nothing knows which mods were in the folder while that savegame was played. Requiring the
     /// chosen profile to be applied first would not recover it either - it would observe the folder at
     /// the moment of publishing, which is a different fact - so it is not required.
     /// </para>
@@ -398,7 +398,7 @@ public sealed class SavegameService(
     /// Head is the honest answer for a profile the folder is <em>not</em> on, since the alternative is
     /// a number belonging to another mod list. The dialog shows whichever it is going to record, so
     /// the declaration is on screen rather than implied, and says out loud that nothing checks the
-    /// farm can run on it.
+    /// savegame can run on it.
     /// </para>
     /// <para>
     /// Static and public for the same reason <see cref="TargetRevisionOf"/> is: the dialog needs the
@@ -575,7 +575,7 @@ public sealed class SavegameService(
     /// <para>
     /// <b>It asks nothing.</b> It acts on the slot the binding already names, because choosing
     /// between twenty near-identical folders from memory is precisely the moment where a wrong answer
-    /// publishes somebody else's farm under this save's name and burns a version doing it.
+    /// publishes somebody else's slot under this save's name and burns a version doing it.
     /// </para>
     /// <para>
     /// <b>The local copy is recycled only after the commit.</b> Not after the upload - an uploaded
@@ -687,7 +687,7 @@ public sealed class SavegameService(
         var response = await savegamesClient.MakeSavegameCurrentV1Async(savegame.RepoId, savegame.Id, ct);
 
         // After the server, and only after: a pin cleared against a swap that was then refused would
-        // leave this instance free to apply head under a farm that is still past.
+        // leave this instance free to apply head under a savegame that is still past.
         foreach (var instance in instances)
         {
             if (bindings.GetBinding(instance.Id, savegame.Id) is not SavegameCheckoutBinding binding
@@ -727,7 +727,7 @@ public sealed class SavegameService(
     /// <b>The profile is asked for rather than derived.</b> Every profile in the repo is a legitimate
     /// answer and so is none of them - the instance's active one is only the likeliest - so the
     /// caller settles it and hands the pair down. The revision half is a <em>declaration</em>: the
-    /// bytes predate ModsDude, nothing knows which mods were in the folder while that farm was
+    /// bytes predate ModsDude, nothing knows which mods were in the folder while that savegame was
     /// actually played, and no arrangement of this flow recovers it. Every version after the first is
     /// observed.
     /// </para>
@@ -1028,7 +1028,7 @@ public sealed class SavegameService(
     /// <remarks>
     /// <para>
     /// <b>The limit is about the folder, not about savegames.</b> One mod folder can only be on one
-    /// revision, so two farms following two mod lists cannot both be played out of one instance - and
+    /// revision, so two savegames following two mod lists cannot both be played out of one instance - and
     /// that is the whole of the reason. A savegame with no profile makes no claim on the folder, so it
     /// neither counts nor is counted against; any number of those may be held at once.
     /// </para>

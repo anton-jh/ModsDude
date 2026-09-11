@@ -47,7 +47,7 @@ public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplySta
     /// instance is still meant to follow this profile and being left drifted is what the notice is
     /// for. False for the two answers that are not "not now" - the user backing out, and a savegame
     /// held here that refuses the switch outright. Recording the intent for that second one would
-    /// leave an instance whose standing profile is one its own held farm forbids applying.
+    /// leave an instance whose standing profile is one its own held savegame forbids applying.
     /// </remarks>
     public bool RecordsIntent => Status is not (ProfileApplyStatus.Declined or ProfileApplyStatus.Refused);
 
@@ -88,7 +88,7 @@ public sealed class ProfileApplyService(
     /// <param name="revision">
     /// Which revision to plan against, or null to let the instance decide - a past savegame held
     /// there pins the folder to its own revision, and everything else follows head. Named only by the
-    /// check-out dialog, which is previewing the apply for a farm nothing is holding yet.
+    /// check-out dialog, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
     public async Task<ModSyncPlan?> TryPlanAsync(
         Repo repo,
@@ -133,7 +133,7 @@ public sealed class ProfileApplyService(
     /// <param name="revision">
     /// Which revision to install, or null - nearly always - to let the instance decide, per
     /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
-    /// preparing the folder for a farm nothing is holding yet: a past one runs on its own revision,
+    /// preparing the folder for a savegame nothing is holding yet: a past one runs on its own revision,
     /// and letting the instance decide would install head and leave the check-out that follows
     /// immediately drifted.
     /// </param>
@@ -152,7 +152,7 @@ public sealed class ProfileApplyService(
         // can get past; this one is the sentence somebody can act on.
         if (heldSavegames.DecideApply(instance.Id, profileId, revision) is { IsAllowed: false } refusal)
         {
-            // Two refusals, two sentences. A past farm held here is not following "another mod list" -
+            // Two refusals, two sentences. A past savegame held here is not following "another mod list" -
             // it is following this very one and does not move off its revision - and telling somebody
             // to check it in over a revision mismatch would be advice that fixes nothing.
             var reason = refusal.Refusal is SavegameApplyRefusal.PastSavegameIsHeld
@@ -310,7 +310,7 @@ public sealed class ProfileApplyService(
     /// terms the moment the folder is put somewhere behind head. Saying the number is what keeps the
     /// ordinary case silent and the pinned one honest, without the caller having to know a savegame is
     /// involved. A caller that named a revision gets the plainer half of it: nothing is holding that
-    /// farm yet, so there is no checked-out save to explain the number by.
+    /// savegame yet, so there is no checked-out save to explain the number by.
     /// </remarks>
     private string Pinned(LocalInstance instance, Guid profileId, int? revision)
     {

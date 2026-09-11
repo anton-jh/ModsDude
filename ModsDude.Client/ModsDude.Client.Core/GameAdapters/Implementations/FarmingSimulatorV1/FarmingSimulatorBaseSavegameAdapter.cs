@@ -176,12 +176,12 @@ public class FarmingSimulatorInstanceSavegameAdapter(
 
     /// <summary>
     /// What this game is worth saying about a save, in the order somebody reads it: where they are
-    /// playing, how the farm is doing, when they last played, and then the rest.
+    /// playing, how much money they have, when they last played, and then the rest.
     /// </summary>
     /// <remarks>
     /// <b>Money is second because a row only shows the first few.</b> Where and how much are the two
     /// facts that tell two saves of the same map apart at a glance - a bank balance says how far along
-    /// a farm is in a way a creation date does not - so it goes above "Started", which was pushing it
+    /// a save is in a way a creation date does not - so it goes above "Started", which was pushing it
     /// off the row and into the tooltip.
     /// </remarks>
     private static IReadOnlyList<SavegameDetail> ReadDetails(
@@ -407,7 +407,7 @@ public class FarmingSimulatorInstanceSavegameAdapter(
 
         var played = TimeSpan.FromMinutes(minutes);
 
-        // Hours, because a farm's playtime is measured in tens of them and "1.21:37:00" is not a
+        // Hours, because a save's playtime is measured in tens of them and "1.21:37:00" is not a
         // number anybody reads.
         return played < TimeSpan.FromHours(1)
             ? $"{played.TotalMinutes:N0} min"

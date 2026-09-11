@@ -575,7 +575,7 @@ same aggregate placement as `Profile`, and for the same reasons.
 | `ProfileId` | The profile this save **follows**, or null where it follows none — see below |
 | `Created` | |
 | `HeadVersion` | `SavegameVersionNumber(int)` — which version is current |
-| `SupersededAt` | When the profile stopped following this farm. Null while it still does |
+| `SupersededAt` | When the profile stopped following this savegame. Null while it still does |
 
 **A savegame is not owned by a profile.** It sits beside profiles in the repo, and it is the
 *version* that records the one profile revision it was played on. A save moves from revision 6 to
@@ -584,7 +584,7 @@ that or lie about it.
 
 **The profile is fixed at publish**, and nothing moves a savegame onto another one — a move would
 put this row and every version's `ProfileId` in disagreement, and two profiles' revision numbers are
-not comparable. Republishing the farm is the route, and it is three operations that already exist.
+not comparable. Republishing the savegame is the route, and it is three operations that already exist.
 
 **A profile has at most one current savegame** and a succession of past ones. Current is
 `SupersededAt IS NULL`, enforced by a filtered unique index on `(RepoId, ProfileId)`; a past savegame

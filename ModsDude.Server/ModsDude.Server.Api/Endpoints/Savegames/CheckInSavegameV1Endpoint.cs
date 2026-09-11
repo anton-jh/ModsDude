@@ -26,7 +26,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <b>Check-in asks nothing about which savegame it is.</b> The route names one and the client knows
 /// it from the checkout binding it wrote when the save went into the slot. Choosing between twenty
 /// near-identical folders from memory is where the MVP went wrong, and it is precisely the moment
-/// where a wrong answer publishes somebody else's farm under this save's name and burns a version
+/// where a wrong answer publishes somebody else's slot under this save's name and burns a version
 /// doing it.
 /// </para>
 /// <para>

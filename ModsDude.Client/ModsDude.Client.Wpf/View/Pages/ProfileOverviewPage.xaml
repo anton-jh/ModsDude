@@ -70,7 +70,7 @@
                     </GroupBox>
                 </Border>
 
-                <!-- Which farm this profile is following. The savegames themselves stay on the one
+                <!-- Which savegame this profile is following. The savegames themselves stay on the one
                      repo-level list, so the past ones are a count and a link into that list rather
                      than a second list of rows to keep true. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
@@ -78,7 +78,7 @@
                         Padding="16"
                         Margin="0 16 0 0"
                         Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <GroupBox Header="Farms" Padding="0 16 0 16">
+                    <GroupBox Header="Savegames" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -97,7 +97,7 @@
                                     HorizontalAlignment="Left"
                                     Style="{DynamicResource SubtleMenuButton}"
                                     Content="{Binding PastSavegamesText}"
-                                    ToolTip="Opens the repo's saves list with past farms showing."
+                                    ToolTip="Opens the repo's saves list with past savegames showing."
                                     Command="{Binding ShowPastSavegamesCommand}"
                                     Visibility="{Binding HasPastSavegames, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>

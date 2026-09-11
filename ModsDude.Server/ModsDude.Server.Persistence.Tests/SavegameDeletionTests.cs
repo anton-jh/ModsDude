@@ -154,13 +154,13 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
         var (firstRepo, firstProfile) = await GivenARepoWithAProfile();
         var (secondRepo, secondProfile) = await GivenARepoWithAProfile();
 
-        await GivenASavegame(firstRepo, firstProfile, "Main farm");
-        await GivenASavegame(secondRepo, secondProfile, "Main farm");
+        await GivenASavegame(firstRepo, firstProfile, "Main save");
+        await GivenASavegame(secondRepo, secondProfile, "Main save");
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.Savegames.CheckNameIsTaken(firstRepo, new SavegameName("Main farm"), CancellationToken.None));
-        Assert.True(await dbContext.Savegames.CheckNameIsTaken(secondRepo, new SavegameName("Main farm"), CancellationToken.None));
+        Assert.True(await dbContext.Savegames.CheckNameIsTaken(firstRepo, new SavegameName("Main save"), CancellationToken.None));
+        Assert.True(await dbContext.Savegames.CheckNameIsTaken(secondRepo, new SavegameName("Main save"), CancellationToken.None));
     }
 
     /// <summary>
@@ -208,7 +208,7 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The same write a publish makes. A profile has one current savegame, so a second farm on one
+    /// The same write a publish makes. A profile has one current savegame, so a second savegame on one
     /// profile supersedes the first rather than sitting beside it - and the two writes are ordered,
     /// because the index refuses the instant where both are current.
     /// </summary>

@@ -170,7 +170,7 @@
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
                     <!-- Which mod list the folder ends up on, shown whether or not anything is wrong:
-                         a current farm's number can differ from the one it was last played on, and a
+                         a current savegame's number can differ from the one it was last played on, and a
                          past one's is the number that does not move. -->
                     <TextBlock Margin="0 4 0 0"
                                TextWrapping="Wrap"

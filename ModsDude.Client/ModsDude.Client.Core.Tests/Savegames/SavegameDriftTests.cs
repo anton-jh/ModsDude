@@ -114,8 +114,8 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// <b>The false alarm this rule used to fire.</b> A farm checked out at revision 6 whose profile is
-    /// then applied at revision 8 is a farm following its profile exactly as intended - that is what
+    /// <b>The false alarm this rule used to fire.</b> A savegame checked out at revision 6 whose profile is
+    /// then applied at revision 8 is a savegame following its profile exactly as intended - that is what
     /// current means - and reporting it here spends the app's loudest warning on the ordinary flow.
     /// Being behind head is the instance's business, and <c>profileHasMoved</c> already says it there.
     /// </summary>
@@ -173,8 +173,8 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"));
-        harness.WriteSlotFile("a farm, and a barn");
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"));
+        harness.WriteSlotFile("a savegame, played once");
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
 
@@ -188,7 +188,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"));
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"));
 
         Assert.Empty(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
     }
@@ -198,7 +198,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"), version: 3);
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), version: 3);
         harness.Heads.Set(_savegameId, 4);
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
@@ -217,7 +217,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"), revision: 6, target: 6);
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6, target: 6);
         harness.WriteManifest(revision: 8);
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
@@ -228,7 +228,7 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// The same two integers for a savegame that is its profile's current farm say nothing at all: it
+    /// The same two integers for a savegame that is its profile's current savegame say nothing at all: it
     /// follows the profile, so the folder moving to a newer revision of it is the intended flow.
     /// </summary>
     [Fact]
@@ -236,7 +236,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"), revision: 6);
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6);
         harness.WriteManifest(revision: 8);
 
         Assert.Empty(await harness.Service.CheckDriftAsync(harness.Instance.Id, CancellationToken.None));
@@ -252,7 +252,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a farm"));
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"));
 
         Directory.Delete(harness.SlotPath, recursive: true);
 

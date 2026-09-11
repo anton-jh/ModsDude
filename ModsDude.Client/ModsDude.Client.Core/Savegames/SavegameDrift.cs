@@ -192,8 +192,8 @@ public static class SavegameDriftRules
     /// <remarks>
     /// <para>
     /// <b>Against the savegame's target, never against the revision it was checked out at.</b> Those
-    /// differ on the ordinary flow - a farm checked out at rev 1000 on a profile applied at rev 1004
-    /// is a farm following its profile exactly as intended - and comparing the check-out value would
+    /// differ on the ordinary flow - a savegame checked out at rev 1000 on a profile applied at rev 1004
+    /// is a savegame following its profile exactly as intended - and comparing the check-out value would
     /// report that as the state that corrupts saves. The binding's <c>ProfileRevision</c> is read for
     /// play attribution and by nothing that decides drift.
     /// </para>

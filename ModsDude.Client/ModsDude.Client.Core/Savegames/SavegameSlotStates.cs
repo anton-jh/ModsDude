@@ -73,7 +73,7 @@ public enum SavegameSlotWriteDecision
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Pure, and deliberately so.</b> The rule that decides whether somebody's unchecked-in farm gets
+/// <b>Pure, and deliberately so.</b> The rule that decides whether somebody's unchecked-in savegame gets
 /// overwritten is one <c>if</c> chain with no filesystem, no server and no clock in it, so it can be
 /// exercised exhaustively by tests and so there is exactly one copy of it. Hashing the slot, reading
 /// the binding out of local state and putting the folder in the Recycle Bin all happen around this,

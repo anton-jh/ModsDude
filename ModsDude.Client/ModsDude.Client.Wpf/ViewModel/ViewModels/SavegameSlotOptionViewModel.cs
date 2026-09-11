@@ -100,7 +100,7 @@ public sealed class SavegameSlotOptionViewModel
     {
         var parts = new List<string>();
 
-        // The adapter's own values lead - "Zielonka · 45 h" is what tells two farms apart - and only
+        // The adapter's own values lead - "Zielonka · 45 h" is what tells two savegames apart - and only
         // the first few, because a row is one line. The adapter's order is its priority order, which
         // is the whole reason it is preserved; the rest are on the tooltip.
         parts.AddRange(Details.Take(SavegameSlotWording.DetailsOnTheRow).Select(x => x.Value));

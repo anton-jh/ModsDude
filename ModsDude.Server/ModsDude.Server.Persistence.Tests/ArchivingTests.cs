@@ -150,7 +150,7 @@ public class ArchivingTests(DatabaseFixture fixture)
     {
         var repoId = await GivenARepo();
         var profileId = await GivenAProfile(repoId, "Season 4");
-        var savegameId = await GivenASavegame(repoId, profileId, "The farm");
+        var savegameId = await GivenASavegame(repoId, profileId, "The main save");
 
         using (var dbContext = fixture.CreateDbContext())
         {
@@ -163,7 +163,7 @@ public class ArchivingTests(DatabaseFixture fixture)
 
         using (var dbContext = fixture.CreateDbContext())
         {
-            Assert.False(await dbContext.Savegames.CheckNameIsTaken(repoId, new SavegameName("The farm"), CancellationToken.None));
+            Assert.False(await dbContext.Savegames.CheckNameIsTaken(repoId, new SavegameName("The main save"), CancellationToken.None));
 
             // The archived one still holds the profile's current slot - archiving frees a name and
             // nothing else - so the successor supersedes it, exactly as a publish would. That the
@@ -173,7 +173,7 @@ public class ArchivingTests(DatabaseFixture fixture)
             archived.Supersede(DateTime.UtcNow);
             await dbContext.SaveChangesAsync(CancellationToken.None);
 
-            dbContext.Savegames.Add(new Savegame(repoId, new SavegameName("The farm"), profileId, DateTime.UtcNow));
+            dbContext.Savegames.Add(new Savegame(repoId, new SavegameName("The main save"), profileId, DateTime.UtcNow));
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
         }
@@ -314,7 +314,7 @@ public class ArchivingTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The same write a publish makes. A profile has one current savegame, so a second farm on one
+    /// The same write a publish makes. A profile has one current savegame, so a second savegame on one
     /// profile supersedes the first rather than sitting beside it - and the two writes are ordered,
     /// because the index refuses the instant where both are current.
     /// </summary>

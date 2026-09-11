@@ -26,7 +26,7 @@ namespace ModsDude.Client.Core.Models;
 /// <param name="Details">
 /// Whatever the adapter thinks is worth saying about the save in this slot, in the order it wants
 /// them read - the map, when it was last played, how long for. Shown beside the name so somebody
-/// can tell two farms apart, and <b>never depended on</b>: see <see cref="SavegameDetail"/>. Empty
+/// can tell two savegames apart, and <b>never depended on</b>: see <see cref="SavegameDetail"/>. Empty
 /// for a slot that is free, or whose contents could not be read.
 /// </param>
 public record SavegameSlot(

@@ -75,7 +75,7 @@ public static class Problems
     };
 
     /// <summary>
-    /// Two people put a farm in the same profile's one current slot at the same instant, and the
+    /// Two people put a savegame in the same profile's one current slot at the same instant, and the
     /// one-current-savegame index let exactly one through. Reported apart from a name clash because
     /// the two look identical from the database and mean entirely different things to the person:
     /// this one is about a profile they may not have been thinking about at all.
@@ -83,20 +83,20 @@ public static class Problems
     public static CustomProblemDetails SavegameCurrentConflict(ProfileId profileId) => new()
     {
         Type = ProblemType.SavegameCurrentConflict,
-        Title = "The profile started following another farm at the same moment",
+        Title = "The profile started following another savegame at the same moment",
         Detail = $"Profile '{profileId.Value}' took a different current savegame while this request was being made. Reload and decide again."
     };
 
     /// <summary>
     /// Asked to place a savegame in a succession it is not in. A savegame with no mod list is
     /// neither current nor past, and nothing connects an existing one to a profile - the route from
-    /// there is republishing the farm, which is three operations the client already has.
+    /// there is republishing the savegame, which is three operations the client already has.
     /// </summary>
     public static CustomProblemDetails SavegameHasNoProfile(SavegameId savegameId) => new()
     {
         Type = ProblemType.SavegameHasNoProfile,
         Title = "The savegame follows no mod list",
-        Detail = $"Savegame '{savegameId.Value}' was published without a mod list, so it is neither current nor past. Publish the farm again against the profile you want it on."
+        Detail = $"Savegame '{savegameId.Value}' was published without a mod list, so it is neither current nor past. Publish the savegame again against the profile you want it on."
     };
 
     /// <summary>

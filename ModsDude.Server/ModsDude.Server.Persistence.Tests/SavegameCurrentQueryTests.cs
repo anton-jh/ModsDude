@@ -16,7 +16,7 @@ namespace ModsDude.Server.Persistence.Tests;
 /// <remarks>
 /// <para>
 /// The point of the whole design is that forgetting produces the safe outcome. A profile that
-/// quietly acquired two current farms would put both of them back to following the mod list, which
+/// quietly acquired two current savegames would put both of them back to following the mod list, which
 /// is the state this exists to prevent - so the database has to be the one saying no, and only a
 /// real PostgreSQL can answer for a partial index and the null semantics underneath it.
 /// </para>
@@ -36,7 +36,7 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
     /// <summary>
     /// The most important test in the file. Two publishes to one profile, both reading no current
     /// savegame, and exactly one commits - which is the only reason an endpoint may treat the
-    /// unsuperseded row as the current farm instead of locking the profile.
+    /// unsuperseded row as the current savegame instead of locking the profile.
     /// </summary>
     [Fact]
     public async Task Two_current_savegames_on_one_profile_are_refused_by_the_database()
@@ -54,7 +54,7 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
 
     /// <summary>
     /// The other half of the same rule. The index has to constrain unsuperseded rows only, or a
-    /// profile could carry exactly one farm in its life and starting a second would be impossible.
+    /// profile could carry exactly one savegame in its life and starting a second would be impossible.
     /// </summary>
     [Fact]
     public async Task A_past_savegame_does_not_stand_in_the_way_of_a_new_one()
@@ -73,7 +73,7 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// A profile that has been played on for years accumulates one past savegame per farm, and none
+    /// A profile that has been played on for years accumulates one past savegame per publish, and none
     /// of them is ever pruned. Nothing about the index may make that history cost anything.
     /// </summary>
     [Fact]
@@ -99,9 +99,9 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
     /// <summary>
     /// <b>Archiving does not hand the profile's slot back.</b> The index is deliberately not filtered
     /// on <c>ArchivedAt</c>, unlike the savegame-name index beside it: archived is the repo-wide
-    /// visibility state and past is which farm a profile follows, and copying the filter across would
-    /// let a second savegame become current behind an archived one. A profile whose current farm is
-    /// archived still has a current farm, which is a sentence the interface has to be able to say.
+    /// visibility state and past is which savegame a profile follows, and copying the filter across would
+    /// let a second savegame become current behind an archived one. A profile whose current savegame is
+    /// archived still has a current savegame, which is a sentence the interface has to be able to say.
     /// </summary>
     [Fact]
     public async Task An_archived_savegame_still_holds_its_profiles_current_slot()
@@ -165,7 +165,7 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
 
     /// <summary>
     /// The swap, in the order it has to happen. Superseding the incumbent first is what gets a
-    /// profile from one current farm to another without the index seeing two, and it is the reason
+    /// profile from one current savegame to another without the index seeing two, and it is the reason
     /// the endpoints write two commits inside one transaction rather than one <c>SaveChanges</c>.
     /// </summary>
     [Fact]

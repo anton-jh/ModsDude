@@ -146,7 +146,7 @@ public class SavegameTests
 
     /// <summary>
     /// Neither word applies to a savegame that follows no mod list. It is in no succession, so
-    /// reading it as current would put it in one - and would make it the answer to "which farm is
+    /// reading it as current would put it in one - and would make it the answer to "which savegame is
     /// this profile following?" for a profile it has nothing to do with.
     /// </summary>
     [Fact]
@@ -219,7 +219,7 @@ public class SavegameTests
     }
 
     /// <summary>
-    /// Two unrelated facts. Archiving is the repo-wide visibility state; past is which farm a profile
+    /// Two unrelated facts. Archiving is the repo-wide visibility state; past is which savegame a profile
     /// follows. A profile whose current savegame is archived still has a current savegame, which is
     /// the case that has to be said out loud rather than quietly resolved.
     /// </summary>

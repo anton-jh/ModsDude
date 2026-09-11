@@ -30,7 +30,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-instance.
 /// </para>
 /// <para>
-/// <b>And refused before the click where a held farm forbids it.</b> This is the instance page's
+/// <b>And refused before the click where a held savegame forbids it.</b> This is the instance page's
 /// disabled profile dropdown seen from the other end - the same switch, the same rule - and the apply
 /// table refuses it either way. A control that offers the move and then reports a refusal is the
 /// thing slice 4 set out to remove, so it is asked here too.
@@ -285,7 +285,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// Whether a savegame checked out on the selected instance forbids putting it on this profile.
     /// </summary>
     /// <remarks>
-    /// Only the outright refusal is a block. A <em>past</em> farm of this very profile pins the folder
+    /// Only the outright refusal is a block. A <em>past</em> savegame of this very profile pins the folder
     /// to its own revision without forbidding the apply - re-applying that revision is what repairs
     /// folder drift under it - and <see cref="ProfileApplyService.ApplyAsync"/> installs the pinned one
     /// on its own, so the button keeps working and its message names the number.

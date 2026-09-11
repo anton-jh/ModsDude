@@ -21,13 +21,13 @@ public enum SavegameRowBlock
     NoInstance,
 
     /// <summary>
-    /// <em>Apply profile</em> only: this farm follows no mod list, so there is no profile to apply and
+    /// <em>Apply profile</em> only: this savegame follows no mod list, so there is no profile to apply and
     /// nothing about the mod folder is its to constrain.
     /// </summary>
     NoModList,
 
     /// <summary>
-    /// <em>Check out</em> only: the mod folder is not on the revision this farm runs on. Applying the
+    /// <em>Check out</em> only: the mod folder is not on the revision this savegame runs on. Applying the
     /// profile is what clears it, which is why the two actions sit next to each other.
     /// </summary>
     ModFolderElsewhere,
@@ -46,8 +46,8 @@ public enum SavegameRowBlock
 /// the block is <see cref="SavegameRowBlock.AnotherSavegameIsHeld"/>.
 /// </param>
 /// <param name="PinnedRevision">
-/// The revision a past farm runs on, carried through so the refusal can name it. Null for a current
-/// farm, whose refusal names the profile alone - it follows whatever the profile says now, and a
+/// The revision a past savegame runs on, carried through so the refusal can name it. Null for a current
+/// savegame, whose refusal names the profile alone - it follows whatever the profile says now, and a
 /// number there would be one the user has no reason to have heard of.
 /// </param>
 public sealed record SavegameRowOffer(
@@ -69,7 +69,7 @@ public sealed record SavegameRowOffer(
 /// <para>
 /// <b>Pure, for the same reason <see cref="SavegameHoldRules"/> is.</b> Reading the sync manifest,
 /// listing the instances and looking up names all happen around this, so the rule that decides
-/// whether a farm can be taken here and now is one function with one copy.
+/// whether a savegame can be taken here and now is one function with one copy.
 /// </para>
 /// <para>
 /// <b>Two actions, not one.</b> Checking a save out never syncs mods - see
@@ -82,12 +82,12 @@ public static class SavegameRowRules
 {
     /// <param name="profileId">The savegame's profile, or null where it follows no mod list.</param>
     /// <param name="headRevision">
-    /// The profile's head, which is what a <em>current</em> farm runs on. Null where this member
+    /// The profile's head, which is what a <em>current</em> savegame runs on. Null where this member
     /// cannot see the profile at all, which is the same answer as following no mod list: nothing here
     /// can say what the folder ought to be on, so nothing is claimed about it.
     /// </param>
     /// <param name="pinnedRevision">
-    /// What a <em>past</em> farm runs on, from <see cref="SavegameService.TargetRevisionOf"/>. Null
+    /// What a <em>past</em> savegame runs on, from <see cref="SavegameService.TargetRevisionOf"/>. Null
     /// for a current one.
     /// </param>
     /// <param name="held">What the instance is already holding.</param>
@@ -128,13 +128,13 @@ public static class SavegameRowRules
         // Past that check, an apply of this savegame's own profile is always allowed, so
         // SavegameHoldRules.DecideApply is not asked a second time: the only hold it could still find
         // is this savegame's own - checking out something already held here moves it between slots -
-        // and a farm never refuses the revision it itself pins.
+        // and a savegame never refuses the revision it itself pins.
         if (profileId is not Guid profile || headRevision is not int head)
         {
             return new SavegameRowOffer(SavegameRowBlock.None, SavegameRowBlock.NoModList, Guid.Empty, null);
         }
 
-        // Head for a current farm, its own revision for a past one - the check-out table in
+        // Head for a current savegame, its own revision for a past one - the check-out table in
         // docs/10-savegame-profile-binding.md#which-revision-a-savegame-runs-on, read from the row.
         var required = pinnedRevision ?? head;
 
@@ -167,7 +167,7 @@ public static class SavegameRowRules
 
             SavegameRowBlock.NoModList => "This save follows no mod list",
 
-            // The number only where the farm pins one. A current farm follows its profile, so naming
+            // The number only where the savegame pins one. A current savegame follows its profile, so naming
             // a revision it happens to be at right now would be a number to memorise rather than a
             // thing to do.
             SavegameRowBlock.ModFolderElsewhere => pinnedRevision is int revision

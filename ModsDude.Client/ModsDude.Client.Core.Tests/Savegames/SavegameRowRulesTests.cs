@@ -20,11 +20,11 @@ public class SavegameRowRulesTests
 
 
     /// <summary>
-    /// The ordinary evening: a current farm, on an instance following its profile, whose folder is on
+    /// The ordinary evening: a current savegame, on an instance following its profile, whose folder is on
     /// head. One click, and nothing to read.
     /// </summary>
     [Fact]
-    public void A_current_farm_on_a_folder_already_at_head_is_one_click()
+    public void A_current_savegame_on_a_folder_already_at_head_is_one_click()
     {
         var offer = Describe(head: 1004, appliedRevision: 1004);
 
@@ -34,12 +34,12 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// The instance is on this profile but behind its head, which is what a current farm runs on. The
-    /// revision is deliberately not named: a current farm follows whatever its profile says now, so a
+    /// The instance is on this profile but behind its head, which is what a current savegame runs on. The
+    /// revision is deliberately not named: a current savegame follows whatever its profile says now, so a
     /// number there would be one to memorise rather than a thing to do.
     /// </summary>
     [Fact]
-    public void A_current_farm_on_a_stale_folder_asks_for_the_profile_by_name()
+    public void A_current_savegame_on_a_stale_folder_asks_for_the_profile_by_name()
     {
         var offer = Describe(head: 1004, appliedRevision: 1000);
 
@@ -52,7 +52,7 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void A_current_farm_on_an_instance_following_another_profile_asks_for_the_profile_by_name()
+    public void A_current_savegame_on_an_instance_following_another_profile_asks_for_the_profile_by_name()
     {
         var offer = Describe(1004, null, _otherProfileId, 1004);
 
@@ -61,12 +61,12 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// A past farm runs on one revision only, so the refusal names it: applying the profile's latest
+    /// A past savegame runs on one revision only, so the refusal names it: applying the profile's latest
     /// is what the apply table refuses, and a sentence saying "apply Old-school first" would send
     /// somebody at a button that does the wrong thing.
     /// </summary>
     [Fact]
-    public void A_past_farm_names_the_revision_it_runs_on()
+    public void A_past_savegame_names_the_revision_it_runs_on()
     {
         var offer = Describe(head: 1004, pinned: 4, appliedRevision: 1004);
 
@@ -76,7 +76,7 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void A_past_farm_on_a_folder_already_at_its_revision_is_one_click()
+    public void A_past_savegame_on_a_folder_already_at_its_revision_is_one_click()
     {
         Assert.True(Describe(head: 1004, pinned: 4, appliedRevision: 4).CanCheckOut);
     }
@@ -122,11 +122,11 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// A farm following no mod list claims no folder, so nothing about the folder can be wrong for it -
+    /// A savegame following no mod list claims no folder, so nothing about the folder can be wrong for it -
     /// and there is no profile to apply, which is the one case where the two buttons disagree.
     /// </summary>
     [Fact]
-    public void A_farm_with_no_mod_list_can_always_be_checked_out_and_never_applied()
+    public void A_savegame_with_no_mod_list_can_always_be_checked_out_and_never_applied()
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
@@ -163,7 +163,7 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// A folder nothing has ever synced is not where any farm needs it, whatever the numbers say.
+    /// A folder nothing has ever synced is not where any savegame needs it, whatever the numbers say.
     /// </summary>
     [Fact]
     public void A_folder_that_has_never_been_synced_is_not_ready()

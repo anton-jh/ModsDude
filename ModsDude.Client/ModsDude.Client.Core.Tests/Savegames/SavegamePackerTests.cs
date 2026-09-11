@@ -27,7 +27,7 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-pack");
         var adapter = new PackerTestAdapter(root.Path);
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         using var archive = await Pack(adapter, _slot);
 
@@ -51,7 +51,7 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-deterministic");
         var adapter = new PackerTestAdapter(root.Path);
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _slot, "vehicles.xml", "two tractors");
         WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
 
@@ -76,9 +76,9 @@ public class SavegamePackerTests
 
         WriteSlotFile(root, _slot, "vehicles.xml", "two tractors");
         WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
-        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _otherSlot, "items/placeables.xml", "a shed");
         WriteSlotFile(root, _otherSlot, "vehicles.xml", "two tractors");
 
@@ -96,7 +96,7 @@ public class SavegamePackerTests
 
         WriteSlotFile(root, _slot, "vehicles.xml", "two tractors");
         WriteSlotFile(root, _slot, "items/deep/placeables.xml", "a shed");
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         using var archive = await Pack(adapter, _slot);
 
@@ -124,11 +124,11 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-touch");
         var adapter = new PackerTestAdapter(root.Path);
 
-        var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         var before = await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None);
 
-        File.WriteAllText(path, "a farm");
+        File.WriteAllText(path, "a savegame");
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(1));
 
         Assert.Equal(before, await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None));
@@ -140,11 +140,11 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-played");
         var adapter = new PackerTestAdapter(root.Path);
 
-        var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         var before = await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None);
 
-        File.WriteAllText(path, "a farm, two hours later");
+        File.WriteAllText(path, "a savegame, two hours later");
 
         Assert.NotEqual(before, await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None));
     }
@@ -160,7 +160,7 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-hash");
         var adapter = new PackerTestAdapter(root.Path, "screenshot.png");
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
         WriteSlotFile(root, _slot, "screenshot.png", "bulk that regenerates");
 
@@ -176,11 +176,11 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-excluded");
         var adapter = new PackerTestAdapter(root.Path, "screenshot.png", "cache/thumbnail.png");
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _slot, "screenshot.png", "bulk that regenerates");
         WriteSlotFile(root, _slot, "cache/thumbnail.png", "more of it");
 
-        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a savegame");
 
         using var withExclusions = await Pack(adapter, _slot);
         using var withoutTheFiles = await Pack(adapter, _otherSlot);
@@ -218,7 +218,7 @@ public class SavegamePackerTests
             Assert.Empty(opened.Entries);
         }
 
-        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "a savegame");
         using var played = await Pack(adapter, _otherSlot);
 
         Assert.NotEqual(played.ContentHash, archive.ContentHash);
@@ -230,11 +230,11 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-unpack");
         var adapter = new PackerTestAdapter(root.Path);
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
 
         // Whatever was in the target is gone, whether or not the archive has a file by that name.
-        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "somebody else's farm");
+        WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "somebody else's savegame");
         WriteSlotFile(root, _otherSlot, "vehicles.xml", "and their tractors");
 
         using var archive = await Pack(adapter, _slot);
@@ -244,7 +244,7 @@ public class SavegamePackerTests
             ["careerSavegame.xml", "items/placeables.xml"],
             RelativeContents(adapter.GetSlotPath(_otherSlot)));
 
-        Assert.Equal("a farm", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_otherSlot), "careerSavegame.xml")));
+        Assert.Equal("a savegame", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_otherSlot), "careerSavegame.xml")));
 
         // Round trip: what was checked out hashes as what was packed, which is what makes the
         // recorded hash of a fresh checkout mean "not played yet".
@@ -257,7 +257,7 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-new-slot");
         var adapter = new PackerTestAdapter(root.Path);
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "a farm");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         using var archive = await Pack(adapter, _slot);
         await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, _otherSlot, CancellationToken.None);
@@ -280,9 +280,9 @@ public class SavegamePackerTests
         using var root = new TempDirectory("savegame-zip-slip");
         var adapter = new PackerTestAdapter(root.Path);
 
-        WriteSlotFile(root, _slot, "careerSavegame.xml", "the farm that was already there");
+        WriteSlotFile(root, _slot, "careerSavegame.xml", "the savegame that was already there");
 
-        var hostile = WriteArchiveWith(root, ("careerSavegame.xml", "a farm"), (entryName, "somewhere else"));
+        var hostile = WriteArchiveWith(root, ("careerSavegame.xml", "a savegame"), (entryName, "somewhere else"));
 
         await Assert.ThrowsAsync<InvalidDataException>(
             () => new SavegamePacker().UnpackAsync(hostile, adapter, _slot, CancellationToken.None));
@@ -291,7 +291,7 @@ public class SavegamePackerTests
         Assert.False(File.Exists("C:\\escaped.xml"));
 
         // The slot is as it was, and nothing was left staged beside it.
-        Assert.Equal("the farm that was already there", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_slot), "careerSavegame.xml")));
+        Assert.Equal("the savegame that was already there", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_slot), "careerSavegame.xml")));
         Assert.Empty(Directory.EnumerateDirectories(root.Path, ".modsdude-*"));
     }
 

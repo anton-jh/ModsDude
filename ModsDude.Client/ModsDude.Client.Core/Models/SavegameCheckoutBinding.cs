@@ -88,7 +88,7 @@ public readonly record struct SavegameCheckoutBinding(
     /// <para>
     /// <b>A number here is the whole of "this instance is holding a past savegame".</b> Stored rather
     /// than inferred from revision numbers, because inferring it needs the server's answer to "is this
-    /// still its profile's current farm?" and the two things that read it - the apply table and the
+    /// still its profile's current savegame?" and the two things that read it - the apply table and the
     /// drift check - both have to work offline and cost a directory listing.
     /// </para>
     /// <para>
