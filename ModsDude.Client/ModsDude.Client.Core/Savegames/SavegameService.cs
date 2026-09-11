@@ -119,6 +119,24 @@ public interface IHeldSavegames
 
 
 /// <summary>
+/// Which mod list a savegame being published follows, and the revision its first version declares.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>One value rather than two parameters</b>, because the two are all-or-nothing: the server carries
+/// a check constraint saying so, and a half-set pair is the one invalid state
+/// <see cref="SavegameVersionDto"/> has. Null in place of this record is the savegame that follows no
+/// mod list - a real choice the publish dialog offers, not a fallback.
+/// </para>
+/// <para>
+/// <b>The revision is declared, not observed</b>, and this is the only version in the system of which
+/// that is true. See <see cref="SavegameService.DeclaredRevisionFor"/> for which number it is.
+/// </para>
+/// </remarks>
+public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision);
+
+
+/// <summary>
 /// The four verbs of a savegame - publish, check out, check in, discard - plus the slot questions the
 /// picker asks before any of them.
 /// </summary>
@@ -172,7 +190,20 @@ public interface ISavegameService : IHeldSavegames
     Task<SavegameVersionDto> CheckInAsync(LocalInstance instance, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
 
     /// <summary>Turns whatever is in a slot into a new savegame in the repo.</summary>
-    Task<SavegameDto> PublishAsync(LocalInstance instance, SavegameSlotId slot, string name, string? label, CancellationToken ct);
+    /// <param name="target">
+    /// Which mod list the new savegame follows and the revision its first version declares, or null
+    /// for a savegame that follows none. The pair travels as one value because the server refuses a
+    /// half-set one, and because there is no third state - see
+    /// docs/10-savegame-profile-binding.md#savegames-without-a-profile.
+    /// </param>
+    Task<SavegameDto> PublishAsync(
+        LocalInstance instance,
+        Guid repoId,
+        SavegameSlotId slot,
+        string name,
+        string? label,
+        SavegamePublishTarget? target,
+        CancellationToken ct);
 
     /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
     Task DiscardAsync(LocalInstance instance, Guid savegameId, CancellationToken ct);
@@ -210,6 +241,19 @@ public interface ISavegameService : IHeldSavegames
 
     /// <summary>What this instance holds for one savegame, or null where it holds none.</summary>
     SavegameCheckoutBinding? GetBinding(LocalInstance instance, Guid savegameId);
+
+    /// <summary>
+    /// Which revision a check-in from here would record the play on, or null where it would record
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// The same answer <see cref="CheckInAsync"/> sends, read early so the check-in dialog can show
+    /// it. That is the point of showing it at all: the attribution becomes visible at the moment it is
+    /// recorded, while a wrong one can still be noticed. Null where the savegame follows no mod list,
+    /// where nothing is held, and where no number could be found at all - the last of which
+    /// <see cref="CheckInAsync"/> refuses rather than guesses, and which a dialog says nothing about.
+    /// </remarks>
+    int? GetPlayedRevision(LocalInstance instance, Guid savegameId);
 
     /// <summary>
     /// What this instance holds in one slot, or null. Null is not "the slot is empty" - it is the
@@ -272,6 +316,12 @@ public sealed class SavegameService(
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance)
         => bindings.GetBindings(instance.Id);
 
+    public int? GetPlayedRevision(LocalInstance instance, Guid savegameId)
+        => bindings.GetBinding(instance.Id, savegameId) is SavegameCheckoutBinding binding
+            && binding.ProfileId is Guid profileId
+            ? FindPlayedRevision(instance, binding, profileId)
+            : null;
+
     public int? GetRequiredRevision(Guid instanceId, Guid profileId)
         => SavegameHoldRules.RequiredRevision(bindings.GetBindings(instanceId), profileId);
 
@@ -301,6 +351,43 @@ public sealed class SavegameService(
         // Superseded implies a profile - the server refuses the other pairing - so this needs no
         // separate check for one.
         => savegame.SupersededAt is null ? null : savegame.Head?.ProfileRevision;
+
+    /// <summary>
+    /// Which revision a published savegame's first version declares: <b>the revision the folder is
+    /// actually on where that is a revision of the chosen profile</b>, and that profile's head
+    /// otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Declared rather than observed, and nothing can change that.</b> The bytes predate ModsDude:
+    /// there is no binding, no <see cref="SavegameCheckoutBinding.LastObservedHash"/> and no prior
+    /// state, so nothing knows which mods were in the folder while that farm was played. Requiring the
+    /// chosen profile to be applied first would not recover it either - it would observe the folder at
+    /// the moment of publishing, which is a different fact - so it is not required.
+    /// </para>
+    /// <para>
+    /// Head is the honest answer for a profile the folder is <em>not</em> on, since the alternative is
+    /// a number belonging to another mod list. The dialog shows whichever it is going to record, so
+    /// the declaration is on screen rather than implied, and says out loud that nothing checks the
+    /// farm can run on it.
+    /// </para>
+    /// <para>
+    /// Static and public for the same reason <see cref="TargetRevisionOf"/> is: the dialog needs the
+    /// number before the publish runs, and two computations of it is how a dialog comes to show a
+    /// different declaration from the one that is recorded.
+    /// </para>
+    /// </remarks>
+    /// <param name="appliedProfileId">
+    /// What the mod folder was last made to match, from the sync manifest, and
+    /// <paramref name="appliedRevision"/> which revision of it. A folder that has never been synced
+    /// has neither, and head is the answer.
+    /// </param>
+    public static int DeclaredRevisionFor(
+        Guid profileId,
+        int headRevision,
+        Guid? appliedProfileId,
+        int? appliedRevision)
+        => profileId == appliedProfileId && appliedRevision is int applied ? applied : headRevision;
 
     public bool Forget(LocalInstance instance, Guid savegameId)
     {
@@ -580,33 +667,34 @@ public sealed class SavegameService(
     /// head cannot be downloaded.
     /// </para>
     /// <para>
-    /// <b>It asks nothing about the profile.</b> The instance has an active one and a manifest saying
-    /// which revision of it the folder is actually on, and that pair is the answer - there is nothing
-    /// to ask.
+    /// <b>The profile is asked for rather than derived.</b> Every profile in the repo is a legitimate
+    /// answer and so is none of them - the instance's active one is only the likeliest - so the
+    /// caller settles it and hands the pair down. The revision half is a <em>declaration</em>: the
+    /// bytes predate ModsDude, nothing knows which mods were in the folder while that farm was
+    /// actually played, and no arrangement of this flow recovers it. Every version after the first is
+    /// observed.
     /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">
-    /// The instance has never had a profile applied to it, or it already holds a savegame that claims
-    /// its mod folder.
+    /// The instance already holds a savegame that claims its mod folder.
     /// </exception>
-    public async Task<SavegameDto> PublishAsync(LocalInstance instance, SavegameSlotId slot, string name, string? label, CancellationToken ct)
+    public async Task<SavegameDto> PublishAsync(
+        LocalInstance instance,
+        Guid repoId,
+        SavegameSlotId slot,
+        string name,
+        string? label,
+        SavegamePublishTarget? target,
+        CancellationToken ct)
     {
         var adapter = RequireAdapter(instance);
-
-        if (instance.ActiveProfile is not ActiveProfile active)
-        {
-            throw new UserFriendlyException(
-                $"'{instance.Name}' is not on a profile yet",
-                "A savegame version records the mod list it was played on, so the instance has to have a profile applied before anything in it can be published.");
-        }
-
-        var revision = RequireAppliedRevision(instance, active);
         var savegameId = Guid.NewGuid();
 
         // The check-out limit reached from the other end rather than a rule of its own: a publish
         // opens a claim in the same transaction as the savegame, so it leaves this instance holding
-        // one - and it is publishing *to a profile*, which is the half that claims the mod folder.
-        EnsureModFolderIsFree(instance, savegameId, active.ProfileId, name);
+        // one - and only publishing *to a profile* claims the mod folder. One with no mod list has no
+        // such precondition, which is why the id goes in nullable.
+        EnsureModFolderIsFree(instance, savegameId, target?.ProfileId, name);
 
         var packed = await packer.PackAsync(adapter, slot, ct);
 
@@ -616,14 +704,14 @@ public sealed class SavegameService(
 
         try
         {
-            await UploadAsync(active.RepoId, savegameId, packed, ct);
+            await UploadAsync(repoId, savegameId, packed, ct);
 
-            savegame = await savegamesClient.PublishSavegameV1Async(active.RepoId, new PublishSavegameRequest
+            savegame = await savegamesClient.PublishSavegameV1Async(repoId, new PublishSavegameRequest
             {
                 SavegameId = savegameId,
                 Name = name,
-                ProfileId = active.ProfileId,
-                ProfileRevision = revision,
+                ProfileId = target?.ProfileId,
+                ProfileRevision = target?.Revision,
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
                 Label = label,
@@ -639,15 +727,15 @@ public sealed class SavegameService(
         // the local half of the same fact. Without it the slot the save is sitting in would read as
         // unrecognised the moment it was published.
         bindings.SetBinding(instance.Id, new SavegameCheckoutBinding(
-            active.RepoId,
+            repoId,
             savegameId,
             slot.Value,
             savegame.Head?.Number ?? 1,
             packed.ContentHash,
             DateTime.UtcNow)
         {
-            ProfileId = active.ProfileId,
-            ProfileRevision = revision,
+            ProfileId = target?.ProfileId,
+            ProfileRevision = target?.Revision,
             // Null, not the revision just declared: publishing to a profile makes this its current
             // savegame - superseding whatever was - and a current savegame follows its profile from
             // then on rather than staying where it was published.
@@ -1114,6 +1202,20 @@ public sealed class SavegameService(
             return null;
         }
 
+        return FindPlayedRevision(instance, binding, profileId)
+            ?? throw new UserFriendlyException(
+                $"'{instance.Name}' has no record of which mod list it is on",
+                $"Neither the sync manifest for instance '{instance.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this instance and check in again.");
+    }
+
+    /// <summary>
+    /// The three places the number can come from, in order. Split out from
+    /// <see cref="ResolveAppliedRevision"/> so the check-in dialog can show the answer without
+    /// inheriting its refusal: what it has to say is "played on rev 1004", and it has nothing useful
+    /// to say about a savegame whose revision nothing on this machine knows.
+    /// </summary>
+    private int? FindPlayedRevision(LocalInstance instance, SavegameCheckoutBinding binding, Guid profileId)
+    {
         if (binding.LastPlayedRevision is int played)
         {
             return played;
@@ -1126,34 +1228,7 @@ public sealed class SavegameService(
             return applied;
         }
 
-        return binding.ProfileRevision
-            ?? throw new UserFriendlyException(
-                $"'{instance.Name}' has no record of which mod list it is on",
-                $"Neither the sync manifest for instance '{instance.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this instance and check in again.");
-    }
-
-    /// <summary>
-    /// Which revision of the profile this folder is on, for the first version of a savegame being
-    /// published out of it.
-    /// </summary>
-    /// <remarks>
-    /// Nothing here is observed, and nothing can be: the bytes existed before ModsDude saw them, so
-    /// no arrangement of the publish flow recovers what was in the mod folder while they were played.
-    /// The folder's current revision is declared instead, and only a completed sync knows it - which
-    /// is why an instance that has never been synced to its profile is refused rather than guessed at.
-    /// </remarks>
-    private int RequireAppliedRevision(LocalInstance instance, ActiveProfile active)
-    {
-        var manifest = manifestStore.TryRead(instance.Id);
-
-        if (manifest?.ProfileId == active.ProfileId && manifest.ProfileRevision is int revision)
-        {
-            return revision;
-        }
-
-        throw new UserFriendlyException(
-            $"'{instance.Name}' has not been synced to its profile yet",
-            "A savegame version records the revision of the mod list it was played on, and only a completed sync knows which revision this folder is on. Apply the profile and publish again.");
+        return binding.ProfileRevision;
     }
 
     /// <summary>

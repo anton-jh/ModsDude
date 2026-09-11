@@ -1320,17 +1320,46 @@ Three things fell out of the boxes above rather than being added to them:
 
 ### 4. Interface
 
-- [ ] **Chips and the savegames list** — past is `Neutral`, never `Caution`; a *Show past farms*
-      toggle, off by default.
-- [ ] **Row actions**, two buttons with the disabled reason carrying the explanation.
-- [ ] **Instance page** — the apply button's meaning changes while a past savegame is held, and the
-      profile dropdown is disabled while one with a profile is.
-- [ ] **Drift notice** — never "behind the profile" for a held past savegame, and its action reads
-      *Re-apply rev 4*.
-- [ ] **The three dialogs** — check-out names the revision it will run on, check-in names what it
+- [x] **Chips and the savegames list** — past is `Neutral`, never `Caution`; a *Show past farms*
+      toggle, off by default, with the count it is hiding said out loud beside it. A filter nobody can
+      see is a list that is quietly wrong, and the toggle is what keeps this the one repo-level list
+      rather than reintroducing a per-profile one.
+- [x] **Row actions**, two buttons with the disabled reason carrying the explanation.
+      `SavegameRowRules` is the rule and the wording, tested in Core the way `SavegameHoldRules` is;
+      the page supplies the instance, what it holds and what its folder is on. It picks the instance
+      that *could* host the farm now over the one following its profile, because a row that answers
+      about a folder the buttons do not act on is a puzzle rather than an answer.
+- [x] **Instance page** — the apply button's meaning changes while a past savegame is held, and the
+      profile dropdown is disabled while one with a profile is. The label came from
+      `InstanceActivation.Label`, which already existed for exactly this reason: what the control will
+      do, not the screen it sits on.
+- [x] **Drift notice** — never "behind the profile" for a held past savegame, and its action reads
+      *Re-apply rev 4*. The first half needed no code: slice 3 hands the drift check the revision the
+      instance is supposed to be on, and the comparison comes out equal on its own.
+- [x] **The three dialogs** — check-out names the revision it will run on, check-in names what it
       recorded, publish carries the profile picker, the declared revision and the supersede notice.
-- [ ] **Profile page** — its current savegame, a count of past ones, and the archived-current case
-      with its three ways out.
+      Publish is the one that grew: `SavegamePublishTarget` replaced the instance's active profile,
+      and `PublishAsync` takes a repo rather than deriving one from a profile it no longer requires.
+- [x] **Profile page** — its current savegame, a count of past ones, and the archived-current case
+      with its three ways out. On Overview, and it reads both savegame lists: archiving does not
+      release a profile's slot, so an archived farm is still its current one.
+
+Three things fell out of the boxes above rather than being added to them:
+
+- **Publishing from a never-synced instance stopped being refused.** `RequireAppliedRevision` was the
+  last place the client insisted the folder be on the profile first, and the design says why it should
+  not: a first version's revision is *declared*, so requiring a sync would observe the folder at the
+  moment of publishing — a different fact, not a better one. The number is now
+  `SavegameService.DeclaredRevisionFor`, shown in the dialog before it is recorded.
+- **`ProfileApplyService.ApplyAsync` gained a revision.** The row's *Apply profile* prepares the folder
+  for a farm nothing is holding yet, so "let the instance decide" resolves to head — correct for a
+  current farm and wrong for a past one, whose check-out a moment later would leave the folder drifted
+  against the revision it had just pinned. The same number goes into `DecideApply`, so the refusal and
+  the apply are asked the same question.
+- **`ISavegameService.GetPlayedRevision`**, and `ResolveAppliedRevision` split in two to answer it. The
+  check-in dialog has to name the revision the version will carry, and a second computation of that is
+  how a dialog comes to name a number the version does not have. The refusal stayed on the check-in:
+  what a dialog has to say about a savegame whose revision nothing on this machine knows is nothing.
 
 ### Already shaped for this
 

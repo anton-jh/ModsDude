@@ -23,6 +23,18 @@ public static class InstanceActivation
     public static InstanceActivationKind Describe(ActiveProfile? current, ActiveProfile target)
         => current == target ? InstanceActivationKind.Reapply : InstanceActivationKind.Activate;
 
-    public static string Label(InstanceActivationKind kind)
-        => kind is InstanceActivationKind.Reapply ? "Re-apply" : "Activate";
+    /// <param name="pinnedRevision">
+    /// The revision a past savegame checked out here holds the mod folder to, from
+    /// <see cref="Savegames.SavegameHoldRules.RequiredRevision"/>. Naming it is the whole change: the
+    /// button normally applies the profile's latest, the apply table refuses that while a past farm is
+    /// held, and its only remaining job is repairing folder drift back to the revision that farm runs
+    /// on. Null - which is nearly always - leaves the label as it was.
+    /// </param>
+    public static string Label(InstanceActivationKind kind, int? pinnedRevision = null)
+        => (kind, pinnedRevision) switch
+        {
+            (InstanceActivationKind.Reapply, int revision) => $"Re-apply rev {revision}",
+            (InstanceActivationKind.Reapply, _) => "Re-apply",
+            _ => "Activate"
+        };
 }

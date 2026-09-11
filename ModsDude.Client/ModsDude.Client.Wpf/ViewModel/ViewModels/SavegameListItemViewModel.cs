@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Users;
 using System.Collections.ObjectModel;
 
@@ -32,6 +34,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     private int _revisionsBehind;
     private bool _lockedPinMoved;
 
+    private SavegameRowOffer _offer = new(SavegameRowBlock.NoInstance, SavegameRowBlock.NoInstance, Guid.Empty, null);
+    private string? _blockingSavegameName;
+
 
     /// <param name="profileName">
     /// The profile this save follows. An attribute of the savegame rather than its parent, which is
@@ -46,14 +51,19 @@ public partial class SavegameListItemViewModel : ObservableObject
         SavegameDto savegame,
         string profileName,
         string? currentUserId,
-        bool canCheckOut,
+        bool isMember,
         bool isAmbiguous)
     {
         Savegame = savegame;
         ProfileName = profileName;
         _currentUserId = currentUserId;
-        CanCheckOut = canCheckOut;
+        IsMember = isMember;
         ShowHolderTag = isAmbiguous;
+
+        // Recorded here because the row's two actions need it and because it is what the binding will
+        // carry a moment later - two answers to "which list does this farm run on" is how a row comes
+        // to describe a different apply from the one that runs.
+        PinnedRevision = SavegameService.TargetRevisionOf(savegame);
 
         Chips = [];
 
@@ -61,9 +71,10 @@ public partial class SavegameListItemViewModel : ObservableObject
     }
 
 
-    /// <summary>Raised when the row's own action is clicked. The page owns both flows.</summary>
+    /// <summary>Raised when the row's own action is clicked. The page owns all three flows.</summary>
     public event EventHandler? CheckOutRequested;
     public event EventHandler? TakeCopyRequested;
+    public event EventHandler? ApplyProfileRequested;
 
 
     public SavegameDto Savegame { get; }
@@ -73,7 +84,71 @@ public partial class SavegameListItemViewModel : ObservableObject
     public string ProfileName { get; }
 
     /// <summary>Refused for a Guest, and therefore never offered - a picker leading to a refusal is worse than one never offered.</summary>
-    public bool CanCheckOut { get; }
+    public bool IsMember { get; }
+
+    /// <summary>
+    /// The revision this farm runs on where it pins one, from
+    /// <see cref="SavegameService.TargetRevisionOf"/>. Null for a current savegame, which follows its
+    /// profile, and for one that follows no mod list.
+    /// </summary>
+    public int? PinnedRevision { get; }
+
+    /// <summary>Whether this is a <em>past</em> savegame - one its profile has moved on from.</summary>
+    /// <remarks>
+    /// A fact about which farm a profile is following, not a problem with either, which is why the
+    /// chip saying it is <see cref="SavegameChipTone.Neutral"/> and why the list hides these rows by
+    /// default rather than colouring them.
+    /// </remarks>
+    public bool IsPast => Savegame.SupersededAt is not null;
+
+    /// <summary>Whether this farm follows a mod list at all.</summary>
+    public bool HasProfile => Savegame.ProfileId is not null;
+
+    /// <summary>
+    /// Whether taking the claim is on offer here and now: Member, and nothing about this machine in
+    /// the way. <see cref="CheckOutBlockedReason"/> is the half that says why not.
+    /// </summary>
+    public bool CanCheckOut => IsMember && _offer.CanCheckOut;
+
+    /// <summary>Whether putting the mod folder on this farm's list is on offer. Member, like check-out.</summary>
+    public bool CanApplyProfile => IsMember && _offer.CanApply;
+
+    /// <summary>
+    /// The installation both buttons act on, decided by the page.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than worked out at the click, so the instance the refusal is about is the
+    /// instance the action runs against. Two answers to "where would this go" is how a row comes to
+    /// explain one folder and act on another.
+    /// </remarks>
+    public LocalInstance? Host { get; set; }
+
+    public string? CheckOutBlockedReason
+        => SavegameRowRules.Explain(_offer.CheckOut, ProfileName, _offer.PinnedRevision, _blockingSavegameName);
+
+    public string? ApplyBlockedReason
+        => SavegameRowRules.Explain(_offer.Apply, ProfileName, _offer.PinnedRevision, _blockingSavegameName);
+
+    /// <summary>
+    /// What the row says under its buttons: the check-out refusal, which is the one somebody is
+    /// acting on. Applying is the way out of it, so its own refusal is only worth a line where it is
+    /// the one that differs - which is a farm following no mod list, where there is nothing to apply.
+    /// </summary>
+    public string? BlockedReason => CheckOutBlockedReason ?? ApplyBlockedReason;
+
+    public bool IsBlocked => BlockedReason is not null;
+
+    /// <summary>
+    /// The tooltip on each button: the refusal where there is one, and what the button does where
+    /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
+    /// </summary>
+    public string CheckOutToolTip => CheckOutBlockedReason
+        ?? "Takes the claim and writes it into a slot. Nobody else can take it until you check it in.";
+
+    public string ApplyToolTip => ApplyBlockedReason
+        ?? (PinnedRevision is int revision
+            ? $"Puts this game's mod folder on '{ProfileName}' revision {revision}, which is what this farm runs on."
+            : $"Puts this game's mod folder on '{ProfileName}', which is what this farm runs on.");
 
     public ObservableCollection<SavegameChip> Chips { get; }
 
@@ -115,6 +190,15 @@ public partial class SavegameListItemViewModel : ObservableObject
     private void CheckOut() => CheckOutRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
+    /// The other half of the pair. Two actions rather than one because checking a save out never
+    /// syncs mods: a plan that would quarantine files the repo has never seen has to be shown before
+    /// anything is written, and folding it into a claim is how that disclosure gets skipped. See
+    /// docs/10-savegame-profile-binding.md#two-actions-not-one.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApplyProfile))]
+    private void ApplyProfile() => ApplyProfileRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
     /// Open to everybody, Guest included. It is what makes the list worth showing to somebody who
     /// cannot take the claim: they can still read the history and play a copy.
     /// </summary>
@@ -136,6 +220,37 @@ public partial class SavegameListItemViewModel : ObservableObject
         _hasUnpublishedPlay = hasUnpublishedPlay;
 
         RefreshChips();
+    }
+
+    /// <summary>
+    /// Records what this machine can do with this savegame right now, from
+    /// <see cref="SavegameRowRules.Describe"/>.
+    /// </summary>
+    /// <remarks>
+    /// Arrives from outside for the same reason the drift chips do: none of it is a fact about the
+    /// savegame. It needs the instances this repo offers, what each one is holding and what its mod
+    /// folder was last synced to - none of which a row has or should have.
+    /// </remarks>
+    /// <param name="blockingSavegameName">
+    /// What the savegame already claiming the mod folder is called, where the page could find it in
+    /// its own list.
+    /// </param>
+    public void SetOffer(SavegameRowOffer offer, string? blockingSavegameName)
+    {
+        _offer = offer;
+        _blockingSavegameName = blockingSavegameName;
+
+        OnPropertyChanged(nameof(CanCheckOut));
+        OnPropertyChanged(nameof(CanApplyProfile));
+        OnPropertyChanged(nameof(CheckOutBlockedReason));
+        OnPropertyChanged(nameof(ApplyBlockedReason));
+        OnPropertyChanged(nameof(BlockedReason));
+        OnPropertyChanged(nameof(IsBlocked));
+        OnPropertyChanged(nameof(CheckOutToolTip));
+        OnPropertyChanged(nameof(ApplyToolTip));
+
+        CheckOutCommand.NotifyCanExecuteChanged();
+        ApplyProfileCommand.NotifyCanExecuteChanged();
     }
 
     /// <param name="lockedPinMoved">
@@ -161,6 +276,21 @@ public partial class SavegameListItemViewModel : ObservableObject
     {
         Chips.Clear();
         Chips.Add(BuildStateChip());
+
+        // Current is the unmarked default, so only the exception carries one of these. Both are
+        // Neutral and neither is ever Caution: which farm a profile is following, and whether a farm
+        // follows one at all, are facts rather than problems - and spending the loud tone on them is
+        // what teaches people to ignore it where it does mean a damaged save.
+        if (IsPast)
+        {
+            Chips.Add(new SavegameChip(
+                PinnedRevision is int revision ? $"Past · {ProfileName} rev {revision}" : $"Past · {ProfileName}",
+                SavegameChipTone.Neutral));
+        }
+        else if (HasProfile is false)
+        {
+            Chips.Add(new SavegameChip("No mod list", SavegameChipTone.Neutral));
+        }
 
         if (_hasUnpublishedPlay)
         {

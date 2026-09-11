@@ -51,13 +51,19 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 /// Everything the dialog needs about one instance. Recomputed when the instance selection changes,
 /// because the slots, the mod plan and the revision note are all facts about a particular folder.
 /// </summary>
+/// <param name="RunsOn">
+/// Which mod list the folder will be on once this check-out and the apply beside it have run - one
+/// line, and the number said out loud. Null for a copy, which applies nothing, and for a farm that
+/// follows no mod list.
+/// </param>
 public sealed record SavegameCheckOutContext(
     LocalInstance Instance,
     IReadOnlyList<SavegameSlotOptionViewModel> Slots,
     SavegameSlotId? Suggested,
     string? SlotNote,
     SavegameModsSummary? Mods,
-    SavegameRevisionNote? Revision);
+    SavegameRevisionNote? Revision,
+    string? RunsOn);
 
 
 /// <summary>
@@ -200,7 +206,23 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowRevisionSection))]
+    [NotifyPropertyChangedFor(nameof(ShowRevisionNote))]
     private SavegameRevisionNote? _revision;
+
+    /// <summary>
+    /// Which revision the folder ends up on.
+    /// </summary>
+    /// <remarks>
+    /// <b>Shown even where nothing is wrong</b>, unlike <see cref="Revision"/> beneath it. A current
+    /// farm's number can differ from the one it was last played on whenever anybody has edited the
+    /// profile since, and that is exactly the case where somebody wants to have seen the number before
+    /// the evening rather than after it. For a past farm it says the opposite thing: the number does
+    /// not move, and playing it will not move it.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRevisionSection))]
+    [NotifyPropertyChangedFor(nameof(HasRunsOn))]
+    private string? _runsOn;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
@@ -211,7 +233,14 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     public bool ShowInstanceSection => Instances.Count > 1;
 
     public bool ShowModsSection => Mods is not null;
-    public bool ShowRevisionSection => Revision is not null;
+
+    /// <summary>Whether the section is drawn at all, which either of its two lines is enough for.</summary>
+    public bool ShowRevisionSection => ShowRevisionNote || HasRunsOn;
+
+    /// <summary>The how-far-behind line, which is absent in the common case where it is nowhere behind.</summary>
+    public bool ShowRevisionNote => Revision is not null;
+
+    public bool HasRunsOn => RunsOn is { Length: > 0 };
 
     public bool ShowPreselection => ShowAllSlots is false;
     public bool HasSlotNote => SlotNote is { Length: > 0 };
@@ -365,6 +394,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
             SlotNote = context.SlotNote;
             Mods = context.Mods;
             Revision = context.Revision;
+            RunsOn = context.RunsOn;
 
             SelectedSlot = context.Suggested is SavegameSlotId suggested
                 ? Slots.FirstOrDefault(x => string.Equals(x.Id.Value, suggested.Value, StringComparison.OrdinalIgnoreCase))

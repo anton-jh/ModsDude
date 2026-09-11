@@ -157,12 +157,12 @@
                              accent cannot be moved by a trigger. Exactly one is ever visible: the
                              plain one beside Review, and the accent one for a guest, whose notice
                              would otherwise have nothing on it that looks like the thing to do. -->
-                        <Button Content="Re-apply now"
+                        <Button Content="{Binding ReapplyLabel}"
                                 Margin="0 0 8 0"
                                 Command="{Binding ReapplyCommand}"
                                 Visibility="{Binding CanReapplyBesideReview, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <Button Content="Re-apply now"
+                        <Button Content="{Binding ReapplyLabel}"
                                 Margin="0 0 8 0"
                                 Style="{DynamicResource AccentButtonStyle}"
                                 Command="{Binding ReapplyCommand}"

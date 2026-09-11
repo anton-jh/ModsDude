@@ -32,6 +32,15 @@
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
+                <!-- The mod list this version is being attributed to. Observed rather than declared,
+                     so this is the one moment it is visible to the person who would know it was
+                     wrong - and the moment before it is recorded for good. -->
+                <TextBlock Text="{Binding PlayedOn}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Visibility="{Binding HasPlayedOn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                 <TextBlock Text="What this version was, for the history (optional)"
                            Margin="0 16 0 4"
                            Style="{DynamicResource CaptionTextBlockStyle}"

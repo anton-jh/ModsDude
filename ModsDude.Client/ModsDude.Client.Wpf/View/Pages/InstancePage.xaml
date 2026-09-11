@@ -26,10 +26,22 @@
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
+                <!-- Disabled while a savegame with a profile is checked out here. Every switch in the
+                     app applies first, a held farm refuses that apply, and a dropdown whose every
+                     other entry leads to a refusal is worse than one that says so and does not open. -->
                 <ComboBox Margin="0 4 0 0"
                           ItemsSource="{Binding Profiles}"
                           DisplayMemberPath="Label"
+                          IsEnabled="{Binding CanChooseProfile}"
+                          ToolTip="{Binding ProfileLock}"
                           SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
+
+                <TextBlock Margin="0 6 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding ProfileLock}"
+                           Visibility="{Binding HasProfileLock, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <TextBlock Margin="0 8 0 0"
                            TextWrapping="Wrap"
@@ -38,11 +50,23 @@
                            Text="The profile this instance followed is gone - it was deleted, or you were removed from its repo. Pick another one."
                            Visibility="{Binding HasDanglingActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                <!-- Reads 'Re-apply rev 4' while a past savegame is held: applying the profile's
+                     latest is exactly what the apply table refuses there, and repairing folder drift
+                     back to that revision is the whole of what this button still does. -->
                 <Button Margin="0 8 0 0"
                         HorizontalAlignment="Stretch"
                         Style="{DynamicResource AccentButtonStyle}"
                         Content="{Binding ActivationLabel}"
                         Command="{Binding ApplyCommand}" />
+
+                <!-- Neutral. Holding a past farm is a state somebody chose and is playing in, not a
+                     problem with the instance. -->
+                <TextBlock Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding HoldingStatus}"
+                           Visibility="{Binding HasHoldingStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <TextBlock Margin="0 12 0 0"
                            TextWrapping="Wrap"

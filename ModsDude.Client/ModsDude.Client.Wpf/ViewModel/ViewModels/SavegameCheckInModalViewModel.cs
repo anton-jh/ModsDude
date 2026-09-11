@@ -22,18 +22,34 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// The description is never required. A field the button refuses to work without is answered with
 /// "asdf" by the third check-in - the same reasoning as the mod editor's version description.
 /// </para>
+/// <para>
+/// <b>It names the mod list the play is being attributed to.</b> That attribution is observed rather
+/// than declared - see docs/10-savegame-profile-binding.md#play-attribution - so this is the one
+/// moment it is visible to the person who would know it was wrong, and the moment before it is
+/// recorded for good.
+/// </para>
 /// </remarks>
 public partial class SavegameCheckInModalViewModel : ModalViewModel
 {
-    public SavegameCheckInModalViewModel(string savegameName, string slotLabel)
+    /// <param name="playedOn">
+    /// Which mod list and revision the version being minted will record, or null where it records
+    /// none - a savegame following no mod list, and one whose revision nothing on this machine knows.
+    /// </param>
+    public SavegameCheckInModalViewModel(string savegameName, string slotLabel, string? playedOn = null)
     {
         SavegameName = savegameName;
         SlotLabel = slotLabel;
+        PlayedOn = playedOn;
     }
 
 
     public string SavegameName { get; }
     public string SlotLabel { get; }
+
+    /// <inheritdoc cref="SavegameCheckInModalViewModel(string, string, string?)"/>
+    public string? PlayedOn { get; }
+
+    public bool HasPlayedOn => PlayedOn is { Length: > 0 };
 
     public string Title => $"Check '{SavegameName}' in";
 

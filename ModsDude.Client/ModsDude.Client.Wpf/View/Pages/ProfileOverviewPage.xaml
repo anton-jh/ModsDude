@@ -70,6 +70,40 @@
                     </GroupBox>
                 </Border>
 
+                <!-- Which farm this profile is following. The savegames themselves stay on the one
+                     repo-level list, so the past ones are a count and a link into that list rather
+                     than a second list of rows to keep true. -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0"
+                        Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Farms" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                       Text="{Binding CurrentSavegame}" />
+
+                            <!-- Archiving deliberately does not release a profile's slot, so this is a
+                                 state somebody can be stuck in. The three ways out are named. -->
+                            <TextBlock Margin="0 8 0 0"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                       Text="{Binding ArchivedWarning}"
+                                       Visibility="{Binding HasArchivedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <Button Margin="0 8 0 0"
+                                    HorizontalAlignment="Left"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Content="{Binding PastSavegamesText}"
+                                    ToolTip="Opens the repo's saves list with past farms showing."
+                                    Command="{Binding ShowPastSavegamesCommand}"
+                                    Visibility="{Binding HasPastSavegames, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16"

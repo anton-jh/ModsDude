@@ -1,13 +1,13 @@
 # 10 — Savegames and profile revisions
 
-*Everything but the interface is built.* Schema, publish, the swap and the rename are in the tree
+*Built.* Schema, publish, the swap and the rename are in the tree
 ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)); the two hashes, the observation and the
-revision a sync installs are ([slice 2](PLAN.md#2-play-attribution-on-the-client)); and so are the
+revision a sync installs are ([slice 2](PLAN.md#2-play-attribution-on-the-client)); so are the
 check-out targets, the apply table, the drift rules and the one-mod-list-per-instance limit
-([slice 3](PLAN.md#3-the-rules)). What is still a design is the [interface](#interface) — the chips,
-the two row actions, the wording of the notices and the three dialogs. The rules those would explain
-already hold; nothing yet explains them, so a refusal reaches the user as a sentence from the engine
-rather than as a button that was never offered.
+([slice 3](PLAN.md#3-the-rules)); and so is the [interface](#interface) — the chips, the two row
+actions, the wording of the notices and the three dialogs ([slice 4](PLAN.md#4-interface)). A refusal
+now reaches the user as a button that was never offered, with the engine's own sentence behind it as
+the backstop it always was.
 
 The application is in early development. Nothing here migrates existing local or server state,
 and no shape below is constrained by what an older client wrote.
@@ -128,9 +128,15 @@ since a savegame following no mod list is in no succession and is neither curren
 A savegame cannot acquire or lose a profile, since nothing moves one between profiles. A history
 mixing versions that name a revision with versions that do not therefore cannot arise.
 
-Nothing is left for the client to enforce about whether a profile is present.
-`SavegameService.RequireAppliedRevision` still throws where a profile *was* chosen and the folder
-has not been synced to it, since a version that names a profile has to name a revision of it too.
+Nothing is left for the client to enforce about whether a profile is present. The pair travels as one
+value — `SavegamePublishTarget`, or null — so a caller cannot set half of it, and
+`SavegameService.DeclaredRevisionFor` answers the other half for whichever profile the dialog was
+given. A folder that has never been synced is not an obstacle: the first version's revision is
+declared, so the answer there is the chosen profile's head.
+
+`SavegameService.ResolveAppliedRevision` still throws at *check-in* where a profile was chosen and no
+revision of it can be found anywhere — a version that names a profile has to name a revision of it
+too, and that one is observed rather than declared.
 
 ## Profiles with no savegame
 
@@ -530,6 +536,16 @@ Two buttons, `Apply profile` and `Check out`, with the disabled reason carrying 
 | Current savegame, instance on another profile | *Apply Old-school first* |
 | Another savegame **with a profile** held here | *Riverbend is checked out on this instance* |
 | No instance for this game | *No instance for this game* |
+
+**Apply profile** is refused by only two of those. A held savegame blocks it as well, since no apply
+clears that one; the folder being elsewhere is the thing it is *for*. Its own case is a farm with no
+mod list: *This save follows no mod list*. It names the revision it would install, so the apply a past
+farm needs is the apply that runs — letting the instance decide resolves to head, which is correct
+for a current farm and wrong for the one this button exists to prepare for.
+
+Which instance the pair acts on is the one that could host the farm now, failing that the one already
+following its profile, failing that the first. A row that answers about a folder its buttons do not
+act on is a puzzle rather than an answer, so the check-out dialog opens on that same instance.
 
 ### Instance page
 

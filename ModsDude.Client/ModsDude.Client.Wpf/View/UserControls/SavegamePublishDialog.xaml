@@ -40,6 +40,42 @@
                 <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          FontSize="14" />
 
+                <!-- Every profile in the repo, and no mod list as an explicit choice. It is asked
+                     rather than derived because nothing moves a savegame between profiles afterwards,
+                     and because the instance's active one is only the likeliest answer. -->
+                <TextBlock Text="Which mod list this farm follows"
+                           Margin="0 16 0 4"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                <ComboBox HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding Profiles}"
+                          DisplayMemberPath="Name"
+                          SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
+
+                <!-- The number this declares. Shown rather than implied: the bytes predate ModsDude,
+                     so nothing observed which mods were in the folder while this farm was played. -->
+                <TextBlock Text="{Binding RevisionText}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding HasRevisionText, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <!-- Superseding, inline rather than as a second dialog: a confirmation that appears
+                     after the button is one that gets clicked through. -->
+                <TextBlock Text="{Binding SupersedeNotice}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Visibility="{Binding HasSupersedeNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <TextBlock Text="{Binding MismatchNotice}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           Visibility="{Binding HasMismatchNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                 <TextBlock Text="What this first version was, for the history (optional)"
                            Margin="0 16 0 4"
                            Style="{DynamicResource CaptionTextBlockStyle}"

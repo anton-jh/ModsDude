@@ -1,7 +1,10 @@
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Services;
@@ -24,6 +27,9 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 /// </remarks>
 public sealed class SavegameFlowService(
     ISavegameService savegames,
+    ISavegamesClient savegamesClient,
+    ProfileService profileService,
+    SyncManifestStore manifestStore,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks)
@@ -42,7 +48,7 @@ public sealed class SavegameFlowService(
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var modal = new SavegameCheckInModalViewModel(savegameName, slotLabel);
+        var modal = new SavegameCheckInModalViewModel(savegameName, slotLabel, DescribePlayedOn(instance, savegameId));
 
         await modalService.Value.Show(modal);
 
@@ -147,16 +153,33 @@ public sealed class SavegameFlowService(
     /// Makes a savegame out of what is already in a slot. Never a check-in: this one names the thing
     /// being created, and the two have opposite failure modes.
     /// </summary>
+    /// <remarks>
+    /// The profile is asked for here rather than taken from the instance - see
+    /// <see cref="SavegamePublishModalViewModel"/> - so this is also where the repo's profiles, the
+    /// farm each is currently following and what the mod folder is on are gathered.
+    /// </remarks>
     /// <returns>The savegame that was created, or null where the dialog was dismissed.</returns>
     public async Task<SavegameDto?> PublishAsync(
         LocalInstance instance,
+        Repo repo,
         SavegameSlotId slot,
         string slotLabel,
-        string repoName,
-        string profileName,
         CancellationToken cancellationToken)
     {
-        var modal = new SavegamePublishModalViewModel(slotLabel, repoName, profileName, slotLabel);
+        var manifest = manifestStore.TryRead(instance.Id);
+        var options = await BuildPublishOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
+
+        var active = instance.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
+            ? options.FirstOrDefault(x => x.ProfileId == profile.ProfileId)
+            : null;
+
+        var modal = new SavegamePublishModalViewModel(
+            slotLabel,
+            repo.Name,
+            slotLabel,
+            options,
+            active,
+            options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name);
 
         await modalService.Value.Show(modal);
 
@@ -167,11 +190,114 @@ public sealed class SavegameFlowService(
 
         // Packing and uploading a save is minutes rather than seconds, and the page it was started
         // from is not where the user has to stay while it happens.
-        using var task = backgroundTasks.Begin($"Publishing '{name}' to {repoName}", $"Packing and uploading '{slotLabel}'");
+        using var task = backgroundTasks.Begin($"Publishing '{name}' to {repo.Name}", $"Packing and uploading '{slotLabel}'");
 
-        return await savegames.PublishAsync(instance, slot, name, modal.TrimmedLabel, cancellationToken);
+        return await savegames.PublishAsync(
+            instance, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), cancellationToken);
     }
 
+    /// <summary>
+    /// Every profile in the repo as something the dialog can offer, plus the no-mod-list answer last.
+    /// </summary>
+    /// <remarks>
+    /// <b>Archived savegames count towards "current".</b> Archiving is the repo-wide visibility state
+    /// and deliberately does not release a profile's slot, so a profile whose current farm is archived
+    /// still has one - and a publish still supersedes it. Reading only the live list would leave that
+    /// consequence unsaid.
+    /// </remarks>
+    private async Task<IReadOnlyList<SavegamePublishOption>> BuildPublishOptionsAsync(
+        Repo repo,
+        Guid? appliedProfileId,
+        int? appliedRevision,
+        CancellationToken cancellationToken)
+    {
+        // This dialog can be the first thing that needs them: the instance's Saves page is reachable
+        // without ever having opened a profile.
+        if (profileService.Profiles.Any(x => x.RepoId == repo.Id) is false)
+        {
+            await profileService.RefreshProfiles(repo.Id, cancellationToken);
+        }
+
+        var current = await ReadCurrentSavegamesAsync(repo.Id, cancellationToken);
+        var options = new List<SavegamePublishOption>();
+
+        foreach (var profile in profileService.Profiles.Where(x => x.RepoId == repo.Id).OrderBy(x => x.Name, NaturalOrder.Comparer))
+        {
+            var incumbent = current.GetValueOrDefault(profile.Id);
+
+            options.Add(new SavegamePublishOption(
+                profile.Id,
+                profile.Name,
+                SavegameService.DeclaredRevisionFor(profile.Id, profile.HeadRevision, appliedProfileId, appliedRevision),
+                incumbent?.Name,
+                incumbent?.Head?.ProfileRevision,
+                profile.Id == appliedProfileId));
+        }
+
+        options.Add(SavegamePublishOption.NoModList);
+
+        return options;
+    }
+
+    /// <summary>
+    /// Which farm each profile is following right now, keyed by profile.
+    /// </summary>
+    /// <remarks>
+    /// A failed read costs the supersede notice and nothing else, which is the same bargain every
+    /// other late-arriving fact in this feature strikes: the publish is still correct, the server
+    /// still supersedes whatever is there, and the sentence saying so is simply absent rather than
+    /// guessed at.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<Guid, SavegameDto>> ReadCurrentSavegamesAsync(Guid repoId, CancellationToken cancellationToken)
+    {
+        var current = new Dictionary<Guid, SavegameDto>();
+
+        try
+        {
+            var savegames = await savegamesClient.GetSavegamesV1Async(repoId, cancellationToken);
+            var archived = await savegamesClient.GetArchivedSavegamesV1Async(repoId, cancellationToken);
+
+            foreach (var savegame in savegames.Concat(archived))
+            {
+                if (savegame.ProfileId is Guid profileId && savegame.SupersededAt is null)
+                {
+                    current[profileId] = savegame;
+                }
+            }
+        }
+        catch (ApiException)
+        {
+            return current;
+        }
+
+        return current;
+    }
+
+
+    /// <summary>
+    /// Which mod list the version about to be minted records, in the one line that says it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Read rather than recomputed.</b> The number is <see cref="ISavegameService.GetPlayedRevision"/>'s,
+    /// which is the same one the check-in sends - working it out a second time here is how a dialog
+    /// comes to name a revision the version does not carry. The profile's name is this layer's to add:
+    /// the binding records an id, and a bare "rev 1004" is a number belonging to no list in particular.
+    /// </remarks>
+    private string? DescribePlayedOn(LocalInstance instance, Guid savegameId)
+    {
+        if (savegames.GetBinding(instance, savegameId) is not SavegameCheckoutBinding binding
+            || binding.ProfileId is not Guid profileId
+            || savegames.GetPlayedRevision(instance, savegameId) is not int revision)
+        {
+            return null;
+        }
+
+        var profile = profileService.Profiles.FirstOrDefault(x => x.Id == profileId);
+
+        return profile is null
+            ? $"Played on revision {revision} of its mod list."
+            : $"Played on {profile.Name} rev {revision}.";
+    }
 
     /// <summary>
     /// Somebody checked in while this save was out. Both answers are safe and neither destroys

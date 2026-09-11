@@ -50,6 +50,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly ModSyncService _syncService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
+    private readonly SyncManifestStore _manifestStore;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -81,12 +82,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         ModSyncService syncService,
         InstanceDriftMonitor driftMonitor,
         SavegameFlowService flowService,
+        SyncManifestStore manifestStore,
         ShellNavigationService shellNavigation,
         IModalService modalService,
         IErrorReporter errorReporter,
-        IBackgroundTaskReporter backgroundTasks)
+        IBackgroundTaskReporter backgroundTasks,
+        bool showPastFarms = false)
     {
         _backgroundTasks = backgroundTasks;
+        _manifestStore = manifestStore;
+        _showPastFarms = showPastFarms;
         _repo = repo;
         _savegamesClient = savegamesClient;
         _savegameService = savegameService;
@@ -107,7 +112,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
 
-        CanCheckOut = repo.MembershipLevel >= RepoMembershipLevel.Member;
+        IsMember = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
         // Admin, like pruning a profile's revisions and for the same reason: it destroys a backup,
         // which is not part of running a repo.
@@ -120,13 +125,56 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     public string RepoName => _repo.Name;
 
-    /// <summary>Whether taking the claim is on offer at all. Reading the list and copying a version is not gated.</summary>
-    public bool CanCheckOut { get; }
+    /// <summary>
+    /// Whether this user may take a claim at all. Reading the list and copying a version is not gated.
+    /// </summary>
+    /// <remarks>
+    /// The coarse half of the answer. Whether a particular savegame can be taken <em>here and now</em>
+    /// is the row's <see cref="SavegameListItemViewModel.CanCheckOut"/>, which also knows what this
+    /// machine is holding and where its mod folder is.
+    /// </remarks>
+    public bool IsMember { get; }
 
     /// <summary>Whether deleting a version of a savegame's history is on offer. Admin only.</summary>
     public bool CanPruneVersions { get; }
 
     public ObservableCollection<SavegameListItemViewModel> Savegames { get; }
+
+    /// <summary>
+    /// Whether the farms their profiles have moved on from are in the list.
+    /// </summary>
+    /// <remarks>
+    /// <b>Off by default, and a toggle rather than a second list.</b> Past farms stay findable without
+    /// filling a list somebody opened to find the one they are playing tonight - and keeping them here
+    /// is what stops this becoming a list per profile, which the whole savegame-is-an-attribute
+    /// argument exists to avoid. See docs/10-savegame-profile-binding.md#savegames-list.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _showPastFarms;
+
+    /// <summary>How many rows the toggle is currently keeping out of the list.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHiddenPast))]
+    [NotifyPropertyChangedFor(nameof(HiddenPastText))]
+    [NotifyPropertyChangedFor(nameof(EmptyText))]
+    private int _hiddenPastCount;
+
+    public bool HasHiddenPast => HiddenPastCount > 0;
+
+    public string HiddenPastText => HiddenPastCount == 1
+        ? "1 past farm is hidden."
+        : $"{HiddenPastCount} past farms are hidden.";
+
+    /// <summary>
+    /// What an empty list says, which is not the same sentence when the toggle is what emptied it.
+    /// </summary>
+    /// <remarks>
+    /// A repo whose every farm is past reads as a repo with no farms at all otherwise, and "publish
+    /// one" is advice for a state this is not in.
+    /// </remarks>
+    public string EmptyText => HasHiddenPast
+        ? "Every save here is a past farm. Turn on 'Show past farms' to see them - they are still playable."
+        : "No saves here yet. Publish one from a game installation's Saves tab, and it appears in this list for everybody.";
 
     /// <summary>Versions and checkouts as one column, newest first.</summary>
     public ObservableCollection<SavegameTimelineEntryViewModel> Timeline { get; }
@@ -296,7 +344,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     // Member, like publishing and checking in: archiving is reversible and is part of keeping the
     // repo's saves tidy. CanPruneVersions is the Admin one, and gates deleting a version.
-    private bool CanArchiveSelected() => CanCheckOut && IsWorking is false && Selected is not null;
+    private bool CanArchiveSelected() => IsMember && IsWorking is false && Selected is not null;
 
     /// <summary>
     /// Deletes the selected version from the savegame's history.
@@ -362,7 +410,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private bool CanDeleteEntry()
         => CanPruneVersions && IsWorking is false && SelectedEntry is { IsVersion: true, IsHead: false };
 
-    private bool CanActOnEntry() => CanCheckOut && IsWorking is false && SelectedEntry is { IsVersion: true };
+    private bool CanActOnEntry() => IsMember && IsWorking is false && SelectedEntry is { IsVersion: true };
     private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsVersion: true };
 
     /// <summary>
@@ -410,24 +458,44 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         ClearRows();
 
+        // Past is a fact about which farm a profile is following, so the toggle hides rows rather than
+        // marking them differently - and the count is said out loud, because a filter nobody can see
+        // is a list that is quietly wrong.
+        var shown = savegames.Where(x => ShowPastFarms || x.SupersededAt is null).ToList();
+
+        HiddenPastCount = savegames.Count - shown.Count;
+
         // Two people called Anton can both hold a save in this repo, and neither of them is the
         // duplicate - so the tag goes on both or on neither, decided over this list.
         var ambiguous = UserDisplay.FindAmbiguous(
             savegames.Select(x => x.Checkout?.User).OfType<UserDto>());
 
-        foreach (var savegame in savegames.OrderBy(x => x.Name, NaturalOrder.Comparer))
+        // One read of each instance's folder state for the whole list, rather than one per row: a
+        // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
+        // parses of it.
+        var hosts = ReadHosts();
+
+        foreach (var savegame in shown.OrderBy(x => x.Name, NaturalOrder.Comparer))
         {
             var row = new SavegameListItemViewModel(
                 savegame,
                 FindProfile(savegame.ProfileId)?.Name ?? "A profile you cannot see",
                 _currentUserId,
-                CanCheckOut,
+                IsMember,
                 ambiguous.Contains(savegame.Checkout?.User.Id ?? ""));
 
             row.CheckOutRequested += OnCheckOutRequested;
             row.TakeCopyRequested += OnTakeCopyRequested;
+            row.ApplyProfileRequested += OnApplyProfileRequested;
 
             Savegames.Add(row);
+        }
+
+        // After the rows exist, because a refusal names the savegame in the way - which is a row in
+        // this same list.
+        foreach (var row in Savegames)
+        {
+            Offer(row, hosts);
         }
 
         IsEmpty = Savegames.Count == 0;
@@ -444,6 +512,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             row.CheckOutRequested -= OnCheckOutRequested;
             row.TakeCopyRequested -= OnTakeCopyRequested;
+            row.ApplyProfileRequested -= OnApplyProfileRequested;
         }
 
         Savegames.Clear();
@@ -468,6 +537,110 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             IsLoading = false;
         }
     }
+
+    partial void OnShowPastFarmsChanged(bool value)
+    {
+        // From what was fetched rather than from the server: the toggle changes which rows are drawn,
+        // not what the repo holds.
+        if (IsLoading is false)
+        {
+            Publish(_fetched);
+        }
+    }
+
+    /// <summary>
+    /// Every instance this repo offers, with what it is holding and what its mod folder was last
+    /// synced to - the two facts <see cref="SavegameRowRules.Describe"/> needs about a host.
+    /// </summary>
+    private IReadOnlyList<SavegameHost> ReadHosts()
+    {
+        var hosts = new List<SavegameHost>();
+
+        foreach (var instance in _repo.LocalInstances)
+        {
+            var manifest = _manifestStore.TryRead(instance.Id);
+
+            hosts.Add(new SavegameHost(
+                instance,
+                _bindingStore.GetBindings(instance.Id),
+                manifest?.ProfileId,
+                manifest?.ProfileRevision));
+        }
+
+        return hosts;
+    }
+
+    /// <summary>
+    /// Tells a row which instance its two buttons act on and what they can do there.
+    /// </summary>
+    /// <remarks>
+    /// <b>The instance that could host it now wins.</b> That is the whole question the row is
+    /// answering - the buttons either work or they carry a sentence saying what would make them work -
+    /// and choosing one that refuses while another would accept turns a one-click evening into a
+    /// puzzle. Failing that, the one already following this save's profile, whose folder is the
+    /// closest to right and which is the likeliest target anyway; failing that the first, whose
+    /// refusal is at least about a folder that exists.
+    /// </remarks>
+    private void Offer(SavegameListItemViewModel row, IReadOnlyList<SavegameHost> hosts)
+    {
+        if (hosts.Count == 0)
+        {
+            row.SetOffer(SavegameRowRules.Describe(
+                row.Id, row.Savegame.ProfileId, null, row.PinnedRevision, [], null, null, hasInstance: false),
+                null);
+
+            return;
+        }
+
+        var head = FindProfile(row.Savegame.ProfileId)?.HeadRevision;
+
+        SavegameHost? fallback = null;
+        SavegameRowOffer? fallbackOffer = null;
+
+        foreach (var host in hosts)
+        {
+            var offer = SavegameRowRules.Describe(
+                row.Id,
+                row.Savegame.ProfileId,
+                head,
+                row.PinnedRevision,
+                host.Held,
+                host.AppliedProfileId,
+                host.AppliedRevision,
+                hasInstance: true);
+
+            if (offer.CanCheckOut)
+            {
+                row.SetOffer(offer, null);
+                row.Host = host.Instance;
+
+                return;
+            }
+
+            var follows = row.Savegame.ProfileId is Guid profileId
+                && host.Instance.ActiveProfile == new ActiveProfile(_repo.Id, profileId);
+
+            if (fallbackOffer is null || follows)
+            {
+                fallback = host;
+                fallbackOffer = offer;
+            }
+        }
+
+        row.SetOffer(fallbackOffer!, NameOfHeld(fallbackOffer!.BlockingSavegameId));
+        row.Host = fallback!.Instance;
+    }
+
+    /// <summary>
+    /// What a savegame in the way is called. Read off this list, which is where the refusal has to
+    /// point anyway - and null for one the toggle is hiding or the repo will not show, where the
+    /// refusal stands without the name.
+    /// </summary>
+    private string? NameOfHeld(Guid savegameId)
+        => savegameId == Guid.Empty
+            ? null
+            : Savegames.FirstOrDefault(x => x.Id == savegameId)?.Name
+                ?? _fetched.FirstOrDefault(x => x.Id == savegameId)?.Name;
 
     /// <summary>
     /// The two chips that are not facts about the savegame: whether a slot on <em>this</em> machine has
@@ -640,6 +813,63 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
+    /// The row's other action: puts the mod folder on the list this farm runs on, which is what
+    /// enables the one beside it.
+    /// </summary>
+    /// <remarks>
+    /// <b>It names the revision.</b> Nothing is holding this farm yet, so an apply that let the
+    /// instance decide would install head - correct for a current savegame and wrong for a past one,
+    /// whose check-out a moment later would leave the folder drifted against the revision it just
+    /// pinned.
+    /// </remarks>
+    private async void OnApplyProfileRequested(object? sender, EventArgs e)
+    {
+        if (sender is not SavegameListItemViewModel row
+            || row.Host is not LocalInstance instance
+            || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            var outcome = await _applyService.ApplyAsync(
+                _repo,
+                instance,
+                profile.Id,
+                profile.Name,
+                confirmPlan: false,
+                progress: null,
+                _lifetime,
+                revision: row.PinnedRevision ?? profile.HeadRevision);
+
+            RecordActiveProfile(instance, profile, outcome.RecordsIntent);
+
+            Status = outcome.Message;
+
+            await _driftMonitor.CheckAsync();
+
+            // The folder moved, so every row's answer to "can this be checked out here" has moved
+            // with it - not just this one's.
+            await ReloadAsync(row.Id);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "applying a profile");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    /// <summary>
     /// The destructive step is local and comes first, the claim is social and wants to be fast, and the
     /// mod question is last because it is the only one that can be deferred. This is that order.
     /// </summary>
@@ -669,12 +899,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            // The instance already following this save's profile is the likeliest target, and it is
-            // also the one whose mod folder is already right. A save that follows no mod list has no
-            // such instance, and any of them will do.
-            var preferred = instances.FirstOrDefault(x =>
-                row.Savegame.ProfileId is Guid profileId
-                && x.ActiveProfile == new ActiveProfile(_repo.Id, profileId)) ?? instances[0];
+            // The one the row's buttons were about, so the dialog opens on the folder the row just
+            // described. Choosing again here is how a row comes to say "ready" about one instance and
+            // open a dialog about another.
+            var preferred = row.Host ?? instances[0];
 
             var context = await BuildContextAsync(row, preferred, mode, _lifetime);
 
@@ -951,7 +1179,30 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             mode is SavegameCheckOutMode.CheckOut
                 ? await BuildModsSummaryAsync(row, instance, cancellationToken)
                 : null,
-            await BuildRevisionNoteAsync(row));
+            await BuildRevisionNoteAsync(row),
+            // Absent for a copy, which applies nothing: the slot is written and the mod folder is left
+            // exactly as it was, so there is no list the save is about to run on.
+            mode is SavegameCheckOutMode.CheckOut ? DescribeRunsOn(row) : null);
+    }
+
+    /// <summary>
+    /// Which revision the folder will be on afterwards, in one line.
+    /// </summary>
+    /// <remarks>
+    /// <b>Worth showing even for a current savegame</b>, where the number can differ from the one the
+    /// farm was last played on whenever anybody has edited the profile since - and that is precisely
+    /// the case where somebody wants to have seen the number before the evening rather than after it.
+    /// </remarks>
+    private string? DescribeRunsOn(SavegameListItemViewModel row)
+    {
+        if (row.PinnedRevision is int pinned)
+        {
+            return $"This farm stays on rev {pinned}. Playing it does not move it forward.";
+        }
+
+        return FindProfile(row.Savegame.ProfileId) is ProfileDto profile
+            ? $"Will run on {profile.Name} rev {profile.HeadRevision}."
+            : null;
     }
 
     /// <summary>
@@ -1070,9 +1321,24 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             : null;
 
 
+    /// <summary>
+    /// One instance this repo offers, with the two things a row's buttons turn on: what it is holding,
+    /// and which revision of which profile its mod folder was last made to match.
+    /// </summary>
+    private sealed record SavegameHost(
+        LocalInstance Instance,
+        IReadOnlyList<SavegameCheckoutBinding> Held,
+        Guid? AppliedProfileId,
+        int? AppliedRevision);
+
+
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoSavegamesPageViewModel Create(Repo repo)
-            => ActivatorUtilities.CreateInstance<RepoSavegamesPageViewModel>(serviceProvider, repo);
+        /// <param name="showPastFarms">
+        /// Whether to arrive with the toggle already on. Set by a link from a profile, whose count of
+        /// past farms is only worth clicking if it lands on a list that shows them.
+        /// </param>
+        public RepoSavegamesPageViewModel Create(Repo repo, bool showPastFarms = false)
+            => ActivatorUtilities.CreateInstance<RepoSavegamesPageViewModel>(serviceProvider, repo, showPastFarms);
     }
 }

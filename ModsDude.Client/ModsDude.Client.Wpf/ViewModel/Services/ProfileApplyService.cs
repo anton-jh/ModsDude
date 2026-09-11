@@ -130,6 +130,13 @@ public sealed class ProfileApplyService(
     /// profile the instance is already on has nothing to disclose beyond the destructive part, which
     /// is confirmed either way.
     /// </param>
+    /// <param name="revision">
+    /// Which revision to install, or null - nearly always - to let the instance decide, per
+    /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
+    /// preparing the folder for a farm nothing is holding yet: a past one runs on its own revision,
+    /// and letting the instance decide would install head and leave the check-out that follows
+    /// immediately drifted.
+    /// </param>
     public async Task<ProfileApplyOutcome> ApplyAsync(
         Repo repo,
         LocalInstance instance,
@@ -137,17 +144,22 @@ public sealed class ProfileApplyService(
         string? profileName,
         bool confirmPlan,
         IProgress<ModSyncProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? revision = null)
     {
         // Asked before anything is planned, because this refusal is not about the folder and reading
         // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
         // can get past; this one is the sentence somebody can act on.
-        if (heldSavegames.DecideApply(instance.Id, profileId, revision: null) is { IsAllowed: false } refusal)
+        if (heldSavegames.DecideApply(instance.Id, profileId, revision) is { IsAllowed: false } refusal)
         {
-            return new ProfileApplyOutcome(
-                instance,
-                ProfileApplyStatus.Refused,
-                $"'{instance.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.")
+            // Two refusals, two sentences. A past farm held here is not following "another mod list" -
+            // it is following this very one and does not move off its revision - and telling somebody
+            // to check it in over a revision mismatch would be advice that fixes nothing.
+            var reason = refusal.Refusal is SavegameApplyRefusal.PastSavegameIsHeld
+                ? $"'{instance.Name}' is holding a past savegame, which runs on revision {refusal.Revision} and does not move off it. It was left as it is."
+                : $"'{instance.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.";
+
+            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Refused, reason)
             {
                 BlockedBySavegameId = refusal.SavegameId
             };
@@ -157,7 +169,7 @@ public sealed class ProfileApplyService(
 
         try
         {
-            plan = await TryPlanAsync(repo, instance, profileId, profileName, revision: null, cancellationToken);
+            plan = await TryPlanAsync(repo, instance, profileId, profileName, revision, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -181,7 +193,7 @@ public sealed class ProfileApplyService(
             await syncService.RecordAlreadyMatchedAsync(plan);
 
             return new ProfileApplyOutcome(
-                instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches{Pinned(instance, profileId)}.");
+                instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches{Pinned(instance, profileId, revision)}.");
         }
 
         if (confirmPlan && await ConfirmPlanAsync(instance, plan) is false)
@@ -204,7 +216,7 @@ public sealed class ProfileApplyService(
             var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
 
             return result.Completed
-                ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches{Pinned(instance, profileId)}.")
+                ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches{Pinned(instance, profileId, revision)}.")
                 : new ProfileApplyOutcome(
                     instance,
                     ProfileApplyStatus.Failed,
@@ -295,14 +307,22 @@ public sealed class ProfileApplyService(
     /// </summary>
     /// <remarks>
     /// "Now matches" is a sentence about following the profile, and it stops being true on its own
-    /// terms the moment a past savegame pins the folder somewhere behind head. Saying the number is
-    /// what keeps the ordinary case silent and the pinned one honest, without the caller having to
-    /// know a savegame is involved.
+    /// terms the moment the folder is put somewhere behind head. Saying the number is what keeps the
+    /// ordinary case silent and the pinned one honest, without the caller having to know a savegame is
+    /// involved. A caller that named a revision gets the plainer half of it: nothing is holding that
+    /// farm yet, so there is no checked-out save to explain the number by.
     /// </remarks>
-    private string Pinned(LocalInstance instance, Guid profileId)
-        => heldSavegames.GetRequiredRevision(instance.Id, profileId) is int revision
-            ? $" revision {revision}, which is what the savegame checked out there runs on"
+    private string Pinned(LocalInstance instance, Guid profileId, int? revision)
+    {
+        if (revision is int named)
+        {
+            return $" revision {named}";
+        }
+
+        return heldSavegames.GetRequiredRevision(instance.Id, profileId) is int held
+            ? $" revision {held}, which is what the savegame checked out there runs on"
             : "";
+    }
 
     private static IInstanceModAdapter? GetAdapter(Repo repo, LocalInstance instance)
     {

@@ -151,7 +151,8 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new farm");
 
-        var savegame = await harness.Service.PublishAsync(harness.Instance, _slot1, "Season 5", null, CancellationToken.None);
+        var savegame = await harness.Service.PublishAsync(
+            harness.Instance, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), CancellationToken.None);
 
         Assert.Equal(4, Assert.Single(harness.Server.Publishes).ProfileRevision);
         Assert.Null(harness.Binding(savegame.Id).TargetRevision);
@@ -199,7 +200,8 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot2, "a brand new farm");
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
-            () => harness.Service.PublishAsync(harness.Instance, _slot2, "Season 5", null, CancellationToken.None));
+            () => harness.Service.PublishAsync(
+                harness.Instance, harness.Server.RepoId, _slot2, "Season 5", null, harness.Target(), CancellationToken.None));
 
         Assert.Contains("already holding a savegame", exception.UserMessage);
 
@@ -496,7 +498,8 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new farm");
 
-        var savegame = await harness.Service.PublishAsync(harness.Instance, _slot1, "Season 5", "the beginning", CancellationToken.None);
+        var savegame = await harness.Service.PublishAsync(
+            harness.Instance, harness.Server.RepoId, _slot1, "Season 5", "the beginning", harness.Target(), CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal("Season 5", savegame.Name);
@@ -508,8 +511,8 @@ public class SavegameServiceTests
         Assert.NotEqual(Guid.Empty, request.SavegameId);
         Assert.Equal(savegame.Id, request.SavegameId);
 
-        // Nothing was asked about the profile: the instance has an active one and a manifest saying
-        // which revision of it this folder is on.
+        // The pair the dialog settled, sent as one: the profile chosen there, and the revision it
+        // declared - which for a folder already on that profile is the revision the folder is on.
         Assert.Equal(harness.ProfileId, request.ProfileId);
         Assert.Equal(harness.AppliedRevision, request.ProfileRevision);
 
@@ -521,18 +524,73 @@ public class SavegameServiceTests
         Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Service.ClassifySlotAsync(harness.Instance, _slot1, CancellationToken.None));
     }
 
+    /// <summary>
+    /// A first version's revision is declared rather than observed, so a folder that has never been
+    /// synced is not an obstacle: nothing knows which mods were in it while that farm was played
+    /// either way, and requiring a sync first would observe the folder at the moment of publishing -
+    /// which is a different fact, not a better one.
+    /// </summary>
     [Fact]
-    public async Task Publishing_from_an_instance_that_has_never_been_synced_is_refused()
+    public async Task Publishing_from_an_instance_that_has_never_been_synced_declares_the_profile_head()
     {
         using var harness = new Harness(writeManifest: false);
 
         harness.WriteSlotFile(_slot1, "a brand new farm");
 
-        var exception = await Assert.ThrowsAsync<UserFriendlyException>(
-            () => harness.Service.PublishAsync(harness.Instance, _slot1, "Season 5", null, CancellationToken.None));
+        await harness.Service.PublishAsync(
+            harness.Instance, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(headRevision: 7), CancellationToken.None);
 
-        Assert.Contains("not been synced", exception.UserMessage);
-        Assert.Empty(harness.Server.Publishes);
+        var request = Assert.Single(harness.Server.Publishes);
+
+        Assert.Equal(harness.ProfileId, request.ProfileId);
+        Assert.Equal(7, request.ProfileRevision);
+    }
+
+    /// <summary>
+    /// The other answer the picker offers, and the first thing on this client that publishes a farm
+    /// following no mod list at all. It records no revision, claims no mod folder, and is therefore
+    /// not subject to the limit that refuses a second savegame.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_without_a_profile_records_neither_half_of_the_pair()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a farm");
+
+        // Already holding one that claims the mod folder, which a publish *to a profile* is refused
+        // for. This one claims nothing.
+        await harness.Service.CheckOutAsync(harness.Instance, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot2, "an unmanaged farm");
+
+        var savegame = await harness.Service.PublishAsync(
+            harness.Instance, harness.Server.RepoId, _slot2, "Scratch", null, target: null, CancellationToken.None);
+
+        var request = Assert.Single(harness.Server.Publishes);
+
+        Assert.Null(request.ProfileId);
+        Assert.Null(request.ProfileRevision);
+
+        var binding = harness.Binding(savegame.Id);
+
+        Assert.Null(binding.ProfileId);
+        Assert.Null(binding.ProfileRevision);
+        Assert.Null(binding.TargetRevision);
+    }
+
+    /// <summary>
+    /// The revision a first version declares: what the folder is actually on where the chosen profile
+    /// is the one it is on, and that profile's head otherwise - which is the honest answer, since the
+    /// alternative is a number belonging to a different mod list.
+    /// </summary>
+    [Fact]
+    public void The_declared_revision_is_the_folder_s_where_the_profile_matches_and_head_otherwise()
+    {
+        var profileId = Guid.NewGuid();
+
+        Assert.Equal(4, SavegameService.DeclaredRevisionFor(profileId, 1004, profileId, 4));
+        Assert.Equal(1004, SavegameService.DeclaredRevisionFor(profileId, 1004, Guid.NewGuid(), 4));
+        Assert.Equal(1004, SavegameService.DeclaredRevisionFor(profileId, 1004, null, null));
     }
 
     /// <summary>
@@ -859,6 +917,24 @@ public class SavegameServiceTests
         public LocalInstance Instance { get; }
 
         public Guid ProfileId => Server.ProfileId;
+
+
+    /// <summary>
+    /// What the publish dialog settles: which mod list the new farm follows, and the revision its
+    /// first version declares.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="SavegameService.DeclaredRevisionFor"/> rather than by naming a number, so
+    /// these tests exercise the rule the dialog shows rather than a second copy of it.
+    /// </remarks>
+    public SavegamePublishTarget Target(int headRevision = 1)
+    {
+        var manifest = ManifestStore.TryRead(Instance.Id);
+
+        return new SavegamePublishTarget(
+            ProfileId,
+            SavegameService.DeclaredRevisionFor(ProfileId, headRevision, manifest?.ProfileId, manifest?.ProfileRevision));
+    }
 
 
         /// <summary>Puts a savegame on the server whose bytes are a real packed slot.</summary>

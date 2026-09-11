@@ -36,6 +36,34 @@ public class InstanceActivationTests
             InstanceActivation.Describe(null, new ActiveProfile(_repoId, _profileId)));
     }
 
+    /// <summary>
+    /// While a past savegame is held, the button's only remaining job is repairing folder drift back
+    /// to that farm's revision - applying the profile's latest is exactly what the apply table
+    /// refuses - so it says which revision rather than implying the newest one.
+    /// </summary>
+    [Fact]
+    public void A_pinned_revision_puts_its_number_on_the_re_apply()
+    {
+        var target = new ActiveProfile(_repoId, _profileId);
+        var kind = InstanceActivation.Describe(target, target);
+
+        Assert.Equal("Re-apply rev 4", InstanceActivation.Label(kind, 4));
+        Assert.Equal("Re-apply", InstanceActivation.Label(kind, null));
+    }
+
+    /// <summary>
+    /// Nothing pins the folder for a profile the instance is not on - the hold is per profile - so the
+    /// combination cannot arise, and the label stays the plain one either way.
+    /// </summary>
+    [Fact]
+    public void Moving_an_instance_never_names_a_revision()
+    {
+        var current = new ActiveProfile(_repoId, Guid.NewGuid());
+        var kind = InstanceActivation.Describe(current, new ActiveProfile(_repoId, _profileId));
+
+        Assert.Equal("Activate", InstanceActivation.Label(kind, 4));
+    }
+
     [Fact]
     public void The_same_profile_id_in_another_repo_is_a_different_profile()
     {

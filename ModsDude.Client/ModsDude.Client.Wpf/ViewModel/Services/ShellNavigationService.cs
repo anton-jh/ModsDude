@@ -77,6 +77,26 @@ public sealed class ShellNavigationService
     }
 
     /// <summary>
+    /// Into a repo's saves list with the past farms showing. Reached from a profile's count of them,
+    /// whose only useful destination is a list that does not filter them out again.
+    /// </summary>
+    /// <returns>False where the shell is not up yet, the repo has no savegames, or navigation was refused.</returns>
+    public async Task<bool> GoToPastFarmsAsync(Guid repoId)
+    {
+        if (_shell is not MainPageViewModel shell)
+        {
+            return false;
+        }
+
+        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
+        {
+            return false;
+        }
+
+        return repoPage.TrySelectSavegames(showPastFarms: true);
+    }
+
+    /// <summary>
     /// Into a profile's own history, where any two revisions can be compared. Reached from a savegame,
     /// whose versions each name the revision they were played on - so "what changed under this save"
     /// is a question this already answers, and a cut-down comparison beside the savegame list would be

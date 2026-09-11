@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Navigation;
@@ -27,6 +28,13 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// The picker used to sit on Manage as well. It does not any more - two places to set one thing is
 /// how they disagree.
 /// </para>
+/// <para>
+/// <b>A held savegame changes what both controls mean.</b> One with a profile claims this mod folder,
+/// so the picker is disabled rather than offering a switch the apply table refuses; and a <em>past</em>
+/// one pins the folder to its own revision, so the button stops meaning "put this on the profile's
+/// latest" and says which revision it is repairing to instead. Both are the same rule read from the
+/// instance's end - see docs/10-savegame-profile-binding.md#instance-page.
+/// </para>
 /// </remarks>
 public partial class InstancePageViewModel : PageViewModel, IDisposable
 {
@@ -37,8 +45,14 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     private readonly InstanceDriftService _driftService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
+    private readonly ISavegameService _savegameService;
+    private readonly ProfileService _profileService;
+    private readonly ISavegamesClient _savegamesClient;
 
     private IReadOnlyList<InstanceProfileOptionViewModel> _fetchedOptions = [];
+
+    /// <summary>What the held savegames are called, so the status line can name one. Best effort.</summary>
+    private IReadOnlyDictionary<Guid, string> _savegameNames = new Dictionary<Guid, string>();
 
 
     public InstancePageViewModel(
@@ -51,6 +65,9 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         InstanceDriftService driftService,
         InstanceDriftMonitor driftMonitor,
         ProfileApplyService applyService,
+        ISavegameService savegameService,
+        ProfileService profileService,
+        ISavegamesClient savegamesClient,
         SyncPageViewModel.Factory syncPageViewModelFactory,
         InstanceSavegamesPageViewModel.Factory instanceSavegamesPageViewModelFactory,
         EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory)
@@ -62,6 +79,9 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         _driftService = driftService;
         _driftMonitor = driftMonitor;
         _applyService = applyService;
+        _savegameService = savegameService;
+        _profileService = profileService;
+        _savegamesClient = savegamesClient;
 
         InstanceName = instance.Name;
         ModFolder = instance.ModFolder ?? "No mod folder configured";
@@ -103,6 +123,33 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private InstanceProfileOptionViewModel? _selectedProfile;
 
+    /// <summary>
+    /// What this instance is holding and what that demands of its mod folder, said in one Neutral
+    /// line. Null - nearly always - where nothing with a profile is checked out here.
+    /// </summary>
+    /// <remarks>
+    /// Neutral on purpose. Holding a past farm is a state somebody chose and is playing in, not a
+    /// problem with the instance, so it reads like the mod-folder path underneath it rather than like
+    /// the locked-mod warning above it.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHoldingStatus))]
+    private string? _holdingStatus;
+
+    /// <summary>
+    /// Why the profile picker is disabled, where it is. Absent in the ordinary case, because a control
+    /// that is not greyed out has nothing to explain.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseProfile))]
+    [NotifyPropertyChangedFor(nameof(HasProfileLock))]
+    private string? _profileLock;
+
+    /// <summary>The revision a past savegame held here pins the mod folder to. Null for everything else.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActivationLabel))]
+    private int? _pinnedRevision;
+
     [ObservableProperty]
     private string _driftStatus = "Checking the mod folder...";
 
@@ -132,17 +179,28 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
     public bool HasLockedWarning => LockedWarning is not null;
     public bool HasApplyStatus => ApplyStatus is not null;
+    public bool HasHoldingStatus => HoldingStatus is not null;
+    public bool HasProfileLock => ProfileLock is not null;
+
+    /// <summary>
+    /// Whether the instance may be pointed at a different profile at all. False while a savegame with
+    /// a profile is checked out here: every switch in the app applies first, a held farm refuses that
+    /// apply, and a dropdown whose every other entry leads to a refusal is worse than one that says so
+    /// and does not open. Savegames following no mod list leave it alone.
+    /// </summary>
+    public bool CanChooseProfile => ProfileLock is null;
 
     public InstanceActivationKind ActivationKind => SelectedProfile is InstanceProfileOptionViewModel option
         ? InstanceActivation.Describe(_instance.ActiveProfile, option.Value)
         : InstanceActivationKind.Activate;
 
-    public string ActivationLabel => InstanceActivation.Label(ActivationKind);
+    public string ActivationLabel => InstanceActivation.Label(ActivationKind, PinnedRevision);
 
 
     protected override async Task InitAsync()
     {
         _fetchedOptions = await LoadProfileOptionsAsync(CancellationToken.None);
+        _savegameNames = await LoadSavegameNamesAsync(CancellationToken.None);
     }
 
     protected override void OnInitCompleted()
@@ -160,6 +218,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
         HasDanglingActiveProfile = _instance.ActiveProfile is not null && SelectedProfile is null;
 
+        RefreshHolding();
         RefreshDrift();
     }
 
@@ -227,6 +286,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     {
         await _driftMonitor.CheckAsync();
 
+        RefreshHolding();
         RefreshDrift();
     }
 
@@ -241,6 +301,46 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         NavManager.Dispose();
     }
 
+
+    /// <summary>
+    /// What the savegames checked out here demand of the mod folder, read off local state.
+    /// </summary>
+    /// <remarks>
+    /// <b>Asked of <see cref="SavegameHoldRules"/> rather than worked out here.</b> The same three
+    /// questions decide whether the sync engine refuses an apply, and a second copy of them on this
+    /// page is one that eventually disagrees with the button it is greying out.
+    /// </remarks>
+    private void RefreshHolding()
+    {
+        var held = _savegameService.GetBindings(_instance);
+        var claiming = held.FirstOrDefault(x => x.ProfileId is not null);
+
+        if (claiming.ProfileId is not Guid profileId)
+        {
+            HoldingStatus = null;
+            ProfileLock = null;
+            PinnedRevision = null;
+
+            return;
+        }
+
+        // Quoted where it has a name and plain where it does not, so both readings are a sentence
+        // rather than a name-shaped hole: the repo's list is a best-effort read, and a hold is a fact
+        // about this machine whether or not it answered.
+        var savegame = _savegameNames.GetValueOrDefault(claiming.SavegameId) is string named
+            ? $"'{named}'"
+            : "a savegame";
+
+        var profile = _profileService.Profiles.FirstOrDefault(x => x.Id == profileId)?.Name ?? "its mod list";
+
+        PinnedRevision = SavegameHoldRules.RequiredRevision(held, profileId);
+
+        ProfileLock = $"This instance is holding {savegame}, which follows '{profile}', so it stays on it. Check that savegame in to move somewhere else.";
+
+        HoldingStatus = PinnedRevision is int pinned
+            ? $"Holding {profile} rev {pinned} for {savegame}. Check {savegame} in to move this instance forward."
+            : $"Holding {savegame}, which follows {profile}.";
+    }
 
     private void RefreshDrift()
     {
@@ -295,6 +395,41 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         }
 
         return options;
+    }
+
+    /// <summary>
+    /// What the savegames this instance holds are called, for the one line that names one.
+    /// </summary>
+    /// <remarks>
+    /// Best effort and absorbed on failure: a held binding is a fact about this machine and stays true
+    /// whether or not the repo answers, so a name that could not be read costs a word in a sentence
+    /// and nothing else. Archived savegames are read too - archiving does not release a hold.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<Guid, string>> LoadSavegameNamesAsync(CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<Guid, string>();
+
+        foreach (var repoId in _savegameService.GetBindings(_instance).Select(x => x.RepoId).Distinct())
+        {
+            try
+            {
+                foreach (var savegame in await _savegamesClient.GetSavegamesV1Async(repoId, cancellationToken))
+                {
+                    names[savegame.Id] = savegame.Name;
+                }
+
+                foreach (var savegame in await _savegamesClient.GetArchivedSavegamesV1Async(repoId, cancellationToken))
+                {
+                    names[savegame.Id] = savegame.Name;
+                }
+            }
+            catch (ApiException)
+            {
+                // One repo being unreadable is not a reason to name none of the others.
+            }
+        }
+
+        return names;
     }
 
     private Repo? FindRepo(Guid repoId) => _repoRepository.Repos.FirstOrDefault(x => x.Id == repoId);

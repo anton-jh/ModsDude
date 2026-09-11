@@ -22,9 +22,10 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// two are the same three verbs seen from opposite sides, exactly as activation is.
 /// </para>
 /// <para>
-/// <b>Publish belongs here</b> because it is inherently about a slot - it takes bytes already on this
-/// disk and makes a savegame of them - and because it asks nothing about the profile: the instance has
-/// an active one, and that is what the first version records.
+/// <b>Publish belongs here</b> because it is inherently about a slot: it takes bytes already on this
+/// disk and makes a savegame of them. Which mod list that savegame follows is the dialog's question
+/// rather than this page's - every profile in the repo is a legitimate answer and so is none of them -
+/// so the page says what the folder is on and leaves the choosing to the dialog.
 /// </para>
 /// <para>
 /// <b>Check-in asks nothing about the slot either.</b> The row it is clicked on is the slot, and the
@@ -41,7 +42,6 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly SavegameFlowService _flowService;
-    private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
 
     private readonly CancellationTokenSource _pageLifetime = new();
@@ -59,7 +59,6 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         SavegameFlowService flowService,
-        IModalService modalService,
         IErrorReporter errorReporter)
     {
         _repo = repo;
@@ -69,7 +68,6 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         _bindingStore = bindingStore;
         _profileService = profileService;
         _flowService = flowService;
-        _modalService = modalService;
         _errorReporter = errorReporter;
 
         _lifetime = _pageLifetime.Token;
@@ -107,12 +105,16 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     public bool HasStatus => Status is not null;
 
     /// <summary>
-    /// Which profile a publish would record. Said on the page rather than asked, so that the one thing
-    /// the dialog does not ask about is still visible before it is opened.
+    /// Which mod list this instance is on, which is the answer a publish arrives pre-selecting.
     /// </summary>
+    /// <remarks>
+    /// A statement rather than a constraint. A save can be published to any profile in the repo or to
+    /// none, so this says where the folder stands and the dialog asks the question - including on an
+    /// instance that follows no profile, which used to be refused outright.
+    /// </remarks>
     public string ActiveProfileText => ActiveProfileName is string name
-        ? $"A save published from here is recorded against '{name}' and the mod list this instance is on."
-        : "This instance follows no profile in this repo yet, so there is nothing for a published save to be recorded against.";
+        ? $"This instance follows '{name}'. A save published from here is offered that mod list first, and any other in the repo - or none at all."
+        : "This instance follows no profile in this repo. A save published from here can still be recorded against any of the repo's mod lists, or against none.";
 
     public string? ActiveProfileName => _instance.ActiveProfile is ActiveProfile active && active.RepoId == _repo.Id
         ? _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId)?.Name
@@ -179,7 +181,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
                     binding?.SavegameId,
                     binding is SavegameCheckoutBinding held ? known.NameOf(held.SavegameId) : null,
                     binding is SavegameCheckoutBinding bound ? known.StandingOf(bound.SavegameId) : SavegameBindingStanding.None,
-                    CanPublish && ActiveProfileName is not null,
+                    CanPublish,
                     CanPublish));
             }
 
@@ -307,18 +309,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
         await RunAsync(async () =>
         {
-            if (ActiveProfileName is not string profileName)
-            {
-                await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                    "No profile is set on this instance",
-                    "A savegame version records the mod list it was played on, so this instance has to be following a " +
-                    "profile in this repo before anything can be published from it. Set one on the instance's own page."));
-
-                return;
-            }
-
-            var published = await _flowService.PublishAsync(
-                _instance, row.Id, row.Label, _repo.Name, profileName, _lifetime);
+            var published = await _flowService.PublishAsync(_instance, _repo, row.Id, row.Label, _lifetime);
 
             if (published is null)
             {

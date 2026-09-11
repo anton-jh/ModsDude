@@ -169,9 +169,19 @@
                                Style="{DynamicResource CaptionTextBlockStyle}"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
+                    <!-- Which mod list the folder ends up on, shown whether or not anything is wrong:
+                         a current farm's number can differ from the one it was last played on, and a
+                         past one's is the number that does not move. -->
                     <TextBlock Margin="0 4 0 0"
                                TextWrapping="Wrap"
-                               Text="{Binding Revision.Text}">
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="{Binding RunsOn}"
+                               Visibility="{Binding HasRunsOn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <TextBlock Margin="0 4 0 0"
+                               TextWrapping="Wrap"
+                               Text="{Binding Revision.Text}"
+                               Visibility="{Binding ShowRevisionNote, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />

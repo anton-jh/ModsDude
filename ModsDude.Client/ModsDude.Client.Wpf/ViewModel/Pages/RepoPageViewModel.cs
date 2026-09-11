@@ -35,6 +35,13 @@ public partial class RepoPageViewModel
     /// <summary>Which row the Archive should pick out on arrival. One-shot, like the others.</summary>
     private Guid? _highlightInArchiveOnce;
 
+    /// <summary>
+    /// Whether the Saves list should arrive with past farms showing. One-shot, like the others: it
+    /// describes an arrival rather than a standing preference, so opening Saves from the sidebar
+    /// afterwards gets the default back.
+    /// </summary>
+    private bool _showPastFarmsOnce;
+
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
     private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
 
@@ -98,8 +105,13 @@ public partial class RepoPageViewModel
         // for, and a game that has no savegames is not.
         if (repo.Adapter.CanSupportSavegames)
         {
-            _savesMenuItem = new MenuItemViewModel("Saves", () => repoSavegamesPageViewModelFactory.Create(repo))
-                .WithIcon(MenuIcons.Saves);
+            _savesMenuItem = new MenuItemViewModel("Saves", () =>
+            {
+                var showPastFarms = _showPastFarmsOnce;
+                _showPastFarmsOnce = false;
+
+                return repoSavegamesPageViewModelFactory.Create(repo, showPastFarms);
+            }).WithIcon(MenuIcons.Saves);
 
             MenuItems.Add(_savesMenuItem);
         }
@@ -192,20 +204,48 @@ public partial class RepoPageViewModel
     /// <summary>
     /// Selects the repo's Saves list.
     /// </summary>
+    /// <param name="showPastFarms">
+    /// Whether to arrive with the past-farms toggle on. Set by a link from a profile's count of them,
+    /// which would otherwise land on a list filtering out the very rows it counted.
+    /// </param>
     /// <returns>False where this repo has no savegames, or navigation was refused.</returns>
-    public bool TrySelectSavegames()
+    public bool TrySelectSavegames(bool showPastFarms = false)
     {
         if (_savesMenuItem is null)
         {
             return false;
         }
 
+        // Read and cleared by the menu item's factory, so it applies to the page this call opens and
+        // not to the next one somebody reaches through the sidebar.
+        _showPastFarmsOnce = showPastFarms;
+
         if (ReferenceEquals(NavManager.Selected, _savesMenuItem) is false)
         {
             NavManager.Selected = _savesMenuItem;
         }
+        else if (showPastFarms)
+        {
+            // Already open, so selecting it again constructs nothing and the factory never runs. Turn
+            // the toggle on for the page the user is looking at instead.
+            _showPastFarmsOnce = false;
 
-        return ReferenceEquals(NavManager.Selected, _savesMenuItem);
+            if (NavManager.CurrentPage is RepoSavegamesPageViewModel page)
+            {
+                page.ShowPastFarms = true;
+            }
+        }
+
+        var selected = ReferenceEquals(NavManager.Selected, _savesMenuItem);
+
+        if (selected is false)
+        {
+            // Refused, so nothing read the value and it must not be waiting for whoever opens Saves
+            // next.
+            _showPastFarmsOnce = false;
+        }
+
+        return selected;
     }
 
     /// <summary>

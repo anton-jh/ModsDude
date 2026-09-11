@@ -48,9 +48,29 @@
                         BorderThickness="1"
                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                    <Grid RowDefinitions="* auto auto">
+                    <Grid RowDefinitions="auto * auto auto">
 
-                        <ListBox Grid.Row="0"
+                        <!-- Past farms are hidden by default: they stay findable without filling a
+                             list somebody opened to find the one they are playing tonight. The count
+                             is said out loud, because a filter nobody can see is a list that is
+                             quietly wrong. -->
+                        <Grid Grid.Row="0" Margin="12 10 12 4" ColumnDefinitions="auto *">
+                            <CheckBox Grid.Column="0"
+                                      Content="Show past farms"
+                                      ToolTip="Farms their profile has moved on from. They are still playable, and their mod list does not move."
+                                      IsChecked="{Binding ShowPastFarms, Mode=TwoWay}" />
+
+                            <TextBlock Grid.Column="1"
+                                       Margin="8 0 0 0"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Text="{Binding HiddenPastText}"
+                                       Visibility="{Binding HasHiddenPast, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </Grid>
+
+                        <ListBox Grid.Row="1"
                                  ItemsSource="{Binding Savegames}"
                                  SelectedItem="{Binding Selected, Mode=TwoWay}"
                                  BorderThickness="0"
@@ -112,17 +132,42 @@
                                                     </ItemsPanelTemplate>
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
+
+                                            <!-- Why Check out is greyed out, and which apply would
+                                                 clear it. Tertiary rather than caution: nothing is
+                                                 wrong here, the folder is simply somewhere else. -->
+                                            <TextBlock Margin="0 2 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       Text="{Binding BlockedReason}"
+                                                       Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Column="2" Margin="8 0 0 0" VerticalAlignment="Top">
-                                            <!-- Never offered to a guest: a picker leading to a refusal
-                                                 is worse than one never offered. -->
+                                        <!-- Two actions, never one: checking a save out does not sync
+                                             mods, so the apply that makes the folder right is its own
+                                             button with its own dialog. Neither of the first two is offered to a guest -
+                                             a control leading to a refusal is worse than one never
+                                             offered - and each carries its own reason when disabled. -->
+                                        <StackPanel Grid.Column="2"
+                                                    Margin="8 0 0 0"
+                                                    MinWidth="140"
+                                                    VerticalAlignment="Top">
+
                                             <Button Content="Check out"
                                                     HorizontalAlignment="Stretch"
                                                     Style="{DynamicResource AccentButtonStyle}"
-                                                    ToolTip="Takes the claim and writes it into a slot. Nobody else can take it until you check it in."
+                                                    ToolTip="{Binding CheckOutToolTip}"
                                                     Command="{Binding CheckOutCommand}"
-                                                    Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <Button Margin="0 4 0 0"
+                                                    Content="Apply profile"
+                                                    HorizontalAlignment="Stretch"
+                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                    ToolTip="{Binding ApplyToolTip}"
+                                                    Command="{Binding ApplyProfileCommand}"
+                                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                             <Button Margin="0 4 0 0"
                                                     Content="Take a copy"
@@ -136,22 +181,22 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
 
-                        <TextBlock Grid.Row="0"
+                        <TextBlock Grid.Row="1"
                                    Margin="16"
                                    TextWrapping="Wrap"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="No saves here yet. Publish one from a game installation's Saves tab, and it appears in this list for everybody."
+                                   Text="{Binding EmptyText}"
                                    Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <TextBlock Grid.Row="1"
+                        <TextBlock Grid.Row="2"
                                    Margin="12 4"
                                    HorizontalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="Reading the repo's saves…"
                                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <Border Grid.Row="2"
+                        <Border Grid.Row="3"
                                 BorderThickness="0 1 0 0"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
                             <Button Margin="12"
@@ -195,7 +240,7 @@
                                         Content="Archive"
                                         ToolTip="Moves it to the repo's Archive. Nothing about the save changes and it can be brought back."
                                         Command="{Binding ArchiveSavegameCommand}"
-                                        Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Grid>
 
@@ -329,7 +374,7 @@
                                     Content="Check this version out"
                                     ToolTip="An older version is copied forward as the newest one first, so nothing in between is deleted."
                                     Command="{Binding CheckOutVersionCommand}"
-                                    Visibility="{Binding CanCheckOut, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <Button Margin="0 0 8 0"
                                     Content="Take a copy of this version"

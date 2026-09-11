@@ -38,6 +38,13 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// a dismissed warning that never comes back is a savegame silently at risk. See
 /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
 /// </para>
+/// <para>
+/// <b>Two rules where a past savegame is held, both about not crying wolf.</b> It never says "behind
+/// the profile" - nothing here suppresses that, the drift check is simply given the revision the
+/// instance is supposed to be on and the comparison comes out equal. And folder drift still reports,
+/// but its action reads <em>Re-apply rev 4</em> rather than offering a latest the apply table refuses.
+/// See docs/10-savegame-profile-binding.md#drift-notice.
+/// </para>
 /// </remarks>
 public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 {
@@ -46,6 +53,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     private readonly LocalInstanceRepository _instanceRepository;
     private readonly ProfileService _profileService;
     private readonly SavegameBindingStore _bindingStore;
+    private readonly IHeldSavegames _heldSavegames;
     private readonly ProfileApplyService _applyService;
     private readonly ShellNavigationService _navigation;
 
@@ -61,6 +69,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         LocalInstanceRepository instanceRepository,
         ProfileService profileService,
         SavegameBindingStore bindingStore,
+        IHeldSavegames heldSavegames,
         ProfileApplyService applyService,
         ShellNavigationService navigation)
     {
@@ -69,6 +78,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         _instanceRepository = instanceRepository;
         _profileService = profileService;
         _bindingStore = bindingStore;
+        _heldSavegames = heldSavegames;
         _applyService = applyService;
         _navigation = navigation;
 
@@ -187,6 +197,18 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ReapplyIsPrimary))]
     [NotifyPropertyChangedFor(nameof(CanReapplyBesideReview))]
     private bool _canReapply = true;
+
+    /// <summary>
+    /// What the re-apply button says.
+    /// </summary>
+    /// <remarks>
+    /// <b>Never "apply latest" for an instance holding a past farm.</b> Head is exactly what the apply
+    /// table refuses there, so a button offering it would be one that fails when pressed - and the
+    /// revision it does target is a number worth seeing before pressing anything, since the folder is
+    /// deliberately behind head and staying there.
+    /// </remarks>
+    [ObservableProperty]
+    private string _reapplyLabel = "Re-apply now";
 
     public bool ReapplyIsPrimary => CanReapply && CanReview is false;
 
@@ -415,6 +437,8 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             && FindRepo(active.RepoId) is Repo repo
             && repo.MembershipLevel >= RepoMembershipLevel.Member;
 
+        ReapplyLabel = DescribeReapply(_subject.Instance);
+
         Detail = Describe(report, files);
         LockedWarning = DescribeLocked(report);
         SavegameWarning = DescribeSavegames(report);
@@ -427,6 +451,27 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         ReapplyCommand.NotifyCanExecuteChanged();
         OpenModListCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Which revision the one-click re-apply is going to install, where that is not simply the
+    /// profile's latest.
+    /// </summary>
+    /// <remarks>
+    /// Asked of <see cref="IHeldSavegames.GetRequiredRevision"/>, which is the same rule
+    /// <see cref="ModsDude.Client.Core.Sync.ModSyncService"/> resolves the apply against - so the
+    /// number on the button is the number that gets installed rather than a second guess at it.
+    /// </remarks>
+    private string DescribeReapply(DriftCandidate instance)
+    {
+        if (instance.ActiveProfile is not ActiveProfile active)
+        {
+            return "Re-apply now";
+        }
+
+        return _heldSavegames.GetRequiredRevision(instance.InstanceId, active.ProfileId) is int revision
+            ? $"Re-apply rev {revision}"
+            : "Re-apply now";
     }
 
     /// <summary>
