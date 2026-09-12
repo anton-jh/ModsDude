@@ -48,10 +48,10 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         OriginalName = subject.Name;
         RepoName = repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(true, subject.GetInstanceSettings(repo.Adapter), dialogService);
+        LocalSettingsEditor = new DynamicFormViewModel(true, subject.GetLocalSettings(repo.Adapter), dialogService);
 
-        InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
-        InstanceSettingsEditor.IsValidChanged += OnInstanceSettingsIsValidChanged;
+        LocalSettingsEditor.Modified += OnLocalSettingsModified;
+        LocalSettingsEditor.IsValidChanged += OnLocalSettingsIsValidChanged;
 
         var _ = IsValid;
     }
@@ -66,9 +66,9 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
 
     public string OriginalName { get; }
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && InstanceSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
-    public DynamicFormViewModel InstanceSettingsEditor { get; }
+    public DynamicFormViewModel LocalSettingsEditor { get; }
 
 
     [RelayCommand]
@@ -82,11 +82,11 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var instanceSettings = InstanceSettingsEditor.ExtractResults();
+        var localSettings = LocalSettingsEditor.ExtractResults();
 
         _navigationLockService.ReleaseLock(this);
 
-        _localInstanceRepository.Update(_subject, _repo.Adapter, Name, instanceSettings);
+        _localInstanceRepository.Update(_subject, _repo.Adapter, Name, localSettings);
     }
 
     [RelayCommand]
@@ -106,18 +106,18 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _navigationLockService.Dispose();
-        InstanceSettingsEditor.Modified -= OnInstanceSettingsModified;
-        InstanceSettingsEditor.IsValidChanged -= OnInstanceSettingsIsValidChanged;
-        InstanceSettingsEditor.Dispose();
+        LocalSettingsEditor.Modified -= OnLocalSettingsModified;
+        LocalSettingsEditor.IsValidChanged -= OnLocalSettingsIsValidChanged;
+        LocalSettingsEditor.Dispose();
     }
 
 
-    private void OnInstanceSettingsModified(object? sender, EventArgs e)
+    private void OnLocalSettingsModified(object? sender, EventArgs e)
     {
         _navigationLockService.AcquireLock(this);
     }
 
-    private void OnInstanceSettingsIsValidChanged(object? sender, EventArgs e)
+    private void OnLocalSettingsIsValidChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsValid));
     }
@@ -129,8 +129,8 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
     /// </summary>
     private LocalInstance? FindFolderConflict()
     {
-        return InstanceSettingsEditor.IsValid
-            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, InstanceSettingsEditor.ExtractResults(), _subject.Id)
+        return LocalSettingsEditor.IsValid
+            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Id)
             : null;
     }
 
@@ -147,7 +147,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
             errors.Add("Name is taken.");
         }
 
-        errors.AddRange(InstanceSettingsEditor.GetValidationErrors());
+        errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
         if (FindFolderConflict() is LocalInstance owner)
         {

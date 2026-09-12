@@ -38,7 +38,7 @@
                         Padding="16"
                         Margin="0 16 0 0">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
-                        <uc:DynamicFormEditor DataContext="{Binding InstanceSettingsEditor}" />
+                        <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>
                 </Border>
 

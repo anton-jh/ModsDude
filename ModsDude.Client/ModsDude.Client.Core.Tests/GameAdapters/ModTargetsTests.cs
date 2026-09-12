@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 
 namespace ModsDude.Client.Core.Tests.GameAdapters;
@@ -24,35 +25,44 @@ public class ModTargetsTests
     [Fact]
     public void A_narrow_caller_handed_several_targets_throws_rather_than_taking_the_first()
     {
-        var targets = new ModTargets(
-            new ModTarget(new TargetKey("server"), "Dedicated server", @"C:\server\mods"),
-            new ModTarget(new TargetKey("client"), "MP client", @"C:\client\mods"));
-
-        var exception = Assert.Throws<InvalidOperationException>(() => targets.RequireSingleTarget());
+        var exception = Assert.Throws<InvalidOperationException>(() => Two().RequireSingleTarget());
 
         Assert.Contains("server", exception.Message);
         Assert.Contains("client", exception.Message);
     }
 
+    /// <summary>Several is the tripwire whichever way it is asked.</summary>
+    [Fact]
+    public void Several_targets_are_refused_even_of_the_forgiving_form()
+    {
+        Assert.Throws<InvalidOperationException>(() => Two().SingleTargetOrNone());
+    }
+
     /// <summary>
-    /// A game whose settings point at no folder reaches nothing, which is an ordinary answer. It is
-    /// only a narrow caller - one that was written when every game had exactly one folder - that
-    /// cannot do anything with it.
+    /// Somebody connected a game and has not filled a path in. Ordinary, and said in a sentence they
+    /// can act on rather than thrown as a fault - which is the whole difference between none and
+    /// several.
     /// </summary>
     [Fact]
-    public void A_narrow_caller_handed_no_target_throws_too()
+    public void A_game_reaching_no_folder_is_told_so_rather_than_crashing()
     {
-        Assert.Throws<InvalidOperationException>(() => ModTargets.None.RequireSingleTarget());
+        Assert.Throws<UserFriendlyException>(() => ModTargets.None.RequireSingleTarget());
+    }
+
+    /// <summary>
+    /// And a caller that has something sensible to say about reaching no folder - the ownership check
+    /// answers "claims nothing" - gets to say it, without an exception in the middle.
+    /// </summary>
+    [Fact]
+    public void A_caller_that_can_live_without_a_folder_gets_none_rather_than_an_exception()
+    {
+        Assert.Null(ModTargets.None.SingleTargetOrNone());
     }
 
     [Fact]
     public void A_target_can_be_found_by_its_key()
     {
-        var targets = new ModTargets(
-            new ModTarget(new TargetKey("server"), "Dedicated server", @"C:\server\mods"),
-            new ModTarget(new TargetKey("client"), "MP client", @"C:\client\mods"));
-
-        Assert.Equal(@"C:\client\mods", targets[new TargetKey("client")]?.Path);
+        Assert.Equal(@"C:\client\mods", Two()[new TargetKey("client")]?.Path);
     }
 
     /// <summary>
@@ -108,4 +118,9 @@ public class ModTargetsTests
     {
         Assert.Equal(raw, new TargetKey(raw).Value);
     }
+
+
+    private static ModTargets Two() => new(
+        new ModTarget(new TargetKey("server"), "Dedicated server", @"C:\server\mods"),
+        new ModTarget(new TargetKey("client"), "MP client", @"C:\client\mods"));
 }

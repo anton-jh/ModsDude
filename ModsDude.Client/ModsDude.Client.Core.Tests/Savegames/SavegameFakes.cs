@@ -388,7 +388,7 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
     }
 
     public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
-    public ILocalSavegameAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
+    public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
 
 
     private bool IsOccupied(string slotId)

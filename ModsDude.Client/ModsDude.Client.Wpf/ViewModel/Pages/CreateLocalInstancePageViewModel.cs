@@ -37,8 +37,8 @@ public partial class CreateLocalInstancePageViewModel
         _takenNames = instancesInScope.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
-        InstanceSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
-        InstanceSettingsEditor.Modified += OnInstanceSettingsModified;
+        LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
+        LocalSettingsEditor.Modified += OnLocalSettingsModified;
     }
 
 
@@ -48,9 +48,9 @@ public partial class CreateLocalInstancePageViewModel
     [NotifyPropertyChangedFor(nameof(IsValid))]
     private string _name;
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && InstanceSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
-    public DynamicFormViewModel InstanceSettingsEditor { get; }
+    public DynamicFormViewModel LocalSettingsEditor { get; }
 
     [RelayCommand]
     public async Task SaveChanges()
@@ -63,7 +63,7 @@ public partial class CreateLocalInstancePageViewModel
             return;
         }
 
-        _localInstanceRepository.Create(_repo.Adapter, Name, InstanceSettingsEditor.ExtractResults());
+        _localInstanceRepository.Create(_repo.Adapter, Name, LocalSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -71,12 +71,12 @@ public partial class CreateLocalInstancePageViewModel
     public void Dispose()
     {
         _navigationLockService.Dispose();
-        InstanceSettingsEditor.Modified -= OnInstanceSettingsModified;
-        InstanceSettingsEditor.Dispose();
+        LocalSettingsEditor.Modified -= OnLocalSettingsModified;
+        LocalSettingsEditor.Dispose();
     }
 
 
-    private void OnInstanceSettingsModified(object? sender, EventArgs e)
+    private void OnLocalSettingsModified(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsValid));
         _navigationLockService.AcquireLock(this);
@@ -89,8 +89,8 @@ public partial class CreateLocalInstancePageViewModel
     /// </summary>
     private LocalInstance? FindFolderConflict()
     {
-        return InstanceSettingsEditor.IsValid
-            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, InstanceSettingsEditor.ExtractResults())
+        return LocalSettingsEditor.IsValid
+            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults())
             : null;
     }
 
@@ -107,7 +107,7 @@ public partial class CreateLocalInstancePageViewModel
             errors.Add("Name is taken.");
         }
 
-        errors.AddRange(InstanceSettingsEditor.GetValidationErrors());
+        errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
         if (FindFolderConflict() is LocalInstance owner)
         {

@@ -73,7 +73,7 @@ public class ProfileApplyTargetsTests
             Scope = new GameIdentity(adapterId.ToString(), "fs25"),
             GameAdapterId = adapterId,
             Name = name,
-            AdapterInstanceSettings = "{}",
+            AdapterLocalSettings = "{}",
             ModFolder = $@"C:\mods\{name}",
             ActiveProfile = activeProfile
         });

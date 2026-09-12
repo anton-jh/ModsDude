@@ -363,7 +363,7 @@ public class SavegamePackerTests
             => throw new NotSupportedException("Packing addresses a slot it was given; it never enumerates them.");
 
         public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
-        public ILocalSavegameAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
+        public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
     }
 
 

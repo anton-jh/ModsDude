@@ -919,7 +919,7 @@ public class SavegameServiceTests
                 Scope = new GameIdentity("farmingSimulator", "fs25"),
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
-                AdapterInstanceSettings = "{}",
+                AdapterLocalSettings = "{}",
                 ModFolder = _slots.Path,
                 ActiveProfile = new ActiveProfile(Server.RepoId, Server.ProfileId)
             };

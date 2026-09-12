@@ -25,32 +25,32 @@ public class LocalInstance
     public GameIdentity Scope => PersistedModel.Scope;
     public GameAdapterId GameAdapterId => PersistedModel.GameAdapterId;
     public string Name => PersistedModel.Name;
-    public string SerializedInstanceSettings => PersistedModel.AdapterInstanceSettings;
+    public string SerializedLocalSettings => PersistedModel.AdapterLocalSettings;
     public string? ModFolder => PersistedModel.ModFolder;
     public ActiveProfile? ActiveProfile => PersistedModel.ActiveProfile;
 
     internal PersistedLocalInstance PersistedModel { get; }
 
 
-    public DynamicForm GetInstanceSettings(IBaseGameAdapter baseAdapter)
+    public DynamicForm GetLocalSettings(IBaseGameAdapter baseAdapter)
     {
-        return baseAdapter.DeserializeLocalSettings(PersistedModel.AdapterInstanceSettings);
+        return baseAdapter.DeserializeLocalSettings(PersistedModel.AdapterLocalSettings);
     }
 
     public ILocalGameAdapter GetAdapter(IBaseGameAdapter baseAdapter)
     {
-        return baseAdapter.WithLocalSettings(PersistedModel.AdapterInstanceSettings);
+        return baseAdapter.WithLocalSettings(PersistedModel.AdapterLocalSettings);
     }
 
 
-    internal void Update(string name, DynamicForm instanceSettings, string? modFolder)
+    internal void Update(string name, DynamicForm localSettings, string? modFolder)
     {
         PersistedModel.Name = name;
-        PersistedModel.AdapterInstanceSettings = instanceSettings.Serialize();
+        PersistedModel.AdapterLocalSettings = localSettings.Serialize();
         PersistedModel.ModFolder = modFolder;
 
         PropertyChanged?.Invoke(this, new(nameof(Name)));
-        PropertyChanged?.Invoke(this, new(nameof(SerializedInstanceSettings)));
+        PropertyChanged?.Invoke(this, new(nameof(SerializedLocalSettings)));
         PropertyChanged?.Invoke(this, new(nameof(ModFolder)));
     }
 

@@ -84,9 +84,9 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
         return ProfileApplyTargets.Derive(Instances, profile);
     }
 
-    public LocalInstance Create(IBaseGameAdapter baseAdapter, string name, DynamicForm instanceSettings)
+    public LocalInstance Create(IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
     {
-        var modFolder = GetModFolder(baseAdapter, instanceSettings);
+        var modFolder = GetModFolder(baseAdapter, localSettings);
 
         EnsureFolderIsUnclaimed(modFolder, null);
 
@@ -96,7 +96,7 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
             Scope = baseAdapter.Scope,
             GameAdapterId = baseAdapter.Id,
             Name = name,
-            AdapterInstanceSettings = instanceSettings.Serialize(),
+            AdapterLocalSettings = localSettings.Serialize(),
             ModFolder = modFolder
         };
 
@@ -109,13 +109,13 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
         return instance;
     }
 
-    public void Update(LocalInstance instance, IBaseGameAdapter baseAdapter, string name, DynamicForm instanceSettings)
+    public void Update(LocalInstance instance, IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
     {
-        var modFolder = GetModFolder(baseAdapter, instanceSettings);
+        var modFolder = GetModFolder(baseAdapter, localSettings);
 
         EnsureFolderIsUnclaimed(modFolder, instance.Id);
 
-        instance.Update(name, instanceSettings, modFolder);
+        instance.Update(name, localSettings, modFolder);
         _store.Save();
 
         // The mod folder may have moved, which makes every answer about the old one meaningless.
@@ -185,9 +185,9 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     /// The instance already claiming the folder these settings point at, if any. Checked across
     /// every scope: two scopes can name the same folder, and only one instance can own it.
     /// </summary>
-    public LocalInstance? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm instanceSettings, Guid? ignoredInstanceId = null)
+    public LocalInstance? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, Guid? ignoredInstanceId = null)
     {
-        return FindFolderConflict(GetModFolder(baseAdapter, instanceSettings), ignoredInstanceId);
+        return FindFolderConflict(GetModFolder(baseAdapter, localSettings), ignoredInstanceId);
     }
 
     /// <summary>The mod folder the adapter says an instance with these settings would own.</summary>
@@ -195,16 +195,20 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     /// Takes the one target, which is Phase 10 slice 1 scaffolding. An instance is still one folder,
     /// and the check this feeds - no two of them own the same one - is rewritten in slice 2a, where a
     /// game owns a list of folders instead.
+    /// <para>
+    /// A game reaching no folder claims none, which is the same null this already returns for an
+    /// adapter with no mod capability at all - both mean "nothing here can collide with anybody".
+    /// </para>
     /// </remarks>
-    public static string? GetModFolder(IBaseGameAdapter baseAdapter, DynamicForm instanceSettings)
+    public static string? GetModFolder(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
         return baseAdapter
-            .WithLocalSettings(instanceSettings)
+            .WithLocalSettings(localSettings)
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
             .ModTargets
-            .RequireSingleTarget()
-            .Path;
+            .SingleTargetOrNone()
+            ?.Path;
     }
 
 

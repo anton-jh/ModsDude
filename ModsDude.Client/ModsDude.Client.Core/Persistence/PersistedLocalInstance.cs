@@ -11,14 +11,14 @@ public class PersistedLocalInstance
     public required GameIdentity Scope { get; init; }
 
     /// <summary>
-    /// Which adapter version authored <see cref="AdapterInstanceSettings"/>. Not part of the scope,
+    /// Which adapter version authored <see cref="AdapterLocalSettings"/>. Not part of the scope,
     /// so a repo on a newer compatibility version still offers this instance and has to be able to
     /// read the older settings.
     /// </summary>
     public required GameAdapterId GameAdapterId { get; init; }
 
     public required string Name { get; set; }
-    public required string AdapterInstanceSettings { get; set; }
+    public required string AdapterLocalSettings { get; set; }
 
     /// <summary>
     /// The folder the adapter says this instance owns, recorded so the ownership check can run

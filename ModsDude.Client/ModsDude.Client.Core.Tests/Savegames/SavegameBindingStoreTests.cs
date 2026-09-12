@@ -330,7 +330,7 @@ public class SavegameBindingStoreTests
         Scope = new GameIdentity("farmingSimulator", "fs25"),
         GameAdapterId = new GameAdapterId("farmingSimulator", 1),
         Name = "Farming Simulator 25",
-        AdapterInstanceSettings = "{}"
+        AdapterLocalSettings = "{}"
     };
 
 

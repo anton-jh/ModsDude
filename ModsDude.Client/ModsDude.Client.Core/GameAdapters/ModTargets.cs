@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Exceptions;
 using System.Collections;
 
 namespace ModsDude.Client.Core.GameAdapters;
@@ -107,26 +108,46 @@ public sealed class ModTargets : IReadOnlyList<ModTarget>
 
 
     /// <summary>
-    /// The one target, for a caller that has not been taught about several yet.
+    /// The one target, or none where the settings point at no folder at all.
     /// </summary>
     /// <remarks>
-    /// Scaffolding, and named so it says as much when it goes off. Slice 1 of Phase 10 widens the
-    /// adapter to answer with a list while every caller still takes one, and slice 2b - where the
-    /// per-folder stores are re-keyed - deletes this. A caller that quietly took the first target
-    /// instead would work perfectly for Farming Simulator and silently ignore two thirds of a
-    /// BeamNG game, which is the failure this phase exists to prevent.
+    /// <para>
+    /// <b>Several is the tripwire; none is data.</b> A game reaching no mod folder is an ordinary
+    /// answer - somebody connected it and has not filled a path in - and a caller that can say
+    /// something sensible about that gets to. A game reaching three is a caller that was written when
+    /// every game had one, and taking the first would work perfectly for Farming Simulator while
+    /// silently leaving two thirds of a BeamNG game on the old mod list.
+    /// </para>
+    /// <para>
+    /// Scaffolding either way. Slice 1 of Phase 10 widens the adapter to answer with a list while
+    /// every caller still takes one, and slice 2b - where the per-folder stores are re-keyed and the
+    /// loop over a game's targets arrives - deletes both of these.
+    /// </para>
     /// </remarks>
-    public ModTarget RequireSingleTarget()
+    public ModTarget? SingleTargetOrNone()
     {
         return Count switch
         {
+            0 => null,
             1 => _targets[0],
-            0 => throw new InvalidOperationException(
-                "This game reaches no mod folder. Its settings point at nothing to sync."),
             _ => throw new InvalidOperationException(
                 $"This game reaches {Count} mod folders ({string.Join(", ", _targets.Select(x => x.Key))}), " +
                 $"and this caller has only been taught about one.")
         };
+    }
+
+    /// <summary>
+    /// The one target, for a caller that cannot do anything at all without a folder.
+    /// </summary>
+    /// <remarks>
+    /// Reaching no folder is the user's settings rather than a fault, so it is said in a sentence they
+    /// can act on. Several is still the tripwire, and still an exception nobody should ever see.
+    /// </remarks>
+    public ModTarget RequireSingleTarget()
+    {
+        return SingleTargetOrNone() ?? throw new UserFriendlyException(
+            "This game has no mod folder",
+            "Its settings point at no folder to put mods in, so there is nothing to sync. Fill one in on the game's settings page.");
     }
 
 

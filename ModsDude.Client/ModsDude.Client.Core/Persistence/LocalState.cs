@@ -8,12 +8,22 @@ public class LocalState
     /// affordable while the system has no users.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Bumped to 3 because <c>AdapterInstanceSettings</c> was renamed to
+    /// <see cref="PersistedLocalInstance.AdapterLocalSettings"/>. A version 2 state has the old
+    /// property name, and the settings are a required member, so reading one would fail as a parse
+    /// error rather than as the deliberate discard it is. The rename is Phase 10 retiring the word
+    /// instance from the adapter layer; the state is cheap, and carrying a second spelling to avoid
+    /// paying for it is how a schema grows a history nobody asked for.
+    /// </para>
+    /// <para>
     /// Not bumped for the savegame collections on <see cref="PersistedLocalInstance"/>. A version 2
     /// state deserializes with both of them empty, which reads as "this machine holds no savegame" -
     /// true, and the right answer. Bumping would throw away every configured instance to learn
     /// something already known.
+    /// </para>
     /// </remarks>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
 
     public int Version { get; set; } = CurrentVersion;
