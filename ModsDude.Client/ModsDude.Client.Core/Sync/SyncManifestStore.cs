@@ -112,5 +112,11 @@ public sealed class SyncManifestStore
     }
 
 
-    private string GetPath(Guid instanceId) => Path.Combine(_directory, $"{instanceId}.json");
+    /// <summary>
+    /// Through <see cref="StoreFileName"/>, which is where what a store puts in a file name gets
+    /// encoded. An instance id needs none of that - a Guid is already hex and dashes, so the name is
+    /// what it has always been - but the identity and target key that replace it are adapter-authored
+    /// strings, and the encoding has to be the store's rather than something an adapter can violate.
+    /// </summary>
+    private string GetPath(Guid instanceId) => Path.Combine(_directory, $"{StoreFileName.For(instanceId.ToString())}.json");
 }
