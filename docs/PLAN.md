@@ -1475,10 +1475,10 @@ adapter will offer each folder, and offer leaving one blank.
       are an opaque blob in that state. `ModFolder` was already this trick; it grew an `s` and
       nothing else. The callers that still read one folder take `Game.SingleModFolderOrNone`, the
       persisted-side twin of `SingleTargetOrNone`, and it dies with it in 2b.
-- [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
+- [x] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
       syncing the dedicated server must not rewrite the MP client's manifest, and
       atomic-write-per-folder is what keeps a half-finished apply safe.
-- [ ] **A manifest for a target that no longer exists is stale, and is dropped.** That is half of
+- [x] **A manifest for a target that no longer exists is stale, and is dropped.** That is half of
       the orphan question the fake adapter makes reachable, and it belongs here rather than in slice
       1 because until the manifest is keyed on a target there is nothing to orphan. Emptying a
       settings field and an adapter author renaming a key produce the same file and nothing can tell
@@ -1500,7 +1500,7 @@ adapter will offer each folder, and offer leaving one blank.
 - [x] **Bump `LocalState.CurrentVersion`.** A per-game dictionary defaulting to empty would read as
       "no profile is set anywhere", which is the one thing that must not be silently guessed. No
       migration, per the standing decision.
-- [ ] **A mod source per target, not per game.** `ModSourceId.ForGame(identity)` offers one scan
+- [x] **A mod source per target, not per game.** `ModSourceId.ForGame(identity)` offers one scan
       source per game; with three targets a BeamNG import would look in one folder of three and
       quietly report what the other two hold as missing. `ModSourceKind.Game` is user-facing as
       *"Game install"* and wants the target's name where there is more than one. `ModSourceId` is
@@ -1734,7 +1734,7 @@ existing test stays green. The helper dies in slice 2b, which is where multi-tar
 - [x] **2a. The `Game` and its state.** `PersistedGame`, `Game`, `GameRepository`,
       `LocalState.Games` keyed by `GameIdentity` with its JSON key converter, the version bump.
       Targets still resolve through `RequireSingleTarget`.
-- [ ] **2b. Re-key the per-folder stores** — the manifest, the drift service, store eviction and mod
+- [x] **2b. Re-key the per-folder stores** — the manifest, the drift service, store eviction and mod
       sources. One slice rather than four, because it is the same edit four times and splitting it
       means four rounds of half-compiling. `RequireSingleTarget` is deleted here.
 - [ ] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
