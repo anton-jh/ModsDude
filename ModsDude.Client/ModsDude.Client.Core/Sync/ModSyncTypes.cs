@@ -145,7 +145,9 @@ public sealed record ModSyncPlan
 {
     public required Guid RepoId { get; init; }
     public required Guid ProfileId { get; init; }
-    public required Guid InstanceId { get; init; }
+
+    /// <summary>Which game this plan is for, and therefore which manifest it rewrites.</summary>
+    public required GameIdentity Game { get; init; }
 
     /// <summary>Carried only so the manifest can record it. See <see cref="ModSyncRequest.ProfileName"/>.</summary>
     public string? ProfileName { get; init; }

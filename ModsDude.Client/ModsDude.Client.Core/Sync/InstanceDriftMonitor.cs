@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -18,7 +19,12 @@ public interface IDriftCandidateSource
     IReadOnlyList<DriftCandidate> GetDriftCandidates();
 }
 
-public sealed record DriftCandidate(Guid InstanceId, string Name, string? ModFolder, ActiveProfile? ActiveProfile);
+/// <param name="Identity">Which game this is, and the key its manifest and its holds are filed under.</param>
+/// <param name="ModFolder">
+/// The one folder, or null where the game reaches none - see
+/// <see cref="Services.GameRepository.GetDriftCandidates"/>. Null is unknown rather than drifted.
+/// </param>
+public sealed record DriftCandidate(GameIdentity Identity, string Name, string? ModFolder, ActiveProfile? ActiveProfile);
 
 /// <summary>
 /// Which revision a profile is on, for the profiles this client happens to know about.
@@ -257,7 +263,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         {
             // Asked for every game, including ones with no active profile: holding somebody's
             // evening in a slot is worth saying whether or not this folder has ever been synced.
-            var savegameDrift = await CheckSavegamesAsync(candidate.InstanceId);
+            var savegameDrift = await CheckSavegamesAsync(candidate.Identity);
 
             if (candidate.ActiveProfile is not ActiveProfile active)
             {
@@ -273,7 +279,7 @@ public sealed class InstanceDriftMonitor : IDisposable
             }
 
             var report = _driftService.Check(
-                candidate.InstanceId,
+                candidate.Identity,
                 active,
                 candidate.ModFolder,
                 // A past savegame held here pins the folder to its own revision, and that is what
@@ -282,7 +288,7 @@ public sealed class InstanceDriftMonitor : IDisposable
                 // on, and it comes out equal on its own. Against head instead, a game holding a
                 // past savegame would report drift permanently and offer a re-apply to head that the
                 // apply table refuses.
-                currentRevision: _savegames?.GetRequiredRevision(candidate.InstanceId, active.ProfileId)
+                currentRevision: _savegames?.GetRequiredRevision(candidate.Identity, active.ProfileId)
                     ?? _profileRevisions?.GetHeadRevision(active),
                 savegameDrift: savegameDrift);
 
@@ -296,7 +302,7 @@ public sealed class InstanceDriftMonitor : IDisposable
             // Only a drifted game needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
             var profileName = report.Status is InstanceDriftStatus.Drifted
-                ? _manifestStore.TryRead(candidate.InstanceId)?.ProfileName
+                ? _manifestStore.TryRead(candidate.Identity)?.ProfileName
                 : null;
 
             results.Add(new InstanceDrift(candidate, report, profileName));
@@ -339,7 +345,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// been there and it is computed already; losing all of it because a save folder went missing
     /// mid-check would trade a working notice for an exception on a background thread.
     /// </remarks>
-    private async Task<IReadOnlyList<Savegames.SavegameDrift>> CheckSavegamesAsync(Guid instanceId)
+    private async Task<IReadOnlyList<Savegames.SavegameDrift>> CheckSavegamesAsync(GameIdentity game)
     {
         if (_savegames is null)
         {
@@ -348,13 +354,13 @@ public sealed class InstanceDriftMonitor : IDisposable
 
         try
         {
-            return await _savegames.CheckDriftAsync(instanceId, CancellationToken.None);
+            return await _savegames.CheckDriftAsync(game, CancellationToken.None);
         }
         catch (Exception exception)
         {
             // The notice degrades to the mod half rather than failing. Nothing on screen says the
             // savegame half was even attempted.
-            _logger.LogWarning(exception, "Could not check savegame drift for game {Game}.", instanceId);
+            _logger.LogWarning(exception, "Could not check savegame drift for game {Game}.", game);
 
             return [];
         }
@@ -379,14 +385,14 @@ public sealed class InstanceDriftMonitor : IDisposable
         try
         {
             return await _storeIntegrity.CheckAsync(
-                candidate.InstanceId,
+                candidate.Identity,
                 candidate.ModFolder,
                 changed,
                 CancellationToken.None);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Could not check store integrity for game {Game}.", candidate.InstanceId);
+            _logger.LogWarning(exception, "Could not check store integrity for game {Game}.", candidate.Identity);
 
             return [];
         }
@@ -512,10 +518,11 @@ public sealed class InstanceDriftMonitor : IDisposable
             '|',
             results
                 .Where(x => x.IsDrifted)
-                .OrderBy(x => x.Game.InstanceId)
+                // A GameIdentity is not comparable, and the signature only needs a stable order.
+                .OrderBy(x => x.Game.Identity.ToString(), StringComparer.Ordinal)
                 .Select(x => string.Join(
                     ';',
-                    x.Game.InstanceId,
+                    x.Game.Identity,
                     x.Report.Status,
                     string.Join(',', x.Report.Added),
                     string.Join(',', x.Report.Removed),

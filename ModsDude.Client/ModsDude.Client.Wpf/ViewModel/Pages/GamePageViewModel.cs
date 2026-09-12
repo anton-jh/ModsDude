@@ -93,7 +93,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         _bindingStore.BindingsChanged += OnBindingsChanged;
 
         GameName = game.Name;
-        ModFolder = game.ModFolder ?? "No mod folder configured";
+        // Joined for now: slice 5 turns this into the target list it really is.
+        ModFolder = game.ModFolders.Count > 0 ? string.Join(", ", game.ModFolders) : "No mod folder configured";
 
         NavManager = navigationManager;
         MenuItems = [
@@ -370,9 +371,9 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     private void RefreshDrift()
     {
         var report = _driftService.Check(
-            _game.Id,
+            _game.Identity,
             _game.ActiveProfile,
-            _game.ModFolder,
+            _game.SingleModFolderOrNone,
             profileIsMissing: HasDanglingActiveProfile);
 
         DriftStatus = report.Status switch
@@ -401,7 +402,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     /// </summary>
     private async Task<IReadOnlyList<InstanceProfileOptionViewModel>> LoadProfileOptionsAsync(CancellationToken cancellationToken)
     {
-        var repos = _repoRepository.Repos.Where(x => x.Scope == _game.Scope).ToList();
+        var repos = _repoRepository.Repos.Where(x => x.Scope == _game.Identity).ToList();
         var options = new List<InstanceProfileOptionViewModel>();
 
         foreach (var repo in repos)

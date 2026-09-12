@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 
 namespace ModsDude.Client.Wpf.ViewModel.Services;
@@ -33,7 +34,7 @@ public sealed class ShellNavigationService
     /// game downloaded are sitting in it, waiting to be imported.
     /// </param>
     /// <returns>False where the shell is not up yet, the target is gone, or navigation was refused.</returns>
-    public async Task<bool> GoToProfileModsAsync(Guid repoId, Guid profileId, Guid driftedInstanceId)
+    public async Task<bool> GoToProfileModsAsync(Guid repoId, Guid profileId, GameIdentity driftedGame)
     {
         if (_shell is not MainPageViewModel shell)
         {
@@ -50,7 +51,7 @@ public sealed class ShellNavigationService
             return false;
         }
 
-        return profilePage.TrySelectMods(driftedInstanceId);
+        return profilePage.TrySelectMods(driftedGame);
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.GameAdapters;
+
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
@@ -34,7 +36,8 @@ public sealed record SyncManifest
 
     public int Version { get; init; } = CurrentVersion;
 
-    public required Guid InstanceId { get; init; }
+    /// <summary>Which game this folder belongs to - the key the manifest is filed under.</summary>
+    public required GameIdentity Game { get; init; }
 
     /// <summary>Which profile was applied, so a manifest can be recognised as describing another one.</summary>
     public required Guid RepoId { get; init; }

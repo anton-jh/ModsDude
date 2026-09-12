@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -61,7 +62,7 @@ public class InstanceDriftServiceTests
 
         Assert.Equal(
             InstanceDriftStatus.NoActiveProfile,
-            fixture.Service.Check(fixture.InstanceId, null, fixture.Folder.Path).Status);
+            fixture.Service.Check(fixture.Game, null, fixture.Folder.Path).Status);
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public class InstanceDriftServiceTests
         fixture.Sync(("fs25_a.zip", "one"));
 
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
             profileIsMissing: true);
@@ -95,7 +96,7 @@ public class InstanceDriftServiceTests
         fixture.Sync(("fs25_a.zip", "one"));
 
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, Guid.NewGuid()),
             fixture.Folder.Path);
 
@@ -111,7 +112,7 @@ public class InstanceDriftServiceTests
         // An unplugged drive or an offline network path. Warning about mods that may be perfectly
         // fine is worse than saying nothing.
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Combine("gone"));
 
@@ -127,7 +128,7 @@ public class InstanceDriftServiceTests
         // The folder is untouched; the profile moved on. No revision number on the profile is
         // needed - the applied mod set is what the comparison is against.
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
             profileDependencies: [
@@ -148,7 +149,7 @@ public class InstanceDriftServiceTests
         fixture.Sync(("fs25_a.zip", "one"));
 
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
             profileDependencies: [
@@ -215,7 +216,7 @@ public class InstanceDriftServiceTests
         fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
 
         var report = fixture.Service.Check(
-            fixture.InstanceId,
+            fixture.Game,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
             profileDependencies: [
@@ -248,7 +249,7 @@ public class InstanceDriftServiceTests
         public TempDirectory Folder { get; } = new("drift-mods");
         public SyncManifestStore Manifests { get; }
         public InstanceDriftService Service { get; }
-        public Guid InstanceId { get; } = Guid.NewGuid();
+        public GameIdentity Game { get; } = Keys.Game();
 
 
         /// <summary>Writes the files and the manifest that says they are what was installed.</summary>
@@ -279,7 +280,7 @@ public class InstanceDriftServiceTests
 
             Manifests.Write(new SyncManifest
             {
-                InstanceId = InstanceId,
+                Game = Game,
                 RepoId = _repoId,
                 ProfileId = _profileId,
                 SyncedAt = DateTimeOffset.UtcNow,
@@ -289,7 +290,7 @@ public class InstanceDriftServiceTests
         }
 
         public InstanceDriftReport Check()
-            => Service.Check(InstanceId, new ActiveProfile(_repoId, _profileId), Folder.Path);
+            => Service.Check(Game, new ActiveProfile(_repoId, _profileId), Folder.Path);
 
         public void Dispose()
         {

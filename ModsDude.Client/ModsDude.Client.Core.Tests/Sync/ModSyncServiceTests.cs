@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
@@ -308,7 +309,7 @@ public class ModSyncServiceTests
 
         Assert.True(File.Exists(fixture.Folder.Combine("fs25_old.zip")));
         Assert.False(File.Exists(fixture.Folder.Combine("fs25_a.zip")));
-        Assert.Null(fixture.Manifests.TryRead(fixture.InstanceId));
+        Assert.Null(fixture.Manifests.TryRead(fixture.Game));
     }
 
     [Fact]
@@ -465,7 +466,7 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(plan);
 
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
     }
 
     /// <summary>
@@ -487,7 +488,7 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(plan);
 
-        Assert.Equal(4, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
     }
 
     /// <summary>
@@ -513,7 +514,7 @@ public class ModSyncServiceTests
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
         Assert.Equal([null, 4], fixture.Held.Observed);
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
     }
 
     /// <summary>
@@ -539,7 +540,7 @@ public class ModSyncServiceTests
         await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
         Assert.Equal([null, 4], fixture.Held.Observed);
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
     }
 
     /// <summary>
@@ -554,7 +555,7 @@ public class ModSyncServiceTests
         using var fixture = new SyncFixture();
         fixture.Server.HeadRevision = 1004;
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
-        fixture.Held.Hold(fixture.InstanceId, fixture.Server.ProfileId, targetRevision: 4);
+        fixture.Held.Hold(fixture.Game, fixture.Server.ProfileId, targetRevision: 4);
 
         var plan = await fixture.PlanAsync();
 
@@ -565,7 +566,7 @@ public class ModSyncServiceTests
 
         // Which is then what the drift check compares against, so the game is not permanently
         // behind head by construction.
-        Assert.Equal(4, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
     }
 
     /// <summary>
@@ -578,7 +579,7 @@ public class ModSyncServiceTests
     {
         using var fixture = new SyncFixture();
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
-        fixture.Held.Hold(fixture.InstanceId, fixture.Server.ProfileId, targetRevision: 4);
+        fixture.Held.Hold(fixture.Game, fixture.Server.ProfileId, targetRevision: 4);
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync(revision: 1004));
 
@@ -596,7 +597,7 @@ public class ModSyncServiceTests
     {
         using var fixture = new SyncFixture();
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
-        fixture.Held.Hold(fixture.InstanceId, Guid.NewGuid());
+        fixture.Held.Hold(fixture.Game, Guid.NewGuid());
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync());
 
@@ -614,7 +615,7 @@ public class ModSyncServiceTests
         using var fixture = new SyncFixture();
         fixture.Server.HeadRevision = 1004;
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
-        fixture.Held.HoldWithNoProfile(fixture.InstanceId);
+        fixture.Held.HoldWithNoProfile(fixture.Game);
 
         var plan = await fixture.PlanAsync();
 
@@ -673,7 +674,7 @@ public class ModSyncServiceTests
                 new FakeStoreProvider(ServingStore, OtherStore),
                 Manifests,
                 RecycleBin,
-                new FakeModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
+                new FakeModFolders(new GameModFolder(Game, Folder.Path)),
                 Held,
                 NullLogger<ModSyncService>.Instance);
         }
@@ -690,12 +691,12 @@ public class ModSyncServiceTests
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
         public ContentStore OtherStore { get; }
-        public Guid InstanceId { get; } = Guid.NewGuid();
+        public GameIdentity Game { get; } = Keys.Game();
 
 
         public Task<ModSyncPlan> PlanAsync(int? revision = null)
             => Service.PlanAsync(
-                new ModSyncRequest(InstanceId, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
+                new ModSyncRequest(Game, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
                 CancellationToken.None);
 
         public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan)
@@ -710,7 +711,7 @@ public class ModSyncServiceTests
         public string ReadInstalled(string name) => File.ReadAllText(Folder.Combine(name));
 
         public InstanceDriftReport CheckDrift()
-            => Drift.Check(InstanceId, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
+            => Drift.Check(Game, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
 
         public void Dispose()
         {

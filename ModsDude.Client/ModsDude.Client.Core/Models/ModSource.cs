@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -71,7 +72,11 @@ public readonly record struct ModSourceId
     /// </summary>
     public static ModSourceId Repo { get; } = new("repo");
 
-    public static ModSourceId ForInstance(Guid instanceId) => new($"game:{instanceId}");
+    /// <summary>
+    /// A game's mod folder, keyed by the identity the game itself is keyed by. Slice 2b gives a
+    /// target's key its own place here, since a source per game would look in one folder of three.
+    /// </summary>
+    public static ModSourceId ForGame(GameIdentity game) => new($"game:{game}");
 
     /// <summary>
     /// Keyed by the folder itself, so the same folder added twice is the same source - and so a

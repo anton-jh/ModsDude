@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Sync;
@@ -154,7 +155,7 @@ public class ModSyncPlannerTests
         // is exactly what an in-game update leaves behind.
         var manifest = new SyncManifest
         {
-            InstanceId = Guid.NewGuid(),
+            Game = Keys.Game(),
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             SyncedAt = DateTimeOffset.UtcNow,
@@ -308,7 +309,7 @@ public class ModSyncPlannerTests
     {
         return new SyncManifest
         {
-            InstanceId = Guid.NewGuid(),
+            Game = Keys.Game(),
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             SyncedAt = DateTimeOffset.UtcNow,

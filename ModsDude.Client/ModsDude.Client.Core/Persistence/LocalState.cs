@@ -1,4 +1,6 @@
-﻿namespace ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.GameAdapters;
+
+namespace ModsDude.Client.Core.Persistence;
 
 public class LocalState
 {
@@ -9,6 +11,15 @@ public class LocalState
     /// </summary>
     /// <remarks>
     /// <para>
+    /// Bumped to 4 because <see cref="Games"/> is keyed by <see cref="GameIdentity"/> now, and a
+    /// <see cref="PersistedGame"/> has lost its id and its scope to that key and grown an <c>s</c> on
+    /// its mod folder. A version 3 state would read into this shape as an <em>empty</em> dictionary -
+    /// no game configured anywhere, and so no profile active anywhere - which is the one thing that
+    /// must not be silently guessed. The <see cref="Models.ModSourceId"/> format changed with it, so
+    /// the "do not look in this folder" preferences go too; harmless, and it rides this bump rather
+    /// than earning one of its own.
+    /// </para>
+    /// <para>
     /// Bumped to 3 because <c>AdapterInstanceSettings</c> was renamed to
     /// <see cref="PersistedGame.AdapterLocalSettings"/>. A version 2 state has the old
     /// property name, and the settings are a required member, so reading one would fail as a parse
@@ -16,14 +27,8 @@ public class LocalState
     /// instance from the adapter layer; the state is cheap, and carrying a second spelling to avoid
     /// paying for it is how a schema grows a history nobody asked for.
     /// </para>
-    /// <para>
-    /// Not bumped for the savegame collections on <see cref="PersistedGame"/>. A version 2
-    /// state deserializes with both of them empty, which reads as "this machine holds no savegame" -
-    /// true, and the right answer. Bumping would throw away every configured game to learn
-    /// something already known.
-    /// </para>
     /// </remarks>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
 
     public int Version { get; set; } = CurrentVersion;
@@ -32,8 +37,19 @@ public class LocalState
     public ClientSettings Settings { get; init; } = new();
 
     /// <summary>
-    /// Games are keyed by their own id and scoped to a game identity, not owned by a repo: one
-    /// installation is configured once and offered under every repo targeting that game.
+    /// The games on this machine, keyed by which game each one is an installation of.
     /// </summary>
-    public Dictionary<Guid, PersistedGame> Games { get; init; } = [];
+    /// <remarks>
+    /// <para>
+    /// Keyed by identity rather than by an id of its own, so the same game configured twice stops
+    /// being representable rather than being checked for. A game is not owned by a repo - it is
+    /// configured once and offered under every repo targeting that game.
+    /// </para>
+    /// <para>
+    /// A record struct as a dictionary key needs
+    /// <see cref="GameIdentityJsonConverter.WriteAsPropertyName"/>, or it serializes as an object and
+    /// the whole file stops round-tripping.
+    /// </para>
+    /// </remarks>
+    public Dictionary<GameIdentity, PersistedGame> Games { get; init; } = [];
 }

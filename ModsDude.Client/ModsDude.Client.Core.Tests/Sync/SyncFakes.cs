@@ -273,9 +273,9 @@ internal sealed class FakeRecycleBin(bool available = true) : IRecycleBin
 }
 
 
-internal sealed class FakeModFolders(params InstanceModFolder[] folders) : IModFolders
+internal sealed class FakeModFolders(params GameModFolder[] folders) : IModFolders
 {
-    public IReadOnlyList<InstanceModFolder> GetAll() => folders;
+    public IReadOnlyList<GameModFolder> GetAll() => folders;
 }
 
 
@@ -309,31 +309,31 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
     /// Records that this game is holding a savegame following one profile.
     /// </summary>
     /// <param name="targetRevision">A number makes it past, pinned there; null makes it current.</param>
-    public void Hold(Guid instanceId, Guid profileId, int? targetRevision = null)
+    public void Hold(GameIdentity game, Guid profileId, int? targetRevision = null)
         => Add(profileId, targetRevision);
 
     /// <summary>One following no mod list, which claims nothing about the folder.</summary>
-    public void HoldWithNoProfile(Guid instanceId) => Add(null, null);
+    public void HoldWithNoProfile(GameIdentity game) => Add(null, null);
 
 
-    public Task ObserveAsync(Guid instanceId, CancellationToken ct)
+    public Task ObserveAsync(GameIdentity game, CancellationToken ct)
     {
-        Observed.Add(manifests.TryRead(instanceId)?.ProfileRevision);
+        Observed.Add(manifests.TryRead(game)?.ProfileRevision);
 
         return Task.CompletedTask;
     }
 
-    public int? GetRequiredRevision(Guid instanceId, Guid profileId)
+    public int? GetRequiredRevision(GameIdentity game, Guid profileId)
         => SavegameHoldRules.RequiredRevision(_held, profileId);
 
-    public SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision)
+    public SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision)
         => SavegameHoldRules.DecideApply(_held, profileId, revision);
 
     /// <summary>
     /// Nothing: what the notice says about a held slot is <see cref="SavegameDriftRules"/>'s and is
     /// exercised where that lives. A hold recorded here is about the mod folder, not about the slot.
     /// </summary>
-    public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct)
+    public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<SavegameDrift>>([]);
 
 

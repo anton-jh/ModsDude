@@ -122,27 +122,27 @@ public sealed class ContentStoreMaintenance(
         var bad = new HashSet<string>(corrupt, StringComparer.OrdinalIgnoreCase);
         var affected = new List<AffectedModFolder>();
 
-        foreach (var game in modFolders.GetAll())
+        foreach (var folder in modFolders.GetAll())
         {
             try
             {
-                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, store.RootPath) is false)
+                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(folder.ModFolder).RootPath, store.RootPath) is false)
                 {
                     continue;
                 }
 
-                var manifest = manifestStore.TryRead(game.InstanceId);
+                var manifest = manifestStore.TryRead(folder.Game);
                 var hits = manifest?.Entries.Count(x => bad.Contains(x.ContentHash)) ?? 0;
 
                 if (hits > 0)
                 {
-                    affected.Add(new AffectedModFolder(game.ModFolder, manifest?.ProfileName, hits));
+                    affected.Add(new AffectedModFolder(folder.ModFolder, manifest?.ProfileName, hits));
                 }
             }
             catch (Exception exception)
             {
                 // One game that cannot be resolved costs its name in the report, not the report.
-                logger.LogDebug(exception, "Could not tell whether game {Game} is running a bad blob.", game.InstanceId);
+                logger.LogDebug(exception, "Could not tell whether game {Game} is running a bad blob.", folder.Game);
             }
         }
 
@@ -163,16 +163,16 @@ public sealed class ContentStoreMaintenance(
     {
         var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var game in modFolders.GetAll())
+        foreach (var folder in modFolders.GetAll())
         {
             try
             {
-                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, store.RootPath) is false)
+                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(folder.ModFolder).RootPath, store.RootPath) is false)
                 {
                     continue;
                 }
 
-                foreach (var entry in manifestStore.TryRead(game.InstanceId)?.Entries ?? [])
+                foreach (var entry in manifestStore.TryRead(folder.Game)?.Entries ?? [])
                 {
                     pinned.Add(entry.ContentHash);
                 }
@@ -181,7 +181,7 @@ public sealed class ContentStoreMaintenance(
             {
                 // A game whose folder cannot be resolved to a store contributes no pins, which
                 // costs a possible re-download rather than a failed sweep.
-                logger.LogDebug(exception, "Could not read what game {Game} is running.", game.InstanceId);
+                logger.LogDebug(exception, "Could not read what game {Game} is running.", folder.Game);
             }
         }
 

@@ -119,7 +119,7 @@ public class Repo
             factory: x => x,
             keySelectorExpression: x => x.Name,
             comparer: NaturalOrder.Comparer,
-            filter: x => x.Scope == Scope,
+            filter: x => x.Identity == Scope,
             disposeRemovedTargets: false);
     }
 }

@@ -11,7 +11,7 @@ using ModsDude.Client.Core.Services;
 namespace ModsDude.Client.Core.Sync;
 
 /// <param name="Adapter">Already hydrated with the local settings; it is what knows the targets.</param>
-public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, Guid RepoId, Guid ProfileId)
+public sealed record ModSyncRequest(GameIdentity Game, ILocalModAdapter Adapter, Guid RepoId, Guid ProfileId)
 {
     /// <summary>
     /// What the profile is called, carried into the manifest so a later drift notice can name it
@@ -41,10 +41,17 @@ public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, G
 /// </remarks>
 public interface IModFolders
 {
-    IReadOnlyList<InstanceModFolder> GetAll();
+    IReadOnlyList<GameModFolder> GetAll();
 }
 
-public sealed record InstanceModFolder(Guid InstanceId, string ModFolder);
+/// <summary>
+/// One mod folder on this machine and the game that reaches it.
+/// </summary>
+/// <remarks>
+/// One entry per folder, so a game with three targets appears three times: eviction has to spare
+/// every folder, and which game they belong to is only how their manifest is found.
+/// </remarks>
+public sealed record GameModFolder(GameIdentity Game, string ModFolder);
 
 
 /// <summary>
@@ -99,7 +106,7 @@ public sealed class ModSyncService(
         var targetRevision = ResolveTargetRevision(request);
         var (desired, revision) = await GetDesiredAsync(request, targetRevision, cancellationToken);
         var installed = await GetInstalledAsync(request.Adapter, target, cancellationToken);
-        var manifest = manifestStore.TryRead(request.InstanceId);
+        var manifest = manifestStore.TryRead(request.Game);
 
         // Fetched only when something is actually going to be removed. It is the one input that
         // needs the repo's mod list, and a re-apply that changes nothing should not pay for it.
@@ -120,7 +127,7 @@ public sealed class ModSyncService(
             ProfileId = request.ProfileId,
             ProfileName = request.ProfileName,
             ProfileRevision = revision,
-            InstanceId = request.InstanceId,
+            Game = request.Game,
             Target = target,
             Items = items,
             Materialization = DecideMaterialization(modFolder, servingStore, request.Adapter),
@@ -575,7 +582,7 @@ public sealed class ModSyncService(
         // Deliberately not the caller's token. By this point the folder is already what the profile
         // asked for and the manifest is about to say so; abandoning the attribution here would credit
         // everything played on the outgoing revision to the incoming one, quietly and permanently.
-        await heldSavegames.ObserveAsync(plan.InstanceId, CancellationToken.None);
+        await heldSavegames.ObserveAsync(plan.Game, CancellationToken.None);
 
         var entries = new List<SyncManifestEntry>();
 
@@ -607,7 +614,7 @@ public sealed class ModSyncService(
 
         manifestStore.Write(new SyncManifest
         {
-            InstanceId = plan.InstanceId,
+            Game = plan.Game,
             RepoId = plan.RepoId,
             ProfileId = plan.ProfileId,
             ProfileName = plan.ProfileName,
@@ -654,19 +661,19 @@ public sealed class ModSyncService(
             pinned.Add(hash);
         }
 
-        foreach (var game in modFolders.GetAll())
+        foreach (var folder in modFolders.GetAll())
         {
-            if (game.InstanceId == plan.InstanceId)
+            if (folder.Game == plan.Game)
             {
                 continue;
             }
 
-            if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, plan.ServingStore.RootPath) is false)
+            if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(folder.ModFolder).RootPath, plan.ServingStore.RootPath) is false)
             {
                 continue;
             }
 
-            foreach (var entry in manifestStore.TryRead(game.InstanceId)?.Entries ?? [])
+            foreach (var entry in manifestStore.TryRead(folder.Game)?.Entries ?? [])
             {
                 pinned.Add(entry.ContentHash);
             }
@@ -697,8 +704,8 @@ public sealed class ModSyncService(
     /// <exception cref="UserFriendlyException">A savegame held here refuses this apply.</exception>
     private int? ResolveTargetRevision(ModSyncRequest request)
     {
-        var revision = request.Revision ?? heldSavegames.GetRequiredRevision(request.InstanceId, request.ProfileId);
-        var decision = heldSavegames.DecideApply(request.InstanceId, request.ProfileId, revision);
+        var revision = request.Revision ?? heldSavegames.GetRequiredRevision(request.Game, request.ProfileId);
+        var decision = heldSavegames.DecideApply(request.Game, request.ProfileId, revision);
 
         return decision.Refusal switch
         {
@@ -706,11 +713,11 @@ public sealed class ModSyncService(
 
             SavegameApplyRefusal.AnotherProfileIsHeld => throw new UserFriendlyException(
                 "A savegame checked out here follows another mod list",
-                $"Game '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
+                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
 
             _ => throw new UserFriendlyException(
                 "That savegame runs on one revision, and this is not it",
-                $"Game '{request.InstanceId}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
+                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
         };
     }
 

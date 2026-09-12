@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
@@ -1261,7 +1262,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // So the import leaves the store warm: what is uploaded from a folder the game does not
             // read is copied into the store these folders are served by, and the apply that follows
             // this save finds it there instead of downloading it back.
-            ModFolders = [.. _repo.Games.Select(x => x.ModFolder).OfType<string>()]
+            ModFolders = [.. _repo.Games.SelectMany(x => x.ModFolders)]
         };
 
         // The overload that invalidates the catalog afterwards: a partly failed import still
@@ -1761,9 +1762,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// Called before the page is shown, and again if the page is already open when the notice is
     /// clicked - enabling an already-enabled source is a no-op.
     /// </remarks>
-    public void ScanInstance(Guid instanceId)
+    public void ScanGame(GameIdentity game)
     {
-        _catalog.SetEnabled(ModSourceId.ForInstance(instanceId), true);
+        _catalog.SetEnabled(ModSourceId.ForGame(game), true);
 
         // Only reloads where the page is already up; during construction there is nothing to reload
         // and the initial load reads the flag on its way through.
@@ -2399,20 +2400,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        /// <param name="scanInstanceId">
+        /// <param name="scanGame">
         /// A game whose mod folder should be scanned from the start. Null for an ordinary
         /// navigation, which reads no disk at all until the user ticks a source.
         /// </param>
-        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, Guid? scanInstanceId = null)
+        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, GameIdentity? scanGame = null)
         {
             var page = ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 
             // Set before the page is handed back, so it is on by the time TriggerInit reads it. Done
             // here rather than through the constructor because a nullable Guid does not survive
             // ActivatorUtilities' positional matching.
-            if (scanInstanceId is Guid instanceId)
+            if (scanGame is GameIdentity game)
             {
-                page.ScanInstance(instanceId);
+                page.ScanGame(game);
             }
 
             return page;

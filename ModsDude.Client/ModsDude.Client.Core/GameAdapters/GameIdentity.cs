@@ -58,6 +58,14 @@ public readonly record struct GameIdentity
     }
 }
 
+/// <summary>
+/// A game identity as a string, both as a value and as a property name.
+/// </summary>
+/// <remarks>
+/// The property-name half is what lets <see cref="Persistence.LocalState.Games"/> be keyed by one.
+/// Without it a record struct key silently serializes as an object - the default implementations of
+/// these two throw, and <c>Dictionary&lt;GameIdentity, …&gt;</c> is exactly where that is reached.
+/// </remarks>
 public sealed class GameIdentityJsonConverter : JsonConverter<GameIdentity>
 {
     public override GameIdentity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -69,5 +77,16 @@ public sealed class GameIdentityJsonConverter : JsonConverter<GameIdentity>
     public override void Write(Utf8JsonWriter writer, GameIdentity value, JsonSerializerOptions options)
     {
         writer.WriteStringValue(value.ToString());
+    }
+
+    public override GameIdentity ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return GameIdentity.Parse(reader.GetString()
+            ?? throw new JsonException("Expected a game identity property name."));
+    }
+
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, GameIdentity value, JsonSerializerOptions options)
+    {
+        writer.WritePropertyName(value.ToString());
     }
 }

@@ -15,7 +15,7 @@ public partial class ConnectGamePageViewModel
     private readonly GameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
-    private readonly HashSet<string> _takenNames;
+    private readonly bool _alreadyConnected;
 
 
     public ConnectGamePageViewModel(
@@ -25,16 +25,16 @@ public partial class ConnectGamePageViewModel
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
-        // Names are unique within the scope, not within the repo: the same games are offered
-        // under every repo targeting this game.
-        var gamesInScope = gameRepository.GetByScope(repo.Scope).ToList();
+        // One game per identity, so connecting a second one is refused rather than offered - see
+        // GameRepository.Create. The name stays a free-text label until slice 5 takes the field away
+        // and the adapter's own display name stands in for it.
+        _alreadyConnected = gameRepository.Find(repo.Scope) is not null;
 
-        _name = gamesInScope.Count == 0 ? "Game" : "";
+        _name = "Game";
         _repo = repo;
         _gameRepository = gameRepository;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
-        _takenNames = gamesInScope.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
         LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
@@ -48,7 +48,7 @@ public partial class ConnectGamePageViewModel
     [NotifyPropertyChangedFor(nameof(IsValid))]
     private string _name;
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => _alreadyConnected is false && string.IsNullOrWhiteSpace(Name) is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
 
@@ -83,11 +83,11 @@ public partial class ConnectGamePageViewModel
     }
 
     /// <summary>
-    /// Checked across every scope, since two games' games can name the same folder and only one
-    /// of them can own it. Only asked of settings that are valid in their own right - the adapter
-    /// refuses to hydrate anything else.
+    /// Checked across every game, since two of them can name the same folder and only one
+    /// can own it - and across this one's own targets. Only asked of settings that are valid in their
+    /// own right - the adapter refuses to hydrate anything else.
     /// </summary>
-    private Game? FindFolderConflict()
+    private FolderClaim? FindFolderConflict()
     {
         return LocalSettingsEditor.IsValid
             ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults())
@@ -102,16 +102,17 @@ public partial class ConnectGamePageViewModel
         {
             errors.Add("Name is required.");
         }
-        if (_takenNames.Contains(Name))
-        {
-            errors.Add("Name is taken.");
-        }
 
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
-        if (FindFolderConflict() is Game owner)
+        if (_alreadyConnected)
         {
-            errors.Add($"That folder already belongs to '{owner.Name}'.");
+            errors.Add("This game is already connected on this machine.");
+        }
+
+        if (FindFolderConflict() is FolderClaim claim)
+        {
+            errors.Add(claim.Describe());
         }
 
         return errors;

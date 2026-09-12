@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 
 public class SavegameBindingStoreTests
 {
-    private readonly Guid _instanceId = Guid.NewGuid();
+    private readonly GameIdentity _game = new("farmingSimulator", "fs25");
     private readonly Guid _repoId = Guid.NewGuid();
 
 
@@ -18,9 +18,9 @@ public class SavegameBindingStoreTests
         var savegameId = Guid.NewGuid();
         var binding = Binding(savegameId, "savegame3", version: 7, hash: "aaaa");
 
-        store.SetBinding(_instanceId, binding);
+        store.SetBinding(_game, binding);
 
-        var read = store.GetBinding(_instanceId, savegameId);
+        var read = store.GetBinding(_game, savegameId);
 
         Assert.NotNull(read);
         Assert.Equal(binding, read);
@@ -37,14 +37,14 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
 
-        Assert.Equal(savegameId, store.GetBindingForSlot(_instanceId, "savegame3")?.SavegameId);
-        Assert.Null(store.GetBindingForSlot(_instanceId, "savegame4"));
+        Assert.Equal(savegameId, store.GetBindingForSlot(_game, "savegame3")?.SavegameId);
+        Assert.Null(store.GetBindingForSlot(_game, "savegame4"));
 
         // The same case-insensitivity the safety check uses. A lookup that missed here would report
         // an occupied slot as unrecognised and recycle a save ModsDude itself put there.
-        Assert.Equal(savegameId, store.GetBindingForSlot(_instanceId, new SavegameSlotId("SAVEGAME3"))?.SavegameId);
+        Assert.Equal(savegameId, store.GetBindingForSlot(_game, new SavegameSlotId("SAVEGAME3"))?.SavegameId);
     }
 
     /// <summary>
@@ -58,12 +58,12 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame7"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameCheckouts);
-        Assert.Equal("savegame7", store.GetBinding(_instanceId, savegameId)?.SlotId);
-        Assert.Null(store.GetBindingForSlot(_instanceId, "savegame3"));
+        Assert.Equal("savegame7", store.GetBinding(_game, savegameId)?.SlotId);
+        Assert.Null(store.GetBindingForSlot(_game, "savegame3"));
     }
 
     /// <summary>
@@ -78,12 +78,12 @@ public class SavegameBindingStoreTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(first, "savegame3"));
-        store.SetBinding(_instanceId, Binding(second, "savegame3"));
+        store.SetBinding(_game, Binding(first, "savegame3"));
+        store.SetBinding(_game, Binding(second, "savegame3"));
 
         Assert.Single(Held(state).SavegameCheckouts);
-        Assert.Equal(second, store.GetBindingForSlot(_instanceId, "savegame3")?.SavegameId);
-        Assert.Null(store.GetBinding(_instanceId, first));
+        Assert.Equal(second, store.GetBindingForSlot(_game, "savegame3")?.SavegameId);
+        Assert.Null(store.GetBinding(_game, first));
     }
 
     [Fact]
@@ -91,8 +91,8 @@ public class SavegameBindingStoreTests
     {
         var (store, state) = Store();
 
-        store.SetBinding(_instanceId, Binding(Guid.NewGuid(), "savegame3"));
-        store.SetBinding(_instanceId, Binding(Guid.NewGuid(), "Savegame3"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame3"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "Savegame3"));
 
         Assert.Single(Held(state).SavegameCheckouts);
     }
@@ -102,10 +102,10 @@ public class SavegameBindingStoreTests
     {
         var (store, _) = Store();
 
-        store.SetBinding(_instanceId, Binding(Guid.NewGuid(), "savegame1"));
-        store.SetBinding(_instanceId, Binding(Guid.NewGuid(), "savegame2"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame1"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame2"));
 
-        Assert.Equal(2, store.GetBindings(_instanceId).Count);
+        Assert.Equal(2, store.GetBindings(_game).Count);
     }
 
     /// <summary>
@@ -119,11 +119,11 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
-        store.ClearBinding(_instanceId, savegameId);
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.ClearBinding(_game, savegameId);
 
-        Assert.Null(store.GetBinding(_instanceId, savegameId));
-        Assert.Equal("savegame3", store.GetSlotHint(_instanceId, savegameId));
+        Assert.Null(store.GetBinding(_game, savegameId));
+        Assert.Equal("savegame3", store.GetSlotHint(_game, savegameId));
     }
 
     [Fact]
@@ -133,13 +133,13 @@ public class SavegameBindingStoreTests
         var kept = Guid.NewGuid();
         var cleared = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(kept, "savegame1"));
-        store.SetBinding(_instanceId, Binding(cleared, "savegame2"));
+        store.SetBinding(_game, Binding(kept, "savegame1"));
+        store.SetBinding(_game, Binding(cleared, "savegame2"));
 
-        store.ClearBinding(_instanceId, cleared);
+        store.ClearBinding(_game, cleared);
 
-        Assert.Single(store.GetBindings(_instanceId));
-        Assert.NotNull(store.GetBinding(_instanceId, kept));
+        Assert.Single(store.GetBindings(_game));
+        Assert.NotNull(store.GetBinding(_game, kept));
     }
 
     /// <summary>
@@ -151,10 +151,10 @@ public class SavegameBindingStoreTests
     {
         var (store, state) = Store();
 
-        store.ClearBinding(_instanceId, Guid.NewGuid());
-        store.ClearBinding(Guid.NewGuid(), Guid.NewGuid());
+        store.ClearBinding(_game, Guid.NewGuid());
+        store.ClearBinding(Keys.Game("beamng"), Guid.NewGuid());
 
-        Assert.Empty(store.GetBindings(_instanceId));
+        Assert.Empty(store.GetBindings(_game));
 
         // Nothing changed, so nothing was written. state.json is rewritten whole, and rewriting it
         // for a no-op is a file operation on every idle check.
@@ -172,9 +172,9 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_instanceId, savegameId));
+        Assert.Equal("savegame3", store.GetSlotHint(_game, savegameId));
     }
 
     [Fact]
@@ -183,11 +183,11 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame7"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameSlotHints);
-        Assert.Equal("savegame7", store.GetSlotHint(_instanceId, savegameId));
+        Assert.Equal("savegame7", store.GetSlotHint(_game, savegameId));
     }
 
     /// <summary>
@@ -201,12 +201,12 @@ public class SavegameBindingStoreTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(first, "savegame3"));
-        store.ClearBinding(_instanceId, first);
-        store.SetBinding(_instanceId, Binding(second, "savegame3"));
+        store.SetBinding(_game, Binding(first, "savegame3"));
+        store.ClearBinding(_game, first);
+        store.SetBinding(_game, Binding(second, "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_instanceId, first));
-        Assert.Equal("savegame3", store.GetSlotHint(_instanceId, second));
+        Assert.Equal("savegame3", store.GetSlotHint(_game, first));
+        Assert.Equal("savegame3", store.GetSlotHint(_game, second));
     }
 
     /// <summary>
@@ -220,13 +220,13 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var moved = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(moved, "savegame3"));
-        store.ClearBinding(_instanceId, moved);
+        store.SetBinding(_game, Binding(moved, "savegame3"));
+        store.ClearBinding(_game, moved);
 
         // Somebody else's savegame is now in slot 3.
-        store.SetBinding(_instanceId, Binding(Guid.NewGuid(), "savegame3"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_instanceId, moved));
+        Assert.Equal("savegame3", store.GetSlotHint(_game, moved));
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public class SavegameBindingStoreTests
     {
         var (store, _) = Store();
 
-        Assert.Null(store.GetSlotHint(_instanceId, Guid.NewGuid()));
+        Assert.Null(store.GetSlotHint(_game, Guid.NewGuid()));
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public class SavegameBindingStoreTests
     public void An_unknown_game_holds_nothing()
     {
         var (store, _) = Store();
-        var unknown = Guid.NewGuid();
+        var unknown = Keys.Game("beamng");
 
         Assert.Empty(store.GetBindings(unknown));
         Assert.Null(store.GetBinding(unknown, Guid.NewGuid()));
@@ -264,7 +264,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
 
         Assert.Throws<InvalidOperationException>(
-            () => store.SetBinding(Guid.NewGuid(), Binding(Guid.NewGuid(), "savegame1")));
+            () => store.SetBinding(Keys.Game("beamng"), Binding(Guid.NewGuid(), "savegame1")));
     }
 
     /// <summary>
@@ -278,23 +278,23 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
         Assert.Equal(1, state.Saves);
 
-        store.ClearBinding(_instanceId, savegameId);
+        store.ClearBinding(_game, savegameId);
         Assert.Equal(2, state.Saves);
     }
 
     [Fact]
     public void Bindings_are_kept_per_game()
     {
-        var other = Guid.NewGuid();
+        var other = Keys.Game("beamng");
         var (store, state) = Store();
-        state.Add(Game(other));
+        state.Add(other, Game());
 
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_instanceId, Binding(savegameId, "savegame3"));
+        store.SetBinding(_game, Binding(savegameId, "savegame3"));
 
         Assert.Empty(store.GetBindings(other));
         Assert.Null(store.GetSlotHint(other, savegameId));
@@ -304,7 +304,7 @@ public class SavegameBindingStoreTests
     private (SavegameBindingStore Store, FakeGameState State) Store()
     {
         var state = new FakeGameState();
-        state.Add(Game(_instanceId));
+        state.Add(_game, Game());
 
         return (new SavegameBindingStore(state), state);
     }
@@ -314,7 +314,7 @@ public class SavegameBindingStoreTests
     /// "One binding replaced another" and "one binding was added beside another" both read as one
     /// binding through the public surface, and only the list length tells them apart.
     /// </summary>
-    private PersistedGame Held(FakeGameState state) => state.Find(_instanceId)!;
+    private PersistedGame Held(FakeGameState state) => state.Find(_game)!;
 
     private SavegameCheckoutBinding Binding(Guid savegameId, string slotId, int version = 1, string hash = "aaaa") => new(
         _repoId,
@@ -324,10 +324,8 @@ public class SavegameBindingStoreTests
         hash,
         DateTime.UtcNow);
 
-    private static PersistedGame Game(Guid id) => new()
+    private static PersistedGame Game() => new()
     {
-        Id = id,
-        Scope = new GameIdentity("farmingSimulator", "fs25"),
         GameAdapterId = new GameAdapterId("farmingSimulator", 1),
         Name = "Farming Simulator 25",
         AdapterLocalSettings = "{}"
@@ -341,17 +339,17 @@ public class SavegameBindingStoreTests
     /// </summary>
     private sealed class FakeGameState : IPersistedGameState
     {
-        private readonly Dictionary<Guid, PersistedGame> _games = [];
+        private readonly Dictionary<GameIdentity, PersistedGame> _games = [];
 
 
         /// <summary>Counted, because "saves on every change" is itself one of the rules.</summary>
         public int Saves { get; private set; }
 
 
-        public void Add(PersistedGame game) => _games[game.Id] = game;
+        public void Add(GameIdentity identity, PersistedGame game) => _games[identity] = game;
 
-        public PersistedGame? Find(Guid instanceId)
-            => _games.TryGetValue(instanceId, out var game) ? game : null;
+        public PersistedGame? Find(GameIdentity identity)
+            => _games.TryGetValue(identity, out var game) ? game : null;
 
         public void Save() => Saves++;
     }

@@ -173,7 +173,7 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
             foreach (var slot in slots)
             {
                 var availability = await _savegameService.ClassifySlotAsync(_game, slot.Id, cancellationToken);
-                var binding = _bindingStore.GetBindingForSlot(_game.Id, slot.Id);
+                var binding = _bindingStore.GetBindingForSlot(_game.Identity, slot.Id);
 
                 rows.Add(new SavegameSlotRowViewModel(
                     slot,

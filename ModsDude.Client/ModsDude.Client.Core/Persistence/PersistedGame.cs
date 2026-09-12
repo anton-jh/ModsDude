@@ -3,15 +3,19 @@ using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Persistence;
 
+/// <summary>
+/// One game on this machine, as it is written down.
+/// </summary>
+/// <remarks>
+/// <b>No id.</b> It is keyed by its <see cref="GameIdentity"/> in <see cref="LocalState.Games"/>, so
+/// the same game configured twice is not a state that can be written rather than one something has to
+/// check for. Everything that would have keyed on a Guid - the manifest, the savegame bindings, the
+/// mod source - keys on the identity, which is also what ends up in the manifest's filename.
+/// </remarks>
 public class PersistedGame
 {
-    public required Guid Id { get; init; }
-
-    /// <summary>The game this installation is of. Every repo with the same scope offers it.</summary>
-    public required GameIdentity Scope { get; init; }
-
     /// <summary>
-    /// Which adapter version authored <see cref="AdapterLocalSettings"/>. Not part of the scope,
+    /// Which adapter version authored <see cref="AdapterLocalSettings"/>. Not part of the identity,
     /// so a repo on a newer compatibility version still offers this game and has to be able to
     /// read the older settings.
     /// </summary>
@@ -21,11 +25,16 @@ public class PersistedGame
     public required string AdapterLocalSettings { get; set; }
 
     /// <summary>
-    /// The folder the adapter says this game owns, recorded so the ownership check can run
-    /// across every scope. A game whose scope has no repo on this machine cannot hydrate its
-    /// adapter, and it still owns its folder.
+    /// Every folder the adapter says this game's targets reach, rewritten whenever the settings are.
     /// </summary>
-    public string? ModFolder { get; set; }
+    /// <remarks>
+    /// <b>Derived and still persisted, which is not redundancy.</b> Store eviction and the drift
+    /// candidate list both need a folder path <em>without hydrating an adapter</em>: a game whose
+    /// identity no loaded repo serves still owns its folders and still has a standing intent, and in
+    /// that state its <see cref="AdapterLocalSettings"/> are an opaque blob. Empty is an ordinary
+    /// answer - a game whose settings point at no folder at all.
+    /// </remarks>
+    public List<string> ModFolders { get; set; } = [];
 
     public ActiveProfile? ActiveProfile { get; set; }
 

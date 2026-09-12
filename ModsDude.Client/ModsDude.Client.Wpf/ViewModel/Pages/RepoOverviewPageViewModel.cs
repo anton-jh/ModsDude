@@ -129,7 +129,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     private void RefreshInstances()
     {
-        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.InstanceId, x => x.Report);
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.Identity, x => x.Report);
 
         Games.Clear();
 
@@ -138,7 +138,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             Games.Add(new InstanceOverviewViewModel(
                 game,
                 DescribeActiveProfile(game),
-                drifted.GetValueOrDefault(game.Id)));
+                drifted.GetValueOrDefault(game.Identity)));
         }
 
         OnPropertyChanged(nameof(HasInstances));

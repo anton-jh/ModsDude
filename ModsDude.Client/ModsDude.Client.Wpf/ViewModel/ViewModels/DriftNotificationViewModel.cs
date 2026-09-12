@@ -287,7 +287,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Game.InstanceId) is false)
+        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Game.Identity) is false)
         {
             Status = "That profile could not be opened from here - pick it in the sidebar.";
         }
@@ -469,7 +469,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             return "Re-apply now";
         }
 
-        return _heldSavegames.GetRequiredRevision(game.InstanceId, active.ProfileId) is int revision
+        return _heldSavegames.GetRequiredRevision(game.Identity, active.ProfileId) is int revision
             ? $"Re-apply rev {revision}"
             : "Re-apply now";
     }

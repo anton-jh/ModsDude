@@ -274,7 +274,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private void RefreshInstances()
     {
-        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.InstanceId, x => x.Report);
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.Identity, x => x.Report);
 
         Games.Clear();
 
@@ -285,7 +285,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             Games.Add(new InstanceOverviewViewModel(
                 game,
                 "Set to this profile",
-                drifted.GetValueOrDefault(game.Id)));
+                drifted.GetValueOrDefault(game.Identity)));
         }
 
         OnPropertyChanged(nameof(HasInstances));

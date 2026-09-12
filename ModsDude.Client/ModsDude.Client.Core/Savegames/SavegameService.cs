@@ -30,9 +30,9 @@ public interface ILocalSavegameAdapters
     ILocalSavegameAdapter? TryGet(Game game);
 
     /// <inheritdoc cref="TryGet(Game)"/>
-    /// <remarks>For callers that hold an id rather than the game - the drift check, which walks
+    /// <remarks>For callers that hold an identity rather than the game - the drift check, which walks
     /// <see cref="DriftCandidate"/>s.</remarks>
-    ILocalSavegameAdapter? TryGet(Guid instanceId);
+    ILocalSavegameAdapter? TryGet(GameIdentity identity);
 }
 
 
@@ -40,8 +40,8 @@ public interface ILocalSavegameAdapters
 public sealed class RepoSavegameAdapters(RepoRepository repos, GameRepository games)
     : ILocalSavegameAdapters
 {
-    public ILocalSavegameAdapter? TryGet(Guid instanceId)
-        => games.Games.FirstOrDefault(x => x.Id == instanceId) is Game game
+    public ILocalSavegameAdapter? TryGet(GameIdentity identity)
+        => games.Find(identity) is Game game
             ? TryGet(game)
             : null;
 
@@ -50,7 +50,7 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, GameRepository ga
         // Any repo serving the identity will do. Two repos on the same game hydrate the same local
         // settings into the same slot list - the settings that differ between them are the mod
         // catalogue's, and a savegame adapter reads none of those.
-        foreach (var repo in repos.Repos.Where(x => x.Scope == game.Scope))
+        foreach (var repo in repos.Repos.Where(x => x.Scope == game.Identity))
         {
             if (repo.Adapter.CanSupportSavegames is false)
             {
@@ -98,23 +98,23 @@ public interface IHeldSavegames
     /// nearly all the time - costs one list read.
     /// </para>
     /// </remarks>
-    Task ObserveAsync(Guid instanceId, CancellationToken ct);
+    Task ObserveAsync(GameIdentity game, CancellationToken ct);
 
     /// <inheritdoc cref="SavegameHoldRules.RequiredRevision"/>
-    int? GetRequiredRevision(Guid instanceId, Guid profileId);
+    int? GetRequiredRevision(GameIdentity game, Guid profileId);
 
     /// <inheritdoc cref="SavegameHoldRules.DecideApply"/>
-    SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision);
+    SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision);
 
     /// <summary>
     /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
     /// </summary>
     /// <remarks>
-    /// Keyed on the id rather than the game because the drift monitor walks
+    /// Keyed on the identity rather than the game because the drift monitor walks
     /// <see cref="DriftCandidate"/>s, which exist for games no loaded repo serves. One of those
     /// reports nothing, quietly.
     /// </remarks>
-    Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct);
+    Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct);
 }
 
 
@@ -337,25 +337,25 @@ public sealed class SavegameService(
     public bool SupportsSavegames(Game game) => adapters.TryGet(game) is not null;
 
     public SavegameCheckoutBinding? GetBinding(Game game, Guid savegameId)
-        => bindings.GetBinding(game.Id, savegameId);
+        => bindings.GetBinding(game.Identity, savegameId);
 
     public SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotId slot)
-        => bindings.GetBindingForSlot(game.Id, slot);
+        => bindings.GetBindingForSlot(game.Identity, slot);
 
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(Game game)
-        => bindings.GetBindings(game.Id);
+        => bindings.GetBindings(game.Identity);
 
     public int? GetPlayedRevision(Game game, Guid savegameId)
-        => bindings.GetBinding(game.Id, savegameId) is SavegameCheckoutBinding binding
+        => bindings.GetBinding(game.Identity, savegameId) is SavegameCheckoutBinding binding
             && binding.ProfileId is Guid profileId
             ? FindPlayedRevision(game, binding, profileId)
             : null;
 
-    public int? GetRequiredRevision(Guid instanceId, Guid profileId)
-        => SavegameHoldRules.RequiredRevision(bindings.GetBindings(instanceId), profileId);
+    public int? GetRequiredRevision(GameIdentity game, Guid profileId)
+        => SavegameHoldRules.RequiredRevision(bindings.GetBindings(game), profileId);
 
-    public SavegameApplyDecision DecideApply(Guid instanceId, Guid profileId, int? revision)
-        => SavegameHoldRules.DecideApply(bindings.GetBindings(instanceId), profileId, revision);
+    public SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision)
+        => SavegameHoldRules.DecideApply(bindings.GetBindings(game), profileId, revision);
 
     /// <summary>
     /// Which revision of its profile a savegame runs on: <b>head for a current one, its own pinned
@@ -422,13 +422,13 @@ public sealed class SavegameService(
     {
         // No adapter is required and none is asked for: this writes nothing to disk beyond local
         // state, which is what makes it work for a game whose scope no loaded repo serves.
-        var forgotten = bindings.Forget(game.Id, savegameId);
+        var forgotten = bindings.Forget(game.Identity, savegameId);
 
         if (forgotten)
         {
             logger.LogInformation(
                 "Game {Game} stopped tracking savegame {Savegame}; the slot's contents were left alone.",
-                game.Id, savegameId);
+                game.Identity, savegameId);
         }
 
         return forgotten;
@@ -443,10 +443,10 @@ public sealed class SavegameService(
         // and unclaimed, and a hash can only ever tell two kinds of occupied apart. Reading a hint
         // must not cost twenty archive passes.
         bool IsFree(SavegameSlot slot)
-            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(game.Id, slot.Id), null)
+            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(game.Identity, slot.Id), null)
                 is SavegameSlotAvailability.Free;
 
-        if (bindings.GetSlotHint(game.Id, savegameId) is string hint &&
+        if (bindings.GetSlotHint(game.Identity, savegameId) is string hint &&
             slots.FirstOrDefault(x => string.Equals(x.Id.Value, hint, StringComparison.OrdinalIgnoreCase)) is SavegameSlot remembered &&
             IsFree(remembered))
         {
@@ -516,7 +516,7 @@ public sealed class SavegameService(
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
         // and which version is in it, and writing it before the unpack would claim a slot holding
         // somebody else's save.
-        bindings.SetBinding(game.Id, new SavegameCheckoutBinding(
+        bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             savegame.RepoId,
             savegame.Id,
             slot.Value,
@@ -562,9 +562,9 @@ public sealed class SavegameService(
         // entirely, and the safety check would read that slot as unpublished play forever. The claim
         // it recorded is still open on the server - the caller is the one that can offer to give it
         // back, and it can only do that if this leaves a truthful local record behind.
-        if (bindings.GetBindingForSlot(game.Id, slot) is SavegameCheckoutBinding displaced)
+        if (bindings.GetBindingForSlot(game.Identity, slot) is SavegameCheckoutBinding displaced)
         {
-            bindings.ClearBinding(game.Id, displaced.SavegameId);
+            bindings.ClearBinding(game.Identity, displaced.SavegameId);
         }
     }
 
@@ -605,10 +605,10 @@ public sealed class SavegameService(
         CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
-        var binding = bindings.GetBinding(game.Id, savegameId)
+        var binding = bindings.GetBinding(game.Identity, savegameId)
             ?? throw new UserFriendlyException(
                 "This machine is not holding that savegame",
-                $"No checkout binding for savegame '{savegameId}' in game '{game.Id}'. Only the machine that checked a save out can check it in.");
+                $"No checkout binding for savegame '{savegameId}' in game '{game.Identity}'. Only the machine that checked a save out can check it in.");
 
         var slot = new SavegameSlotId(binding.SlotId);
         var packed = await packer.PackAsync(adapter, slot, ct);
@@ -616,7 +616,7 @@ public sealed class SavegameService(
         // The last observation, and the packed hash is exactly what one would compute - the packer
         // hashes what it writes - so it costs no second pass over the folder. Play since the previous
         // look belongs to the revision this folder is on now, which is what the version will name.
-        binding = Observe(game.Id, binding, packed.ContentHash);
+        binding = Observe(game.Identity, binding, packed.ContentHash);
 
         // Read from the slot these bytes came from, before the upload rather than after: the details
         // describe the version being minted.
@@ -652,7 +652,7 @@ public sealed class SavegameService(
             // than on a version that is no longer the head. The hash is the packed one and not the
             // slot's - they are the same bytes by construction, and re-hashing the folder would cost
             // a second full pass to learn nothing.
-            bindings.SetBinding(game.Id, binding with
+            bindings.SetBinding(game.Identity, binding with
             {
                 Version = version.Number,
                 ContentHash = version.ContentHash,
@@ -672,7 +672,7 @@ public sealed class SavegameService(
         // Only now. The binding goes first so that a failure to recycle cannot leave a slot claimed
         // by a savegame that is no longer checked out - the folder left behind reads as unrecognised,
         // which needs a confirmation to displace, and that is the safe way round.
-        bindings.ClearBinding(game.Id, savegameId);
+        bindings.ClearBinding(game.Identity, savegameId);
         Recycle(adapter, slot);
 
         return version;
@@ -690,17 +690,17 @@ public sealed class SavegameService(
         // leave this game free to apply head under a savegame that is still past.
         foreach (var game in games)
         {
-            if (bindings.GetBinding(game.Id, savegame.Id) is not SavegameCheckoutBinding binding
+            if (bindings.GetBinding(game.Identity, savegame.Id) is not SavegameCheckoutBinding binding
                 || binding.TargetRevision is null)
             {
                 continue;
             }
 
-            bindings.SetBinding(game.Id, binding with { TargetRevision = null });
+            bindings.SetBinding(game.Identity, binding with { TargetRevision = null });
 
             logger.LogInformation(
                 "Savegame {Savegame} is current again; game {Game} stopped pinning its mod folder to revision {Revision}.",
-                savegame.Id, game.Id, binding.TargetRevision);
+                savegame.Id, game.Identity, binding.TargetRevision);
         }
 
         return response;
@@ -783,7 +783,7 @@ public sealed class SavegameService(
         // Publishing leaves you holding it: the server opens a claim beside the version, and this is
         // the local half of the same fact. Without it the slot the save is sitting in would read as
         // unrecognised the moment it was published.
-        bindings.SetBinding(game.Id, new SavegameCheckoutBinding(
+        bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             repoId,
             savegameId,
             slot.Value,
@@ -819,23 +819,23 @@ public sealed class SavegameService(
     public async Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
-        var binding = bindings.GetBinding(game.Id, savegameId)
+        var binding = bindings.GetBinding(game.Identity, savegameId)
             ?? throw new UserFriendlyException(
                 "This machine is not holding that savegame",
-                $"No checkout binding for savegame '{savegameId}' in game '{game.Id}', so there is no claim of ours to give back.");
+                $"No checkout binding for savegame '{savegameId}' in game '{game.Identity}', so there is no claim of ours to give back.");
 
         // The server first: it is the half somebody else is waiting on, and a local record cleared
         // against a claim that is still open would leave the save unclaimable by anybody, this
         // machine included.
         await savegamesClient.DiscardSavegameCheckoutV1Async(binding.RepoId, savegameId, ct);
 
-        bindings.ClearBinding(game.Id, savegameId);
+        bindings.ClearBinding(game.Identity, savegameId);
         Recycle(adapter, new SavegameSlotId(binding.SlotId));
     }
 
-    public async Task ObserveAsync(Guid instanceId, CancellationToken ct)
+    public async Task ObserveAsync(GameIdentity game, CancellationToken ct)
     {
-        var held = bindings.GetBindings(instanceId);
+        var held = bindings.GetBindings(game);
 
         // The overwhelmingly common answer, for one list read - the same bargain the drift check
         // strikes, and for the same reason: nearly every apply is to a game holding nothing.
@@ -846,7 +846,7 @@ public sealed class SavegameService(
 
         // A game whose scope no loaded repo serves observes nothing, quietly - the same answer
         // the drift check gives for a folder it cannot reach.
-        var adapter = adapters.TryGet(instanceId);
+        var adapter = adapters.TryGet(game);
 
         if (adapter is null)
         {
@@ -855,7 +855,7 @@ public sealed class SavegameService(
 
         // Read once, before anything is hashed: it is the same folder for every binding, and it is
         // the outgoing revision only until the caller rewrites it.
-        var manifest = manifestStore.TryRead(instanceId);
+        var manifest = manifestStore.TryRead(game);
         var slots = await ReadSlotsOrNothing(adapter, ct);
 
         foreach (var binding in held)
@@ -880,14 +880,14 @@ public sealed class SavegameService(
 
             if (await HashOrNothing(adapter, new SavegameSlotId(binding.SlotId), ct) is string current)
             {
-                Observe(instanceId, binding, current, manifest?.ProfileId, manifest?.ProfileRevision);
+                Observe(game, binding, current, manifest?.ProfileId, manifest?.ProfileRevision);
             }
         }
     }
 
-    public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct)
+    public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
     {
-        var held = bindings.GetBindings(instanceId);
+        var held = bindings.GetBindings(game);
 
         // The overwhelmingly common answer, and it costs one list read: a slot is occupied by
         // ModsDude only while a save is checked out, which is one or two saves, usually none.
@@ -898,14 +898,14 @@ public sealed class SavegameService(
 
         // A game whose scope no loaded repo serves reports nothing. Unknown, not drifted - the
         // same answer the mod check gives for a folder it cannot reach.
-        var adapter = Maybe.From(adapters.TryGet(instanceId));
+        var adapter = Maybe.From(adapters.TryGet(game));
 
         if (adapter.HasValue is false)
         {
             return [];
         }
 
-        var manifest = manifestStore.TryRead(instanceId);
+        var manifest = manifestStore.TryRead(game);
         var slots = await ReadSlotsOrNothing(adapter.Value, ct);
         var drift = new List<SavegameDrift>();
 
@@ -983,7 +983,7 @@ public sealed class SavegameService(
     /// <param name="appliedRevision">Which revision of it, from the manifest.</param>
     /// <returns>The binding as it now stands, so a caller holding one does not go on reading a stale copy.</returns>
     private SavegameCheckoutBinding Observe(
-        Guid instanceId,
+        GameIdentity game,
         SavegameCheckoutBinding binding,
         string currentContentHash,
         Guid? appliedProfileId,
@@ -1004,22 +1004,22 @@ public sealed class SavegameService(
             LastPlayedRevision = played ?? binding.LastPlayedRevision
         };
 
-        bindings.SetBinding(instanceId, observed);
+        bindings.SetBinding(game, observed);
 
         logger.LogInformation(
             "Savegame {Savegame} in game {Game} has been played since it was last looked at; attributed to profile revision {Revision}.",
-            binding.SavegameId, instanceId, observed.LastPlayedRevision);
+            binding.SavegameId, game, observed.LastPlayedRevision);
 
         return observed;
     }
 
-    /// <inheritdoc cref="Observe(Guid, SavegameCheckoutBinding, string, Guid?, int?)"/>
+    /// <inheritdoc cref="Observe(GameIdentity, SavegameCheckoutBinding, string, Guid?, int?)"/>
     /// <remarks>Reads the manifest itself, for the caller that has not already.</remarks>
-    private SavegameCheckoutBinding Observe(Guid instanceId, SavegameCheckoutBinding binding, string currentContentHash)
+    private SavegameCheckoutBinding Observe(GameIdentity game, SavegameCheckoutBinding binding, string currentContentHash)
     {
-        var manifest = manifestStore.TryRead(instanceId);
+        var manifest = manifestStore.TryRead(game);
 
-        return Observe(instanceId, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
+        return Observe(game, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
     }
 
     /// <summary>
@@ -1046,14 +1046,14 @@ public sealed class SavegameService(
             return;
         }
 
-        if (SavegameHoldRules.FindConflictingHold(bindings.GetBindings(game.Id), savegameId) is not SavegameCheckoutBinding blocking)
+        if (SavegameHoldRules.FindConflictingHold(bindings.GetBindings(game.Identity), savegameId) is not SavegameCheckoutBinding blocking)
         {
             return;
         }
 
         throw new UserFriendlyException(
             $"'{game.Name}' is already holding a savegame",
-            $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Id}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
+            $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Identity}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
     }
 
     /// <summary>
@@ -1097,7 +1097,7 @@ public sealed class SavegameService(
             // it comes to it, which is its call to make and not this one's.
             ?? new SavegameSlot(slotId, null, false, []);
 
-        var binding = bindings.GetBindingForSlot(game.Id, slot.Id);
+        var binding = bindings.GetBindingForSlot(game.Identity, slot.Id);
 
         // Hashed only where something claims the slot: without a binding there is no recorded hash to
         // compare against, so the pass would cost a full archive read to change no answer.
@@ -1267,7 +1267,7 @@ public sealed class SavegameService(
         return FindPlayedRevision(game, binding, profileId)
             ?? throw new UserFriendlyException(
                 $"'{game.Name}' has no record of which mod list it is on",
-                $"Neither the sync manifest for game '{game.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.");
+                $"Neither the sync manifest for game '{game.Identity}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.");
     }
 
     /// <summary>
@@ -1283,7 +1283,7 @@ public sealed class SavegameService(
             return played;
         }
 
-        var manifest = manifestStore.TryRead(game.Id);
+        var manifest = manifestStore.TryRead(game.Identity);
 
         if (manifest?.ProfileRevision is int applied && profileId == manifest.ProfileId)
         {
@@ -1361,7 +1361,7 @@ public sealed class SavegameService(
         => adapters.TryGet(game)
             ?? throw new UserFriendlyException(
                 $"'{game.Name}' has no savegames",
-                $"No loaded repo hydrates a savegame adapter for game '{game.Id}' - either its game does not support savegames, or no repo on this machine serves its scope.");
+                $"No loaded repo hydrates a savegame adapter for game '{game.Identity}' - either its game does not support savegames, or no repo on this machine serves its scope.");
 
     /// <summary>Slots, or nothing where the game folder is unreachable - unknown, never drifted.</summary>
     private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(ILocalSavegameAdapter adapter, CancellationToken ct)

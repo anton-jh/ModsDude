@@ -21,7 +21,6 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly GameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
-    private readonly HashSet<string> _takenNames;
     private readonly Game _subject;
     private readonly IModalService _modalService;
 
@@ -40,11 +39,6 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         _gameRepository = gameRepository;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
-        _takenNames = gameRepository.GetByScope(repo.Scope)
-            .Where(x => x.Id != subject.Id)
-            .Select(x => x.Name)
-            .Distinct()
-            .ToHashSet();
         OriginalName = subject.Name;
         RepoName = repo.Name;
 
@@ -66,7 +60,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
     public string OriginalName { get; }
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && !_takenNames.Contains(Name) && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => string.IsNullOrWhiteSpace(Name) is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
 
@@ -123,14 +117,14 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Checked across every scope, since two games' games can name the same folder and only one
-    /// of them can own it. Only asked of settings that are valid in their own right - the adapter
-    /// refuses to hydrate anything else.
+    /// Checked across every game, since two of them can name the same folder and only one
+    /// can own it - and across this one's own targets. Only asked of settings that are valid in their
+    /// own right - the adapter refuses to hydrate anything else.
     /// </summary>
-    private Game? FindFolderConflict()
+    private FolderClaim? FindFolderConflict()
     {
         return LocalSettingsEditor.IsValid
-            ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Id)
+            ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Identity)
             : null;
     }
 
@@ -142,16 +136,12 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         {
             errors.Add("Name is required.");
         }
-        if (_takenNames.Contains(Name))
-        {
-            errors.Add("Name is taken.");
-        }
 
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
-        if (FindFolderConflict() is Game owner)
+        if (FindFolderConflict() is FolderClaim claim)
         {
-            errors.Add($"That folder already belongs to '{owner.Name}'.");
+            errors.Add(claim.Describe());
         }
 
         return errors;

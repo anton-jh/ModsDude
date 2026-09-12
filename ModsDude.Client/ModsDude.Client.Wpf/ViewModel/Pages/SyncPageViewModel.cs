@@ -252,7 +252,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         try
         {
             var plan = await _syncService.PlanAsync(
-                new ModSyncRequest(_game.Id, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
+                new ModSyncRequest(_game.Identity, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
                 cancellationToken);
 
             _pinned = await LoadPinnedAsync(active.ProfileId, cancellationToken);
@@ -336,7 +336,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
               "install is a full copy even though the store is on the same disk."
             : null;
 
-        ShowDrift(_driftService.Check(_game.Id, _game.ActiveProfile, plan.ModFolder));
+        ShowDrift(_driftService.Check(_game.Identity, _game.ActiveProfile, plan.ModFolder));
     }
 
     /// <summary>

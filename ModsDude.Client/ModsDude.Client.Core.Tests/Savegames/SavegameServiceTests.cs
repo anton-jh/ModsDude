@@ -112,7 +112,7 @@ public class SavegameServiceTests
         await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         Assert.Null(harness.Binding(harness.Server.SavegameId).TargetRevision);
-        Assert.Null(harness.Service.GetRequiredRevision(harness.Game.Id, harness.ProfileId));
+        Assert.Null(harness.Service.GetRequiredRevision(harness.Game.Identity, harness.ProfileId));
     }
 
     /// <summary>
@@ -132,12 +132,12 @@ public class SavegameServiceTests
         await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         Assert.Equal(4, harness.Binding(harness.Server.SavegameId).TargetRevision);
-        Assert.Equal(4, harness.Service.GetRequiredRevision(harness.Game.Id, harness.ProfileId));
+        Assert.Equal(4, harness.Service.GetRequiredRevision(harness.Game.Identity, harness.ProfileId));
 
         // And the apply table now says head is not on offer for this game.
         Assert.Equal(
             SavegameApplyRefusal.PastSavegameIsHeld,
-            harness.Service.DecideApply(harness.Game.Id, harness.ProfileId, 1004).Refusal);
+            harness.Service.DecideApply(harness.Game.Identity, harness.ProfileId, 1004).Refusal);
     }
 
     /// <summary>
@@ -607,7 +607,7 @@ public class SavegameServiceTests
 
         // And with the pin gone, the apply table stops refusing head - which is the whole point of
         // clearing it.
-        Assert.True(harness.Service.DecideApply(harness.Game.Id, harness.ProfileId, 1004).IsAllowed);
+        Assert.True(harness.Service.DecideApply(harness.Game.Identity, harness.ProfileId, 1004).IsAllowed);
     }
 
     /// <summary>
@@ -809,7 +809,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.PointTheFolderAtAnotherProfile(revision: 9);
 
-        await harness.Service.ObserveAsync(harness.Game.Id, CancellationToken.None);
+        await harness.Service.ObserveAsync(harness.Game.Identity, CancellationToken.None);
 
         var observed = harness.Binding(harness.Server.SavegameId);
 
@@ -859,7 +859,7 @@ public class SavegameServiceTests
 
         await harness.ApplyAsync(1004);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         // One kind and not two: the folder is on 1004 and the binding was checked out at 4, which is
         // this savegame following its profile rather than leaving its mod list.
@@ -915,17 +915,15 @@ public class SavegameServiceTests
 
             var persisted = new PersistedGame
             {
-                Id = Guid.NewGuid(),
-                Scope = new GameIdentity("farmingSimulator", "fs25"),
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
                 AdapterLocalSettings = "{}",
-                ModFolder = _slots.Path,
+                ModFolders = [_slots.Path],
                 ActiveProfile = new ActiveProfile(Server.RepoId, Server.ProfileId)
             };
 
-            State.Add(persisted);
-            Game = new Game(persisted);
+            State.Add(Keys.Game(), persisted);
+            Game = new Game(Keys.Game(), persisted);
 
             Uploader = new FakeSavegameUploader(Server);
             Adapter = new FakeSavegameAdapter(_slots.Path, _slot1.Value, _slot2.Value);
@@ -979,7 +977,7 @@ public class SavegameServiceTests
     /// </remarks>
     public SavegamePublishTarget Target(int headRevision = 1)
     {
-        var manifest = ManifestStore.TryRead(Game.Id);
+        var manifest = ManifestStore.TryRead(Game.Identity);
 
         return new SavegamePublishTarget(
             ProfileId,
@@ -998,7 +996,7 @@ public class SavegameServiceTests
         /// </summary>
         public async Task ApplyAsync(int revision)
         {
-            await Service.ObserveAsync(Game.Id, CancellationToken.None);
+            await Service.ObserveAsync(Game.Identity, CancellationToken.None);
 
             WriteManifest(revision);
         }
@@ -1017,7 +1015,7 @@ public class SavegameServiceTests
 
             ManifestStore.Write(new SyncManifest
             {
-                InstanceId = Game.Id,
+                Game = Game.Identity,
                 RepoId = Server.RepoId,
                 ProfileId = profileId,
                 ProfileRevision = revision,

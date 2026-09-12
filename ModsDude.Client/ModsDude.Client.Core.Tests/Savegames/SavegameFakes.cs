@@ -404,7 +404,7 @@ internal sealed class FakeSavegameAdapters(ILocalSavegameAdapter? adapter) : ILo
 {
     public ILocalSavegameAdapter? TryGet(Game game) => adapter;
 
-    public ILocalSavegameAdapter? TryGet(Guid instanceId) => adapter;
+    public ILocalSavegameAdapter? TryGet(GameIdentity identity) => adapter;
 }
 
 
@@ -453,16 +453,16 @@ internal sealed class FakeSlotRecycleBin(bool available = true) : IRecycleBin
 /// </summary>
 internal sealed class FakeGameState : IPersistedGameState
 {
-    private readonly Dictionary<Guid, PersistedGame> _games = [];
+    private readonly Dictionary<GameIdentity, PersistedGame> _games = [];
 
 
     public int Saves { get; private set; }
 
 
-    public void Add(PersistedGame game) => _games[game.Id] = game;
+    public void Add(GameIdentity identity, PersistedGame game) => _games[identity] = game;
 
-    public PersistedGame? Find(Guid instanceId)
-        => _games.TryGetValue(instanceId, out var game) ? game : null;
+    public PersistedGame? Find(GameIdentity identity)
+        => _games.TryGetValue(identity, out var game) ? game : null;
 
     public void Save() => Saves++;
 }

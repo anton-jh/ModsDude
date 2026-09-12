@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Sync;
@@ -68,7 +69,7 @@ public sealed class StoreIntegrityService(
     /// that cannot answer the question at all.
     /// </remarks>
     public async Task<IReadOnlyList<CorruptedBlob>> CheckAsync(
-        Guid instanceId,
+        GameIdentity game,
         string modFolder,
         IReadOnlyList<string> changed,
         CancellationToken cancellationToken)
@@ -78,7 +79,7 @@ public sealed class StoreIntegrityService(
             return [];
         }
 
-        var manifest = manifestStore.TryRead(instanceId);
+        var manifest = manifestStore.TryRead(game);
 
         if (manifest is null)
         {

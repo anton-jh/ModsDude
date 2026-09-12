@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -79,7 +80,7 @@ public class InstanceDriftMonitorTests
         fixture.Sync(4, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 1004;
-        fixture.Held.Hold(fixture.Candidates.InstanceId, _profileId, targetRevision: 4);
+        fixture.Held.Hold(fixture.Candidates.Game, _profileId, targetRevision: 4);
         fixture.Monitor.Check();
 
         Assert.False(fixture.Monitor.HasDrift);
@@ -96,7 +97,7 @@ public class InstanceDriftMonitorTests
         fixture.Sync(4, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 1004;
-        fixture.Held.Hold(fixture.Candidates.InstanceId, _profileId, targetRevision: 4);
+        fixture.Held.Hold(fixture.Candidates.Game, _profileId, targetRevision: 4);
         fixture.Folder.WriteFile("fs25_b.zip", "two");
         fixture.Monitor.Check();
 
@@ -326,12 +327,12 @@ public class InstanceDriftMonitorTests
 
     private sealed class FakeCandidates : IDriftCandidateSource
     {
-        public Guid InstanceId { get; } = Guid.NewGuid();
+        public GameIdentity Game { get; } = Keys.Game();
         public string? ModFolder { get; set; }
         public ActiveProfile? ActiveProfile { get; set; } = new(_repoId, _profileId);
 
         public IReadOnlyList<DriftCandidate> GetDriftCandidates()
-            => [new DriftCandidate(InstanceId, "Farming Simulator 25", ModFolder, ActiveProfile)];
+            => [new DriftCandidate(Game, "Farming Simulator 25", ModFolder, ActiveProfile)];
     }
 
 
@@ -557,7 +558,7 @@ public class InstanceDriftMonitorTests
         {
             Manifests.Write(new SyncManifest
             {
-                InstanceId = Candidates.InstanceId,
+                Game = Candidates.Game,
                 RepoId = _repoId,
                 ProfileId = _profileId,
                 ProfileName = "Season 4",

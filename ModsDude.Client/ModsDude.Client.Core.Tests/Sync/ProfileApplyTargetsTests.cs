@@ -63,18 +63,20 @@ public class ProfileApplyTargetsTests
     }
 
 
+    /// <remarks>
+    /// The name doubles as the discriminator, so each of these is a different game rather than the
+    /// same one twice - which is what a machine with two of them now means.
+    /// </remarks>
     private static Game Game(string name, ActiveProfile? activeProfile)
     {
         var adapterId = new GameAdapterId("farmingSimulator", 1);
 
-        return new Game(new PersistedGame
+        return new Game(new GameIdentity(adapterId.Id, name), new PersistedGame
         {
-            Id = Guid.NewGuid(),
-            Scope = new GameIdentity(adapterId.ToString(), "fs25"),
             GameAdapterId = adapterId,
             Name = name,
             AdapterLocalSettings = "{}",
-            ModFolder = $@"C:\mods\{name}",
+            ModFolders = [$@"C:\mods\{name}"],
             ActiveProfile = activeProfile
         });
     }

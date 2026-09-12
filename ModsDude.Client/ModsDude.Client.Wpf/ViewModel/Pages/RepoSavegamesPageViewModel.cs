@@ -657,11 +657,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         foreach (var game in _repo.Games)
         {
-            var manifest = _manifestStore.TryRead(game.Id);
+            var manifest = _manifestStore.TryRead(game.Identity);
 
             hosts.Add(new SavegameHost(
                 game,
-                _bindingStore.GetBindings(game.Id),
+                _bindingStore.GetBindings(game.Identity),
                 manifest?.ProfileId,
                 manifest?.ProfileRevision));
         }
@@ -831,7 +831,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     {
         foreach (var game in _repo.Games.ToList())
         {
-            foreach (var binding in _bindingStore.GetBindings(game.Id))
+            foreach (var binding in _bindingStore.GetBindings(game.Identity))
             {
                 _lifetime.ThrowIfCancellationRequested();
 
@@ -1393,7 +1393,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             Status += " The mod folder was left as it is until you decide what to keep.";
 
             await _driftMonitor.CheckAsync();
-            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, game.Id);
+            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, game.Identity);
 
             return;
         }
@@ -1437,7 +1437,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         foreach (var slot in slots)
         {
             var availability = await _savegameService.ClassifySlotAsync(game, slot.Id, cancellationToken);
-            var binding = _bindingStore.GetBindingForSlot(game.Id, slot.Id);
+            var binding = _bindingStore.GetBindingForSlot(game.Identity, slot.Id);
 
             options.Add(new SavegameSlotOptionViewModel(
                 slot,
@@ -1449,7 +1449,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
 
         var suggested = await _savegameService.SuggestSlotAsync(game, row.Id, cancellationToken);
-        var hint = _bindingStore.GetSlotHint(game.Id, row.Id);
+        var hint = _bindingStore.GetSlotHint(game.Identity, row.Id);
 
         return new SavegameCheckOutContext(
             game,

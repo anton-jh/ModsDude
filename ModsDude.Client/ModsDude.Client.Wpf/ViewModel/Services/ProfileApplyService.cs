@@ -106,7 +106,7 @@ public sealed class ProfileApplyService(
         try
         {
             return await syncService.PlanAsync(
-                new ModSyncRequest(game.Id, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
+                new ModSyncRequest(game.Identity, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -150,7 +150,7 @@ public sealed class ProfileApplyService(
         // Asked before anything is planned, because this refusal is not about the folder and reading
         // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
         // can get past; this one is the sentence somebody can act on.
-        if (heldSavegames.DecideApply(game.Id, profileId, revision) is { IsAllowed: false } refusal)
+        if (heldSavegames.DecideApply(game.Identity, profileId, revision) is { IsAllowed: false } refusal)
         {
             // Two refusals, two sentences. A past savegame held here is not following "another mod list" -
             // it is following this very one and does not move off its revision - and telling somebody
@@ -319,7 +319,7 @@ public sealed class ProfileApplyService(
             return $" revision {named}";
         }
 
-        return heldSavegames.GetRequiredRevision(game.Id, profileId) is int held
+        return heldSavegames.GetRequiredRevision(game.Identity, profileId) is int held
             ? $" revision {held}, which is what the savegame checked out there runs on"
             : "";
     }

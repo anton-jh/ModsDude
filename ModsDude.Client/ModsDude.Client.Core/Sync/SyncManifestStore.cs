@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
-/// Reads and writes <c>manifests/{instanceId}.json</c>, one file per game beside
+/// Reads and writes <c>manifests/{game-identity}.json</c>, one file per game beside
 /// <c>state.json</c>.
 /// </summary>
 /// <remarks>
@@ -47,9 +48,9 @@ public sealed class SyncManifestStore
     /// Null when there is none, when it cannot be read, or when it was written by an incompatible
     /// version. All three mean the same thing to a caller - fall back to a full reconcile.
     /// </returns>
-    public SyncManifest? TryRead(Guid instanceId)
+    public SyncManifest? TryRead(GameIdentity game)
     {
-        var path = GetPath(instanceId);
+        var path = GetPath(game);
 
         lock (_lock)
         {
@@ -68,7 +69,7 @@ public sealed class SyncManifestStore
             {
                 // A manifest that cannot be read costs a full reconcile rather than a delta, which
                 // is slow but correct - and invisible, which is why it is written down.
-                _log.LogWarning(exception, "Could not read the sync manifest for game {Game}.", instanceId);
+                _log.LogWarning(exception, "Could not read the sync manifest for game {Game}.", game);
 
                 return null;
             }
@@ -81,7 +82,7 @@ public sealed class SyncManifestStore
     /// </summary>
     public void Write(SyncManifest manifest)
     {
-        var path = GetPath(manifest.InstanceId);
+        var path = GetPath(manifest.Game);
 
         lock (_lock)
         {
@@ -95,18 +96,18 @@ public sealed class SyncManifestStore
     }
 
     /// <summary>Forgets what a game last installed - for a game being deleted.</summary>
-    public void Delete(Guid instanceId)
+    public void Delete(GameIdentity game)
     {
         lock (_lock)
         {
             try
             {
-                File.Delete(GetPath(instanceId));
+                File.Delete(GetPath(game));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // A manifest for a game that no longer exists is inert.
-                _log.LogDebug(exception, "Could not delete the sync manifest for game {Game}.", instanceId);
+                _log.LogDebug(exception, "Could not delete the sync manifest for game {Game}.", game);
             }
         }
     }
@@ -114,9 +115,10 @@ public sealed class SyncManifestStore
 
     /// <summary>
     /// Through <see cref="StoreFileName"/>, which is where what a store puts in a file name gets
-    /// encoded. A game id needs none of that - a Guid is already hex and dashes, so the name is
-    /// what it has always been - but the identity and target key that replace it are adapter-authored
-    /// strings, and the encoding has to be the store's rather than something an adapter can violate.
+    /// encoded. The identity carries an adapter-authored discriminator, and the target key that joins
+    /// it in slice 2b is adapter-authored too, so the encoding has to be the store's rather than
+    /// something an adapter can violate. Ordinary ones stay legible:
+    /// <c>_farming_simulator#fs25.json</c>.
     /// </summary>
-    private string GetPath(Guid instanceId) => Path.Combine(_directory, $"{StoreFileName.For(instanceId.ToString())}.json");
+    private string GetPath(GameIdentity game) => Path.Combine(_directory, $"{StoreFileName.For(game.ToString())}.json");
 }

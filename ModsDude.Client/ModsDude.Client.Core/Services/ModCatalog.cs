@@ -90,15 +90,18 @@ public sealed class ModCatalog : IDisposable
 
         foreach (var game in _repo.Games)
         {
-            if (string.IsNullOrWhiteSpace(game.ModFolder))
+            // One source for the one folder. A game reaching several is one slice 2b scans per
+            // target, because looking in one folder of three would report what the other two hold as
+            // missing - and until then nothing in this build can sync such a game either.
+            if (game.SingleModFolderOrNone is not string modFolder)
             {
                 continue;
             }
 
             sources.Add(new ModSource(
-                ModSourceId.ForInstance(game.Id),
+                ModSourceId.ForGame(game.Identity),
                 game.Name,
-                game.ModFolder,
+                modFolder,
                 ModSourceKind.Game));
         }
 

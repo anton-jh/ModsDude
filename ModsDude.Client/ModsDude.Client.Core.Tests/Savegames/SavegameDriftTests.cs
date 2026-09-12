@@ -165,7 +165,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"));
         harness.WriteSlotFile("a savegame, played once");
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.UncheckedInPlay, drift.Kind);
         Assert.Equal(_slot, drift.Slot);
@@ -190,7 +190,7 @@ public class SavegameDriftTests
 
         harness.Hold(await harness.WriteAndHashAsync("a savegame"));
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), version: 3);
         harness.Heads.Set(_savegameId, 4);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.TakenOverAndCheckedIn, drift.Kind);
         Assert.Equal(3, drift.HeldVersion);
@@ -220,7 +220,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6, target: 6);
         harness.WriteManifest(revision: 8);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.PlayedOnAnotherModList, drift.Kind);
         Assert.Equal(6, drift.TargetRevision);
@@ -239,7 +239,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6);
         harness.WriteManifest(revision: 8);
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     /// <summary>
@@ -256,7 +256,7 @@ public class SavegameDriftTests
 
         Directory.Delete(harness.SlotPath, recursive: true);
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Id, CancellationToken.None));
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ public class SavegameDriftTests
         var drift = new[] { new SavegameDrift(_repoId, _savegameId, _slot, SavegameDriftKind.UncheckedInPlay) };
 
         var report = service.Check(
-            Guid.NewGuid(),
+            Keys.Game(),
             new ActiveProfile(_repoId, _profileId),
             modFolder.Path,
             savegameDrift: drift);
@@ -285,7 +285,7 @@ public class SavegameDriftTests
 
         // And it is enough on its own to make the notice fire, without pretending the mod folder
         // drifted.
-        Assert.True(new InstanceDrift(new DriftCandidate(Guid.NewGuid(), "FS25", modFolder.Path, null), report, null).IsDrifted);
+        Assert.True(new InstanceDrift(new DriftCandidate(Keys.Game(), "FS25", modFolder.Path, null), report, null).IsDrifted);
     }
 
 
@@ -322,17 +322,15 @@ public class SavegameDriftTests
         {
             var persisted = new PersistedGame
             {
-                Id = Guid.NewGuid(),
-                Scope = new GameIdentity("farmingSimulator", "fs25"),
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
                 AdapterLocalSettings = "{}",
-                ModFolder = _slots.Path,
+                ModFolders = [_slots.Path],
                 ActiveProfile = new ActiveProfile(_repoId, _profileId)
             };
 
-            State.Add(persisted);
-            Game = new Game(persisted);
+            State.Add(Keys.Game(), persisted);
+            Game = new Game(Keys.Game(), persisted);
 
             Adapter = new FakeSavegameAdapter(_slots.Path, _slot.Value);
             _bindings = new SavegameBindingStore(State);
@@ -367,7 +365,7 @@ public class SavegameDriftTests
 
         public void WriteManifest(int revision) => _manifestStore.Write(new SyncManifest
         {
-            InstanceId = Game.Id,
+            Game = Game.Identity,
             RepoId = _repoId,
             ProfileId = _profileId,
             ProfileRevision = revision,
@@ -379,7 +377,7 @@ public class SavegameDriftTests
         /// <summary>Records that this machine holds the savegame in the slot, at a known hash.</summary>
         /// <param name="target">A number makes it a past savegame, pinned to that revision.</param>
         public void Hold(string contentHash, int version = 1, int revision = 6, int? target = null)
-            => _bindings.SetBinding(Game.Id, new SavegameCheckoutBinding(
+            => _bindings.SetBinding(Game.Identity, new SavegameCheckoutBinding(
                 _repoId,
                 _savegameId,
                 _slot.Value,

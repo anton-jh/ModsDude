@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Sync;
@@ -19,7 +20,7 @@ public class ContentStoreVerificationTests
 {
     private const long _oneGigabyte = 1024L * 1024 * 1024;
 
-    private static readonly Guid _instanceId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly GameIdentity _game = Keys.Game();
 
 
     [Fact]
@@ -160,7 +161,7 @@ public class ContentStoreVerificationTests
 
         manifests.Write(new SyncManifest
         {
-            InstanceId = _instanceId,
+            Game = _game,
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             ProfileName = "Season 4",
@@ -175,7 +176,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeModFolders(new InstanceModFolder(_instanceId, modFolder)),
+            new FakeModFolders(new GameModFolder(_game, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 
@@ -204,7 +205,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeModFolders(new InstanceModFolder(_instanceId, modFolder)),
+            new FakeModFolders(new GameModFolder(_game, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 

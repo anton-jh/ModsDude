@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -50,11 +51,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private ProfileModsEditorPageViewModel? _openModsEditor;
 
     /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
-    private Guid? _scanInstanceIdOnce;
+    private GameIdentity? _scanGameOnce;
 
     /// <summary>
     /// Which revision a deep link into the history asked for. Same one-shot shape as
-    /// <see cref="_scanInstanceIdOnce"/>, and for the same reason: it describes an arrival, not a
+    /// <see cref="_scanGameOnce"/>, and for the same reason: it describes an arrival, not a
     /// standing preference.
     /// </summary>
     private int? _selectRevisionOnce;
@@ -94,10 +95,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return profileModsPageViewModelFactory.Create(repo, profile);
             }
 
-            var scanInstanceId = _scanInstanceIdOnce;
-            _scanInstanceIdOnce = null;
+            var scanGame = _scanGameOnce;
+            _scanGameOnce = null;
 
-            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanInstanceId);
+            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanGame);
         }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
@@ -299,34 +300,34 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        HoldRefusal = _heldSavegames.DecideApply(game.Id, _profile.Id, revision: null) is { IsAllowed: false }
+        HoldRefusal = _heldSavegames.DecideApply(game.Identity, _profile.Id, revision: null) is { IsAllowed: false }
             ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."
             : null;
     }
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
-    /// <param name="scanInstanceId">
+    /// <param name="scanGame">
     /// A game whose mod folder the editor should open already scanning. Sources are off by
     /// default because opening a page must not read a disk - but arriving here from a drift notice
     /// <em>is</em> the user asking about that folder's contents, so the one it is about is on.
     /// </param>
-    public bool TrySelectMods(Guid? scanInstanceId = null)
+    public bool TrySelectMods(GameIdentity? scanGame = null)
     {
         // Read and cleared by the menu item's factory, so it applies to the page this call opens and
         // not to the next one somebody reaches through the sidebar.
-        _scanInstanceIdOnce = scanInstanceId;
+        _scanGameOnce = scanGame;
 
         if (ReferenceEquals(NavManager.Selected, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
         }
-        else if (scanInstanceId is not null)
+        else if (scanGame is not null)
         {
             // Already open, so selecting it again constructs nothing and the factory never runs.
             // Enable the folder on the page the user is looking at instead.
-            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanInstance(scanInstanceId.Value);
-            _scanInstanceIdOnce = null;
+            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanGame(scanGame.Value);
+            _scanGameOnce = null;
         }
 
         return ReferenceEquals(NavManager.Selected, _modsMenuItem);

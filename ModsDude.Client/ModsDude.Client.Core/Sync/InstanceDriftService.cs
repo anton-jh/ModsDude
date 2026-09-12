@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -199,7 +200,7 @@ public sealed class InstanceDriftService(
     /// deleted underneath it is precisely a case where somebody wants to hear about their save.
     /// </param>
     public InstanceDriftReport Check(
-        Guid instanceId,
+        GameIdentity game,
         ActiveProfile? activeProfile,
         string? modFolder,
         bool profileIsMissing = false,
@@ -224,7 +225,7 @@ public sealed class InstanceDriftService(
             return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
-        var manifest = manifestStore.TryRead(instanceId);
+        var manifest = manifestStore.TryRead(game);
 
         // A manifest describing another profile, or another folder, says nothing about this one -
         // the same position as having none, which is a full reconcile rather than a false alarm.
