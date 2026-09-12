@@ -20,7 +20,7 @@ out right; that slice is now closed end to end.
 | --- | --- |
 | Identity, users, memberships | Working, with a members UI |
 | Repos, adapters, base settings | Working |
-| Local instances | Working, scoped to a game and carrying an active profile |
+| Local instances | Working, scoped to a game and carrying an active profile. [Phase 10](#phase-10--one-game-many-targets) splits the folder from the policy it carries and retires the word |
 | Profiles (create/rename/delete) | Working. Creating one can branch off a revision of another |
 | Mod dependencies | Server and the profile mod list editor both work. A save is one revision |
 | Profile history | Working — every save is a revision, readable, restorable, branchable |
@@ -65,6 +65,13 @@ get several instances. BeamNG.drive with BeamMP needs three — singleplayer, MP
 dedicated server all read from different directories, even where two of them belong to the
 same install. The model tracks folders and does not assume there is a game installed at all,
 which keeps it far simpler than modelling installations with child targets.
+
+**Superseded by [Phase 10](#phase-10--one-game-many-targets).** The half above it — instances
+scoped to a game rather than a repo — stands and is what Phase 10 builds on. This half does not:
+child targets are simpler *only* while the folder also holds the policy, and moving the active
+profile and the savegame hold up to the game is precisely what makes one-per-machine with a list of
+targets the smaller model. BeamNG still needs three folders; it no longer needs three of everything
+else.
 
 ### The content store is per volume and configured machine-wide
 
@@ -1420,6 +1427,279 @@ Worth knowing before starting, so none of it gets rediscovered:
 - **A published savegame's first version carries a declared revision.** The bytes existed before
   ModsDude saw them; no arrangement of the publish flow recovers what was in the folder at the
   time. Every version after it is observed.
+
+## Phase 10 — One game, many targets
+
+The instance is two things wearing one name: **a policy holder** — which profile this follows, which
+savegame is held here — and **a folder** on disk. Almost every game has one folder, so the two look
+identical and the conflation costs nothing to notice. BeamNG.drive with BeamMP has three, and there
+the conflation is not merely redundant, it is wrong: activating a profile on the dedicated server
+leaves the MP client on the old mod list, nothing connects the two actions, and nothing says they
+have diverged. The client matching the server is the entire point of that arrangement.
+
+So the two halves separate. **Policy moves up to the game; the folder stays where it is and stops
+carrying anything else.** A game has one active profile and holds at most one savegame; its
+*targets* are how many folders that reaches. Farming Simulator has one target and never mentions it.
+BeamNG has three and mentions them only where they differ.
+
+This supersedes [Instances are scoped to a game, and an instance is one mod
+folder](#instances-are-scoped-to-a-game-and-an-instance-is-one-mod-folder). That decision was right
+given its premise — with policy on the folder, modelling installations with child targets buys
+nothing — and this phase changes the premise.
+
+**Client-only. No server changes, and no endpoint moves.** The server has never heard of an
+instance.
+
+### The shape
+
+**`Game`** — one per `GameIdentity` per machine. Holds `ActiveProfile` and the savegame hold. Keyed
+by identity in `LocalState`, so *configured twice* stops being representable rather than being
+checked for.
+
+**A target** — 0 or 1 mod folder and 0 or 1 savegame folder, paired. That pairing is what makes the
+rest fall out: a save in target T's savegame folder was played against target T's mod folder, and
+nothing else.
+
+**A target is a value the adapter returns, not a persisted entity.** No id, no row, no list the user
+manages. A game that needs more than one says so in its `LocalSettings` — which is where the BeamNG
+adapter will offer each folder, and offer leaving one blank.
+
+- [ ] **`ILocalModAdapter.ModFolder` becomes `ModTargets`**, a keyed list of
+      `(Key, DisplayName, Path)`. The key is adapter-defined and stable, because it ends up in a
+      filename. Farming Simulator returns one and names it nothing; a blank folder in `LocalSettings`
+      is a target the adapter omits rather than one with a null path.
+- [ ] **`PersistedGame.ModFolders` stays a first-class persisted field**, derived but written
+      whenever settings are saved. This is not redundancy: store eviction and the drift candidate
+      list both read a folder path **without hydrating an adapter**, because a game whose identity no
+      loaded repo serves still owns its folders and still has a standing intent. Its `LocalSettings`
+      are an opaque blob in that state. `PersistedLocalInstance.ModFolder` is already this trick; it
+      grows an `s` and nothing else.
+- [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
+      syncing the dedicated server must not rewrite the MP client's manifest, and
+      atomic-write-per-folder is what keeps a half-finished apply safe.
+- [ ] **A third rule for the discriminator** in
+      [04 — Game adapters](04-game-adapters.md#two-rules-for-the-discriminator): it has to be
+      filesystem-safe, checked when the adapter is registered. It is adapter-authored — a scripted
+      adapter declares its own game id from inside the script — so without this a bad discriminator
+      is a manifest that cannot be written, found at sync time on somebody else's machine. Unlike the
+      other two rules this one is cheap to enforce, which is why it is code rather than prose.
+- [ ] **No `Guid` on `Game`.** Everything that would have keyed on one keys on `GameIdentity`, which
+      is already the `LocalState` dictionary key. Two ways to name one game is the thing this phase
+      spends its argument removing.
+- [ ] **Bump `LocalState.CurrentVersion`.** A per-game dictionary defaulting to empty would read as
+      "no profile is set anywhere", which is the one thing that must not be silently guessed. No
+      migration, per the standing decision.
+
+### Activating is intent; applying is work
+
+They have been one word and one button, and the split is load-bearing everywhere below.
+
+| | Activate | Apply |
+| --- | --- | --- |
+| What it is | Intent | Work |
+| Scope | The game — one profile | Each target, independently |
+| Sets | `Game.ActiveProfile` | Files on disk; that target's manifest |
+| Can fail | Only by **refusal** | Yes, per target |
+| On failure | Nothing is recorded | Intent stands, the target is drifted |
+
+- [ ] **Activating implies applying; applying never implies activating.** Activation runs the apply
+      immediately after — one gesture. *Save and apply* in the mod list editor is pure apply: the
+      profile is already active on whatever game follows it.
+- [ ] **A failed apply does not retract the activation.** The game still means to be on that profile,
+      the target is drifted, and the app-level notice carries it from there — which is
+      [the next section](#an-intent-that-was-not-carried-out-is-drift), and is not true today. Two
+      things stop an activation happening at all: a held savegame refusing it, and the user declining
+      the plan.
+- [ ] **That line already exists and only needs naming.** `ProfileApplyOutcome.RecordsIntent` is
+      false for `Refused` and `Declined` and true for `Unavailable` and `Failed` — refusals are
+      intent-level, failures are work-level. The split makes it structural: check the refusals,
+      record the intent, then do the work.
+- [ ] **The plan confirmation moves to once per activation**, showing what happens across every
+      target, rather than once per target. Otherwise declining the server's plan while accepting the
+      client's leaves an activation half-consented-to.
+- [ ] **`InstanceActivation` becomes `ProfileActivation`**, and its two kinds stop describing a label
+      and start naming which verb runs.
+
+### An intent that was not carried out is drift
+
+The bullet above claims the notice carries a failed apply. **It does not, and has never had to** —
+today a failed activation is uncommon enough that nobody has been left in the state. This phase makes
+it ordinary: one intent, several targets, and *the dedicated server is locked while the client
+applies fine* is the normal BeamMP evening. That leaves one target on the old mod list, silently,
+which is the exact thing this phase exists to prevent.
+
+Two things combine to produce the silence. The manifest is written **only on success**, so a failed
+apply leaves one describing the *previous* profile — and `InstanceDriftService.Check` early-returns
+`NeverSynced` for a manifest whose `ProfileId` is not the active one, while
+`InstanceDrift.IsDrifted` is `Status is Drifted || HasSavegameDrift`. `NeverSynced` is neither, so it
+never reaches the notice.
+
+Two failure shapes reach it, and the second is the one the word is wrong for:
+
+| Where the apply failed | The folder | Reported as |
+| --- | --- | --- |
+| Fetch — download or store population | Untouched; sync stops before the destructive phase on purpose | `NeverSynced`, silent |
+| Remove or install | Genuinely half-applied — neither profile | `NeverSynced`, silent |
+
+- [ ] **Split `NeverSynced` in two.** *No manifest at all* — a fresh install, discarded local state —
+      is genuinely nothing-known, promises nothing, and stays quiet. *A manifest describing a
+      different profile* is, under the two verbs above, **definitionally intent recorded and work not
+      done**, which is the cleanest description there is of a target needing an apply. It becomes
+      `NotApplied` and `IsDrifted` includes it. Nothing has to be invented: the split names the state.
+- [ ] **The third case in that guard gets its own sentence.** A manifest describing a different
+      *folder* is the settings having been repointed, not an apply that did not happen, and it should
+      not inherit the wording of one.
+- [ ] **Surfacing only — there is nothing to repair.** A later re-apply already produces the right
+      plan: reconciliation works from the folder's contents, and the planner reads the manifest purely
+      as a filename-size-time to hash cache, which is profile-independent. The state is unprompted,
+      not wrong. See [07 — Mod sync design](07-mod-sync-design.md#it-has-to-be-unmissable-everywhere).
+- [ ] **Re-apply on this drift names the target**, since with several of them the interesting half is
+      *which* one did not get there.
+
+### One profile per game
+
+- [ ] **`Game.ActiveProfile` replaces `LocalInstance.ActiveProfile`.** Every target follows it. Two
+      targets of one game cannot disagree, which is the BeamMP requirement stated as a type.
+- [ ] **`ProfileApplyTargets` collapses to a lookup.** A profile belongs to a repo, a repo has one
+      `GameIdentity`, games are keyed by identity — so a profile maps to exactly one game. Repo →
+      game → its targets, with no search. `DescribeSaveAction` says *Save and apply*, always.
+- [ ] **A folder that wants a different mod list does not get connected.** "A group runs the same
+      mods at the same versions" is the premise of the system, so a private singleplayer mod set is
+      out of scope by construction. The two ways out are a repo of your own for it, or leaving the
+      folder out — which the adapter offers as a blank field in `LocalSettings`.
+
+### One savegame held per game
+
+- [ ] **The hold limit counts per game, not per target.** `SavegameHoldRules.FindConflictingHold` is
+      asked once for the game. You play one save at a time; hosting one save on the server while
+      playing another in singleplayer would hold two of the group's saves and block two people.
+- [ ] ***Take a copy* is the escape hatch**, unchanged: no claim, no binding, an ordinary
+      unrecognised slot. It is already the answer to "I want to look at another save without holding
+      it".
+- [ ] **`IHeldSavegames` splits along the seam it already has.** `ObserveAsync` and `CheckDriftAsync`
+      stay per target — the bytes are in a folder. `GetRequiredRevision` and `DecideApply` move to
+      the game. The interface was keying both halves on one id; only the keys change.
+- [ ] **Slots become unique across the game**, with `SavegameSlot` carrying its `TargetKey` beside
+      its id. The id stays a value nobody parses; the key is what groups the picker. Slot identity is
+      already the adapter's to mint, so this is a tightening rather than a new burden.
+
+### Play attribution stays per target
+
+The one thing that does **not** move up to the game, and the reason is worth writing down because
+per-game looks simpler and is not.
+
+- [ ] **`ObserveAsync` goes on reading the manifest of the folder it is about to rewrite.** It is
+      already called from inside `WriteManifestAsync`, which is already per folder; with N targets it
+      is that same loop N times. Per-game would mean *adding* an activated-revision field and logic
+      to prefer it over the manifest — more code, for a worse number.
+- [ ] **The number has to be observed, not declared.** A failed apply never reaches
+      `WriteManifestAsync`, so nothing is attributed, which is correct: that folder did not change,
+      so what is being played there did not change either. Record the *activated* revision instead
+      and the case breaks exactly where it matters — activate rev 12, the server's apply fails, the
+      folder is still physically on rev 8, and a check-in stamps the version with 12. The save then
+      reproduces wrong for whoever checks it out next.
+- [ ] **Activated-but-not-applied becomes a normal state** under this phase rather than an
+      exceptional one, so divergence gets *more* reachable, not less. That argues for observing
+      harder, not for trusting intent.
+- [ ] **Both existing guards survive verbatim**: a folder on a *different* profile records no number
+      at all — the hash still moves, because the bytes did — and the no-work path still observes,
+      because a revision can move without a single mod doing so.
+
+### Interface
+
+- [ ] **No instance list in the sidebar, and no current-instance dropdown.** The dropdown was the
+      answer to "which folder does this act on" while policy lived on folders. Under one game per
+      machine there is no such question, so it is not built.
+- [ ] **Activation lives on the profile page only**, and loses its instance picker —
+      `ProfilePageViewModel.SelectedInstance` and `HasInstanceChoice` go with it. The target is the
+      game.
+- [ ] **Check-out is one flat slot list** across every target with a savegame folder, grouped under a
+      target header only where more than one has them. No instance step. Slots are already labelled
+      with the game's own name for the save, so the list reads the same at one target or three.
+- [ ] **Publish moves to the repo's Saves page**, where it can be reached without opening a game
+      page. It is still inherently about a slot; the slot list is the same one.
+- [ ] **Drift reports per target**, naming the folder only where the game has more than one — *"your
+      MP client folder has 2 differences"*.
+- [ ] **Connect game loses its name field.** A game is called Farming Simulator 25 and
+      `Adapter.DisplayName` already says so. The name box, its "Game" default and its
+      uniqueness-within-scope check all go; connecting becomes filling in the settings form.
+- [ ] **`GamePage` is reached rarely and on purpose**: its settings, its targets and its slot list.
+      Nothing in a normal evening requires opening it.
+
+### Naming
+
+"Instance" leaves the user-facing vocabulary entirely. The rename **rides each slice** rather than
+being a pass of its own, because every file it touches is a file these slices already open.
+
+| Now | Then |
+| --- | --- |
+| `LocalInstance` | `Game` |
+| `PersistedLocalInstance` | `PersistedGame` |
+| `LocalInstanceRepository` | `GameRepository` |
+| `InstanceScope` | `GameIdentity` |
+| `IInstanceGameAdapter` | `ILocalGameAdapter` |
+| `IInstanceModAdapter` / `IInstanceSavegameAdapter` | `ILocalModAdapter` / `ILocalSavegameAdapter` |
+| `InstanceSettings`, `GetInstanceSettingsTemplate`, `WithInstanceSettings` | `LocalSettings`, `GetLocalSettingsTemplate`, `WithLocalSettings` |
+| `IInstanceModFolders` | `IModFolders` |
+| `InstanceDriftService` / `Monitor` / `Report` | `DriftService` / `DriftMonitor` / `DriftReport` |
+| `InstanceActivation` | `ProfileActivation` |
+| `CreateLocalInstancePage` | `ConnectGamePage` |
+| `EditLocalInstancePage` | `GameSettingsPage` |
+| `InstancePage` / `InstanceSavegamesPage` | `GamePage` / `GameSavegamesPage` |
+
+`Game` means *your local installation* on the client, while in conversation "the game" is what the
+adapter is for — which lives on `Repo.Adapter.DisplayName`. They never appear together, and
+`Repo.Game` does not exist.
+
+`ConnectGamePage` is the one that was already true: the menu item has said *Connect game* since it
+was written.
+
+### The order to build it in
+
+Slice 1 goes first and alone — everything after it reads folders, and it is what changes how folders
+are read.
+
+- [ ] **1. The adapter answers with targets.** `ModTargets`, the manifest key, the third
+      discriminator rule, and the adapter-layer renames. Farming Simulator returns one target and
+      nothing downstream notices.
+- [ ] **2. `Game` replaces `LocalInstance`.** Keyed by `GameIdentity`, holding `ActiveProfile` and
+      the cached folder list; manifests, drift and store eviction re-key onto targets.
+- [ ] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
+      grouping. Attribution is deliberately untouched.
+- [ ] **4. Activate and apply become two verbs**, with the confirmation moved, `RecordsIntent` made
+      structural, and `NeverSynced` split so an activation that did not land is drift. The split
+      belongs in this slice rather than slice 2: it is only *definable* once the two verbs are, and
+      until then there is no such thing as an intent that was not carried out.
+- [ ] **5. Interface.** The sidebar, the profile page's activation, the check-out list, publish, the
+      drift wording, and Connect game losing its name.
+
+### What this deletes
+
+Worth knowing before starting, because it is most of the argument for doing it:
+
+- **The sidebar instance list and `InstanceItemViewModel`** — and with them the only consumer of
+  `MenuItemViewModel`'s title-tracking machinery, which exists solely because instances have no
+  server refresh to rebuild their menu entries. See [05 — Client](05-client.md#navigation).
+- **`RepoSavegamesPageViewModel.Offer`'s host ranking** — "an instance that would accept, else one
+  following this profile, else the first". There is one game, so there is nothing to rank.
+- **Half of `InstancePageViewModel`** — the profile dropdown, the apply button and the hold-lock
+  wiring, all of which are the second copy of a control the profile page already has.
+- **`SavegameRowRules.NoInstance` and its `hasInstance` parameter.**
+- **Three validation rules**: instance name uniqueness within a scope, the name field itself, and
+  most of the cross-scope duplicate-folder check — which collapses to "a game's targets are distinct
+  from each other" plus "paths do not collide between games".
+
+### Settled
+
+- **No per-target profiles, ever.** Targets of one game cannot disagree. A folder that wants its own
+  mod list is a folder that is not connected, or one belonging to a repo of your own.
+- **No instance groups.** The set of targets on a profile *is* the group, and it is maintained by the
+  one fact that already exists. A second way to express membership is a second way for it to
+  disagree with the first.
+- **The current-instance dropdown is not built.** It was the right answer to a question this phase
+  removes.
+- **Attribution is observed, never declared** — except a published savegame's first version, which
+  declares because the bytes predate ModsDude and nothing recovers what was in the folder then.
 
 ## Deliberately not planned
 
