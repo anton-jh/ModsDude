@@ -42,6 +42,11 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         _state = store.Get();
 
         Games = new(_state.Games.Select(x => new Game(x.Key, x.Value)));
+
+        // At startup as well as after every edit, because the state can arrive smaller than the
+        // manifest directory without anything here having run: a version bump discards it wholesale,
+        // and the manifests it named survive on disk as files nothing will ever look for again.
+        DropStaleManifests();
     }
 
 
@@ -177,6 +182,11 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         game.Update(name, localSettings, targets);
         _store.Save();
 
+        // A field somebody emptied has taken a target away, and the manifest describing what used to
+        // be in that folder is one nothing will look for again. Dropped here rather than worked out,
+        // because a removal and an adapter author renaming a key are the same edit from this side.
+        DropStaleManifests();
+
         // The mod folders may have moved, which makes every answer about the old ones meaningless.
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -231,19 +241,13 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
     public void Delete(Game game)
     {
-        var targets = TargetsOf(game).ToList();
-
         _state.Games.Remove(game.Identity);
         Games.Remove(game);
         _store.Save();
 
         // Nothing reads a manifest for a folder no game reaches any more, and leaving one behind
-        // would keep a few hundred kilobytes per disconnected folder forever. One per target,
-        // because that is how many there are.
-        foreach (var target in targets)
-        {
-            _manifestStore.Delete(target.Target);
-        }
+        // would keep a few hundred kilobytes per disconnected folder forever.
+        DropStaleManifests();
     }
 
     /// <summary>
@@ -319,6 +323,20 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Leaves a manifest for every folder some game still reaches, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Called after anything that changes which folders exist - and from the constructor, because a
+    /// discarded state file changes that without any of those having run. Read off the persisted
+    /// targets, so a game whose identity no loaded repo serves keeps its manifests rather than
+    /// having them swept for being unreadable right now.
+    /// </remarks>
+    private void DropStaleManifests()
+    {
+        _manifestStore.DropStale(Games.SelectMany(x => x.TargetRefs));
     }
 
     private void EnsureFoldersAreUnclaimed(IReadOnlyList<PersistedModTarget> targets, GameIdentity? ignoredGame)

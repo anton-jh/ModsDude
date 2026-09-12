@@ -148,6 +148,74 @@ public class SyncManifestStoreTests
     }
 
     /// <summary>
+    /// The orphan half that is droppable. Emptying a target's settings field takes the target away,
+    /// and the manifest behind it describes a folder nothing will ever ask about again.
+    /// </summary>
+    [Fact]
+    public void A_manifest_for_a_target_that_is_gone_is_dropped()
+    {
+        using var directory = new TempDirectory("manifests-stale");
+        var store = new SyncManifestStore(directory.Path);
+
+        store.Write(Manifest(Keys.Target("server"), "C:\\server\\mods", []));
+        store.Write(Manifest(Keys.Target("client"), "C:\\client\\mods", []));
+
+        // The settings now fill in one field where they filled in two.
+        store.DropStale([Keys.Target("server")]);
+
+        Assert.NotNull(store.TryRead(Keys.Target("server")));
+        Assert.Null(store.TryRead(Keys.Target("client")));
+    }
+
+    /// <summary>
+    /// Everything unexpected, not only the keys that have gone: a file an older version wrote under
+    /// a name nothing builds any more is the same kind of orphan, and this is what collects it.
+    /// </summary>
+    [Fact]
+    public void A_file_the_store_would_never_have_written_is_dropped_too()
+    {
+        using var directory = new TempDirectory("manifests-orphans");
+        var store = new SyncManifestStore(directory.Path);
+
+        store.Write(Manifest(Keys.Target(), "C:\\mods", []));
+
+        // What slice 2a left behind - named by the game alone - and what an interrupted atomic write
+        // leaves beside a live manifest.
+        File.WriteAllText(Path.Combine(directory.Path, $"{Keys.Game()}.json"), "{}");
+        File.WriteAllText(Path.Combine(directory.Path, $"{Name(Keys.Target())}.json.tmp"), "{}");
+
+        store.DropStale([Keys.Target()]);
+
+        Assert.Equal([$"{Name(Keys.Target())}.json"], Directory.EnumerateFiles(directory.Path).Select(Path.GetFileName));
+        Assert.NotNull(store.TryRead(Keys.Target()));
+    }
+
+    /// <summary>
+    /// A game disconnected, or a state file discarded by a version bump. Expecting nothing is an
+    /// ordinary answer and costs a rescan, which is all a manifest is ever worth.
+    /// </summary>
+    [Fact]
+    public void Expecting_nothing_drops_everything()
+    {
+        using var directory = new TempDirectory("manifests-none-expected");
+        var store = new SyncManifestStore(directory.Path);
+
+        store.Write(Manifest(Keys.Target(), "C:\\mods", []));
+        store.DropStale([]);
+
+        Assert.Empty(Directory.EnumerateFiles(directory.Path));
+    }
+
+    /// <summary>A sweep of a directory nothing has written to yet is not an error.</summary>
+    [Fact]
+    public void Sweeping_before_anything_has_been_written_does_nothing()
+    {
+        using var directory = new TempDirectory("manifests-unwritten");
+
+        new SyncManifestStore(Path.Combine(directory.Path, "not-there")).DropStale([Keys.Target()]);
+    }
+
+    /// <summary>
     /// What the savegame side reads, since a binding is keyed on the game and not yet on a target.
     /// </summary>
     [Fact]

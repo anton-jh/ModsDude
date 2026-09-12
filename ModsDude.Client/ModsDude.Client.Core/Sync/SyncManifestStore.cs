@@ -100,19 +100,73 @@ public sealed class SyncManifestStore
         }
     }
 
-    /// <summary>Forgets what one folder last had installed - for a target being disconnected.</summary>
-    public void Delete(ModTargetRef target)
+    /// <summary>
+    /// Drops every manifest that is not one of these.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Everything unexpected, not only the targets that have gone.</b> A settings field somebody
+    /// emptied, a game disconnected, an adapter author who renamed a key, and a file an older
+    /// version wrote under a name nothing builds any more all leave the same thing behind: a
+    /// manifest no future read will ever look for. Nothing can tell them apart and nothing needs to -
+    /// losing a manifest costs a rescan, which is the whole reason this file is an optimisation
+    /// rather than a record.
+    /// </para>
+    /// <para>
+    /// Which is also why a sweep by "what do I still expect" is safe where one by "what has gone"
+    /// would not be. It is driven by the persisted target list, so it answers for a game whose
+    /// identity no loaded repo serves - and if that list were ever wrong, the cost is a rescan
+    /// rather than a folder nobody can account for.
+    /// </para>
+    /// <para>
+    /// Failures are swallowed per file. This runs from a repository constructor at startup, and a
+    /// locked manifest is a few hundred kilobytes rather than something worth failing a launch over.
+    /// </para>
+    /// </remarks>
+    public void DropStale(IEnumerable<ModTargetRef> expected)
     {
+        var keep = new HashSet<string>(expected.Select(FileName), StringComparer.OrdinalIgnoreCase);
+
         lock (_lock)
         {
+            if (Directory.Exists(_directory) is false)
+            {
+                return;
+            }
+
+            IReadOnlyList<string> present;
+
             try
             {
-                File.Delete(GetPath(target));
+                present = [.. Directory.EnumerateFiles(_directory)];
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // A manifest for a target that no longer exists is inert.
-                _log.LogDebug(exception, "Could not delete the sync manifest for target {Target}.", target);
+                _log.LogDebug(exception, "Could not list the manifest directory to sweep it.");
+
+                return;
+            }
+
+            foreach (var path in present)
+            {
+                // Every file rather than *.json, which collects the .tmp an interrupted atomic write
+                // leaves behind as well.
+                if (keep.Contains(Path.GetFileName(path)))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(path);
+
+                    _log.LogInformation("Dropped the stale sync manifest {File}.", Path.GetFileName(path));
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // A manifest nothing will read is inert wherever it sits.
+                    _log.LogDebug(exception, "Could not drop the stale sync manifest {File}.", Path.GetFileName(path));
+                }
             }
         }
     }
@@ -171,6 +225,16 @@ public sealed class SyncManifestStore
     /// store's rather than something an adapter can violate. Ordinary ones stay legible:
     /// <c>_farming_simulator#fs25_mods.json</c>.
     /// </summary>
-    private string GetPath(ModTargetRef target)
-        => Path.Combine(_directory, $"{StoreFileName.For(target.Game.ToString(), target.Key.Value)}.json");
+    private string GetPath(ModTargetRef target) => Path.Combine(_directory, FileName(target));
+
+    /// <inheritdoc cref="GetPath"/>
+    /// <remarks>
+    /// Named separately because <see cref="DropStale"/> builds the name it would have written for
+    /// every target it still expects and compares directory entries against those. Nothing ever
+    /// reads a name back into its parts - see <see cref="StoreFileName"/>, which is deliberately not
+    /// reversible - so the two have to come from one place or the sweep would drop live manifests
+    /// the moment the encoding changed.
+    /// </remarks>
+    private static string FileName(ModTargetRef target)
+        => $"{StoreFileName.For(target.Game.ToString(), target.Key.Value)}.json";
 }
