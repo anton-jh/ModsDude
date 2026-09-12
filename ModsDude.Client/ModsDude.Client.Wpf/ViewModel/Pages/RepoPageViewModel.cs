@@ -444,8 +444,8 @@ public partial class RepoPageViewModel
         }
 
         // The transient archived entry exists for one visit. Anything else being selected - including
-        // the Archive itself - is the end of it.
-        if (ArchivedProfiles.Contains(NavManager.Selected) is false)
+        // the Archive itself, and including nothing at all - is the end of it.
+        if (NavManager.Selected is not MenuItemViewModel selected || ArchivedProfiles.Contains(selected) is false)
         {
             ClearArchivedProfile();
         }
