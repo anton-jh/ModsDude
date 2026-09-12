@@ -49,7 +49,7 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     public event EventHandler? InstanceChanged;
 
 
-    public IEnumerable<LocalInstance> GetByScope(InstanceScope scope)
+    public IEnumerable<LocalInstance> GetByScope(GameIdentity scope)
     {
         return Instances.Where(x => x.Scope == scope);
     }
@@ -194,8 +194,8 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     public static string? GetModFolder(IBaseGameAdapter baseAdapter, DynamicForm instanceSettings)
     {
         return baseAdapter
-            .WithInstanceSettings(instanceSettings)
-            .GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>()
+            .WithLocalSettings(instanceSettings)
+            .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
             .ModFolder;
     }

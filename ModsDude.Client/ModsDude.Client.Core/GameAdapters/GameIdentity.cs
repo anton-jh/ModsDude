@@ -13,13 +13,13 @@ namespace ModsDude.Client.Core.GameAdapters;
 /// are both plausible-looking strings, and comparing the wrong pair fails as a silently empty
 /// instance list rather than as a compile error.
 /// </remarks>
-[JsonConverter(typeof(InstanceScopeJsonConverter))]
-public readonly record struct InstanceScope
+[JsonConverter(typeof(GameIdentityJsonConverter))]
+public readonly record struct GameIdentity
 {
     private const string _separator = "#";
 
 
-    public InstanceScope(string adapterId, string? discriminator = null)
+    public GameIdentity(string adapterId, string? discriminator = null)
     {
         if (adapterId.Contains(_separator))
         {
@@ -47,26 +47,26 @@ public readonly record struct InstanceScope
     }
 
 
-    public static InstanceScope Parse(string s)
+    public static GameIdentity Parse(string s)
     {
         return s.Split(_separator) switch
         {
             [var adapterId] => new(adapterId),
             [var adapterId, var discriminator] => new(adapterId, discriminator),
-            _ => throw new FormatException($"Invalid InstanceScope string '{s}'")
+            _ => throw new FormatException($"Invalid GameIdentity string '{s}'")
         };
     }
 }
 
-public sealed class InstanceScopeJsonConverter : JsonConverter<InstanceScope>
+public sealed class GameIdentityJsonConverter : JsonConverter<GameIdentity>
 {
-    public override InstanceScope Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override GameIdentity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        return InstanceScope.Parse(reader.GetString()
-            ?? throw new JsonException("Expected an instance scope string."));
+        return GameIdentity.Parse(reader.GetString()
+            ?? throw new JsonException("Expected a game identity string."));
     }
 
-    public override void Write(Utf8JsonWriter writer, InstanceScope value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, GameIdentity value, JsonSerializerOptions options)
     {
         writer.WriteStringValue(value.ToString());
     }

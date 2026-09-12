@@ -22,7 +22,7 @@ public class LocalInstance
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public Guid Id => PersistedModel.Id;
-    public InstanceScope Scope => PersistedModel.Scope;
+    public GameIdentity Scope => PersistedModel.Scope;
     public GameAdapterId GameAdapterId => PersistedModel.GameAdapterId;
     public string Name => PersistedModel.Name;
     public string SerializedInstanceSettings => PersistedModel.AdapterInstanceSettings;
@@ -34,12 +34,12 @@ public class LocalInstance
 
     public DynamicForm GetInstanceSettings(IBaseGameAdapter baseAdapter)
     {
-        return baseAdapter.DeserializeInstanceSettings(PersistedModel.AdapterInstanceSettings);
+        return baseAdapter.DeserializeLocalSettings(PersistedModel.AdapterInstanceSettings);
     }
 
-    public IInstanceGameAdapter GetAdapter(IBaseGameAdapter baseAdapter)
+    public ILocalGameAdapter GetAdapter(IBaseGameAdapter baseAdapter)
     {
-        return baseAdapter.WithInstanceSettings(PersistedModel.AdapterInstanceSettings);
+        return baseAdapter.WithLocalSettings(PersistedModel.AdapterInstanceSettings);
     }
 
 

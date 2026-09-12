@@ -56,7 +56,7 @@ public interface ISavegamePacker
     /// useful answer than an exception to the one caller - the drift check - that can legitimately
     /// ask about a slot somebody deleted from under it.
     /// </remarks>
-    Task<PackedSavegame> PackAsync(IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
 
     /// <summary>
     /// Replaces the slot's contents with the archive's.
@@ -75,7 +75,7 @@ public interface ISavegamePacker
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidDataException">An entry names a path outside the slot folder.</exception>
-    Task UnpackAsync(string archivePath, IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
 
     /// <summary>
     /// What <see cref="PackAsync"/> would report as the content hash, without keeping the archive.
@@ -85,7 +85,7 @@ public interface ISavegamePacker
     /// compresses every byte - the hash has to be over the same bytes the packer produces or the two
     /// could differ - but writes none of them.
     /// </remarks>
-    Task<string> HashSlotAsync(IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
 }
 
 
@@ -108,7 +108,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private const int _bufferSize = 64 * 1024;
 
 
-    public async Task<PackedSavegame> PackAsync(IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
     {
         var archivePath = GetTemporaryArchivePath();
 
@@ -135,7 +135,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
-    public Task<string> HashSlotAsync(IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
     {
         // Literally the pack, discarding the bytes as they are produced. Sharing the writer rather
         // than hashing the files individually is the whole point: any difference between the two -
@@ -144,7 +144,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         return WriteArchiveAsync(adapter, slot, Stream.Null, cancellationToken);
     }
 
-    public async Task UnpackAsync(string archivePath, IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
     {
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(slot));
         var parent = Path.GetDirectoryName(slotPath)
@@ -206,7 +206,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     /// cost of a data descriptor per entry.
     /// </remarks>
     private static async Task<string> WriteArchiveAsync(
-        IInstanceSavegameAdapter adapter,
+        ILocalSavegameAdapter adapter,
         SavegameSlotId slot,
         Stream destination,
         CancellationToken cancellationToken)
@@ -249,7 +249,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     /// forward-slashed before the adapter is asked about it, so an adapter sees the same string the
     /// archive will store.
     /// </remarks>
-    private static IReadOnlyList<(string RelativePath, string FullPath)> EnumerateContents(IInstanceSavegameAdapter adapter, string slotPath)
+    private static IReadOnlyList<(string RelativePath, string FullPath)> EnumerateContents(ILocalSavegameAdapter adapter, string slotPath)
     {
         if (Directory.Exists(slotPath) is false)
         {

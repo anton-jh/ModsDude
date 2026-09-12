@@ -323,7 +323,7 @@ public class SavegameDriftTests
             var persisted = new PersistedLocalInstance
             {
                 Id = Guid.NewGuid(),
-                Scope = new InstanceScope("farmingSimulator", "fs25"),
+                Scope = new GameIdentity("farmingSimulator", "fs25"),
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
                 AdapterInstanceSettings = "{}",

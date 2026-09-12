@@ -20,32 +20,32 @@ namespace ModsDude.Client.Core.Savegames;
 /// Behind an interface so the savegame engine depends on the one fact it uses and can be exercised
 /// without a signed-in client.
 /// </remarks>
-public interface IInstanceSavegameAdapters
+public interface ILocalSavegameAdapters
 {
     /// <returns>
     /// Null where no repo on this machine hydrates this instance's adapter, or where the adapter has
     /// no savegame support at all. Both are ordinary states rather than errors - an instance whose
     /// scope no loaded repo serves still exists, and a mods-only game has no slots by design.
     /// </returns>
-    IInstanceSavegameAdapter? TryGet(LocalInstance instance);
+    ILocalSavegameAdapter? TryGet(LocalInstance instance);
 
     /// <inheritdoc cref="TryGet(LocalInstance)"/>
     /// <remarks>For callers that hold an id rather than the instance - the drift check, which walks
     /// <see cref="DriftCandidate"/>s.</remarks>
-    IInstanceSavegameAdapter? TryGet(Guid instanceId);
+    ILocalSavegameAdapter? TryGet(Guid instanceId);
 }
 
 
-/// <summary><see cref="IInstanceSavegameAdapters"/> over the repos this client has loaded.</summary>
+/// <summary><see cref="ILocalSavegameAdapters"/> over the repos this client has loaded.</summary>
 public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepository instances)
-    : IInstanceSavegameAdapters
+    : ILocalSavegameAdapters
 {
-    public IInstanceSavegameAdapter? TryGet(Guid instanceId)
+    public ILocalSavegameAdapter? TryGet(Guid instanceId)
         => instances.Instances.FirstOrDefault(x => x.Id == instanceId) is LocalInstance instance
             ? TryGet(instance)
             : null;
 
-    public IInstanceSavegameAdapter? TryGet(LocalInstance instance)
+    public ILocalSavegameAdapter? TryGet(LocalInstance instance)
     {
         // Any repo serving the scope will do. Two repos on the same game hydrate the same instance
         // settings into the same slot list - the settings that differ between them are the mod
@@ -57,7 +57,7 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
                 continue;
             }
 
-            if (instance.GetAdapter(repo.Adapter).GetInstanceCapabilityAdapterFactory<IInstanceSavegameAdapter>() is Func<IInstanceSavegameAdapter> factory)
+            if (instance.GetAdapter(repo.Adapter).GetLocalCapabilityAdapterFactory<ILocalSavegameAdapter>() is Func<ILocalSavegameAdapter> factory)
             {
                 return factory();
             }
@@ -302,7 +302,7 @@ public sealed class SavegameService(
     IFilesClient filesClient,
     ISavegamePacker packer,
     SavegameBindingStore bindings,
-    IInstanceSavegameAdapters adapters,
+    ILocalSavegameAdapters adapters,
     IModFileDownloader downloader,
     IModFileUploader uploader,
     SyncManifestStore manifestStore,
@@ -1067,7 +1067,7 @@ public sealed class SavegameService(
     /// </remarks>
     private async Task EnsureWritable(
         LocalInstance instance,
-        IInstanceSavegameAdapter adapter,
+        ILocalSavegameAdapter adapter,
         SavegameSlotId slot,
         string savegameName,
         CancellationToken ct)
@@ -1086,7 +1086,7 @@ public sealed class SavegameService(
 
     private async Task<SavegameSlotAvailability> ClassifyAsync(
         LocalInstance instance,
-        IInstanceSavegameAdapter adapter,
+        ILocalSavegameAdapter adapter,
         SavegameSlotId slotId,
         CancellationToken ct)
     {
@@ -1118,7 +1118,7 @@ public sealed class SavegameService(
     /// what lands here is about to replace somebody's slot.
     /// </remarks>
     private async Task DownloadIntoSlotAsync(
-        IInstanceSavegameAdapter adapter,
+        ILocalSavegameAdapter adapter,
         Guid repoId,
         Guid savegameId,
         string contentHash,
@@ -1303,7 +1303,7 @@ public sealed class SavegameService(
     /// would be the one thing the uninstall rules never permit, and failing the check-in over it
     /// would report a hand-back that plainly succeeded as broken.
     /// </remarks>
-    private void Recycle(IInstanceSavegameAdapter adapter, SavegameSlotId slot)
+    private void Recycle(ILocalSavegameAdapter adapter, SavegameSlotId slot)
     {
         try
         {
@@ -1338,7 +1338,7 @@ public sealed class SavegameService(
     /// </para>
     /// </remarks>
     private async Task<List<SavegameDetailDto>> DescribeAsync(
-        IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
+        ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
     {
         try
         {
@@ -1357,14 +1357,14 @@ public sealed class SavegameService(
         }
     }
 
-    private IInstanceSavegameAdapter RequireAdapter(LocalInstance instance)
+    private ILocalSavegameAdapter RequireAdapter(LocalInstance instance)
         => adapters.TryGet(instance)
             ?? throw new UserFriendlyException(
                 $"'{instance.Name}' has no savegames",
                 $"No loaded repo hydrates a savegame adapter for instance '{instance.Id}' - either its game does not support savegames, or no repo on this machine serves its scope.");
 
     /// <summary>Slots, or nothing where the game folder is unreachable - unknown, never drifted.</summary>
-    private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(IInstanceSavegameAdapter adapter, CancellationToken ct)
+    private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(ILocalSavegameAdapter adapter, CancellationToken ct)
     {
         try
         {
@@ -1385,7 +1385,7 @@ public sealed class SavegameService(
     /// play, for the reason <see cref="SavegameDriftRules"/> gives: a warning that fires when nothing
     /// is wrong is one everybody learns to click past.
     /// </summary>
-    private async Task<string?> HashOrNothing(IInstanceSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
+    private async Task<string?> HashOrNothing(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
     {
         try
         {

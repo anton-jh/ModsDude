@@ -29,33 +29,33 @@ public class FarmingSimulatorBaseSavegameAdapter(ILoggerFactory? loggerFactory =
     public bool CanCreateSlots => false;
 
 
-    public IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings)
+    public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var instanceSettings = FarmingSimulatorInstanceSettings.Deserialize(serializedInstanceSettings);
-        instanceSettings.EnsureValid();
-        return new FarmingSimulatorInstanceSavegameAdapter(instanceSettings, Loggers);
+        var localSettings = FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings);
+        localSettings.EnsureValid();
+        return new FarmingSimulatorLocalSavegameAdapter(localSettings, Loggers);
     }
 
-    public IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings)
+    public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings)
     {
-        if (instanceSettings is not FarmingSimulatorInstanceSettings settings)
+        if (localSettings is not FarmingSimulatorLocalSettings settings)
         {
-            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
         settings.EnsureValid();
-        return new FarmingSimulatorInstanceSavegameAdapter(settings, Loggers);
+        return new FarmingSimulatorLocalSavegameAdapter(settings, Loggers);
     }
 }
 
 
-public class FarmingSimulatorInstanceSavegameAdapter(
-    FarmingSimulatorInstanceSettings instanceSettings,
+public class FarmingSimulatorLocalSavegameAdapter(
+    FarmingSimulatorLocalSettings localSettings,
     ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseSavegameAdapter(loggerFactory), IInstanceSavegameAdapter
+    : FarmingSimulatorBaseSavegameAdapter(loggerFactory), ILocalSavegameAdapter
 {
     /// <summary>
     /// The game offers this many slots and no more. A number about one game, which is exactly why it
-    /// lives here and why <see cref="IInstanceSavegameAdapter.GetSlots"/> hands back a list - nothing
+    /// lives here and why <see cref="ILocalSavegameAdapter.GetSlots"/> hands back a list - nothing
     /// above this file has to know it.
     /// </summary>
     private const int _slotCount = 20;
@@ -79,8 +79,8 @@ public class FarmingSimulatorInstanceSavegameAdapter(
     private static readonly string[] _excludedFileNames = ["screenshot.png"];
 
 
-    private string GameDataFolder => instanceSettings.GameDataFolder
-        ?? throw new InvalidOperationException("Instance settings carry no game data folder.");
+    private string GameDataFolder => localSettings.GameDataFolder
+        ?? throw new InvalidOperationException("Local settings carry no game data folder.");
 
 
     public string GetSlotPath(SavegameSlotId slot)

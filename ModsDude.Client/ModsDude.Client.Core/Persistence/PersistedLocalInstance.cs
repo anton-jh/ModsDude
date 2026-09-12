@@ -8,7 +8,7 @@ public class PersistedLocalInstance
     public required Guid Id { get; init; }
 
     /// <summary>The game this instance belongs to. Every repo with the same scope offers it.</summary>
-    public required InstanceScope Scope { get; init; }
+    public required GameIdentity Scope { get; init; }
 
     /// <summary>
     /// Which adapter version authored <see cref="AdapterInstanceSettings"/>. Not part of the scope,

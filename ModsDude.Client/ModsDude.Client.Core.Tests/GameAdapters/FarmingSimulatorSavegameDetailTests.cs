@@ -328,7 +328,7 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
         => Read().Details.FirstOrDefault(x => x.Id == id);
 
     private SavegameSlot Read()
-        => FarmingSimulatorInstanceSavegameAdapter.ReadSlot(
+        => FarmingSimulatorLocalSavegameAdapter.ReadSlot(
             new SavegameSlotId("savegame1"), _directory.Path, NullLogger.Instance, CancellationToken.None);
 
     private void WriteCareer(string xml)

@@ -73,10 +73,10 @@ public class FarmingSimulatorBaseGameAdapter(
     /// interchangeable sync targets, so the adapter id alone would offer an FS22 folder to an FS25
     /// repo.
     /// </summary>
-    public InstanceScope Scope => new(Id.Id, BaseSettings.GameVersion switch
+    public GameIdentity Scope => new(Id.Id, BaseSettings.GameVersion switch
     {
         { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
-        null => throw new InvalidOperationException("Base settings without a game version cannot produce an instance scope.")
+        null => throw new InvalidOperationException("Base settings without a game version cannot produce a game identity.")
     });
 
     /// <summary>
@@ -102,10 +102,10 @@ public class FarmingSimulatorBaseGameAdapter(
             ?.Text;
 
 
-    public DynamicForm DeserializeInstanceSettings(string serializedInstanceSettings)
+    public DynamicForm DeserializeLocalSettings(string serializedLocalSettings)
     {
-        var settings = JsonSerializer.Deserialize<FarmingSimulatorInstanceSettings>(serializedInstanceSettings)
-            ?? throw new ArgumentException("Cannot deserialize instance settings");
+        var settings = JsonSerializer.Deserialize<FarmingSimulatorLocalSettings>(serializedLocalSettings)
+            ?? throw new ArgumentException("Cannot deserialize local settings");
 
         settings.EnsureValid();
 
@@ -117,49 +117,49 @@ public class FarmingSimulatorBaseGameAdapter(
         return _capabilities.OfType<Func<T>>().SingleOrDefault();
     }
 
-    public DynamicForm GetInstanceSettingsTemplate()
+    public DynamicForm GetLocalSettingsTemplate()
     {
-        return FarmingSimulatorInstanceSettings.CreateTemplate(BaseSettings.GameVersion
-            ?? throw new InvalidOperationException("Base settings without a game version cannot produce an instance settings template."));
+        return FarmingSimulatorLocalSettings.CreateTemplate(BaseSettings.GameVersion
+            ?? throw new InvalidOperationException("Base settings without a game version cannot produce a local settings template."));
     }
 
-    public IInstanceGameAdapter WithInstanceSettings(string serializedInstanceSettings)
+    public ILocalGameAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var instanceSettings = JsonSerializer.Deserialize<FarmingSimulatorInstanceSettings>(serializedInstanceSettings)
-            ?? throw new ArgumentException("Could not deserialize instance settings");
-        instanceSettings.EnsureValid();
+        var localSettings = JsonSerializer.Deserialize<FarmingSimulatorLocalSettings>(serializedLocalSettings)
+            ?? throw new ArgumentException("Could not deserialize local settings");
+        localSettings.EnsureValid();
 
-        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, instanceSettings, Loggers);
+        return new FarmingSimulatorLocalGameAdapter(BaseSettings, localSettings, Loggers);
     }
 
-    public IInstanceGameAdapter WithInstanceSettings(DynamicForm instanceSettings)
+    public ILocalGameAdapter WithLocalSettings(DynamicForm localSettings)
     {
-        if (instanceSettings is not FarmingSimulatorInstanceSettings settings)
+        if (localSettings is not FarmingSimulatorLocalSettings settings)
         {
-            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
-        return new FarmingSimulatorInstanceGameAdapter(BaseSettings, settings, Loggers);
+        return new FarmingSimulatorLocalGameAdapter(BaseSettings, settings, Loggers);
     }
 }
 
 
-public class FarmingSimulatorInstanceGameAdapter(
+public class FarmingSimulatorLocalGameAdapter(
     FarmingSimulatorBaseSettings baseSettings,
-    FarmingSimulatorInstanceSettings instanceSettings,
+    FarmingSimulatorLocalSettings localSettings,
     ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory), IInstanceGameAdapter
+    : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory), ILocalGameAdapter
 {
     // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
     private readonly List<object> _capabilities = [
-        new Func<IInstanceModAdapter>(() => new FarmingSimulatorInstanceModAdapter(instanceSettings, loggerFactory)),
-        new Func<IInstanceSavegameAdapter>(() => new FarmingSimulatorInstanceSavegameAdapter(instanceSettings, loggerFactory))
+        new Func<ILocalModAdapter>(() => new FarmingSimulatorLocalModAdapter(localSettings, loggerFactory)),
+        new Func<ILocalSavegameAdapter>(() => new FarmingSimulatorLocalSavegameAdapter(localSettings, loggerFactory))
         ];
 
 
-    public DynamicForm InstanceSettings { get; } = instanceSettings;
+    public DynamicForm LocalSettings { get; } = localSettings;
 
 
-    public Func<T>? GetInstanceCapabilityAdapterFactory<T>()
+    public Func<T>? GetLocalCapabilityAdapterFactory<T>()
     {
         return _capabilities.OfType<Func<T>>().SingleOrDefault();
     }

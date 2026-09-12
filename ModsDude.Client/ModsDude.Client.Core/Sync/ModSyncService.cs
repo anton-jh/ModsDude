@@ -11,7 +11,7 @@ using ModsDude.Client.Core.Services;
 namespace ModsDude.Client.Core.Sync;
 
 /// <param name="Adapter">Already hydrated with the instance's settings; it is what knows the mod folder.</param>
-public sealed record ModSyncRequest(Guid InstanceId, IInstanceModAdapter Adapter, Guid RepoId, Guid ProfileId)
+public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, Guid RepoId, Guid ProfileId)
 {
     /// <summary>
     /// What the profile is called, carried into the manifest so a later drift notice can name it
@@ -742,7 +742,7 @@ public sealed class ModSyncService(
     }
 
     private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(
-        IInstanceModAdapter adapter,
+        ILocalModAdapter adapter,
         CancellationToken cancellationToken)
     {
         var found = await adapter.GetInstalledMods(cancellationToken);
@@ -784,7 +784,7 @@ public sealed class ModSyncService(
         IReadOnlyList<ModSyncItem> items,
         IReadOnlyList<string> unmanagedFileNames,
         string modFolder,
-        IInstanceModAdapter adapter)
+        ILocalModAdapter adapter)
     {
         if (unmanagedFileNames.Count == 0)
         {
@@ -885,7 +885,7 @@ public sealed class ModSyncService(
     /// deliberate trade of sync time for space, and an adapter without hardlink support is a stated
     /// property of the game rather than a silent surprise.
     /// </remarks>
-    private ModMaterialization DecideMaterialization(string modFolder, ContentStore servingStore, IInstanceModAdapter adapter)
+    private ModMaterialization DecideMaterialization(string modFolder, ContentStore servingStore, ILocalModAdapter adapter)
     {
         var sameVolume = string.Equals(
             FileSystemHelper.NormalizeVolumeRoot(modFolder),

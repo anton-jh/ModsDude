@@ -53,7 +53,7 @@ public class Repo
     public RepoMembershipLevel MembershipLevel { get; private set; }
     public ObservableCollection<LocalInstance> LocalInstances { get; }
     public IBaseGameAdapter Adapter { get; private set; }
-    public InstanceScope Scope => Adapter.Scope;
+    public GameIdentity Scope => Adapter.Scope;
 
     // TODO: Profiles
 

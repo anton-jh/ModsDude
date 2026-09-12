@@ -363,7 +363,7 @@ internal sealed class FakeSavegameDownloader(FakeSavegameServer server) : IModFi
 /// means the folder exists and has something in it - the same thing a real adapter decides by reading
 /// the save.
 /// </summary>
-internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) : IInstanceSavegameAdapter
+internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) : ILocalSavegameAdapter
 {
     public bool CanCreateSlots => false;
 
@@ -387,8 +387,8 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
         return Task.FromResult(slots);
     }
 
-    public IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings) => this;
-    public IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings) => this;
+    public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
+    public ILocalSavegameAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
 
 
     private bool IsOccupied(string slotId)
@@ -400,11 +400,11 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
 }
 
 
-internal sealed class FakeInstanceSavegameAdapters(IInstanceSavegameAdapter? adapter) : IInstanceSavegameAdapters
+internal sealed class FakeInstanceSavegameAdapters(ILocalSavegameAdapter? adapter) : ILocalSavegameAdapters
 {
-    public IInstanceSavegameAdapter? TryGet(LocalInstance instance) => adapter;
+    public ILocalSavegameAdapter? TryGet(LocalInstance instance) => adapter;
 
-    public IInstanceSavegameAdapter? TryGet(Guid instanceId) => adapter;
+    public ILocalSavegameAdapter? TryGet(Guid instanceId) => adapter;
 }
 
 

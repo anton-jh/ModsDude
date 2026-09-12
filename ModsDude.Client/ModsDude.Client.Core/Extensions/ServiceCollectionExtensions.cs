@@ -45,7 +45,7 @@ public static class ServiceCollectionExtensions
         // The savegame engine and the one seam it needs: hydrating a savegame adapter takes the
         // repo's base settings, which an instance does not carry. TryAdd so a host that composes its
         // own - a test harness, or a shell that knows its repos by another route - keeps it.
-        services.TryAddSingleton<Savegames.IInstanceSavegameAdapters, Savegames.RepoSavegameAdapters>();
+        services.TryAddSingleton<Savegames.ILocalSavegameAdapters, Savegames.RepoSavegameAdapters>();
         services.AddSingleton<Savegames.ISavegameService, Savegames.SavegameService>();
 
         // What the sync engine knows about savegames, resolved to the same instance rather than to a

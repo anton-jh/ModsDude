@@ -168,7 +168,7 @@ public sealed record ModSyncPlan
     public required IReadOnlyList<string> HashesToFetch { get; init; }
 
     /// <summary>What executing this plan needs, carried on it so nothing has to be resolved twice.</summary>
-    public required IInstanceModAdapter Adapter { get; init; }
+    public required ILocalModAdapter Adapter { get; init; }
 
     /// <summary>The store serving this mod folder's disk - where installs materialise from.</summary>
     public required ContentStore ServingStore { get; init; }

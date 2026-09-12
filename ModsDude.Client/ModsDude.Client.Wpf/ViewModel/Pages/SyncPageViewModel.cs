@@ -32,7 +32,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private ModSyncPlan? _plan;
-    private IInstanceModAdapter? _adapter;
+    private ILocalModAdapter? _adapter;
 
     /// <summary>
     /// The repo's record for every version this profile pins, by identity. It is what lets a plan row
@@ -237,10 +237,10 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         ProfileName = profile.Name;
 
         _adapter ??= _instance.GetAdapter(_repo.Adapter)
-            .GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>()
+            .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke();
 
-        if (_adapter is not IInstanceModAdapter adapter)
+        if (_adapter is not ILocalModAdapter adapter)
         {
             Fail("This game adapter cannot manage mod folders, so there is nothing to apply.");
 

@@ -327,7 +327,7 @@ public class SavegameBindingStoreTests
     private static PersistedLocalInstance Instance(Guid id) => new()
     {
         Id = id,
-        Scope = new InstanceScope("farmingSimulator", "fs25"),
+        Scope = new GameIdentity("farmingSimulator", "fs25"),
         GameAdapterId = new GameAdapterId("farmingSimulator", 1),
         Name = "Farming Simulator 25",
         AdapterInstanceSettings = "{}"

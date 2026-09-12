@@ -333,32 +333,32 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
         return lastDot > lastSlash ? name[..lastDot] : name;
     }
 
-    public IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings)
+    public ILocalModAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var instanceSettings = FarmingSimulatorInstanceSettings.Deserialize(serializedInstanceSettings);
-        instanceSettings.EnsureValid();
-        return new FarmingSimulatorInstanceModAdapter(instanceSettings, Loggers);
+        var localSettings = FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings);
+        localSettings.EnsureValid();
+        return new FarmingSimulatorLocalModAdapter(localSettings, Loggers);
     }
 
-    public IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings)
+    public ILocalModAdapter WithLocalSettings(DynamicForm localSettings)
     {
-        if (instanceSettings is not FarmingSimulatorInstanceSettings settings)
+        if (localSettings is not FarmingSimulatorLocalSettings settings)
         {
-            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorInstanceSettings>(instanceSettings);
+            throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
         settings.EnsureValid();
-        return new FarmingSimulatorInstanceModAdapter(settings, Loggers);
+        return new FarmingSimulatorLocalModAdapter(settings, Loggers);
     }
 }
 
 
-public class FarmingSimulatorInstanceModAdapter(
-    FarmingSimulatorInstanceSettings instanceSettings,
+public class FarmingSimulatorLocalModAdapter(
+    FarmingSimulatorLocalSettings localSettings,
     ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseModAdapter(loggerFactory), IInstanceModAdapter
+    : FarmingSimulatorBaseModAdapter(loggerFactory), ILocalModAdapter
 {
     public string ModFolder => Path.Combine(
-        instanceSettings.GameDataFolder ?? throw new InvalidOperationException("Instance settings carry no game data folder."),
+        localSettings.GameDataFolder ?? throw new InvalidOperationException("Local settings carry no game data folder."),
         "mods");
 
 

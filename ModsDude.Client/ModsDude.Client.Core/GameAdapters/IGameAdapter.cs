@@ -57,20 +57,20 @@ public interface IBaseGameAdapter : IGameAdapter
     /// '@2' still matches instances created under '@1', which is what compatibility versions exist
     /// for.
     /// </remarks>
-    InstanceScope Scope => new(Id.Id);
+    GameIdentity Scope => new(Id.Id);
 
-    DynamicForm GetInstanceSettingsTemplate();
-    DynamicForm DeserializeInstanceSettings(string serializedInstanceSettings);
+    DynamicForm GetLocalSettingsTemplate();
+    DynamicForm DeserializeLocalSettings(string serializedLocalSettings);
     Func<T>? GetBaseCapabilityAdapterFactory<T>();
-    IInstanceGameAdapter WithInstanceSettings(string serializedInstanceSettings);
-    IInstanceGameAdapter WithInstanceSettings(DynamicForm instanceSettings);
+    ILocalGameAdapter WithLocalSettings(string serializedLocalSettings);
+    ILocalGameAdapter WithLocalSettings(DynamicForm localSettings);
 }
 
-public interface IInstanceGameAdapter : IBaseGameAdapter
+public interface ILocalGameAdapter : IBaseGameAdapter
 {
-    DynamicForm InstanceSettings { get; }
+    DynamicForm LocalSettings { get; }
 
-    Func<T>? GetInstanceCapabilityAdapterFactory<T>();
+    Func<T>? GetLocalCapabilityAdapterFactory<T>();
 }
 
 public interface IBaseModAdapter
@@ -90,11 +90,11 @@ public interface IBaseModAdapter
     bool SupportsHardlinks => false;
 
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
-    IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings);
-    IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings);
+    ILocalModAdapter WithLocalSettings(string serializedLocalSettings);
+    ILocalModAdapter WithLocalSettings(DynamicForm localSettings);
 }
 
-public interface IInstanceModAdapter : IBaseModAdapter
+public interface ILocalModAdapter : IBaseModAdapter
 {
     /// <summary>
     /// The mod folder this instance owns. No two instances may own the same one, whatever their
@@ -144,8 +144,8 @@ public interface IBaseSavegameAdapter
     /// </remarks>
     bool CanCreateSlots { get; }
 
-    IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings);
-    IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings);
+    ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings);
+    ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings);
 }
 
 /// <summary>
@@ -153,7 +153,7 @@ public interface IBaseSavegameAdapter
 /// packs, unpacks, hashes and displaces; the adapter says where saves live, which of them exist, and
 /// what belongs in one.
 /// </summary>
-public interface IInstanceSavegameAdapter : IBaseSavegameAdapter
+public interface ILocalSavegameAdapter : IBaseSavegameAdapter
 {
     /// <summary>
     /// Every slot this instance has, occupied or not, in the order a picker should show them.

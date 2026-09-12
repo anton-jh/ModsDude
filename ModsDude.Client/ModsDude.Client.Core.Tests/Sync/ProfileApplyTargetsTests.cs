@@ -70,7 +70,7 @@ public class ProfileApplyTargetsTests
         return new LocalInstance(new PersistedLocalInstance
         {
             Id = Guid.NewGuid(),
-            Scope = new InstanceScope(adapterId.ToString(), "fs25"),
+            Scope = new GameIdentity(adapterId.ToString(), "fs25"),
             GameAdapterId = adapterId,
             Name = name,
             AdapterInstanceSettings = "{}",

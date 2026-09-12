@@ -190,7 +190,7 @@ internal sealed class FakeModFileDownloader(FakeSyncServer server) : IModFileDow
 /// the file the way a real one reads it out of the archive's metadata - and two builds can therefore
 /// call themselves the same version.
 /// </summary>
-internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardlinks) : IInstanceModAdapter
+internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardlinks) : ILocalModAdapter
 {
     public string ModFolder { get; } = modFolder;
 
@@ -235,8 +235,8 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
     public string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName)
         => Path.Combine(ModFolder, fileName?.Value ?? $"{modId.Value}.zip");
 
-    public IInstanceModAdapter WithInstanceSettings(string serializedInstanceSettings) => this;
-    public IInstanceModAdapter WithInstanceSettings(DynamicForm instanceSettings) => this;
+    public ILocalModAdapter WithLocalSettings(string serializedInstanceSettings) => this;
+    public ILocalModAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
 }
 
 

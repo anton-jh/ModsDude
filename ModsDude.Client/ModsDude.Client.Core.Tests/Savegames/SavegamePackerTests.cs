@@ -296,7 +296,7 @@ public class SavegamePackerTests
     }
 
 
-    private static async Task<OwnedArchive> Pack(IInstanceSavegameAdapter adapter, SavegameSlotId slot)
+    private static async Task<OwnedArchive> Pack(ILocalSavegameAdapter adapter, SavegameSlotId slot)
         => new(await new SavegamePacker().PackAsync(adapter, slot, CancellationToken.None));
 
     private static string WriteSlotFile(TempDirectory root, SavegameSlotId slot, string relativePath, string content)
@@ -343,7 +343,7 @@ public class SavegamePackerTests
     /// is, and what belongs in a packed save. It records what it was asked, because the form the
     /// question is put in - a forward-slashed relative path - is part of the contract.
     /// </summary>
-    private sealed class PackerTestAdapter(string root, params string[] excluded) : IInstanceSavegameAdapter
+    private sealed class PackerTestAdapter(string root, params string[] excluded) : ILocalSavegameAdapter
     {
         public List<string> Asked { get; } = [];
 
@@ -362,8 +362,8 @@ public class SavegamePackerTests
         public Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken)
             => throw new NotSupportedException("Packing addresses a slot it was given; it never enumerates them.");
 
-        public IInstanceSavegameAdapter WithInstanceSettings(string serializedInstanceSettings) => this;
-        public IInstanceSavegameAdapter WithInstanceSettings(DynamicForm instanceSettings) => this;
+        public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
+        public ILocalSavegameAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
     }
 
 

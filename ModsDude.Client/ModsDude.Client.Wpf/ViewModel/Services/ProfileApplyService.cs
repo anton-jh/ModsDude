@@ -98,7 +98,7 @@ public sealed class ProfileApplyService(
         int? revision,
         CancellationToken cancellationToken)
     {
-        if (GetAdapter(repo, instance) is not IInstanceModAdapter adapter)
+        if (GetAdapter(repo, instance) is not ILocalModAdapter adapter)
         {
             return null;
         }
@@ -324,10 +324,10 @@ public sealed class ProfileApplyService(
             : "";
     }
 
-    private static IInstanceModAdapter? GetAdapter(Repo repo, LocalInstance instance)
+    private static ILocalModAdapter? GetAdapter(Repo repo, LocalInstance instance)
     {
         return instance.GetAdapter(repo.Adapter)
-            .GetInstanceCapabilityAdapterFactory<IInstanceModAdapter>()
+            .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke();
     }
 
