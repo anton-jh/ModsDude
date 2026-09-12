@@ -64,7 +64,7 @@ public partial class ModSourceViewModel : ObservableObject
     public string KindText => Source.Kind switch
     {
         ModSourceKind.Repo => "This repo",
-        ModSourceKind.Instance => "Game install",
+        ModSourceKind.Game => "Game install",
         ModSourceKind.Downloads => "Downloads",
         _ => "Added this session"
     };

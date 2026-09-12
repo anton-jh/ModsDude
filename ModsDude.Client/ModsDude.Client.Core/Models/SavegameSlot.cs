@@ -3,7 +3,7 @@ using ModsDude.Client.Core.GameAdapters;
 namespace ModsDude.Client.Core.Models;
 
 /// <summary>
-/// One addressable place a savegame can live in one instance.
+/// One addressable place a savegame can live in one game.
 /// </summary>
 /// <remarks>
 /// <para>

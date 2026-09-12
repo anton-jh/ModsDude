@@ -5,7 +5,7 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 public class FarmingSimulatorBaseSettings : DynamicForm<FarmingSimulatorBaseSettings>
 {
     // Deliberately not [CanBeModified]: the game identity is derived from this, so an admin
-    // editing it would silently orphan every instance on every member's machine. An FS22 repo
+    // editing it would silently orphan every game on every member's machine. An FS22 repo
     // cannot become an FS25 repo.
     [Required, Title("Game version")]
     public FarmingSimulatorGameVersion? GameVersion { get; set; }

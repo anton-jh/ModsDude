@@ -16,7 +16,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 /// <remarks>
 /// <para>
 /// The same shape as <see cref="ProfileApplyService"/>, and for the same reason: check-in is reached
-/// from the instance's slot list <em>and</em> from the check-out dialog's way out of a refused slot,
+/// from the game's slot list <em>and</em> from the check-out dialog's way out of a refused slot,
 /// and two copies of "ask, send, resolve a stale base" would be two copies that eventually disagree
 /// about what force means.
 /// </para>
@@ -42,13 +42,13 @@ public sealed class SavegameFlowService(
     /// changed, or they chose to look at the newer version first.
     /// </returns>
     public async Task<SavegameCheckInOutcome> CheckInAsync(
-        LocalInstance instance,
+        Game game,
         Guid savegameId,
         string savegameName,
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var modal = new SavegameCheckInModalViewModel(savegameName, slotLabel, DescribePlayedOn(instance, savegameId));
+        var modal = new SavegameCheckInModalViewModel(savegameName, slotLabel, DescribePlayedOn(game, savegameId));
 
         await modalService.Value.Show(modal);
 
@@ -57,7 +57,7 @@ public sealed class SavegameFlowService(
             return SavegameCheckInOutcome.Cancelled;
         }
 
-        return await SendAsync(instance, savegameId, savegameName, modal.TrimmedLabel, modal.KeepPlaying, force: false, cancellationToken);
+        return await SendAsync(game, savegameId, savegameName, modal.TrimmedLabel, modal.KeepPlaying, force: false, cancellationToken);
     }
 
     /// <summary>
@@ -68,7 +68,7 @@ public sealed class SavegameFlowService(
     /// whatever is in the slot is gone, and the Recycle Bin is the only way back.
     /// </remarks>
     public async Task<bool> DiscardAsync(
-        LocalInstance instance,
+        Game game,
         Guid savegameId,
         string savegameName,
         string slotLabel,
@@ -96,7 +96,7 @@ public sealed class SavegameFlowService(
 
         using var task = backgroundTasks.Begin($"Giving '{savegameName}' back", "Releasing the claim, then recycling the local copy");
 
-        await savegames.DiscardAsync(instance, savegameId, cancellationToken);
+        await savegames.DiscardAsync(game, savegameId, cancellationToken);
 
         return true;
     }
@@ -119,7 +119,7 @@ public sealed class SavegameFlowService(
     /// </remarks>
     /// <returns>False where the dialog was dismissed, or there was nothing to forget.</returns>
     public async Task<bool> DisconnectAsync(
-        LocalInstance instance,
+        Game game,
         Guid savegameId,
         string savegameName,
         string slotLabel,
@@ -146,7 +146,7 @@ public sealed class SavegameFlowService(
             return false;
         }
 
-        return savegames.Forget(instance, savegameId);
+        return savegames.Forget(game, savegameId);
     }
 
     /// <summary>
@@ -154,22 +154,22 @@ public sealed class SavegameFlowService(
     /// being created, and the two have opposite failure modes.
     /// </summary>
     /// <remarks>
-    /// The profile is asked for here rather than taken from the instance - see
+    /// The profile is asked for here rather than taken from the game - see
     /// <see cref="SavegamePublishModalViewModel"/> - so this is also where the repo's profiles, the
     /// savegame each is currently following and what the mod folder is on are gathered.
     /// </remarks>
     /// <returns>The savegame that was created, or null where the dialog was dismissed.</returns>
     public async Task<SavegameDto?> PublishAsync(
-        LocalInstance instance,
+        Game game,
         Repo repo,
         SavegameSlotId slot,
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var manifest = manifestStore.TryRead(instance.Id);
+        var manifest = manifestStore.TryRead(game.Id);
         var options = await BuildPublishOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
 
-        var active = instance.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
+        var active = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
             ? options.FirstOrDefault(x => x.ProfileId == profile.ProfileId)
             : null;
 
@@ -193,7 +193,7 @@ public sealed class SavegameFlowService(
         using var task = backgroundTasks.Begin($"Publishing '{name}' to {repo.Name}", $"Packing and uploading '{slotLabel}'");
 
         return await savegames.PublishAsync(
-            instance, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), cancellationToken);
+            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), cancellationToken);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public sealed class SavegameFlowService(
         int? appliedRevision,
         CancellationToken cancellationToken)
     {
-        // This dialog can be the first thing that needs them: the instance's Saves page is reachable
+        // This dialog can be the first thing that needs them: the game's Saves page is reachable
         // without ever having opened a profile.
         if (profileService.Profiles.Any(x => x.RepoId == repo.Id) is false)
         {
@@ -283,11 +283,11 @@ public sealed class SavegameFlowService(
     /// comes to name a revision the version does not carry. The profile's name is this layer's to add:
     /// the binding records an id, and a bare "rev 1004" is a number belonging to no list in particular.
     /// </remarks>
-    private string? DescribePlayedOn(LocalInstance instance, Guid savegameId)
+    private string? DescribePlayedOn(Game game, Guid savegameId)
     {
-        if (savegames.GetBinding(instance, savegameId) is not SavegameCheckoutBinding binding
+        if (savegames.GetBinding(game, savegameId) is not SavegameCheckoutBinding binding
             || binding.ProfileId is not Guid profileId
-            || savegames.GetPlayedRevision(instance, savegameId) is not int revision)
+            || savegames.GetPlayedRevision(game, savegameId) is not int revision)
         {
             return null;
         }
@@ -305,7 +305,7 @@ public sealed class SavegameFlowService(
     /// it, so the fork ends up in the record rather than one side of it being lost.
     /// </summary>
     private async Task<SavegameCheckInOutcome> SendAsync(
-        LocalInstance instance,
+        Game game,
         Guid savegameId,
         string savegameName,
         string? label,
@@ -317,7 +317,7 @@ public sealed class SavegameFlowService(
         {
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
 
-            var version = await savegames.CheckInAsync(instance, savegameId, label, keepPlaying, force, cancellationToken);
+            var version = await savegames.CheckInAsync(game, savegameId, label, keepPlaying, force, cancellationToken);
 
             return SavegameCheckInOutcome.CheckedIn(version, keepPlaying);
         }
@@ -339,7 +339,7 @@ public sealed class SavegameFlowService(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(instance, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken);
+            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken);
         }
         catch (UserFriendlyException exception)
         {

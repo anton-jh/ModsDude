@@ -43,15 +43,15 @@
                         CornerRadius="4"
                         Padding="16"
                         Margin="0 16 0 0">
-                    <GroupBox Header="Game instances" Padding="0 16 0 16">
+                    <GroupBox Header="Games" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Visibility="{Binding HasNoInstances, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
                                        Text="No game on this machine is connected to this repo yet. Use 'Connect game' to point one at its mod folder." />
 
-                            <ItemsControl ItemsSource="{Binding Instances}"
+                            <ItemsControl ItemsSource="{Binding Games}"
                                           Visibility="{Binding HasInstances, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:InstanceOverviewViewModel}">
@@ -84,7 +84,7 @@
                     <GroupBox Header="Sync" Padding="0 16 0 16">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                   Text="Nothing syncs yet. When it does, each instance's drift from its profile and the time it last synced will be shown here." />
+                                   Text="Nothing syncs yet. When it does, each game's drift from its profile and the time it last synced will be shown here." />
                     </GroupBox>
                 </Border>
 

@@ -41,7 +41,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// <b>Two rules where a past savegame is held, both about not crying wolf.</b> It never says "behind
 /// the profile" - nothing here suppresses that, the drift check is simply given the revision the
-/// instance is supposed to be on and the comparison comes out equal. And folder drift still reports,
+/// game is supposed to be on and the comparison comes out equal. And folder drift still reports,
 /// but its action reads <em>Re-apply rev 4</em> rather than offering a latest the apply table refuses.
 /// See docs/10-savegame-profile-binding.md#drift-notice.
 /// </para>
@@ -50,7 +50,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 {
     private readonly InstanceDriftMonitor _monitor;
     private readonly RepoRepository _repoRepository;
-    private readonly LocalInstanceRepository _instanceRepository;
+    private readonly GameRepository _instanceRepository;
     private readonly ProfileService _profileService;
     private readonly SavegameBindingStore _bindingStore;
     private readonly IHeldSavegames _heldSavegames;
@@ -66,7 +66,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     public DriftNotificationViewModel(
         InstanceDriftMonitor monitor,
         RepoRepository repoRepository,
-        LocalInstanceRepository instanceRepository,
+        GameRepository instanceRepository,
         ProfileService profileService,
         SavegameBindingStore bindingStore,
         IHeldSavegames heldSavegames,
@@ -83,7 +83,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         _navigation = navigation;
 
         _monitor.Changed += OnDriftChanged;
-        _instanceRepository.Instances.CollectionChanged += OnInstancesChanged;
+        _instanceRepository.Games.CollectionChanged += OnGamesChanged;
 
         // Drift is detected from the manifest and the folder, so this notice can be up before the
         // repo list has been fetched - it is raised from the window's constructor, and the repos are
@@ -92,10 +92,10 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         _repoRepository.Repos.CollectionChanged += OnReposChanged;
 
         // Everything else that can change the answer, wired here rather than remembered at each call
-        // site. A user who edits a profile, repoints an instance or checks a save out and then tabs
+        // site. A user who edits a profile, repoints a game or checks a save out and then tabs
         // back to the game must not be the first to find out that they are out of sync - so the check
         // is driven by the facts changing, not by anybody remembering to ask.
-        _instanceRepository.InstanceChanged += OnFactsChanged;
+        _instanceRepository.GameChanged += OnFactsChanged;
         _profileService.ProfileUpdated += OnProfileUpdated;
         _bindingStore.BindingsChanged += OnFactsChanged;
     }
@@ -112,7 +112,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     private string _detail = "";
 
     /// <summary>
-    /// Whether the mod half found anything to say. It can be empty - an instance reported only for
+    /// Whether the mod half found anything to say. It can be empty - a game reported only for
     /// the savegame it is holding has no file counts and no moved revision - and an empty line under
     /// the headline reads as something that failed to load.
     /// </summary>
@@ -131,7 +131,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <remarks>
     /// <b>This is the half the notice used to compute and never print.</b> A held savegame that has
-    /// moved makes an instance drifted on its own - see <c>InstanceDrift.IsDrifted</c> - so the notice
+    /// moved makes a game drifted on its own - see <c>InstanceDrift.IsDrifted</c> - so the notice
     /// could be raised entirely by it, and the detail line, which only ever described mod files and
     /// revisions, then had nothing to say. An empty mod folder on an empty profile is exactly that
     /// case, and it read as a warning with no reason in it.
@@ -144,9 +144,9 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// A store blob the game rewrote in place through a hardlink, caught and dropped.
     /// </summary>
     /// <remarks>
-    /// Read off the monitor's accumulated set rather than off this instance's report, and
+    /// Read off the monitor's accumulated set rather than off this game's report, and
     /// deliberately: a corrupt blob is deleted the moment it is found, so the report that carried it
-    /// is empty by the next check. It is also the only line here that is not about one instance - a
+    /// is empty by the next check. It is also the only line here that is not about one game - a
     /// store is shared by every repo on its volume - which is why it names the drive.
     /// </remarks>
     [ObservableProperty]
@@ -188,7 +188,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// For a guest there is nothing else to offer, so it leads by being the only one.
     /// </summary>
     /// <summary>
-    /// Whether there is anything to re-apply. False for an instance reported only because it is
+    /// Whether there is anything to re-apply. False for a game reported only because it is
     /// holding a savegame and that has never been pointed at a profile - there is no mod list to put
     /// its folder back onto, and the buttons say so by not being there.
     /// </summary>
@@ -202,7 +202,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// What the re-apply button says.
     /// </summary>
     /// <remarks>
-    /// <b>Never "apply latest" for an instance holding a past savegame.</b> Head is exactly what the apply
+    /// <b>Never "apply latest" for a game holding a past savegame.</b> Head is exactly what the apply
     /// table refuses there, so a button offering it would be one that fails when pressed - and the
     /// revision it does target is a number worth seeing before pressing anything, since the folder is
     /// deliberately behind head and staying there.
@@ -271,9 +271,9 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _monitor.Changed -= OnDriftChanged;
-        _instanceRepository.Instances.CollectionChanged -= OnInstancesChanged;
+        _instanceRepository.Games.CollectionChanged -= OnGamesChanged;
         _repoRepository.Repos.CollectionChanged -= OnReposChanged;
-        _instanceRepository.InstanceChanged -= OnFactsChanged;
+        _instanceRepository.GameChanged -= OnFactsChanged;
         _profileService.ProfileUpdated -= OnProfileUpdated;
         _bindingStore.BindingsChanged -= OnFactsChanged;
     }
@@ -282,12 +282,12 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanReviewNow))]
     private async Task OpenModList()
     {
-        if (_subject?.Instance.ActiveProfile is not ActiveProfile active)
+        if (_subject?.Game.ActiveProfile is not ActiveProfile active)
         {
             return;
         }
 
-        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Instance.InstanceId) is false)
+        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Game.InstanceId) is false)
         {
             Status = "That profile could not be opened from here - pick it in the sidebar.";
         }
@@ -295,13 +295,13 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// One click, because most of the time there is nothing to change and the user just wants their
-    /// locked versions back. Applies to every instance on the drifted profile, which is the derived
+    /// locked versions back. Applies to every game on the drifted profile, which is the derived
     /// target set and not a choice.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanAct), IncludeCancelCommand = true)]
     private async Task Reapply(CancellationToken cancellationToken)
     {
-        if (_subject?.Instance.ActiveProfile is not ActiveProfile active)
+        if (_subject?.Game.ActiveProfile is not ActiveProfile active)
         {
             return;
         }
@@ -310,7 +310,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         {
             // The same window the Review button is missing in: this notice can be up before the repo
             // list has arrived. Saying so beats a button that does nothing when pressed.
-            Status = "The repo this instance follows has not loaded yet. Try again in a moment.";
+            Status = "The repo this game follows has not loaded yet. Try again in a moment.";
 
             return;
         }
@@ -322,11 +322,11 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         {
             var messages = new List<string>();
 
-            foreach (var instance in _instanceRepository.GetInstancesUsing(active))
+            foreach (var game in _instanceRepository.GetGamesUsing(active))
             {
                 var outcome = await _applyService.ApplyAsync(
                     repo,
-                    instance,
+                    game,
                     active.ProfileId,
                     _subject.ProfileName,
                     confirmPlan: false,
@@ -372,7 +372,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         _ = Application.Current?.Dispatcher.InvokeAsync(Refresh);
     }
 
-    private void OnInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // A folder that just arrived is not being watched yet, and one that left is being watched for
         // nothing.
@@ -382,7 +382,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Something the check reads has changed: an instance repointed, a profile that moved on, a
+    /// Something the check reads has changed: a game repointed, a profile that moved on, a
     /// savegame taken or handed back.
     /// </summary>
     /// <remarks>
@@ -392,7 +392,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// </remarks>
     private void OnFactsChanged(object? sender, EventArgs e)
     {
-        // Re-watched as well as re-checked: an instance whose mod folder moved is being watched at
+        // Re-watched as well as re-checked: a game whose mod folder moved is being watched at
         // the old path.
         _monitor.Watch();
 
@@ -409,7 +409,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     private void Refresh()
     {
         var drifted = _monitor.Drifted
-            .Where(x => x.Instance.ActiveProfile is not ActiveProfile active || _suppressed.Contains(active) is false)
+            .Where(x => x.Game.ActiveProfile is not ActiveProfile active || _suppressed.Contains(active) is false)
             .ToList();
 
         _subject = drifted.FirstOrDefault();
@@ -426,18 +426,18 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         var profile = _subject.ProfileName is string name ? $"'{name}'" : "the applied profile";
         var files = report.Added.Count + report.Removed.Count + report.Changed.Count;
 
-        Headline = DescribeHeadline(drifted.Count, _subject.Instance.Name, profile, report);
+        Headline = DescribeHeadline(drifted.Count, _subject.Game.Name, profile, report);
 
-        // Re-applying needs somewhere to apply *to*. An instance reported purely because it is holding
+        // Re-applying needs somewhere to apply *to*. A game reported purely because it is holding
         // a savegame may have no active profile at all, and an accent button that returns the moment
         // it is pressed is worse than no button.
-        CanReapply = _subject.Instance.ActiveProfile is not null;
+        CanReapply = _subject.Game.ActiveProfile is not null;
 
-        CanReview = _subject.Instance.ActiveProfile is ActiveProfile active
+        CanReview = _subject.Game.ActiveProfile is ActiveProfile active
             && FindRepo(active.RepoId) is Repo repo
             && repo.MembershipLevel >= RepoMembershipLevel.Member;
 
-        ReapplyLabel = DescribeReapply(_subject.Instance);
+        ReapplyLabel = DescribeReapply(_subject.Game);
 
         Detail = Describe(report, files);
         LockedWarning = DescribeLocked(report);
@@ -462,14 +462,14 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// <see cref="ModsDude.Client.Core.Sync.ModSyncService"/> resolves the apply against - so the
     /// number on the button is the number that gets installed rather than a second guess at it.
     /// </remarks>
-    private string DescribeReapply(DriftCandidate instance)
+    private string DescribeReapply(DriftCandidate game)
     {
-        if (instance.ActiveProfile is not ActiveProfile active)
+        if (game.ActiveProfile is not ActiveProfile active)
         {
             return "Re-apply now";
         }
 
-        return _heldSavegames.GetRequiredRevision(instance.InstanceId, active.ProfileId) is int revision
+        return _heldSavegames.GetRequiredRevision(game.InstanceId, active.ProfileId) is int revision
             ? $"Re-apply rev {revision}"
             : "Re-apply now";
     }
@@ -478,7 +478,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// What the notice is about, in one line.
     /// </summary>
     /// <remarks>
-    /// Three sentences rather than one, because an instance can be here for two unrelated reasons and
+    /// Three sentences rather than one, because a game can be here for two unrelated reasons and
     /// the notice used to name only the first. A folder that matches its profile exactly and is
     /// holding somebody's evening in a slot was announced as "no longer matches the applied profile",
     /// followed by no detail at all - which is how a mod folder and a profile that are both empty
@@ -488,7 +488,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     {
         if (count > 1)
         {
-            return $"{count} game instances have drifted";
+            return $"{count} games have drifted";
         }
 
         return (report.Status is InstanceDriftStatus.Drifted, report.HasSavegameDrift) switch
@@ -561,7 +561,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The one warning here that is not about this instance. Named for the blast radius rather than
+    /// The one warning here that is not about this game. Named for the blast radius rather than
     /// the mod, because the mod is the symptom and the shared cache is the problem.
     /// </summary>
     private static string? DescribeStoreCorruption(IReadOnlyList<CorruptedBlob> corruption)

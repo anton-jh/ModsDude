@@ -62,7 +62,7 @@
                                Visibility="{Binding Mods.HasConsequence, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
 
-                <!-- Instance. Absent where the repo offers one - there is nothing to ask. -->
+                <!-- Game. Absent where the repo offers one - there is nothing to ask. -->
                 <StackPanel Margin="0 20 0 0"
                             Visibility="{Binding ShowInstanceSection, Converter={StaticResource BoolToVisibilityConverter}}">
 
@@ -72,9 +72,9 @@
 
                     <ComboBox Margin="0 4 0 0"
                               HorizontalAlignment="Stretch"
-                              ItemsSource="{Binding Instances}"
+                              ItemsSource="{Binding Games}"
                               DisplayMemberPath="Name"
-                              SelectedItem="{Binding SelectedInstance, Mode=TwoWay}" />
+                              SelectedItem="{Binding SelectedGame, Mode=TwoWay}" />
                 </StackPanel>
 
                 <!-- Slot. Shown on every check-out: the remembered one pre-selects it, it never

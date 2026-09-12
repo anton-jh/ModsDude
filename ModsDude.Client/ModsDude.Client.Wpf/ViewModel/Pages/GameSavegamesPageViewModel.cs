@@ -13,12 +13,12 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The instance's savegame slots: the local half of the feature, and where publishing lives.
+/// The game's savegame slots: the local half of the feature, and where publishing lives.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Reachable from both ends.</b> From the repo's Saves page the savegame is fixed and the instance
-/// and slot are chosen; from here the instance is fixed and the slot is what everything hangs off. The
+/// <b>Reachable from both ends.</b> From the repo's Saves page the savegame is fixed and the game
+/// and slot are chosen; from here the game is fixed and the slot is what everything hangs off. The
 /// two are the same three verbs seen from opposite sides, exactly as activation is.
 /// </para>
 /// <para>
@@ -33,10 +33,10 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// where a wrong answer publishes somebody else's slot under this save's name.
 /// </para>
 /// </remarks>
-public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
+public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly LocalInstance _instance;
+    private readonly Game _game;
     private readonly ISavegameService _savegameService;
     private readonly ISavegamesClient _savegamesClient;
     private readonly SavegameBindingStore _bindingStore;
@@ -51,9 +51,9 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     private string? _fetchProblem;
 
 
-    public InstanceSavegamesPageViewModel(
+    public GameSavegamesPageViewModel(
         Repo repo,
-        LocalInstance instance,
+        Game game,
         ISavegameService savegameService,
         ISavegamesClient savegamesClient,
         SavegameBindingStore bindingStore,
@@ -62,7 +62,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter)
     {
         _repo = repo;
-        _instance = instance;
+        _game = game;
         _savegameService = savegameService;
         _savegamesClient = savegamesClient;
         _bindingStore = bindingStore;
@@ -72,14 +72,14 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
         _lifetime = _pageLifetime.Token;
 
-        InstanceName = instance.Name;
+        GameName = game.Name;
         CanPublish = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
         Slots = [];
     }
 
 
-    public string InstanceName { get; }
+    public string GameName { get; }
 
     /// <summary>Publishing and checking in both write to the repo, so both need Member.</summary>
     public bool CanPublish { get; }
@@ -105,18 +105,18 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
     public bool HasStatus => Status is not null;
 
     /// <summary>
-    /// Which mod list this instance is on, which is the answer a publish arrives pre-selecting.
+    /// Which mod list this game is on, which is the answer a publish arrives pre-selecting.
     /// </summary>
     /// <remarks>
     /// A statement rather than a constraint. A save can be published to any profile in the repo or to
     /// none, so this says where the folder stands and the dialog asks the question - including on an
-    /// instance that follows no profile, which used to be refused outright.
+    /// game that follows no profile, which used to be refused outright.
     /// </remarks>
     public string ActiveProfileText => ActiveProfileName is string name
-        ? $"This instance follows '{name}'. A save published from here is offered that mod list first, and any other in the repo - or none at all."
-        : "This instance follows no profile in this repo. A save published from here can still be recorded against any of the repo's mod lists, or against none.";
+        ? $"This game follows '{name}'. A save published from here is offered that mod list first, and any other in the repo - or none at all."
+        : "This game follows no profile in this repo. A save published from here can still be recorded against any of the repo's mod lists, or against none.";
 
-    public string? ActiveProfileName => _instance.ActiveProfile is ActiveProfile active && active.RepoId == _repo.Id
+    public string? ActiveProfileName => _game.ActiveProfile is ActiveProfile active && active.RepoId == _repo.Id
         ? _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId)?.Name
         : null;
 
@@ -156,7 +156,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (_repo.Adapter.CanSupportSavegames is false)
         {
-            _fetchProblem = "This game's adapter does not manage savegames, so this instance has no slots to show.";
+            _fetchProblem = "This game's adapter does not manage savegames, so this game has no slots to show.";
 
             return [];
         }
@@ -167,13 +167,13 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var slots = await _savegameService.GetSlotsAsync(_instance, cancellationToken);
+            var slots = await _savegameService.GetSlotsAsync(_game, cancellationToken);
             var rows = new List<SavegameSlotRowViewModel>();
 
             foreach (var slot in slots)
             {
-                var availability = await _savegameService.ClassifySlotAsync(_instance, slot.Id, cancellationToken);
-                var binding = _bindingStore.GetBindingForSlot(_instance.Id, slot.Id);
+                var availability = await _savegameService.ClassifySlotAsync(_game, slot.Id, cancellationToken);
+                var binding = _bindingStore.GetBindingForSlot(_game.Id, slot.Id);
 
                 rows.Add(new SavegameSlotRowViewModel(
                     slot,
@@ -309,7 +309,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
         await RunAsync(async () =>
         {
-            var published = await _flowService.PublishAsync(_instance, _repo, row.Id, row.Label, _lifetime);
+            var published = await _flowService.PublishAsync(_game, _repo, row.Id, row.Label, _lifetime);
 
             if (published is null)
             {
@@ -333,7 +333,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         await RunAsync(async () =>
         {
             var outcome = await _flowService.CheckInAsync(
-                _instance, savegameId, row.SavegameName ?? "this savegame", row.Label, _lifetime);
+                _game, savegameId, row.SavegameName ?? "this savegame", row.Label, _lifetime);
 
             if (outcome.WasDeferred)
             {
@@ -365,7 +365,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         await RunAsync(async () =>
         {
             var discarded = await _flowService.DiscardAsync(
-                _instance,
+                _game,
                 savegameId,
                 row.SavegameName ?? "this savegame",
                 row.Label,
@@ -401,7 +401,7 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
         await RunAsync(async () =>
         {
             var disconnected = await _flowService.DisconnectAsync(
-                _instance,
+                _game,
                 savegameId,
                 row.SavegameName ?? "that savegame",
                 row.Label,
@@ -443,8 +443,8 @@ public partial class InstanceSavegamesPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public InstanceSavegamesPageViewModel Create(Repo repo, LocalInstance instance)
-            => ActivatorUtilities.CreateInstance<InstanceSavegamesPageViewModel>(serviceProvider, repo, instance);
+        public GameSavegamesPageViewModel Create(Repo repo, Game game)
+            => ActivatorUtilities.CreateInstance<GameSavegamesPageViewModel>(serviceProvider, repo, game);
     }
 
 

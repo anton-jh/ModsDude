@@ -24,7 +24,7 @@
 
             <uc:SidebarHeader Grid.Row="1" Title="My repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" />
 
-            <!-- Grouped by game rather than one flat column: an instance belongs to a game, so two
+            <!-- Grouped by game rather than one flat column: a local installation belongs to a game, so two
                  repos for different games have nothing in common that the sidebar was saying they
                  did. ReposView is the same entries with one heading per game - see
                  MainPageViewModel.ReposView for why it groups and deliberately does not sort. -->

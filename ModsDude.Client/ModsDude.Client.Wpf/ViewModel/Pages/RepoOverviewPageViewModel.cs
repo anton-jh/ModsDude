@@ -13,7 +13,7 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// What the repo looks like from here: the game instances it offers, whether each still matches its
+/// What the repo looks like from here: the games it offers, whether each still matches its
 /// profile, the profiles it holds, and the caller's standing in it.
 /// </summary>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
@@ -37,10 +37,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
 
-        Instances = [];
+        Games = [];
 
         _repo.PropertyChanged += OnRepoPropertyChanged;
-        _repo.LocalInstances.CollectionChanged += OnSourceCollectionChanged;
+        _repo.Games.CollectionChanged += OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
@@ -50,7 +50,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     public string RepoName => _repo.Name;
     public string Game => _repo.Adapter.DisplayName;
-    public ObservableCollection<InstanceOverviewViewModel> Instances { get; }
+    public ObservableCollection<InstanceOverviewViewModel> Games { get; }
 
     public string MembershipSummary => _repo.MembershipLevel switch
     {
@@ -66,8 +66,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         var count => $"{count} profiles."
     };
 
-    public bool HasInstances => Instances.Count > 0;
-    public bool HasNoInstances => Instances.Count == 0;
+    public bool HasInstances => Games.Count > 0;
+    public bool HasNoGames => Games.Count == 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMemberSummary))]
@@ -79,7 +79,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _repo.PropertyChanged -= OnRepoPropertyChanged;
-        _repo.LocalInstances.CollectionChanged -= OnSourceCollectionChanged;
+        _repo.Games.CollectionChanged -= OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged -= OnSourceCollectionChanged;
         _driftMonitor.Changed -= OnDriftChanged;
     }
@@ -129,30 +129,30 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     private void RefreshInstances()
     {
-        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Instance.InstanceId, x => x.Report);
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.InstanceId, x => x.Report);
 
-        Instances.Clear();
+        Games.Clear();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            Instances.Add(new InstanceOverviewViewModel(
-                instance,
-                DescribeActiveProfile(instance),
-                drifted.GetValueOrDefault(instance.Id)));
+            Games.Add(new InstanceOverviewViewModel(
+                game,
+                DescribeActiveProfile(game),
+                drifted.GetValueOrDefault(game.Id)));
         }
 
         OnPropertyChanged(nameof(HasInstances));
-        OnPropertyChanged(nameof(HasNoInstances));
+        OnPropertyChanged(nameof(HasNoGames));
     }
 
-    private string DescribeActiveProfile(LocalInstance instance)
+    private string DescribeActiveProfile(Game game)
     {
-        if (instance.ActiveProfile is not ActiveProfile active)
+        if (game.ActiveProfile is not ActiveProfile active)
         {
             return "No profile set";
         }
 
-        // An instance is offered by every repo targeting the same game, so the one it is currently
+        // A game is offered by every repo targeting the same game, so the one it is currently
         // set to may well belong to a different repo than the one being looked at.
         if (active.RepoId != _repo.Id)
         {

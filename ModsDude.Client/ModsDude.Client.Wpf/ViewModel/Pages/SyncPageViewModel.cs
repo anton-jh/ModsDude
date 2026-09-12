@@ -16,13 +16,13 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// Applying a profile to one instance: what would change, the confirmation for anything the repo
+/// Applying a profile to one game: what would change, the confirmation for anything the repo
 /// cannot put back, and live progress while it happens.
 /// </summary>
 public partial class SyncPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly LocalInstance _instance;
+    private readonly Game _game;
     private readonly ModSyncService _syncService;
     private readonly InstanceDriftService _driftService;
     private readonly InstanceDriftMonitor _driftMonitor;
@@ -46,7 +46,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
     public SyncPageViewModel(
         Repo repo,
-        LocalInstance instance,
+        Game game,
         ModSyncService syncService,
         InstanceDriftService driftService,
         InstanceDriftMonitor driftMonitor,
@@ -57,7 +57,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     {
         _backgroundTasks = backgroundTasks;
         _repo = repo;
-        _instance = instance;
+        _game = game;
         _syncService = syncService;
         _driftService = driftService;
         _driftMonitor = driftMonitor;
@@ -65,12 +65,12 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         _applyService = applyService;
         _itemFactory = itemFactory;
 
-        InstanceName = instance.Name;
+        GameName = game.Name;
         Rows = [];
     }
 
 
-    public string InstanceName { get; }
+    public string GameName { get; }
 
     public ObservableCollection<ModSyncRowViewModel> Rows { get; }
 
@@ -164,7 +164,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
         // The one sync that does not go through ProfileApplyService - this page shows the plan and
         // executes it itself - so it announces itself rather than inheriting the announcement.
-        using var task = _backgroundTasks.Begin($"Applying '{ProfileName}' to '{InstanceName}'");
+        using var task = _backgroundTasks.Begin($"Applying '{ProfileName}' to '{GameName}'");
 
         try
         {
@@ -176,7 +176,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             // The plan describes a folder that has just changed, so it is stale whatever happened.
             await LoadPlanAsync(CancellationToken.None);
 
-            // And so is the app-level notice, which may be up about exactly this instance.
+            // And so is the app-level notice, which may be up about exactly this game.
             await _driftMonitor.CheckAsync();
         }
         catch (OperationCanceledException)
@@ -212,16 +212,16 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             OnPropertyChanged(nameof(HasChanges));
         });
 
-        if (_instance.ActiveProfile is not ActiveProfile active)
+        if (_game.ActiveProfile is not ActiveProfile active)
         {
-            Fail("No profile is set on this instance yet. Pick one on Manage, and this page will say what applying it would do.");
+            Fail("No profile is set on this game yet. Pick one on Manage, and this page will say what applying it would do.");
 
             return;
         }
 
         if (active.RepoId != _repo.Id)
         {
-            Fail("This instance follows a profile in another repo. Open that repo to apply it, or pick a profile from this one on Manage.");
+            Fail("This game follows a profile in another repo. Open that repo to apply it, or pick a profile from this one on Manage.");
 
             return;
         }
@@ -229,14 +229,14 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         if (_profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is not ProfileDto profile)
         {
             ShowDrift(InstanceDriftReport.For(InstanceDriftStatus.DanglingProfile));
-            Fail("The profile this instance follows no longer exists, or is no longer visible to you. Pick another on Manage.");
+            Fail("The profile this game follows no longer exists, or is no longer visible to you. Pick another on Manage.");
 
             return;
         }
 
         ProfileName = profile.Name;
 
-        _adapter ??= _instance.GetAdapter(_repo.Adapter)
+        _adapter ??= _game.GetAdapter(_repo.Adapter)
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke();
 
@@ -252,7 +252,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         try
         {
             var plan = await _syncService.PlanAsync(
-                new ModSyncRequest(_instance.Id, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
+                new ModSyncRequest(_game.Id, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
                 cancellationToken);
 
             _pinned = await LoadPinnedAsync(active.ProfileId, cancellationToken);
@@ -325,7 +325,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
         Status = plan.HasWork
             ? $"{plan.HashesToFetch.Count} mods have to be fetched before anything is changed."
-            : "This instance already matches its profile.";
+            : "This game already matches its profile.";
 
         MaterializationNote = plan.Materialization.Method is MaterializationMethod.Hardlink
             ? "Mods are hardlinked from the store on this disk, so installing costs no extra space and takes seconds."
@@ -336,7 +336,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
               "install is a full copy even though the store is on the same disk."
             : null;
 
-        ShowDrift(_driftService.Check(_instance.Id, _instance.ActiveProfile, plan.ModFolder));
+        ShowDrift(_driftService.Check(_game.Id, _game.ActiveProfile, plan.ModFolder));
     }
 
     /// <summary>
@@ -375,8 +375,8 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         {
             InstanceDriftStatus.Drifted =>
                 $"{report.DifferenceCount} files differ from what was last applied here. Mods updated inside the game look like this.",
-            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this instance yet.",
-            InstanceDriftStatus.DanglingProfile => "The profile this instance follows is gone.",
+            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            InstanceDriftStatus.DanglingProfile => "The profile this game follows is gone.",
             InstanceDriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
             InstanceDriftStatus.InSync => "The mod folder still matches what was last applied here.",
             _ => null
@@ -408,7 +408,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
             return result.Failures.Count == 1 && first is not null
                 ? $"One mod could not be applied ({first.ModId}): {first.Message}"
-                : $"{result.Failures.Count} mods could not be applied. The instance is left as it is until they are.";
+                : $"{result.Failures.Count} mods could not be applied. The game is left as it is until they are.";
         }
 
         var recycled = result.Quarantined.Count(x => x.Destination is QuarantineDestination.RecycleBin);
@@ -443,7 +443,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public SyncPageViewModel Create(Repo repo, LocalInstance instance)
-            => ActivatorUtilities.CreateInstance<SyncPageViewModel>(serviceProvider, repo, instance);
+        public SyncPageViewModel Create(Repo repo, Game game)
+            => ActivatorUtilities.CreateInstance<SyncPageViewModel>(serviceProvider, repo, game);
     }
 }

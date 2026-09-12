@@ -1,7 +1,7 @@
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
-/// What the last sync actually installed into one instance's mod folder.
+/// What the last sync actually installed into one game's mod folder.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -65,7 +65,7 @@ public sealed record SyncManifest
     public required DateTimeOffset SyncedAt { get; init; }
 
     /// <summary>
-    /// The folder it describes. An instance repointed at a different folder has a manifest about
+    /// The folder it describes. A game repointed at a different folder has a manifest about
     /// somewhere else, which is worth noticing rather than comparing against.
     /// </summary>
     public required string ModFolder { get; init; }

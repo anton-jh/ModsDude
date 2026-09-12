@@ -6,11 +6,11 @@ using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Sync;
 
-/// <summary>One instance as the monitor has to see it, which is three facts and no adapter.</summary>
+/// <summary>One game as the monitor has to see it, which is three facts and no adapter.</summary>
 /// <remarks>
-/// An interface rather than <see cref="Services.LocalInstanceRepository"/> itself, for the same
-/// reason <see cref="IInstanceModFolders"/> is one: the check runs off the persisted folder and the
-/// persisted intent, so it works for an instance whose scope no repo on this machine serves, and it
+/// An interface rather than <see cref="Services.GameRepository"/> itself, for the same
+/// reason <see cref="IModFolders"/> is one: the check runs off the persisted folder and the
+/// persisted intent, so it works for a game whose scope no repo on this machine serves, and it
 /// can be exercised without a real <c>state.json</c>.
 /// </remarks>
 public interface IDriftCandidateSource
@@ -27,7 +27,7 @@ public sealed record DriftCandidate(Guid InstanceId, string Name, string? ModFol
 /// <para>
 /// Deliberately partial. The client holds the profile list of the repo it has loaded, so the answer
 /// is there for the repo the user is standing in and absent for the rest - and absent is the honest
-/// answer, because the alternative is a network round trip per instance on every window activation,
+/// answer, because the alternative is a network round trip per game on every window activation,
 /// in a check whose entire point is that it works offline and costs a directory listing.
 /// </para>
 /// <para>
@@ -42,13 +42,13 @@ public interface IProfileRevisions
 }
 
 /// <param name="ProfileName">
-/// What the manifest recorded the profile was called. Null before an instance has ever synced, which
+/// What the manifest recorded the profile was called. Null before a game has ever synced, which
 /// is also a state with no drift to report.
 /// </param>
-public sealed record InstanceDrift(DriftCandidate Instance, InstanceDriftReport Report, string? ProfileName)
+public sealed record InstanceDrift(DriftCandidate Game, InstanceDriftReport Report, string? ProfileName)
 {
     /// <summary>
-    /// Whether this instance is worth telling somebody about.
+    /// Whether this game is worth telling somebody about.
     /// </summary>
     /// <remarks>
     /// A held savegame that has moved counts, even where the mod folder is exactly what was
@@ -155,7 +155,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     public event EventHandler? Changed;
 
 
-    /// <summary>Every instance that reported drift, most recently checked first.</summary>
+    /// <summary>Every game that reported drift, most recently checked first.</summary>
     public IReadOnlyList<InstanceDrift> Drifted
     {
         get
@@ -219,7 +219,7 @@ public sealed class InstanceDriftMonitor : IDisposable
 
 
     /// <summary>
-    /// Runs the cheap check across every instance and reports whether the answer changed.
+    /// Runs the cheap check across every game and reports whether the answer changed.
     /// </summary>
     /// <returns>False where the throttle swallowed the request, so nothing was looked at.</returns>
     public bool Check(DriftCheckReason reason = DriftCheckReason.Explicit)
@@ -255,7 +255,7 @@ public sealed class InstanceDriftMonitor : IDisposable
 
         foreach (var candidate in _candidates.GetDriftCandidates())
         {
-            // Asked for every instance, including ones with no active profile: holding somebody's
+            // Asked for every game, including ones with no active profile: holding somebody's
             // evening in a slot is worth saying whether or not this folder has ever been synced.
             var savegameDrift = await CheckSavegamesAsync(candidate.InstanceId);
 
@@ -277,9 +277,9 @@ public sealed class InstanceDriftMonitor : IDisposable
                 active,
                 candidate.ModFolder,
                 // A past savegame held here pins the folder to its own revision, and that is what
-                // "up to date" means for this instance until it is checked in. Nothing is suppressed
-                // to achieve it: the comparison is against the number the instance is supposed to be
-                // on, and it comes out equal on its own. Against head instead, an instance holding a
+                // "up to date" means for this game until it is checked in. Nothing is suppressed
+                // to achieve it: the comparison is against the number the game is supposed to be
+                // on, and it comes out equal on its own. Against head instead, a game holding a
                 // past savegame would report drift permanently and offer a re-apply to head that the
                 // apply table refuses.
                 currentRevision: _savegames?.GetRequiredRevision(candidate.InstanceId, active.ProfileId)
@@ -293,7 +293,7 @@ public sealed class InstanceDriftMonitor : IDisposable
                 StoreCorruption = await CheckStoreAsync(candidate, report.Changed)
             };
 
-            // Only a drifted instance needs the manifest read a second time, and only to name the
+            // Only a drifted game needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
             var profileName = report.Status is InstanceDriftStatus.Drifted
                 ? _manifestStore.TryRead(candidate.InstanceId)?.ProfileName
@@ -309,7 +309,7 @@ public sealed class InstanceDriftMonitor : IDisposable
             var before = Signature(_results, _corruption);
 
             // Kept rather than replaced - see StoreCorruption. Deduplicated by address, since two
-            // instances served by one store can both reach a blob before it is gone.
+            // games served by one store can both reach a blob before it is gone.
             foreach (var blob in results.SelectMany(x => x.Report.StoreCorruption))
             {
                 if (_corruption.Any(x => ModContentHasher.Matches(x.Hash, blob.Hash)) is false)
@@ -354,7 +354,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         {
             // The notice degrades to the mod half rather than failing. Nothing on screen says the
             // savegame half was even attempted.
-            _logger.LogWarning(exception, "Could not check savegame drift for instance {Instance}.", instanceId);
+            _logger.LogWarning(exception, "Could not check savegame drift for game {Game}.", instanceId);
 
             return [];
         }
@@ -386,7 +386,7 @@ public sealed class InstanceDriftMonitor : IDisposable
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Could not check store integrity for instance {Instance}.", candidate.InstanceId);
+            _logger.LogWarning(exception, "Could not check store integrity for game {Game}.", candidate.InstanceId);
 
             return [];
         }
@@ -512,10 +512,10 @@ public sealed class InstanceDriftMonitor : IDisposable
             '|',
             results
                 .Where(x => x.IsDrifted)
-                .OrderBy(x => x.Instance.InstanceId)
+                .OrderBy(x => x.Game.InstanceId)
                 .Select(x => string.Join(
                     ';',
-                    x.Instance.InstanceId,
+                    x.Game.InstanceId,
                     x.Report.Status,
                     string.Join(',', x.Report.Added),
                     string.Join(',', x.Report.Removed),

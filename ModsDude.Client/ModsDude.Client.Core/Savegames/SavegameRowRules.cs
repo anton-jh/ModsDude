@@ -18,7 +18,7 @@ public enum SavegameRowBlock
     None,
 
     /// <summary>No installation of this game is connected here, so there is nowhere to write a save.</summary>
-    NoInstance,
+    NoGame,
 
     /// <summary>
     /// <em>Apply profile</em> only: this savegame follows no mod list, so there is no profile to apply and
@@ -33,14 +33,14 @@ public enum SavegameRowBlock
     ModFolderElsewhere,
 
     /// <summary>
-    /// Another savegame with a profile already claims this instance's mod folder. It blocks both
+    /// Another savegame with a profile already claims this game's mod folder. It blocks both
     /// actions, and applying anything does not clear it - checking that savegame in does.
     /// </summary>
     AnotherSavegameIsHeld
 }
 
 
-/// <summary>What a savegame's two actions can do on one instance, and why not where they cannot.</summary>
+/// <summary>What a savegame's two actions can do on one game, and why not where they cannot.</summary>
 /// <param name="BlockingSavegameId">
 /// The savegame already holding the mod folder, so a caller with the list can name it. Empty unless
 /// the block is <see cref="SavegameRowBlock.AnotherSavegameIsHeld"/>.
@@ -62,13 +62,13 @@ public sealed record SavegameRowOffer(
 
 
 /// <summary>
-/// Which of a savegame row's two actions are on offer against one instance, and the words for the one
+/// Which of a savegame row's two actions are on offer against one game, and the words for the one
 /// that is not.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Pure, for the same reason <see cref="SavegameHoldRules"/> is.</b> Reading the sync manifest,
-/// listing the instances and looking up names all happen around this, so the rule that decides
+/// listing the games and looking up names all happen around this, so the rule that decides
 /// whether a savegame can be taken here and now is one function with one copy.
 /// </para>
 /// <para>
@@ -90,13 +90,13 @@ public static class SavegameRowRules
     /// What a <em>past</em> savegame runs on, from <see cref="SavegameService.TargetRevisionOf"/>. Null
     /// for a current one.
     /// </param>
-    /// <param name="held">What the instance is already holding.</param>
+    /// <param name="held">What the game is already holding.</param>
     /// <param name="appliedProfileId">
     /// Which profile the mod folder was last made to match, from the sync manifest, and
     /// <paramref name="appliedRevision"/> which revision of it. The manifest is the only thing that
     /// says what a folder is on, so a folder that has never been synced is one that is not ready.
     /// </param>
-    /// <param name="hasInstance">Whether there is any installation of this game to act on.</param>
+    /// <param name="hasGame">Whether there is any installation of this game to act on.</param>
     public static SavegameRowOffer Describe(
         Guid savegameId,
         Guid? profileId,
@@ -105,12 +105,12 @@ public static class SavegameRowRules
         IReadOnlyList<SavegameCheckoutBinding> held,
         Guid? appliedProfileId,
         int? appliedRevision,
-        bool hasInstance)
+        bool hasGame)
     {
-        if (hasInstance is false)
+        if (hasGame is false)
         {
             return new SavegameRowOffer(
-                SavegameRowBlock.NoInstance, SavegameRowBlock.NoInstance, Guid.Empty, pinnedRevision);
+                SavegameRowBlock.NoGame, SavegameRowBlock.NoGame, Guid.Empty, pinnedRevision);
         }
 
         // Ahead of everything about the folder, because no apply clears it and because it holds even
@@ -163,7 +163,7 @@ public static class SavegameRowRules
     {
         return block switch
         {
-            SavegameRowBlock.NoInstance => "No instance for this game",
+            SavegameRowBlock.NoGame => "This game is not connected here",
 
             SavegameRowBlock.NoModList => "This save follows no mod list",
 
@@ -175,8 +175,8 @@ public static class SavegameRowRules
                 : $"Apply {profileName} first",
 
             SavegameRowBlock.AnotherSavegameIsHeld => blockingSavegameName is { Length: > 0 } name
-                ? $"'{name}' is checked out on this instance"
-                : "Another savegame is checked out on this instance",
+                ? $"'{name}' is checked out here"
+                : "Another savegame is checked out here",
 
             _ => null
         };

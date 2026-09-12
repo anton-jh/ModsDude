@@ -39,16 +39,16 @@ public static class ServiceCollectionExtensions
         // StateStore itself is registered by the host (App.xaml.cs), so this only names the seam the
         // binding store reads it through - which exists so a test can reach persisted state without
         // rewriting the developer's own state.json.
-        services.AddSingleton<Savegames.IPersistedInstanceState, Savegames.StateStoreInstanceState>();
+        services.AddSingleton<Savegames.IPersistedGameState, Savegames.StateStoreGameState>();
         services.AddSingleton<Savegames.SavegameBindingStore>();
 
         // The savegame engine and the one seam it needs: hydrating a savegame adapter takes the
-        // repo's base settings, which an instance does not carry. TryAdd so a host that composes its
+        // repo's base settings, which a game does not carry. TryAdd so a host that composes its
         // own - a test harness, or a shell that knows its repos by another route - keeps it.
         services.TryAddSingleton<Savegames.ILocalSavegameAdapters, Savegames.RepoSavegameAdapters>();
         services.AddSingleton<Savegames.ISavegameService, Savegames.SavegameService>();
 
-        // What the sync engine knows about savegames, resolved to the same instance rather than to a
+        // What the sync engine knows about savegames, resolved to the same game rather than to a
         // second engine: play has to be attributed before an apply moves the manifest, and a seam
         // with its own binding store would attribute it to a copy nobody reads - and would answer
         // the apply table from a set of holds nobody took.

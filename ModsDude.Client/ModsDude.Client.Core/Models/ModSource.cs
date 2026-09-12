@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace ModsDude.Client.Core.Models;
 
 /// <summary>
-/// Somewhere to look for mods to import. Not a sync target: sync makes an instance's mod folder
+/// Somewhere to look for mods to import. Not a sync target: sync makes a game's mod folder
 /// match a profile, which means uninstalling from it, and nothing will ever delete, move or
 /// quarantine a file in Downloads or a folder the user pointed at.
 /// See docs/09-mod-catalog.md#sources-are-not-sync-targets.
@@ -32,10 +32,10 @@ public enum ModSourceKind
     /// </remarks>
     Repo,
 
-    /// <summary>An instance's mod folder. Present automatically, and disabling it here does not affect syncing to it.</summary>
-    Instance,
+    /// <summary>A game's mod folder. Present automatically, and disabling it here does not affect syncing to it.</summary>
+    Game,
 
-    /// <summary>The system Downloads folder. Once per machine, not per instance.</summary>
+    /// <summary>The system Downloads folder. Once per machine, not per game.</summary>
     Downloads,
 
     /// <summary>A folder the user added for this session. Never persisted.</summary>
@@ -71,7 +71,7 @@ public readonly record struct ModSourceId
     /// </summary>
     public static ModSourceId Repo { get; } = new("repo");
 
-    public static ModSourceId ForInstance(Guid instanceId) => new($"instance:{instanceId}");
+    public static ModSourceId ForInstance(Guid instanceId) => new($"game:{instanceId}");
 
     /// <summary>
     /// Keyed by the folder itself, so the same folder added twice is the same source - and so a

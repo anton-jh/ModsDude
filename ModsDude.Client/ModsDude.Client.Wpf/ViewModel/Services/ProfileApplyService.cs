@@ -20,7 +20,7 @@ public enum ProfileApplyStatus
     Declined,
 
     /// <summary>
-    /// A savegame checked out on the instance follows another mod list. Not a "not now" like
+    /// A savegame checked out on the game follows another mod list. Not a "not now" like
     /// <see cref="Unavailable"/> - nothing about waiting changes it, and the way out is to check that
     /// savegame in.
     /// </summary>
@@ -35,19 +35,19 @@ public enum ProfileApplyStatus
     Failed
 }
 
-public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplyStatus Status, string Message)
+public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, string Message)
 {
     public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched;
 
     /// <summary>
-    /// Whether the instance should now be recorded as following this profile.
+    /// Whether the game should now be recorded as following this profile.
     /// </summary>
     /// <remarks>
     /// <b>True even where the folder could not be touched</b>, which is the long-standing rule: the
-    /// instance is still meant to follow this profile and being left drifted is what the notice is
+    /// game is still meant to follow this profile and being left drifted is what the notice is
     /// for. False for the two answers that are not "not now" - the user backing out, and a savegame
     /// held here that refuses the switch outright. Recording the intent for that second one would
-    /// leave an instance whose standing profile is one its own held savegame forbids applying.
+    /// leave a game whose standing profile is one its own held savegame forbids applying.
     /// </remarks>
     public bool RecordsIntent => Status is not (ProfileApplyStatus.Declined or ProfileApplyStatus.Refused);
 
@@ -60,7 +60,7 @@ public sealed record ProfileApplyOutcome(LocalInstance Instance, ProfileApplySta
 
 
 /// <summary>
-/// Applying a profile to an instance from anywhere that is not the sync page: the drift notice's
+/// Applying a profile to a game from anywhere that is not the sync page: the drift notice's
 /// one-click re-apply, the mod list editor's save, and the shell-level activation control.
 /// </summary>
 /// <remarks>
@@ -83,22 +83,22 @@ public sealed class ProfileApplyService(
     IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
-    /// Works out what would change. Returns null where the instance cannot be applied to right now.
+    /// Works out what would change. Returns null where the game cannot be applied to right now.
     /// </summary>
     /// <param name="revision">
-    /// Which revision to plan against, or null to let the instance decide - a past savegame held
+    /// Which revision to plan against, or null to let the game decide - a past savegame held
     /// there pins the folder to its own revision, and everything else follows head. Named only by the
     /// check-out dialog, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
     public async Task<ModSyncPlan?> TryPlanAsync(
         Repo repo,
-        LocalInstance instance,
+        Game game,
         Guid profileId,
         string? profileName,
         int? revision,
         CancellationToken cancellationToken)
     {
-        if (GetAdapter(repo, instance) is not ILocalModAdapter adapter)
+        if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
             return null;
         }
@@ -106,7 +106,7 @@ public sealed class ProfileApplyService(
         try
         {
             return await syncService.PlanAsync(
-                new ModSyncRequest(instance.Id, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
+                new ModSyncRequest(game.Id, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -124,22 +124,22 @@ public sealed class ProfileApplyService(
     /// decided - the whole point of the drift notice's second action is that it costs one click.
     /// </summary>
     /// <param name="confirmPlan">
-    /// Whether to show the plan before executing. Activation moves an instance onto a different
+    /// Whether to show the plan before executing. Activation moves a game onto a different
     /// profile, which uninstalls whatever the previous one put there; the reconciler already knows
     /// exactly what that is, so it is shown rather than a bare "are you sure". A re-apply of the
-    /// profile the instance is already on has nothing to disclose beyond the destructive part, which
+    /// profile the game is already on has nothing to disclose beyond the destructive part, which
     /// is confirmed either way.
     /// </param>
     /// <param name="revision">
-    /// Which revision to install, or null - nearly always - to let the instance decide, per
+    /// Which revision to install, or null - nearly always - to let the game decide, per
     /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
     /// preparing the folder for a savegame nothing is holding yet: a past one runs on its own revision,
-    /// and letting the instance decide would install head and leave the check-out that follows
+    /// and letting the game decide would install head and leave the check-out that follows
     /// immediately drifted.
     /// </param>
     public async Task<ProfileApplyOutcome> ApplyAsync(
         Repo repo,
-        LocalInstance instance,
+        Game game,
         Guid profileId,
         string? profileName,
         bool confirmPlan,
@@ -150,16 +150,16 @@ public sealed class ProfileApplyService(
         // Asked before anything is planned, because this refusal is not about the folder and reading
         // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
         // can get past; this one is the sentence somebody can act on.
-        if (heldSavegames.DecideApply(instance.Id, profileId, revision) is { IsAllowed: false } refusal)
+        if (heldSavegames.DecideApply(game.Id, profileId, revision) is { IsAllowed: false } refusal)
         {
             // Two refusals, two sentences. A past savegame held here is not following "another mod list" -
             // it is following this very one and does not move off its revision - and telling somebody
             // to check it in over a revision mismatch would be advice that fixes nothing.
             var reason = refusal.Refusal is SavegameApplyRefusal.PastSavegameIsHeld
-                ? $"'{instance.Name}' is holding a past savegame, which runs on revision {refusal.Revision} and does not move off it. It was left as it is."
-                : $"'{instance.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.";
+                ? $"'{game.Name}' is holding a past savegame, which runs on revision {refusal.Revision} and does not move off it. It was left as it is."
+                : $"'{game.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.";
 
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Refused, reason)
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason)
             {
                 BlockedBySavegameId = refusal.SavegameId
             };
@@ -169,19 +169,19 @@ public sealed class ProfileApplyService(
 
         try
         {
-            plan = await TryPlanAsync(repo, instance, profileId, profileName, revision, cancellationToken);
+            plan = await TryPlanAsync(repo, game, profileId, profileName, revision, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Declined, $"'{instance.Name}' was stopped before anything changed.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
         }
 
         if (plan is null)
         {
             return new ProfileApplyOutcome(
-                instance,
+                game,
                 ProfileApplyStatus.Unavailable,
-                $"'{instance.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be.");
+                $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be.");
         }
 
         if (plan.HasWork is false)
@@ -193,45 +193,45 @@ public sealed class ProfileApplyService(
             await syncService.RecordAlreadyMatchedAsync(plan);
 
             return new ProfileApplyOutcome(
-                instance, ProfileApplyStatus.AlreadyMatched, $"'{instance.Name}' already matches{Pinned(instance, profileId, revision)}.");
+                game, ProfileApplyStatus.AlreadyMatched, $"'{game.Name}' already matches{Pinned(game, profileId, revision)}.");
         }
 
-        if (confirmPlan && await ConfirmPlanAsync(instance, plan) is false)
+        if (confirmPlan && await ConfirmPlanAsync(game, plan) is false)
         {
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Declined, $"'{instance.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
         }
 
         if (plan.Unrecognised.Count > 0 && await ConfirmUnrecognisedAsync(plan) is false)
         {
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Declined, $"'{instance.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
         }
 
         // Only from here: everything above is planning and asking, which is quick or is a dialog the
         // user is already looking at. The strip is for the part that takes minutes and that they are
         // entitled to walk away from.
-        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to '{instance.Name}'");
+        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to '{game.Name}'");
 
         try
         {
             var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
 
             return result.Completed
-                ? new ProfileApplyOutcome(instance, ProfileApplyStatus.Applied, $"'{instance.Name}' now matches{Pinned(instance, profileId, revision)}.")
+                ? new ProfileApplyOutcome(game, ProfileApplyStatus.Applied, $"'{game.Name}' now matches{Pinned(game, profileId, revision)}.")
                 : new ProfileApplyOutcome(
-                    instance,
+                    game,
                     ProfileApplyStatus.Failed,
-                    $"'{instance.Name}': {result.Failures.Count} mods could not be applied.");
+                    $"'{game.Name}': {result.Failures.Count} mods could not be applied.");
         }
         catch (OperationCanceledException)
         {
-            return new ProfileApplyOutcome(instance, ProfileApplyStatus.Declined, $"'{instance.Name}' was stopped part way.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped part way.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return new ProfileApplyOutcome(
-                instance,
+                game,
                 ProfileApplyStatus.Unavailable,
-                $"'{instance.Name}' is in use - a running game or a server mid-session holds its folder. It was left drifted.");
+                $"'{game.Name}' is in use - a running game or a server mid-session holds its folder. It was left drifted.");
         }
     }
 
@@ -239,7 +239,7 @@ public sealed class ProfileApplyService(
     /// The reconciler's own plan as the confirmation. It already computes exactly what would change,
     /// so showing it beats asking "are you sure" about something the user cannot see.
     /// </summary>
-    public async Task<bool> ConfirmPlanAsync(LocalInstance instance, ModSyncPlan plan)
+    public async Task<bool> ConfirmPlanAsync(Game game, ModSyncPlan plan)
     {
         var lines = new List<string>();
 
@@ -250,7 +250,7 @@ public sealed class ProfileApplyService(
         if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
 
         var modal = new ConfirmationDialogViewModel(
-            $"Apply to '{instance.Name}'?",
+            $"Apply to '{game.Name}'?",
             $"{plan.ModFolder}\n\n" +
             $"{string.Join('\n', lines)}\n" +
             $"{plan.KeepCount} already correct.\n\n" +
@@ -312,21 +312,21 @@ public sealed class ProfileApplyService(
     /// involved. A caller that named a revision gets the plainer half of it: nothing is holding that
     /// savegame yet, so there is no checked-out save to explain the number by.
     /// </remarks>
-    private string Pinned(LocalInstance instance, Guid profileId, int? revision)
+    private string Pinned(Game game, Guid profileId, int? revision)
     {
         if (revision is int named)
         {
             return $" revision {named}";
         }
 
-        return heldSavegames.GetRequiredRevision(instance.Id, profileId) is int held
+        return heldSavegames.GetRequiredRevision(game.Id, profileId) is int held
             ? $" revision {held}, which is what the savegame checked out there runs on"
             : "";
     }
 
-    private static ILocalModAdapter? GetAdapter(Repo repo, LocalInstance instance)
+    private static ILocalModAdapter? GetAdapter(Repo repo, Game game)
     {
-        return instance.GetAdapter(repo.Adapter)
+        return game.GetAdapter(repo.Adapter)
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke();
     }

@@ -273,7 +273,7 @@ internal sealed class FakeRecycleBin(bool available = true) : IRecycleBin
 }
 
 
-internal sealed class FakeInstanceModFolders(params InstanceModFolder[] folders) : IInstanceModFolders
+internal sealed class FakeModFolders(params InstanceModFolder[] folders) : IModFolders
 {
     public IReadOnlyList<InstanceModFolder> GetAll() => folders;
 }
@@ -306,7 +306,7 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
 
 
     /// <summary>
-    /// Records that this instance is holding a savegame following one profile.
+    /// Records that this game is holding a savegame following one profile.
     /// </summary>
     /// <param name="targetRevision">A number makes it past, pinned there; null makes it current.</param>
     public void Hold(Guid instanceId, Guid profileId, int? targetRevision = null)

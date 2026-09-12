@@ -36,7 +36,7 @@ public sealed record StoreVerificationReport(
 /// </remarks>
 public sealed class ContentStoreMaintenance(
     IContentStoreProvider storeProvider,
-    IInstanceModFolders instanceModFolders,
+    IModFolders modFolders,
     SyncManifestStore manifestStore,
     ILogger<ContentStoreMaintenance> logger)
 {
@@ -48,12 +48,12 @@ public sealed class ContentStoreMaintenance(
     /// Both halves are needed and neither is a superset of the other.
     /// <see cref="IContentStoreProvider.GetAllStores"/> reads settings, so it misses the store a
     /// mod folder is served by under the defaults nobody has visited a page to accept; and a store
-    /// whose disk no longer holds any instance is exactly the one worth being able to empty, so it
+    /// whose disk no longer holds any game is exactly the one worth being able to empty, so it
     /// cannot be dropped for having nothing to serve.
     /// </remarks>
     public IReadOnlyList<ContentStore> GetStores()
     {
-        var serving = instanceModFolders.GetAll()
+        var serving = modFolders.GetAll()
             .Select(x => x.ModFolder)
             .Select(storeProvider.GetStoreServing);
 
@@ -68,7 +68,7 @@ public sealed class ContentStoreMaintenance(
     /// </summary>
     /// <remarks>
     /// The same sweep a sync ends with, minus the profile being applied - which there is not one of
-    /// here. What each served instance is running comes off its sync manifest, so this asks the
+    /// here. What each served game is running comes off its sync manifest, so this asks the
     /// network nothing and works offline.
     /// </remarks>
     public ContentStoreEvictionResult Sweep(ContentStore store, CancellationToken cancellationToken)
@@ -108,7 +108,7 @@ public sealed class ContentStoreMaintenance(
     /// Which mod folders this store serves are running one of the bad addresses.
     /// </summary>
     /// <remarks>
-    /// Every served instance is asked, not only the drifted ones. A folder whose file still matches
+    /// Every served game is asked, not only the drifted ones. A folder whose file still matches
     /// its manifest exactly is the <em>worst</em> case here, not the safe one: it means nothing has
     /// noticed, and under hardlinking that file is the blob that just failed.
     /// </remarks>
@@ -122,27 +122,27 @@ public sealed class ContentStoreMaintenance(
         var bad = new HashSet<string>(corrupt, StringComparer.OrdinalIgnoreCase);
         var affected = new List<AffectedModFolder>();
 
-        foreach (var instance in instanceModFolders.GetAll())
+        foreach (var game in modFolders.GetAll())
         {
             try
             {
-                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(instance.ModFolder).RootPath, store.RootPath) is false)
+                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, store.RootPath) is false)
                 {
                     continue;
                 }
 
-                var manifest = manifestStore.TryRead(instance.InstanceId);
+                var manifest = manifestStore.TryRead(game.InstanceId);
                 var hits = manifest?.Entries.Count(x => bad.Contains(x.ContentHash)) ?? 0;
 
                 if (hits > 0)
                 {
-                    affected.Add(new AffectedModFolder(instance.ModFolder, manifest?.ProfileName, hits));
+                    affected.Add(new AffectedModFolder(game.ModFolder, manifest?.ProfileName, hits));
                 }
             }
             catch (Exception exception)
             {
-                // One instance that cannot be resolved costs its name in the report, not the report.
-                logger.LogDebug(exception, "Could not tell whether instance {Instance} is running a bad blob.", instance.InstanceId);
+                // One game that cannot be resolved costs its name in the report, not the report.
+                logger.LogDebug(exception, "Could not tell whether game {Game} is running a bad blob.", game.InstanceId);
             }
         }
 
@@ -163,25 +163,25 @@ public sealed class ContentStoreMaintenance(
     {
         var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var instance in instanceModFolders.GetAll())
+        foreach (var game in modFolders.GetAll())
         {
             try
             {
-                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(instance.ModFolder).RootPath, store.RootPath) is false)
+                if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, store.RootPath) is false)
                 {
                     continue;
                 }
 
-                foreach (var entry in manifestStore.TryRead(instance.InstanceId)?.Entries ?? [])
+                foreach (var entry in manifestStore.TryRead(game.InstanceId)?.Entries ?? [])
                 {
                     pinned.Add(entry.ContentHash);
                 }
             }
             catch (Exception exception)
             {
-                // An instance whose folder cannot be resolved to a store contributes no pins, which
+                // A game whose folder cannot be resolved to a store contributes no pins, which
                 // costs a possible re-download rather than a failed sweep.
-                logger.LogDebug(exception, "Could not read what instance {Instance} is running.", instance.InstanceId);
+                logger.LogDebug(exception, "Could not read what game {Game} is running.", game.InstanceId);
             }
         }
 

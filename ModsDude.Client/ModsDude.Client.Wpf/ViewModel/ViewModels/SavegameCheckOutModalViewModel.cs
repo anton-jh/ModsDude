@@ -48,7 +48,7 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 
 
 /// <summary>
-/// Everything the dialog needs about one instance. Recomputed when the instance selection changes,
+/// Everything the dialog needs about one game. Recomputed when the game selection changes,
 /// because the slots, the mod plan and the revision note are all facts about a particular folder.
 /// </summary>
 /// <param name="RunsOn">
@@ -57,7 +57,7 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 /// follows no mod list.
 /// </param>
 public sealed record SavegameCheckOutContext(
-    LocalInstance Instance,
+    Game Game,
     IReadOnlyList<SavegameSlotOptionViewModel> Slots,
     SavegameSlotId? Suggested,
     string? SlotNote,
@@ -67,13 +67,13 @@ public sealed record SavegameCheckOutContext(
 
 
 /// <summary>
-/// The one confirmation a check-out gets, carrying four sections - mods, instance, slot, revision -
+/// The one confirmation a check-out gets, carrying four sections - mods, game, slot, revision -
 /// each of which disappears when it has nothing to say.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>The common case is a name, a slot and one button.</b> That is the whole design: an ordinary
-/// evening, where the mods are already right and there is one instance and a free slot, must not read
+/// evening, where the mods are already right and there is one game and a free slot, must not read
 /// like a form. Everything here is either an answer the user has to give or a consequence they have
 /// to see, and anything that is neither is absent rather than greyed out.
 /// </para>
@@ -91,7 +91,7 @@ public sealed record SavegameCheckOutContext(
 /// </remarks>
 public partial class SavegameCheckOutModalViewModel : ModalViewModel
 {
-    private readonly Func<LocalInstance, CancellationToken, Task<SavegameCheckOutContext>> _load;
+    private readonly Func<Game, CancellationToken, Task<SavegameCheckOutContext>> _load;
     private readonly int _headVersion;
 
     private bool _reloading;
@@ -107,9 +107,9 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         string profileName,
         int versionNumber,
         int headVersion,
-        IReadOnlyList<LocalInstance> instances,
+        IReadOnlyList<Game> games,
         SavegameCheckOutContext context,
-        Func<LocalInstance, CancellationToken, Task<SavegameCheckOutContext>> load)
+        Func<Game, CancellationToken, Task<SavegameCheckOutContext>> load)
     {
         Mode = mode;
         SavegameName = savegameName;
@@ -118,10 +118,10 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         _headVersion = headVersion;
         _load = load;
 
-        Instances = [.. instances];
+        Games = [.. games];
         Slots = [];
 
-        _selectedInstance = context.Instance;
+        _selectedGame = context.Game;
 
         Apply(context);
     }
@@ -158,12 +158,12 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         }
     }
 
-    /// <summary>Every instance this repo offers. The section is absent where there is one.</summary>
-    public IReadOnlyList<LocalInstance> Instances { get; }
+    /// <summary>Every game this repo offers. The section is absent where there is one.</summary>
+    public IReadOnlyList<Game> Games { get; }
 
     public ObservableCollection<SavegameSlotOptionViewModel> Slots { get; }
 
-    /// <summary>The chosen instance and slot, or null where the dialog was dismissed.</summary>
+    /// <summary>The chosen game and slot, or null where the dialog was dismissed.</summary>
     public SavegameCheckOutResult? Result { get; private set; }
 
     /// <summary>
@@ -176,7 +176,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowInstanceSection))]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    private LocalInstance? _selectedInstance;
+    private Game? _selectedGame;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSlotRefused))]
@@ -229,8 +229,8 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     private bool _isBusy;
 
 
-    /// <summary>Absent where the repo offers one instance - there is nothing to ask.</summary>
-    public bool ShowInstanceSection => Instances.Count > 1;
+    /// <summary>Absent where the repo offers one game - there is nothing to ask.</summary>
+    public bool ShowInstanceSection => Games.Count > 1;
 
     public bool ShowModsSection => Mods is not null;
 
@@ -292,17 +292,17 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     [RelayCommand(CanExecute = nameof(CanConfirm))]
     private void Confirm()
     {
-        if (SelectedInstance is not LocalInstance instance || SelectedSlot is not SavegameSlotOptionViewModel slot)
+        if (SelectedGame is not Game game || SelectedSlot is not SavegameSlotOptionViewModel slot)
         {
             return;
         }
 
-        Result = new SavegameCheckOutResult(instance, slot);
+        Result = new SavegameCheckOutResult(game, slot);
         Done = true;
     }
 
     private bool CanConfirm()
-        => IsBusy is false && SelectedInstance is not null && SelectedSlot is { IsRefused: false };
+        => IsBusy is false && SelectedGame is not null && SelectedSlot is { IsRefused: false };
 
     /// <summary>
     /// The one action a refused slot offers. It closes this dialog rather than checking in behind it:
@@ -330,11 +330,11 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 
 
     /// <summary>
-    /// A different instance is a different folder, so every section is re-read rather than patched.
-    /// The guard is what stops the reload's own write to <see cref="SelectedInstance"/> - when the
+    /// A different game is a different folder, so every section is re-read rather than patched.
+    /// The guard is what stops the reload's own write to <see cref="SelectedGame"/> - when the
     /// load fails and the selection is put back - from starting another one.
     /// </summary>
-    partial void OnSelectedInstanceChanged(LocalInstance? value)
+    partial void OnSelectedGameChanged(Game? value)
     {
         if (_reloading || value is null)
         {
@@ -344,13 +344,13 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         _ = ReloadAsync(value);
     }
 
-    private async Task ReloadAsync(LocalInstance instance)
+    private async Task ReloadAsync(Game game)
     {
         IsBusy = true;
 
         try
         {
-            Apply(await _load(instance, CancellationToken.None));
+            Apply(await _load(game, CancellationToken.None));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -362,7 +362,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
             {
                 Slots.Clear();
                 SelectedSlot = null;
-                SlotNote = $"'{instance.Name}' could not be read: {exception.Message}";
+                SlotNote = $"'{game.Name}' could not be read: {exception.Message}";
                 ShowAllSlots = true;
             }
             finally
@@ -382,7 +382,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 
         try
         {
-            SelectedInstance = context.Instance;
+            SelectedGame = context.Game;
 
             Slots.Clear();
 
@@ -420,5 +420,5 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 }
 
 
-/// <summary>What the dialog settled: which instance, and which slot in it.</summary>
-public sealed record SavegameCheckOutResult(LocalInstance Instance, SavegameSlotOptionViewModel Slot);
+/// <summary>What the dialog settled: which game, and which slot in it.</summary>
+public sealed record SavegameCheckOutResult(Game Game, SavegameSlotOptionViewModel Slot);

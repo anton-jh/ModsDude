@@ -16,7 +16,7 @@
 
             <StackPanel Grid.Row="0" Orientation="Vertical">
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding InstanceName}" />
+                           Text="{Binding GameName}" />
                 <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
                            Text="{Binding ProfileName}"
                            Margin="0 8 0 24" />

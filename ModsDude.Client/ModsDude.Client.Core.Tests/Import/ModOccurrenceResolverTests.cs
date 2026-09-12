@@ -13,8 +13,8 @@ public class ModOccurrenceResolverTests
     private static readonly ModSource _downloads =
         new(ModSourceId.Downloads, "Downloads", @"C:\Downloads", ModSourceKind.Downloads);
 
-    private static readonly ModSource _instance =
-        new(ModSourceId.ForInstance(Guid.NewGuid()), "FS25", @"C:\FS25\mods", ModSourceKind.Instance);
+    private static readonly ModSource _game =
+        new(ModSourceId.ForInstance(Guid.NewGuid()), "FS25", @"C:\FS25\mods", ModSourceKind.Game);
 
     private static readonly ModSource _added =
         new(ModSourceId.ForFolder(@"D:\Backup"), "Backup", @"D:\Backup", ModSourceKind.AdHoc);
@@ -45,7 +45,7 @@ public class ModOccurrenceResolverTests
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
                 Occurrence(_downloads, "one build"),
-                Occurrence(_instance, "one build"),
+                Occurrence(_game, "one build"),
                 Occurrence(_added, "one build")
             ],
             CancellationToken.None);
@@ -62,7 +62,7 @@ public class ModOccurrenceResolverTests
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
                 Occurrence(_downloads, "one build"),
-                Occurrence(_instance, "another build")
+                Occurrence(_game, "another build")
             ],
             CancellationToken.None);
 
@@ -80,7 +80,7 @@ public class ModOccurrenceResolverTests
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
                 Occurrence(_downloads, "aaaa"),
-                Occurrence(_instance, "bbbb")
+                Occurrence(_game, "bbbb")
             ],
             CancellationToken.None);
 
@@ -97,13 +97,13 @@ public class ModOccurrenceResolverTests
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
                 new ModOccurrence(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
-                Occurrence(_instance, "one build")
+                Occurrence(_game, "one build")
             ],
             CancellationToken.None);
 
         var candidate = Assert.Single(candidates);
 
-        Assert.Equal(_instance, candidate.Primary.Source);
+        Assert.Equal(_game, candidate.Primary.Source);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class ModOccurrenceResolverTests
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
                 new ModOccurrence(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
-                new ModOccurrence(_instance, @"C:\FS25\mods\gone.zip", 9, () => throw new IOException())
+                new ModOccurrence(_game, @"C:\FS25\mods\gone.zip", 9, () => throw new IOException())
             ],
             CancellationToken.None);
 

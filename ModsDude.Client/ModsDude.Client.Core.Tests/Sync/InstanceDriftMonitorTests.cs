@@ -54,7 +54,7 @@ public class InstanceDriftMonitorTests
     }
 
     [Fact]
-    public void An_instance_on_the_profiles_current_revision_is_not_drifted_by_that()
+    public void An_game_on_the_profiles_current_revision_is_not_drifted_by_that()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(8, ("fs25_a.zip", "one"));
@@ -66,14 +66,14 @@ public class InstanceDriftMonitorTests
     }
 
     /// <summary>
-    /// An instance holding a past savegame is behind head <em>by construction</em> - that savegame's
+    /// A game holding a past savegame is behind head <em>by construction</em> - that savegame's
     /// revision does not move - so comparing it against head would report drift permanently, and offer
     /// a re-apply to head that the apply table refuses. The comparison is against the revision the
     /// savegame targets instead, and nothing is suppressed to achieve it: it comes out equal on its
     /// own.
     /// </summary>
     [Fact]
-    public void An_instance_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
+    public void An_game_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));
@@ -124,7 +124,7 @@ public class InstanceDriftMonitorTests
 
     /// <summary>
     /// A manifest written before profiles had revisions records none. That is "not recorded", which
-    /// says nothing about the folder - and must not turn every pre-existing instance into drift on
+    /// says nothing about the folder - and must not turn every pre-existing game into drift on
     /// the first launch after the upgrade.
     /// </summary>
     [Fact]
@@ -287,7 +287,7 @@ public class InstanceDriftMonitorTests
     }
 
     [Fact]
-    public void An_instance_with_no_active_profile_is_not_checked_at_all()
+    public void An_game_with_no_active_profile_is_not_checked_at_all()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -301,7 +301,7 @@ public class InstanceDriftMonitorTests
     }
 
     [Fact]
-    public void The_drifted_instance_carries_the_profile_name_the_manifest_recorded()
+    public void The_drifted_game_carries_the_profile_name_the_manifest_recorded()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -478,7 +478,7 @@ public class InstanceDriftMonitorTests
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();
 
-        /// <summary>Holding nothing by default, which is nearly every instance nearly all the time.</summary>
+        /// <summary>Holding nothing by default, which is nearly every game nearly all the time.</summary>
         public FakeHeldSavegames Held { get; }
 
         public InstanceDriftMonitor Monitor { get; }

@@ -405,7 +405,7 @@
                         </Grid>
 
                         <!-- The sources feed this list and nothing else, so they sit under it.
-                             Disabling an instance here says nothing about syncing to it. -->
+                             Disabling a game here says nothing about syncing to it. -->
                         <!-- Not collapsible. Sources start switched off, so the one control that
                              explains why the left list is empty is exactly the one a collapsed pane
                              would hide. -->

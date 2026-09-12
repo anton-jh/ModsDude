@@ -135,15 +135,15 @@ public partial class App : Application
         services.AddSingleton<ProfileModsEditorPageViewModel.Factory>();
         services.AddSingleton<ProfileModsPageViewModel.Factory>();
         services.AddSingleton<ProfileHistoryPageViewModel.Factory>();
-        services.AddSingleton<CreateLocalInstancePageViewModel.Factory>();
-        services.AddSingleton<EditLocalInstancePageViewModel.Factory>();
-        services.AddSingleton<InstancePageViewModel.Factory>();
+        services.AddSingleton<ConnectGamePageViewModel.Factory>();
+        services.AddSingleton<GameSettingsPageViewModel.Factory>();
+        services.AddSingleton<GamePageViewModel.Factory>();
         services.AddSingleton<SyncPageViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
         services.AddSingleton<RepoArchivePageViewModel.Factory>();
         services.AddFactory<ArchivePageViewModel>();
-        services.AddSingleton<InstanceSavegamesPageViewModel.Factory>();
+        services.AddSingleton<GameSavegamesPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
@@ -204,14 +204,14 @@ public partial class App : Application
         services.AddSingleton<MembershipService>();
         services.AddSingleton<InviteService>();
         services.AddSingleton<CurrentUserService>();
-        services.AddSingleton<LocalInstanceRepository>();
+        services.AddSingleton<GameRepository>();
 
-        // Sync's store eviction has to spare what other instances are running, and the instance list
+        // Sync's store eviction has to spare what other games are running, and the game list
         // is the only thing that knows which folders those are.
-        services.AddSingleton<IInstanceModFolders>(sp => sp.GetRequiredService<LocalInstanceRepository>());
+        services.AddSingleton<IModFolders>(sp => sp.GetRequiredService<GameRepository>());
 
         // The drift monitor asks the same list for the folder and the standing intent behind each one.
-        services.AddSingleton<IDriftCandidateSource>(sp => sp.GetRequiredService<LocalInstanceRepository>());
+        services.AddSingleton<IDriftCandidateSource>(sp => sp.GetRequiredService<GameRepository>());
         services.AddSingleton<ClientSettingsRepository>();
         // A catalog is created per surface and disposed with it, so its per-source scan cache lives
         // exactly as long as the page whose checkboxes recompose from it.

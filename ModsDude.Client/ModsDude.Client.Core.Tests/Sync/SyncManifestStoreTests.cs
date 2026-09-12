@@ -32,9 +32,9 @@ public class SyncManifestStoreTests
     }
 
     [Fact]
-    public void One_file_per_instance_beside_state_json()
+    public void One_file_per_game_beside_state_json()
     {
-        using var directory = new TempDirectory("manifests-per-instance");
+        using var directory = new TempDirectory("manifests-per-game");
         var store = new SyncManifestStore(directory.Path);
 
         var first = Manifest(Guid.NewGuid(), "C:\\one", []);

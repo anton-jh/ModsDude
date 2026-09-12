@@ -40,7 +40,7 @@ public class RepoItemViewModel
     /// <remarks>
     /// <b>Not observable, because it cannot change.</b> The adapter's game discriminator is the one
     /// base setting deliberately not marked <c>[CanBeModified]</c> - an FS22 repo cannot become an
-    /// FS25 one, since that would orphan every instance on every member's machine - so an entry never
+    /// FS25 one, since that would orphan every game on every member's machine - so an entry never
     /// moves between groups and there is nothing for the grouping to have to react to.
     /// </remarks>
     public string GameName => _repo.Adapter.GameDisplayName;

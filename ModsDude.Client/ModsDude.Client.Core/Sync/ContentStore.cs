@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
 /// One volume's content-addressed store of mod files: <c>{root}/blobs/{hash[0..2]}/{hash}</c>,
-/// shared by every repo and instance it serves.
+/// shared by every repo and game it serves.
 /// </summary>
 /// <remarks>
 /// <para>

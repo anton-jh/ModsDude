@@ -175,7 +175,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeInstanceModFolders(new InstanceModFolder(_instanceId, modFolder)),
+            new FakeModFolders(new InstanceModFolder(_instanceId, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 
@@ -204,7 +204,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeInstanceModFolders(new InstanceModFolder(_instanceId, modFolder)),
+            new FakeModFolders(new InstanceModFolder(_instanceId, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 

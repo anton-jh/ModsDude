@@ -34,7 +34,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     private int _revisionsBehind;
     private bool _lockedPinMoved;
 
-    private SavegameRowOffer _offer = new(SavegameRowBlock.NoInstance, SavegameRowBlock.NoInstance, Guid.Empty, null);
+    private SavegameRowOffer _offer = new(SavegameRowBlock.NoGame, SavegameRowBlock.NoGame, Guid.Empty, null);
     private string? _blockingSavegameName;
 
 
@@ -129,11 +129,11 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// The installation both buttons act on, decided by the page.
     /// </summary>
     /// <remarks>
-    /// Held here rather than worked out at the click, so the instance the refusal is about is the
-    /// instance the action runs against. Two answers to "where would this go" is how a row comes to
+    /// Held here rather than worked out at the click, so the game the refusal is about is the
+    /// game the action runs against. Two answers to "where would this go" is how a row comes to
     /// explain one folder and act on another.
     /// </remarks>
-    public LocalInstance? Host { get; set; }
+    public Game? Host { get; set; }
 
     /// <summary>
     /// The installation on this machine whose slot actually holds this savegame, or null where none
@@ -141,13 +141,13 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <b>A different question from <see cref="Host"/>, and not interchangeable with it.</b> Host is
-    /// where a check-out <em>would</em> write, chosen by the page from whichever instance can accept
+    /// where a check-out <em>would</em> write, chosen by the page from whichever game can accept
     /// one; this is where the copy already is, and a check-in has no choice about it at all - a save
     /// is handed back from the slot it is in or not handed back here. The two differ the moment a
-    /// check-out would rather use some other instance, and swapping them is how a row comes to check
+    /// check-out would rather use some other game, and swapping them is how a row comes to check
     /// one machine's copy in against another machine's folder.
     /// </remarks>
-    public LocalInstance? HeldHere { get; private set; }
+    public Game? HeldHere { get; private set; }
 
     public bool IsHeldHere => HeldHere is not null;
 
@@ -261,7 +261,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Hands the save back from the slot holding it, as a new version.
     /// </summary>
     /// <remarks>
-    /// The same flow the instance's own slot list runs, reached from here because this is the list
+    /// The same flow the game's own slot list runs, reached from here because this is the list
     /// somebody is looking at when they finish an evening - and a row saying "You have it" whose only
     /// button offered to take it again was the thing that sent them hunting for the other page.
     /// </remarks>
@@ -319,7 +319,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// Arrives from outside for the same reason the drift chips do: none of it is a fact about the
-    /// savegame. It needs the instances this repo offers, what each one is holding and what its mod
+    /// savegame. It needs the games this repo offers, what each one is holding and what its mod
     /// folder was last synced to - none of which a row has or should have.
     /// </remarks>
     /// <param name="blockingSavegameName">
@@ -332,17 +332,17 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// Arrives from outside for the same reason the offer does: it is not a fact about the savegame.
-    /// It needs every instance this repo offers and what each one's binding store says it is holding,
+    /// It needs every game this repo offers and what each one's binding store says it is holding,
     /// none of which a row has.
     /// </remarks>
-    public void SetHeldHere(LocalInstance? instance)
+    public void SetHeldHere(Game? game)
     {
-        if (ReferenceEquals(HeldHere, instance))
+        if (ReferenceEquals(HeldHere, game))
         {
             return;
         }
 
-        HeldHere = instance;
+        HeldHere = game;
 
         OnPropertyChanged(nameof(HeldHere));
         OnPropertyChanged(nameof(IsHeldHere));

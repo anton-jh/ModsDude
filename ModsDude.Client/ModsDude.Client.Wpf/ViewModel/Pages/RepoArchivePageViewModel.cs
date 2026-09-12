@@ -35,7 +35,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 {
     private readonly Repo _repo;
     private readonly ProfileService _profileService;
-    private readonly LocalInstanceRepository _localInstances;
+    private readonly GameRepository _games;
     private readonly ISavegamesClient _savegamesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -51,14 +51,14 @@ public partial class RepoArchivePageViewModel : PageViewModel
     public RepoArchivePageViewModel(
         Repo repo,
         ProfileService profileService,
-        LocalInstanceRepository localInstances,
+        GameRepository localInstances,
         ISavegamesClient savegamesClient,
         IModalService modalService,
         IErrorReporter errorReporter)
     {
         _repo = repo;
         _profileService = profileService;
-        _localInstances = localInstances;
+        _games = localInstances;
         _savegamesClient = savegamesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;
@@ -321,13 +321,13 @@ public partial class RepoArchivePageViewModel : PageViewModel
         {
             await _profileService.DeleteProfile(_repo.Id, item.Id, _lifetime.Token);
 
-            // The profile is gone, so no instance can still be pointed at it. Local state, which the
-            // server has no idea about: an instance whose active profile is a dangling id reports
+            // The profile is gone, so no game can still be pointed at it. Local state, which the
+            // server has no idea about: a game whose active profile is a dangling id reports
             // drift against a mod list nobody can read. An *archived* profile is still tracked -
             // this is the deletion letting go, not the archiving.
-            _localInstances.StopTracking(item.Id);
+            _games.StopTracking(item.Id);
 
-            Status = $"'{item.Name}' is gone for good. Any instance that was on it is no longer tracking a profile.";
+            Status = $"'{item.Name}' is gone for good. Any game that was on it is no longer tracking a profile.";
 
             await ReloadAsync();
         }

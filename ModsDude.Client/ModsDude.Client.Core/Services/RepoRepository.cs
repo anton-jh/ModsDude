@@ -8,7 +8,7 @@ namespace ModsDude.Client.Core.Services;
 public class RepoRepository(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
-    LocalInstanceRepository localInstanceRepository)
+    GameRepository gameRepository)
     : IUserScopedState
 {
     public delegate void RepoCreatedEventHandler(Guid repoId);
@@ -30,7 +30,7 @@ public class RepoRepository(
 
         // Reconciled rather than rebuilt. Clearing would discard every menu entry and every open
         // page built from these repos, and each Repo holds a synchronizer subscribed to the
-        // machine's instance list that has to be disposed exactly when the repo really goes away.
+        // machine's game list that has to be disposed exactly when the repo really goes away.
         for (var i = Repos.Count - 1; i >= 0; i--)
         {
             if (!byId.ContainsKey(Repos[i].Id))
@@ -182,6 +182,6 @@ public class RepoRepository(
 
     private Repo MapRepoModel(RepoMembershipDto repoMembership)
     {
-        return new Repo(repoMembership, gameAdapterIndex, this, localInstanceRepository);
+        return new Repo(repoMembership, gameAdapterIndex, this, gameRepository);
     }
 }

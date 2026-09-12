@@ -4,7 +4,7 @@ using ModsDude.Client.Core.Savegames;
 namespace ModsDude.Client.Core.Tests.Savegames;
 
 /// <summary>
-/// The apply table, the revision a hold pins the folder to, and the one-mod-list-per-instance limit.
+/// The apply table, the revision a hold pins the folder to, and the one-mod-list-per-game limit.
 /// </summary>
 public class SavegameHoldRulesTests
 {
@@ -14,7 +14,7 @@ public class SavegameHoldRulesTests
 
 
     [Fact]
-    public void An_instance_holding_nothing_constrains_nothing()
+    public void An_game_holding_nothing_constrains_nothing()
     {
         Assert.Null(SavegameHoldRules.RequiredRevision([], _profileId));
         Assert.True(SavegameHoldRules.DecideApply([], _profileId, 1004).IsAllowed);
@@ -103,7 +103,7 @@ public class SavegameHoldRulesTests
     }
 
     /// <summary>
-    /// Checking out something this instance already holds moves it to another slot rather than making
+    /// Checking out something this game already holds moves it to another slot rather than making
     /// it two - so it is not its own conflict.
     /// </summary>
     [Fact]

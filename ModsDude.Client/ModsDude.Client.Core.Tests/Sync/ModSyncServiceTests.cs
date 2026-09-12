@@ -93,7 +93,7 @@ public class ModSyncServiceTests
         Assert.False(result.Completed);
         Assert.Single(result.Failures);
 
-        // The destructive phase never ran, so the instance is exactly as it was - the mod that was on
+        // The destructive phase never ran, so the game is exactly as it was - the mod that was on
         // its way out is still installed, and nothing new is.
         Assert.True(File.Exists(fixture.Folder.Combine("fs25_old.zip")));
         Assert.False(File.Exists(fixture.Folder.Combine("fs25_a.zip")));
@@ -447,7 +447,7 @@ public class ModSyncServiceTests
 
 
     /// <summary>
-    /// Head is what an instance following its profile wants, and asking for nothing is how the client
+    /// Head is what a game following its profile wants, and asking for nothing is how the client
     /// says so. The endpoint has served any revision all along; this is only the client no longer
     /// insisting.
     /// </summary>
@@ -469,7 +469,7 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
-    /// The other half: an instance that has to stay on an older list - one holding a past savegame,
+    /// The other half: a game that has to stay on an older list - one holding a past savegame,
     /// whose revision does not move - gets that revision installed and recorded, rather than being
     /// quietly taken to head by the only apply the client used to know how to do.
     /// </summary>
@@ -544,12 +544,12 @@ public class ModSyncServiceTests
 
     /// <summary>
     /// <b>The apply that would take a savegame off its mod list, resolved rather than refused.</b> An
-    /// instance holding a past savegame is pinned to that savegame's revision, and every caller asks for
+    /// game holding a past savegame is pinned to that savegame's revision, and every caller asks for
     /// nothing in particular - so the one place all of them pass through is where head stops being the
     /// answer. Nobody had to know a savegame was involved.
     /// </summary>
     [Fact]
-    public async Task An_instance_holding_a_past_savegame_gets_its_revision_rather_than_head()
+    public async Task An_game_holding_a_past_savegame_gets_its_revision_rather_than_head()
     {
         using var fixture = new SyncFixture();
         fixture.Server.HeadRevision = 1004;
@@ -563,13 +563,13 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(plan);
 
-        // Which is then what the drift check compares against, so the instance is not permanently
+        // Which is then what the drift check compares against, so the game is not permanently
         // behind head by construction.
         Assert.Equal(4, fixture.Manifests.TryRead(fixture.InstanceId)?.ProfileRevision);
     }
 
     /// <summary>
-    /// A caller that names a revision has said something the instance cannot know better than - the
+    /// A caller that names a revision has said something the game cannot know better than - the
     /// check-out dialog previewing a savegame nothing is holding yet - so it is taken at its word, and
     /// then checked against what <em>is</em> held.
     /// </summary>
@@ -605,8 +605,8 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
-    /// A savegame following no mod list claims nothing about the folder, so an instance holding one is
-    /// an instance holding nothing as far as any of this is concerned.
+    /// A savegame following no mod list claims nothing about the folder, so a game holding one is
+    /// a game holding nothing as far as any of this is concerned.
     /// </summary>
     [Fact]
     public async Task A_held_savegame_with_no_profile_constrains_no_apply()
@@ -673,7 +673,7 @@ public class ModSyncServiceTests
                 new FakeStoreProvider(ServingStore, OtherStore),
                 Manifests,
                 RecycleBin,
-                new FakeInstanceModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
+                new FakeModFolders(new InstanceModFolder(InstanceId, Folder.Path)),
                 Held,
                 NullLogger<ModSyncService>.Instance);
         }

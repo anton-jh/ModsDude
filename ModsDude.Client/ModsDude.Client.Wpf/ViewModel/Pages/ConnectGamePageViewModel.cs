@@ -8,33 +8,33 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
-public partial class CreateLocalInstancePageViewModel
+public partial class ConnectGamePageViewModel
     : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly HashSet<string> _takenNames;
 
 
-    public CreateLocalInstancePageViewModel(
+    public ConnectGamePageViewModel(
         Repo repo,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         IDialogService dialogService,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
-        // Names are unique within the scope, not within the repo: the same instances are offered
+        // Names are unique within the scope, not within the repo: the same games are offered
         // under every repo targeting this game.
-        var instancesInScope = localInstanceRepository.GetByScope(repo.Scope).ToList();
+        var gamesInScope = gameRepository.GetByScope(repo.Scope).ToList();
 
-        _name = instancesInScope.Count == 0 ? "Game" : "";
+        _name = gamesInScope.Count == 0 ? "Game" : "";
         _repo = repo;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
-        _takenNames = instancesInScope.Select(x => x.Name).Distinct().ToHashSet();
+        _takenNames = gamesInScope.Select(x => x.Name).Distinct().ToHashSet();
         RepoName = _repo.Name;
 
         LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
@@ -63,7 +63,7 @@ public partial class CreateLocalInstancePageViewModel
             return;
         }
 
-        _localInstanceRepository.Create(_repo.Adapter, Name, LocalSettingsEditor.ExtractResults());
+        _gameRepository.Create(_repo.Adapter, Name, LocalSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -83,14 +83,14 @@ public partial class CreateLocalInstancePageViewModel
     }
 
     /// <summary>
-    /// Checked across every scope, since two games' instances can name the same folder and only one
+    /// Checked across every scope, since two games' games can name the same folder and only one
     /// of them can own it. Only asked of settings that are valid in their own right - the adapter
     /// refuses to hydrate anything else.
     /// </summary>
-    private LocalInstance? FindFolderConflict()
+    private Game? FindFolderConflict()
     {
         return LocalSettingsEditor.IsValid
-            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults())
+            ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults())
             : null;
     }
 
@@ -109,7 +109,7 @@ public partial class CreateLocalInstancePageViewModel
 
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
-        if (FindFolderConflict() is LocalInstance owner)
+        if (FindFolderConflict() is Game owner)
         {
             errors.Add($"That folder already belongs to '{owner.Name}'.");
         }
@@ -125,7 +125,7 @@ public partial class CreateLocalInstancePageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public CreateLocalInstancePageViewModel Create(Repo repo)
-            => ActivatorUtilities.CreateInstance<CreateLocalInstancePageViewModel>(serviceProvider, repo);
+        public ConnectGamePageViewModel Create(Repo repo)
+            => ActivatorUtilities.CreateInstance<ConnectGamePageViewModel>(serviceProvider, repo);
     }
 }

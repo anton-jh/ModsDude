@@ -57,7 +57,7 @@ public sealed record SavegamePublishOption(
 /// of somebody else's. This one is only ever reached from a slot, and it names the thing being made.
 /// </para>
 /// <para>
-/// <b>It asks about the profile, and every answer is legitimate.</b> The instance's active one is only
+/// <b>It asks about the profile, and every answer is legitimate.</b> The game's active one is only
 /// the likeliest: a savegame can be published to a list it is not currently on, and to no list at all. The
 /// answer cannot be revised afterwards - nothing moves a savegame between profiles - which is why it
 /// is asked here rather than derived from whatever the folder happens to be on.
@@ -72,7 +72,7 @@ public sealed record SavegamePublishOption(
 public partial class SavegamePublishModalViewModel : ModalViewModel
 {
     /// <param name="preselected">
-    /// The profile to arrive on, or null to arrive on nothing. Null where the instance follows no
+    /// The profile to arrive on, or null to arrive on nothing. Null where the game follows no
     /// profile in this repo: the two defaults available there - the first profile in the list, and no
     /// mod list - are both permanent decisions made on the user's behalf, so the dialog asks instead.
     /// </param>

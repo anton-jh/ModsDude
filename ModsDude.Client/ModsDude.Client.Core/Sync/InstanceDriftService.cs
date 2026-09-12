@@ -13,7 +13,7 @@ public enum InstanceDriftStatus
     /// <summary>Mods were added, removed or replaced since the last sync - or the profile changed underneath it.</summary>
     Drifted,
 
-    /// <summary>Nothing has been applied to this instance yet.</summary>
+    /// <summary>Nothing has been applied to this game yet.</summary>
     NoActiveProfile,
 
     /// <summary>The active profile was deleted, or the user was removed from its repo.</summary>
@@ -86,7 +86,7 @@ public sealed record InstanceDriftReport(
     /// </summary>
     /// <remarks>
     /// A save that changes nothing mints no revision, so a moved number always means a different
-    /// list. Only ever a difference, never a direction: an instance can sit on a newer revision than
+    /// list. Only ever a difference, never a direction: a game can sit on a newer revision than
     /// the client happens to know about, and that is still worth saying.
     /// </remarks>
     public bool ProfileHasMoved => AppliedRevision is int applied
@@ -107,7 +107,7 @@ public sealed record InstanceDriftReport(
     public bool HasLockedDrift => LockedDrift.Count > 0;
 
     /// <summary>
-    /// The savegames this instance is holding that have stopped agreeing with the server.
+    /// The savegames this game is holding that have stopped agreeing with the server.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -120,7 +120,7 @@ public sealed record InstanceDriftReport(
     /// needs the binding store, a hydrated adapter and a full archive pass per held save; this class
     /// is a synchronous comparison of a manifest against a directory listing, and acquiring three
     /// dependencies of a different cost class to fold them into one method would make the cheap check
-    /// expensive for every instance that holds no savegames - which is most of them.
+    /// expensive for every game that holds no savegames - which is most of them.
     /// </para>
     /// </remarks>
     public IReadOnlyList<Savegames.SavegameDrift> SavegameDrift { get; init; } = [];
@@ -133,9 +133,9 @@ public sealed record InstanceDriftReport(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Carried here because this is where the evidence turns up - a changed file in this instance's
-    /// folder - but it is emphatically <b>not a fact about this instance</b>. A store is shared by
-    /// every repo and instance on its volume, so anything named here was being served to all of
+    /// Carried here because this is where the evidence turns up - a changed file in this game's
+    /// folder - but it is emphatically <b>not a fact about this game</b>. A store is shared by
+    /// every repo and game on its volume, so anything named here was being served to all of
     /// them. <see cref="CorruptedBlob.VolumeRoot"/> is on the record so a notice can say that
     /// rather than implying one mod folder is the extent of it.
     /// </para>
@@ -152,7 +152,7 @@ public sealed record InstanceDriftReport(
 
 
 /// <summary>
-/// Whether an instance's mod folder still matches what was applied to it, answered without opening a
+/// Whether a game's mod folder still matches what was applied to it, answered without opening a
 /// single archive.
 /// </summary>
 /// <remarks>
@@ -172,11 +172,11 @@ public sealed class InstanceDriftService(
     ILogger<InstanceDriftService> logger)
 {
     /// <param name="activeProfile">
-    /// The instance's standing intent. Passed rather than read off the instance so this depends on
+    /// The game's standing intent. Passed rather than read off the game so this depends on
     /// the two facts it actually uses and nothing else.
     /// </param>
     /// <param name="modFolder">
-    /// Null where the instance's adapter cannot be hydrated - an instance whose scope no repo on this
+    /// Null where the game's adapter cannot be hydrated - a game whose scope no repo on this
     /// machine serves. Unknown rather than drifted, like any other unreachable folder.
     /// </param>
     /// <param name="profileIsMissing">
@@ -192,10 +192,10 @@ public sealed class InstanceDriftService(
     /// the question unasked rather than answered "unchanged".
     /// </param>
     /// <param name="savegameDrift">
-    /// What the savegame check found for this instance, where the caller ran one. Carried through
+    /// What the savegame check found for this game, where the caller ran one. Carried through
     /// rather than computed here - see <see cref="InstanceDriftReport.SavegameDrift"/> - and attached
     /// to <em>every</em> answer including the ones that stop early: a held savegame with an evening in
-    /// it is worth saying whatever the mod folder turned out to be, and an instance whose profile was
+    /// it is worth saying whatever the mod folder turned out to be, and a game whose profile was
     /// deleted underneath it is precisely a case where somebody wants to hear about their save.
     /// </param>
     public InstanceDriftReport Check(
@@ -362,7 +362,7 @@ public sealed class InstanceDriftService(
 
     /// <summary>
     /// The mod set that was applied against what the profile pins now. Any difference means somebody
-    /// edited the shared profile since this instance synced.
+    /// edited the shared profile since this game synced.
     /// </summary>
     private static (List<ModKey> Changed, List<DriftedLockedMod> Locked) CompareProfile(
         SyncManifest manifest,

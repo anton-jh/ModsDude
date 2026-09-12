@@ -77,7 +77,7 @@ public class ProfileService(
     /// <remarks>
     /// Answered from <see cref="Profiles"/>, which holds one repo at a time, so this is null for
     /// every profile outside the repo the user is standing in - and null on purpose. Going and
-    /// fetching it would put a network round trip per instance into a check that runs on every
+    /// fetching it would put a network round trip per game into a check that runs on every
     /// window activation and is meant to work offline.
     /// </remarks>
     public int? GetHeadRevision(ActiveProfile profile)

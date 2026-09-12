@@ -9,27 +9,27 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The instance's name and adapter settings, and disconnecting it.
+/// The game's name and adapter settings, and disconnecting it.
 /// </summary>
 /// <remarks>
-/// The active profile used to be here too. It is on <see cref="InstancePageViewModel"/> now, beside
+/// The active profile used to be here too. It is on <see cref="GamePageViewModel"/> now, beside
 /// the drift status and the Re-apply it belongs with - and only there, because two places to set one
 /// thing is how they come to disagree.
 /// </remarks>
-public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
+public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly HashSet<string> _takenNames;
-    private readonly LocalInstance _subject;
+    private readonly Game _subject;
     private readonly IModalService _modalService;
 
 
-    public EditLocalInstancePageViewModel(
+    public GameSettingsPageViewModel(
         Repo repo,
-        LocalInstance subject,
-        LocalInstanceRepository localInstanceRepository,
+        Game subject,
+        GameRepository gameRepository,
         IDialogService dialogService,
         IModalService modalService,
         NavigationLockService navigationLockService)
@@ -37,10 +37,10 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         _name = subject.Name;
         _repo = repo;
         _subject = subject;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
-        _takenNames = localInstanceRepository.GetByScope(repo.Scope)
+        _takenNames = gameRepository.GetByScope(repo.Scope)
             .Where(x => x.Id != subject.Id)
             .Select(x => x.Name)
             .Distinct()
@@ -86,7 +86,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
 
         _navigationLockService.ReleaseLock(this);
 
-        _localInstanceRepository.Update(_subject, _repo.Adapter, Name, localSettings);
+        _gameRepository.Update(_subject, _repo.Adapter, Name, localSettings);
     }
 
     [RelayCommand]
@@ -99,7 +99,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
         if (modal.Result == true)
         {
             _navigationLockService.ReleaseLock(this);
-            _localInstanceRepository.Delete(_subject);
+            _gameRepository.Delete(_subject);
         }
     }
 
@@ -123,14 +123,14 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Checked across every scope, since two games' instances can name the same folder and only one
+    /// Checked across every scope, since two games' games can name the same folder and only one
     /// of them can own it. Only asked of settings that are valid in their own right - the adapter
     /// refuses to hydrate anything else.
     /// </summary>
-    private LocalInstance? FindFolderConflict()
+    private Game? FindFolderConflict()
     {
         return LocalSettingsEditor.IsValid
-            ? _localInstanceRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Id)
+            ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Id)
             : null;
     }
 
@@ -149,7 +149,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
 
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
-        if (FindFolderConflict() is LocalInstance owner)
+        if (FindFolderConflict() is Game owner)
         {
             errors.Add($"That folder already belongs to '{owner.Name}'.");
         }
@@ -165,7 +165,7 @@ public partial class EditLocalInstancePageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public EditLocalInstancePageViewModel Create(Repo repo, LocalInstance subject)
-            => ActivatorUtilities.CreateInstance<EditLocalInstancePageViewModel>(serviceProvider, repo, subject);
+        public GameSettingsPageViewModel Create(Repo repo, Game subject)
+            => ActivatorUtilities.CreateInstance<GameSettingsPageViewModel>(serviceProvider, repo, subject);
     }
 }

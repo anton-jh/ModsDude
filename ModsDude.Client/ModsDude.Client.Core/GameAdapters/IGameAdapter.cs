@@ -40,7 +40,7 @@ public interface IBaseGameAdapter : IGameAdapter
     /// </summary>
     /// <remarks>
     /// The counterpart of <see cref="Scope"/> and it must agree with it: the sidebar groups repos by
-    /// this, and two repos in one group whose instances are not interchangeable would be the group
+    /// this, and two repos in one group whose games are not interchangeable would be the group
     /// heading telling a lie. Farming Simulator 22 and 25 share an adapter and are two games, which
     /// is the whole reason this is not just <see cref="IGameAdapter.DisplayName"/>.
     /// </remarks>
@@ -54,7 +54,7 @@ public interface IBaseGameAdapter : IGameAdapter
     /// </summary>
     /// <remarks>
     /// <see cref="GameAdapterId.Id"/> without the compatibility version, deliberately: a repo on
-    /// '@2' still matches instances created under '@1', which is what compatibility versions exist
+    /// '@2' still matches games created under '@1', which is what compatibility versions exist
     /// for.
     /// </remarks>
     GameIdentity Scope => new(Id.Id);
@@ -80,7 +80,7 @@ public interface IBaseModAdapter
     /// </summary>
     /// <remarks>
     /// False when the game or its updater may <b>rewrite a mod file in place</b>, which through a
-    /// hardlink would corrupt the store blob shared with every other repo and instance on that
+    /// hardlink would corrupt the store blob shared with every other repo and game on that
     /// volume. False also means "nobody has checked yet", which is why it is the default: the
     /// failure is silent, the blast radius is every repo on the disk, and a slow sync is visible and
     /// recoverable where a corrupted store is neither. Setting it true is an opt-in that means
@@ -162,7 +162,7 @@ public interface IBaseSavegameAdapter
 public interface ILocalSavegameAdapter : IBaseSavegameAdapter
 {
     /// <summary>
-    /// Every slot this instance has, occupied or not, in the order a picker should show them.
+    /// Every slot this game has, occupied or not, in the order a picker should show them.
     /// </summary>
     /// <remarks>
     /// Reads each occupied slot far enough to name it, because a picker that says "savegame3" is the

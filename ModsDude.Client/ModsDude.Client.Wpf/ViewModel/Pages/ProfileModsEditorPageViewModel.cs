@@ -65,7 +65,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IErrorReporter _errorReporter;
     private readonly IDialogService _dialogService;
     private readonly NavigationLockService _navigationLock;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly DriftNotificationViewModel _driftNotification;
@@ -134,10 +134,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private HashSet<ModKey> _pendingRemovals = [];
 
     /// <summary>
-    /// Tracked rather than re-derived from the repo, so an instance dropped from its list is still
+    /// Tracked rather than re-derived from the repo, so a game dropped from its list is still
     /// unsubscribed from.
     /// </summary>
-    private readonly List<LocalInstance> _watchedInstances = [];
+    private readonly List<Game> _watchedGames = [];
 
     /// <summary>
     /// Set while the list is being rebuilt wholesale - from the server, or by a bulk move. Every add
@@ -167,7 +167,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         IDialogService dialogService,
         NavigationLockService navigationLock,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         ProfileApplyService applyService,
         InstanceDriftMonitor driftMonitor,
         DriftNotificationViewModel driftNotification,
@@ -184,7 +184,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _errorReporter = errorReporter;
         _dialogService = dialogService;
         _navigationLock = navigationLock;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _applyService = applyService;
         _driftMonitor = driftMonitor;
         _driftNotification = driftNotification;
@@ -217,7 +217,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _undoTimer.Tick += (_, _) => BulkUndo = null;
 
-        _repo.LocalInstances.CollectionChanged += OnLocalInstancesChanged;
+        _repo.Games.CollectionChanged += OnLocalInstancesChanged;
         RefreshApplyTargets();
 
         // The one place the app-level drift notice is suppressed: somebody already looking at the
@@ -383,10 +383,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// The instances this save re-applies to: read-only, and only rendered from two upwards. With one
-    /// the word "instance" never appears at all, which is the common case for most games.
+    /// The games this save re-applies to: read-only, and only rendered from two upwards. With one
+    /// the word "game" never appears at all, which is the common case for most games.
     /// </summary>
-    public ObservableCollection<LocalInstance> ApplyTargets { get; } = [];
+    public ObservableCollection<Game> ApplyTargets { get; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveActionText))]
@@ -395,7 +395,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     private int _applyTargetCount;
 
-    /// <summary>What the last save's apply did, per instance.</summary>
+    /// <summary>What the last save's apply did, per game.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasApplyStatus))]
     private string? _applyStatus;
@@ -411,9 +411,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActivationChoice))]
     [NotifyCanExecuteChangedFor(nameof(AcceptActivationOfferCommand))]
-    private LocalInstance? _activationCandidate;
+    private Game? _activationCandidate;
 
-    public ObservableCollection<LocalInstance> ActivationCandidates { get; } = [];
+    public ObservableCollection<Game> ActivationCandidates { get; } = [];
 
     public bool HasActivationOffer => ActivationOffer is not null;
     public bool HasActivationChoice => ActivationCandidates.Count > 1;
@@ -1120,7 +1120,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool CanSaveOnly() => CanSave() && HasApplyTargets;
 
     /// <summary>
-    /// Re-applies to the derived targets. An instance that cannot be applied to right now - a
+    /// Re-applies to the derived targets. A game that cannot be applied to right now - a
     /// dedicated server mid-session, a folder a running game holds - is reported and left drifted,
     /// which the app-level notice already covers. That is a "not now", not a "not this one".
     /// </summary>
@@ -1135,13 +1135,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var messages = new List<string>();
 
-        foreach (var instance in ApplyTargets.ToList())
+        foreach (var game in ApplyTargets.ToList())
         {
-            ApplyStatus = $"Applying to '{instance.Name}'...";
+            ApplyStatus = $"Applying to '{game.Name}'...";
 
             var outcome = await _applyService.ApplyAsync(
                 _repo,
-                instance,
+                game,
                 _profile.Id,
                 _profile.Name,
                 confirmPlan: false,
@@ -1157,33 +1157,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The onboarding case: a profile nothing is using yet. Naming the instance because here that
+    /// The onboarding case: a profile nothing is using yet. Naming the game because here that
     /// genuinely is a choice, and offered afterwards rather than folded into the save.
     /// </summary>
     private void OfferActivation()
     {
         ActivationCandidates.Clear();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            ActivationCandidates.Add(instance);
+            ActivationCandidates.Add(game);
         }
 
         OnPropertyChanged(nameof(HasActivationChoice));
 
         ActivationCandidate = ActivationCandidates.FirstOrDefault();
 
-        ActivationOffer = ActivationCandidate is LocalInstance candidate
+        ActivationOffer = ActivationCandidate is Game candidate
             ? ActivationCandidates.Count == 1
-                ? $"No instance is using this profile. Use it on '{candidate.Name}'?"
-                : "No instance is using this profile. Use it on one of these?"
+                ? $"No game is using this profile. Use it on '{candidate.Name}'?"
+                : "No game is using this profile. Use it on one of these?"
             : null;
     }
 
     [RelayCommand(CanExecute = nameof(CanAcceptActivationOffer))]
     private async Task AcceptActivationOffer(CancellationToken cancellationToken)
     {
-        if (ActivationCandidate is not LocalInstance instance)
+        if (ActivationCandidate is not Game game)
         {
             return;
         }
@@ -1192,7 +1192,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var outcome = await _applyService.ApplyAsync(
             _repo,
-            instance,
+            game,
             _profile.Id,
             _profile.Name,
             // A mode change, not a re-apply: what the previous profile put in that folder comes back
@@ -1203,7 +1203,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (outcome.RecordsIntent)
         {
-            _localInstanceRepository.SetActiveProfile(instance, _activeProfile);
+            _gameRepository.SetActiveProfile(game, _activeProfile);
             RefreshApplyTargets();
         }
 
@@ -1261,7 +1261,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // So the import leaves the store warm: what is uploaded from a folder the game does not
             // read is copied into the store these folders are served by, and the apply that follows
             // this save finds it there instead of downloading it back.
-            ModFolders = [.. _repo.LocalInstances.Select(x => x.ModFolder).OfType<string>()]
+            ModFolders = [.. _repo.Games.Select(x => x.ModFolder).OfType<string>()]
         };
 
         // The overload that invalidates the catalog afterwards: a partly failed import still
@@ -1750,7 +1750,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// Switches on the mod folder of one instance, for a page opened <i>at</i> that folder rather
+    /// Switches on the mod folder of one game, for a page opened <i>at</i> that folder rather
     /// than merely opened - which today means arriving from the drift notice.
     /// </summary>
     /// <remarks>
@@ -1790,14 +1790,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             row.PropertyChanged -= OnPinnedRowChanged;
         }
 
-        _repo.LocalInstances.CollectionChanged -= OnLocalInstancesChanged;
+        _repo.Games.CollectionChanged -= OnLocalInstancesChanged;
 
-        foreach (var instance in _watchedInstances)
+        foreach (var game in _watchedGames)
         {
-            instance.PropertyChanged -= OnInstanceChanged;
+            game.PropertyChanged -= OnInstanceChanged;
         }
 
-        _watchedInstances.Clear();
+        _watchedGames.Clear();
 
         // Deliberately not disposed: the wait may still be inside the token's registration, and
         // disposing a source out from under that is not safe. Nothing here holds a wait handle.
@@ -1813,36 +1813,36 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void OnInstanceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(LocalInstance.ActiveProfile))
+        if (e.PropertyName == nameof(Game.ActiveProfile))
         {
             RefreshApplyTargets();
         }
     }
 
     /// <summary>
-    /// Derived from the instances' own standing intent, every time it could have moved. The count is
+    /// Derived from the games' own standing intent, every time it could have moved. The count is
     /// what the primary button says, so being a step behind would mislabel it.
     /// </summary>
     private void RefreshApplyTargets()
     {
-        foreach (var instance in _watchedInstances)
+        foreach (var game in _watchedGames)
         {
-            instance.PropertyChanged -= OnInstanceChanged;
+            game.PropertyChanged -= OnInstanceChanged;
         }
 
-        _watchedInstances.Clear();
+        _watchedGames.Clear();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            instance.PropertyChanged += OnInstanceChanged;
-            _watchedInstances.Add(instance);
+            game.PropertyChanged += OnInstanceChanged;
+            _watchedGames.Add(game);
         }
 
         ApplyTargets.Clear();
 
-        foreach (var instance in _localInstanceRepository.GetInstancesUsing(_activeProfile))
+        foreach (var game in _gameRepository.GetGamesUsing(_activeProfile))
         {
-            ApplyTargets.Add(instance);
+            ApplyTargets.Add(game);
         }
 
         ApplyTargetCount = ApplyTargets.Count;
@@ -2400,7 +2400,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public class Factory(IServiceProvider serviceProvider)
     {
         /// <param name="scanInstanceId">
-        /// An instance whose mod folder should be scanned from the start. Null for an ordinary
+        /// A game whose mod folder should be scanned from the start. Null for an ordinary
         /// navigation, which reads no disk at all until the user ticks a source.
         /// </param>
         public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, Guid? scanInstanceId = null)

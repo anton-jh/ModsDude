@@ -13,11 +13,11 @@ using System.Windows.Shapes;
 
 namespace ModsDude.Client.Wpf.View.Pages;
 /// <summary>
-/// Interaction logic for EditLocalInstancePage.xaml
+/// Interaction logic for GameSettingsPage.xaml
 /// </summary>
-public partial class EditLocalInstancePage : Page
+public partial class GameSettingsPage : Page
 {
-    public EditLocalInstancePage()
+    public GameSettingsPage()
     {
         InitializeComponent();
     }

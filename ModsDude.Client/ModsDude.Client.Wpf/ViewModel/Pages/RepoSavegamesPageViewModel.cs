@@ -45,7 +45,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly CurrentUserService _currentUserService;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly ModSyncService _syncService;
     private readonly InstanceDriftMonitor _driftMonitor;
@@ -77,7 +77,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         CurrentUserService currentUserService,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         ProfileApplyService applyService,
         ModSyncService syncService,
         InstanceDriftMonitor driftMonitor,
@@ -99,7 +99,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _bindingStore = bindingStore;
         _profileService = profileService;
         _currentUserService = currentUserService;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _applyService = applyService;
         _syncService = syncService;
         _driftMonitor = driftMonitor;
@@ -565,7 +565,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var ambiguous = UserDisplay.FindAmbiguous(
             savegames.Select(x => x.Checkout?.User).OfType<UserDto>());
 
-        // One read of each instance's folder state for the whole list, rather than one per row: a
+        // One read of each game's folder state for the whole list, rather than one per row: a
         // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
         // parses of it.
         var hosts = ReadHosts();
@@ -648,20 +648,20 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Every instance this repo offers, with what it is holding and what its mod folder was last
+    /// Every game this repo offers, with what it is holding and what its mod folder was last
     /// synced to - the two facts <see cref="SavegameRowRules.Describe"/> needs about a host.
     /// </summary>
     private IReadOnlyList<SavegameHost> ReadHosts()
     {
         var hosts = new List<SavegameHost>();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            var manifest = _manifestStore.TryRead(instance.Id);
+            var manifest = _manifestStore.TryRead(game.Id);
 
             hosts.Add(new SavegameHost(
-                instance,
-                _bindingStore.GetBindings(instance.Id),
+                game,
+                _bindingStore.GetBindings(game.Id),
                 manifest?.ProfileId,
                 manifest?.ProfileRevision));
         }
@@ -670,10 +670,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Tells a row which instance its two buttons act on and what they can do there.
+    /// Tells a row which game its two buttons act on and what they can do there.
     /// </summary>
     /// <remarks>
-    /// <b>The instance that could host it now wins.</b> That is the whole question the row is
+    /// <b>The game that could host it now wins.</b> That is the whole question the row is
     /// answering - the buttons either work or they carry a sentence saying what would make them work -
     /// and choosing one that refuses while another would accept turns a one-click evening into a
     /// puzzle. Failing that, the one already following this save's profile, whose folder is the
@@ -683,17 +683,17 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private void Offer(SavegameListItemViewModel row, IReadOnlyList<SavegameHost> hosts)
     {
         // Answered across every host and before the loop below, which returns the moment it finds an
-        // instance that would accept a check-out. Where the copy is is not that question and cannot
-        // share its search: the instance holding a save is routinely the one a check-out likes least,
+        // game that would accept a check-out. Where the copy is is not that question and cannot
+        // share its search: the game holding a save is routinely the one a check-out likes least,
         // since the folder it is on belongs to the save already in it.
         row.SetHeldHere(hosts
             .FirstOrDefault(x => x.Held.Any(y => y.SavegameId == row.Id))
-            ?.Instance);
+            ?.Game);
 
         if (hosts.Count == 0)
         {
             row.SetOffer(SavegameRowRules.Describe(
-                row.Id, row.Savegame.ProfileId, null, row.PinnedRevision, [], null, null, hasInstance: false),
+                row.Id, row.Savegame.ProfileId, null, row.PinnedRevision, [], null, null, hasGame: false),
                 null);
 
             return;
@@ -714,18 +714,18 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 host.Held,
                 host.AppliedProfileId,
                 host.AppliedRevision,
-                hasInstance: true);
+                hasGame: true);
 
             if (offer.CanCheckOut)
             {
                 row.SetOffer(offer, null);
-                row.Host = host.Instance;
+                row.Host = host.Game;
 
                 return;
             }
 
             var follows = row.Savegame.ProfileId is Guid profileId
-                && host.Instance.ActiveProfile == new ActiveProfile(_repo.Id, profileId);
+                && host.Game.ActiveProfile == new ActiveProfile(_repo.Id, profileId);
 
             if (fallbackOffer is null || follows)
             {
@@ -735,7 +735,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
 
         row.SetOffer(fallbackOffer!, NameOfHeld(fallbackOffer!.BlockingSavegameId));
-        row.Host = fallback!.Instance;
+        row.Host = fallback!.Game;
     }
 
     /// <summary>
@@ -829,9 +829,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     private async Task AnnotateUnpublishedPlayAsync(IReadOnlyList<SavegameListItemViewModel> rows)
     {
-        foreach (var instance in _repo.LocalInstances.ToList())
+        foreach (var game in _repo.Games.ToList())
         {
-            foreach (var binding in _bindingStore.GetBindings(instance.Id))
+            foreach (var binding in _bindingStore.GetBindings(game.Id))
             {
                 _lifetime.ThrowIfCancellationRequested();
 
@@ -841,7 +841,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 }
 
                 var availability = await _savegameService.ClassifySlotAsync(
-                    instance, new SavegameSlotId(binding.SlotId), _lifetime);
+                    game, new SavegameSlotId(binding.SlotId), _lifetime);
 
                 if (availability is SavegameSlotAvailability.HeldWithUnpublishedPlay)
                 {
@@ -935,17 +935,17 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Hands a save back from the instance holding it, without going to that instance's own page.
+    /// Hands a save back from the game holding it, without going to that game's own page.
     /// </summary>
     /// <remarks>
-    /// <b>The instance is the row's, not a choice.</b> A check-in uploads what is in a slot, so the
-    /// only instance it can mean is the one whose slot holds the copy - which is why this reads
+    /// <b>The game is the row's, not a choice.</b> A check-in uploads what is in a slot, so the
+    /// only game it can mean is the one whose slot holds the copy - which is why this reads
     /// <see cref="SavegameListItemViewModel.HeldHere"/> and not <c>Host</c>, and why there is no
     /// picker here the way there is for a check-out.
     /// </remarks>
     private async void OnCheckInRequested(object? sender, EventArgs e)
     {
-        if (sender is not SavegameListItemViewModel row || row.HeldHere is not LocalInstance instance)
+        if (sender is not SavegameListItemViewModel row || row.HeldHere is not Game game)
         {
             return;
         }
@@ -957,7 +957,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             // The savegame's name where the dialog wants a slot label, as CheckInBlockingAsync does:
             // the slot's own id is a folder name the player has never thought in, and what they are
             // handing back is the save rather than the folder.
-            var outcome = await _flowService.CheckInAsync(instance, row.Id, row.Name, row.Name, _lifetime);
+            var outcome = await _flowService.CheckInAsync(game, row.Id, row.Name, row.Name, _lifetime);
 
             if (outcome.WasDeferred)
             {
@@ -972,7 +972,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             }
 
             Status = outcome.KeptPlaying
-                ? $"Version {outcome.Version!.Number} of '{row.Name}' is on the server. The save is still in '{instance.Name}' and still yours."
+                ? $"Version {outcome.Version!.Number} of '{row.Name}' is on the server. The save is still in '{game.Name}' and still yours."
                 : $"Version {outcome.Version!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.";
 
             await _driftMonitor.CheckAsync();
@@ -1041,7 +1041,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         try
         {
             var result = await _savegameService.MakeCurrentAsync(
-                [.. _repo.LocalInstances], row.Savegame, _lifetime);
+                [.. _repo.Games], row.Savegame, _lifetime);
 
             Status = result.Superseded is SavegameDto displaced
                 ? $"'{row.Name}' is {row.ProfileName}'s current savegame and follows it from here. '{displaced.Name}' is past - still playable, and its mod list no longer moves."
@@ -1098,14 +1098,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     /// <remarks>
     /// <b>It names the revision.</b> Nothing is holding this savegame yet, so an apply that let the
-    /// instance decide would install head - correct for a current savegame and wrong for a past one,
+    /// game decide would install head - correct for a current savegame and wrong for a past one,
     /// whose check-out a moment later would leave the folder drifted against the revision it just
     /// pinned.
     /// </remarks>
     private async void OnApplyProfileRequested(object? sender, EventArgs e)
     {
         if (sender is not SavegameListItemViewModel row
-            || row.Host is not LocalInstance instance
+            || row.Host is not Game game
             || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
         {
             return;
@@ -1117,7 +1117,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             var outcome = await _applyService.ApplyAsync(
                 _repo,
-                instance,
+                game,
                 profile.Id,
                 profile.Name,
                 confirmPlan: false,
@@ -1125,7 +1125,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 _lifetime,
                 revision: row.PinnedRevision ?? profile.HeadRevision);
 
-            RecordActiveProfile(instance, profile, outcome.RecordsIntent);
+            RecordActiveProfile(game, profile, outcome.RecordsIntent);
 
             Status = outcome.Message;
 
@@ -1164,9 +1164,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var instances = _repo.LocalInstances.ToList();
+        var games = _repo.Games.ToList();
 
-        if (instances.Count == 0)
+        if (games.Count == 0)
         {
             await _modalService.Show(ConfirmationDialogViewModel.Refusal(
                 "No game is connected here",
@@ -1180,9 +1180,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         try
         {
             // The one the row's buttons were about, so the dialog opens on the folder the row just
-            // described. Choosing again here is how a row comes to say "ready" about one instance and
+            // described. Choosing again here is how a row comes to say "ready" about one game and
             // open a dialog about another.
-            var preferred = row.Host ?? instances[0];
+            var preferred = row.Host ?? games[0];
 
             var context = await BuildContextAsync(row, preferred, mode, _lifetime);
 
@@ -1192,15 +1192,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 row.ProfileName,
                 versionNumber,
                 row.Savegame.Head.Number,
-                instances,
+                games,
                 context,
-                (instance, cancellationToken) => BuildContextAsync(row, instance, mode, cancellationToken));
+                (game, cancellationToken) => BuildContextAsync(row, game, mode, cancellationToken));
 
             await _modalService.Show(modal);
 
             if (modal.CheckInFirstSavegameId is Guid blocking)
             {
-                await CheckInBlockingAsync(modal.SelectedInstance, blocking, row, versionNumber, mode);
+                await CheckInBlockingAsync(modal.SelectedGame, blocking, row, versionNumber, mode);
 
                 return;
             }
@@ -1233,13 +1233,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// with the slot free. One action rather than a warning, per docs/PLAN.md#slot-safety.
     /// </summary>
     private async Task CheckInBlockingAsync(
-        LocalInstance? instance,
+        Game? game,
         Guid blockingSavegameId,
         SavegameListItemViewModel row,
         int versionNumber,
         SavegameCheckOutMode mode)
     {
-        if (instance is null)
+        if (game is null)
         {
             return;
         }
@@ -1247,7 +1247,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var blocking = Savegames.FirstOrDefault(x => x.Id == blockingSavegameId);
 
         var outcome = await _flowService.CheckInAsync(
-            instance,
+            game,
             blockingSavegameId,
             blocking?.Name ?? "that savegame",
             blocking?.Name ?? "the slot",
@@ -1280,15 +1280,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // away from - the claim, where there is one, is taken before the bytes move.
         using var task = _backgroundTasks.Begin(
             mode is SavegameCheckOutMode.TakeCopy
-                ? $"Copying '{row.Name}' into '{result.Instance.Name}'"
-                : $"Checking '{row.Name}' out into '{result.Instance.Name}'",
+                ? $"Copying '{row.Name}' into '{result.Game.Name}'"
+                : $"Checking '{row.Name}' out into '{result.Game.Name}'",
             $"Version {versionNumber}");
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
-            await _savegameService.TakeCopyAsync(result.Instance, row.Savegame, versionNumber, result.Slot.Id, _lifetime);
+            await _savegameService.TakeCopyAsync(result.Game, row.Savegame, versionNumber, result.Slot.Id, _lifetime);
 
-            Status = $"Version {versionNumber} of '{row.Name}' is in '{result.Instance.Name}'. Nobody was stopped from playing it, " +
+            Status = $"Version {versionNumber} of '{row.Name}' is in '{result.Game.Name}'. Nobody was stopped from playing it, " +
                      "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
 
             return;
@@ -1312,11 +1312,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         task.Report("Writing it into the slot");
 
-        await _savegameService.CheckOutAsync(result.Instance, savegame, result.Slot.Id, _lifetime);
+        await _savegameService.CheckOutAsync(result.Game, savegame, result.Slot.Id, _lifetime);
 
-        Status = $"'{row.Name}' is checked out to you, in '{result.Instance.Name}'.";
+        Status = $"'{row.Name}' is checked out to you, in '{result.Game.Name}'.";
 
-        await ApplyProfileAsync(result.Instance, savegame);
+        await ApplyProfileAsync(result.Game, savegame);
 
         await ReloadAsync(row.Id);
     }
@@ -1332,7 +1332,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// one - and every apply resolves it from there. Working it out a second time in this method is how
     /// the check-out comes to install a different list from the one the drift check then expects.
     /// </remarks>
-    private async Task ApplyProfileAsync(LocalInstance instance, SavegameDto savegame)
+    private async Task ApplyProfileAsync(Game game, SavegameDto savegame)
     {
         if (_repo.Adapter.CanSupportMods is false)
         {
@@ -1344,11 +1344,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var plan = await _applyService.TryPlanAsync(_repo, instance, profile.Id, profile.Name, revision: null, _lifetime);
+        var plan = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
 
         if (plan is null)
         {
-            Status += $" '{instance.Name}' could not be reached, so its mod folder was left as it is.";
+            Status += $" '{game.Name}' could not be reached, so its mod folder was left as it is.";
 
             return;
         }
@@ -1358,9 +1358,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         if (plan.Unrecognised.Count == 0)
         {
             var outcome = await _applyService.ApplyAsync(
-                _repo, instance, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
+                _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
 
-            RecordActiveProfile(instance, profile, outcome.RecordsIntent);
+            RecordActiveProfile(game, profile, outcome.RecordsIntent);
 
             Status += $" {outcome.Message}";
 
@@ -1386,58 +1386,58 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (choice.Result is false)
         {
-            // Review leaves the instance drifted, and the persistent notification takes it from there -
-            // the same answer this design gives for an instance that cannot be applied to right now.
-            RecordActiveProfile(instance, profile, true);
+            // Review leaves the game drifted, and the persistent notification takes it from there -
+            // the same answer this design gives for a game that cannot be applied to right now.
+            RecordActiveProfile(game, profile, true);
 
             Status += " The mod folder was left as it is until you decide what to keep.";
 
             await _driftMonitor.CheckAsync();
-            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, instance.Id);
+            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, game.Id);
 
             return;
         }
 
         var result = await _syncService.ExecuteAsync(plan, null, _lifetime);
 
-        RecordActiveProfile(instance, profile, true);
+        RecordActiveProfile(game, profile, true);
 
         Status += result.Completed
-            ? $" '{instance.Name}' now matches '{profile.Name}'."
-            : $" {result.Failures.Count} mods could not be applied to '{instance.Name}'.";
+            ? $" '{game.Name}' now matches '{profile.Name}'."
+            : $" {result.Failures.Count} mods could not be applied to '{game.Name}'.";
 
         await _driftMonitor.CheckAsync();
     }
 
     /// <summary>
-    /// The standing intent is recorded even where the folder could not be put right: the instance is
+    /// The standing intent is recorded even where the folder could not be put right: the game is
     /// still meant to follow this profile, and being left drifted is what the notice is for.
     /// </summary>
-    private void RecordActiveProfile(LocalInstance instance, ProfileDto profile, bool record)
+    private void RecordActiveProfile(Game game, ProfileDto profile, bool record)
     {
         if (record)
         {
-            _localInstanceRepository.SetActiveProfile(instance, new ActiveProfile(_repo.Id, profile.Id));
+            _gameRepository.SetActiveProfile(game, new ActiveProfile(_repo.Id, profile.Id));
         }
     }
 
     /// <summary>
-    /// Everything the dialog needs about one instance: its slots and their safety, what the mod folder
+    /// Everything the dialog needs about one game: its slots and their safety, what the mod folder
     /// would have to do, and how far the save's revision is from the profile's.
     /// </summary>
     private async Task<SavegameCheckOutContext> BuildContextAsync(
         SavegameListItemViewModel row,
-        LocalInstance instance,
+        Game game,
         SavegameCheckOutMode mode,
         CancellationToken cancellationToken)
     {
-        var slots = await _savegameService.GetSlotsAsync(instance, cancellationToken);
+        var slots = await _savegameService.GetSlotsAsync(game, cancellationToken);
         var options = new List<SavegameSlotOptionViewModel>();
 
         foreach (var slot in slots)
         {
-            var availability = await _savegameService.ClassifySlotAsync(instance, slot.Id, cancellationToken);
-            var binding = _bindingStore.GetBindingForSlot(instance.Id, slot.Id);
+            var availability = await _savegameService.ClassifySlotAsync(game, slot.Id, cancellationToken);
+            var binding = _bindingStore.GetBindingForSlot(game.Id, slot.Id);
 
             options.Add(new SavegameSlotOptionViewModel(
                 slot,
@@ -1448,16 +1448,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                     : null));
         }
 
-        var suggested = await _savegameService.SuggestSlotAsync(instance, row.Id, cancellationToken);
-        var hint = _bindingStore.GetSlotHint(instance.Id, row.Id);
+        var suggested = await _savegameService.SuggestSlotAsync(game, row.Id, cancellationToken);
+        var hint = _bindingStore.GetSlotHint(game.Id, row.Id);
 
         return new SavegameCheckOutContext(
-            instance,
+            game,
             options,
             suggested,
             DescribeSuggestion(options, suggested, hint),
             mode is SavegameCheckOutMode.CheckOut
-                ? await BuildModsSummaryAsync(row, instance, cancellationToken)
+                ? await BuildModsSummaryAsync(row, game, cancellationToken)
                 : null,
             await BuildRevisionNoteAsync(row),
             // Absent for a copy, which applies nothing: the slot is written and the mod folder is left
@@ -1497,7 +1497,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         if (suggested is null)
         {
             return options.Count == 0
-                ? "This instance reports no savegame slots at all."
+                ? "This game reports no savegame slots at all."
                 : "Every slot has something in it, so there is nothing to pre-select. Pick the one to write over - anything ModsDude has a copy of can be put back.";
         }
 
@@ -1519,7 +1519,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private async Task<SavegameModsSummary?> BuildModsSummaryAsync(
         SavegameListItemViewModel row,
-        LocalInstance instance,
+        Game game,
         CancellationToken cancellationToken)
     {
         if (_repo.Adapter.CanSupportMods is false || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
@@ -1527,10 +1527,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return null;
         }
 
-        // Named rather than resolved from the instance: nothing is holding this savegame yet, so the
-        // instance has no opinion about it - and the plan shown here has to be the plan that runs.
+        // Named rather than resolved from the game: nothing is holding this savegame yet, so the
+        // game has no opinion about it - and the plan shown here has to be the plan that runs.
         var plan = await _applyService.TryPlanAsync(
-            _repo, instance, profile.Id, profile.Name, SavegameService.TargetRevisionOf(row.Savegame), cancellationToken);
+            _repo, game, profile.Id, profile.Name, SavegameService.TargetRevisionOf(row.Savegame), cancellationToken);
 
         if (plan is null)
         {
@@ -1602,11 +1602,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// One instance this repo offers, with the two things a row's buttons turn on: what it is holding,
+    /// One game this repo offers, with the two things a row's buttons turn on: what it is holding,
     /// and which revision of which profile its mod folder was last made to match.
     /// </summary>
     private sealed record SavegameHost(
-        LocalInstance Instance,
+        Game Game,
         IReadOnlyList<SavegameCheckoutBinding> Held,
         Guid? AppliedProfileId,
         int? AppliedRevision);

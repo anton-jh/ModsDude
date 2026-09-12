@@ -40,14 +40,14 @@ public enum SavegameBindingStanding
 
 
 /// <summary>
-/// One slot of one instance, as the local half of savegames sees it: free, holding something checked
+/// One slot of one game, as the local half of savegames sees it: free, holding something checked
 /// out, or holding a save ModsDude has never seen.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>This is where Publish lives</b>, because publishing is inherently about a slot: it takes bytes
 /// that are already on this disk and makes a savegame of them. It asks nothing about the profile - the
-/// instance has an active one, and that is what the first version records.
+/// game has an active one, and that is what the first version records.
 /// </para>
 /// <para>
 /// <b>Unchecked-in play is called out rather than left to be inferred.</b> A slot whose contents have

@@ -9,7 +9,7 @@ namespace ModsDude.Client.Core.Helpers;
 /// <remarks>
 /// <para>
 /// <b>One comparer, used everywhere a display name is sorted</b> - mods, versions, profiles, repos,
-/// savegames, members, instances. A list that sorts differently from the list beside it is a list
+/// savegames, members, games. A list that sorts differently from the list beside it is a list
 /// somebody has to learn, and the whole value of natural ordering is that nobody has to.
 /// </para>
 /// <para>

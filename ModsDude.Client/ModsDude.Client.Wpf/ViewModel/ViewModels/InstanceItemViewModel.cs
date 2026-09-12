@@ -8,15 +8,15 @@ public class InstanceItemViewModel
 {
     public InstanceItemViewModel(
         Repo repo,
-        LocalInstance instance,
-        InstancePageViewModel.Factory pageFactory)
+        Game game,
+        GamePageViewModel.Factory pageFactory)
         : base(
-            instance.Name,
-            () => pageFactory.Create(repo, instance),
-            instance,
-            () => instance.Name,
-            nameof(LocalInstance.Name))
+            game.Name,
+            () => pageFactory.Create(repo, game),
+            game,
+            () => game.Name,
+            nameof(Game.Name))
     {
-        Icon = MenuIcons.Instance;
+        Icon = MenuIcons.Game;
     }
 }

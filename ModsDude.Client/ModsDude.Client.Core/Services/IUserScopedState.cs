@@ -5,7 +5,7 @@ namespace ModsDude.Client.Core.Services;
 /// when the user changes.
 /// </summary>
 /// <remarks>
-/// The distinction is the whole point. Local instances, content stores and the image cache describe
+/// The distinction is the whole point. Local games, content stores and the image cache describe
 /// the game installations on this PC and do not change with who is signed in, so they are
 /// deliberately not this. Repos and profiles came out of one account's memberships and are
 /// meaningless to the next account.

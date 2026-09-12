@@ -6,7 +6,7 @@ namespace ModsDude.Client.Core.Sync;
 /// <param name="Hash">The address the bytes no longer hash to.</param>
 /// <param name="FileName">The mod folder file that turned out to be the blob itself.</param>
 /// <param name="VolumeRoot">
-/// Which volume's store held it. The blast radius is the volume, not the instance the check happened
+/// Which volume's store held it. The blast radius is the volume, not the game the check happened
 /// to run for, so the notice has to be able to say so.
 /// </param>
 /// <param name="Removed">
@@ -53,7 +53,7 @@ public sealed class StoreIntegrityService(
     ILogger<StoreIntegrityService> logger)
 {
     /// <summary>
-    /// Checks the changed files of one instance, and drops any blob that proves to have been
+    /// Checks the changed files of one game, and drops any blob that proves to have been
     /// rewritten.
     /// </summary>
     /// <param name="changed">
@@ -62,7 +62,7 @@ public sealed class StoreIntegrityService(
     /// one nothing has written to.
     /// </param>
     /// <remarks>
-    /// Copy-served instances fall out for free rather than by a special case. Nothing there is
+    /// Copy-served games fall out for free rather than by a special case. Nothing there is
     /// hardlinked, so the installed file is never the same file as the blob and every candidate is
     /// discarded by the identity comparison - which is also what happens on a platform or filesystem
     /// that cannot answer the question at all.

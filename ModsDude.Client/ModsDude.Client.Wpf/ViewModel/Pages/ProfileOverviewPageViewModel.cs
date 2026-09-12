@@ -14,7 +14,7 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// What the profile looks like from here: how many mods it pins, which game instances on this
+/// What the profile looks like from here: how many mods it pins, which games on this
 /// machine are set to match it, whether each of them still does, and which savegame it is following.
 /// </summary>
 /// <remarks>
@@ -54,10 +54,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _navigation = navigation;
         _driftMonitor = driftMonitor;
 
-        Instances = [];
+        Games = [];
 
         _profileService.ProfileUpdated += OnProfileUpdated;
-        _repo.LocalInstances.CollectionChanged += OnInstancesChanged;
+        _repo.Games.CollectionChanged += OnGamesChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
         RefreshInstances();
@@ -66,10 +66,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     public string ProfileName => _profile.Name;
     public string RepoName => _repo.Name;
-    public ObservableCollection<InstanceOverviewViewModel> Instances { get; }
+    public ObservableCollection<InstanceOverviewViewModel> Games { get; }
 
-    public bool HasInstances => Instances.Count > 0;
-    public bool HasNoInstances => Instances.Count == 0;
+    public bool HasInstances => Games.Count > 0;
+    public bool HasNoGames => Games.Count == 0;
 
     /// <summary>Whether this repo has savegames at all. The whole section is absent where it does not.</summary>
     public bool HasSavegames => _repo.Adapter.CanSupportSavegames;
@@ -117,7 +117,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _profileService.ProfileUpdated -= OnProfileUpdated;
-        _repo.LocalInstances.CollectionChanged -= OnInstancesChanged;
+        _repo.Games.CollectionChanged -= OnGamesChanged;
         _driftMonitor.Changed -= OnDriftChanged;
     }
 
@@ -257,7 +257,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private void OnInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshInstances();
     }
@@ -269,27 +269,27 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Only the instances actually set to this profile. An instance the repo offers but that points
+    /// Only the games actually set to this profile. A game the repo offers but that points
     /// somewhere else is the repo overview's business, not this page's.
     /// </summary>
     private void RefreshInstances()
     {
-        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Instance.InstanceId, x => x.Report);
+        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.InstanceId, x => x.Report);
 
-        Instances.Clear();
+        Games.Clear();
 
         var active = new ActiveProfile(_repo.Id, _profile.Id);
 
-        foreach (var instance in _repo.LocalInstances.Where(x => x.ActiveProfile == active))
+        foreach (var game in _repo.Games.Where(x => x.ActiveProfile == active))
         {
-            Instances.Add(new InstanceOverviewViewModel(
-                instance,
+            Games.Add(new InstanceOverviewViewModel(
+                game,
                 "Set to this profile",
-                drifted.GetValueOrDefault(instance.Id)));
+                drifted.GetValueOrDefault(game.Id)));
         }
 
         OnPropertyChanged(nameof(HasInstances));
-        OnPropertyChanged(nameof(HasNoInstances));
+        OnPropertyChanged(nameof(HasNoGames));
     }
 
 

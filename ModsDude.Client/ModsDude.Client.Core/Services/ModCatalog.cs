@@ -82,24 +82,24 @@ public sealed class ModCatalog : IDisposable
 
     /// <summary>
     /// Every source currently available, standing ones first. Rebuilt on each call, because the
-    /// instance list and the settings behind it are live.
+    /// game list and the settings behind it are live.
     /// </summary>
     public IReadOnlyList<ModSource> GetSources()
     {
         var sources = new List<ModSource>();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            if (string.IsNullOrWhiteSpace(instance.ModFolder))
+            if (string.IsNullOrWhiteSpace(game.ModFolder))
             {
                 continue;
             }
 
             sources.Add(new ModSource(
-                ModSourceId.ForInstance(instance.Id),
-                instance.Name,
-                instance.ModFolder,
-                ModSourceKind.Instance));
+                ModSourceId.ForInstance(game.Id),
+                game.Name,
+                game.ModFolder,
+                ModSourceKind.Game));
         }
 
         if (KnownFolders.GetDownloads() is string downloads)
@@ -128,9 +128,9 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
-    /// Switches a source in or out of the merged view. Disabling an instance says nothing about
+    /// Switches a source in or out of the merged view. Disabling a game says nothing about
     /// syncing to it - a source is somewhere to find mods, a sync target is a folder sync will make
-    /// match a profile, and an instance's mod folder simply happens to be both.
+    /// match a profile, and a game's mod folder simply happens to be both.
     /// </summary>
     public void SetEnabled(ModSource source, bool enabled)
     {

@@ -55,7 +55,7 @@ public class InstanceDriftServiceTests
     }
 
     [Fact]
-    public void An_instance_with_no_active_profile_has_nothing_to_drift_from()
+    public void An_game_with_no_active_profile_has_nothing_to_drift_from()
     {
         using var fixture = new DriftFixture();
 

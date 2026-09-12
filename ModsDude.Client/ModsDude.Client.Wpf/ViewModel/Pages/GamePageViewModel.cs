@@ -15,14 +15,14 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The instance's own page: which profile it follows, whether its mod folder still matches, and the
+/// The game's own page: which profile it follows, whether its mod folder still matches, and the
 /// one action that fixes it - with the settings and the name on the Manage sub-page below.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Activation lives here because this is the end of it where the target is fixed and the profile is
-/// chosen. The choice spans every repo sharing this instance's scope rather than the repo the user
-/// navigated in through, since the instance is shared across all of them and holds one active profile
+/// chosen. The choice spans every repo sharing this game's scope rather than the repo the user
+/// navigated in through, since the game is shared across all of them and holds one active profile
 /// that may have come from any.
 /// </para>
 /// <para>
@@ -34,15 +34,15 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// so the picker is disabled rather than offering a switch the apply table refuses; and a <em>past</em>
 /// one pins the folder to its own revision, so the button stops meaning "put this on the profile's
 /// latest" and says which revision it is repairing to instead. Both are the same rule read from the
-/// instance's end - see docs/10-savegame-profile-binding.md#instance-page.
+/// game's end - see docs/10-savegame-profile-binding.md#game-page.
 /// </para>
 /// </remarks>
-public partial class InstancePageViewModel : PageViewModel, IDisposable
+public partial class GamePageViewModel : PageViewModel, IDisposable
 {
-    private readonly LocalInstance _instance;
+    private readonly Game _game;
     private readonly RepoRepository _repoRepository;
     private readonly IProfilesClient _profilesClient;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly InstanceDriftService _driftService;
     private readonly InstanceDriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
@@ -57,13 +57,13 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     private IReadOnlyDictionary<Guid, string> _savegameNames = new Dictionary<Guid, string>();
 
 
-    public InstancePageViewModel(
+    public GamePageViewModel(
         Repo repo,
-        LocalInstance instance,
+        Game game,
         NavigationManager navigationManager,
         RepoRepository repoRepository,
         IProfilesClient profilesClient,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         InstanceDriftService driftService,
         InstanceDriftMonitor driftMonitor,
         ProfileApplyService applyService,
@@ -72,13 +72,13 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         ProfileService profileService,
         ISavegamesClient savegamesClient,
         SyncPageViewModel.Factory syncPageViewModelFactory,
-        InstanceSavegamesPageViewModel.Factory instanceSavegamesPageViewModelFactory,
-        EditLocalInstancePageViewModel.Factory editLocalInstancePageViewModelFactory)
+        GameSavegamesPageViewModel.Factory gameSavegamesPageViewModelFactory,
+        GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory)
     {
-        _instance = instance;
+        _game = game;
         _repoRepository = repoRepository;
         _profilesClient = profilesClient;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _driftService = driftService;
         _driftMonitor = driftMonitor;
         _applyService = applyService;
@@ -92,12 +92,12 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         // with a disabled dropdown and a Re-apply rev 4 that are both about a hold that has ended.
         _bindingStore.BindingsChanged += OnBindingsChanged;
 
-        InstanceName = instance.Name;
-        ModFolder = instance.ModFolder ?? "No mod folder configured";
+        GameName = game.Name;
+        ModFolder = game.ModFolder ?? "No mod folder configured";
 
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Sync", () => syncPageViewModelFactory.Create(repo, instance))
+            new MenuItemViewModel("Sync", () => syncPageViewModelFactory.Create(repo, game))
                 .WithIcon(MenuIcons.Sync)
         ];
 
@@ -106,11 +106,11 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         // repo's Saves entry is.
         if (repo.Adapter.CanSupportSavegames)
         {
-            MenuItems.Add(new MenuItemViewModel("Saves", () => instanceSavegamesPageViewModelFactory.Create(repo, instance))
+            MenuItems.Add(new MenuItemViewModel("Saves", () => gameSavegamesPageViewModelFactory.Create(repo, game))
                 .WithIcon(MenuIcons.Saves));
         }
 
-        MenuItems.Add(new MenuItemViewModel("Manage", () => editLocalInstancePageViewModelFactory.Create(repo, instance))
+        MenuItems.Add(new MenuItemViewModel("Manage", () => gameSettingsPageViewModelFactory.Create(repo, game))
             .WithIcon(MenuIcons.Manage));
 
         NavManager.Selected = MenuItems.First();
@@ -123,7 +123,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
     public ObservableCollection<InstanceProfileOptionViewModel> Profiles { get; } = [];
 
-    public string InstanceName { get; }
+    public string GameName { get; }
     public string ModFolder { get; }
 
 
@@ -133,12 +133,12 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     private InstanceProfileOptionViewModel? _selectedProfile;
 
     /// <summary>
-    /// What this instance is holding and what that demands of its mod folder, said in one Neutral
+    /// What this game is holding and what that demands of its mod folder, said in one Neutral
     /// line. Null - nearly always - where nothing with a profile is checked out here.
     /// </summary>
     /// <remarks>
     /// Neutral on purpose. Holding a past savegame is a state somebody chose and is playing in, not a
-    /// problem with the instance, so it reads like the mod-folder path underneath it rather than like
+    /// problem with the game, so it reads like the mod-folder path underneath it rather than like
     /// the locked-mod warning above it.
     /// </remarks>
     [ObservableProperty]
@@ -192,7 +192,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     public bool HasProfileLock => ProfileLock is not null;
 
     /// <summary>
-    /// Whether the instance may be pointed at a different profile at all. False while a savegame with
+    /// Whether the game may be pointed at a different profile at all. False while a savegame with
     /// a profile is checked out here: every switch in the app applies first, a held savegame refuses that
     /// apply, and a dropdown whose every other entry leads to a refusal is worse than one that says so
     /// and does not open. Savegames following no mod list leave it alone.
@@ -200,7 +200,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     public bool CanChooseProfile => ProfileLock is null;
 
     public InstanceActivationKind ActivationKind => SelectedProfile is InstanceProfileOptionViewModel option
-        ? InstanceActivation.Describe(_instance.ActiveProfile, option.Value)
+        ? InstanceActivation.Describe(_game.ActiveProfile, option.Value)
         : InstanceActivationKind.Activate;
 
     public string ActivationLabel => InstanceActivation.Label(ActivationKind, PinnedRevision);
@@ -221,11 +221,11 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
             Profiles.Add(option);
         }
 
-        SelectedProfile = _instance.ActiveProfile is ActiveProfile active
+        SelectedProfile = _game.ActiveProfile is ActiveProfile active
             ? Profiles.FirstOrDefault(x => x.Value == active)
             : null;
 
-        HasDanglingActiveProfile = _instance.ActiveProfile is not null && SelectedProfile is null;
+        HasDanglingActiveProfile = _game.ActiveProfile is not null && SelectedProfile is null;
 
         RefreshHolding();
         RefreshDrift();
@@ -239,7 +239,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        // An instance is offered by every repo sharing its scope, so the profile picked here may well
+        // A game is offered by every repo sharing its scope, so the profile picked here may well
         // belong to a repo other than the one navigated in through - and that repo's adapter is the
         // one that knows how to read its mod folder.
         if (FindRepo(option.Value.RepoId) is not Repo owner)
@@ -258,18 +258,18 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
         {
             var outcome = await _applyService.ApplyAsync(
                 owner,
-                _instance,
+                _game,
                 option.Value.ProfileId,
                 option.ProfileName,
                 confirmPlan: kind is InstanceActivationKind.Activate,
                 progress: null,
                 cancellationToken);
 
-            // The intent is recorded even where the folder could not be touched: the instance is still
+            // The intent is recorded even where the folder could not be touched: the game is still
             // meant to follow this profile, and being left drifted is what the notice is for.
             if (outcome.RecordsIntent)
             {
-                _localInstanceRepository.SetActiveProfile(_instance, option.Value);
+                _gameRepository.SetActiveProfile(_game, option.Value);
                 HasDanglingActiveProfile = false;
             }
 
@@ -337,7 +337,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private void RefreshHolding()
     {
-        var held = _savegameService.GetBindings(_instance);
+        var held = _savegameService.GetBindings(_game);
         var claiming = held.FirstOrDefault(x => x.ProfileId is not null);
 
         if (claiming.ProfileId is not Guid profileId)
@@ -360,19 +360,19 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
         PinnedRevision = SavegameHoldRules.RequiredRevision(held, profileId);
 
-        ProfileLock = $"This instance is holding {savegame}, which follows '{profile}', so it stays on it. Check that savegame in to move somewhere else.";
+        ProfileLock = $"This game is holding {savegame}, which follows '{profile}', so it stays on it. Check that savegame in to move somewhere else.";
 
         HoldingStatus = PinnedRevision is int pinned
-            ? $"Holding {profile} rev {pinned} for {savegame}. Check {savegame} in to move this instance forward."
+            ? $"Holding {profile} rev {pinned} for {savegame}. Check {savegame} in to move this game forward."
             : $"Holding {savegame}, which follows {profile}.";
     }
 
     private void RefreshDrift()
     {
         var report = _driftService.Check(
-            _instance.Id,
-            _instance.ActiveProfile,
-            _instance.ModFolder,
+            _game.Id,
+            _game.ActiveProfile,
+            _game.ModFolder,
             profileIsMissing: HasDanglingActiveProfile);
 
         DriftStatus = report.Status switch
@@ -380,9 +380,9 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
             InstanceDriftStatus.InSync => "The mod folder matches what was last applied here.",
             InstanceDriftStatus.Drifted =>
                 $"{report.DifferenceCount} differences from what was last applied here. Updating mods from inside the game looks like this.",
-            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this instance yet.",
-            InstanceDriftStatus.NoActiveProfile => "No profile is set on this instance yet.",
-            InstanceDriftStatus.DanglingProfile => "The profile this instance followed is gone. Pick another one.",
+            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            InstanceDriftStatus.NoActiveProfile => "No profile is set on this game yet.",
+            InstanceDriftStatus.DanglingProfile => "The profile this game followed is gone. Pick another one.",
             // Unknown, not drifted: warning about mods that may be perfectly fine is worse than
             // saying nothing.
             InstanceDriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
@@ -396,12 +396,12 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Every profile in every repo that shares this instance's scope. One request per repo, and there
+    /// Every profile in every repo that shares this game's scope. One request per repo, and there
     /// are usually one or two.
     /// </summary>
     private async Task<IReadOnlyList<InstanceProfileOptionViewModel>> LoadProfileOptionsAsync(CancellationToken cancellationToken)
     {
-        var repos = _repoRepository.Repos.Where(x => x.Scope == _instance.Scope).ToList();
+        var repos = _repoRepository.Repos.Where(x => x.Scope == _game.Scope).ToList();
         var options = new List<InstanceProfileOptionViewModel>();
 
         foreach (var repo in repos)
@@ -423,7 +423,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// What the savegames this instance holds are called, for the one line that names one.
+    /// What the savegames this game holds are called, for the one line that names one.
     /// </summary>
     /// <remarks>
     /// Best effort and absorbed on failure: a held binding is a fact about this machine and stays true
@@ -434,7 +434,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
     {
         var names = new Dictionary<Guid, string>();
 
-        foreach (var repoId in _savegameService.GetBindings(_instance).Select(x => x.RepoId).Distinct())
+        foreach (var repoId in _savegameService.GetBindings(_game).Select(x => x.RepoId).Distinct())
         {
             try
             {
@@ -462,7 +462,7 @@ public partial class InstancePageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public InstancePageViewModel Create(Repo repo, LocalInstance instance)
-            => ActivatorUtilities.CreateInstance<InstancePageViewModel>(serviceProvider, repo, instance);
+        public GamePageViewModel Create(Repo repo, Game game)
+            => ActivatorUtilities.CreateInstance<GamePageViewModel>(serviceProvider, repo, game);
     }
 }

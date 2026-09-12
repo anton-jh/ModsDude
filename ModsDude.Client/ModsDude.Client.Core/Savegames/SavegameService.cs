@@ -11,53 +11,53 @@ using ModsDude.Client.Core.Sync;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// The savegame adapter for one instance, for the callers that have an instance rather than a repo.
+/// The savegame adapter for one game, for the callers that have a game rather than a repo.
 /// </summary>
 /// <remarks>
-/// A seam for the same reason <see cref="IInstanceModFolders"/> and <see cref="IDriftCandidateSource"/>
-/// are: hydrating an adapter needs the <em>repo's</em> base settings, which an instance does not
-/// carry, so the lookup goes through whichever repo on this machine serves the instance's scope.
+/// A seam for the same reason <see cref="IModFolders"/> and <see cref="IDriftCandidateSource"/>
+/// are: hydrating an adapter needs the <em>repo's</em> base settings, which a game does not
+/// carry, so the lookup goes through whichever repo on this machine serves the game's scope.
 /// Behind an interface so the savegame engine depends on the one fact it uses and can be exercised
 /// without a signed-in client.
 /// </remarks>
 public interface ILocalSavegameAdapters
 {
     /// <returns>
-    /// Null where no repo on this machine hydrates this instance's adapter, or where the adapter has
-    /// no savegame support at all. Both are ordinary states rather than errors - an instance whose
+    /// Null where no repo on this machine hydrates this game's adapter, or where the adapter has
+    /// no savegame support at all. Both are ordinary states rather than errors - a game whose
     /// scope no loaded repo serves still exists, and a mods-only game has no slots by design.
     /// </returns>
-    ILocalSavegameAdapter? TryGet(LocalInstance instance);
+    ILocalSavegameAdapter? TryGet(Game game);
 
-    /// <inheritdoc cref="TryGet(LocalInstance)"/>
-    /// <remarks>For callers that hold an id rather than the instance - the drift check, which walks
+    /// <inheritdoc cref="TryGet(Game)"/>
+    /// <remarks>For callers that hold an id rather than the game - the drift check, which walks
     /// <see cref="DriftCandidate"/>s.</remarks>
     ILocalSavegameAdapter? TryGet(Guid instanceId);
 }
 
 
 /// <summary><see cref="ILocalSavegameAdapters"/> over the repos this client has loaded.</summary>
-public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepository instances)
+public sealed class RepoSavegameAdapters(RepoRepository repos, GameRepository games)
     : ILocalSavegameAdapters
 {
     public ILocalSavegameAdapter? TryGet(Guid instanceId)
-        => instances.Instances.FirstOrDefault(x => x.Id == instanceId) is LocalInstance instance
-            ? TryGet(instance)
+        => games.Games.FirstOrDefault(x => x.Id == instanceId) is Game game
+            ? TryGet(game)
             : null;
 
-    public ILocalSavegameAdapter? TryGet(LocalInstance instance)
+    public ILocalSavegameAdapter? TryGet(Game game)
     {
-        // Any repo serving the scope will do. Two repos on the same game hydrate the same instance
+        // Any repo serving the identity will do. Two repos on the same game hydrate the same local
         // settings into the same slot list - the settings that differ between them are the mod
         // catalogue's, and a savegame adapter reads none of those.
-        foreach (var repo in repos.Repos.Where(x => x.Scope == instance.Scope))
+        foreach (var repo in repos.Repos.Where(x => x.Scope == game.Scope))
         {
             if (repo.Adapter.CanSupportSavegames is false)
             {
                 continue;
             }
 
-            if (instance.GetAdapter(repo.Adapter).GetLocalCapabilityAdapterFactory<ILocalSavegameAdapter>() is Func<ILocalSavegameAdapter> factory)
+            if (game.GetAdapter(repo.Adapter).GetLocalCapabilityAdapterFactory<ILocalSavegameAdapter>() is Func<ILocalSavegameAdapter> factory)
             {
                 return factory();
             }
@@ -69,12 +69,12 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
 
 
 /// <summary>
-/// What the savegames an instance is holding are to everything that is <em>not</em> the savegame
+/// What the savegames a game is holding are to everything that is <em>not</em> the savegame
 /// engine: a mod folder that may not be moved without the play in it being attributed first, one that
 /// may not be moved at all, and a slot worth telling somebody about.
 /// </summary>
 /// <remarks>
-/// A seam for the same reason <see cref="IInstanceModFolders"/> and <see cref="IProfileRevisions"/>
+/// A seam for the same reason <see cref="IModFolders"/> and <see cref="IProfileRevisions"/>
 /// are: the sync engine and the drift monitor depend on the facts they actually use rather than on
 /// the savegame client, and both can be exercised without a signed-in one. It is the whole of what
 /// either of them knows about savegames.
@@ -82,7 +82,7 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, LocalInstanceRepo
 public interface IHeldSavegames
 {
     /// <summary>
-    /// Looks at every slot this instance is holding and, where the bytes have moved since the last
+    /// Looks at every slot this game is holding and, where the bytes have moved since the last
     /// look, records that the play happened on the revision the mod folder is on <em>now</em>.
     /// </summary>
     /// <remarks>
@@ -94,7 +94,7 @@ public interface IHeldSavegames
     /// docs/10-savegame-profile-binding.md#play-attribution.
     /// </para>
     /// <para>
-    /// Costs one hash per held savegame, and an instance holding none - which is nearly all of them,
+    /// Costs one hash per held savegame, and a game holding none - which is nearly all of them,
     /// nearly all the time - costs one list read.
     /// </para>
     /// </remarks>
@@ -110,8 +110,8 @@ public interface IHeldSavegames
     /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
     /// </summary>
     /// <remarks>
-    /// Keyed on the id rather than the instance because the drift monitor walks
-    /// <see cref="DriftCandidate"/>s, which exist for instances no loaded repo serves. One of those
+    /// Keyed on the id rather than the game because the drift monitor walks
+    /// <see cref="DriftCandidate"/>s, which exist for games no loaded repo serves. One of those
     /// reports nothing, quietly.
     /// </remarks>
     Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(Guid instanceId, CancellationToken ct);
@@ -157,8 +157,8 @@ public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision
 /// </remarks>
 public interface ISavegameService : IHeldSavegames
 {
-    /// <summary>Every slot this instance has, occupied or not, in the order a picker should show them.</summary>
-    Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(LocalInstance instance, CancellationToken ct);
+    /// <summary>Every slot this game has, occupied or not, in the order a picker should show them.</summary>
+    Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct);
 
     /// <summary>
     /// Which slot the picker should pre-select for this savegame: the slot it used last if that one
@@ -171,23 +171,23 @@ public interface ISavegameService : IHeldSavegames
     /// Null means "no free slot", which is a real state: the rest can be full of saves ModsDude knows
     /// nothing about, and the answer there is the unrecognised-slot confirmation, not an eviction.
     /// </remarks>
-    Task<SavegameSlotId?> SuggestSlotAsync(LocalInstance instance, Guid savegameId, CancellationToken ct);
+    Task<SavegameSlotId?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct);
 
     /// <summary>What one slot is, from the point of view of somebody about to write a savegame into it.</summary>
     /// <remarks>
     /// Hashes the slot only where a binding claims it, since that is the only case where the answer
     /// turns on the contents. An unrecognised slot is unrecognised whatever is in it.
     /// </remarks>
-    Task<SavegameSlotAvailability> ClassifySlotAsync(LocalInstance instance, SavegameSlotId slot, CancellationToken ct);
+    Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotId slot, CancellationToken ct);
 
     /// <summary>Takes the claim on a savegame and writes its head version into a slot.</summary>
-    Task CheckOutAsync(LocalInstance instance, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct);
+    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct);
 
     /// <summary>Writes a named version into a slot without claiming anything.</summary>
-    Task TakeCopyAsync(LocalInstance instance, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct);
+    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct);
 
     /// <summary>Hands a held savegame back, minting a version from whatever is in its slot now.</summary>
-    Task<SavegameVersionDto> CheckInAsync(LocalInstance instance, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
+    Task<SavegameVersionDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
 
     /// <summary>
     /// Puts a past savegame back in its profile's current slot, and lets go of the revision it was
@@ -202,19 +202,19 @@ public interface ISavegameService : IHeldSavegames
     /// <para>
     /// <b>The holder's pin goes with it.</b> A past savegame pins the mod folder to its own revision, and
     /// a savegame that is current again follows its profile - so a binding still naming a number would
-    /// hold this instance behind head forever and refuse every apply that tried to move it. That the
+    /// hold this game behind head forever and refuse every apply that tried to move it. That the
     /// hold is otherwise <em>decided once and does not move under the holder</em> is about somebody
     /// else's publish, which is not stated to whoever is playing; this is the opposite case, stated
     /// to the person doing it.
     /// </para>
     /// </remarks>
-    /// <param name="instances">
-    /// Every installation that might be holding it, since the pin lives in local state per instance
+    /// <param name="games">
+    /// Every installation that might be holding it, since the pin lives in local state per game
     /// and this verb is about a savegame rather than about a folder. Passing none is legitimate - a
     /// repo whose savegames nobody here has checked out.
     /// </param>
     Task<MakeSavegameCurrentResponse> MakeCurrentAsync(
-        IReadOnlyList<LocalInstance> instances,
+        IReadOnlyList<Game> games,
         SavegameDto savegame,
         CancellationToken ct);
 
@@ -226,7 +226,7 @@ public interface ISavegameService : IHeldSavegames
     /// docs/10-savegame-profile-binding.md#savegames-without-a-profile.
     /// </param>
     Task<SavegameDto> PublishAsync(
-        LocalInstance instance,
+        Game game,
         Guid repoId,
         SavegameSlotId slot,
         string name,
@@ -235,7 +235,7 @@ public interface ISavegameService : IHeldSavegames
         CancellationToken ct);
 
     /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
-    Task DiscardAsync(LocalInstance instance, Guid savegameId, CancellationToken ct);
+    Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct);
 
     /// <summary>
     /// Cuts every local tie to a savegame: this machine stops claiming to hold it, and stops
@@ -262,14 +262,14 @@ public interface ISavegameService : IHeldSavegames
     /// playing.
     /// </para>
     /// </remarks>
-    /// <returns>False where this instance was holding no such savegame, which is idempotent rather than an error.</returns>
-    bool Forget(LocalInstance instance, Guid savegameId);
+    /// <returns>False where this game was holding no such savegame, which is idempotent rather than an error.</returns>
+    bool Forget(Game game, Guid savegameId);
 
-    /// <summary>Whether this instance's adapter has savegames at all.</summary>
-    bool SupportsSavegames(LocalInstance instance);
+    /// <summary>Whether this game's adapter has savegames at all.</summary>
+    bool SupportsSavegames(Game game);
 
-    /// <summary>What this instance holds for one savegame, or null where it holds none.</summary>
-    SavegameCheckoutBinding? GetBinding(LocalInstance instance, Guid savegameId);
+    /// <summary>What this game holds for one savegame, or null where it holds none.</summary>
+    SavegameCheckoutBinding? GetBinding(Game game, Guid savegameId);
 
     /// <summary>
     /// Which revision a check-in from here would record the play on, or null where it would record
@@ -282,17 +282,17 @@ public interface ISavegameService : IHeldSavegames
     /// where nothing is held, and where no number could be found at all - the last of which
     /// <see cref="CheckInAsync"/> refuses rather than guesses, and which a dialog says nothing about.
     /// </remarks>
-    int? GetPlayedRevision(LocalInstance instance, Guid savegameId);
+    int? GetPlayedRevision(Game game, Guid savegameId);
 
     /// <summary>
-    /// What this instance holds in one slot, or null. Null is not "the slot is empty" - it is the
+    /// What this game holds in one slot, or null. Null is not "the slot is empty" - it is the
     /// half of <see cref="SavegameSlotAvailability.Unrecognised"/> that says ModsDude did not put
     /// whatever is there. The picker reads it to offer "check that one in first" on a refused slot.
     /// </summary>
-    SavegameCheckoutBinding? GetBindingForSlot(LocalInstance instance, SavegameSlotId slot);
+    SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotId slot);
 
-    /// <summary>Everything this instance currently holds. Short by construction.</summary>
-    IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance);
+    /// <summary>Everything this game currently holds. Short by construction.</summary>
+    IReadOnlyList<SavegameCheckoutBinding> GetBindings(Game game);
 }
 
 
@@ -331,24 +331,24 @@ public sealed class SavegameService(
         => exception is ApiException<CustomProblemDetails> { Result.Type: ProblemType.SavegameVersionStale };
 
 
-    public async Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(LocalInstance instance, CancellationToken ct)
-        => await RequireAdapter(instance).GetSlots(ct);
+    public async Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct)
+        => await RequireAdapter(game).GetSlots(ct);
 
-    public bool SupportsSavegames(LocalInstance instance) => adapters.TryGet(instance) is not null;
+    public bool SupportsSavegames(Game game) => adapters.TryGet(game) is not null;
 
-    public SavegameCheckoutBinding? GetBinding(LocalInstance instance, Guid savegameId)
-        => bindings.GetBinding(instance.Id, savegameId);
+    public SavegameCheckoutBinding? GetBinding(Game game, Guid savegameId)
+        => bindings.GetBinding(game.Id, savegameId);
 
-    public SavegameCheckoutBinding? GetBindingForSlot(LocalInstance instance, SavegameSlotId slot)
-        => bindings.GetBindingForSlot(instance.Id, slot);
+    public SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotId slot)
+        => bindings.GetBindingForSlot(game.Id, slot);
 
-    public IReadOnlyList<SavegameCheckoutBinding> GetBindings(LocalInstance instance)
-        => bindings.GetBindings(instance.Id);
+    public IReadOnlyList<SavegameCheckoutBinding> GetBindings(Game game)
+        => bindings.GetBindings(game.Id);
 
-    public int? GetPlayedRevision(LocalInstance instance, Guid savegameId)
-        => bindings.GetBinding(instance.Id, savegameId) is SavegameCheckoutBinding binding
+    public int? GetPlayedRevision(Game game, Guid savegameId)
+        => bindings.GetBinding(game.Id, savegameId) is SavegameCheckoutBinding binding
             && binding.ProfileId is Guid profileId
-            ? FindPlayedRevision(instance, binding, profileId)
+            ? FindPlayedRevision(game, binding, profileId)
             : null;
 
     public int? GetRequiredRevision(Guid instanceId, Guid profileId)
@@ -418,35 +418,35 @@ public sealed class SavegameService(
         int? appliedRevision)
         => profileId == appliedProfileId && appliedRevision is int applied ? applied : headRevision;
 
-    public bool Forget(LocalInstance instance, Guid savegameId)
+    public bool Forget(Game game, Guid savegameId)
     {
         // No adapter is required and none is asked for: this writes nothing to disk beyond local
-        // state, which is what makes it work for an instance whose scope no loaded repo serves.
-        var forgotten = bindings.Forget(instance.Id, savegameId);
+        // state, which is what makes it work for a game whose scope no loaded repo serves.
+        var forgotten = bindings.Forget(game.Id, savegameId);
 
         if (forgotten)
         {
             logger.LogInformation(
-                "Instance {Instance} stopped tracking savegame {Savegame}; the slot's contents were left alone.",
-                instance.Id, savegameId);
+                "Game {Game} stopped tracking savegame {Savegame}; the slot's contents were left alone.",
+                game.Id, savegameId);
         }
 
         return forgotten;
     }
 
-    public async Task<SavegameSlotId?> SuggestSlotAsync(LocalInstance instance, Guid savegameId, CancellationToken ct)
+    public async Task<SavegameSlotId?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
+        var adapter = RequireAdapter(game);
         var slots = await adapter.GetSlots(ct);
 
         // Nothing is hashed here, and nothing needs to be: free-ness turns on the slot being empty
         // and unclaimed, and a hash can only ever tell two kinds of occupied apart. Reading a hint
         // must not cost twenty archive passes.
         bool IsFree(SavegameSlot slot)
-            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(instance.Id, slot.Id), null)
+            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(game.Id, slot.Id), null)
                 is SavegameSlotAvailability.Free;
 
-        if (bindings.GetSlotHint(instance.Id, savegameId) is string hint &&
+        if (bindings.GetSlotHint(game.Id, savegameId) is string hint &&
             slots.FirstOrDefault(x => string.Equals(x.Id.Value, hint, StringComparison.OrdinalIgnoreCase)) is SavegameSlot remembered &&
             IsFree(remembered))
         {
@@ -458,11 +458,11 @@ public sealed class SavegameService(
         return slots.FirstOrDefault(IsFree)?.Id;
     }
 
-    public async Task<SavegameSlotAvailability> ClassifySlotAsync(LocalInstance instance, SavegameSlotId slot, CancellationToken ct)
+    public async Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotId slot, CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
+        var adapter = RequireAdapter(game);
 
-        return await ClassifyAsync(instance, adapter, slot, ct);
+        return await ClassifyAsync(game, adapter, slot, ct);
     }
 
     /// <summary>
@@ -491,12 +491,12 @@ public sealed class SavegameService(
     /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">
-    /// The slot holds play nobody has checked in, or this instance already holds a savegame that
+    /// The slot holds play nobody has checked in, or this game already holds a savegame that
     /// claims its mod folder.
     /// </exception>
-    public async Task CheckOutAsync(LocalInstance instance, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct)
+    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
+        var adapter = RequireAdapter(game);
         var head = savegame.Head
             ?? throw new UserFriendlyException(
                 $"'{savegame.Name}' has nothing to check out",
@@ -505,9 +505,9 @@ public sealed class SavegameService(
         // Read off the version rather than the savegame, because that is what the binding will record
         // a moment later and the limit has to count what the binding claims. The server keeps the two
         // in step - a version's profile is its savegame's - so they cannot disagree.
-        EnsureModFolderIsFree(instance, savegame.Id, head.ProfileId, savegame.Name);
+        EnsureModFolderIsFree(game, savegame.Id, head.ProfileId, savegame.Name);
 
-        await EnsureWritable(instance, adapter, slot, savegame.Name, ct);
+        await EnsureWritable(game, adapter, slot, savegame.Name, ct);
 
         await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
 
@@ -516,7 +516,7 @@ public sealed class SavegameService(
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
         // and which version is in it, and writing it before the unpack would claim a slot holding
         // somebody else's save.
-        bindings.SetBinding(instance.Id, new SavegameCheckoutBinding(
+        bindings.SetBinding(game.Id, new SavegameCheckoutBinding(
             savegame.RepoId,
             savegame.Id,
             slot.Value,
@@ -548,11 +548,11 @@ public sealed class SavegameService(
     /// there is no version to mint from it and no claim to give back, so it is a copy in the plainest
     /// sense.
     /// </remarks>
-    public async Task TakeCopyAsync(LocalInstance instance, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct)
+    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
+        var adapter = RequireAdapter(game);
 
-        await EnsureWritable(instance, adapter, slot, savegame.Name, ct);
+        await EnsureWritable(game, adapter, slot, savegame.Name, ct);
 
         var contentHash = await ResolveVersionHashAsync(savegame, versionNumber, ct);
 
@@ -562,9 +562,9 @@ public sealed class SavegameService(
         // entirely, and the safety check would read that slot as unpublished play forever. The claim
         // it recorded is still open on the server - the caller is the one that can offer to give it
         // back, and it can only do that if this leaves a truthful local record behind.
-        if (bindings.GetBindingForSlot(instance.Id, slot) is SavegameCheckoutBinding displaced)
+        if (bindings.GetBindingForSlot(game.Id, slot) is SavegameCheckoutBinding displaced)
         {
-            bindings.ClearBinding(instance.Id, displaced.SavegameId);
+            bindings.ClearBinding(game.Id, displaced.SavegameId);
         }
     }
 
@@ -597,18 +597,18 @@ public sealed class SavegameService(
     /// </param>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
     public async Task<SavegameVersionDto> CheckInAsync(
-        LocalInstance instance,
+        Game game,
         Guid savegameId,
         string? label,
         bool keepPlaying,
         bool force,
         CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
-        var binding = bindings.GetBinding(instance.Id, savegameId)
+        var adapter = RequireAdapter(game);
+        var binding = bindings.GetBinding(game.Id, savegameId)
             ?? throw new UserFriendlyException(
                 "This machine is not holding that savegame",
-                $"No checkout binding for savegame '{savegameId}' in instance '{instance.Id}'. Only the machine that checked a save out can check it in.");
+                $"No checkout binding for savegame '{savegameId}' in game '{game.Id}'. Only the machine that checked a save out can check it in.");
 
         var slot = new SavegameSlotId(binding.SlotId);
         var packed = await packer.PackAsync(adapter, slot, ct);
@@ -616,7 +616,7 @@ public sealed class SavegameService(
         // The last observation, and the packed hash is exactly what one would compute - the packer
         // hashes what it writes - so it costs no second pass over the folder. Play since the previous
         // look belongs to the revision this folder is on now, which is what the version will name.
-        binding = Observe(instance.Id, binding, packed.ContentHash);
+        binding = Observe(game.Id, binding, packed.ContentHash);
 
         // Read from the slot these bytes came from, before the upload rather than after: the details
         // describe the version being minted.
@@ -631,7 +631,7 @@ public sealed class SavegameService(
             version = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
             {
                 BasedOn = binding.Version,
-                ProfileRevision = ResolveAppliedRevision(instance, binding),
+                ProfileRevision = ResolveAppliedRevision(game, binding),
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
                 Label = label,
@@ -652,7 +652,7 @@ public sealed class SavegameService(
             // than on a version that is no longer the head. The hash is the packed one and not the
             // slot's - they are the same bytes by construction, and re-hashing the folder would cost
             // a second full pass to learn nothing.
-            bindings.SetBinding(instance.Id, binding with
+            bindings.SetBinding(game.Id, binding with
             {
                 Version = version.Number,
                 ContentHash = version.ContentHash,
@@ -672,7 +672,7 @@ public sealed class SavegameService(
         // Only now. The binding goes first so that a failure to recycle cannot leave a slot claimed
         // by a savegame that is no longer checked out - the folder left behind reads as unrecognised,
         // which needs a confirmation to displace, and that is the safe way round.
-        bindings.ClearBinding(instance.Id, savegameId);
+        bindings.ClearBinding(game.Id, savegameId);
         Recycle(adapter, slot);
 
         return version;
@@ -680,27 +680,27 @@ public sealed class SavegameService(
 
     /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
     public async Task<MakeSavegameCurrentResponse> MakeCurrentAsync(
-        IReadOnlyList<LocalInstance> instances,
+        IReadOnlyList<Game> games,
         SavegameDto savegame,
         CancellationToken ct)
     {
         var response = await savegamesClient.MakeSavegameCurrentV1Async(savegame.RepoId, savegame.Id, ct);
 
         // After the server, and only after: a pin cleared against a swap that was then refused would
-        // leave this instance free to apply head under a savegame that is still past.
-        foreach (var instance in instances)
+        // leave this game free to apply head under a savegame that is still past.
+        foreach (var game in games)
         {
-            if (bindings.GetBinding(instance.Id, savegame.Id) is not SavegameCheckoutBinding binding
+            if (bindings.GetBinding(game.Id, savegame.Id) is not SavegameCheckoutBinding binding
                 || binding.TargetRevision is null)
             {
                 continue;
             }
 
-            bindings.SetBinding(instance.Id, binding with { TargetRevision = null });
+            bindings.SetBinding(game.Id, binding with { TargetRevision = null });
 
             logger.LogInformation(
-                "Savegame {Savegame} is current again; instance {Instance} stopped pinning its mod folder to revision {Revision}.",
-                savegame.Id, instance.Id, binding.TargetRevision);
+                "Savegame {Savegame} is current again; game {Game} stopped pinning its mod folder to revision {Revision}.",
+                savegame.Id, game.Id, binding.TargetRevision);
         }
 
         return response;
@@ -725,7 +725,7 @@ public sealed class SavegameService(
     /// </para>
     /// <para>
     /// <b>The profile is asked for rather than derived.</b> Every profile in the repo is a legitimate
-    /// answer and so is none of them - the instance's active one is only the likeliest - so the
+    /// answer and so is none of them - the game's active one is only the likeliest - so the
     /// caller settles it and hands the pair down. The revision half is a <em>declaration</em>: the
     /// bytes predate ModsDude, nothing knows which mods were in the folder while that savegame was
     /// actually played, and no arrangement of this flow recovers it. Every version after the first is
@@ -733,10 +733,10 @@ public sealed class SavegameService(
     /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">
-    /// The instance already holds a savegame that claims its mod folder.
+    /// The game already holds a savegame that claims its mod folder.
     /// </exception>
     public async Task<SavegameDto> PublishAsync(
-        LocalInstance instance,
+        Game game,
         Guid repoId,
         SavegameSlotId slot,
         string name,
@@ -744,14 +744,14 @@ public sealed class SavegameService(
         SavegamePublishTarget? target,
         CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
+        var adapter = RequireAdapter(game);
         var savegameId = Guid.NewGuid();
 
         // The check-out limit reached from the other end rather than a rule of its own: a publish
-        // opens a claim in the same transaction as the savegame, so it leaves this instance holding
+        // opens a claim in the same transaction as the savegame, so it leaves this game holding
         // one - and only publishing *to a profile* claims the mod folder. One with no mod list has no
         // such precondition, which is why the id goes in nullable.
-        EnsureModFolderIsFree(instance, savegameId, target?.ProfileId, name);
+        EnsureModFolderIsFree(game, savegameId, target?.ProfileId, name);
 
         var packed = await packer.PackAsync(adapter, slot, ct);
 
@@ -783,7 +783,7 @@ public sealed class SavegameService(
         // Publishing leaves you holding it: the server opens a claim beside the version, and this is
         // the local half of the same fact. Without it the slot the save is sitting in would read as
         // unrecognised the moment it was published.
-        bindings.SetBinding(instance.Id, new SavegameCheckoutBinding(
+        bindings.SetBinding(game.Id, new SavegameCheckoutBinding(
             repoId,
             savegameId,
             slot.Value,
@@ -816,20 +816,20 @@ public sealed class SavegameService(
     /// explicit "I never played this".
     /// </remarks>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
-    public async Task DiscardAsync(LocalInstance instance, Guid savegameId, CancellationToken ct)
+    public async Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct)
     {
-        var adapter = RequireAdapter(instance);
-        var binding = bindings.GetBinding(instance.Id, savegameId)
+        var adapter = RequireAdapter(game);
+        var binding = bindings.GetBinding(game.Id, savegameId)
             ?? throw new UserFriendlyException(
                 "This machine is not holding that savegame",
-                $"No checkout binding for savegame '{savegameId}' in instance '{instance.Id}', so there is no claim of ours to give back.");
+                $"No checkout binding for savegame '{savegameId}' in game '{game.Id}', so there is no claim of ours to give back.");
 
         // The server first: it is the half somebody else is waiting on, and a local record cleared
         // against a claim that is still open would leave the save unclaimable by anybody, this
         // machine included.
         await savegamesClient.DiscardSavegameCheckoutV1Async(binding.RepoId, savegameId, ct);
 
-        bindings.ClearBinding(instance.Id, savegameId);
+        bindings.ClearBinding(game.Id, savegameId);
         Recycle(adapter, new SavegameSlotId(binding.SlotId));
     }
 
@@ -838,13 +838,13 @@ public sealed class SavegameService(
         var held = bindings.GetBindings(instanceId);
 
         // The overwhelmingly common answer, for one list read - the same bargain the drift check
-        // strikes, and for the same reason: nearly every apply is to an instance holding nothing.
+        // strikes, and for the same reason: nearly every apply is to a game holding nothing.
         if (held.Count == 0)
         {
             return;
         }
 
-        // An instance whose scope no loaded repo serves observes nothing, quietly - the same answer
+        // A game whose scope no loaded repo serves observes nothing, quietly - the same answer
         // the drift check gives for a folder it cannot reach.
         var adapter = adapters.TryGet(instanceId);
 
@@ -896,7 +896,7 @@ public sealed class SavegameService(
             return [];
         }
 
-        // An instance whose scope no loaded repo serves reports nothing. Unknown, not drifted - the
+        // A game whose scope no loaded repo serves reports nothing. Unknown, not drifted - the
         // same answer the mod check gives for a folder it cannot reach.
         var adapter = Maybe.From(adapters.TryGet(instanceId));
 
@@ -1007,7 +1007,7 @@ public sealed class SavegameService(
         bindings.SetBinding(instanceId, observed);
 
         logger.LogInformation(
-            "Savegame {Savegame} in instance {Instance} has been played since it was last looked at; attributed to profile revision {Revision}.",
+            "Savegame {Savegame} in game {Game} has been played since it was last looked at; attributed to profile revision {Revision}.",
             binding.SavegameId, instanceId, observed.LastPlayedRevision);
 
         return observed;
@@ -1023,12 +1023,12 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Refuses to take a second savegame that claims this instance's mod folder.
+    /// Refuses to take a second savegame that claims this game's mod folder.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>The limit is about the folder, not about savegames.</b> One mod folder can only be on one
-    /// revision, so two savegames following two mod lists cannot both be played out of one instance - and
+    /// revision, so two savegames following two mod lists cannot both be played out of one game - and
     /// that is the whole of the reason. A savegame with no profile makes no claim on the folder, so it
     /// neither counts nor is counted against; any number of those may be held at once.
     /// </para>
@@ -1039,21 +1039,21 @@ public sealed class SavegameService(
     /// discard by hand.
     /// </para>
     /// </remarks>
-    private void EnsureModFolderIsFree(LocalInstance instance, Guid savegameId, Guid? profileId, string savegameName)
+    private void EnsureModFolderIsFree(Game game, Guid savegameId, Guid? profileId, string savegameName)
     {
         if (profileId is null)
         {
             return;
         }
 
-        if (SavegameHoldRules.FindConflictingHold(bindings.GetBindings(instance.Id), savegameId) is not SavegameCheckoutBinding blocking)
+        if (SavegameHoldRules.FindConflictingHold(bindings.GetBindings(game.Id), savegameId) is not SavegameCheckoutBinding blocking)
         {
             return;
         }
 
         throw new UserFriendlyException(
-            $"'{instance.Name}' is already holding a savegame",
-            $"Savegame '{blocking.SavegameId}' is checked out in instance '{instance.Id}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
+            $"'{game.Name}' is already holding a savegame",
+            $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Id}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
     }
 
     /// <summary>
@@ -1066,13 +1066,13 @@ public sealed class SavegameService(
     /// displaced.
     /// </remarks>
     private async Task EnsureWritable(
-        LocalInstance instance,
+        Game game,
         ILocalSavegameAdapter adapter,
         SavegameSlotId slot,
         string savegameName,
         CancellationToken ct)
     {
-        var availability = await ClassifyAsync(instance, adapter, slot, ct);
+        var availability = await ClassifyAsync(game, adapter, slot, ct);
 
         if (SavegameSlotStates.IsRefused(availability) is false)
         {
@@ -1085,7 +1085,7 @@ public sealed class SavegameService(
     }
 
     private async Task<SavegameSlotAvailability> ClassifyAsync(
-        LocalInstance instance,
+        Game game,
         ILocalSavegameAdapter adapter,
         SavegameSlotId slotId,
         CancellationToken ct)
@@ -1097,7 +1097,7 @@ public sealed class SavegameService(
             // it comes to it, which is its call to make and not this one's.
             ?? new SavegameSlot(slotId, null, false, []);
 
-        var binding = bindings.GetBindingForSlot(instance.Id, slot.Id);
+        var binding = bindings.GetBindingForSlot(game.Id, slot.Id);
 
         // Hashed only where something claims the slot: without a binding there is no recorded hash to
         // compare against, so the pass would cost a full archive read to change no answer.
@@ -1250,12 +1250,12 @@ public sealed class SavegameService(
     /// The manifest is the fallback rather than the answer, and only where it describes the same
     /// profile the save was checked out against: two revision numbers belonging to two different
     /// profiles are not comparable, and the server rejects a revision that is not the savegame's
-    /// profile's, so sending one because the user re-pointed the instance would fail the check-in with
+    /// profile's, so sending one because the user re-pointed the game would fail the check-in with
     /// a message about a profile they were not thinking about. What the binding recorded at check-out
     /// is the last resort, and it is still honest - it says which list the save was handed over on.
     /// </para>
     /// </remarks>
-    private int? ResolveAppliedRevision(LocalInstance instance, SavegameCheckoutBinding binding)
+    private int? ResolveAppliedRevision(Game game, SavegameCheckoutBinding binding)
     {
         // A savegame following no mod list sends no revision at all, and the server refuses one that
         // does. Nothing was attributed to it either: Observe() leaves such a binding alone.
@@ -1264,10 +1264,10 @@ public sealed class SavegameService(
             return null;
         }
 
-        return FindPlayedRevision(instance, binding, profileId)
+        return FindPlayedRevision(game, binding, profileId)
             ?? throw new UserFriendlyException(
-                $"'{instance.Name}' has no record of which mod list it is on",
-                $"Neither the sync manifest for instance '{instance.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this instance and check in again.");
+                $"'{game.Name}' has no record of which mod list it is on",
+                $"Neither the sync manifest for game '{game.Id}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.");
     }
 
     /// <summary>
@@ -1276,14 +1276,14 @@ public sealed class SavegameService(
     /// inheriting its refusal: what it has to say is "played on rev 1004", and it has nothing useful
     /// to say about a savegame whose revision nothing on this machine knows.
     /// </summary>
-    private int? FindPlayedRevision(LocalInstance instance, SavegameCheckoutBinding binding, Guid profileId)
+    private int? FindPlayedRevision(Game game, SavegameCheckoutBinding binding, Guid profileId)
     {
         if (binding.LastPlayedRevision is int played)
         {
             return played;
         }
 
-        var manifest = manifestStore.TryRead(instance.Id);
+        var manifest = manifestStore.TryRead(game.Id);
 
         if (manifest?.ProfileRevision is int applied && profileId == manifest.ProfileId)
         {
@@ -1357,11 +1357,11 @@ public sealed class SavegameService(
         }
     }
 
-    private ILocalSavegameAdapter RequireAdapter(LocalInstance instance)
-        => adapters.TryGet(instance)
+    private ILocalSavegameAdapter RequireAdapter(Game game)
+        => adapters.TryGet(game)
             ?? throw new UserFriendlyException(
-                $"'{instance.Name}' has no savegames",
-                $"No loaded repo hydrates a savegame adapter for instance '{instance.Id}' - either its game does not support savegames, or no repo on this machine serves its scope.");
+                $"'{game.Name}' has no savegames",
+                $"No loaded repo hydrates a savegame adapter for game '{game.Id}' - either its game does not support savegames, or no repo on this machine serves its scope.");
 
     /// <summary>Slots, or nothing where the game folder is unreachable - unknown, never drifted.</summary>
     private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(ILocalSavegameAdapter adapter, CancellationToken ct)
@@ -1374,7 +1374,7 @@ public sealed class SavegameService(
         {
             // An unreachable game folder reads as "no slots", which is deliberately indistinguishable
             // from an empty one to everything above - so this is the only place it is visible.
-            logger.LogWarning(exception, "Could not read the savegame slots; treating the instance as having none.");
+            logger.LogWarning(exception, "Could not read the savegame slots; treating the game as having none.");
 
             return [];
         }

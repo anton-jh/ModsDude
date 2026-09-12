@@ -2,11 +2,11 @@
 
 namespace ModsDude.Client.Wpf.View.Pages;
 /// <summary>
-/// Interaction logic for InstancePage.xaml
+/// Interaction logic for GamePage.xaml
 /// </summary>
-public partial class InstancePage : Page
+public partial class GamePage : Page
 {
-    public InstancePage()
+    public GamePage()
     {
         InitializeComponent();
     }

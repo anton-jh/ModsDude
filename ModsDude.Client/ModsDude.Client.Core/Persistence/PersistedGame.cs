@@ -3,16 +3,16 @@ using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Persistence;
 
-public class PersistedLocalInstance
+public class PersistedGame
 {
     public required Guid Id { get; init; }
 
-    /// <summary>The game this instance belongs to. Every repo with the same scope offers it.</summary>
+    /// <summary>The game this installation is of. Every repo with the same scope offers it.</summary>
     public required GameIdentity Scope { get; init; }
 
     /// <summary>
     /// Which adapter version authored <see cref="AdapterLocalSettings"/>. Not part of the scope,
-    /// so a repo on a newer compatibility version still offers this instance and has to be able to
+    /// so a repo on a newer compatibility version still offers this game and has to be able to
     /// read the older settings.
     /// </summary>
     public required GameAdapterId GameAdapterId { get; init; }
@@ -21,8 +21,8 @@ public class PersistedLocalInstance
     public required string AdapterLocalSettings { get; set; }
 
     /// <summary>
-    /// The folder the adapter says this instance owns, recorded so the ownership check can run
-    /// across every scope. An instance whose scope has no repo on this machine cannot hydrate its
+    /// The folder the adapter says this game owns, recorded so the ownership check can run
+    /// across every scope. A game whose scope has no repo on this machine cannot hydrate its
     /// adapter, and it still owns its folder.
     /// </summary>
     public string? ModFolder { get; set; }
@@ -30,7 +30,7 @@ public class PersistedLocalInstance
     public ActiveProfile? ActiveProfile { get; set; }
 
     /// <summary>
-    /// The savegames this instance currently holds, one per occupied slot. Underivable once somebody
+    /// The savegames this game currently holds, one per occupied slot. Underivable once somebody
     /// has played, so it is persisted rather than worked out - see
     /// <see cref="SavegameCheckoutBinding"/>.
     /// </summary>

@@ -47,7 +47,7 @@ public sealed record ModImportRequest(
     public int MaxPlacementRetries { get; init; } = 4;
 
     /// <summary>
-    /// The mod folders these mods are being imported for - the instances on this machine whose scope
+    /// The mod folders these mods are being imported for - the games on this machine whose scope
     /// is the repo's. Used for one thing: deciding which content store an imported file is copied
     /// into, so the sync that follows does not fetch back bytes that never left.
     /// </summary>

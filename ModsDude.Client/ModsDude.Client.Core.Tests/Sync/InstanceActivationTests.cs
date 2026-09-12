@@ -10,7 +10,7 @@ public class InstanceActivationTests
 
 
     [Fact]
-    public void An_instance_already_on_the_profile_is_being_re_applied()
+    public void An_game_already_on_the_profile_is_being_re_applied()
     {
         var target = new ActiveProfile(_repoId, _profileId);
 
@@ -19,7 +19,7 @@ public class InstanceActivationTests
     }
 
     [Fact]
-    public void An_instance_on_another_profile_is_being_moved()
+    public void An_game_on_another_profile_is_being_moved()
     {
         var current = new ActiveProfile(_repoId, Guid.NewGuid());
         var target = new ActiveProfile(_repoId, _profileId);
@@ -29,7 +29,7 @@ public class InstanceActivationTests
     }
 
     [Fact]
-    public void An_instance_on_nothing_is_being_moved_too()
+    public void An_game_on_nothing_is_being_moved_too()
     {
         Assert.Equal(
             InstanceActivationKind.Activate,
@@ -52,11 +52,11 @@ public class InstanceActivationTests
     }
 
     /// <summary>
-    /// Nothing pins the folder for a profile the instance is not on - the hold is per profile - so the
+    /// Nothing pins the folder for a profile the game is not on - the hold is per profile - so the
     /// combination cannot arise, and the label stays the plain one either way.
     /// </summary>
     [Fact]
-    public void Moving_an_instance_never_names_a_revision()
+    public void Moving_an_game_never_names_a_revision()
     {
         var current = new ActiveProfile(_repoId, Guid.NewGuid());
         var kind = InstanceActivation.Describe(current, new ActiveProfile(_repoId, _profileId));

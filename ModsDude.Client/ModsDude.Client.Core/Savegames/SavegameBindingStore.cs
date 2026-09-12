@@ -4,7 +4,7 @@ using ModsDude.Client.Core.Persistence;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// The persisted instance record this store reads and writes, and the one call that flushes it to
+/// The persisted game record this store reads and writes, and the one call that flushes it to
 /// disk.
 /// </summary>
 /// <remarks>
@@ -17,29 +17,29 @@ namespace ModsDude.Client.Core.Savegames;
 /// </para>
 /// <para>
 /// Deliberately not a repository of its own: the bindings live on
-/// <see cref="PersistedLocalInstance"/>, in the same file and under the same save as the instance's
+/// <see cref="PersistedGame"/>, in the same file and under the same save as the game's
 /// active profile, because losing one without the other would leave a slot held by a savegame nothing
 /// can name.
 /// </para>
 /// </remarks>
-public interface IPersistedInstanceState
+public interface IPersistedGameState
 {
-    /// <summary>The instance's persisted record, or null where no such instance is configured.</summary>
-    PersistedLocalInstance? Find(Guid instanceId);
+    /// <summary>The game's persisted record, or null where no such game is configured.</summary>
+    PersistedGame? Find(Guid instanceId);
 
     /// <summary>Flushes every pending change. Whole-state, exactly as the rest of the client saves.</summary>
     void Save();
 }
 
 
-/// <summary><see cref="IPersistedInstanceState"/> over the real <c>state.json</c>.</summary>
-public sealed class StateStoreInstanceState(StateStore store) : IPersistedInstanceState
+/// <summary><see cref="IPersistedGameState"/> over the real <c>state.json</c>.</summary>
+public sealed class StateStoreGameState(StateStore store) : IPersistedGameState
 {
-    public PersistedLocalInstance? Find(Guid instanceId)
-        => store.Get().Instances.TryGetValue(instanceId, out var instance) ? instance : null;
+    public PersistedGame? Find(Guid instanceId)
+        => store.Get().Games.TryGetValue(instanceId, out var game) ? game : null;
 
     // Store.Save() serialises the entire LocalState, so there is nothing finer to flush and no
-    // ordering to get wrong - the same call LocalInstanceRepository makes after every mutation.
+    // ordering to get wrong - the same call GameRepository makes after every mutation.
     public void Save() => store.Save();
 }
 
@@ -68,7 +68,7 @@ public sealed class StateStoreInstanceState(StateStore store) : IPersistedInstan
 /// unrecognised folder holding play that ModsDude put there and can no longer name.
 /// </para>
 /// </remarks>
-public sealed class SavegameBindingStore(IPersistedInstanceState state)
+public sealed class SavegameBindingStore(IPersistedGameState state)
 {
     /// <summary>
     /// Raised after a binding is taken, released or forgotten.
@@ -83,7 +83,7 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
 
 
     /// <summary>
-    /// What this instance holds for one savegame, or null where it holds none.
+    /// What this game holds for one savegame, or null where it holds none.
     /// </summary>
     /// <remarks>
     /// Keyed on the savegame id alone rather than on <c>(RepoId, SavegameId)</c>: the id is a Guid
@@ -97,7 +97,7 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
     }
 
     /// <summary>
-    /// What this instance holds in one slot, or null where the slot holds nothing ModsDude checked
+    /// What this game holds in one slot, or null where the slot holds nothing ModsDude checked
     /// out. Null does <b>not</b> mean the slot is empty - see
     /// <see cref="SavegameSlotAvailability.Unrecognised"/>, which is exactly this answer combined
     /// with an occupied slot.
@@ -112,7 +112,7 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
         => GetBindingForSlot(instanceId, slotId.Value);
 
     /// <summary>
-    /// Everything this instance currently holds. A short list by construction - a slot is occupied by
+    /// Everything this game currently holds. A short list by construction - a slot is occupied by
     /// ModsDude only while a save is checked out, which is one or two, not twenty.
     /// </summary>
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(Guid instanceId)
@@ -139,22 +139,22 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
     /// app is closed.
     /// </para>
     /// </remarks>
-    /// <exception cref="InvalidOperationException">No such instance is configured on this machine.</exception>
+    /// <exception cref="InvalidOperationException">No such game is configured on this machine.</exception>
     public void SetBinding(Guid instanceId, SavegameCheckoutBinding binding)
     {
         // Refused rather than ignored. Silently dropping this loses the only record of which
         // savegame is sitting in that slot, and the folder is already written by the time anybody
         // would notice.
-        var instance = state.Find(instanceId)
-            ?? throw new InvalidOperationException($"No local instance '{instanceId}' to bind a savegame to.");
+        var game = state.Find(instanceId)
+            ?? throw new InvalidOperationException($"No local game '{instanceId}' to bind a savegame to.");
 
-        instance.SavegameCheckouts.RemoveAll(x =>
+        game.SavegameCheckouts.RemoveAll(x =>
             x.SavegameId == binding.SavegameId ||
             SlotIdsMatch(x.SlotId, binding.SlotId));
 
-        instance.SavegameCheckouts.Add(binding);
+        game.SavegameCheckouts.Add(binding);
 
-        SetHint(instance, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.SlotId));
+        SetHint(game, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.SlotId));
 
         state.Save();
 
@@ -174,12 +174,12 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
     {
         // A binding that is already gone is the state the caller wanted, so this is idempotent - a
         // check-in retried after a crash must not fail on its own success.
-        if (state.Find(instanceId) is not PersistedLocalInstance instance)
+        if (state.Find(instanceId) is not PersistedGame game)
         {
             return;
         }
 
-        if (instance.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId) == 0)
+        if (game.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId) == 0)
         {
             return;
         }
@@ -209,16 +209,16 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
     /// <c>DiscardAsync</c> is the answer where it does.
     /// </para>
     /// </remarks>
-    /// <returns>False where this instance knew nothing about the savegame, which is idempotent rather than an error.</returns>
+    /// <returns>False where this game knew nothing about the savegame, which is idempotent rather than an error.</returns>
     public bool Forget(Guid instanceId, Guid savegameId)
     {
-        if (state.Find(instanceId) is not PersistedLocalInstance instance)
+        if (state.Find(instanceId) is not PersistedGame game)
         {
             return false;
         }
 
-        var removed = instance.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId)
-            + instance.SavegameSlotHints.RemoveAll(x => x.SavegameId == savegameId);
+        var removed = game.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId)
+            + game.SavegameSlotHints.RemoveAll(x => x.SavegameId == savegameId);
 
         if (removed == 0)
         {
@@ -286,10 +286,10 @@ public sealed class SavegameBindingStore(IPersistedInstanceState state)
     /// One hint per savegame. Unlike a binding, a hint has no per-slot uniqueness to keep: two
     /// savegames may perfectly well remember the same slot, having taken turns in it.
     /// </summary>
-    private static void SetHint(PersistedLocalInstance instance, SavegameSlotHint hint)
+    private static void SetHint(PersistedGame game, SavegameSlotHint hint)
     {
-        instance.SavegameSlotHints.RemoveAll(x => x.SavegameId == hint.SavegameId);
-        instance.SavegameSlotHints.Add(hint);
+        game.SavegameSlotHints.RemoveAll(x => x.SavegameId == hint.SavegameId);
+        game.SavegameSlotHints.Add(hint);
     }
 
     /// <summary>

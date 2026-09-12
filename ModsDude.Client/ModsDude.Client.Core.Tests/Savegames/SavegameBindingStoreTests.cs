@@ -48,7 +48,7 @@ public class SavegameBindingStoreTests
     }
 
     /// <summary>
-    /// A savegame is checked out to at most one slot per instance. Moving it must leave nothing
+    /// A savegame is checked out to at most one slot per game. Moving it must leave nothing
     /// behind claiming the old slot, or that slot reads as held forever and can never be written to
     /// again.
     /// </summary>
@@ -238,12 +238,12 @@ public class SavegameBindingStoreTests
     }
 
     /// <summary>
-    /// An unknown instance is a question about a machine this one is not, so it reads as "holds
-    /// nothing" rather than throwing. Every read here is on a path that also runs for instances whose
+    /// An unknown game is a question about a machine this one is not, so it reads as "holds
+    /// nothing" rather than throwing. Every read here is on a path that also runs for games whose
     /// scope no repo on this machine serves.
     /// </summary>
     [Fact]
-    public void An_unknown_instance_holds_nothing()
+    public void An_unknown_game_holds_nothing()
     {
         var (store, _) = Store();
         var unknown = Guid.NewGuid();
@@ -259,7 +259,7 @@ public class SavegameBindingStoreTests
     /// is sitting in that slot, and the folder is already written by the time anybody would notice.
     /// </summary>
     [Fact]
-    public void Binding_a_savegame_to_an_unknown_instance_is_refused()
+    public void Binding_a_savegame_to_an_unknown_game_is_refused()
     {
         var (store, _) = Store();
 
@@ -286,11 +286,11 @@ public class SavegameBindingStoreTests
     }
 
     [Fact]
-    public void Bindings_are_kept_per_instance()
+    public void Bindings_are_kept_per_game()
     {
         var other = Guid.NewGuid();
         var (store, state) = Store();
-        state.Add(Instance(other));
+        state.Add(Game(other));
 
         var savegameId = Guid.NewGuid();
 
@@ -301,10 +301,10 @@ public class SavegameBindingStoreTests
     }
 
 
-    private (SavegameBindingStore Store, FakeInstanceState State) Store()
+    private (SavegameBindingStore Store, FakeGameState State) Store()
     {
-        var state = new FakeInstanceState();
-        state.Add(Instance(_instanceId));
+        var state = new FakeGameState();
+        state.Add(Game(_instanceId));
 
         return (new SavegameBindingStore(state), state);
     }
@@ -314,7 +314,7 @@ public class SavegameBindingStoreTests
     /// "One binding replaced another" and "one binding was added beside another" both read as one
     /// binding through the public surface, and only the list length tells them apart.
     /// </summary>
-    private PersistedLocalInstance Held(FakeInstanceState state) => state.Find(_instanceId)!;
+    private PersistedGame Held(FakeGameState state) => state.Find(_instanceId)!;
 
     private SavegameCheckoutBinding Binding(Guid savegameId, string slotId, int version = 1, string hash = "aaaa") => new(
         _repoId,
@@ -324,7 +324,7 @@ public class SavegameBindingStoreTests
         hash,
         DateTime.UtcNow);
 
-    private static PersistedLocalInstance Instance(Guid id) => new()
+    private static PersistedGame Game(Guid id) => new()
     {
         Id = id,
         Scope = new GameIdentity("farmingSimulator", "fs25"),
@@ -335,23 +335,23 @@ public class SavegameBindingStoreTests
 
 
     /// <summary>
-    /// The persisted instances, in memory. <c>state.json</c> lives at a fixed path under LocalAppData,
-    /// so a test running against the real store would rewrite the developer's own instance list - and
+    /// The persisted games, in memory. <c>state.json</c> lives at a fixed path under LocalAppData,
+    /// so a test running against the real store would rewrite the developer's own game list - and
     /// none of the rules under test is about json.
     /// </summary>
-    private sealed class FakeInstanceState : IPersistedInstanceState
+    private sealed class FakeGameState : IPersistedGameState
     {
-        private readonly Dictionary<Guid, PersistedLocalInstance> _instances = [];
+        private readonly Dictionary<Guid, PersistedGame> _games = [];
 
 
         /// <summary>Counted, because "saves on every change" is itself one of the rules.</summary>
         public int Saves { get; private set; }
 
 
-        public void Add(PersistedLocalInstance instance) => _instances[instance.Id] = instance;
+        public void Add(PersistedGame game) => _games[game.Id] = game;
 
-        public PersistedLocalInstance? Find(Guid instanceId)
-            => _instances.TryGetValue(instanceId, out var instance) ? instance : null;
+        public PersistedGame? Find(Guid instanceId)
+            => _games.TryGetValue(instanceId, out var game) ? game : null;
 
         public void Save() => Saves++;
     }

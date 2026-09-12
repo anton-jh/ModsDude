@@ -14,8 +14,8 @@ public class ModImportServiceTests : IDisposable
     private static readonly ModSource _downloads =
         new(ModSourceId.Downloads, "Downloads", @"C:\Downloads", ModSourceKind.Downloads);
 
-    private static readonly ModSource _instance =
-        new(ModSourceId.ForInstance(Guid.NewGuid()), "FS25", @"C:\FS25\mods", ModSourceKind.Instance);
+    private static readonly ModSource _game =
+        new(ModSourceId.ForInstance(Guid.NewGuid()), "FS25", @"C:\FS25\mods", ModSourceKind.Game);
 
     private readonly FakeModsDudeServer _server = new();
     private readonly RecordingModImagePublisher _imagery = new();
@@ -108,7 +108,7 @@ public class ModImportServiceTests : IDisposable
     }
 
     /// <summary>
-    /// The worked example from docs/09: v1 and v4 registered, v2 in an instance's mod folder and v3
+    /// The worked example from docs/09: v1 and v4 registered, v2 in a game's mod folder and v3
     /// in Downloads. Each insert names the version it goes before, and v4's position moves.
     /// </summary>
     [Fact]
@@ -118,7 +118,7 @@ public class ModImportServiceTests : IDisposable
 
         await ImportAsync(
         [
-            Local("FS25_Plough", "2.0", source: _instance),
+            Local("FS25_Plough", "2.0", source: _game),
             Local("FS25_Plough", "3.0", source: _downloads)
         ]);
 
@@ -200,7 +200,7 @@ public class ModImportServiceTests : IDisposable
     [Fact]
     public async Task A_mod_imported_out_of_the_mod_folder_is_not_copied_into_the_store()
     {
-        var version = Local("FS25_Plough", "1.0", source: _instance);
+        var version = Local("FS25_Plough", "1.0", source: _game);
 
         await ImportAsync([version]);
 
@@ -364,7 +364,7 @@ public class ModImportServiceTests : IDisposable
             FoundIn =
             [
                 Occurrence(_downloads, "one build"),
-                Occurrence(_instance, "one build")
+                Occurrence(_game, "one build")
             ]
         };
 
@@ -580,9 +580,9 @@ public class ModImportServiceTests : IDisposable
     {
         var request = new ModImportRequest(_server.RepoId, versions, DefaultModVersionComparer.Instance)
         {
-            // The instance source's folder, so every test in here runs with store seeding live -
+            // The game source's folder, so every test in here runs with store seeding live -
             // the point of which is that it is invisible: nothing about an import changes.
-            ModFolders = [_instance.Path]
+            ModFolders = [_game.Path]
         };
 
         return _service.ImportAsync(configure?.Invoke(request) ?? request, cancellationToken);
@@ -606,7 +606,7 @@ public class ModImportServiceTests : IDisposable
             FoundIn =
             [
                 Occurrence(_downloads, "one build", modId),
-                Occurrence(_instance, "a different build of the same version", modId)
+                Occurrence(_game, "a different build of the same version", modId)
             ]
         };
     }

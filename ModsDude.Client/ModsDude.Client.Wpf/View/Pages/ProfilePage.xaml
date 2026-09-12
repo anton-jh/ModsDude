@@ -19,7 +19,7 @@
                       ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-            <!-- On the shell rather than on Overview, so applying this profile to an instance is
+            <!-- On the shell rather than on Overview, so applying this profile to a game is
                  reachable from every sub-page. -->
             <StackPanel Grid.Row="2"
                         Orientation="Vertical"
@@ -27,11 +27,11 @@
                         Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
 
                 <ComboBox Margin="0 0 0 8"
-                          ItemsSource="{Binding Instances}"
+                          ItemsSource="{Binding Games}"
                           DisplayMemberPath="Name"
-                          SelectedItem="{Binding SelectedInstance, Mode=TwoWay}"
-                          ToolTip="Which game instance to use this profile on"
-                          Visibility="{Binding HasInstanceChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
+                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                          ToolTip="Which game to use this profile on"
+                          Visibility="{Binding HasGameChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <Button HorizontalAlignment="Stretch"
                         Style="{DynamicResource AccentButtonStyle}"

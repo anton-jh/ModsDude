@@ -10,10 +10,10 @@ namespace ModsDude.Client.Core.Models;
 /// settings it carries are hydrated by whichever repo offers it - they are the same settings under
 /// all of them.
 /// </summary>
-public class LocalInstance
+public class Game
     : INotifyPropertyChanged
 {
-    internal LocalInstance(PersistedLocalInstance persistedModel)
+    internal Game(PersistedGame persistedModel)
     {
         PersistedModel = persistedModel;
     }
@@ -29,7 +29,7 @@ public class LocalInstance
     public string? ModFolder => PersistedModel.ModFolder;
     public ActiveProfile? ActiveProfile => PersistedModel.ActiveProfile;
 
-    internal PersistedLocalInstance PersistedModel { get; }
+    internal PersistedGame PersistedModel { get; }
 
 
     public DynamicForm GetLocalSettings(IBaseGameAdapter baseAdapter)

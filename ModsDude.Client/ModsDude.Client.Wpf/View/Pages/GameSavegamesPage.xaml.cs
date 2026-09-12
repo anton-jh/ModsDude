@@ -3,11 +3,11 @@ using System.Windows.Controls;
 namespace ModsDude.Client.Wpf.View.Pages;
 
 /// <summary>
-/// Interaction logic for InstanceSavegamesPage.xaml
+/// Interaction logic for GameSavegamesPage.xaml
 /// </summary>
-public partial class InstanceSavegamesPage : Page
+public partial class GameSavegamesPage : Page
 {
-    public InstanceSavegamesPage()
+    public GameSavegamesPage()
     {
         InitializeComponent();
     }

@@ -21,16 +21,16 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <remarks>
 /// <para>
 /// The activation control sits here rather than on Overview so that it is present on every sub-page.
-/// From this end the profile is fixed and the instance is chosen, which is why there is a dropdown at
-/// all - and none when the repo offers a single instance, which is the common case for most games.
+/// From this end the profile is fixed and the game is chosen, which is why there is a dropdown at
+/// all - and none when the repo offers a single game, which is the common case for most games.
 /// </para>
 /// <para>
-/// It is <b>labelled for what it will do</b>: an instance already on this profile is being re-applied,
+/// It is <b>labelled for what it will do</b>: a game already on this profile is being re-applied,
 /// one on another profile or none is being moved, and moving it uninstalls whatever the previous
-/// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-instance.
+/// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-game.
 /// </para>
 /// <para>
-/// <b>And refused before the click where a held savegame forbids it.</b> This is the instance page's
+/// <b>And refused before the click where a held savegame forbids it.</b> This is the game page's
 /// disabled profile dropdown seen from the other end - the same switch, the same rule - and the apply
 /// table refuses it either way. A control that offers the move and then reports a refusal is the
 /// thing slice 4 set out to remove, so it is asked here too.
@@ -40,7 +40,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly InstanceDriftMonitor _driftMonitor;
@@ -64,7 +64,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         Repo repo,
         ProfileDto profile,
         NavigationManager navigationManager,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
         InstanceDriftMonitor driftMonitor,
@@ -76,7 +76,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     {
         _repo = repo;
         _profile = profile;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         _applyService = applyService;
         _heldSavegames = heldSavegames;
         _driftMonitor = driftMonitor;
@@ -123,12 +123,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];
 
-        Instances = [];
+        Games = [];
 
         NavManager.Selected = MenuItems.First();
         NavManager.PropertyChanged += OnNavigationChanged;
 
-        _repo.LocalInstances.CollectionChanged += OnInstancesChanged;
+        _repo.Games.CollectionChanged += OnGamesChanged;
 
         RefreshInstances();
     }
@@ -138,18 +138,18 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public NavigationManager NavManager { get; }
 
-    /// <summary>The instances this repo offers, which are compatible with it by construction.</summary>
-    public ObservableCollection<LocalInstance> Instances { get; }
+    /// <summary>The games this repo offers, which are compatible with it by construction.</summary>
+    public ObservableCollection<Game> Games { get; }
 
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivationLabel))]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
-    private LocalInstance? _selectedInstance;
+    private Game? _selectedGame;
 
     /// <summary>
-    /// Why the selected instance cannot be put on this profile, where it cannot. Null - nearly
+    /// Why the selected game cannot be put on this profile, where it cannot. Null - nearly
     /// always - where nothing is in the way.
     /// </summary>
     /// <remarks>
@@ -166,7 +166,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     public bool HasHoldRefusal => HoldRefusal is not null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasInstanceChoice))]
+    [NotifyPropertyChangedFor(nameof(HasGameChoice))]
     [NotifyPropertyChangedFor(nameof(HasActivation))]
     private int _instanceCount;
 
@@ -190,13 +190,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public bool HasActivation => InstanceCount > 0;
 
-    /// <summary>With one instance there is nothing to pick, so the dropdown does not appear at all.</summary>
-    public bool HasInstanceChoice => InstanceCount > 1;
+    /// <summary>With one game there is nothing to pick, so the dropdown does not appear at all.</summary>
+    public bool HasGameChoice => InstanceCount > 1;
 
     public bool HasActivationStatus => ActivationStatus is not null;
 
     public InstanceActivationKind ActivationKind => InstanceActivation.Describe(
-        SelectedInstance?.ActiveProfile,
+        SelectedGame?.ActiveProfile,
         new ActiveProfile(_repo.Id, _profile.Id));
 
     public string ActivationLabel => InstanceActivation.Label(ActivationKind);
@@ -215,14 +215,14 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return refused;
             }
 
-            if (SelectedInstance is not LocalInstance instance)
+            if (SelectedGame is not Game game)
             {
                 return "";
             }
 
             return ActivationKind is InstanceActivationKind.Reapply
-                ? $"'{instance.Name}' already follows this profile. Applying it again makes the mod folder match."
-                : $"'{instance.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
+                ? $"'{game.Name}' already follows this profile. Applying it again makes the mod folder match."
+                : $"'{game.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
         }
     }
 
@@ -230,7 +230,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanActivate), IncludeCancelCommand = true)]
     private async Task Activate(CancellationToken cancellationToken)
     {
-        if (SelectedInstance is not LocalInstance instance)
+        if (SelectedGame is not Game game)
         {
             return;
         }
@@ -245,20 +245,20 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         {
             var outcome = await _applyService.ApplyAsync(
                 _repo,
-                instance,
+                game,
                 _profile.Id,
                 _profile.Name,
-                // Moving an instance onto a different profile takes the previous one's mods back out,
+                // Moving a game onto a different profile takes the previous one's mods back out,
                 // so the plan is shown first. A re-apply has nothing extra to disclose.
                 confirmPlan: kind is InstanceActivationKind.Activate,
                 progress: null,
                 cancellationToken);
 
-            // The intent is recorded whatever the folder ended up doing: an instance that could not be
+            // The intent is recorded whatever the folder ended up doing: a game that could not be
             // reached is still meant to follow this profile, and the drift notice covers the rest.
             if (outcome.RecordsIntent)
             {
-                _localInstanceRepository.SetActiveProfile(instance, target);
+                _gameRepository.SetActiveProfile(game, target);
             }
 
             ActivationStatus = outcome.Message;
@@ -276,13 +276,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanActivate()
-        => SelectedInstance is not null
+        => SelectedGame is not null
         && IsApplying is false
         && BlockedByUnsavedChanges is false
         && HasHoldRefusal is false;
 
     /// <summary>
-    /// Whether a savegame checked out on the selected instance forbids putting it on this profile.
+    /// Whether a savegame checked out on the selected game forbids putting it on this profile.
     /// </summary>
     /// <remarks>
     /// Only the outright refusal is a block. A <em>past</em> savegame of this very profile pins the folder
@@ -292,22 +292,22 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private void RefreshHoldRefusal()
     {
-        if (SelectedInstance is not LocalInstance instance)
+        if (SelectedGame is not Game game)
         {
             HoldRefusal = null;
 
             return;
         }
 
-        HoldRefusal = _heldSavegames.DecideApply(instance.Id, _profile.Id, revision: null) is { IsAllowed: false }
-            ? $"'{instance.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."
+        HoldRefusal = _heldSavegames.DecideApply(game.Id, _profile.Id, revision: null) is { IsAllowed: false }
+            ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."
             : null;
     }
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
     /// <param name="scanInstanceId">
-    /// An instance whose mod folder the editor should open already scanning. Sources are off by
+    /// A game whose mod folder the editor should open already scanning. Sources are off by
     /// default because opening a page must not read a disk - but arriving here from a drift notice
     /// <em>is</em> the user asking about that folder's contents, so the one it is about is on.
     /// </param>
@@ -368,49 +368,49 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         DetachModsEditor();
 
         NavManager.PropertyChanged -= OnNavigationChanged;
-        _repo.LocalInstances.CollectionChanged -= OnInstancesChanged;
+        _repo.Games.CollectionChanged -= OnGamesChanged;
 
         NavManager.Dispose();
     }
 
 
     /// <summary>
-    /// Re-asks the hold question for whichever instance is selected now.
+    /// Re-asks the hold question for whichever game is selected now.
     /// </summary>
     /// <remarks>
     /// Selection is the only thing that can change the answer while this page is up: checking a
-    /// savegame in happens on a repo's Saves list or an instance's own, and reaching either means
+    /// savegame in happens on a repo's Saves list or a game's own, and reaching either means
     /// leaving this page - which rebuilds it. Subscribing to the binding store as well would be
     /// covering a window that does not exist.
     /// </remarks>
-    partial void OnSelectedInstanceChanged(LocalInstance? value)
+    partial void OnSelectedGameChanged(Game? value)
     {
         RefreshHoldRefusal();
     }
 
-    private void OnInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshInstances();
     }
 
     private void RefreshInstances()
     {
-        var previous = SelectedInstance;
+        var previous = SelectedGame;
 
-        Instances.Clear();
+        Games.Clear();
 
-        foreach (var instance in _repo.LocalInstances)
+        foreach (var game in _repo.Games)
         {
-            Instances.Add(instance);
+            Games.Add(game);
         }
 
-        InstanceCount = Instances.Count;
+        InstanceCount = Games.Count;
 
-        // Prefer one already on this profile: with several instances the likeliest intent is
+        // Prefer one already on this profile: with several games the likeliest intent is
         // re-applying, and that is also the one the label has to get right on first sight.
-        SelectedInstance = previous is not null && Instances.Contains(previous) ? previous : Instances
+        SelectedGame = previous is not null && Games.Contains(previous) ? previous : Games
             .FirstOrDefault(x => x.ActiveProfile == new ActiveProfile(_repo.Id, _profile.Id))
-            ?? Instances.FirstOrDefault();
+            ?? Games.FirstOrDefault();
 
         OnPropertyChanged(nameof(ActivationKind));
     }

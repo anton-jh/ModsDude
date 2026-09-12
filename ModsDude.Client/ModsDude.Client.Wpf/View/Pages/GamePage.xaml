@@ -1,4 +1,4 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.InstancePage"
+﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.GamePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -6,8 +6,8 @@
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
-      d:DataContext="{d:DesignInstance Type=pvm:InstancePageViewModel, IsDesignTimeCreatable=False}"
-      Title="InstancePage">
+      d:DataContext="{d:DesignInstance Type=pvm:GamePageViewModel, IsDesignTimeCreatable=False}"
+      Title="GamePage">
 
     <Grid ColumnDefinitions="260 *">
 
@@ -18,7 +18,7 @@
                       ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-            <!-- The instance's own state, on its own page: which profile it follows, whether the
+            <!-- The game's own state, on its own page: which profile it follows, whether the
                  folder still matches, and the one action that fixes it. -->
             <StackPanel Grid.Row="1" Orientation="Vertical" Margin="12 16 12 0">
 
@@ -47,7 +47,7 @@
                            TextWrapping="Wrap"
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                           Text="The profile this instance followed is gone - it was deleted, or you were removed from its repo. Pick another one."
+                           Text="The profile this game followed is gone - it was deleted, or you were removed from its repo. Pick another one."
                            Visibility="{Binding HasDanglingActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <!-- Reads 'Re-apply rev 4' while a past savegame is held: applying the profile's
@@ -60,7 +60,7 @@
                         Command="{Binding ApplyCommand}" />
 
                 <!-- Neutral. Holding a past savegame is a state somebody chose and is playing in, not a
-                     problem with the instance. -->
+                     problem with the game. -->
                 <TextBlock Margin="0 8 0 0"
                            TextWrapping="Wrap"
                            Style="{DynamicResource CaptionTextBlockStyle}"

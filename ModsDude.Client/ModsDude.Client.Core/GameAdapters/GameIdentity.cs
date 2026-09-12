@@ -5,13 +5,13 @@ namespace ModsDude.Client.Core.GameAdapters;
 
 /// <summary>
 /// The identity of the game an adapter is configured for - the adapter id, plus a discriminator its
-/// base settings decide where one adapter serves several games. A repo offers the instances whose
+/// base settings decide where one adapter serves several games. A repo offers the games whose
 /// scope equals its own.
 /// </summary>
 /// <remarks>
 /// A type rather than a bare string because '_farming_simulator#fs25' and '_farming_simulator@1'
 /// are both plausible-looking strings, and comparing the wrong pair fails as a silently empty
-/// instance list rather than as a compile error.
+/// game list rather than as a compile error.
 /// </remarks>
 [JsonConverter(typeof(GameIdentityJsonConverter))]
 public readonly record struct GameIdentity

@@ -20,14 +20,14 @@ public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, G
     public string? ProfileName { get; init; }
 
     /// <summary>
-    /// Which revision of the profile to install, or null to let the instance's own state decide.
+    /// Which revision of the profile to install, or null to let the game's own state decide.
     /// </summary>
     /// <remarks>
     /// <b>Null is the ordinary answer and the one nearly every caller gives.</b> It resolves to the
     /// revision a past savegame held here pins the folder to, and to the profile's head where nothing
-    /// pins it - so a re-apply from the drift notice, from the mod list editor and from the instance
+    /// pins it - so a re-apply from the drift notice, from the mod list editor and from the game
     /// page all target the right list without any of them knowing what a savegame is. A number is for
-    /// the one caller that knows better than the instance does: the check-out dialog, previewing the
+    /// the one caller that knows better than the game does: the check-out dialog, previewing the
     /// apply for a savegame this machine is not holding yet.
     /// </remarks>
     public int? Revision { get; init; }
@@ -36,10 +36,10 @@ public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, G
 
 /// <summary>The mod folders on this machine, which is what eviction needs to know to spare them.</summary>
 /// <remarks>
-/// An interface rather than <see cref="LocalInstanceRepository"/> itself, so the sync engine depends
+/// An interface rather than <see cref="GameRepository"/> itself, so the sync engine depends
 /// on the one fact it uses and can be exercised without a real <c>state.json</c>.
 /// </remarks>
-public interface IInstanceModFolders
+public interface IModFolders
 {
     IReadOnlyList<InstanceModFolder> GetAll();
 }
@@ -48,14 +48,14 @@ public sealed record InstanceModFolder(Guid InstanceId, string ModFolder);
 
 
 /// <summary>
-/// Makes an instance's mod folder contain exactly what a profile pins: plan first, show it, then
+/// Makes a game's mod folder contain exactly what a profile pins: plan first, show it, then
 /// execute.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The execution order is the safety property. The serving store is filled with everything
 /// <b>this profile</b> needs before anything in the mod folder is touched, so a failure or a
-/// cancellation during the slow part leaves the instance exactly as it was, and the destructive phase
+/// cancellation during the slow part leaves the game exactly as it was, and the destructive phase
 /// only ever runs against a store that already holds what the profile needs. There is no prefetching
 /// of the repo's full mod set - at thousands of registered versions that is tens of gigabytes for
 /// content the user may never activate.
@@ -73,7 +73,7 @@ public sealed class ModSyncService(
     IContentStoreProvider storeProvider,
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
-    IInstanceModFolders instanceModFolders,
+    IModFolders modFolders,
     IHeldSavegames heldSavegames,
     ILogger<ModSyncService> logger)
 {
@@ -150,7 +150,7 @@ public sealed class ModSyncService(
 
         if (failures.Count > 0)
         {
-            // Nothing in the mod folder has been touched, so stopping here leaves the instance
+            // Nothing in the mod folder has been touched, so stopping here leaves the game
             // exactly as it was rather than half-applied.
             return new ModSyncResult(false, failures);
         }
@@ -643,7 +643,7 @@ public sealed class ModSyncService(
 
     /// <summary>
     /// Everything an active profile needs on a disk this store serves: this sync's own set, plus what
-    /// the other instances' manifests say they are running.
+    /// the other games' manifests say they are running.
     /// </summary>
     private IReadOnlySet<string> GetPinnedHashes(ModSyncPlan plan)
     {
@@ -654,19 +654,19 @@ public sealed class ModSyncService(
             pinned.Add(hash);
         }
 
-        foreach (var instance in instanceModFolders.GetAll())
+        foreach (var game in modFolders.GetAll())
         {
-            if (instance.InstanceId == plan.InstanceId)
+            if (game.InstanceId == plan.InstanceId)
             {
                 continue;
             }
 
-            if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(instance.ModFolder).RootPath, plan.ServingStore.RootPath) is false)
+            if (FileSystemHelper.ArePathsEqual(storeProvider.GetStoreServing(game.ModFolder).RootPath, plan.ServingStore.RootPath) is false)
             {
                 continue;
             }
 
-            foreach (var entry in manifestStore.TryRead(instance.InstanceId)?.Entries ?? [])
+            foreach (var entry in manifestStore.TryRead(game.InstanceId)?.Entries ?? [])
             {
                 pinned.Add(entry.ContentHash);
             }
@@ -677,7 +677,7 @@ public sealed class ModSyncService(
 
 
     /// <summary>
-    /// Which revision this instance's folder is to end up on, refusing the apply outright where a
+    /// Which revision this game's folder is to end up on, refusing the apply outright where a
     /// savegame it is holding says it may not move at all.
     /// </summary>
     /// <remarks>
@@ -706,11 +706,11 @@ public sealed class ModSyncService(
 
             SavegameApplyRefusal.AnotherProfileIsHeld => throw new UserFriendlyException(
                 "A savegame checked out here follows another mod list",
-                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
+                $"Game '{request.InstanceId}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
 
             _ => throw new UserFriendlyException(
                 "That savegame runs on one revision, and this is not it",
-                $"Instance '{request.InstanceId}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
+                $"Game '{request.InstanceId}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
         };
     }
 

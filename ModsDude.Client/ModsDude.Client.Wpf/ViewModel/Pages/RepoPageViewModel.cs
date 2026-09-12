@@ -20,9 +20,9 @@ public partial class RepoPageViewModel
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
     private readonly LastSelectionRepository _lastSelectionRepository;
-    private readonly CreateLocalInstancePageViewModel.Factory _createLocalInstancePageViewModelFactory;
+    private readonly ConnectGamePageViewModel.Factory _createLocalInstancePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
-    private readonly InstancePageViewModel.Factory _instancePageViewModelFactory;
+    private readonly GamePageViewModel.Factory _instancePageViewModelFactory;
     /// <summary>
     /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
     /// versions holding a revision, and a link that could not open the list would be no link at all.
@@ -43,7 +43,7 @@ public partial class RepoPageViewModel
     private bool _showPastSavegamesOnce;
 
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
-    private readonly ObservableCollectionSynchronizer<LocalInstance, MenuItemViewModel, string> _instanceSynchronizer;
+    private readonly ObservableCollectionSynchronizer<Game, MenuItemViewModel, string> _gameSynchronizer;
 
     private bool _selectionRestored;
 
@@ -55,8 +55,8 @@ public partial class RepoPageViewModel
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
-        InstancePageViewModel.Factory instancePageViewModelFactory,
-        CreateLocalInstancePageViewModel.Factory createLocalInstancePageViewModelFactory,
+        GamePageViewModel.Factory gamePageViewModelFactory,
+        ConnectGamePageViewModel.Factory connectGamePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
@@ -73,9 +73,9 @@ public partial class RepoPageViewModel
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
         _lastSelectionRepository = lastSelectionRepository;
-        _createLocalInstancePageViewModelFactory = createLocalInstancePageViewModelFactory;
+        _createLocalInstancePageViewModelFactory = connectGamePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
-        _instancePageViewModelFactory = instancePageViewModelFactory;
+        _instancePageViewModelFactory = gamePageViewModelFactory;
 
         var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.ConnectGame);
@@ -136,8 +136,8 @@ public partial class RepoPageViewModel
             .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));
         MenuItems.Add(connectGameMenuItem);
 
-        Instances = [];
-        _instanceSynchronizer = new(repo.LocalInstances, Instances, MapInstanceToVm, x => x.Title, NaturalOrder.Comparer);
+        Games = [];
+        _gameSynchronizer = new(repo.Games, Games, MapGameToVm, x => x.Title, NaturalOrder.Comparer);
 
         Profiles = [];
         _profileService.ProfileCreated += OnProfileCreated;
@@ -149,7 +149,7 @@ public partial class RepoPageViewModel
             Selected = MenuItems.First()
         };
 
-        if (Instances.Count == 0)
+        if (Games.Count == 0)
         {
             NavManager.Selected = connectGameMenuItem;
         }
@@ -173,7 +173,7 @@ public partial class RepoPageViewModel
 
     public bool HasArchivedProfileOpen => ArchivedProfiles.Count > 0;
 
-    public ObservableCollection<MenuItemViewModel> Instances { get; }
+    public ObservableCollection<MenuItemViewModel> Games { get; }
 
 
     protected override void Init()
@@ -188,7 +188,7 @@ public partial class RepoPageViewModel
         NavManager.PropertyChanged -= OnNavigationChanged;
 
         _profilesSynchronizer.Dispose();
-        _instanceSynchronizer.Dispose();
+        _gameSynchronizer.Dispose();
         NavManager.Dispose();
     }
 
@@ -416,7 +416,7 @@ public partial class RepoPageViewModel
 
         _selectionRestored = true;
 
-        if (Instances.Count == 0)
+        if (Games.Count == 0)
         {
             return;
         }
@@ -475,9 +475,9 @@ public partial class RepoPageViewModel
         return new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
     }
 
-    private InstanceItemViewModel MapInstanceToVm(LocalInstance instance)
+    private InstanceItemViewModel MapGameToVm(Game game)
     {
-        return new InstanceItemViewModel(_repo, instance, _instancePageViewModelFactory);
+        return new InstanceItemViewModel(_repo, game, _instancePageViewModelFactory);
     }
 
 

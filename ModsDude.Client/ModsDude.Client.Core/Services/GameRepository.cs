@@ -9,88 +9,88 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 
-public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSource
+public class GameRepository : IModFolders, IDriftCandidateSource
 {
     private readonly StateStore _store;
     private readonly SyncManifestStore _manifestStore;
     private readonly LocalState _state;
 
 
-    public LocalInstanceRepository(StateStore store, SyncManifestStore manifestStore)
+    public GameRepository(StateStore store, SyncManifestStore manifestStore)
     {
         _store = store;
         _manifestStore = manifestStore;
         _state = store.Get();
 
-        Instances = new(_state.Instances.Values.Select(x => new LocalInstance(x)));
+        Games = new(_state.Games.Values.Select(x => new Game(x)));
     }
 
 
-    /// <summary>Every instance on this machine, across all scopes.</summary>
-    public ObservableCollection<LocalInstance> Instances { get; }
+    /// <summary>Every game on this machine, across all scopes.</summary>
+    public ObservableCollection<Game> Games { get; }
 
     /// <summary>
-    /// Raised after any change to an instance that is not an add or a remove.
+    /// Raised after any change to a game that is not an add or a remove.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The half <see cref="Instances"/> cannot report.</b> Adding and deleting raise
-    /// <c>CollectionChanged</c>, so a listener already hears about those; repointing an instance at a
+    /// <b>The half <see cref="Games"/> cannot report.</b> Adding and deleting raise
+    /// <c>CollectionChanged</c>, so a listener already hears about those; repointing a game at a
     /// different mod folder, or at a different profile, changes nothing about the collection and used
     /// to be silent. Both of those change whether the folder matches what was applied to it, which is
     /// the entire question the drift check answers - see
     /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
     /// </para>
     /// <para>
-    /// Raised after the state has been written, so a listener that reads the instance back gets what
+    /// Raised after the state has been written, so a listener that reads the game back gets what
     /// was saved rather than what is about to be.
     /// </para>
     /// </remarks>
-    public event EventHandler? InstanceChanged;
+    public event EventHandler? GameChanged;
 
 
-    public IEnumerable<LocalInstance> GetByScope(GameIdentity scope)
+    public IEnumerable<Game> GetByScope(GameIdentity scope)
     {
-        return Instances.Where(x => x.Scope == scope);
+        return Games.Where(x => x.Scope == scope);
     }
 
     /// <summary>
-    /// The folders sync's store eviction has to know about, across every scope: an instance on a
+    /// The folders sync's store eviction has to know about, across every scope: a game on a
     /// disk this store serves is relying on entries the sweep would otherwise drop.
     /// </summary>
     public IReadOnlyList<InstanceModFolder> GetAll()
     {
-        return [.. Instances
+        return [.. Games
             .Where(x => x.ModFolder is not null)
             .Select(x => new InstanceModFolder(x.Id, x.ModFolder!))];
     }
 
     /// <summary>
-    /// Every instance the drift check has to look at, across every scope. An instance whose scope no
+    /// Every game the drift check has to look at, across every scope. A game whose scope no
     /// repo on this machine serves still owns its folder and still has a standing intent, and the
     /// check runs off both without hydrating an adapter.
     /// </summary>
     public IReadOnlyList<DriftCandidate> GetDriftCandidates()
     {
-        return [.. Instances.Select(x => new DriftCandidate(x.Id, x.Name, x.ModFolder, x.ActiveProfile))];
+        return [.. Games.Select(x => new DriftCandidate(x.Id, x.Name, x.ModFolder, x.ActiveProfile))];
     }
 
     /// <summary>
-    /// The instances a save on this profile re-applies to. See <see cref="ProfileApplyTargets"/> for
+    /// The games a save on this profile re-applies to. See <see cref="ProfileApplyTargets"/> for
     /// why this is derived rather than chosen.
     /// </summary>
-    public IReadOnlyList<LocalInstance> GetInstancesUsing(ActiveProfile profile)
+    public IReadOnlyList<Game> GetGamesUsing(ActiveProfile profile)
     {
-        return ProfileApplyTargets.Derive(Instances, profile);
+        return ProfileApplyTargets.Derive(Games, profile);
     }
 
-    public LocalInstance Create(IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
+    public Game Create(IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
     {
         var modFolder = GetModFolder(baseAdapter, localSettings);
 
         EnsureFolderIsUnclaimed(modFolder, null);
 
-        var persistedModel = new PersistedLocalInstance()
+        var persistedModel = new PersistedGame()
         {
             Id = Guid.NewGuid(),
             Scope = baseAdapter.Scope,
@@ -100,40 +100,40 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
             ModFolder = modFolder
         };
 
-        var instance = new LocalInstance(persistedModel);
+        var game = new Game(persistedModel);
 
-        _state.Instances[persistedModel.Id] = persistedModel;
-        Instances.Add(instance);
+        _state.Games[persistedModel.Id] = persistedModel;
+        Games.Add(game);
         _store.Save();
 
-        return instance;
+        return game;
     }
 
-    public void Update(LocalInstance instance, IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
+    public void Update(Game game, IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
     {
         var modFolder = GetModFolder(baseAdapter, localSettings);
 
-        EnsureFolderIsUnclaimed(modFolder, instance.Id);
+        EnsureFolderIsUnclaimed(modFolder, game.Id);
 
-        instance.Update(name, localSettings, modFolder);
+        game.Update(name, localSettings, modFolder);
         _store.Save();
 
         // The mod folder may have moved, which makes every answer about the old one meaningless.
-        InstanceChanged?.Invoke(this, EventArgs.Empty);
+        GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void SetActiveProfile(LocalInstance instance, ActiveProfile? activeProfile)
+    public void SetActiveProfile(Game game, ActiveProfile? activeProfile)
     {
-        instance.SetActiveProfile(activeProfile);
+        game.SetActiveProfile(activeProfile);
         _store.Save();
 
         // A folder that was in sync with one profile is drifted from another the moment it is pointed
         // at it, and nothing about the collection changed to say so.
-        InstanceChanged?.Invoke(this, EventArgs.Empty);
+        GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Stops every instance tracking a profile that no longer exists.
+    /// Stops every game tracking a profile that no longer exists.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -144,13 +144,13 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     /// </para>
     /// <para>
     /// Local state, which is why it lives here: the server has no idea which machines were pointed
-    /// at the profile, and an instance whose active profile is a dangling id would report drift
+    /// at the profile, and a game whose active profile is a dangling id would report drift
     /// against a mod list nobody can read.
     /// </para>
     /// </remarks>
     public void StopTracking(Guid profileId)
     {
-        var affected = Instances
+        var affected = Games
             .Where(x => x.ActiveProfile?.ProfileId == profileId)
             .ToList();
 
@@ -159,40 +159,40 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
             return;
         }
 
-        foreach (var instance in affected)
+        foreach (var game in affected)
         {
-            instance.SetActiveProfile(null);
+            game.SetActiveProfile(null);
         }
 
         // One save for the batch: they were all made unusable by one event.
         _store.Save();
 
-        InstanceChanged?.Invoke(this, EventArgs.Empty);
+        GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Delete(LocalInstance instance)
+    public void Delete(Game game)
     {
-        _state.Instances.Remove(instance.Id);
-        Instances.Remove(instance);
+        _state.Games.Remove(game.Id);
+        Games.Remove(game);
         _store.Save();
 
-        // Nothing reads a manifest for an instance that no longer exists, and leaving one behind
+        // Nothing reads a manifest for a game that no longer exists, and leaving one behind
         // would keep a few hundred kilobytes per disconnected game folder forever.
-        _manifestStore.Delete(instance.Id);
+        _manifestStore.Delete(game.Id);
     }
 
     /// <summary>
-    /// The instance already claiming the folder these settings point at, if any. Checked across
-    /// every scope: two scopes can name the same folder, and only one instance can own it.
+    /// The game already claiming the folder these settings point at, if any. Checked across
+    /// every scope: two scopes can name the same folder, and only one game can own it.
     /// </summary>
-    public LocalInstance? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, Guid? ignoredInstanceId = null)
+    public Game? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, Guid? ignoredInstanceId = null)
     {
         return FindFolderConflict(GetModFolder(baseAdapter, localSettings), ignoredInstanceId);
     }
 
-    /// <summary>The mod folder the adapter says an instance with these settings would own.</summary>
+    /// <summary>The mod folder the adapter says a game with these settings would own.</summary>
     /// <remarks>
-    /// Takes the one target, which is Phase 10 slice 1 scaffolding. An instance is still one folder,
+    /// Takes the one target, which is Phase 10 slice 1 scaffolding. A game is still one folder,
     /// and the check this feeds - no two of them own the same one - is rewritten in slice 2a, where a
     /// game owns a list of folders instead.
     /// <para>
@@ -212,25 +212,25 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     }
 
 
-    private LocalInstance? FindFolderConflict(string? modFolder, Guid? ignoredInstanceId)
+    private Game? FindFolderConflict(string? modFolder, Guid? ignoredInstanceId)
     {
         if (modFolder is null)
         {
             return null;
         }
 
-        return Instances.FirstOrDefault(x =>
+        return Games.FirstOrDefault(x =>
             x.Id != ignoredInstanceId &&
             FileSystemHelper.ArePathsEqual(x.ModFolder, modFolder));
     }
 
     private void EnsureFolderIsUnclaimed(string? modFolder, Guid? ignoredInstanceId)
     {
-        if (FindFolderConflict(modFolder, ignoredInstanceId) is LocalInstance owner)
+        if (FindFolderConflict(modFolder, ignoredInstanceId) is Game owner)
         {
             throw new UserFriendlyException(
                 $"'{owner.Name}' already uses that folder",
-                $"A folder may only be claimed by one instance: '{modFolder}' belongs to '{owner.Name}'.");
+                $"A folder may only be claimed by one game: '{modFolder}' belongs to '{owner.Name}'.");
         }
     }
 }

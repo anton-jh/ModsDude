@@ -4,18 +4,18 @@ namespace ModsDude.Client.Core.Sync;
 
 public enum InstanceActivationKind
 {
-    /// <summary>The instance is already on this profile, so the folder is only being made to match again.</summary>
+    /// <summary>The game is already on this profile, so the folder is only being made to match again.</summary>
     Reapply,
 
     /// <summary>
-    /// The instance is on a different profile, or on none. Applying re-syncs the folder, which means
+    /// The game is on a different profile, or on none. Applying re-syncs the folder, which means
     /// uninstalling whatever the previous profile put there.
     /// </summary>
     Activate
 }
 
 /// <summary>
-/// What pairing a profile with an instance would actually do, so the control can be labelled for it
+/// What pairing a profile with a game would actually do, so the control can be labelled for it
 /// rather than for the screen it happens to sit on.
 /// </summary>
 public static class InstanceActivation

@@ -4,24 +4,24 @@ using ModsDude.Client.Core.Sync;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// One game instance as an overview shows it: where it installs, which profile it is meant to match,
+/// One game as an overview shows it: where it installs, which profile it is meant to match,
 /// and whether its mod folder still does. Read-only and rebuilt whenever the underlying lists change
-/// - the instance's own page is where it is edited.
+/// - the game's own page is where it is edited.
 /// </summary>
 public class InstanceOverviewViewModel(
-    LocalInstance instance,
+    Game game,
     string activeProfileSummary,
     InstanceDriftReport? drift = null)
 {
-    public string Name { get; } = instance.Name;
+    public string Name { get; } = game.Name;
 
-    public string ModFolder { get; } = instance.ModFolder ?? "No mod folder configured";
+    public string ModFolder { get; } = game.ModFolder ?? "No mod folder configured";
 
     public string ActiveProfileSummary { get; } = activeProfileSummary;
 
     /// <summary>
-    /// Null where the last check found nothing to say. Drift belongs wherever the instance appears,
-    /// but an instance that matches its profile does not need a line saying so on every list.
+    /// Null where the last check found nothing to say. Drift belongs wherever the game appears,
+    /// but a game that matches its profile does not need a line saying so on every list.
     /// </summary>
     public string? DriftSummary { get; } = Describe(drift);
 

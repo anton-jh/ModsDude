@@ -39,11 +39,11 @@
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                       Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-            <uc:SidebarHeader Grid.Row="5" Title="Game instances" Command="" ActionIcon="&#xE72C;" />
+            <uc:SidebarHeader Grid.Row="5" Title="Games" Command="" ActionIcon="&#xE72C;" />
 
             <ListView Grid.Row="6"
                       Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=Instances}"
+                      ItemsSource="{Binding Path=Games}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
         </Grid>
 

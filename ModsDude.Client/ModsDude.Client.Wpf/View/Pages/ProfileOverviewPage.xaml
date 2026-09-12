@@ -43,10 +43,10 @@
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Visibility="{Binding HasNoInstances, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="No game instance on this machine is set to this profile. Pick it on an instance to make that instance's mod folder match this profile." />
+                                       Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="No game on this machine is set to this profile. Pick it on a game to make that game's mod folder match this profile." />
 
-                            <ItemsControl ItemsSource="{Binding Instances}"
+                            <ItemsControl ItemsSource="{Binding Games}"
                                           Visibility="{Binding HasInstances, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:InstanceOverviewViewModel}">
@@ -111,7 +111,7 @@
                     <GroupBox Header="Sync" Padding="0 16 0 16">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                   Text="Applying this profile happens on an instance's own Sync page, which shows what would change before anything does. How far each instance above has drifted, and when it last synced, will be summarised here." />
+                                   Text="Applying this profile happens on a game's own Sync page, which shows what would change before anything does. How far each game above has drifted, and when it last synced, will be summarised here." />
                     </GroupBox>
                 </Border>
 

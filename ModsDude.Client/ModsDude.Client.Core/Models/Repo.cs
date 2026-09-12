@@ -12,28 +12,28 @@ public class Repo
     : INotifyPropertyChanged, IDisposable
 {
     private readonly RepoRepository _repoService;
-    private readonly LocalInstanceRepository _localInstanceRepository;
+    private readonly GameRepository _gameRepository;
 
-    private ObservableCollectionSynchronizer<LocalInstance, LocalInstance, string> _instancesSynchronizer;
+    private ObservableCollectionSynchronizer<Game, Game, string> _gamesSynchronizer;
 
 
     public Repo(
         RepoMembershipDto repoMembershipDto,
         IGameAdapterIndex gameAdapterIndex,
         RepoRepository repoService,
-        LocalInstanceRepository localInstanceRepository)
+        GameRepository gameRepository)
     {
         Adapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembershipDto.Repo.AdapterId)).WithBaseSettings(repoMembershipDto.Repo.AdapterConfiguration);
         _repoService = repoService;
-        _localInstanceRepository = localInstanceRepository;
+        _gameRepository = gameRepository;
         Id = repoMembershipDto.Repo.Id;
         Name = repoMembershipDto.Repo.Name;
         Tag = repoMembershipDto.Repo.Tag;
         MembershipLevel = repoMembershipDto.MembershipLevel;
 
-        LocalInstances = [];
+        Games = [];
 
-        _instancesSynchronizer = CreateInstancesSynchronizer();
+        _gamesSynchronizer = CreateGamesSynchronizer();
     }
 
 
@@ -51,7 +51,7 @@ public class Repo
     public string Tag { get; }
 
     public RepoMembershipLevel MembershipLevel { get; private set; }
-    public ObservableCollection<LocalInstance> LocalInstances { get; }
+    public ObservableCollection<Game> Games { get; }
     public IBaseGameAdapter Adapter { get; private set; }
     public GameIdentity Scope => Adapter.Scope;
 
@@ -92,12 +92,12 @@ public class Repo
         PropertyChanged?.Invoke(this, new(nameof(Adapter)));
 
         // The base settings carry the game discriminator, so editing them can move the repo to a
-        // different set of instances. The synchronizer's filter is fixed at construction, so it has
+        // different set of games. The synchronizer's filter is fixed at construction, so it has
         // to be rebuilt rather than re-evaluated.
         if (Scope != previousScope)
         {
-            _instancesSynchronizer.Dispose();
-            _instancesSynchronizer = CreateInstancesSynchronizer();
+            _gamesSynchronizer.Dispose();
+            _gamesSynchronizer = CreateGamesSynchronizer();
 
             PropertyChanged?.Invoke(this, new(nameof(Scope)));
         }
@@ -105,17 +105,17 @@ public class Repo
 
     public void Dispose()
     {
-        _instancesSynchronizer.Dispose();
+        _gamesSynchronizer.Dispose();
     }
 
 
-    private ObservableCollectionSynchronizer<LocalInstance, LocalInstance, string> CreateInstancesSynchronizer()
+    private ObservableCollectionSynchronizer<Game, Game, string> CreateGamesSynchronizer()
     {
-        // Offered, not owned: an instance belongs to a game, so every repo targeting that game
-        // lists the same instances - and dropping one from this list must not dispose it.
+        // Offered, not owned: a game is configured once per identity, so every repo targeting
+        // that game lists the same one - and dropping it from this list must not dispose it.
         return new(
-            source: _localInstanceRepository.Instances,
-            target: LocalInstances,
+            source: _gameRepository.Games,
+            target: Games,
             factory: x => x,
             keySelectorExpression: x => x.Name,
             comparer: NaturalOrder.Comparer,

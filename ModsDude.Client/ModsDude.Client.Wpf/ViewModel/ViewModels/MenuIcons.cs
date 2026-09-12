@@ -8,12 +8,12 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// Segoe Fluent Icons code points, which is the font the rest of the app's iconography already uses -
 /// the dialogs' icon converter, the sidebar headers' refresh button, the subtle icon buttons. Kept as
 /// constants rather than written into the XAML because several of them appear in more than one
-/// sidebar: <b>Saves</b> is an entry under a repo and under an instance, and <b>Manage</b> is one
-/// under an instance and under a profile, and those have to be the same glyph or the icons stop being
+/// sidebar: <b>Saves</b> is an entry under a repo and under a game, and <b>Manage</b> is one
+/// under a game and under a profile, and those have to be the same glyph or the icons stop being
 /// a way to find things.
 /// </para>
 /// <para>
-/// <b>Entities get one too.</b> A repo, a profile and an instance are the rows there are most of, and
+/// <b>Entities get one too.</b> A repo, a profile and a game are the rows there are most of, and
 /// they are the rows an icon says least about - so they take the plainest glyph of the three kinds,
 /// which is enough to keep every row's text starting at the same x and to say which kind of thing a
 /// row is when three lists are stacked in one sidebar.
@@ -41,11 +41,11 @@ internal static class MenuIcons
     public const string History = "\xE81C";
     public const string Manage = "\xE713";
 
-    // Instance
+    // Game
     public const string Sync = "\xE895";
 
     // The three kinds of entity a sidebar lists.
     public const string Repo = "\xE8B7";
     public const string Profile = "\xE8FD";
-    public const string Instance = "\xE7FC";
+    public const string Game = "\xE7FC";
 }

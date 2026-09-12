@@ -20,7 +20,7 @@ public class SavegameRowRulesTests
 
 
     /// <summary>
-    /// The ordinary evening: a current savegame, on an instance following its profile, whose folder is on
+    /// The ordinary evening: a current savegame, on a game following its profile, whose folder is on
     /// head. One click, and nothing to read.
     /// </summary>
     [Fact]
@@ -34,7 +34,7 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// The instance is on this profile but behind its head, which is what a current savegame runs on. The
+    /// The game is on this profile but behind its head, which is what a current savegame runs on. The
     /// revision is deliberately not named: a current savegame follows whatever its profile says now, so a
     /// number there would be one to memorise rather than a thing to do.
     /// </summary>
@@ -52,7 +52,7 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void A_current_savegame_on_an_instance_following_another_profile_asks_for_the_profile_by_name()
+    public void A_current_savegame_on_an_game_following_another_profile_asks_for_the_profile_by_name()
     {
         var offer = Describe(1004, null, _otherProfileId, 1004);
 
@@ -96,7 +96,7 @@ public class SavegameRowRulesTests
         Assert.Equal(_otherSavegameId, offer.BlockingSavegameId);
 
         Assert.Equal(
-            "'Riverbend' is checked out on this instance",
+            "'Riverbend' is checked out here",
             SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, "Riverbend"));
     }
 
@@ -107,12 +107,12 @@ public class SavegameRowRulesTests
         var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId)]);
 
         Assert.Equal(
-            "Another savegame is checked out on this instance",
+            "Another savegame is checked out here",
             SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
     }
 
     /// <summary>
-    /// Checking out something this instance already holds moves it between slots rather than making it
+    /// Checking out something this game already holds moves it between slots rather than making it
     /// two, so its own binding is not what stops it.
     /// </summary>
     [Fact]
@@ -130,7 +130,7 @@ public class SavegameRowRulesTests
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
-            held: [], appliedProfileId: null, appliedRevision: null, hasInstance: true);
+            held: [], appliedProfileId: null, appliedRevision: null, hasGame: true);
 
         Assert.True(offer.CanCheckOut);
         Assert.False(offer.CanApply);
@@ -151,15 +151,15 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void With_no_instance_there_is_nowhere_to_write_a_save()
+    public void With_no_game_there_is_nowhere_to_write_a_save()
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, _profileId, headRevision: 1004, pinnedRevision: null,
-            held: [], appliedProfileId: null, appliedRevision: null, hasInstance: false);
+            held: [], appliedProfileId: null, appliedRevision: null, hasGame: false);
 
         Assert.False(offer.CanCheckOut);
         Assert.False(offer.CanApply);
-        Assert.Equal("No instance for this game", SavegameRowRules.Explain(offer.CheckOut, "Old-school", null, null));
+        Assert.Equal("This game is not connected here", SavegameRowRules.Explain(offer.CheckOut, "Old-school", null, null));
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public class SavegameRowRulesTests
     }
 
 
-    /// <summary>The row against an instance whose mod folder is on this savegame's own profile.</summary>
+    /// <summary>The row against a game whose mod folder is on this savegame's own profile.</summary>
     private static SavegameRowOffer Describe(
         int? head,
         int? pinned = null,
@@ -195,7 +195,7 @@ public class SavegameRowRulesTests
             held ?? [],
             appliedProfileId,
             appliedRevision,
-            hasInstance: true);
+            hasGame: true);
 
     private static SavegameCheckoutBinding Hold(Guid savegameId)
         => new(Guid.NewGuid(), savegameId, "savegame1", 1, "aaaa", DateTime.UtcNow)

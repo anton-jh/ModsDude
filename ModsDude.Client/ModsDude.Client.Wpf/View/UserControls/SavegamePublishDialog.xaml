@@ -42,7 +42,7 @@
 
                 <!-- Every profile in the repo, and no mod list as an explicit choice. It is asked
                      rather than derived because nothing moves a savegame between profiles afterwards,
-                     and because the instance's active one is only the likeliest answer. -->
+                     and because the game's active one is only the likeliest answer. -->
                 <TextBlock Text="Which mod list this savegame follows"
                            Margin="0 16 0 4"
                            Style="{DynamicResource CaptionTextBlockStyle}"

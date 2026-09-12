@@ -362,7 +362,7 @@ public class SavegamePackerTests
         public Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken)
             => throw new NotSupportedException("Packing addresses a slot it was given; it never enumerates them.");
 
-        public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
+        public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings) => this;
         public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
     }
 

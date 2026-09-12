@@ -59,7 +59,7 @@ public partial class SettingsPageViewModel
 
     public SettingsPageViewModel(
         ClientSettingsRepository settingsRepository,
-        LocalInstanceRepository localInstanceRepository,
+        GameRepository gameRepository,
         ContentStoreMaintenance maintenance,
         ModImageCache imageCache,
         IDialogService dialogService,
@@ -75,9 +75,9 @@ public partial class SettingsPageViewModel
 
         var settings = settingsRepository.Settings;
 
-        // A store on a disk with no mod folders on it serves nothing, so the disks with instances on
+        // A store on a disk with no mod folders on it serves nothing, so the disks with games on
         // them are what the page is about.
-        var modFolderVolumes = localInstanceRepository.Instances
+        var modFolderVolumes = gameRepository.Games
             .Select(x => x.ModFolder)
             .OfType<string>()
             .GroupBy(FileSystemHelper.NormalizeVolumeRoot)

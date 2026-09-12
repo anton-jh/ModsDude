@@ -28,7 +28,7 @@ public sealed class ShellNavigationService
     }
 
     /// <param name="driftedInstanceId">
-    /// The instance whose mod folder went out of step, so the editor can open with that folder
+    /// The game whose mod folder went out of step, so the editor can open with that folder
     /// already being scanned. It is the whole reason the user is being sent there - the versions the
     /// game downloaded are sitting in it, waiting to be imported.
     /// </param>

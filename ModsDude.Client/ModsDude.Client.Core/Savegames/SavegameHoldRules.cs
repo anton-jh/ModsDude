@@ -3,7 +3,7 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// Why the savegames an instance is holding refuse a profile being applied to its mod folder.
+/// Why the savegames a game is holding refuse a profile being applied to its mod folder.
 /// </summary>
 /// <remarks>
 /// Both refusals are about the same thing: <b>one mod folder can only be on one revision</b>, and a
@@ -51,7 +51,7 @@ public sealed record SavegameApplyDecision(
 
 
 /// <summary>
-/// What the savegames an instance is holding demand of its mod folder: which revision it has to be
+/// What the savegames a game is holding demand of its mod folder: which revision it has to be
 /// on, whether a given apply may run, and whether another savegame may be checked out beside them.
 /// </summary>
 /// <remarks>
@@ -71,12 +71,12 @@ public sealed record SavegameApplyDecision(
 public static class SavegameHoldRules
 {
     /// <summary>
-    /// Which revision this instance's mod folder has to be on for one profile, or null where nothing
+    /// Which revision this game's mod folder has to be on for one profile, or null where nothing
     /// held here pins it and the profile's head is the answer.
     /// </summary>
     /// <remarks>
     /// Read by the apply, which installs it in place of head, and by the drift check, which compares
-    /// against it in place of head. Nothing is suppressed by the second: an instance holding a past
+    /// against it in place of head. Nothing is suppressed by the second: a game holding a past
     /// savegame is behind head by construction, and comparing it against head instead would report
     /// drift permanently while offering a re-apply the apply table refuses.
     /// </remarks>
@@ -94,8 +94,8 @@ public static class SavegameHoldRules
     }
 
     /// <summary>
-    /// Whether a profile may be applied to this instance, per the apply table in
-    /// docs/10-savegame-profile-binding.md#applying-to-an-instance-that-holds-a-savegame.
+    /// Whether a profile may be applied to this game, per the apply table in
+    /// docs/10-savegame-profile-binding.md#applying-to-an-game-that-holds-a-savegame.
     /// </summary>
     /// <param name="revision">
     /// The revision about to be installed, or null where the caller has not chosen one and will take
@@ -134,7 +134,7 @@ public static class SavegameHoldRules
     }
 
     /// <summary>
-    /// The savegame already holding this instance's mod folder, which is what stops a second one
+    /// The savegame already holding this game's mod folder, which is what stops a second one
     /// being checked out into it. Null where nothing does.
     /// </summary>
     /// <remarks>
@@ -145,7 +145,7 @@ public static class SavegameHoldRules
     /// </remarks>
     /// <param name="savegameId">
     /// The savegame about to be taken. A binding for that same savegame is not a conflict: checking
-    /// out something this instance already holds moves it to another slot rather than making it two.
+    /// out something this game already holds moves it to another slot rather than making it two.
     /// </param>
     public static SavegameCheckoutBinding? FindConflictingHold(
         IReadOnlyList<SavegameCheckoutBinding> held,

@@ -4,7 +4,7 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Persistence;
 
 /// <summary>
-/// Machine-wide client settings - not per repo, not per instance, not per adapter. The content
+/// Machine-wide client settings - not per repo, not per game, not per adapter. The content
 /// store is addressed by hash and holds no notion of what a file is for, so there is nothing a repo
 /// or an adapter would contribute to its scoping.
 /// </summary>

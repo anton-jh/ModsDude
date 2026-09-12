@@ -6,13 +6,13 @@ using System.Text.Json;
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
-/// Reads and writes <c>manifests/{instanceId}.json</c>, one file per instance beside
+/// Reads and writes <c>manifests/{instanceId}.json</c>, one file per game beside
 /// <c>state.json</c>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Not inline in <see cref="Persistence.LocalState"/>, which is loaded eagerly and rewritten
-/// whenever any instance changes: a manifest for 2,000 mods with a hash each is a few hundred
+/// whenever any game changes: a manifest for 2,000 mods with a hash each is a few hundred
 /// kilobytes with no business being re-serialised because somebody renamed something. And not in the
 /// game's own folder, which an in-game updater rewrites.
 /// </para>
@@ -68,7 +68,7 @@ public sealed class SyncManifestStore
             {
                 // A manifest that cannot be read costs a full reconcile rather than a delta, which
                 // is slow but correct - and invisible, which is why it is written down.
-                _log.LogWarning(exception, "Could not read the sync manifest for instance {Instance}.", instanceId);
+                _log.LogWarning(exception, "Could not read the sync manifest for game {Game}.", instanceId);
 
                 return null;
             }
@@ -94,7 +94,7 @@ public sealed class SyncManifestStore
         }
     }
 
-    /// <summary>Forgets what an instance last installed - for an instance being deleted.</summary>
+    /// <summary>Forgets what a game last installed - for a game being deleted.</summary>
     public void Delete(Guid instanceId)
     {
         lock (_lock)
@@ -105,8 +105,8 @@ public sealed class SyncManifestStore
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // A manifest for an instance that no longer exists is inert.
-                _log.LogDebug(exception, "Could not delete the sync manifest for instance {Instance}.", instanceId);
+                // A manifest for a game that no longer exists is inert.
+                _log.LogDebug(exception, "Could not delete the sync manifest for game {Game}.", instanceId);
             }
         }
     }
@@ -114,7 +114,7 @@ public sealed class SyncManifestStore
 
     /// <summary>
     /// Through <see cref="StoreFileName"/>, which is where what a store puts in a file name gets
-    /// encoded. An instance id needs none of that - a Guid is already hex and dashes, so the name is
+    /// encoded. A game id needs none of that - a Guid is already hex and dashes, so the name is
     /// what it has always been - but the identity and target key that replace it are adapter-authored
     /// strings, and the encoding has to be the store's rather than something an adapter can violate.
     /// </summary>

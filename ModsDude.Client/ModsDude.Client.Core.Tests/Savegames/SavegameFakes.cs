@@ -387,7 +387,7 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
         return Task.FromResult(slots);
     }
 
-    public ILocalSavegameAdapter WithLocalSettings(string serializedInstanceSettings) => this;
+    public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings) => this;
     public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
 
 
@@ -400,9 +400,9 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
 }
 
 
-internal sealed class FakeInstanceSavegameAdapters(ILocalSavegameAdapter? adapter) : ILocalSavegameAdapters
+internal sealed class FakeSavegameAdapters(ILocalSavegameAdapter? adapter) : ILocalSavegameAdapters
 {
-    public ILocalSavegameAdapter? TryGet(LocalInstance instance) => adapter;
+    public ILocalSavegameAdapter? TryGet(Game game) => adapter;
 
     public ILocalSavegameAdapter? TryGet(Guid instanceId) => adapter;
 }
@@ -448,21 +448,21 @@ internal sealed class FakeSlotRecycleBin(bool available = true) : IRecycleBin
 
 
 /// <summary>
-/// The persisted instances, in memory - <c>state.json</c> lives at a fixed path under LocalAppData,
-/// and a test running against the real store would rewrite the developer's own instance list.
+/// The persisted games, in memory - <c>state.json</c> lives at a fixed path under LocalAppData,
+/// and a test running against the real store would rewrite the developer's own game list.
 /// </summary>
-internal sealed class FakeInstanceState : IPersistedInstanceState
+internal sealed class FakeGameState : IPersistedGameState
 {
-    private readonly Dictionary<Guid, PersistedLocalInstance> _instances = [];
+    private readonly Dictionary<Guid, PersistedGame> _games = [];
 
 
     public int Saves { get; private set; }
 
 
-    public void Add(PersistedLocalInstance instance) => _instances[instance.Id] = instance;
+    public void Add(PersistedGame game) => _games[game.Id] = game;
 
-    public PersistedLocalInstance? Find(Guid instanceId)
-        => _instances.TryGetValue(instanceId, out var instance) ? instance : null;
+    public PersistedGame? Find(Guid instanceId)
+        => _games.TryGetValue(instanceId, out var game) ? game : null;
 
     public void Save() => Saves++;
 }
