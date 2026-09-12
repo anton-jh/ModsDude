@@ -56,51 +56,6 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     /// every other status.
     /// </summary>
     public Guid? BlockedBySavegameId { get; init; }
-
-
-    /// <summary>
-    /// One answer for a game whose folders were applied to one at a time.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>The status is the one that most needs saying</b>, and every sentence is kept: a game that
-    /// applied to its server folder and could not reach its client folder says both, because the
-    /// half that worked is not the news. <see cref="ProfileApplyStatus.Declined"/> ranks last on
-    /// purpose - it only speaks for the game where <em>every</em> folder was declined, since
-    /// <see cref="RecordsIntent"/> hangs off this and a game with one folder already put right
-    /// plainly means to follow the profile.
-    /// </para>
-    /// <para>
-    /// Scaffolding, and the shape slice 4 of Phase 10 replaces: activation becomes one gesture with
-    /// one confirmation across every folder, which is what makes a partly-declined activation
-    /// unrepresentable rather than something to fold.
-    /// </para>
-    /// </remarks>
-    public static ProfileApplyOutcome Combine(Game game, IReadOnlyList<ProfileApplyOutcome> perTarget)
-    {
-        if (perTarget.Count == 1)
-        {
-            return perTarget[0];
-        }
-
-        var worst = perTarget
-            .OrderBy(x => x.Status switch
-            {
-                ProfileApplyStatus.Failed => 0,
-                ProfileApplyStatus.Unavailable => 1,
-                ProfileApplyStatus.Refused => 2,
-                ProfileApplyStatus.Applied => 3,
-                ProfileApplyStatus.AlreadyMatched => 4,
-                _ => 5
-            })
-            .First();
-
-        return worst with
-        {
-            Game = game,
-            Message = string.Join(' ', perTarget.Select(x => x.Message).Distinct())
-        };
-    }
 }
 
 
@@ -277,7 +232,51 @@ public sealed class ProfileApplyService(
             outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision));
         }
 
-        return ProfileApplyOutcome.Combine(game, outcomes);
+        return Combine(game, outcomes);
+    }
+
+    /// <summary>
+    /// One answer for a game whose folders were applied to one at a time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The status is the one that most needs saying</b>, and every sentence is kept: a game that
+    /// applied to its server folder and could not reach its client folder says both, because the
+    /// half that worked is not the news. <see cref="ProfileApplyStatus.Declined"/> ranks last on
+    /// purpose - it only speaks for the game where <em>every</em> folder was declined, since
+    /// <see cref="ProfileApplyOutcome.RecordsIntent"/> hangs off this and a game with one folder
+    /// already put right plainly means to follow the profile.
+    /// </para>
+    /// <para>
+    /// Scaffolding, and the shape slice 4 of Phase 10 replaces: activation becomes one gesture with
+    /// one confirmation across every folder, which is what makes a partly-declined activation
+    /// unrepresentable rather than something to fold. <see cref="ProfileApplyStatus.Refused"/> is
+    /// never folded - it is decided once for the game, before the loop.
+    /// </para>
+    /// </remarks>
+    private static ProfileApplyOutcome Combine(Game game, IReadOnlyList<ProfileApplyOutcome> perTarget)
+    {
+        if (perTarget.Count == 1)
+        {
+            return perTarget[0];
+        }
+
+        var worst = perTarget
+            .OrderBy(x => x.Status switch
+            {
+                ProfileApplyStatus.Failed => 0,
+                ProfileApplyStatus.Unavailable => 1,
+                ProfileApplyStatus.Applied => 2,
+                ProfileApplyStatus.AlreadyMatched => 3,
+                _ => 4
+            })
+            .First();
+
+        return worst with
+        {
+            Game = game,
+            Message = string.Join(' ', perTarget.Select(x => x.Message).Distinct())
+        };
     }
 
     /// <summary>One folder: confirm what it would destroy, then make it match.</summary>

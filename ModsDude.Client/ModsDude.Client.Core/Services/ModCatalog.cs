@@ -91,24 +91,19 @@ public sealed class ModCatalog : IDisposable
         foreach (var game in _repo.Games)
         {
             // One source per target, because looking in one folder of three would report what the
-            // other two hold as missing from this machine. Off the hydrated adapter rather than the
-            // persisted list, since that is what knows what to call each folder - and this repo
-            // serves the game, so it hydrates.
-            var targets = game.GetAdapter(_repo.Adapter)
-                .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
-                ?.Invoke()
-                .ModTargets ?? ModTargets.None;
+            // other two hold as missing from this machine.
+            var targets = ReadTargets(game);
 
-            foreach (var target in targets)
+            foreach (var (key, displayName, path) in targets)
             {
                 sources.Add(new ModSource(
-                    ModSourceId.ForTarget(new ModTargetRef(game.Identity, target.Key)),
+                    ModSourceId.ForTarget(new ModTargetRef(game.Identity, key)),
                     // The game alone where it has one folder, which is every game the user is
                     // likely to have: naming a folder that has no sibling is noise.
-                    targets.Count > 1 && target.DisplayName is string folderName
+                    targets.Count > 1 && displayName is string folderName
                         ? $"{game.Name} - {folderName}"
                         : game.Name,
-                    target.Path,
+                    path,
                     ModSourceKind.Game));
             }
         }
@@ -124,6 +119,37 @@ public sealed class ModCatalog : IDisposable
         }
 
         return sources;
+    }
+
+    /// <summary>
+    /// A game's folders, named where the adapter can be asked what to call them.
+    /// </summary>
+    /// <remarks>
+    /// <b>The list has to be complete and the names do not.</b> A target missing from it is a folder
+    /// the merged view never looks in, which reports what that folder holds as missing from this
+    /// machine - so settings this repo's adapter version cannot read fall back to the persisted
+    /// targets, which are paths and keys with no display name. That is the same list with worse
+    /// labels rather than a shorter one.
+    /// </remarks>
+    private IReadOnlyList<(TargetKey Key, string? DisplayName, string Path)> ReadTargets(Game game)
+    {
+        try
+        {
+            if (game.GetAdapter(_repo.Adapter).GetLocalCapabilityAdapterFactory<ILocalModAdapter>() is
+                Func<ILocalModAdapter> factory)
+            {
+                return [.. factory().ModTargets.Select(x => (x.Key, x.DisplayName, x.Path))];
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not read the targets of game {Game} from its adapter; falling back to the persisted folders.",
+                game.Identity);
+        }
+
+        return [.. game.Targets.Select(x => (x.Key, (string?)null, x.ModFolder))];
     }
 
     /// <summary>
