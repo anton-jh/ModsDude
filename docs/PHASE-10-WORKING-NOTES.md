@@ -10,8 +10,10 @@ One interface change, a keying band, one new loop, and a lot of removal. Nothing
 
 | Layer | Fate |
 | --- | --- |
-| `ModSyncPlanner`, `ContentStore`, `FileLinks`, `RecycleBin`, `ModFileDownloader`, `SavegamePacker`, `ModContentHasher` | **Untouched.** They take data and paths, never ids |
+| `ModSyncPlanner`, `ContentStore`, `FileLinks`, `RecycleBin`, `ModFileDownloader`, `ModContentHasher` | **Untouched.** They take data and paths, never ids |
+| `SavegamePacker` | Not untouched after all: it asks an adapter where a slot is, so it takes the target as well as the slot. Still no ids |
 | `ILocalModAdapter` | The root change: `ModFolder` → `ModTargets` |
+| `ILocalSavegameAdapter` | The same change in slice 3: `SavegameTargets`, and a target on `GetSlots` and `GetSlotPath` |
 | `SyncManifest(Store)`, `DriftService`, store eviction, `SavegameBindingStore`, `ModSource` | **Re-keyed**: `instanceId` → `(GameIdentity, TargetKey)`, or `GameIdentity` |
 | `Game`, `GameRepository`, `LocalState` | Rewritten |
 | `ProfileApplyService` | Gains the target loop and the activate/apply split |
@@ -49,7 +51,7 @@ Sequential. It is a stack, not a set.
 | 1 | The adapter answers with targets | ~20 | **done** |
 | 2a | The `Game` and its state | 117 + 51 | **done** |
 | 2b | Re-key the per-folder stores | 18 + 48 + 3 | **done** |
-| 3 | Savegames go per game | ~15 | |
+| 3 | Savegames go per game | 42 | **done** |
 | 4 | Activate and apply become two verbs | ~12 | |
 | 5 | Interface | ~25 | |
 
@@ -68,12 +70,23 @@ surfaces turned out to be holding one plan, one report or one sentence where the
 3's estimate has the same shape of hole in it — `ObserveAsync` and `CheckDriftAsync` going per target
 is cheap, and the check-out list, the picker and the hold status are where the work is.
 
+**3 was estimated at ~15 and was 42**, in one commit, and the hole was the shape the note above
+predicted plus one it did not: **the adapter contract**. `ObserveAsync` and the manifest lookups were
+about ten files and went as expected; the picker, the slot list and the hold status were another ten,
+as predicted. The twenty nobody counted are what giving `ILocalSavegameAdapter` targets costs — the
+packer takes a target now, and so does every fake adapter and every test harness that ever addressed
+a slot. Slice 5 has no contract change in it, so its ~25 is probably honest.
+
 Three things are independent and can land beside any of it:
 
 - **Relocating publish** to the repo's Saves page. Purely additive, and it is what lets slice 5
   delete the sidebar without making publish unreachable in the meantime.
 - **The store's filename encoding.** Landed with slice 1.
-- **The documentation pass** over 02, 04, 05 and 06, at the very end.
+- **The documentation pass** over 02, 04, 05 and 06, at the very end. **Add 10 to that list, and
+  expect it to be the biggest single piece**: it is written end to end in the instance vocabulary,
+  its apply table and check-out table are per instance, and slices 4 and 5 change what those tables
+  say. 04 is kept current as each slice lands instead, because it is the contract an adapter author
+  reads — slice 3 gave it the savegame half of a target.
 
 ## What batches, and what must not
 
@@ -97,7 +110,10 @@ Three things are independent and can land beside any of it:
   what let the persisted target list, the eviction pin set and the sweep's expected-name set all be
   keyed on the same thing without any of them building the join themselves. Threading two parameters
   would have been the same edit four times over with four chances to pass somebody else's identity.
-- Everything in slice 3. It is one concept with shared test fakes.
+- Everything in slice 3. It is one concept with shared test fakes. **It was, and it had to be**: the
+  slot reference on the binding, the target on the savegame adapter and the target on the packer are
+  one edit seen from three sides, and nothing between them compiles on its own. One commit of 42
+  files, which is the largest single one of the phase and the right shape for it.
 
 **Do not batch** — **renames go in their own commits**, separate from semantic change. A pure rename
 is reviewable by "it compiled"; mixed into a behaviour change it hides the behaviour change. This
@@ -162,9 +178,52 @@ matters more than usual here, because the rename table touches most of the 78 fi
   same entry.
 
 - **Play attribution.** Two tests: a failed apply attributes nothing, and an apply landing on target
-  A while target B holds a save uses **B's** outgoing revision.
+  A while target B holds a save uses **B's** outgoing revision. **Both there, and the second is the
+  whole slice in one test**: the server's apply attributes nothing while the MP client holds the
+  evening, and the client's apply then attributes it to 4 rather than to the 1004 the server moved
+  to. It only discriminates because the two folders are on different revisions between the two
+  applies, which is the ordinary state for the seconds an activation takes.
 - **Slot collisions are not a risk** — `SavegameSlotRef` makes uniqueness a construction. Do not
   reintroduce global uniqueness as an adapter obligation.
+
+- **`CheckDriftAsync` kept the game as its key, and that was the right call.** The plan said both
+  halves go per target; three of the four keys did. The drift check answers a *list*, its cost is one
+  hash per held slot, and the holds are the game's — so a call per folder would re-read the same list
+  N times. What went per target is the part that was wrong: each answer is classified against its own
+  target's manifest and carries the target it is about, and `DriftMonitor` places it on that folder's
+  entry. See PLAN, where the bullet now says so.
+
+- **The notice reads every entry of the game it is showing**, which is the consequence of that
+  placement and was nearly missed. `Drifted.FirstOrDefault()` picks one entry; with the savegame half
+  now sitting on its own folder's entry, a game whose server folder drifted and whose client folder
+  holds an unchecked-in evening would have shown the mod half and said nothing about the save. The
+  notice gathers the savegame half across the game's entries and passes it to `DescribeHeadline` and
+  `DescribeSavegames` separately from `report`. **Slice 5 rewrites both of those sentences — keep the
+  gathering.**
+
+- **`TryReadAgreed` did not die here.** Three of its four callers became lookups, as planned. The
+  fourth is the savegame row's *can this be taken here*, asked before anybody has chosen a slot, and
+  that is a genuine question about the game rather than scaffolding: every target follows one profile,
+  so where they all agree the row can state it, and where they do not the honest answer is "apply the
+  profile first". Its doc comment says that now instead of naming slice 3.
+
+- **The fake adapter earned its place a second time**, exactly where the plan said it would: a target
+  with savegames and no mod folder is a shape fixtures cannot make, and it is what proved the drift
+  monitor needed a game-level entry for holds that belong to no folder entry.
+
+- **An unreachable hold is a row, not a slot.** `SavegameSlotRowViewModel.ForUnreachableHold` builds
+  one from the binding alone — there is no slot to build it from, which is the state — and it offers
+  Disconnect and nothing else: check-in and discard both need a folder to pack or recycle, and
+  `RequireTarget` refuses them before the server is told anything. Slice 5 rewrites this page's
+  neighbours; the row shape should survive it.
+
+- **`SlotGrouping` is shared by the two slot lists** and groups only where a row carries a target
+  name, which `SavegameService` sets only for a game with more than one savegame folder. Slice 5's
+  flat check-out list is that same call.
+
+- **FS's two halves share one key**, `FarmingSimulatorTarget.Key`, still spelling `mods`. Renaming it
+  to something that reads better for a savegame folder would orphan every manifest and binding on
+  every machine, which is the rule this phase spends a bullet on — a key is not a description.
 
 ## Definition of done, per slice
 
@@ -178,3 +237,11 @@ sweep and the drift monitor need is *two keyed folders*, and standing a whole ad
 would have put a settings round trip in the middle of a test about a file name. The fake earns its
 place where the *targets themselves* are under test — that a settings edit removes one — and slice 3
 is where it comes back, because a savegame folder without a mod folder is a shape only it can make.
+
+**3 split the same way, and the split is worth repeating in 4 and 5.** The fake adapter holds the
+pairing — that both halves come from one settings form under one key, that either half can be absent
+— and the service harness grew a second savegame folder for everything else, because what a hold, an
+observation and a check-in need is *two keyed folders on two revisions* and the fake would have put a
+settings round trip in the middle of a test about attribution. Three test projects are green at
+645 + 239 + 109, and the solution builds; the Farming Simulator flow is one target and unchanged by
+this slice, so the multi-target half is those tests and nothing else until a BeamNG adapter exists.

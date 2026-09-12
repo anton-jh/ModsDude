@@ -50,7 +50,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 | Capability | Base stage | Local stage |
 | --- | --- | --- |
 | Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
-| Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `GetSlots(ct)`, plus `GetSlotPath`, `CreateSlot` and `BelongsInPackedSave` |
+| Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `SavegameTargets`, plus `GetSlots(target, ct)`, `GetSlotPath(target, slot)`, `CreateSlot` and `BelongsInPackedSave` |
 
 `IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
@@ -94,14 +94,25 @@ adapter answers with a list.
 
 ```csharp
 public sealed record ModTarget(TargetKey Key, string? DisplayName, string Path);
+public sealed record SavegameTarget(TargetKey Key, string? DisplayName, string Path);
 ```
+
+**The two halves are two capability adapters answering under one key.** The mod adapter lists the
+folders mods go in and the savegame adapter lists the folders saves live in, and a key appearing in
+both is one target: a save in target T's savegame folder was played against target T's mod folder,
+and nothing else. That is what an apply attributes an evening by and what a check-in names a
+revision from. The two never see each other, so the key is the whole of the link — Farming
+Simulator's halves share `FarmingSimulatorTarget.Key` for exactly that reason.
+
+A key in one list and not the other is ordinary: mods with no saves beside them is most of them,
+and saves with no mods beside them is the MP client whose mods the server's copy serves.
 
 **A target is a value the adapter returns, not a persisted entity.** No id, no row, no list the
 user maintains. A game that needs more than one says so in its local settings — one optional
-folder field per target — and `ModTargets` is derived from those fields every time it is asked.
-Emptying a field takes a target away; filling it in puts it back. A blank field is a target the
-adapter **omits** rather than one carrying a null path, and a game reaching no folder at all is
-an ordinary answer rather than an error.
+folder field per half per target — and both lists are derived from those fields every time they
+are asked. Emptying a field takes that half away; filling it in puts it back. A blank field is a
+folder the adapter **omits** rather than one carrying a null path, and a game reaching no folder at
+all is an ordinary answer rather than an error.
 
 `DisplayName` is null for a game with one target, which never mentions it: Farming Simulator has
 a mod folder, not a mod folder called something. A game with several names them, because with
@@ -117,6 +128,13 @@ Keys are **not** subject to filename rules, even though one ends up in a manifes
 store encodes what it puts in a filename, with a length cap, so an awkward key is escaped rather
 than refused — see [Two rules for the discriminator](#two-rules-for-the-discriminator), which
 this deliberately does not become a third of.
+
+**Slot ids need only be unique within the target they came from**, which an adapter cannot get
+wrong: it is asked for one folder's slots at a time, and the engine pairs each answer with the key
+it asked about. `SavegameSlotRef(TargetKey, SavegameSlotId)` is what addresses a place across a
+whole game, and `{target}:{slot}` is only how one is written down. Asking instead for ids unique
+across every folder would put two targets' slots on one binding the first time somebody numbered
+from one twice.
 
 ## What the sync engine and registration read off an adapter
 
@@ -518,12 +536,13 @@ Several details in this code are load-bearing and worth preserving if you touch 
 7. Nothing else. Registration is by reflection, and the UI is driven by the dynamic forms.
 
 Set `CanSupportSavegames = false` unless you implement it — the flag is what the UI checks
-before offering the feature. Implementing it means `GetSlots` above all: a slot list rather than a
-slot *count*, so that a game with twenty numbered folders and one with freely named saves are the
-same model, and nothing above the adapter ever learns a number. Read each occupied slot far enough
-to name it the way the game does; a picker that shows `savegame3` is the memory test the feature
-exists to remove. A slot you cannot read is **occupied and unnamed**, never empty — empty is the one
-the engine overwrites without asking.
+before offering the feature. Implementing it means `SavegameTargets` and `GetSlots(target, ct)`
+above all: a slot list rather than a slot *count*, so that a game with twenty numbered folders and
+one with freely named saves are the same model, and nothing above the adapter ever learns a number.
+Key each savegame folder the same way its mod folder is keyed, or nothing can say which mods a save
+was played against. Read each occupied slot far enough to name it the way the game does; a picker
+that shows `savegame3` is the memory test the feature exists to remove. A slot you cannot read is
+**occupied and unnamed**, never empty — empty is the one the engine overwrites without asking.
 
 Leave `SupportsHardlinks` alone unless somebody has actually tested what the game's updater does
 to a mod file. The default is `false` because the failure is silent and takes every repo on the

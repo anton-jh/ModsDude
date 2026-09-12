@@ -1616,23 +1616,31 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 
 ### One savegame held per game
 
-- [ ] **The hold limit counts per game, not per target.** `SavegameHoldRules.FindConflictingHold` is
+- [x] **The hold limit counts per game, not per target.** `SavegameHoldRules.FindConflictingHold` is
       asked once for the game. You play one save at a time; hosting one save on the server while
       playing another in singleplayer would hold two of the group's saves and block two people.
-- [ ] ***Take a copy* is the escape hatch**, unchanged: no claim, no binding, an ordinary
+- [x] ***Take a copy* is the escape hatch**, unchanged: no claim, no binding, an ordinary
       unrecognised slot. It is already the answer to "I want to look at another save without holding
       it".
-- [ ] **`IHeldSavegames` splits along the seam it already has.** `ObserveAsync` and `CheckDriftAsync`
+- [x] **`IHeldSavegames` splits along the seam it already has.** `ObserveAsync` and `CheckDriftAsync`
       stay per target — the bytes are in a folder. `GetRequiredRevision` and `DecideApply` move to
       the game. The interface was keying both halves on one id; only the keys change.
-- [ ] **A binding for a target that no longer exists must not vanish with a settings edit.** The
+
+      **Three of the four keys moved and the fourth did not.** `CheckDriftAsync` kept the game,
+      because its answer is a list rather than a value: the holds are the game's, the cost is one
+      hash per held slot, and a call per folder would re-read the same list N times to no end. What
+      went per target is the part that was wrong — every answer is compared against *its own*
+      target's manifest and names the target it is about, and the monitor places each one on that
+      folder's entry. A hold in a target with savegames and no mod folder belongs to no folder entry
+      and gets one about the game, which is the shape a game with no profile already used.
+- [x] **A binding for a target that no longer exists must not vanish with a settings edit.** The
       other half of the orphan question, and the half that is not droppable: a binding is a savegame
       this machine is still holding, and a claim somebody else is waiting on. A settings edit and an
       adapter author renaming a key are indistinguishable here too, so the answer cannot be "work
       out which happened" — it is that the hold survives a target it can no longer address, and the
       game says so where holds are shown. The manifest half is
       [dropped in 2b](#the-shape); this one is why they are two bullets.
-- [ ] **A slot is identified by `SavegameSlotRef(TargetKey, SlotId)`**, a compound value in the shape
+- [x] **A slot is identified by `SavegameSlotRef(TargetKey, SlotId)`**, a compound value in the shape
       `GameIdentity` and `ActiveProfile` already have — not a prefixed string, which would invite
       parsing. `{target}:{slot}` exists only as the persisted rendering, exactly as
       `_farming_simulator#fs25` is for an identity, and the key is also what groups the picker.
@@ -1651,11 +1659,11 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 The one thing that does **not** move up to the game, and the reason is worth writing down because
 per-game looks simpler and is not.
 
-- [ ] **`ObserveAsync` goes on reading the manifest of the folder it is about to rewrite.** It is
+- [x] **`ObserveAsync` goes on reading the manifest of the folder it is about to rewrite.** It is
       already called from inside `WriteManifestAsync`, which is already per folder; with N targets it
       is that same loop N times. Per-game would mean *adding* an activated-revision field and logic
       to prefer it over the manifest — more code, for a worse number.
-- [ ] **The number has to be observed, not declared.** A failed apply never reaches
+- [x] **The number has to be observed, not declared.** A failed apply never reaches
       `WriteManifestAsync`, so nothing is attributed, which is correct: that folder did not change,
       so what is being played there did not change either. Record the *activated* revision instead
       and the case breaks exactly where it matters — activate rev 12, the server's apply fails, the
@@ -1664,7 +1672,7 @@ per-game looks simpler and is not.
 - [ ] **Activated-but-not-applied becomes a normal state** under this phase rather than an
       exceptional one, so divergence gets *more* reachable, not less. That argues for observing
       harder, not for trusting intent.
-- [ ] **Both existing guards survive verbatim**: a folder on a *different* profile records no number
+- [x] **Both existing guards survive verbatim**: a folder on a *different* profile records no number
       at all — the hash still moves, because the bytes did — and the no-work path still observes,
       because a revision can move without a single mod doing so.
 
@@ -1737,7 +1745,7 @@ existing test stays green. The helper dies in slice 2b, which is where multi-tar
 - [x] **2b. Re-key the per-folder stores** — the manifest, the drift service, store eviction and mod
       sources. One slice rather than four, because it is the same edit four times and splitting it
       means four rounds of half-compiling. `RequireSingleTarget` is deleted here.
-- [ ] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
+- [x] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
       grouping. Attribution is deliberately untouched.
 - [ ] **4. Activate and apply become two verbs**, with the confirmation moved, `RecordsIntent` made
       structural, and `NeverSynced` split so an activation that did not land is drift. The split
