@@ -192,13 +192,15 @@ internal sealed class FakeModFileDownloader(FakeSyncServer server) : IModFileDow
 /// </summary>
 internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardlinks) : ILocalModAdapter
 {
-    public string ModFolder { get; } = modFolder;
+    public ModTarget Target { get; } = new(new TargetKey("mods"), null, modFolder);
+
+    public ModTargets ModTargets => new(Target);
 
     public bool SupportsHardlinks { get; } = supportsHardlinks;
 
 
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
-        => GetModsFromFolder(ModFolder, cancellationToken);
+    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken)
+        => GetModsFromFolder(target.Path, cancellationToken);
 
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
     {
@@ -232,11 +234,11 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
         return Task.FromResult<IEnumerable<LocalMod>>(mods);
     }
 
-    public string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName)
-        => Path.Combine(ModFolder, fileName?.Value ?? $"{modId.Value}.zip");
+    public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
+        => Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
 
-    public ILocalModAdapter WithLocalSettings(string serializedInstanceSettings) => this;
-    public ILocalModAdapter WithLocalSettings(DynamicForm instanceSettings) => this;
+    public ILocalModAdapter WithLocalSettings(string serializedLocalSettings) => this;
+    public ILocalModAdapter WithLocalSettings(DynamicForm localSettings) => this;
 }
 
 

@@ -157,7 +157,11 @@ public sealed record ModSyncPlan
     /// </summary>
     public int? ProfileRevision { get; init; }
 
-    public required string ModFolder { get; init; }
+    /// <summary>The target this plan is for - one folder, which is genuinely sync's unit of work.</summary>
+    public required ModTarget Target { get; init; }
+
+    /// <summary>The folder itself, which is all most of the plan's readers want from the target.</summary>
+    public string ModFolder => Target.Path;
     public required IReadOnlyList<ModSyncItem> Items { get; init; }
     public required ModMaterialization Materialization { get; init; }
 

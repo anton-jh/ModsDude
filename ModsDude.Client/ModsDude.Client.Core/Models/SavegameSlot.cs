@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.GameAdapters;
+
 namespace ModsDude.Client.Core.Models;
 
 /// <summary>
@@ -43,4 +45,65 @@ public record SavegameSlot(
 public readonly record struct SavegameSlotId(string Value)
 {
     public override string ToString() => Value;
+}
+
+
+/// <summary>
+/// One slot in one target - what addresses a place for a savegame once a game reaches more than one
+/// folder.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A compound value in the shape <see cref="GameAdapters.GameIdentity"/> and
+/// <see cref="ActiveProfile"/> already have, rather than a prefixed string, which would invite
+/// parsing at every site that handled one. <c>{target}:{slot}</c> exists only as the persisted
+/// rendering, exactly as <c>_farming_simulator#fs25</c> is for an identity, and nothing but
+/// <see cref="Parse"/> ever splits one.
+/// </para>
+/// <para>
+/// <b>Uniqueness across a game is a construction rather than a contract.</b> An adapter mints slot
+/// ids unique within its own target, which it cannot get wrong, and nothing has to be asked of it or
+/// tested. Asking instead for ids unique across the game would put two targets' slots on one binding
+/// the first time somebody numbered from one twice, and the one-binding-per-slot rule in
+/// <c>SavegameBindingStore</c> would enforce that collision rather than catch it.
+/// </para>
+/// </remarks>
+public readonly record struct SavegameSlotRef
+{
+    public SavegameSlotRef(TargetKey target, SavegameSlotId slot)
+    {
+        if (string.IsNullOrEmpty(slot.Value))
+        {
+            throw new ArgumentException("A slot reference cannot carry a blank slot id.", nameof(slot));
+        }
+
+        Target = target;
+        Slot = slot;
+    }
+
+
+    public TargetKey Target { get; }
+    public SavegameSlotId Slot { get; }
+
+
+    public override string ToString() => $"{Target}{TargetKey.Separator}{Slot}";
+
+
+    /// <summary>
+    /// Reads back what <see cref="ToString"/> wrote. Splits at the first separator only: the target
+    /// key cannot contain one, and a slot id is an adapter's own string that may.
+    /// </summary>
+    public static SavegameSlotRef Parse(string s)
+    {
+        var separator = s.IndexOf(TargetKey.Separator, StringComparison.Ordinal);
+
+        if (separator < 0)
+        {
+            throw new FormatException($"Invalid SavegameSlotRef string '{s}'");
+        }
+
+        return new(
+            new TargetKey(s[..separator]),
+            new SavegameSlotId(s[(separator + TargetKey.Separator.Length)..]));
+    }
 }

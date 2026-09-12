@@ -191,13 +191,20 @@ public class LocalInstanceRepository : IInstanceModFolders, IDriftCandidateSourc
     }
 
     /// <summary>The mod folder the adapter says an instance with these settings would own.</summary>
+    /// <remarks>
+    /// Takes the one target, which is Phase 10 slice 1 scaffolding. An instance is still one folder,
+    /// and the check this feeds - no two of them own the same one - is rewritten in slice 2a, where a
+    /// game owns a list of folders instead.
+    /// </remarks>
     public static string? GetModFolder(IBaseGameAdapter baseAdapter, DynamicForm instanceSettings)
     {
         return baseAdapter
             .WithLocalSettings(instanceSettings)
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
-            .ModFolder;
+            .ModTargets
+            .RequireSingleTarget()
+            .Path;
     }
 
 

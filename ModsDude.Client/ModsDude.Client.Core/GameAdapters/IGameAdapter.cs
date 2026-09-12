@@ -97,12 +97,18 @@ public interface IBaseModAdapter
 public interface ILocalModAdapter : IBaseModAdapter
 {
     /// <summary>
-    /// The mod folder this instance owns. No two instances may own the same one, whatever their
-    /// scopes - scoping instances to a game rather than an adapter is what makes that possible.
+    /// Every mod folder this game reaches on this machine, keyed. Almost every game answers with one
+    /// and never names it; a game whose folders are separately configured - a dedicated server and
+    /// the client that has to match it - answers with as many as its settings fill in.
     /// </summary>
-    string ModFolder { get; }
+    /// <remarks>
+    /// <b>Derived from the local settings, every time.</b> Nothing persists a target, so emptying a
+    /// settings field takes one away and filling it in puts it back, and a game reaching no folder at
+    /// all is an ordinary answer rather than an error.
+    /// </remarks>
+    ModTargets ModTargets { get; }
 
-    Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken);
+    Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken);
 
     /// <summary>
     /// Where a mod version's file belongs, and what it is called. The write side of the adapter -
@@ -121,7 +127,7 @@ public interface ILocalModAdapter : IBaseModAdapter
     /// of in every adapter. Adapters supply paths; the engine performs the filesystem operations.
     /// See docs/07-mod-sync-design.md#fitting-it-into-the-client.
     /// </remarks>
-    string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
+    string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 
     /// <summary>
     /// The file to remove when uninstalling a mod that is currently installed. The uninstall half of

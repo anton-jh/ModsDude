@@ -357,14 +357,28 @@ public class FarmingSimulatorLocalModAdapter(
     ILoggerFactory? loggerFactory = null)
     : FarmingSimulatorBaseModAdapter(loggerFactory), ILocalModAdapter
 {
-    public string ModFolder => Path.Combine(
+    /// <summary>
+    /// The one target, and the key that ends up in its manifest's filename. Never shown: a game with
+    /// one mod folder does not have a mod folder called something.
+    /// </summary>
+    /// <remarks>
+    /// Stable, and it has to stay that way. Renaming this to anything else would orphan every
+    /// manifest and every savegame binding on every member's machine, and nothing could tell that
+    /// from the folder having been taken away.
+    /// </remarks>
+    public static TargetKey Key { get; } = new("mods");
+
+
+    public ModTargets ModTargets => new(new ModTarget(Key, null, ModFolder));
+
+    private string ModFolder => Path.Combine(
         localSettings.GameDataFolder ?? throw new InvalidOperationException("Local settings carry no game data folder."),
         "mods");
 
 
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(CancellationToken cancellationToken)
+    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken)
     {
-        return GetModsFromFolder(ModFolder, cancellationToken);
+        return GetModsFromFolder(target.Path, cancellationToken);
     }
 
     /// <summary>
@@ -380,8 +394,8 @@ public class FarmingSimulatorLocalModAdapter(
     /// Falls back to the id where the repo has nothing usable registered - an older row, or a name
     /// that failed validation - which is exactly what this used to do for everything.
     /// </remarks>
-    public string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName)
+    public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
     {
-        return Path.Combine(ModFolder, fileName?.Value ?? $"{modId.Value}.zip");
+        return Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
     }
 }

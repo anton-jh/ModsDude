@@ -10,7 +10,7 @@ using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Core.Sync;
 
-/// <param name="Adapter">Already hydrated with the instance's settings; it is what knows the mod folder.</param>
+/// <param name="Adapter">Already hydrated with the local settings; it is what knows the targets.</param>
 public sealed record ModSyncRequest(Guid InstanceId, ILocalModAdapter Adapter, Guid RepoId, Guid ProfileId)
 {
     /// <summary>
@@ -83,7 +83,11 @@ public sealed class ModSyncService(
 
     public async Task<ModSyncPlan> PlanAsync(ModSyncRequest request, CancellationToken cancellationToken)
     {
-        var modFolder = request.Adapter.ModFolder;
+        // Slice 1 of Phase 10: the adapter answers with targets, and this caller still takes one. The
+        // loop over a game's targets belongs to whatever activates a profile, not to sync, which is
+        // genuinely per folder - see docs/PLAN.md#phase-10--one-game-many-targets.
+        var target = request.Adapter.ModTargets.RequireSingleTarget();
+        var modFolder = target.Path;
 
         if (Directory.Exists(modFolder) is false)
         {
@@ -92,9 +96,9 @@ public sealed class ModSyncService(
                 $"'{modFolder}' does not exist right now. An unplugged drive or an offline network path looks like this; nothing has been changed.");
         }
 
-        var target = ResolveTargetRevision(request);
-        var (desired, revision) = await GetDesiredAsync(request, target, cancellationToken);
-        var installed = await GetInstalledAsync(request.Adapter, cancellationToken);
+        var targetRevision = ResolveTargetRevision(request);
+        var (desired, revision) = await GetDesiredAsync(request, targetRevision, cancellationToken);
+        var installed = await GetInstalledAsync(request.Adapter, target, cancellationToken);
         var manifest = manifestStore.TryRead(request.InstanceId);
 
         // Fetched only when something is actually going to be removed. It is the one input that
@@ -108,7 +112,7 @@ public sealed class ModSyncService(
         var servingStore = storeProvider.GetStoreServing(modFolder);
         var allStores = storeProvider.GetAllStores();
 
-        items = [.. items, .. FindBlockingFiles(items, installed.UnmanagedFileNames, modFolder, request.Adapter)];
+        items = [.. items, .. FindBlockingFiles(items, installed.UnmanagedFileNames, target, request.Adapter)];
 
         return new ModSyncPlan
         {
@@ -117,7 +121,7 @@ public sealed class ModSyncService(
             ProfileName = request.ProfileName,
             ProfileRevision = revision,
             InstanceId = request.InstanceId,
-            ModFolder = modFolder,
+            Target = target,
             Items = items,
             Materialization = DecideMaterialization(modFolder, servingStore, request.Adapter),
             UnmanagedFileNames = installed.UnmanagedFileNames,
@@ -449,11 +453,11 @@ public sealed class ModSyncService(
     /// </summary>
     private static void Materialize(ModSyncPlan plan, ModSyncItem item)
     {
-        var target = plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName);
+        var destination = plan.Adapter.GetModFilePath(plan.Target, item.ModId, item.DesiredVersion!.Value, item.FileName);
 
         if (item.Action is ModSyncAction.Rename)
         {
-            Rename(item.InstalledPath!, target);
+            Rename(item.InstalledPath!, destination);
 
             return;
         }
@@ -461,27 +465,27 @@ public sealed class ModSyncService(
         var hash = item.DesiredHash!;
         var blob = plan.ServingStore.GetBlobPath(hash);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-        if (File.Exists(target))
+        if (File.Exists(destination))
         {
             // The removal phase took the old file, so anything still here is a leftover of a failed
             // run rather than something the user owns - a plan that found a file it does not
             // recognise here would have listed it for quarantine.
-            File.Delete(target);
+            File.Delete(destination);
         }
 
         if (plan.Materialization.Method is MaterializationMethod.Hardlink &&
-            FileLinks.TryCreateHardLink(target, blob))
+            FileLinks.TryCreateHardLink(destination, blob))
         {
             return;
         }
 
-        File.Copy(blob, target);
+        File.Copy(blob, destination);
 
         // A copied file inherits the blob's read-only-ness and timestamps on some paths; make sure
         // the game sees an ordinary, writable file of its own.
-        var info = new FileInfo(target) { IsReadOnly = false };
+        var info = new FileInfo(destination) { IsReadOnly = false };
         info.LastWriteTimeUtc = DateTime.UtcNow;
     }
 
@@ -579,7 +583,7 @@ public sealed class ModSyncService(
         {
             var path = item.Action is ModSyncAction.Keep
                 ? item.InstalledPath!
-                : plan.Adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName);
+                : plan.Adapter.GetModFilePath(plan.Target, item.ModId, item.DesiredVersion!.Value, item.FileName);
 
             var info = new FileInfo(path);
 
@@ -743,9 +747,10 @@ public sealed class ModSyncService(
 
     private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(
         ILocalModAdapter adapter,
+        ModTarget target,
         CancellationToken cancellationToken)
     {
-        var found = await adapter.GetInstalledMods(cancellationToken);
+        var found = await adapter.GetInstalledMods(target, cancellationToken);
         var mods = new List<InstalledMod>();
         var recognised = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -766,7 +771,7 @@ public sealed class ModSyncService(
         // Everything else in the folder is somebody else's business - a readme, a log, an archive
         // that is not a mod. Recorded so that drift detection does not report them as additions
         // forever, and otherwise never touched.
-        var unmanaged = Directory.EnumerateFiles(adapter.ModFolder)
+        var unmanaged = Directory.EnumerateFiles(target.Path)
             .Select(Path.GetFileName)
             .OfType<string>()
             .Where(x => recognised.Contains(x) is false)
@@ -783,7 +788,7 @@ public sealed class ModSyncService(
     private static IReadOnlyList<ModSyncItem> FindBlockingFiles(
         IReadOnlyList<ModSyncItem> items,
         IReadOnlyList<string> unmanagedFileNames,
-        string modFolder,
+        ModTarget target,
         ILocalModAdapter adapter)
     {
         if (unmanagedFileNames.Count == 0)
@@ -796,7 +801,7 @@ public sealed class ModSyncService(
 
         foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename))
         {
-            var name = Path.GetFileName(adapter.GetModFilePath(item.ModId, item.DesiredVersion!.Value, item.FileName));
+            var name = Path.GetFileName(adapter.GetModFilePath(target, item.ModId, item.DesiredVersion!.Value, item.FileName));
 
             if (unmanaged.Remove(name) is false)
             {
@@ -808,7 +813,7 @@ public sealed class ModSyncService(
                 Action = ModSyncAction.Quarantine,
                 ModId = item.ModId,
                 DisplayName = name,
-                InstalledPath = Path.Combine(modFolder, name),
+                InstalledPath = Path.Combine(target.Path, name),
                 InstalledIsRecoverable = false
             });
         }
