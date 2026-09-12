@@ -4,6 +4,22 @@ using System.Windows.Data;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
+/// A row in a slot list, as the grouping sees it.
+/// </summary>
+/// <remarks>
+/// Two lines of interface for one reason: <see cref="PropertyGroupDescription"/> takes a property
+/// name as a string, and a string that stops matching groups everything under one silent null
+/// heading rather than failing. Both slot lists implement this, so <c>nameof</c> has something to
+/// check the name against.
+/// </remarks>
+internal interface IGroupedSlot
+{
+    /// <summary>What to call the folder this slot is in, or null where the game reaches one.</summary>
+    string? TargetName { get; }
+}
+
+
+/// <summary>
 /// Groups a slot list under its targets, where the game has more than one of them.
 /// </summary>
 /// <remarks>
@@ -34,7 +50,7 @@ internal static class SlotGrouping
 
         if (grouped)
         {
-            view.GroupDescriptions.Add(new PropertyGroupDescription("TargetName"));
+            view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(IGroupedSlot.TargetName)));
         }
     }
 }

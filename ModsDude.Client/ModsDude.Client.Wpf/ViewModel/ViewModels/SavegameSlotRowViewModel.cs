@@ -61,7 +61,7 @@ public enum SavegameBindingStanding
 /// thing that can work when there is no longer a savegame to talk to the server about.
 /// </para>
 /// </remarks>
-public partial class SavegameSlotRowViewModel : ObservableObject
+public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
 {
     public SavegameSlotRowViewModel(
         GameSavegameSlot slot,

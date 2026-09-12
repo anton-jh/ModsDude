@@ -19,7 +19,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// somebody's evening and then apologises.
 /// </para>
 /// </remarks>
-public sealed class SavegameSlotOptionViewModel
+public sealed class SavegameSlotOptionViewModel : IGroupedSlot
 {
     public SavegameSlotOptionViewModel(
         GameSavegameSlot slot,
