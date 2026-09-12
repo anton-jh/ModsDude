@@ -1477,18 +1477,53 @@ adapter will offer each folder, and offer leaving one blank.
 - [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
       syncing the dedicated server must not rewrite the MP client's manifest, and
       atomic-write-per-folder is what keeps a half-finished apply safe.
-- [ ] **A third rule for the discriminator** in
-      [04 — Game adapters](04-game-adapters.md#two-rules-for-the-discriminator): it has to be
-      filesystem-safe, checked when the adapter is registered. It is adapter-authored — a scripted
-      adapter declares its own game id from inside the script — so without this a bad discriminator
-      is a manifest that cannot be written, found at sync time on somebody else's machine. Unlike the
-      other two rules this one is cheap to enforce, which is why it is code rather than prose.
+- [ ] **The store encodes what it puts in a filename**, with a length cap — it is not a rule adapter
+      authors have to obey. **Two** adapter-authored strings land in that name: the identity's
+      discriminator, which a scripted adapter declares from inside its script, and the target key.
+      A third entry beside the [two discriminator
+      rules](04-game-adapters.md#two-rules-for-the-discriminator) would make a bad one into a
+      manifest that cannot be written, found at sync time on somebody else's machine; encoding at the
+      store cannot be violated at all. Ordinary keys stay legible —
+      `_farming_simulator#fs25_mods.json` — and pathological ones are escaped rather than refused.
 - [ ] **No `Guid` on `Game`.** Everything that would have keyed on one keys on `GameIdentity`, which
-      is already the `LocalState` dictionary key. Two ways to name one game is the thing this phase
-      spends its argument removing.
+      is already the `LocalState` dictionary key. Once the store is encoding anyway a `Guid` buys
+      only a fixed-length filename, and costs the thing this phase spends its argument on: a game
+      having one name rather than two.
 - [ ] **Bump `LocalState.CurrentVersion`.** A per-game dictionary defaulting to empty would read as
       "no profile is set anywhere", which is the one thing that must not be silently guessed. No
       migration, per the standing decision.
+- [ ] **A mod source per target, not per game.** `ModSourceId.ForInstance(instanceId)` offers one
+      scan source per instance; with three targets a BeamNG import would otherwise look in one folder
+      of three and quietly report what the other two hold as missing. `ModSourceKind.Instance` is
+      user-facing as *"Game install"* and wants the target's name where there is more than one.
+      `ModSourceId` is persisted — it is what remembers *do not look in this folder* — so the format
+      change drops those preferences; harmless, and it rides the version bump anyway.
+      `ProfileModsEditorPageViewModel.ScanInstance`, the drift notice's deep link, scans a target.
+
+### A fake adapter with optional targets, before anything needs one
+
+Farming Simulator has one target and there is no BeamNG adapter yet, so **every multi-target path
+would otherwise ship having never run.** The fake is written in slice 1, before the code that needs
+it exists, and it is what the rest of the phase is developed against.
+
+- [ ] **Targets driven by its `LocalSettings`**, the way the real BeamNG adapter will be: three
+      optional folders, each present only when its field is filled in. That makes the whole matrix
+      reachable from one adapter — 0, 1, 2 and 3 targets — rather than needing a fake per shape.
+- [ ] **Savegame folders independently optional.** A target with mods and no saves, one with saves
+      and no mods, and one with both all have to be ordinary — it is the pairing the whole phase
+      rests on, and the MP client is exactly a target whose saves live somewhere else.
+- [ ] **Cover the transitions, which is where the orphans are.** Emptying a target's field removes a
+      target that has a manifest, and possibly a held savegame, behind it. Decide and test what
+      happens to both rather than discovering it: a manifest for a target that no longer exists is
+      simply stale and can be dropped, but a **binding** for one is a savegame this machine is still
+      holding and must not quietly vanish with a settings edit.
+- [ ] **Renaming a target key is the same event.** An adapter author changing `"mp"` to
+      `"multiplayer"` orphans both, and nothing can tell that from a removal — which is the argument
+      for keys being adapter-stable and worth a line in
+      [04 — Game adapters](04-game-adapters.md).
+- [ ] **`RequireSingleTarget` stays covered too.** Slice 1 and 2a hold every caller to one target, so
+      a test that the helper throws on two is what stops that scaffolding becoming silently
+      first-target-wins.
 
 ### Activating is intent; applying is work
 
@@ -1579,9 +1614,17 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 - [ ] **`IHeldSavegames` splits along the seam it already has.** `ObserveAsync` and `CheckDriftAsync`
       stay per target — the bytes are in a folder. `GetRequiredRevision` and `DecideApply` move to
       the game. The interface was keying both halves on one id; only the keys change.
-- [ ] **Slots become unique across the game**, with `SavegameSlot` carrying its `TargetKey` beside
-      its id. The id stays a value nobody parses; the key is what groups the picker. Slot identity is
-      already the adapter's to mint, so this is a tightening rather than a new burden.
+- [ ] **A slot is identified by `SavegameSlotRef(TargetKey, SlotId)`**, a compound value in the shape
+      `GameIdentity` and `ActiveProfile` already have — not a prefixed string, which would invite
+      parsing. `{target}:{slot}` exists only as the persisted rendering, exactly as
+      `_farming_simulator#fs25` is for an identity, and the key is also what groups the picker.
+
+      **Uniqueness across the game is then a construction rather than a contract.** An adapter mints
+      ids unique within its own target, which it cannot get wrong, and nothing has to be asked of it
+      or tested. The alternative — global uniqueness as an adapter obligation — puts two targets'
+      slots on one binding the first time somebody numbers from one twice, and
+      `SavegameBindingStore`'s one-binding-per-slot rule would enforce the collision rather than
+      catch it.
 
 ### Play attribution stays per target
 
@@ -1656,14 +1699,24 @@ was written.
 
 ### The order to build it in
 
-Slice 1 goes first and alone — everything after it reads folders, and it is what changes how folders
-are read.
+Sequential, and genuinely so — this is a stack, not a set. Three things are independent of it and
+can land in any order beside it: relocating publish (which gates the sidebar deletion in slice 5),
+the store's filename encoding, and the pass over 02, 04, 05 and 06 at the end.
 
-- [ ] **1. The adapter answers with targets.** `ModTargets`, the manifest key, the third
-      discriminator rule, and the adapter-layer renames. Farming Simulator returns one target and
-      nothing downstream notices.
-- [ ] **2. `Game` replaces `LocalInstance`.** Keyed by `GameIdentity`, holding `ActiveProfile` and
-      the cached folder list; manifests, drift and store eviction re-key onto targets.
+**Widen the interface, keep the callers narrow, widen the callers later.** Slice 1 has `ModTargets`
+return a list while every caller takes `RequireSingleTarget()` — a named helper rather than
+`.Single()`, so the tripwire explains itself. Farming Simulator behaves identically and every
+existing test stays green. The helper dies in slice 2b, which is where multi-target becomes real.
+
+- [ ] **1. The adapter answers with targets.** `ModTargets`, `SavegameSlotRef`, the store's filename
+      encoding, the adapter-layer renames, `RequireSingleTarget` at every caller — and the fake
+      adapter above, which is written here because everything after this is developed against it.
+- [ ] **2a. The `Game` and its state.** `PersistedGame`, `Game`, `GameRepository`,
+      `LocalState.Games` keyed by `GameIdentity` with its JSON key converter, the version bump.
+      Targets still resolve through `RequireSingleTarget`.
+- [ ] **2b. Re-key the per-folder stores** — the manifest, the drift service, store eviction and mod
+      sources. One slice rather than four, because it is the same edit four times and splitting it
+      means four rounds of half-compiling. `RequireSingleTarget` is deleted here.
 - [ ] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
       grouping. Attribution is deliberately untouched.
 - [ ] **4. Activate and apply become two verbs**, with the confirmation moved, `RecordsIntent` made
