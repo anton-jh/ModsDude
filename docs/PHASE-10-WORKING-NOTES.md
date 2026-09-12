@@ -79,7 +79,9 @@ matters more than usual here, because the rename table touches most of the 78 fi
 - **Removing a target orphans things.** Emptying its settings field takes away a target that has a
   manifest and possibly a held savegame behind it. A stale manifest is droppable; a **binding is a
   savegame this machine is still holding** and must not vanish with a settings edit. An adapter
-  author renaming a target key is indistinguishable from a removal.
+  author renaming a target key is indistinguishable from a removal. The fake makes the transition
+  reachable in slice 1; the two answers belong where the two things are keyed — **the manifest in
+  2b, the binding in 3** — because until then nothing is keyed on a target to orphan.
 - **`GameIdentity` as a JSON dictionary key.** A record struct needs a converter or it silently
   serializes as an object. The version bump means the failure is "everything resets" rather than
   corruption, but round-trip a `LocalState` with two games.

@@ -50,7 +50,7 @@ public interface IBaseGameAdapter : IGameAdapter
     /// The identity of the game these base settings configure the adapter for. An adapter serving
     /// one game says nothing and gets its id alone; one serving several overrides this from a base
     /// settings field, which must not be marked [CanBeModified] - see
-    /// docs/04-game-adapters.md#instance-scope.
+    /// docs/04-game-adapters.md#game-identity.
     /// </summary>
     /// <remarks>
     /// <see cref="GameAdapterId.Id"/> without the compatibility version, deliberately: a repo on

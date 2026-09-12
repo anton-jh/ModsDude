@@ -1477,6 +1477,13 @@ adapter will offer each folder, and offer leaving one blank.
 - [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
       syncing the dedicated server must not rewrite the MP client's manifest, and
       atomic-write-per-folder is what keeps a half-finished apply safe.
+- [ ] **A manifest for a target that no longer exists is stale, and is dropped.** That is half of
+      the orphan question the fake adapter makes reachable, and it belongs here rather than in slice
+      1 because until the manifest is keyed on a target there is nothing to orphan. Emptying a
+      settings field and an adapter author renaming a key produce the same file and nothing can tell
+      them apart, which is fine for a manifest: losing one costs a rescan. The other half — a
+      **binding**, which is a savegame this machine is still holding — is not fine, and is
+      [decided in slice 3](#one-savegame-held-per-game).
 - [x] **The store encodes what it puts in a filename**, with a length cap — it is not a rule adapter
       authors have to obey. **Two** adapter-authored strings land in that name: the identity's
       discriminator, which a scripted adapter declares from inside its script, and the target key.
@@ -1512,18 +1519,21 @@ it exists, and it is what the rest of the phase is developed against.
 - [x] **Savegame folders independently optional.** A target with mods and no saves, one with saves
       and no mods, and one with both all have to be ordinary — it is the pairing the whole phase
       rests on, and the MP client is exactly a target whose saves live somewhere else.
-- [ ] **Cover the transitions, which is where the orphans are.** Emptying a target's field removes a
-      target that has a manifest, and possibly a held savegame, behind it. Decide and test what
-      happens to both rather than discovering it: a manifest for a target that no longer exists is
-      simply stale and can be dropped, but a **binding** for one is a savegame this machine is still
-      holding and must not quietly vanish with a settings edit.
-- [ ] **Renaming a target key is the same event.** An adapter author changing `"mp"` to
+- [x] **The transitions are reachable, which is what the fake is for.** Emptying a target's field
+      removes a target; emptying only its mod folder leaves a target still holding savegames;
+      neither renumbers the others. Those are the fake's own tests. **What happens to the things
+      behind a removed target is decided where they are keyed** — the manifest in 2b, the binding
+      in 3 — because until then there is nothing keyed on a target to orphan.
+- [x] **Renaming a target key is the same event.** An adapter author changing `"mp"` to
       `"multiplayer"` orphans both, and nothing can tell that from a removal — which is the argument
-      for keys being adapter-stable and worth a line in
-      [04 — Game adapters](04-game-adapters.md).
+      for keys being adapter-stable, and it is
+      [written down in 04](04-game-adapters.md#targets). The fake pins its keys in a test that
+      looks like it asserts constants, because that is exactly what it is for.
 - [x] **`RequireSingleTarget` stays covered too.** Slice 1 and 2a hold every caller to one target, so
       a test that the helper throws on two is what stops that scaffolding becoming silently
-      first-target-wins.
+      first-target-wins. **None is not the same failure**: a game whose settings point at no folder
+      is an ordinary answer, so `SingleTargetOrNone` is the forgiving form the ownership check uses
+      and `RequireSingleTarget` says so in a sentence somebody can act on. Both die in 2b.
 
 ### Activating is intent; applying is work
 
@@ -1614,10 +1624,19 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 - [ ] **`IHeldSavegames` splits along the seam it already has.** `ObserveAsync` and `CheckDriftAsync`
       stay per target — the bytes are in a folder. `GetRequiredRevision` and `DecideApply` move to
       the game. The interface was keying both halves on one id; only the keys change.
+- [ ] **A binding for a target that no longer exists must not vanish with a settings edit.** The
+      other half of the orphan question, and the half that is not droppable: a binding is a savegame
+      this machine is still holding, and a claim somebody else is waiting on. A settings edit and an
+      adapter author renaming a key are indistinguishable here too, so the answer cannot be "work
+      out which happened" — it is that the hold survives a target it can no longer address, and the
+      game says so where holds are shown. The manifest half is
+      [dropped in 2b](#the-shape); this one is why they are two bullets.
 - [ ] **A slot is identified by `SavegameSlotRef(TargetKey, SlotId)`**, a compound value in the shape
       `GameIdentity` and `ActiveProfile` already have — not a prefixed string, which would invite
       parsing. `{target}:{slot}` exists only as the persisted rendering, exactly as
       `_farming_simulator#fs25` is for an identity, and the key is also what groups the picker.
+      *The type landed in slice 1 with `ModTargets`, since it is the same contract; nothing is
+      addressed by one until here.*
 
       **Uniqueness across the game is then a construction rather than a contract.** An adapter mints
       ids unique within its own target, which it cannot get wrong, and nothing has to be asked of it
