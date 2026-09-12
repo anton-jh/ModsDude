@@ -32,7 +32,7 @@ public class FolderClaimTests
     {
         var claim = GameRepository.FindFolderConflict(
             [Game(_fs22, "Farming Simulator 22", @"C:\fs22\mods")],
-            [@"C:\fs22\mods"],
+            Targets(@"C:\fs22\mods"),
             ignoredGame: _fs25);
 
         Assert.NotNull(claim);
@@ -53,7 +53,7 @@ public class FolderClaimTests
     {
         var claim = GameRepository.FindFolderConflict(
             [],
-            [@"C:\beamng\server", @"C:\beamng\client", @"C:\beamng\server"],
+            Targets(@"C:\beamng\server", @"C:\beamng\client", @"C:\beamng\server"),
             ignoredGame: null);
 
         Assert.NotNull(claim);
@@ -71,7 +71,7 @@ public class FolderClaimTests
     {
         Assert.Null(GameRepository.FindFolderConflict(
             [Game(_fs25, "Farming Simulator 25", @"C:\fs25\mods")],
-            [@"C:\fs25\mods"],
+            Targets(@"C:\fs25\mods"),
             ignoredGame: _fs25));
     }
 
@@ -83,7 +83,7 @@ public class FolderClaimTests
                 Game(_fs25, "Farming Simulator 25", @"C:\fs25\mods"),
                 Game(_fs22, "Farming Simulator 22", @"C:\fs22\mods")
             ],
-            [@"D:\beamng\server", @"D:\beamng\client"],
+            Targets(@"D:\beamng\server", @"D:\beamng\client"),
             ignoredGame: null));
     }
 
@@ -98,7 +98,7 @@ public class FolderClaimTests
     {
         Assert.NotNull(GameRepository.FindFolderConflict(
             [Game(_fs22, "Farming Simulator 22", @"C:\fs22\mods")],
-            [candidate],
+            Targets(candidate),
             ignoredGame: _fs25));
     }
 
@@ -108,7 +108,7 @@ public class FolderClaimTests
     {
         Assert.Null(GameRepository.FindFolderConflict(
             [Game(_fs22, "Farming Simulator 22", @"C:\fs22\mods")],
-            [],
+            Targets(),
             ignoredGame: null));
     }
 
@@ -120,7 +120,16 @@ public class FolderClaimTests
             GameAdapterId = new GameAdapterId("farmingSimulator", 1),
             Name = name,
             AdapterLocalSettings = "{}",
-            ModFolders = [.. modFolders]
+            Targets = [.. Targets(modFolders)]
         });
+    }
+
+    /// <summary>
+    /// The folders as a target list, keyed by position. The rule under test is about paths, and the
+    /// keys only have to be distinct - which is what an adapter guarantees anyway.
+    /// </summary>
+    private static IReadOnlyList<PersistedModTarget> Targets(params string[] modFolders)
+    {
+        return [.. modFolders.Select((folder, index) => new PersistedModTarget(new TargetKey($"t{index}"), folder))];
     }
 }

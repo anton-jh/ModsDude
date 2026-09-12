@@ -1,5 +1,6 @@
-using ModsDude.Client.Core.Exceptions;
 using System.Collections;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ModsDude.Client.Core.GameAdapters;
 
@@ -34,6 +35,7 @@ public sealed record ModTarget(TargetKey Key, string? DisplayName, string Path);
 /// slot id and a folder name are all plausible-looking strings, and putting the wrong one in a
 /// lookup fails as a silently empty answer rather than as a compile error.
 /// </remarks>
+[JsonConverter(typeof(TargetKeyJsonConverter))]
 public readonly record struct TargetKey
 {
     /// <summary>
@@ -62,6 +64,51 @@ public readonly record struct TargetKey
 
 
     public override string ToString() => Value;
+}
+
+/// <summary>
+/// A target key as a string, because the persisted target list carries one per entry.
+/// </summary>
+/// <remarks>
+/// Needed rather than merely tidy: a record struct with a validating constructor and a get-only
+/// property round-trips through the default serializer as <c>{"Value":"mods"}</c> on the way out and
+/// as a <em>blank</em> key on the way back, which would read as a target nobody can address.
+/// </remarks>
+public sealed class TargetKeyJsonConverter : JsonConverter<TargetKey>
+{
+    public override TargetKey Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return new(reader.GetString() ?? throw new JsonException("Expected a target key string."));
+    }
+
+    public override void Write(Utf8JsonWriter writer, TargetKey value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.Value);
+    }
+}
+
+
+/// <summary>
+/// One of a game's mod targets, addressed from outside the adapter that named it: which game, and
+/// which of its folders.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>What the per-folder stores are keyed on.</b> A manifest, a drift report, an eviction sweep's
+/// pin list and a mod source all belong to one folder of one game, and a game reaching three of them
+/// has three of each - so <see cref="GameIdentity"/> alone is not an address. It is a compound value
+/// in the shape <see cref="Models.SavegameSlotRef"/> and <see cref="Models.ActiveProfile"/> already
+/// have, rather than a prefixed string, which would invite parsing wherever one was handled.
+/// </para>
+/// <para>
+/// The rendering exists for a log line and for <see cref="Models.ModSourceId"/>; nothing reads one
+/// back. A manifest's filename is built by <see cref="Helpers.StoreFileName"/> out of the two parts
+/// separately, which is what lets it escape each of them.
+/// </para>
+/// </remarks>
+public readonly record struct ModTargetRef(GameIdentity Game, TargetKey Key)
+{
+    public override string ToString() => $"{Game}{TargetKey.Separator}{Key}";
 }
 
 
@@ -105,50 +152,6 @@ public sealed class ModTargets : IReadOnlyList<ModTarget>
 
     /// <summary>The target with this key, or null where the settings no longer produce one.</summary>
     public ModTarget? this[TargetKey key] => Array.Find(_targets, x => x.Key == key);
-
-
-    /// <summary>
-    /// The one target, or none where the settings point at no folder at all.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Several is the tripwire; none is data.</b> A game reaching no mod folder is an ordinary
-    /// answer - somebody connected it and has not filled a path in - and a caller that can say
-    /// something sensible about that gets to. A game reaching three is a caller that was written when
-    /// every game had one, and taking the first would work perfectly for Farming Simulator while
-    /// silently leaving two thirds of a BeamNG game on the old mod list.
-    /// </para>
-    /// <para>
-    /// Scaffolding either way. Slice 1 of Phase 10 widens the adapter to answer with a list while
-    /// every caller still takes one, and slice 2b - where the per-folder stores are re-keyed and the
-    /// loop over a game's targets arrives - deletes both of these.
-    /// </para>
-    /// </remarks>
-    public ModTarget? SingleTargetOrNone()
-    {
-        return Count switch
-        {
-            0 => null,
-            1 => _targets[0],
-            _ => throw new InvalidOperationException(
-                $"This game reaches {Count} mod folders ({string.Join(", ", _targets.Select(x => x.Key))}), " +
-                $"and this caller has only been taught about one.")
-        };
-    }
-
-    /// <summary>
-    /// The one target, for a caller that cannot do anything at all without a folder.
-    /// </summary>
-    /// <remarks>
-    /// Reaching no folder is the user's settings rather than a fault, so it is said in a sentence they
-    /// can act on. Several is still the tripwire, and still an exception nobody should ever see.
-    /// </remarks>
-    public ModTarget RequireSingleTarget()
-    {
-        return SingleTargetOrNone() ?? throw new UserFriendlyException(
-            "This game has no mod folder",
-            "Its settings point at no folder to put mods in, so there is nothing to sync. Fill one in on the game's settings page.");
-    }
 
 
     public IEnumerator<ModTarget> GetEnumerator() => ((IEnumerable<ModTarget>)_targets).GetEnumerator();

@@ -11,6 +11,15 @@ public class LocalState
     /// </summary>
     /// <remarks>
     /// <para>
+    /// Bumped to 5 because <see cref="PersistedGame.Targets"/> carries a
+    /// <see cref="TargetKey"/> beside each folder. A version 4 state holds bare path strings there,
+    /// and a string where an object is expected is a parse error rather than the deliberate discard
+    /// this is - but even read, a folder with no key names no manifest, which is the one thing the
+    /// list is persisted for. The <see cref="Models.ModSourceId"/> format changed again with it and
+    /// the "do not look in this folder" preferences go again; that is the second time, and it is
+    /// still cheaper than a migration for a system with no users.
+    /// </para>
+    /// <para>
     /// Bumped to 4 because <see cref="Games"/> is keyed by <see cref="GameIdentity"/> now, and a
     /// <see cref="PersistedGame"/> has lost its id and its scope to that key and grown an <c>s</c> on
     /// its mod folder. A version 3 state would read into this shape as an <em>empty</em> dictionary -
@@ -28,7 +37,7 @@ public class LocalState
     /// paying for it is how a schema grows a history nobody asked for.
     /// </para>
     /// </remarks>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
 
     public int Version { get; set; } = CurrentVersion;

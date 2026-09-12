@@ -273,7 +273,7 @@ public class SavegameDriftTests
         var drift = new[] { new SavegameDrift(_repoId, _savegameId, _slot, SavegameDriftKind.UncheckedInPlay) };
 
         var report = service.Check(
-            Keys.Game(),
+            Keys.Target(),
             new ActiveProfile(_repoId, _profileId),
             modFolder.Path,
             savegameDrift: drift);
@@ -285,7 +285,13 @@ public class SavegameDriftTests
 
         // And it is enough on its own to make the notice fire, without pretending the mod folder
         // drifted.
-        Assert.True(new InstanceDrift(new DriftCandidate(Keys.Game(), "FS25", modFolder.Path, null), report, null).IsDrifted);
+        var target = new GameModFolder(Keys.Target(), modFolder.Path);
+
+        Assert.True(new TargetDrift(
+            new DriftCandidate(Keys.Game(), "FS25", [target], null),
+            target,
+            report,
+            null).IsDrifted);
     }
 
 
@@ -325,7 +331,7 @@ public class SavegameDriftTests
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
                 AdapterLocalSettings = "{}",
-                ModFolders = [_slots.Path],
+                Targets = [new PersistedModTarget(Keys.Target().Key, _slots.Path)],
                 ActiveProfile = new ActiveProfile(_repoId, _profileId)
             };
 
@@ -347,6 +353,7 @@ public class SavegameDriftTests
                 new FakeSavegameDownloader(Server),
                 new FakeSavegameUploader(Server),
                 _manifestStore,
+                new FakeModFolders(new GameModFolder(Keys.Target(), _slots.Path)),
                 new FakeSlotRecycleBin(),
                 NullLogger<SavegameService>.Instance,
                 Heads);
@@ -365,7 +372,7 @@ public class SavegameDriftTests
 
         public void WriteManifest(int revision) => _manifestStore.Write(new SyncManifest
         {
-            Game = Game.Identity,
+            Target = Keys.Target(),
             RepoId = _repoId,
             ProfileId = _profileId,
             ProfileRevision = revision,

@@ -16,8 +16,8 @@ public class InstanceOverviewViewModel(
     public string Name { get; } = game.Name;
 
     /// <summary>Joined for now; slice 5 turns this into the target list it really is.</summary>
-    public string ModFolder { get; } = game.ModFolders.Count > 0
-        ? string.Join(", ", game.ModFolders)
+    public string ModFolder { get; } = game.Targets.Count > 0
+        ? string.Join(", ", game.Targets.Select(x => x.ModFolder))
         : "No mod folder configured";
 
     public string ActiveProfileSummary { get; } = activeProfileSummary;

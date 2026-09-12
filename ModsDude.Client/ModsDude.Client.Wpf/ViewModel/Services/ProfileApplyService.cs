@@ -56,6 +56,51 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     /// every other status.
     /// </summary>
     public Guid? BlockedBySavegameId { get; init; }
+
+
+    /// <summary>
+    /// One answer for a game whose folders were applied to one at a time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The status is the one that most needs saying</b>, and every sentence is kept: a game that
+    /// applied to its server folder and could not reach its client folder says both, because the
+    /// half that worked is not the news. <see cref="ProfileApplyStatus.Declined"/> ranks last on
+    /// purpose - it only speaks for the game where <em>every</em> folder was declined, since
+    /// <see cref="RecordsIntent"/> hangs off this and a game with one folder already put right
+    /// plainly means to follow the profile.
+    /// </para>
+    /// <para>
+    /// Scaffolding, and the shape slice 4 of Phase 10 replaces: activation becomes one gesture with
+    /// one confirmation across every folder, which is what makes a partly-declined activation
+    /// unrepresentable rather than something to fold.
+    /// </para>
+    /// </remarks>
+    public static ProfileApplyOutcome Combine(Game game, IReadOnlyList<ProfileApplyOutcome> perTarget)
+    {
+        if (perTarget.Count == 1)
+        {
+            return perTarget[0];
+        }
+
+        var worst = perTarget
+            .OrderBy(x => x.Status switch
+            {
+                ProfileApplyStatus.Failed => 0,
+                ProfileApplyStatus.Unavailable => 1,
+                ProfileApplyStatus.Refused => 2,
+                ProfileApplyStatus.Applied => 3,
+                ProfileApplyStatus.AlreadyMatched => 4,
+                _ => 5
+            })
+            .First();
+
+        return worst with
+        {
+            Game = game,
+            Message = string.Join(' ', perTarget.Select(x => x.Message).Distinct())
+        };
+    }
 }
 
 
@@ -83,14 +128,20 @@ public sealed class ProfileApplyService(
     IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
-    /// Works out what would change. Returns null where the game cannot be applied to right now.
+    /// Works out what would change, one plan per folder the game reaches.
     /// </summary>
+    /// <remarks>
+    /// <b>A list rather than a plan, because a game reaching three folders has three of them.</b>
+    /// Sync's unit of work is genuinely one folder - see <see cref="ModSyncRequest"/> - so the loop
+    /// lives here, at the thing that applies a profile to a <em>game</em>. Empty means there was
+    /// nothing to plan: no mod capability, no folder configured, or none of them reachable right now.
+    /// </remarks>
     /// <param name="revision">
     /// Which revision to plan against, or null to let the game decide - a past savegame held
     /// there pins the folder to its own revision, and everything else follows head. Named only by the
     /// check-out dialog, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
-    public async Task<ModSyncPlan?> TryPlanAsync(
+    public async Task<IReadOnlyList<ModSyncPlan>> TryPlanAsync(
         Repo repo,
         Game game,
         Guid profileId,
@@ -100,13 +151,45 @@ public sealed class ProfileApplyService(
     {
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
-            return null;
+            return [];
         }
 
+        var plans = new List<ModSyncPlan>();
+
+        foreach (var target in adapter.ModTargets)
+        {
+            // Per folder, and one that cannot be planned does not cost the others theirs: a
+            // dedicated server mid-session is exactly the folder somebody wants left out while the
+            // client is put right.
+            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken)
+                is ModSyncPlan plan)
+            {
+                plans.Add(plan);
+            }
+        }
+
+        return plans;
+    }
+
+    /// <summary>One folder's plan, or null where that folder cannot be planned against right now.</summary>
+    private async Task<ModSyncPlan?> TryPlanTargetAsync(
+        ILocalModAdapter adapter,
+        Game game,
+        ModTarget target,
+        Guid repoId,
+        Guid profileId,
+        string? profileName,
+        int? revision,
+        CancellationToken cancellationToken)
+    {
         try
         {
             return await syncService.PlanAsync(
-                new ModSyncRequest(game.Identity, adapter, repo.Id, profileId) { ProfileName = profileName, Revision = revision },
+                new ModSyncRequest(game.Identity, target, adapter, repoId, profileId)
+                {
+                    ProfileName = profileName,
+                    Revision = revision
+                },
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -165,24 +248,50 @@ public sealed class ProfileApplyService(
             };
         }
 
-        ModSyncPlan? plan;
+        IReadOnlyList<ModSyncPlan> plans;
 
         try
         {
-            plan = await TryPlanAsync(repo, game, profileId, profileName, revision, cancellationToken);
+            plans = await TryPlanAsync(repo, game, profileId, profileName, revision, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
         }
 
-        if (plan is null)
+        if (plans.Count == 0)
         {
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
                 $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be.");
         }
+
+        // One folder at a time, each with its own answer. A failure here is per folder by design -
+        // the dedicated server being locked mid-session must not stop the client being put right -
+        // and the folded answer below is what a caller that holds a game rather than a folder reads.
+        var outcomes = new List<ProfileApplyOutcome>();
+
+        foreach (var plan in plans)
+        {
+            outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision));
+        }
+
+        return ProfileApplyOutcome.Combine(game, outcomes);
+    }
+
+    /// <summary>One folder: confirm what it would destroy, then make it match.</summary>
+    private async Task<ProfileApplyOutcome> ApplyTargetAsync(
+        ModSyncPlan plan,
+        Game game,
+        Guid profileId,
+        string? profileName,
+        bool confirmPlan,
+        IProgress<ModSyncProgress>? progress,
+        CancellationToken cancellationToken,
+        int? revision)
+    {
+        var where = Where(game, plan);
 
         if (plan.HasWork is false)
         {
@@ -193,46 +302,63 @@ public sealed class ProfileApplyService(
             await syncService.RecordAlreadyMatchedAsync(plan);
 
             return new ProfileApplyOutcome(
-                game, ProfileApplyStatus.AlreadyMatched, $"'{game.Name}' already matches{Pinned(game, profileId, revision)}.");
+                game, ProfileApplyStatus.AlreadyMatched, $"{where} already matches{Pinned(game, profileId, revision)}.");
         }
 
         if (confirmPlan && await ConfirmPlanAsync(game, plan) is false)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was left as it is.");
         }
 
         if (plan.Unrecognised.Count > 0 && await ConfirmUnrecognisedAsync(plan) is false)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was left as it is.");
         }
 
         // Only from here: everything above is planning and asking, which is quick or is a dialog the
         // user is already looking at. The strip is for the part that takes minutes and that they are
         // entitled to walk away from.
-        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to '{game.Name}'");
+        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to {where}");
 
         try
         {
             var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
 
             return result.Completed
-                ? new ProfileApplyOutcome(game, ProfileApplyStatus.Applied, $"'{game.Name}' now matches{Pinned(game, profileId, revision)}.")
+                ? new ProfileApplyOutcome(game, ProfileApplyStatus.Applied, $"{where} now matches{Pinned(game, profileId, revision)}.")
                 : new ProfileApplyOutcome(
                     game,
                     ProfileApplyStatus.Failed,
-                    $"'{game.Name}': {result.Failures.Count} mods could not be applied.");
+                    $"{where}: {result.Failures.Count} mods could not be applied.");
         }
         catch (OperationCanceledException)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped part way.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was stopped part way.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"'{game.Name}' is in use - a running game or a server mid-session holds its folder. It was left drifted.");
+                $"{where} is in use - a running game or a server mid-session holds its folder. It was left drifted.");
         }
+    }
+
+    /// <summary>
+    /// What to call the thing a sentence is about: the game, or one of its folders where it has more
+    /// than one to tell apart.
+    /// </summary>
+    /// <remarks>
+    /// A game with one target names nothing, so every sentence here reads exactly as it did before
+    /// targets existed - and <see cref="ProfileApplyOutcome.Combine"/> then folds three identical
+    /// sentences into one. A game with three names the folder, because "2 mods could not be applied"
+    /// without saying <em>where</em> is the complaint this phase exists to answer.
+    /// </remarks>
+    private static string Where(Game game, ModSyncPlan plan)
+    {
+        return plan.Target.DisplayName is string folder
+            ? $"'{game.Name}' ({folder})"
+            : $"'{game.Name}'";
     }
 
     /// <summary>

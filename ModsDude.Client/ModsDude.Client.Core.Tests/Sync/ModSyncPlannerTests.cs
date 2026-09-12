@@ -155,7 +155,7 @@ public class ModSyncPlannerTests
         // is exactly what an in-game update leaves behind.
         var manifest = new SyncManifest
         {
-            Game = Keys.Game(),
+            Target = Keys.Target(),
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             SyncedAt = DateTimeOffset.UtcNow,
@@ -309,7 +309,7 @@ public class ModSyncPlannerTests
     {
         return new SyncManifest
         {
-            Game = Keys.Game(),
+            Target = Keys.Target(),
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             SyncedAt = DateTimeOffset.UtcNow,

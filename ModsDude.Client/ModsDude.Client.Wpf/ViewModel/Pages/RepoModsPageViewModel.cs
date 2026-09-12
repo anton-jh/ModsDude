@@ -510,7 +510,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
                 // So the import leaves the store warm: what is uploaded from a folder the game does
                 // not read is copied into the store these folders are served by, and the first sync
                 // after the import finds it there instead of downloading it back.
-                ModFolders = [.. _repo.Games.SelectMany(x => x.ModFolders)]
+                ModFolders = [.. _repo.Games.SelectMany(x => x.Targets).Select(x => x.ModFolder)]
             };
 
             // The overload that invalidates the catalog when it is over: a cancelled or partly failed

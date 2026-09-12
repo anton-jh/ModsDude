@@ -22,4 +22,12 @@ internal static class Keys
     /// the one on a real machine.
     /// </summary>
     public static GameIdentity Game(string discriminator = "fs25") => new("farmingSimulator", discriminator);
+
+    /// <summary>
+    /// The target a test files a manifest under. The default key is the one Farming Simulator's own
+    /// adapter names its single folder, so a manifest in a test temp folder is named as it would be
+    /// on a real machine; a second key is how a test reaches the multi-target half.
+    /// </summary>
+    public static ModTargetRef Target(string key = "mods", string discriminator = "fs25")
+        => new(Game(discriminator), new TargetKey(key));
 }

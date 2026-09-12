@@ -131,7 +131,7 @@ public sealed class ContentStoreMaintenance(
                     continue;
                 }
 
-                var manifest = manifestStore.TryRead(folder.Game);
+                var manifest = manifestStore.TryRead(folder.Target);
                 var hits = manifest?.Entries.Count(x => bad.Contains(x.ContentHash)) ?? 0;
 
                 if (hits > 0)
@@ -141,8 +141,8 @@ public sealed class ContentStoreMaintenance(
             }
             catch (Exception exception)
             {
-                // One game that cannot be resolved costs its name in the report, not the report.
-                logger.LogDebug(exception, "Could not tell whether game {Game} is running a bad blob.", folder.Game);
+                // One folder that cannot be resolved costs its name in the report, not the report.
+                logger.LogDebug(exception, "Could not tell whether target {Target} is running a bad blob.", folder.Target);
             }
         }
 
@@ -172,16 +172,16 @@ public sealed class ContentStoreMaintenance(
                     continue;
                 }
 
-                foreach (var entry in manifestStore.TryRead(folder.Game)?.Entries ?? [])
+                foreach (var entry in manifestStore.TryRead(folder.Target)?.Entries ?? [])
                 {
                     pinned.Add(entry.ContentHash);
                 }
             }
             catch (Exception exception)
             {
-                // A game whose folder cannot be resolved to a store contributes no pins, which
+                // A folder that cannot be resolved to a store contributes no pins, which
                 // costs a possible re-download rather than a failed sweep.
-                logger.LogDebug(exception, "Could not read what game {Game} is running.", folder.Game);
+                logger.LogDebug(exception, "Could not read what target {Target} is running.", folder.Target);
             }
         }
 

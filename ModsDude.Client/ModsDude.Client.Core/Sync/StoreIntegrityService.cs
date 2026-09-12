@@ -54,8 +54,8 @@ public sealed class StoreIntegrityService(
     ILogger<StoreIntegrityService> logger)
 {
     /// <summary>
-    /// Checks the changed files of one game, and drops any blob that proves to have been
-    /// rewritten.
+    /// Checks the changed files of one of a game's folders, and drops any blob that proves to have
+    /// been rewritten.
     /// </summary>
     /// <param name="changed">
     /// The names <see cref="DriftService"/> found no longer matching the manifest. Nothing
@@ -69,7 +69,7 @@ public sealed class StoreIntegrityService(
     /// that cannot answer the question at all.
     /// </remarks>
     public async Task<IReadOnlyList<CorruptedBlob>> CheckAsync(
-        GameIdentity game,
+        ModTargetRef target,
         string modFolder,
         IReadOnlyList<string> changed,
         CancellationToken cancellationToken)
@@ -79,7 +79,7 @@ public sealed class StoreIntegrityService(
             return [];
         }
 
-        var manifest = manifestStore.TryRead(game);
+        var manifest = manifestStore.TryRead(target);
 
         if (manifest is null)
         {

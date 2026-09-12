@@ -309,7 +309,7 @@ public class ModSyncServiceTests
 
         Assert.True(File.Exists(fixture.Folder.Combine("fs25_old.zip")));
         Assert.False(File.Exists(fixture.Folder.Combine("fs25_a.zip")));
-        Assert.Null(fixture.Manifests.TryRead(fixture.Game));
+        Assert.Null(fixture.Manifests.TryRead(fixture.Target));
     }
 
     [Fact]
@@ -324,6 +324,48 @@ public class ModSyncServiceTests
 
         Assert.True(result.Completed);
         Assert.True(fixture.ServingStore.Contains(SyncTestContent.HashOf(Mod("1.0.0", "a"))));
+    }
+
+    /// <summary>
+    /// The reason eviction's skip is the target and not the game. Syncing the MP client used to
+    /// exempt <em>every</em> folder of that game from the pin pass, so the dedicated server's
+    /// installed set was evicted the moment the client was applied - a re-download next time, of a
+    /// folder nobody touched.
+    /// </summary>
+    [Fact]
+    public async Task Store_eviction_spares_what_another_target_of_the_same_game_is_running()
+    {
+        using var fixture = new SyncFixture(storeMaxSizeBytes: 1, withSecondTarget: true);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var serverSide = await fixture.SeedIntoStoreAsync(Mod("3.0.0", "server"));
+
+        fixture.WriteSecondTargetManifest(serverSide);
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.True(fixture.ServingStore.Contains(serverSide));
+    }
+
+    /// <summary>
+    /// And the folder being synced right now is still skipped, since the plan's own hashes are what
+    /// pin it - its manifest describes the mod list it is leaving.
+    /// </summary>
+    [Fact]
+    public async Task Store_eviction_does_not_spare_what_this_target_is_leaving_behind()
+    {
+        using var fixture = new SyncFixture(storeMaxSizeBytes: 1);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var outgoing = await fixture.SeedIntoStoreAsync(Mod("0.9.0", "old"));
+
+        fixture.WriteManifest(outgoing);
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.False(fixture.ServingStore.Contains(outgoing));
     }
 
 
@@ -466,7 +508,7 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(plan);
 
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Target)?.ProfileRevision);
     }
 
     /// <summary>
@@ -488,7 +530,7 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(plan);
 
-        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Target)?.ProfileRevision);
     }
 
     /// <summary>
@@ -514,7 +556,7 @@ public class ModSyncServiceTests
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
         Assert.Equal([null, 4], fixture.Held.Observed);
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Target)?.ProfileRevision);
     }
 
     /// <summary>
@@ -540,7 +582,7 @@ public class ModSyncServiceTests
         await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
         Assert.Equal([null, 4], fixture.Held.Observed);
-        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
+        Assert.Equal(1004, fixture.Manifests.TryRead(fixture.Target)?.ProfileRevision);
     }
 
     /// <summary>
@@ -566,7 +608,7 @@ public class ModSyncServiceTests
 
         // Which is then what the drift check compares against, so the game is not permanently
         // behind head by construction.
-        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Game)?.ProfileRevision);
+        Assert.Equal(4, fixture.Manifests.TryRead(fixture.Target)?.ProfileRevision);
     }
 
     /// <summary>
@@ -649,12 +691,19 @@ public class ModSyncServiceTests
         private readonly TempDirectory _serving = new("sync-store");
         private readonly TempDirectory _other = new("sync-other-store");
         private readonly TempDirectory _manifests = new("sync-manifests");
+        private readonly TempDirectory _second = new("sync-second-target");
 
 
+        /// <param name="withSecondTarget">
+        /// Whether this game reaches a second folder, as a dedicated server beside an MP client does.
+        /// Off by default: the sync engine's unit of work is one folder either way, and what the
+        /// second one is for is what the pin pass and the manifest keying do about it.
+        /// </param>
         public SyncFixture(
             bool supportsHardlinks = false,
             bool recycleBinAvailable = true,
-            long storeMaxSizeBytes = 1024L * 1024 * 1024)
+            long storeMaxSizeBytes = 1024L * 1024 * 1024,
+            bool withSecondTarget = false)
         {
             ServingStore = new ContentStore("C:\\", _serving.Path, storeMaxSizeBytes);
             OtherStore = new ContentStore("D:\\", _other.Path, storeMaxSizeBytes);
@@ -664,7 +713,13 @@ public class ModSyncServiceTests
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
-            Held = new FakeHeldSavegames(Manifests);
+            Held = new FakeHeldSavegames(Manifests, Target);
+
+            // Same game, same disk, another folder - which is what makes its manifest something the
+            // sweep has to consult rather than something it may skip along with this game.
+            GameModFolder[] folders = withSecondTarget
+                ? [new(Target, Folder.Path), new(SecondTarget, _second.Path)]
+                : [new(Target, Folder.Path)];
 
             Service = new ModSyncService(
                 Server,
@@ -674,7 +729,7 @@ public class ModSyncServiceTests
                 new FakeStoreProvider(ServingStore, OtherStore),
                 Manifests,
                 RecycleBin,
-                new FakeModFolders(new GameModFolder(Game, Folder.Path)),
+                new FakeModFolders(folders),
                 Held,
                 NullLogger<ModSyncService>.Instance);
         }
@@ -691,12 +746,17 @@ public class ModSyncServiceTests
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
         public ContentStore OtherStore { get; }
-        public GameIdentity Game { get; } = Keys.Game();
+        public ModTargetRef Target { get; } = Keys.Target();
+
+        /// <summary>Another folder of the same game - present only where the fixture was built with one.</summary>
+        public ModTargetRef SecondTarget { get; } = Keys.Target("server");
+
+        public GameIdentity Game => Target.Game;
 
 
         public Task<ModSyncPlan> PlanAsync(int? revision = null)
             => Service.PlanAsync(
-                new ModSyncRequest(Game, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
+                new ModSyncRequest(Game, Adapter.Target, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
                 CancellationToken.None);
 
         public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan)
@@ -711,14 +771,49 @@ public class ModSyncServiceTests
         public string ReadInstalled(string name) => File.ReadAllText(Folder.Combine(name));
 
         public DriftReport CheckDrift()
-            => Drift.Check(Game, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
+            => Drift.Check(Target, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
+
+        /// <summary>Puts content in the serving store and answers with its address.</summary>
+        public async Task<string> SeedIntoStoreAsync(string content)
+        {
+            var hash = SyncTestContent.HashOf(content);
+
+            await ServingStore.IngestAsync(
+                new MemoryStream(SyncTestContent.Bytes(content)),
+                hash,
+                null,
+                CancellationToken.None);
+
+            return hash;
+        }
+
+        /// <summary>What this folder's own manifest says it is running - the list it is leaving.</summary>
+        public void WriteManifest(string hash) => WriteManifest(Target, Folder.Path, hash);
+
+        /// <summary>What the game's other folder is running, which no sweep may take back.</summary>
+        public void WriteSecondTargetManifest(string hash) => WriteManifest(SecondTarget, _second.Path, hash);
 
         public void Dispose()
         {
             Folder.Dispose();
             _serving.Dispose();
             _other.Dispose();
+            _second.Dispose();
             _manifests.Dispose();
+        }
+
+
+        private void WriteManifest(ModTargetRef target, string modFolder, string hash)
+        {
+            Manifests.Write(new SyncManifest
+            {
+                Target = target,
+                RepoId = Server.RepoId,
+                ProfileId = Server.ProfileId,
+                SyncedAt = DateTimeOffset.UtcNow,
+                ModFolder = modFolder,
+                Entries = [new SyncManifestEntry("fs25_other", "3.0.0", hash, "fs25_other.zip", 1, DateTimeOffset.UtcNow)]
+            });
         }
     }
 }

@@ -7,10 +7,10 @@ using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Sync;
 
-/// <summary>One game as the monitor has to see it, which is three facts and no adapter.</summary>
+/// <summary>One game as the monitor has to see it, which is a few facts and no adapter.</summary>
 /// <remarks>
 /// An interface rather than <see cref="Services.GameRepository"/> itself, for the same
-/// reason <see cref="IModFolders"/> is one: the check runs off the persisted folder and the
+/// reason <see cref="IModFolders"/> is one: the check runs off the persisted folders and the
 /// persisted intent, so it works for a game whose scope no repo on this machine serves, and it
 /// can be exercised without a real <c>state.json</c>.
 /// </remarks>
@@ -19,12 +19,18 @@ public interface IDriftCandidateSource
     IReadOnlyList<DriftCandidate> GetDriftCandidates();
 }
 
-/// <param name="Identity">Which game this is, and the key its manifest and its holds are filed under.</param>
-/// <param name="ModFolder">
-/// The one folder, or null where the game reaches none - see
-/// <see cref="Services.GameRepository.GetDriftCandidates"/>. Null is unknown rather than drifted.
+/// <param name="Identity">Which game this is, and the key its holds are filed under.</param>
+/// <param name="Targets">
+/// Every folder it reaches, each carrying the key its own manifest is filed under. Read off the
+/// persisted list, so it is answered for a game whose identity no loaded repo serves. Empty is an
+/// ordinary answer - a game whose settings point at no folder - and the savegame half of the check
+/// still has something to say about one.
 /// </param>
-public sealed record DriftCandidate(GameIdentity Identity, string Name, string? ModFolder, ActiveProfile? ActiveProfile);
+public sealed record DriftCandidate(
+    GameIdentity Identity,
+    string Name,
+    IReadOnlyList<GameModFolder> Targets,
+    ActiveProfile? ActiveProfile);
 
 /// <summary>
 /// Which revision a profile is on, for the profiles this client happens to know about.
@@ -47,14 +53,34 @@ public interface IProfileRevisions
     int? GetHeadRevision(ActiveProfile profile);
 }
 
+/// <summary>
+/// One thing the notice could say: a game, whichever of its folders this is about, and what the
+/// check found there.
+/// </summary>
+/// <remarks>
+/// <b>One per target, because the mod half is per folder.</b> A game reaching three of them produces
+/// three of these, and <em>which one did not get the apply</em> is the interesting half of a BeamMP
+/// evening. The savegame half is the game's and is carried on every one of its entries, so whichever
+/// entry the notice is showing says both things about the game the user is looking at rather than
+/// racing a second notice to say the other.
+/// </remarks>
+/// <param name="Target">
+/// Null where this is about the game rather than about one of its folders - it reaches none, or it
+/// follows no profile, so there is no comparison to attribute to any particular one. Such an entry
+/// exists for the savegame half alone, which is the answer this already gave before targets existed.
+/// </param>
 /// <param name="ProfileName">
-/// What the manifest recorded the profile was called. Null before a game has ever synced, which
+/// What the manifest recorded the profile was called. Null before a folder has ever synced, which
 /// is also a state with no drift to report.
 /// </param>
-public sealed record InstanceDrift(DriftCandidate Game, DriftReport Report, string? ProfileName)
+public sealed record TargetDrift(
+    DriftCandidate Game,
+    GameModFolder? Target,
+    DriftReport Report,
+    string? ProfileName)
 {
     /// <summary>
-    /// Whether this game is worth telling somebody about.
+    /// Whether this is worth telling somebody about.
     /// </summary>
     /// <remarks>
     /// A held savegame that has moved counts, even where the mod folder is exactly what was
@@ -124,7 +150,7 @@ public sealed class DriftMonitor : IDisposable
 
     private DateTimeOffset? _lastCheck;
     private string? _dismissedSignature;
-    private IReadOnlyList<InstanceDrift> _results = [];
+    private IReadOnlyList<TargetDrift> _results = [];
     private readonly List<CorruptedBlob> _corruption = [];
 
 
@@ -162,7 +188,7 @@ public sealed class DriftMonitor : IDisposable
 
 
     /// <summary>Every game that reported drift, most recently checked first.</summary>
-    public IReadOnlyList<InstanceDrift> Drifted
+    public IReadOnlyList<TargetDrift> Drifted
     {
         get
         {
@@ -257,20 +283,25 @@ public sealed class DriftMonitor : IDisposable
             _lastCheck = _timeProvider.GetUtcNow();
         }
 
-        var results = new List<InstanceDrift>();
+        var results = new List<TargetDrift>();
 
         foreach (var candidate in _candidates.GetDriftCandidates())
         {
-            // Asked for every game, including ones with no active profile: holding somebody's
-            // evening in a slot is worth saying whether or not this folder has ever been synced.
+            // Once per game rather than once per target, because the hold is the game's and the
+            // check costs a hash of every held slot. Asked for every game, including ones with no
+            // active profile: holding somebody's evening in a slot is worth saying whether or not
+            // any of these folders has ever been synced.
             var savegameDrift = await CheckSavegamesAsync(candidate.Identity);
 
             if (candidate.ActiveProfile is not ActiveProfile active)
             {
                 if (savegameDrift.Count > 0)
                 {
-                    results.Add(new InstanceDrift(
+                    // No folder named: with no profile there is no comparison to make against any of
+                    // them, so this entry is about the game rather than about one of its folders.
+                    results.Add(new TargetDrift(
                         candidate,
+                        null,
                         DriftReport.For(DriftStatus.NoActiveProfile) with { SavegameDrift = savegameDrift },
                         null));
                 }
@@ -278,22 +309,39 @@ public sealed class DriftMonitor : IDisposable
                 continue;
             }
 
-            var report = CheckMods(candidate, active, savegameDrift);
-
-            // Runs off what the folder comparison just found changed, which is the only set of files
-            // that can have been written to since the sync.
-            report = report with
+            if (candidate.Targets.Count == 0)
             {
-                StoreCorruption = await CheckStoreAsync(candidate, report.Changed)
-            };
+                // Nothing to compare, and one entry rather than none: the savegame half is still an
+                // answer about this game, and a game whose settings point at no folder is exactly
+                // where somebody wants to hear that a slot is still holding a save.
+                results.Add(new TargetDrift(
+                    candidate,
+                    null,
+                    DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = savegameDrift },
+                    null));
 
-            // Only a drifted game needs the manifest read a second time, and only to name the
-            // profile. Everything else has nothing to say.
-            var profileName = report.Status is DriftStatus.Drifted
-                ? _manifestStore.TryRead(candidate.Identity)?.ProfileName
-                : null;
+                continue;
+            }
 
-            results.Add(new InstanceDrift(candidate, report, profileName));
+            foreach (var target in candidate.Targets)
+            {
+                var report = CheckMods(candidate, target, active, savegameDrift);
+
+                // Runs off what the folder comparison just found changed, which is the only set of
+                // files that can have been written to since the sync.
+                report = report with
+                {
+                    StoreCorruption = await CheckStoreAsync(target, report.Changed)
+                };
+
+                // Only a drifted folder needs the manifest read a second time, and only to name the
+                // profile. Everything else has nothing to say.
+                var profileName = report.Status is DriftStatus.Drifted
+                    ? _manifestStore.TryRead(target.Target)?.ProfileName
+                    : null;
+
+                results.Add(new TargetDrift(candidate, target, report, profileName));
+            }
         }
 
         bool changed;
@@ -326,7 +374,7 @@ public sealed class DriftMonitor : IDisposable
     }
 
     /// <summary>
-    /// The mod half: what this game's folder holds against what was last applied to it.
+    /// The mod half: what one of this game's folders holds against what was last applied to it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -335,8 +383,8 @@ public sealed class DriftMonitor : IDisposable
     /// vanished between the listing and the read is drift rather than a throw - see
     /// <c>DriftService.HasMoved</c>, which is where that one escaped from. What this is for is
     /// the shape of the failure rather than any known instance of it: this loop runs unattended on
-    /// every window activation, so one game's disk must cost that game's answer and not every other
-    /// game's with it, and nothing here may arrive as an unobserved task exception.
+    /// every window activation, so one folder's disk must cost that folder's answer and not every
+    /// other folder's with it, and nothing here may arrive as an unobserved task exception.
     /// </para>
     /// <para>
     /// <b>Narrower than the other two guards on purpose.</b> The savegame and store-integrity halves
@@ -347,15 +395,16 @@ public sealed class DriftMonitor : IDisposable
     /// </remarks>
     private DriftReport CheckMods(
         DriftCandidate candidate,
+        GameModFolder target,
         ActiveProfile active,
         IReadOnlyList<Savegames.SavegameDrift> savegameDrift)
     {
         try
         {
             return _driftService.Check(
-                candidate.Identity,
+                target.Target,
                 active,
-                candidate.ModFolder,
+                target.ModFolder,
                 // A past savegame held here pins the folder to its own revision, and that is what
                 // "up to date" means for this game until it is checked in. Nothing is suppressed
                 // to achieve it: the comparison is against the number the game is supposed to be
@@ -368,7 +417,7 @@ public sealed class DriftMonitor : IDisposable
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(exception, "Could not check the mod folder {Folder} for drift.", candidate.ModFolder);
+            _logger.LogWarning(exception, "Could not check the mod folder {Folder} for drift.", target.ModFolder);
 
             // Unknown rather than drifted, and the savegame half is still carried: a held savegame is
             // worth saying whatever the folder turned out to be.
@@ -414,9 +463,9 @@ public sealed class DriftMonitor : IDisposable
     /// and the identity read. Nothing found means nothing said, which is also the honest answer for
     /// a filesystem that cannot report file identities at all.
     /// </remarks>
-    private async Task<IReadOnlyList<CorruptedBlob>> CheckStoreAsync(DriftCandidate candidate, IReadOnlyList<string> changed)
+    private async Task<IReadOnlyList<CorruptedBlob>> CheckStoreAsync(GameModFolder target, IReadOnlyList<string> changed)
     {
-        if (_storeIntegrity is null || candidate.ModFolder is null || changed.Count == 0)
+        if (_storeIntegrity is null || changed.Count == 0)
         {
             return [];
         }
@@ -424,14 +473,14 @@ public sealed class DriftMonitor : IDisposable
         try
         {
             return await _storeIntegrity.CheckAsync(
-                candidate.Identity,
-                candidate.ModFolder,
+                target.Target,
+                target.ModFolder,
                 changed,
                 CancellationToken.None);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Could not check store integrity for game {Game}.", candidate.Identity);
+            _logger.LogWarning(exception, "Could not check store integrity for target {Target}.", target.Target);
 
             return [];
         }
@@ -460,16 +509,15 @@ public sealed class DriftMonitor : IDisposable
     {
         StopWatching();
 
-        foreach (var candidate in _candidates.GetDriftCandidates())
+        // One watcher per folder, so a game whose server folder is being updated while its client
+        // folder sits still hears about the one that moved.
+        foreach (var target in _candidates.GetDriftCandidates()
+            .Where(x => x.ActiveProfile is not null)
+            .SelectMany(x => x.Targets))
         {
-            if (candidate.ModFolder is null || candidate.ActiveProfile is null)
-            {
-                continue;
-            }
-
             try
             {
-                var watcher = new FileSystemWatcher(candidate.ModFolder)
+                var watcher = new FileSystemWatcher(target.ModFolder)
                 {
                     IncludeSubdirectories = false,
                     NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite
@@ -541,7 +589,7 @@ public sealed class DriftMonitor : IDisposable
     /// found, so the reports empty out on the next pass; signing against them would un-dismiss the
     /// notice every time a finding aged out, which is the exact opposite of what dismissal means.
     /// </param>
-    private static string Signature(IReadOnlyList<InstanceDrift> results, IReadOnlyList<CorruptedBlob> corruption)
+    private static string Signature(IReadOnlyList<TargetDrift> results, IReadOnlyList<CorruptedBlob> corruption)
     {
         return string.Join(
             "//",
@@ -551,17 +599,20 @@ public sealed class DriftMonitor : IDisposable
             string.Join(',', corruption.Select(x => x.Hash).Order(StringComparer.OrdinalIgnoreCase)));
     }
 
-    private static string SignatureOfDrift(IReadOnlyList<InstanceDrift> results)
+    private static string SignatureOfDrift(IReadOnlyList<TargetDrift> results)
     {
         return string.Join(
             '|',
             results
                 .Where(x => x.IsDrifted)
-                // A GameIdentity is not comparable, and the signature only needs a stable order.
-                .OrderBy(x => x.Game.Identity.ToString(), StringComparer.Ordinal)
+                // A ModTargetRef is not comparable, and the signature only needs a stable order. By
+                // target rather than by game, so that the server folder going wrong under a notice
+                // dismissed about the client folder brings it straight back.
+                .OrderBy(x => x.Target?.Target.ToString() ?? x.Game.Identity.ToString(), StringComparer.Ordinal)
                 .Select(x => string.Join(
                     ';',
                     x.Game.Identity,
+                    x.Target?.Target.Key,
                     x.Report.Status,
                     string.Join(',', x.Report.Added),
                     string.Join(',', x.Report.Removed),

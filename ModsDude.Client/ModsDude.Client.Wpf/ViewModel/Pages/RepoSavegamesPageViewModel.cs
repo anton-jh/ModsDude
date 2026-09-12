@@ -657,7 +657,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         foreach (var game in _repo.Games)
         {
-            var manifest = _manifestStore.TryRead(game.Identity);
+            var manifest = _manifestStore.TryReadAgreed(game.TargetRefs);
 
             hosts.Add(new SavegameHost(
                 game,
@@ -1344,18 +1344,22 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var plan = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
+        var plans = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
 
-        if (plan is null)
+        if (plans.Count == 0)
         {
             Status += $" '{game.Name}' could not be reached, so its mod folder was left as it is.";
 
             return;
         }
 
-        // Nothing unrecognised in the folder means there is nothing to disclose, and the ordinary night
-        // stays one click.
-        if (plan.Unrecognised.Count == 0)
+        // Across every folder, because the disclosure is about the game the user is checking a save
+        // out on and one question per folder is one dialog too many.
+        var unrecognised = plans.SelectMany(x => x.Unrecognised).ToList();
+
+        // Nothing unrecognised in the folders means there is nothing to disclose, and the ordinary
+        // night stays one click.
+        if (unrecognised.Count == 0)
         {
             var outcome = await _applyService.ApplyAsync(
                 _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
@@ -1372,14 +1376,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // Otherwise the drift notice's own two verbs, because this is that problem found at a different
         // moment. Importing is deliberately not on offer here: it would commit files nobody decided to
         // keep, which is the argument that already put import behind Save in the editor.
-        var names = plan.Unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
-        var more = plan.Unrecognised.Count > 10 ? $"\n  ...and {plan.Unrecognised.Count - 10} more" : "";
+        var names = unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
+        var more = unrecognised.Count > 10 ? $"\n  ...and {unrecognised.Count - 10} more" : "";
 
         var choice = new ConfirmationDialogViewModel(
-            $"The mod folder has {plan.Unrecognised.Count} mods that are not in the repo",
+            $"The mod folder has {unrecognised.Count} mods that are not in the repo",
             $"{string.Join('\n', names)}{more}",
             IconKind.Warning,
-            $"Apply - puts the folder on '{profile.Name}'. The {plan.Unrecognised.Count} mods go to the Recycle Bin",
+            $"Apply - puts the folder on '{profile.Name}'. The {unrecognised.Count} mods go to the Recycle Bin",
             $"Review - opens '{profile.Name}'s mod list with this folder scanned");
 
         await _modalService.Show(choice);
@@ -1393,18 +1397,33 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             Status += " The mod folder was left as it is until you decide what to keep.";
 
             await _driftMonitor.CheckAsync();
-            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, game.Identity);
+
+            // The first folder with something unrecognised in it, since that is the one the list the
+            // user is about to read was built from.
+            await _shellNavigation.GoToProfileModsAsync(
+                _repo.Id,
+                profile.Id,
+                plans.First(x => x.Unrecognised.Count > 0).TargetRef);
 
             return;
         }
 
-        var result = await _syncService.ExecuteAsync(plan, null, _lifetime);
+        var failures = 0;
+        var completed = true;
+
+        foreach (var plan in plans)
+        {
+            var result = await _syncService.ExecuteAsync(plan, null, _lifetime);
+
+            completed &= result.Completed;
+            failures += result.Failures.Count;
+        }
 
         RecordActiveProfile(game, profile, true);
 
-        Status += result.Completed
+        Status += completed
             ? $" '{game.Name}' now matches '{profile.Name}'."
-            : $" {result.Failures.Count} mods could not be applied to '{game.Name}'.";
+            : $" {failures} mods could not be applied to '{game.Name}'.";
 
         await _driftMonitor.CheckAsync();
     }
@@ -1529,39 +1548,48 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         // Named rather than resolved from the game: nothing is holding this savegame yet, so the
         // game has no opinion about it - and the plan shown here has to be the plan that runs.
-        var plan = await _applyService.TryPlanAsync(
+        var plans = await _applyService.TryPlanAsync(
             _repo, game, profile.Id, profile.Name, SavegameService.TargetRevisionOf(row.Savegame), cancellationToken);
 
-        if (plan is null)
+        if (plans.Count == 0)
         {
             return null;
         }
 
-        if (plan.HasWork is false)
+        // Summed across the folders, because what is being previewed is what checking this savegame
+        // out does to the game - which is every folder it reaches.
+        if (plans.Any(x => x.HasWork) is false)
         {
             return new SavegameModsSummary(true, "Mods are already correct.", [], null);
         }
 
         var parts = new List<string>();
+        var installs = plans.Sum(x => x.InstallCount);
+        var replaces = plans.Sum(x => x.ReplaceCount);
+        var uninstalls = plans.Sum(x => x.UninstallCount);
+        var renames = plans.Sum(x => x.RenameCount);
+        var unrecognised = plans.Sum(x => x.Unrecognised.Count);
 
-        if (plan.InstallCount > 0) parts.Add($"{plan.InstallCount} to install");
-        if (plan.ReplaceCount > 0) parts.Add($"{plan.ReplaceCount} to replace");
-        if (plan.UninstallCount > 0) parts.Add($"{plan.UninstallCount} to uninstall");
-        if (plan.RenameCount > 0) parts.Add($"{plan.RenameCount} to rename");
+        if (installs > 0) parts.Add($"{installs} to install");
+        if (replaces > 0) parts.Add($"{replaces} to replace");
+        if (uninstalls > 0) parts.Add($"{uninstalls} to uninstall");
+        if (renames > 0) parts.Add($"{renames} to rename");
 
         // A rename leaves the bytes alone, so a locked mod being renamed is not a mod changing
         // under a savegame and is not worth warning about.
-        var locked = plan.Items
+        var locked = plans
+            .SelectMany(x => x.Items)
             .Where(x => x.Locked && x.Action is not (ModSyncAction.Keep or ModSyncAction.Rename))
             .Select(x => $"'{x.DisplayName}'")
+            .Distinct()
             .ToList();
 
         return new SavegameModsSummary(
             false,
-            string.Join(", ", parts) + $" · {plan.KeepCount} already correct.",
+            string.Join(", ", parts) + $" · {plans.Sum(x => x.KeepCount)} already correct.",
             locked,
-            plan.Unrecognised.Count > 0
-                ? $"{plan.Unrecognised.Count} mods in the folder are not in the repo. You are asked about those separately, before anything moves."
+            unrecognised > 0
+                ? $"{unrecognised} mods in the folder are not in the repo. You are asked about those separately, before anything moves."
                 : null);
     }
 

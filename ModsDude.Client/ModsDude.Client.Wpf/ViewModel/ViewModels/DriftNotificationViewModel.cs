@@ -60,7 +60,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// <summary>The one place the notice is suppressed: the drifted profile's own mod list editor.</summary>
     private readonly HashSet<ActiveProfile> _suppressed = [];
 
-    private InstanceDrift? _subject;
+    private TargetDrift? _subject;
 
 
     public DriftNotificationViewModel(
@@ -131,7 +131,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <remarks>
     /// <b>This is the half the notice used to compute and never print.</b> A held savegame that has
-    /// moved makes a game drifted on its own - see <c>InstanceDrift.IsDrifted</c> - so the notice
+    /// moved makes a game drifted on its own - see <c>TargetDrift.IsDrifted</c> - so the notice
     /// could be raised entirely by it, and the detail line, which only ever described mod files and
     /// revisions, then had nothing to say. An empty mod folder on an empty profile is exactly that
     /// case, and it read as a warning with no reason in it.
@@ -287,7 +287,15 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, _subject.Game.Identity) is false)
+        if (_subject.Target is not GameModFolder target)
+        {
+            // Nothing to scan: this entry is here for a held savegame and names no folder.
+            Status = "This game reaches no mod folder, so there is nothing on disk to look at.";
+
+            return;
+        }
+
+        if (await _navigation.GoToProfileModsAsync(active.RepoId, active.ProfileId, target.Target) is false)
         {
             Status = "That profile could not be opened from here - pick it in the sidebar.";
         }
@@ -426,7 +434,11 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         var profile = _subject.ProfileName is string name ? $"'{name}'" : "the applied profile";
         var files = report.Added.Count + report.Removed.Count + report.Changed.Count;
 
-        Headline = DescribeHeadline(drifted.Count, _subject.Game.Name, profile, report);
+        Headline = DescribeHeadline(
+            drifted.DistinctBy(x => x.Game.Identity).Count(),
+            _subject.Game.Name,
+            profile,
+            report);
 
         // Re-applying needs somewhere to apply *to*. A game reported purely because it is holding
         // a savegame may have no active profile at all, and an accent button that returns the moment
@@ -484,6 +496,12 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// followed by no detail at all - which is how a mod folder and a profile that are both empty
     /// produced a warning with nothing in it.
     /// </remarks>
+    /// <param name="count">
+    /// How many <em>games</em> are drifted, not how many entries: a game reaching three folders
+    /// contributes one line's worth of news however many of them went out of step, and "3 games have
+    /// drifted" for one game's three folders would be a plain lie. Slice 5 of Phase 10 is where the
+    /// wording gets to name the folder.
+    /// </param>
     private static string DescribeHeadline(int count, string instanceName, string profile, DriftReport report)
     {
         if (count > 1)

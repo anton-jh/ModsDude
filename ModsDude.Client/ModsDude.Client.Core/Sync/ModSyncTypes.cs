@@ -146,7 +146,7 @@ public sealed record ModSyncPlan
     public required Guid RepoId { get; init; }
     public required Guid ProfileId { get; init; }
 
-    /// <summary>Which game this plan is for, and therefore which manifest it rewrites.</summary>
+    /// <summary>Which game this plan is for. Its holds are what can refuse the apply.</summary>
     public required GameIdentity Game { get; init; }
 
     /// <summary>Carried only so the manifest can record it. See <see cref="ModSyncRequest.ProfileName"/>.</summary>
@@ -161,6 +161,9 @@ public sealed record ModSyncPlan
 
     /// <summary>The target this plan is for - one folder, which is genuinely sync's unit of work.</summary>
     public required ModTarget Target { get; init; }
+
+    /// <summary>Which folder of which game, and therefore which manifest this rewrites.</summary>
+    public ModTargetRef TargetRef => new(Game, Target.Key);
 
     /// <summary>The folder itself, which is all most of the plan's readers want from the target.</summary>
     public string ModFolder => Target.Path;

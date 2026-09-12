@@ -166,7 +166,7 @@ public sealed class SavegameFlowService(
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var manifest = manifestStore.TryRead(game.Identity);
+        var manifest = manifestStore.TryReadAgreed(game.TargetRefs);
         var options = await BuildPublishOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
 
         var active = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id

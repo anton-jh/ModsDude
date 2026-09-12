@@ -33,7 +33,10 @@ public enum ModSourceKind
     /// </remarks>
     Repo,
 
-    /// <summary>A game's mod folder. Present automatically, and disabling it here does not affect syncing to it.</summary>
+    /// <summary>
+    /// One of a game's mod folders. Present automatically, and disabling it here does not affect
+    /// syncing to it. One per target, named after the folder where a game reaches more than one.
+    /// </summary>
     Game,
 
     /// <summary>The system Downloads folder. Once per machine, not per game.</summary>
@@ -73,10 +76,15 @@ public readonly record struct ModSourceId
     public static ModSourceId Repo { get; } = new("repo");
 
     /// <summary>
-    /// A game's mod folder, keyed by the identity the game itself is keyed by. Slice 2b gives a
-    /// target's key its own place here, since a source per game would look in one folder of three.
+    /// One of a game's mod folders, keyed by the target the folder belongs to.
     /// </summary>
-    public static ModSourceId ForGame(GameIdentity game) => new($"game:{game}");
+    /// <remarks>
+    /// <b>Per target rather than per game.</b> A source per game would scan one folder of three and
+    /// quietly report what the other two hold as missing from the machine - and since this id is what
+    /// remembers <em>do not look in this folder</em>, switching off the server's folder would
+    /// otherwise switch off the client's with it.
+    /// </remarks>
+    public static ModSourceId ForTarget(ModTargetRef target) => new($"game:{target}");
 
     /// <summary>
     /// Keyed by the folder itself, so the same folder added twice is the same source - and so a

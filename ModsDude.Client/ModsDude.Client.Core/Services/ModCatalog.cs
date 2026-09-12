@@ -90,19 +90,27 @@ public sealed class ModCatalog : IDisposable
 
         foreach (var game in _repo.Games)
         {
-            // One source for the one folder. A game reaching several is one slice 2b scans per
-            // target, because looking in one folder of three would report what the other two hold as
-            // missing - and until then nothing in this build can sync such a game either.
-            if (game.SingleModFolderOrNone is not string modFolder)
-            {
-                continue;
-            }
+            // One source per target, because looking in one folder of three would report what the
+            // other two hold as missing from this machine. Off the hydrated adapter rather than the
+            // persisted list, since that is what knows what to call each folder - and this repo
+            // serves the game, so it hydrates.
+            var targets = game.GetAdapter(_repo.Adapter)
+                .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
+                ?.Invoke()
+                .ModTargets ?? ModTargets.None;
 
-            sources.Add(new ModSource(
-                ModSourceId.ForGame(game.Identity),
-                game.Name,
-                modFolder,
-                ModSourceKind.Game));
+            foreach (var target in targets)
+            {
+                sources.Add(new ModSource(
+                    ModSourceId.ForTarget(new ModTargetRef(game.Identity, target.Key)),
+                    // The game alone where it has one folder, which is every game the user is
+                    // likely to have: naming a folder that has no sibling is noise.
+                    targets.Count > 1 && target.DisplayName is string folderName
+                        ? $"{game.Name} - {folderName}"
+                        : game.Name,
+                    target.Path,
+                    ModSourceKind.Game));
+            }
         }
 
         if (KnownFolders.GetDownloads() is string downloads)

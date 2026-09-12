@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -94,7 +95,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         GameName = game.Name;
         // Joined for now: slice 5 turns this into the target list it really is.
-        ModFolder = game.ModFolders.Count > 0 ? string.Join(", ", game.ModFolders) : "No mod folder configured";
+        ModFolder = game.Targets.Count > 0 ? string.Join(", ", game.Targets.Select(x => x.ModFolder)) : "No mod folder configured";
 
         NavManager = navigationManager;
         MenuItems = [
@@ -368,15 +369,54 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             : $"Holding {savegame}, which follows {profile}.";
     }
 
+    /// <summary>
+    /// One line per folder this game reaches, since each of them matches its profile or does not on
+    /// its own. The folder is named only where there is more than one to tell apart.
+    /// </summary>
     private void RefreshDrift()
     {
-        var report = _driftService.Check(
-            _game.Identity,
-            _game.ActiveProfile,
-            _game.SingleModFolderOrNone,
-            profileIsMissing: HasDanglingActiveProfile);
+        if (_game.Targets.Count == 0)
+        {
+            // No folder means no comparison, and there is no target to ask about one. The profile is
+            // still worth a sentence, since setting one is what this page is for.
+            DriftNote = (_game.ActiveProfile, HasDanglingActiveProfile) switch
+            {
+                (null, _) => "No profile is set on this game yet.",
+                (_, true) => "The profile this game followed is gone. Pick another one.",
+                _ => "No mod folder is configured, so nothing is known about what is installed."
+            };
+            LockedWarning = null;
 
-        DriftNote = report.Status switch
+            return;
+        }
+
+        var reports = _game.Targets
+            .Select(target => (
+                target.Key,
+                Report: _driftService.Check(
+                    new ModTargetRef(_game.Identity, target.Key),
+                    _game.ActiveProfile,
+                    target.ModFolder,
+                    profileIsMissing: HasDanglingActiveProfile)))
+            .ToList();
+
+        DriftNote = string.Join(
+            '\n',
+            reports.Select(x => reports.Count > 1
+                ? $"{x.Key}: {Describe(x.Report)}"
+                : Describe(x.Report)));
+
+        var locked = reports.SelectMany(x => x.Report.LockedDrift).DistinctBy(x => x.ModId).ToList();
+
+        LockedWarning = locked.Count > 0
+            ? $"{string.Join(", ", locked.Select(x => $"'{x.DisplayName}'"))} " +
+              "are locked and no longer match what was applied. Hosting a savegame on them may damage that save."
+            : null;
+    }
+
+    private static string Describe(DriftReport report)
+    {
+        return report.Status switch
         {
             DriftStatus.InSync => "The mod folder matches what was last applied here.",
             DriftStatus.Drifted =>
@@ -389,11 +429,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             DriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
             _ => ""
         };
-
-        LockedWarning = report.LockedDrift.Count > 0
-            ? $"{string.Join(", ", report.LockedDrift.Select(x => $"'{x.DisplayName}'"))} " +
-              "are locked and no longer match what was applied. Hosting a savegame on them may damage that save."
-            : null;
     }
 
     /// <summary>

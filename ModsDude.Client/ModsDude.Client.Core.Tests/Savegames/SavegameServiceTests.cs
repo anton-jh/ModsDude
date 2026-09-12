@@ -918,7 +918,7 @@ public class SavegameServiceTests
                 GameAdapterId = new GameAdapterId("farmingSimulator", 1),
                 Name = "Farming Simulator 25",
                 AdapterLocalSettings = "{}",
-                ModFolders = [_slots.Path],
+                Targets = [new PersistedModTarget(Keys.Target().Key, _slots.Path)],
                 ActiveProfile = new ActiveProfile(Server.RepoId, Server.ProfileId)
             };
 
@@ -944,6 +944,7 @@ public class SavegameServiceTests
                 new FakeSavegameDownloader(Server),
                 Uploader,
                 ManifestStore,
+                new FakeModFolders(new GameModFolder(Keys.Target(), _slots.Path)),
                 RecycleBin,
                 NullLogger<SavegameService>.Instance,
                 Heads);
@@ -977,7 +978,7 @@ public class SavegameServiceTests
     /// </remarks>
     public SavegamePublishTarget Target(int headRevision = 1)
     {
-        var manifest = ManifestStore.TryRead(Game.Identity);
+        var manifest = ManifestStore.TryRead(Keys.Target());
 
         return new SavegamePublishTarget(
             ProfileId,
@@ -1015,7 +1016,7 @@ public class SavegameServiceTests
 
             ManifestStore.Write(new SyncManifest
             {
-                Game = Game.Identity,
+                Target = Keys.Target(),
                 RepoId = Server.RepoId,
                 ProfileId = profileId,
                 ProfileRevision = revision,

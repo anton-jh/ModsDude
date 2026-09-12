@@ -306,6 +306,7 @@ public sealed class SavegameService(
     IModFileDownloader downloader,
     IModFileUploader uploader,
     SyncManifestStore manifestStore,
+    IModFolders modFolders,
     IRecycleBin recycleBin,
     ILogger<SavegameService> logger,
     ISavegameHeadVersions? headVersions = null)
@@ -853,9 +854,9 @@ public sealed class SavegameService(
             return;
         }
 
-        // Read once, before anything is hashed: it is the same folder for every binding, and it is
+        // Read once, before anything is hashed: it is the same answer for every binding, and it is
         // the outgoing revision only until the caller rewrites it.
-        var manifest = manifestStore.TryRead(game);
+        var manifest = ReadAppliedManifest(game);
         var slots = await ReadSlotsOrNothing(adapter, ct);
 
         foreach (var binding in held)
@@ -905,7 +906,7 @@ public sealed class SavegameService(
             return [];
         }
 
-        var manifest = manifestStore.TryRead(game);
+        var manifest = ReadAppliedManifest(game);
         var slots = await ReadSlotsOrNothing(adapter.Value, ct);
         var drift = new List<SavegameDrift>();
 
@@ -1017,9 +1018,28 @@ public sealed class SavegameService(
     /// <remarks>Reads the manifest itself, for the caller that has not already.</remarks>
     private SavegameCheckoutBinding Observe(GameIdentity game, SavegameCheckoutBinding binding, string currentContentHash)
     {
-        var manifest = manifestStore.TryRead(game);
+        var manifest = ReadAppliedManifest(game);
 
         return Observe(game, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
+    }
+
+    /// <summary>
+    /// Which mod list this game's folders are on, where they all say the same thing.
+    /// </summary>
+    /// <remarks>
+    /// <b>A savegame is held by the game and played against one folder, and the binding does not yet
+    /// say which.</b> A manifest is per target, so a game reaching three has three answers to a
+    /// question asked of the game - and every target of a game follows one profile, so where they
+    /// agree the ambiguity does not matter. Where they do not, one folder did not get an apply
+    /// another did, and the answer is <see cref="SyncManifestStore.TryReadAgreed"/>'s null: unknown,
+    /// which records nothing rather than a mod list this save may never have run on. Slice 3 of
+    /// Phase 10 puts the target key on the binding and turns this into a lookup.
+    /// </remarks>
+    private SyncManifest? ReadAppliedManifest(GameIdentity game)
+    {
+        return manifestStore.TryReadAgreed(modFolders.GetAll()
+            .Where(x => x.Target.Game == game)
+            .Select(x => x.Target));
     }
 
     /// <summary>
@@ -1283,7 +1303,7 @@ public sealed class SavegameService(
             return played;
         }
 
-        var manifest = manifestStore.TryRead(game.Identity);
+        var manifest = ReadAppliedManifest(game.Identity);
 
         if (manifest?.ProfileRevision is int applied && profileId == manifest.ProfileId)
         {

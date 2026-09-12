@@ -78,7 +78,8 @@ public partial class SettingsPageViewModel
         // A store on a disk with no mod folders on it serves nothing, so the disks with games on
         // them are what the page is about.
         var modFolderVolumes = gameRepository.Games
-            .SelectMany(x => x.ModFolders)
+            .SelectMany(x => x.Targets)
+            .Select(x => x.ModFolder)
             .GroupBy(FileSystemHelper.NormalizeVolumeRoot)
             .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();

@@ -25,7 +25,7 @@ public class PersistedGame
     public required string AdapterLocalSettings { get; set; }
 
     /// <summary>
-    /// Every folder the adapter says this game's targets reach, rewritten whenever the settings are.
+    /// Every target the adapter says this game reaches, rewritten whenever the settings are.
     /// </summary>
     /// <remarks>
     /// <b>Derived and still persisted, which is not redundancy.</b> Store eviction and the drift
@@ -34,7 +34,7 @@ public class PersistedGame
     /// that state its <see cref="AdapterLocalSettings"/> are an opaque blob. Empty is an ordinary
     /// answer - a game whose settings point at no folder at all.
     /// </remarks>
-    public List<string> ModFolders { get; set; } = [];
+    public List<PersistedModTarget> Targets { get; set; } = [];
 
     public ActiveProfile? ActiveProfile { get; set; }
 
@@ -56,3 +56,18 @@ public class PersistedGame
     /// </summary>
     public List<SavegameSlotHint> SavegameSlotHints { get; init; } = [];
 }
+
+
+/// <summary>
+/// One of a game's targets as it is written down: the adapter's key for it, and the folder it
+/// reached when the settings were last saved.
+/// </summary>
+/// <remarks>
+/// <b>The key is the half that earns this being a record rather than a string.</b> A manifest and an
+/// eviction pin are filed under <see cref="ModTargetRef"/>, so reading a folder path without
+/// hydrating an adapter is only useful if the key beside it says which manifest the folder's contents
+/// are described by. <see cref="ModTarget.DisplayName"/> is deliberately not here: it is what to call
+/// the folder on screen, which needs the adapter that named it and is re-derived whenever there is
+/// one.
+/// </remarks>
+public sealed record PersistedModTarget(TargetKey Key, string ModFolder);

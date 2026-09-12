@@ -129,7 +129,11 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     private void RefreshInstances()
     {
-        var drifted = _driftMonitor.Drifted.ToDictionary(x => x.Game.Identity, x => x.Report);
+        // One row per game, so a game whose server folder drifted and whose client folder did not
+        // shows the drifted one. Slice 5 of Phase 10 gives the row a line per folder.
+        var drifted = _driftMonitor.Drifted
+            .GroupBy(x => x.Game.Identity)
+            .ToDictionary(x => x.Key, x => x.First().Report);
 
         Games.Clear();
 

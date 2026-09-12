@@ -3,7 +3,7 @@ using ModsDude.Client.Core.GameAdapters;
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>
-/// What the last sync actually installed into one game's mod folder.
+/// What the last sync actually installed into one of a game's mod folders.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,17 +27,32 @@ public sealed record SyncManifest
     /// cannot be read is a manifest that is absent, which costs a full reconcile.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Deliberately <b>not</b> bumped for <see cref="Target"/> replacing the bare game identity, even
+    /// though the shape changed: the key moved into the filename with it, so a manifest written before
+    /// slice 2b of Phase 10 sits under a name nothing will ever build again and cannot be read as this
+    /// shape by accident. It is collected by the stale sweep rather than by a version check.
+    /// </para>
+    /// <para>
     /// Bumped to 2 for <see cref="SyncManifestEntry.Locked"/>. A version 1 manifest would deserialize
     /// with every entry unlocked, which reads as "no locked mod drifted" - the one thing the drift
     /// notice exists to say loudly. Discarding it costs a reconcile; believing it costs a savegame.
+    /// </para>
     /// </remarks>
     public const int CurrentVersion = 2;
 
 
     public int Version { get; init; } = CurrentVersion;
 
-    /// <summary>Which game this folder belongs to - the key the manifest is filed under.</summary>
-    public required GameIdentity Game { get; init; }
+    /// <summary>
+    /// Which of which game's folders this describes - the key the manifest is filed under.
+    /// </summary>
+    /// <remarks>
+    /// <b>Per target rather than per game</b>, because syncing the dedicated server must not rewrite
+    /// the MP client's record of what it is running, and because an atomic write per folder is what
+    /// keeps a half-finished apply describing one folder correctly instead of two folders wrongly.
+    /// </remarks>
+    public required ModTargetRef Target { get; init; }
 
     /// <summary>Which profile was applied, so a manifest can be recognised as describing another one.</summary>
     public required Guid RepoId { get; init; }
@@ -68,8 +83,9 @@ public sealed record SyncManifest
     public required DateTimeOffset SyncedAt { get; init; }
 
     /// <summary>
-    /// The folder it describes. A game repointed at a different folder has a manifest about
-    /// somewhere else, which is worth noticing rather than comparing against.
+    /// The folder it describes. A target repointed at a different folder has a manifest about
+    /// somewhere else, which is worth noticing rather than comparing against - the key survives a
+    /// settings edit, and the path is what says whether it is still the same place.
     /// </summary>
     public required string ModFolder { get; init; }
 

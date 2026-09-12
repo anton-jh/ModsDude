@@ -301,6 +301,74 @@ public class DriftMonitorTests
         Assert.False(fixture.Monitor.HasDrift);
     }
 
+    /// <summary>
+    /// The normal BeamMP evening, and the reason the whole phase exists: the dedicated server was
+    /// locked while the client applied fine, so one folder is on the old mod list and the other is
+    /// not. The check has to say which - a per-game answer could only say "something differs".
+    /// </summary>
+    [Fact]
+    public void One_folder_drifting_is_reported_against_that_folder_and_not_the_other()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SyncSecondTarget(("fs25_a.zip", "one"));
+
+        fixture.SecondFolder.WriteFile("fs25_a.zip", "the game updated this");
+        fixture.Monitor.Check();
+
+        var drift = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(fixture.Candidates.SecondTarget, drift.Target?.Target);
+        Assert.Equal(["fs25_a.zip"], drift.Report.Changed);
+    }
+
+    /// <summary>
+    /// And a folder that is exactly what was applied to it stays quiet, which is what makes the
+    /// answer above worth reading: both folders are checked, and only one of them is news.
+    /// </summary>
+    [Fact]
+    public void Both_folders_are_checked_and_a_matching_one_says_nothing()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SyncSecondTarget(("fs25_a.zip", "one"));
+
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+
+        // Both, not just the first: an unapplied second folder used to be invisible because the
+        // manifest was the game's and the first folder's answer was the game's answer.
+        fixture.Folder.WriteFile("fs25_b.zip", "two");
+        fixture.SecondFolder.WriteFile("fs25_b.zip", "two");
+        fixture.Monitor.Check();
+
+        Assert.Equal(2, fixture.Monitor.Drifted.Count);
+    }
+
+    /// <summary>
+    /// Dismissal is per drift set, and the second folder going wrong under a notice waved away about
+    /// the first is a different problem - which the signature has to be keyed finely enough to see.
+    /// </summary>
+    [Fact]
+    public void A_dismissed_notice_comes_back_when_the_other_folder_goes_wrong()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SyncSecondTarget(("fs25_a.zip", "one"));
+
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+        fixture.Monitor.Check();
+        fixture.Monitor.Dismiss();
+
+        Assert.False(fixture.Monitor.ShouldNotify);
+
+        fixture.SecondFolder.WriteFile("fs25_a.zip", "and this");
+        fixture.Monitor.Check();
+
+        Assert.True(fixture.Monitor.ShouldNotify);
+    }
+
     [Fact]
     public void The_drifted_game_carries_the_profile_name_the_manifest_recorded()
     {
@@ -327,12 +395,36 @@ public class DriftMonitorTests
 
     private sealed class FakeCandidates : IDriftCandidateSource
     {
-        public GameIdentity Game { get; } = Keys.Game();
+        public ModTargetRef Target { get; } = Keys.Target();
+
+        /// <summary>A second folder of the same game. Null unless a test is about having two.</summary>
+        public ModTargetRef SecondTarget { get; } = Keys.Target("server");
+
+        public GameIdentity Game => Target.Game;
+
+        /// <summary>Null is a game whose settings point at no folder, which reaches no target.</summary>
         public string? ModFolder { get; set; }
+
+        public string? SecondModFolder { get; set; }
+
         public ActiveProfile? ActiveProfile { get; set; } = new(_repoId, _profileId);
 
         public IReadOnlyList<DriftCandidate> GetDriftCandidates()
-            => [new DriftCandidate(Game, "Farming Simulator 25", ModFolder, ActiveProfile)];
+            => [new DriftCandidate(Game, "Farming Simulator 25", [.. Targets()], ActiveProfile)];
+
+
+        private IEnumerable<GameModFolder> Targets()
+        {
+            if (ModFolder is string folder)
+            {
+                yield return new GameModFolder(Target, folder);
+            }
+
+            if (SecondModFolder is string second)
+            {
+                yield return new GameModFolder(SecondTarget, second);
+            }
+        }
     }
 
 
@@ -460,7 +552,7 @@ public class DriftMonitorTests
                     NullLogger<StoreIntegrityService>.Instance);
             }
 
-            Held = new FakeHeldSavegames(Manifests);
+            Held = new FakeHeldSavegames(Manifests, Candidates.Target);
 
             Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
         }
@@ -468,6 +560,9 @@ public class DriftMonitorTests
 
         public TempDirectory Folder { get; }
         public FakeCandidates Candidates { get; }
+
+        /// <summary>The game's other folder, used only by the tests that give it one.</summary>
+        public TempDirectory SecondFolder { get; } = new("monitor-second-mods");
         public SyncManifestStore Manifests { get; }
         public DriftService Drift { get; }
         public TestTimeProvider Time { get; } = new();
@@ -488,6 +583,34 @@ public class DriftMonitorTests
         /// <summary>Writes the files and the manifest that says they are what was installed.</summary>
         public void Sync(params (string Name, string Content)[] files)
             => Sync(null, files);
+
+        /// <summary>
+        /// Gives this game a second folder and syncs it, as a dedicated server beside an MP client.
+        /// </summary>
+        public void SyncSecondTarget(params (string Name, string Content)[] files)
+        {
+            Candidates.SecondModFolder = SecondFolder.Path;
+
+            var entries = new List<SyncManifestEntry>();
+
+            foreach (var (name, content) in files)
+            {
+                var info = new FileInfo(SecondFolder.WriteFile(name, content));
+
+                entries.Add(Entry(name, content, info));
+            }
+
+            Manifests.Write(new SyncManifest
+            {
+                Target = Candidates.SecondTarget,
+                RepoId = _repoId,
+                ProfileId = _profileId,
+                ProfileName = "Season 4",
+                SyncedAt = DateTimeOffset.UtcNow,
+                ModFolder = SecondFolder.Path,
+                Entries = entries
+            });
+        }
 
         /// <param name="revision">Which revision of the profile the manifest records as applied.</param>
         public void Sync(int? revision, params (string Name, string Content)[] files)
@@ -541,6 +664,7 @@ public class DriftMonitorTests
         {
             Monitor.Dispose();
             Folder.Dispose();
+            SecondFolder.Dispose();
             _manifests.Dispose();
             _storeRoot.Dispose();
         }
@@ -558,7 +682,7 @@ public class DriftMonitorTests
         {
             Manifests.Write(new SyncManifest
             {
-                Game = Candidates.Game,
+                Target = Candidates.Target,
                 RepoId = _repoId,
                 ProfileId = _profileId,
                 ProfileName = "Season 4",

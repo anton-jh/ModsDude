@@ -21,7 +21,7 @@ public class StoreIntegrityServiceTests
 {
     private const long _oneGigabyte = 1024L * 1024 * 1024;
 
-    private static readonly GameIdentity _game = Keys.Game();
+    private static readonly ModTargetRef _target = Keys.Target();
 
 
     [Fact]
@@ -45,7 +45,7 @@ public class StoreIntegrityServiceTests
         // hardlinking that file *is* the blob, so this lands in the shared store.
         await File.WriteAllBytesAsync(installed, Bytes("what the game downloaded instead"));
 
-        var found = await service.CheckAsync(_game, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
+        var found = await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
 
         var blob = Assert.Single(found);
         Assert.Equal(hash, blob.Hash);
@@ -81,7 +81,7 @@ public class StoreIntegrityServiceTests
         await File.WriteAllBytesAsync(staged, Bytes("a newer build, downloaded in the game"));
         File.Move(staged, installed, overwrite: true);
 
-        var found = await service.CheckAsync(_game, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
+        var found = await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
 
         // Drift, yes - the folder no longer matches. Corruption, no. Nothing was read to establish
         // that: the file in the folder is simply not the blob any more.
@@ -110,7 +110,7 @@ public class StoreIntegrityServiceTests
 
         await File.WriteAllBytesAsync(installed, Bytes("rewritten in place, harmlessly"));
 
-        Assert.Empty(await service.CheckAsync(_game, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
         Assert.True(store.Contains(hash));
     }
 
@@ -135,7 +135,7 @@ public class StoreIntegrityServiceTests
         // without changing it. The hash is what stops a blob being deleted on that suspicion alone.
         File.SetLastWriteTimeUtc(installed, DateTime.UtcNow.AddHours(1));
 
-        Assert.Empty(await service.CheckAsync(_game, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
         Assert.True(store.Contains(hash));
     }
 
@@ -152,7 +152,7 @@ public class StoreIntegrityServiceTests
 
         manifests.Write(Manifest(modFolder, hash, "FS22_Mod.zip", new FileInfo(installed)));
 
-        Assert.Empty(await service.CheckAsync(_game, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class StoreIntegrityServiceTests
         using var root = new TempDirectory("integrity-quiet");
         var (_, modFolder, service) = Setup(root, out _);
 
-        Assert.Empty(await service.CheckAsync(_game, modFolder, [], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, modFolder, [], CancellationToken.None));
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public class StoreIntegrityServiceTests
 
     private static SyncManifest Manifest(string modFolder, string hash, string fileName, FileInfo installed) => new()
     {
-        Game = _game,
+        Target = _target,
         RepoId = Guid.NewGuid(),
         ProfileId = Guid.NewGuid(),
         SyncedAt = DateTimeOffset.UtcNow,

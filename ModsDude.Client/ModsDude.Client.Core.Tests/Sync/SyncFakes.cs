@@ -296,7 +296,7 @@ internal sealed class FakeModFolders(params GameModFolder[] folders) : IModFolde
 /// still have read, and that is the number play gets attributed to.
 /// </para>
 /// </remarks>
-internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSavegames
+internal sealed class FakeHeldSavegames(SyncManifestStore manifests, params ModTargetRef[] targets) : IHeldSavegames
 {
     private readonly List<SavegameCheckoutBinding> _held = [];
 
@@ -316,9 +316,14 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
     public void HoldWithNoProfile(GameIdentity game) => Add(null, null);
 
 
+    /// <remarks>
+    /// Reads the manifest the same way the real one does - through the game's folders rather than
+    /// off the game - so what is observed is the revision the folders agree on, which for a game
+    /// with one folder is that folder's.
+    /// </remarks>
     public Task ObserveAsync(GameIdentity game, CancellationToken ct)
     {
-        Observed.Add(manifests.TryRead(game)?.ProfileRevision);
+        Observed.Add(manifests.TryReadAgreed(targets.Where(x => x.Game == game))?.ProfileRevision);
 
         return Task.CompletedTask;
     }

@@ -1262,7 +1262,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // So the import leaves the store warm: what is uploaded from a folder the game does not
             // read is copied into the store these folders are served by, and the apply that follows
             // this save finds it there instead of downloading it back.
-            ModFolders = [.. _repo.Games.SelectMany(x => x.ModFolders)]
+            ModFolders = [.. _repo.Games.SelectMany(x => x.Targets).Select(x => x.ModFolder)]
         };
 
         // The overload that invalidates the catalog afterwards: a partly failed import still
@@ -1751,7 +1751,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// Switches on the mod folder of one game, for a page opened <i>at</i> that folder rather
+    /// Switches on one of a game's mod folders, for a page opened <i>at</i> that folder rather
     /// than merely opened - which today means arriving from the drift notice.
     /// </summary>
     /// <remarks>
@@ -1762,9 +1762,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// Called before the page is shown, and again if the page is already open when the notice is
     /// clicked - enabling an already-enabled source is a no-op.
     /// </remarks>
-    public void ScanGame(GameIdentity game)
+    public void ScanTarget(ModTargetRef target)
     {
-        _catalog.SetEnabled(ModSourceId.ForGame(game), true);
+        _catalog.SetEnabled(ModSourceId.ForTarget(target), true);
 
         // Only reloads where the page is already up; during construction there is nothing to reload
         // and the initial load reads the flag on its way through.
@@ -2400,20 +2400,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        /// <param name="scanGame">
-        /// A game whose mod folder should be scanned from the start. Null for an ordinary
+        /// <param name="scanTarget">
+        /// A folder that should be scanned from the start. Null for an ordinary
         /// navigation, which reads no disk at all until the user ticks a source.
         /// </param>
-        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, GameIdentity? scanGame = null)
+        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, ModTargetRef? scanTarget = null)
         {
             var page = ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 
             // Set before the page is handed back, so it is on by the time TriggerInit reads it. Done
             // here rather than through the constructor because a nullable Guid does not survive
             // ActivatorUtilities' positional matching.
-            if (scanGame is GameIdentity game)
+            if (scanTarget is ModTargetRef target)
             {
-                page.ScanGame(game);
+                page.ScanTarget(target);
             }
 
             return page;

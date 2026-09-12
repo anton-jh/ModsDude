@@ -153,8 +153,8 @@ public sealed record DriftReport(
 
 
 /// <summary>
-/// Whether a game's mod folder still matches what was applied to it, answered without opening a
-/// single archive.
+/// Whether one of a game's mod folders still matches what was applied to it, answered without
+/// opening a single archive.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -177,8 +177,8 @@ public sealed class DriftService(
     /// the two facts it actually uses and nothing else.
     /// </param>
     /// <param name="modFolder">
-    /// Null where the game's adapter cannot be hydrated - a game whose scope no repo on this
-    /// machine serves. Unknown rather than drifted, like any other unreachable folder.
+    /// Null where the game reaches no folder at all - somebody connected it and has not filled a
+    /// path in. Unknown rather than drifted, like any other unreachable folder.
     /// </param>
     /// <param name="profileIsMissing">
     /// Whether the repo says the active profile is gone. The caller knows; this cannot ask.
@@ -193,14 +193,16 @@ public sealed class DriftService(
     /// the question unasked rather than answered "unchanged".
     /// </param>
     /// <param name="savegameDrift">
-    /// What the savegame check found for this game, where the caller ran one. Carried through
+    /// What the savegame check found for this <em>game</em>, where the caller ran one - the hold is
+    /// the game's and every one of its folders is implicated in it, so a caller checking three
+    /// targets hands the same list to each. Carried through
     /// rather than computed here - see <see cref="DriftReport.SavegameDrift"/> - and attached
     /// to <em>every</em> answer including the ones that stop early: a held savegame with an evening in
     /// it is worth saying whatever the mod folder turned out to be, and a game whose profile was
     /// deleted underneath it is precisely a case where somebody wants to hear about their save.
     /// </param>
     public DriftReport Check(
-        GameIdentity game,
+        ModTargetRef target,
         ActiveProfile? activeProfile,
         string? modFolder,
         bool profileIsMissing = false,
@@ -225,7 +227,7 @@ public sealed class DriftService(
             return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
-        var manifest = manifestStore.TryRead(game);
+        var manifest = manifestStore.TryRead(target);
 
         // A manifest describing another profile, or another folder, says nothing about this one -
         // the same position as having none, which is a full reconcile rather than a false alarm.

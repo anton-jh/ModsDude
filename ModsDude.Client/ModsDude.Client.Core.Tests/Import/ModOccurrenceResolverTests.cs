@@ -15,7 +15,7 @@ public class ModOccurrenceResolverTests
         new(ModSourceId.Downloads, "Downloads", @"C:\Downloads", ModSourceKind.Downloads);
 
     private static readonly ModSource _game =
-        new(ModSourceId.ForGame(new GameIdentity("farmingSimulator", "fs25")), "FS25", @"C:\FS25\mods", ModSourceKind.Game);
+        new(ModSourceId.ForTarget(Keys.Target()), "FS25", @"C:\FS25\mods", ModSourceKind.Game);
 
     private static readonly ModSource _added =
         new(ModSourceId.ForFolder(@"D:\Backup"), "Backup", @"D:\Backup", ModSourceKind.AdHoc);

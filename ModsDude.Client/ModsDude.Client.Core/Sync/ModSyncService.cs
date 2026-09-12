@@ -10,9 +10,22 @@ using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Core.Sync;
 
+/// <param name="Target">
+/// Which of the game's folders to make match. Sync is genuinely per folder, so this is named by the
+/// caller rather than derived here: a game with three targets is three requests, and looping them is
+/// what applying a profile does.
+/// </param>
 /// <param name="Adapter">Already hydrated with the local settings; it is what knows the targets.</param>
-public sealed record ModSyncRequest(GameIdentity Game, ILocalModAdapter Adapter, Guid RepoId, Guid ProfileId)
+public sealed record ModSyncRequest(
+    GameIdentity Game,
+    ModTarget Target,
+    ILocalModAdapter Adapter,
+    Guid RepoId,
+    Guid ProfileId)
 {
+    /// <summary>What the manifest for this run is filed under.</summary>
+    public ModTargetRef TargetRef => new(Game, Target.Key);
+
     /// <summary>
     /// What the profile is called, carried into the manifest so a later drift notice can name it
     /// without a repo's profile list to hand. Optional: sync itself has no use for it.
@@ -45,13 +58,13 @@ public interface IModFolders
 }
 
 /// <summary>
-/// One mod folder on this machine and the game that reaches it.
+/// One mod folder on this machine, and which of which game's targets reaches it.
 /// </summary>
 /// <remarks>
 /// One entry per folder, so a game with three targets appears three times: eviction has to spare
-/// every folder, and which game they belong to is only how their manifest is found.
+/// every folder, and the target is how each one's manifest is found.
 /// </remarks>
-public sealed record GameModFolder(GameIdentity Game, string ModFolder);
+public sealed record GameModFolder(ModTargetRef Target, string ModFolder);
 
 
 /// <summary>
@@ -90,10 +103,7 @@ public sealed class ModSyncService(
 
     public async Task<ModSyncPlan> PlanAsync(ModSyncRequest request, CancellationToken cancellationToken)
     {
-        // Slice 1 of Phase 10: the adapter answers with targets, and this caller still takes one. The
-        // loop over a game's targets belongs to whatever activates a profile, not to sync, which is
-        // genuinely per folder - see docs/PLAN.md#phase-10--one-game-many-targets.
-        var target = request.Adapter.ModTargets.RequireSingleTarget();
+        var target = request.Target;
         var modFolder = target.Path;
 
         if (Directory.Exists(modFolder) is false)
@@ -106,7 +116,7 @@ public sealed class ModSyncService(
         var targetRevision = ResolveTargetRevision(request);
         var (desired, revision) = await GetDesiredAsync(request, targetRevision, cancellationToken);
         var installed = await GetInstalledAsync(request.Adapter, target, cancellationToken);
-        var manifest = manifestStore.TryRead(request.Game);
+        var manifest = manifestStore.TryRead(request.TargetRef);
 
         // Fetched only when something is actually going to be removed. It is the one input that
         // needs the repo's mod list, and a re-apply that changes nothing should not pay for it.
@@ -614,7 +624,7 @@ public sealed class ModSyncService(
 
         manifestStore.Write(new SyncManifest
         {
-            Game = plan.Game,
+            Target = plan.TargetRef,
             RepoId = plan.RepoId,
             ProfileId = plan.ProfileId,
             ProfileName = plan.ProfileName,
@@ -650,8 +660,15 @@ public sealed class ModSyncService(
 
     /// <summary>
     /// Everything an active profile needs on a disk this store serves: this sync's own set, plus what
-    /// the other games' manifests say they are running.
+    /// every other folder's manifest says it is running.
     /// </summary>
+    /// <remarks>
+    /// <b>The skip is this target, not this game.</b> A game's other targets are other folders
+    /// running their own installed sets, and skipping the whole game would evict what the dedicated
+    /// server is holding the moment the MP client is synced - a re-download on the next apply of a
+    /// folder nobody touched. Only the folder being synced right now is covered by the plan's own
+    /// hashes above.
+    /// </remarks>
     private IReadOnlySet<string> GetPinnedHashes(ModSyncPlan plan)
     {
         var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -663,7 +680,7 @@ public sealed class ModSyncService(
 
         foreach (var folder in modFolders.GetAll())
         {
-            if (folder.Game == plan.Game)
+            if (folder.Target == plan.TargetRef)
             {
                 continue;
             }
@@ -673,7 +690,7 @@ public sealed class ModSyncService(
                 continue;
             }
 
-            foreach (var entry in manifestStore.TryRead(folder.Game)?.Entries ?? [])
+            foreach (var entry in manifestStore.TryRead(folder.Target)?.Entries ?? [])
             {
                 pinned.Add(entry.ContentHash);
             }

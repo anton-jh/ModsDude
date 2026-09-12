@@ -51,11 +51,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private ProfileModsEditorPageViewModel? _openModsEditor;
 
     /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
-    private GameIdentity? _scanGameOnce;
+    private ModTargetRef? _scanTargetOnce;
 
     /// <summary>
     /// Which revision a deep link into the history asked for. Same one-shot shape as
-    /// <see cref="_scanGameOnce"/>, and for the same reason: it describes an arrival, not a
+    /// <see cref="_scanTargetOnce"/>, and for the same reason: it describes an arrival, not a
     /// standing preference.
     /// </summary>
     private int? _selectRevisionOnce;
@@ -95,10 +95,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return profileModsPageViewModelFactory.Create(repo, profile);
             }
 
-            var scanGame = _scanGameOnce;
-            _scanGameOnce = null;
+            var scanTarget = _scanTargetOnce;
+            _scanTargetOnce = null;
 
-            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanGame);
+            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanTarget);
         }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
@@ -307,27 +307,27 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
-    /// <param name="scanGame">
-    /// A game whose mod folder the editor should open already scanning. Sources are off by
+    /// <param name="scanTarget">
+    /// A folder the editor should open already scanning. Sources are off by
     /// default because opening a page must not read a disk - but arriving here from a drift notice
     /// <em>is</em> the user asking about that folder's contents, so the one it is about is on.
     /// </param>
-    public bool TrySelectMods(GameIdentity? scanGame = null)
+    public bool TrySelectMods(ModTargetRef? scanTarget = null)
     {
         // Read and cleared by the menu item's factory, so it applies to the page this call opens and
         // not to the next one somebody reaches through the sidebar.
-        _scanGameOnce = scanGame;
+        _scanTargetOnce = scanTarget;
 
         if (ReferenceEquals(NavManager.Selected, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
         }
-        else if (scanGame is not null)
+        else if (scanTarget is not null)
         {
             // Already open, so selecting it again constructs nothing and the factory never runs.
             // Enable the folder on the page the user is looking at instead.
-            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanGame(scanGame.Value);
-            _scanGameOnce = null;
+            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanTarget(scanTarget.Value);
+            _scanTargetOnce = null;
         }
 
         return ReferenceEquals(NavManager.Selected, _modsMenuItem);

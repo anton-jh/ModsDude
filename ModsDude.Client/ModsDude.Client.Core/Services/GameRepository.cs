@@ -87,12 +87,13 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// </summary>
     /// <remarks>
     /// One entry per <em>folder</em> rather than per game, so a game reaching three of them spares
-    /// all three. Read off the persisted paths, so it works for a game whose identity no loaded repo
-    /// serves.
+    /// all three. Read off the persisted list, so it works for a game whose identity no loaded repo
+    /// serves - and each entry carries the key its own manifest is filed under, which is what lets a
+    /// sweep ask what that folder is running.
     /// </remarks>
     public IReadOnlyList<GameModFolder> GetAll()
     {
-        return [.. Games.SelectMany(game => game.ModFolders.Select(folder => new GameModFolder(game.Identity, folder)))];
+        return [.. Games.SelectMany(TargetsOf)];
     }
 
     /// <summary>
@@ -101,14 +102,23 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// without hydrating an adapter.
     /// </summary>
     /// <remarks>
-    /// One candidate per game, carrying the one folder. A game reaching none is unknown rather than
-    /// drifted, which is the quiet answer this already gave for an adapter with no mod capability;
-    /// several is not reachable while <see cref="ModTargets.RequireSingleTarget"/> holds every sync
-    /// caller to one, and slice 2b makes this a candidate per target instead.
+    /// One candidate per game carrying every folder it reaches, rather than one per folder: the mod
+    /// half of the check is per folder and the savegame half is per game, and a candidate per folder
+    /// would hash a game's held saves once for each of them.
     /// </remarks>
     public IReadOnlyList<DriftCandidate> GetDriftCandidates()
     {
-        return [.. Games.Select(x => new DriftCandidate(x.Identity, x.Name, x.SingleModFolderOrNone, x.ActiveProfile))];
+        return [.. Games.Select(game => new DriftCandidate(
+            game.Identity,
+            game.Name,
+            [.. TargetsOf(game)],
+            game.ActiveProfile))];
+    }
+
+    /// <summary>Every folder one game reaches, each addressed by the key its manifest is under.</summary>
+    private static IEnumerable<GameModFolder> TargetsOf(Game game)
+    {
+        return game.Targets.Select(x => new GameModFolder(new ModTargetRef(game.Identity, x.Key), x.ModFolder));
     }
 
     /// <summary>
@@ -137,16 +147,16 @@ public class GameRepository : IModFolders, IDriftCandidateSource
                 "One installation of a game is configured once on a machine, and this one already is. Open its settings to change where its folders are.");
         }
 
-        var modFolders = GetModFolders(baseAdapter, localSettings);
+        var targets = GetTargets(baseAdapter, localSettings);
 
-        EnsureFoldersAreUnclaimed(modFolders, null);
+        EnsureFoldersAreUnclaimed(targets, null);
 
         var persistedModel = new PersistedGame()
         {
             GameAdapterId = baseAdapter.Id,
             Name = name,
             AdapterLocalSettings = localSettings.Serialize(),
-            ModFolders = [.. modFolders]
+            Targets = [.. targets]
         };
 
         var game = new Game(identity, persistedModel);
@@ -160,11 +170,11 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
     public void Update(Game game, IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
     {
-        var modFolders = GetModFolders(baseAdapter, localSettings);
+        var targets = GetTargets(baseAdapter, localSettings);
 
-        EnsureFoldersAreUnclaimed(modFolders, game.Identity);
+        EnsureFoldersAreUnclaimed(targets, game.Identity);
 
-        game.Update(name, localSettings, modFolders);
+        game.Update(name, localSettings, targets);
         _store.Save();
 
         // The mod folders may have moved, which makes every answer about the old ones meaningless.
@@ -221,13 +231,19 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
     public void Delete(Game game)
     {
+        var targets = TargetsOf(game).ToList();
+
         _state.Games.Remove(game.Identity);
         Games.Remove(game);
         _store.Save();
 
-        // Nothing reads a manifest for a game that no longer exists, and leaving one behind
-        // would keep a few hundred kilobytes per disconnected game folder forever.
-        _manifestStore.Delete(game.Identity);
+        // Nothing reads a manifest for a folder no game reaches any more, and leaving one behind
+        // would keep a few hundred kilobytes per disconnected folder forever. One per target,
+        // because that is how many there are.
+        foreach (var target in targets)
+        {
+            _manifestStore.Delete(target.Target);
+        }
     }
 
     /// <summary>
@@ -243,24 +259,27 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// </param>
     public FolderClaim? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, GameIdentity? ignoredGame = null)
     {
-        return FindFolderConflict(Games, GetModFolders(baseAdapter, localSettings), ignoredGame);
+        return FindFolderConflict(Games, GetTargets(baseAdapter, localSettings), ignoredGame);
     }
 
-    /// <summary>Every folder the adapter says a game with these settings would reach.</summary>
+    /// <summary>
+    /// Every target the adapter says a game with these settings would reach, as it gets written down.
+    /// </summary>
     /// <remarks>
-    /// Every target, not the one: this is the list that gets written down, and it is the only thing
-    /// that has to be complete for eviction to spare a folder nothing else can name. A game reaching
-    /// no folder claims none, which is the same empty list this returns for an adapter with no mod
-    /// capability at all - both mean "nothing here can collide with anybody".
+    /// Every target, not the one: this is the list that gets persisted, and it is the only thing that
+    /// has to be complete for eviction to spare a folder nothing else can name. The key travels with
+    /// the path because a path on its own names no manifest. A game reaching no folder claims none,
+    /// which is the same empty list this returns for an adapter with no mod capability at all - both
+    /// mean "nothing here can collide with anybody".
     /// </remarks>
-    public static IReadOnlyList<string> GetModFolders(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
+    public static IReadOnlyList<PersistedModTarget> GetTargets(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
         return [.. baseAdapter
             .WithLocalSettings(localSettings)
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
             .ModTargets
-            .Select(x => x.Path) ?? []];
+            .Select(x => new PersistedModTarget(x.Key, x.Path)) ?? []];
     }
 
 
@@ -272,18 +291,18 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// </remarks>
     internal static FolderClaim? FindFolderConflict(
         IEnumerable<Game> games,
-        IReadOnlyList<string> modFolders,
+        IReadOnlyList<PersistedModTarget> targets,
         GameIdentity? ignoredGame)
     {
-        for (var i = 0; i < modFolders.Count; i++)
+        for (var i = 0; i < targets.Count; i++)
         {
-            var folder = modFolders[i];
+            var folder = targets[i].ModFolder;
 
             // Its own, first: two targets of one game pointing at one folder would have each of them
             // uninstalling what the other just put there.
             for (var earlier = 0; earlier < i; earlier++)
             {
-                if (FileSystemHelper.ArePathsEqual(modFolders[earlier], folder))
+                if (FileSystemHelper.ArePathsEqual(targets[earlier].ModFolder, folder))
                 {
                     return new FolderClaim(folder, null);
                 }
@@ -291,7 +310,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
             var owner = games.FirstOrDefault(game =>
                 game.Identity != ignoredGame &&
-                game.ModFolders.Any(x => FileSystemHelper.ArePathsEqual(x, folder)));
+                game.Targets.Any(x => FileSystemHelper.ArePathsEqual(x.ModFolder, folder)));
 
             if (owner is not null)
             {
@@ -302,9 +321,9 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         return null;
     }
 
-    private void EnsureFoldersAreUnclaimed(IReadOnlyList<string> modFolders, GameIdentity? ignoredGame)
+    private void EnsureFoldersAreUnclaimed(IReadOnlyList<PersistedModTarget> targets, GameIdentity? ignoredGame)
     {
-        if (FindFolderConflict(Games, modFolders, ignoredGame) is FolderClaim claim)
+        if (FindFolderConflict(Games, targets, ignoredGame) is FolderClaim claim)
         {
             throw new UserFriendlyException(
                 "That folder is already in use",

@@ -24,24 +24,23 @@ public class FakeMultiTargetAdapterTests
     }
 
     [Fact]
-    public void One_filled_field_is_one_target_and_narrow_callers_are_happy()
+    public void One_filled_field_is_one_target()
     {
         var targets = FakeMultiTargetGameAdapter.ModAdapterFor(new FakeMultiTargetSettings
         {
             SoloModFolder = @"C:\solo\mods"
         }).ModTargets;
 
-        Assert.Equal(@"C:\solo\mods", targets.RequireSingleTarget().Path);
+        Assert.Equal(@"C:\solo\mods", Assert.Single(targets).Path);
     }
 
     /// <summary>The shape the whole phase is for, and the one nothing could reach before this fake.</summary>
     [Fact]
-    public void Three_filled_fields_are_three_targets_and_narrow_callers_are_not()
+    public void Three_filled_fields_are_three_targets()
     {
         var targets = FakeMultiTargetGameAdapter.ModAdapterFor(Everything()).ModTargets;
 
         Assert.Equal(3, targets.Count);
-        Assert.Throws<InvalidOperationException>(() => targets.RequireSingleTarget());
     }
 
     /// <summary>

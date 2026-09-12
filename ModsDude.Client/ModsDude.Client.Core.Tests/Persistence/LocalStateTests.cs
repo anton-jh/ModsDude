@@ -39,7 +39,13 @@ public class LocalStateTests
 
         Assert.Equal(2, read.Games.Count);
         Assert.Equal("Farming Simulator 25", read.Games[_fs25].Name);
-        Assert.Equal(@"D:\fs22\mods", Assert.Single(read.Games[_fs22].ModFolders));
+        // The key beside the folder is what names the manifest describing it, so it is the half
+        // worth asserting came back readable rather than as the blank a default-serialized record
+        // struct would produce.
+        var target = Assert.Single(read.Games[_fs22].Targets);
+
+        Assert.Equal(@"D:\fs22\mods", target.ModFolder);
+        Assert.Equal("mods", target.Key.Value);
 
         // The intent is the half that cannot be re-derived from anything on disk, so it is the half
         // worth asserting survives the trip.
@@ -81,7 +87,7 @@ public class LocalStateTests
             AdapterLocalSettings = "{}"
         };
 
-        Assert.Empty(RoundTrip(state).Games[_fs25].ModFolders);
+        Assert.Empty(RoundTrip(state).Games[_fs25].Targets);
     }
 
 
@@ -96,7 +102,7 @@ public class LocalStateTests
         GameAdapterId = new GameAdapterId("farmingSimulator", 1),
         Name = name,
         AdapterLocalSettings = """{"modFolder":"C:\\mods"}""",
-        ModFolders = [modFolder],
+        Targets = [new PersistedModTarget(new TargetKey("mods"), modFolder)],
         ActiveProfile = activeProfile
     };
 }

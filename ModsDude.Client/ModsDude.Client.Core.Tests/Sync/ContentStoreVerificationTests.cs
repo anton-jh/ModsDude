@@ -20,7 +20,7 @@ public class ContentStoreVerificationTests
 {
     private const long _oneGigabyte = 1024L * 1024 * 1024;
 
-    private static readonly GameIdentity _game = Keys.Game();
+    private static readonly ModTargetRef _target = Keys.Target();
 
 
     [Fact]
@@ -161,7 +161,7 @@ public class ContentStoreVerificationTests
 
         manifests.Write(new SyncManifest
         {
-            Game = _game,
+            Target = _target,
             RepoId = Guid.NewGuid(),
             ProfileId = Guid.NewGuid(),
             ProfileName = "Season 4",
@@ -176,7 +176,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeModFolders(new GameModFolder(_game, modFolder)),
+            new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 
@@ -205,7 +205,7 @@ public class ContentStoreVerificationTests
 
         var maintenance = new ContentStoreMaintenance(
             new FakeStoreProvider(store),
-            new FakeModFolders(new GameModFolder(_game, modFolder)),
+            new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
             NullLogger<ContentStoreMaintenance>.Instance);
 

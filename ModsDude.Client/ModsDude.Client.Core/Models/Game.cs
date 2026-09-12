@@ -18,7 +18,7 @@ namespace ModsDude.Client.Core.Models;
 /// <para>
 /// A target is a value the adapter returns and not something persisted here: there is no list for
 /// the user to manage, and emptying a folder's field in the settings takes a target away again. What
-/// is written down is <see cref="ModFolders"/>, so that the folders can be read without an adapter.
+/// is written down is <see cref="Targets"/>, so that the folders can be read without an adapter.
 /// </para>
 /// </remarks>
 public class Game
@@ -41,21 +41,18 @@ public class Game
     public string SerializedLocalSettings => PersistedModel.AdapterLocalSettings;
     public ActiveProfile? ActiveProfile => PersistedModel.ActiveProfile;
 
-    /// <inheritdoc cref="PersistedGame.ModFolders"/>
-    public IReadOnlyList<string> ModFolders => PersistedModel.ModFolders;
+    /// <inheritdoc cref="PersistedGame.Targets"/>
+    public IReadOnlyList<PersistedModTarget> Targets => PersistedModel.Targets;
 
     /// <summary>
-    /// The one mod folder, or null where this game reaches none.
+    /// The same targets as the addresses the per-folder stores file things under.
     /// </summary>
     /// <remarks>
-    /// The persisted-side counterpart of <see cref="ModTargets.SingleTargetOrNone"/>, and scaffolding
-    /// for the same reason: slice 2a of Phase 10 gives a game a list of folders while every caller
-    /// still reads one. Several answers null rather than throwing, because the callers are the quiet
-    /// ones - the drift check and the import's source list - and a game this build cannot sync is one
-    /// they have nothing to say about. Sync itself refuses it loudly, in
-    /// <see cref="ModTargets.RequireSingleTarget"/>. Both die in slice 2b.
+    /// Here rather than at each caller because the join is always the same one - this game's identity
+    /// with each of its keys - and writing it out at every site is how one of them comes to be
+    /// written with somebody else's identity.
     /// </remarks>
-    public string? SingleModFolderOrNone => ModFolders.Count == 1 ? ModFolders[0] : null;
+    public IEnumerable<ModTargetRef> TargetRefs => Targets.Select(x => new ModTargetRef(Identity, x.Key));
 
     internal PersistedGame PersistedModel { get; }
 
@@ -71,15 +68,15 @@ public class Game
     }
 
 
-    internal void Update(string name, DynamicForm localSettings, IEnumerable<string> modFolders)
+    internal void Update(string name, DynamicForm localSettings, IEnumerable<PersistedModTarget> targets)
     {
         PersistedModel.Name = name;
         PersistedModel.AdapterLocalSettings = localSettings.Serialize();
-        PersistedModel.ModFolders = [.. modFolders];
+        PersistedModel.Targets = [.. targets];
 
         PropertyChanged?.Invoke(this, new(nameof(Name)));
         PropertyChanged?.Invoke(this, new(nameof(SerializedLocalSettings)));
-        PropertyChanged?.Invoke(this, new(nameof(ModFolders)));
+        PropertyChanged?.Invoke(this, new(nameof(Targets)));
     }
 
     internal void SetActiveProfile(ActiveProfile? activeProfile)

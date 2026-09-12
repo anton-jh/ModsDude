@@ -76,7 +76,7 @@ public class ProfileApplyTargetsTests
             GameAdapterId = adapterId,
             Name = name,
             AdapterLocalSettings = "{}",
-            ModFolders = [$@"C:\mods\{name}"],
+            Targets = [new PersistedModTarget(new TargetKey("mods"), $@"C:\mods\{name}")],
             ActiveProfile = activeProfile
         });
     }

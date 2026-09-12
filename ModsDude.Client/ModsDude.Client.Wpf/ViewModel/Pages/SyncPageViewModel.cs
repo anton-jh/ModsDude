@@ -31,7 +31,16 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IBackgroundTaskReporter _backgroundTasks;
 
-    private ModSyncPlan? _plan;
+    /// <summary>
+    /// One plan per folder the game reaches. Empty until the first load and whenever it failed.
+    /// </summary>
+    /// <remarks>
+    /// The page is about a game, and applying a profile to a game is applying it to each of its
+    /// folders - so the preview lists every folder's changes together and Apply executes them in
+    /// turn. A game with one folder, which is every game this build's adapters offer, reads exactly
+    /// as it always has.
+    /// </remarks>
+    private IReadOnlyList<ModSyncPlan> _plans = [];
     private ILocalModAdapter? _adapter;
 
     /// <summary>
@@ -148,14 +157,19 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanApply), IncludeCancelCommand = true)]
     private async Task Apply(CancellationToken cancellationToken)
     {
-        if (_plan is not ModSyncPlan plan)
+        if (_plans.Count == 0)
         {
             return;
         }
 
-        if (plan.Unrecognised.Count > 0 && await _applyService.ConfirmUnrecognisedAsync(plan) is false)
+        // Asked once for the game rather than once per folder: it is one disclosure about what is
+        // going to the Recycle Bin, and splitting it would be two dialogs saying the same thing.
+        foreach (var plan in _plans.Where(x => x.Unrecognised.Count > 0))
         {
-            return;
+            if (await _applyService.ConfirmUnrecognisedAsync(plan) is false)
+            {
+                return;
+            }
         }
 
         IsRunning = true;
@@ -169,11 +183,18 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         try
         {
             var progress = ProfileApplyService.Report(task, new Progress<ModSyncProgress>(Report));
-            var result = await _syncService.ExecuteAsync(plan, progress, cancellationToken);
+            var results = new List<ModSyncResult>();
 
-            Status = Describe(result);
+            // One folder at a time, and each of them gets its turn: a folder that could not be
+            // finished must not stop the next one being put right.
+            foreach (var plan in _plans)
+            {
+                results.Add(await _syncService.ExecuteAsync(plan, progress, cancellationToken));
+            }
 
-            // The plan describes a folder that has just changed, so it is stale whatever happened.
+            Status = Describe(results);
+
+            // The plans describe folders that have just changed, so they are stale whatever happened.
             await LoadPlanAsync(CancellationToken.None);
 
             // And so is the app-level notice, which may be up about exactly this game.
@@ -200,7 +221,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private async Task LoadPlanAsync(CancellationToken cancellationToken)
     {
-        _plan = null;
+        _plans = [];
         HasPlan = false;
         Problem = null;
 
@@ -247,17 +268,35 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             return;
         }
 
+        if (adapter.ModTargets.Count == 0)
+        {
+            Fail("This game's settings point at no mod folder, so there is nothing to apply. Fill one in on its settings page.");
+
+            return;
+        }
+
         Status = "Working out what needs to change...";
 
         try
         {
-            var plan = await _syncService.PlanAsync(
-                new ModSyncRequest(_game.Identity, adapter, _repo.Id, active.ProfileId) { ProfileName = profile.Name },
-                cancellationToken);
+            var plans = new List<ModSyncPlan>();
+
+            // One plan per folder. Nothing is caught per folder here, unlike the one-click apply: this
+            // page exists to show the plan before anything runs, and a preview missing a third of
+            // what is about to happen would be worse than the sentence saying it could not be made.
+            foreach (var target in adapter.ModTargets)
+            {
+                plans.Add(await _syncService.PlanAsync(
+                    new ModSyncRequest(_game.Identity, target, adapter, _repo.Id, active.ProfileId)
+                    {
+                        ProfileName = profile.Name
+                    },
+                    cancellationToken));
+            }
 
             _pinned = await LoadPinnedAsync(active.ProfileId, cancellationToken);
 
-            await Application.Current.Dispatcher.InvokeAsync(() => Publish(plan));
+            await Application.Current.Dispatcher.InvokeAsync(() => Publish(plans));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -297,15 +336,16 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private void Publish(ModSyncPlan plan)
+    private void Publish(IReadOnlyList<ModSyncPlan> plans)
     {
-        _plan = plan;
+        _plans = plans;
         HasPlan = true;
 
         // Keeps are left out on purpose: they are what the summary counts, and on a re-apply they are
         // nearly the whole list. A preview headed "What would change" listing what would not is the
         // fastest way to hide the two lines that matter.
-        var changing = plan.Items
+        var changing = plans
+            .SelectMany(x => x.Items)
             .Where(x => x.Action is not ModSyncAction.Keep)
             .OrderBy(x => x.Action)
             .ThenBy(x => x.DisplayName, NaturalOrder.Comparer);
@@ -317,26 +357,40 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
         OnPropertyChanged(nameof(HasChanges));
 
-        Summary = plan.HasWork
-            ? $"{plan.InstallCount} to install, {plan.ReplaceCount} to replace, " +
-              $"{plan.UninstallCount} to uninstall, {plan.QuarantineCount} to move to the Recycle Bin, " +
-              $"{plan.RenameCount} to rename, {plan.KeepCount} already correct."
-            : $"Nothing to do - all {plan.KeepCount} mods already match this profile.";
+        var hasWork = plans.Any(x => x.HasWork);
+        var keeps = plans.Sum(x => x.KeepCount);
 
-        Status = plan.HasWork
-            ? $"{plan.HashesToFetch.Count} mods have to be fetched before anything is changed."
+        Summary = hasWork
+            ? $"{plans.Sum(x => x.InstallCount)} to install, {plans.Sum(x => x.ReplaceCount)} to replace, " +
+              $"{plans.Sum(x => x.UninstallCount)} to uninstall, {plans.Sum(x => x.QuarantineCount)} to move to the Recycle Bin, " +
+              $"{plans.Sum(x => x.RenameCount)} to rename, {keeps} already correct."
+            : $"Nothing to do - all {keeps} mods already match this profile.";
+
+        Status = hasWork
+            ? $"{plans.Sum(x => x.HashesToFetch.Count)} mods have to be fetched before anything is changed."
             : "This game already matches its profile.";
 
-        MaterializationNote = plan.Materialization.Method is MaterializationMethod.Hardlink
-            ? "Mods are hardlinked from the store on this disk, so installing costs no extra space and takes seconds."
-            : $"Mods are copied into the mod folder from the store at {plan.ServingStore.RootPath}.";
+        // Off the folders rather than the folder, and said once per distinct answer: two folders on
+        // one disk have one story to tell and two on different disks have two.
+        MaterializationNote = string.Join(' ', plans.Select(DescribeMaterialization).Distinct());
 
-        MaterializationWarning = plan.Materialization.FellBackToCopy
+        MaterializationWarning = plans.Any(x => x.Materialization.FellBackToCopy)
             ? "The store on this disk cannot hardlink into this mod folder - exFAT and network paths cannot - so every " +
               "install is a full copy even though the store is on the same disk."
             : null;
 
-        ShowDrift(_driftService.Check(_game.Identity, _game.ActiveProfile, plan.ModFolder));
+        // One line per folder, named where there is more than one: which folder is out of step is the
+        // half worth knowing once a game reaches several.
+        ShowDrift([.. plans.Select(plan => (
+            plan.Target.DisplayName,
+            Report: _driftService.Check(plan.TargetRef, _game.ActiveProfile, plan.ModFolder)))]);
+    }
+
+    private static string DescribeMaterialization(ModSyncPlan plan)
+    {
+        return plan.Materialization.Method is MaterializationMethod.Hardlink
+            ? "Mods are hardlinked from the store on this disk, so installing costs no extra space and takes seconds."
+            : $"Mods are copied into the mod folder from the store at {plan.ServingStore.RootPath}.";
     }
 
     /// <summary>
@@ -369,9 +423,22 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         return _itemFactory.Create(_repo.Id, version);
     }
 
-    private void ShowDrift(DriftReport report)
+    private void ShowDrift(IReadOnlyList<(string? Folder, DriftReport Report)> reports)
     {
-        DriftNote = report.Status switch
+        var lines = reports
+            .Select(x => (x.Folder, Note: Describe(x.Report)))
+            .Where(x => x.Note is not null)
+            .Select(x => reports.Count > 1 && x.Folder is string folder ? $"{folder}: {x.Note}" : x.Note)
+            .ToList();
+
+        DriftNote = lines.Count > 0 ? string.Join('\n', lines) : null;
+    }
+
+    private void ShowDrift(DriftReport report) => ShowDrift([(null, report)]);
+
+    private static string? Describe(DriftReport report)
+    {
+        return report.Status switch
         {
             DriftStatus.Drifted =>
                 $"{report.DifferenceCount} files differ from what was last applied here. Mods updated inside the game look like this.",
@@ -400,20 +467,27 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         ProgressValue = progress.Total == 0 ? 0 : progress.Completed * 100d / progress.Total;
     }
 
-    private static string Describe(ModSyncResult result)
+    /// <summary>
+    /// What happened across every folder, in one line. Counts are summed: what the user asked for
+    /// was one apply, and the plan they read was the folders' changes listed together.
+    /// </summary>
+    private static string Describe(IReadOnlyList<ModSyncResult> results)
     {
-        if (result.Completed is false)
-        {
-            var first = result.Failures.FirstOrDefault();
+        var failures = results.SelectMany(x => x.Failures).ToList();
 
-            return result.Failures.Count == 1 && first is not null
+        if (results.Any(x => x.Completed is false))
+        {
+            var first = failures.FirstOrDefault();
+
+            return failures.Count == 1 && first is not null
                 ? $"One mod could not be applied ({first.ModId}): {first.Message}"
-                : $"{result.Failures.Count} mods could not be applied. The game is left as it is until they are.";
+                : $"{failures.Count} mods could not be applied. The game is left as it is until they are.";
         }
 
-        var recycled = result.Quarantined.Count(x => x.Destination is QuarantineDestination.RecycleBin);
-        var moved = result.Quarantined.Count(x => x.Destination is QuarantineDestination.QuarantineFolder);
-        var stuck = result.Quarantined.Count(x => x.Destination is QuarantineDestination.Failed);
+        var quarantined = results.SelectMany(x => x.Quarantined).ToList();
+        var recycled = quarantined.Count(x => x.Destination is QuarantineDestination.RecycleBin);
+        var moved = quarantined.Count(x => x.Destination is QuarantineDestination.QuarantineFolder);
+        var stuck = quarantined.Count(x => x.Destination is QuarantineDestination.Failed);
 
         var notes = new List<string> { "The mod folder now matches the profile." };
 
