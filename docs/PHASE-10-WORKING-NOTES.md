@@ -41,11 +41,17 @@ Sequential. It is a stack, not a set.
 | | Slice | Files | |
 | --- | --- | --- | --- |
 | 1 | The adapter answers with targets | ~20 | **done** |
-| 2a | The `Game` and its state | ~15 | |
+| 2a | The `Game` and its state | 117 + 51 | **done** |
 | 2b | Re-key the per-folder stores | ~20 | |
 | 3 | Savegames go per game | ~15 | |
 | 4 | Activate and apply become two verbs | ~12 | |
 | 5 | Interface | ~25 | |
+
+**2a was ~15 files in two commits of 117 and 51.** The estimate was of the *semantic* half and it was
+about right — 51 files, nearly all of them a parameter type. The rename was the other 117, and it is
+only that large because "instance" was in the prose of every file that mentioned a mod folder. Worth
+knowing before slice 5: the rename table's remaining rows are all in files that slice rewrites
+anyway.
 
 Three things are independent and can land beside any of it:
 
@@ -62,9 +68,14 @@ Three things are independent and can land beside any of it:
 - `RequireSingleTarget()` across every caller (slice 1) — one mechanical pass. Estimated ~16 sites;
   it was **two**, because widening `GetInstalledMods` and `GetModFilePath` to take the `ModTarget`
   turned the rest into threading one value through rather than re-deriving a folder at each site.
-  `ModSyncService.PlanAsync` and `LocalInstanceRepository.GetModFolder` are the whole list, which is
+  `ModSyncService.PlanAsync` and `GameRepository.GetModFolders` are the whole list, which is
   also where 2b has to reach in from the game loop.
-- The four re-keyings in 2b — manifest, drift, eviction, mod sources.
+- **The key swap in 2a** — dropping the `Guid` forces `instanceId` → `GameIdentity` through the
+  manifest, the bindings, eviction, the drift check, the integrity check and the mod source id in one
+  go, because each of them is a parameter type on a call the others make. One compile error at a time
+  would have been six half-broken builds.
+- The four re-keyings in 2b — manifest, drift, eviction, mod sources. **2a already moved them once**,
+  from a `Guid` to a `GameIdentity`; 2b widens the same parameters to carry a `TargetKey` beside it.
 - Everything in slice 3. It is one concept with shared test fakes.
 
 **Do not batch** — **renames go in their own commits**, separate from semantic change. A pure rename
@@ -84,7 +95,20 @@ matters more than usual here, because the rename table touches most of the 78 fi
   2b, the binding in 3** — because until then nothing is keyed on a target to orphan.
 - **`GameIdentity` as a JSON dictionary key.** A record struct needs a converter or it silently
   serializes as an object. The version bump means the failure is "everything resets" rather than
-  corruption, but round-trip a `LocalState` with two games.
+  corruption, but round-trip a `LocalState` with two games. **Done in 2a, and the failure is worse
+  than advertised**: `JsonConverter<T>`'s `ReadAsPropertyName`/`WriteAsPropertyName` *throw* by
+  default rather than falling back to the object form, so the state file would not have saved at all.
+  `LocalStateTests` round-trips two games and asserts the key is a property name somebody can read.
+- **Manifests from before 2a are orphans on disk.** They are named `{guid}.json` and nothing will
+  ever look for one again. Harmless — the state that named them was discarded by the same version
+  bump, and a manifest nobody reads costs a few hundred kilobytes — but **2b's stale-manifest sweep
+  should drop any file it does not expect**, not only the ones whose target key has gone, and that is
+  what collects these.
+- **`Game.SingleModFolderOrNone` is the second narrowing, and it is the quiet one.**
+  `RequireSingleTarget` throws because sync cannot proceed; this returns null for *several* as well as
+  for none, because its callers are the drift check and the import's source list and neither can
+  throw on a background thread. Several is unreachable while sync refuses such a game anyway. Both
+  die in 2b; a `grep` for either is the checklist.
 - **Play attribution.** Two tests: a failed apply attributes nothing, and an apply landing on target
   A while target B holds a save uses **B's** outgoing revision.
 - **Slot collisions are not a risk** — `SavegameSlotRef` makes uniqueness a construction. Do not

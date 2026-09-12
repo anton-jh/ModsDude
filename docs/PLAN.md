@@ -1468,12 +1468,13 @@ adapter will offer each folder, and offer leaving one blank.
       `(Key, DisplayName, Path)`. The key is adapter-defined and stable, because it ends up in a
       filename. Farming Simulator returns one and names it nothing; a blank folder in `LocalSettings`
       is a target the adapter omits rather than one with a null path.
-- [ ] **`PersistedGame.ModFolders` stays a first-class persisted field**, derived but written
+- [x] **`PersistedGame.ModFolders` stays a first-class persisted field**, derived but written
       whenever settings are saved. This is not redundancy: store eviction and the drift candidate
       list both read a folder path **without hydrating an adapter**, because a game whose identity no
       loaded repo serves still owns its folders and still has a standing intent. Its `LocalSettings`
-      are an opaque blob in that state. `PersistedLocalInstance.ModFolder` is already this trick; it
-      grows an `s` and nothing else.
+      are an opaque blob in that state. `ModFolder` was already this trick; it grew an `s` and
+      nothing else. The callers that still read one folder take `Game.SingleModFolderOrNone`, the
+      persisted-side twin of `SingleTargetOrNone`, and it dies with it in 2b.
 - [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
       syncing the dedicated server must not rewrite the MP client's manifest, and
       atomic-write-per-folder is what keeps a half-finished apply safe.
@@ -1492,20 +1493,20 @@ adapter will offer each folder, and offer leaving one blank.
       manifest that cannot be written, found at sync time on somebody else's machine; encoding at the
       store cannot be violated at all. Ordinary keys stay legible —
       `_farming_simulator#fs25_mods.json` — and pathological ones are escaped rather than refused.
-- [ ] **No `Guid` on `Game`.** Everything that would have keyed on one keys on `GameIdentity`, which
+- [x] **No `Guid` on `Game`.** Everything that would have keyed on one keys on `GameIdentity`, which
       is already the `LocalState` dictionary key. Once the store is encoding anyway a `Guid` buys
       only a fixed-length filename, and costs the thing this phase spends its argument on: a game
       having one name rather than two.
-- [ ] **Bump `LocalState.CurrentVersion`.** A per-game dictionary defaulting to empty would read as
+- [x] **Bump `LocalState.CurrentVersion`.** A per-game dictionary defaulting to empty would read as
       "no profile is set anywhere", which is the one thing that must not be silently guessed. No
       migration, per the standing decision.
-- [ ] **A mod source per target, not per game.** `ModSourceId.ForInstance(instanceId)` offers one
-      scan source per instance; with three targets a BeamNG import would otherwise look in one folder
-      of three and quietly report what the other two hold as missing. `ModSourceKind.Instance` is
-      user-facing as *"Game install"* and wants the target's name where there is more than one.
-      `ModSourceId` is persisted — it is what remembers *do not look in this folder* — so the format
-      change drops those preferences; harmless, and it rides the version bump anyway.
-      `ProfileModsEditorPageViewModel.ScanInstance`, the drift notice's deep link, scans a target.
+- [ ] **A mod source per target, not per game.** `ModSourceId.ForGame(identity)` offers one scan
+      source per game; with three targets a BeamNG import would look in one folder of three and
+      quietly report what the other two hold as missing. `ModSourceKind.Game` is user-facing as
+      *"Game install"* and wants the target's name where there is more than one. `ModSourceId` is
+      persisted — it is what remembers *do not look in this folder* — so the format change drops
+      those preferences; harmless, and 2a's version bump has already dropped them once.
+      `ProfileModsEditorPageViewModel.ScanGame`, the drift notice's deep link, scans a target.
 
 ### A fake adapter with optional targets, before anything needs one
 
@@ -1603,7 +1604,7 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 
 ### One profile per game
 
-- [ ] **`Game.ActiveProfile` replaces `LocalInstance.ActiveProfile`.** Every target follows it. Two
+- [x] **`Game.ActiveProfile` replaces `LocalInstance.ActiveProfile`.** Every target follows it. Two
       targets of one game cannot disagree, which is the BeamMP requirement stated as a type.
 - [ ] **`ProfileApplyTargets` collapses to a lookup.** A profile belongs to a repo, a repo has one
       `GameIdentity`, games are keyed by identity — so a profile maps to exactly one game. Repo →
@@ -1730,7 +1731,7 @@ existing test stays green. The helper dies in slice 2b, which is where multi-tar
 - [x] **1. The adapter answers with targets.** `ModTargets`, `SavegameSlotRef`, the store's filename
       encoding, the adapter-layer renames, `RequireSingleTarget` at every caller — and the fake
       adapter above, which is written here because everything after this is developed against it.
-- [ ] **2a. The `Game` and its state.** `PersistedGame`, `Game`, `GameRepository`,
+- [x] **2a. The `Game` and its state.** `PersistedGame`, `Game`, `GameRepository`,
       `LocalState.Games` keyed by `GameIdentity` with its JSON key converter, the version bump.
       Targets still resolve through `RequireSingleTarget`.
 - [ ] **2b. Re-key the per-folder stores** — the manifest, the drift service, store eviction and mod
@@ -1759,7 +1760,9 @@ Worth knowing before starting, because it is most of the argument for doing it:
 - **`SavegameRowRules.NoInstance` and its `hasInstance` parameter.**
 - **Three validation rules**: instance name uniqueness within a scope, the name field itself, and
   most of the cross-scope duplicate-folder check — which collapses to "a game's targets are distinct
-  from each other" plus "paths do not collide between games".
+  from each other" plus "paths do not collide between games". Two of the three went in 2a: the
+  uniqueness rule had nothing left to be unique against, and the folder check was rewritten over the
+  list. The name field itself waits for slice 5, where the box goes.
 
 ### Settled
 
