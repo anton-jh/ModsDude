@@ -44,7 +44,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftMonitor _driftMonitor;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
 
@@ -68,7 +68,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
-        InstanceDriftMonitor driftMonitor,
+        DriftMonitor driftMonitor,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,

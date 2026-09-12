@@ -33,7 +33,7 @@ public class ModSyncServiceTests
 
         // The manifest is what makes the next check a directory listing rather than 2,000 archives.
         Assert.True(result.ManifestWritten);
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class ModSyncServiceTests
         Assert.True(File.Exists(fixture.Folder.Combine("readme.txt")));
 
         // Recorded so the next drift check does not report it as something that appeared.
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     [Fact]
@@ -268,7 +268,7 @@ public class ModSyncServiceTests
 
         Assert.Equal(downloadsBefore, fixture.Downloader.Downloads);
         Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("fs25_a.zip"));
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     [Fact]
@@ -340,13 +340,13 @@ public class ModSyncServiceTests
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
 
         // The user drops a mod into the folder from outside, which is what the game itself does.
         fixture.Install("fs25_b.zip", Mod("2.0.0", "b"));
 
         var drifted = fixture.CheckDrift();
-        Assert.Equal(InstanceDriftStatus.Drifted, drifted.Status);
+        Assert.Equal(DriftStatus.Drifted, drifted.Status);
         Assert.Equal(["fs25_b.zip"], drifted.Added);
 
         // ...then imports it and pins it to the profile, which is what the notice sent them to do.
@@ -359,7 +359,7 @@ public class ModSyncServiceTests
 
         await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     /// <summary>
@@ -377,7 +377,7 @@ public class ModSyncServiceTests
 
         Assert.True(result.Completed);
         Assert.Equal(["FS25_MyMod.zip"], fixture.FolderContents());
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     /// <summary>
@@ -431,7 +431,7 @@ public class ModSyncServiceTests
         Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("FS25_A.zip"));
 
         // Recorded under the new name, or the next drift check reports one file added and one gone.
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
     }
 
     [Fact]
@@ -663,7 +663,7 @@ public class ModSyncServiceTests
             Downloader = new FakeModFileDownloader(Server);
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
+            Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
             Held = new FakeHeldSavegames(Manifests);
 
             Service = new ModSyncService(
@@ -686,7 +686,7 @@ public class ModSyncServiceTests
         public FakeModFileDownloader Downloader { get; }
         public FakeRecycleBin RecycleBin { get; }
         public SyncManifestStore Manifests { get; }
-        public InstanceDriftService Drift { get; }
+        public DriftService Drift { get; }
         public FakeHeldSavegames Held { get; }
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
@@ -710,7 +710,7 @@ public class ModSyncServiceTests
 
         public string ReadInstalled(string name) => File.ReadAllText(Folder.Combine(name));
 
-        public InstanceDriftReport CheckDrift()
+        public DriftReport CheckDrift()
             => Drift.Check(Game, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
 
         public void Dispose()

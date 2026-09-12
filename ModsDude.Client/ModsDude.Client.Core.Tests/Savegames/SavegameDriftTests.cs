@@ -269,7 +269,7 @@ public class SavegameDriftTests
         using var manifests = new TempDirectory("savegame-drift-report");
         using var modFolder = new TempDirectory("savegame-drift-mods");
 
-        var service = new InstanceDriftService(new SyncManifestStore(manifests.Path), NullLogger<InstanceDriftService>.Instance);
+        var service = new DriftService(new SyncManifestStore(manifests.Path), NullLogger<DriftService>.Instance);
         var drift = new[] { new SavegameDrift(_repoId, _savegameId, _slot, SavegameDriftKind.UncheckedInPlay) };
 
         var report = service.Check(
@@ -279,7 +279,7 @@ public class SavegameDriftTests
             savegameDrift: drift);
 
         // Never synced, so the mod half has nothing to say - and the savegame half is carried anyway.
-        Assert.Equal(InstanceDriftStatus.NeverSynced, report.Status);
+        Assert.Equal(DriftStatus.NeverSynced, report.Status);
         Assert.True(report.HasSavegameDrift);
         Assert.Equal(SavegameDriftKind.UncheckedInPlay, Assert.Single(report.SavegameDrift).Kind);
 

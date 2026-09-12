@@ -11,7 +11,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public class InstanceOverviewViewModel(
     Game game,
     string activeProfileSummary,
-    InstanceDriftReport? drift = null)
+    DriftReport? drift = null)
 {
     public string Name { get; } = game.Name;
 
@@ -31,9 +31,9 @@ public class InstanceOverviewViewModel(
     public bool HasDrift => DriftSummary is not null;
 
 
-    private static string? Describe(InstanceDriftReport? report)
+    private static string? Describe(DriftReport? report)
     {
-        if (report is not InstanceDriftReport drift || drift.Status is not InstanceDriftStatus.Drifted)
+        if (report is not DriftReport drift || drift.Status is not DriftStatus.Drifted)
         {
             return null;
         }

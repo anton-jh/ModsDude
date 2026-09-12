@@ -48,7 +48,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly ModSyncService _syncService;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
     private readonly SyncManifestStore _manifestStore;
     private readonly ShellNavigationService _shellNavigation;
@@ -80,7 +80,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         ModSyncService syncService,
-        InstanceDriftMonitor driftMonitor,
+        DriftMonitor driftMonitor,
         SavegameFlowService flowService,
         SyncManifestStore manifestStore,
         ShellNavigationService shellNavigation,

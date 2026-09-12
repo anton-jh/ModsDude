@@ -43,8 +43,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     private readonly RepoRepository _repoRepository;
     private readonly IProfilesClient _profilesClient;
     private readonly GameRepository _gameRepository;
-    private readonly InstanceDriftService _driftService;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftService _driftService;
+    private readonly DriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
     private readonly ISavegameService _savegameService;
     private readonly SavegameBindingStore _bindingStore;
@@ -64,8 +64,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         RepoRepository repoRepository,
         IProfilesClient profilesClient,
         GameRepository gameRepository,
-        InstanceDriftService driftService,
-        InstanceDriftMonitor driftMonitor,
+        DriftService driftService,
+        DriftMonitor driftMonitor,
         ProfileApplyService applyService,
         ISavegameService savegameService,
         SavegameBindingStore bindingStore,
@@ -161,7 +161,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     private int? _pinnedRevision;
 
     [ObservableProperty]
-    private string _driftStatus = "Checking the mod folder...";
+    private string _driftNote = "Checking the mod folder...";
 
     /// <summary>
     /// Named separately from the count: an unlocked mod at the wrong version is untidy, a locked map
@@ -376,17 +376,17 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             _game.SingleModFolderOrNone,
             profileIsMissing: HasDanglingActiveProfile);
 
-        DriftStatus = report.Status switch
+        DriftNote = report.Status switch
         {
-            InstanceDriftStatus.InSync => "The mod folder matches what was last applied here.",
-            InstanceDriftStatus.Drifted =>
+            DriftStatus.InSync => "The mod folder matches what was last applied here.",
+            DriftStatus.Drifted =>
                 $"{report.DifferenceCount} differences from what was last applied here. Updating mods from inside the game looks like this.",
-            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
-            InstanceDriftStatus.NoActiveProfile => "No profile is set on this game yet.",
-            InstanceDriftStatus.DanglingProfile => "The profile this game followed is gone. Pick another one.",
+            DriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            DriftStatus.NoActiveProfile => "No profile is set on this game yet.",
+            DriftStatus.DanglingProfile => "The profile this game followed is gone. Pick another one.",
             // Unknown, not drifted: warning about mods that may be perfectly fine is worse than
             // saying nothing.
-            InstanceDriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
+            DriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
             _ => ""
         };
 

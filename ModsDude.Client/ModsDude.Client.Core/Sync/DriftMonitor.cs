@@ -51,18 +51,18 @@ public interface IProfileRevisions
 /// What the manifest recorded the profile was called. Null before a game has ever synced, which
 /// is also a state with no drift to report.
 /// </param>
-public sealed record InstanceDrift(DriftCandidate Game, InstanceDriftReport Report, string? ProfileName)
+public sealed record InstanceDrift(DriftCandidate Game, DriftReport Report, string? ProfileName)
 {
     /// <summary>
     /// Whether this game is worth telling somebody about.
     /// </summary>
     /// <remarks>
     /// A held savegame that has moved counts, even where the mod folder is exactly what was
-    /// installed. <see cref="InstanceDriftStatus"/> is a statement about the mod folder and stays
+    /// installed. <see cref="DriftStatus"/> is a statement about the mod folder and stays
     /// one; that the notice fires for two different kinds of problem is this line's business, not
     /// that enum's.
     /// </remarks>
-    public bool IsDrifted => Report.Status is InstanceDriftStatus.Drifted || Report.HasSavegameDrift;
+    public bool IsDrifted => Report.Status is DriftStatus.Drifted || Report.HasSavegameDrift;
 }
 
 /// <param name="Reason">Only for the throttle: a check the user asked for is never dropped.</param>
@@ -102,7 +102,7 @@ public enum DriftCheckReason
 /// back is a savegame silently at risk.
 /// </para>
 /// </remarks>
-public sealed class InstanceDriftMonitor : IDisposable
+public sealed class DriftMonitor : IDisposable
 {
     /// <summary>
     /// Long enough that alt-tabbing between the game and ModsDude costs one listing rather than
@@ -111,7 +111,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     public static readonly TimeSpan ThrottleWindow = TimeSpan.FromSeconds(5);
 
     private readonly IDriftCandidateSource _candidates;
-    private readonly InstanceDriftService _driftService;
+    private readonly DriftService _driftService;
     private readonly SyncManifestStore _manifestStore;
     private readonly IProfileRevisions? _profileRevisions;
     private readonly IHeldSavegames? _savegames;
@@ -136,15 +136,15 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// The rewritten-blob check, run against whatever the folder comparison found changed. Optional
     /// on the same terms as <paramref name="savegames"/>.
     /// </param>
-    public InstanceDriftMonitor(
+    public DriftMonitor(
         IDriftCandidateSource candidates,
-        InstanceDriftService driftService,
+        DriftService driftService,
         SyncManifestStore manifestStore,
         IProfileRevisions? profileRevisions = null,
         TimeProvider? timeProvider = null,
         IHeldSavegames? savegames = null,
         StoreIntegrityService? storeIntegrity = null,
-        ILogger<InstanceDriftMonitor>? logger = null)
+        ILogger<DriftMonitor>? logger = null)
     {
         _logger = logger ?? (ILogger)NullLogger.Instance;
         _candidates = candidates;
@@ -271,7 +271,7 @@ public sealed class InstanceDriftMonitor : IDisposable
                 {
                     results.Add(new InstanceDrift(
                         candidate,
-                        InstanceDriftReport.For(InstanceDriftStatus.NoActiveProfile) with { SavegameDrift = savegameDrift },
+                        DriftReport.For(DriftStatus.NoActiveProfile) with { SavegameDrift = savegameDrift },
                         null));
                 }
 
@@ -289,7 +289,7 @@ public sealed class InstanceDriftMonitor : IDisposable
 
             // Only a drifted game needs the manifest read a second time, and only to name the
             // profile. Everything else has nothing to say.
-            var profileName = report.Status is InstanceDriftStatus.Drifted
+            var profileName = report.Status is DriftStatus.Drifted
                 ? _manifestStore.TryRead(candidate.Identity)?.ProfileName
                 : null;
 
@@ -331,9 +331,9 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// <remarks>
     /// <para>
     /// <b>A backstop, not the fix.</b> The check answers
-    /// <see cref="InstanceDriftStatus.FolderUnreachable"/> for a folder it cannot list, and a file that
+    /// <see cref="DriftStatus.FolderUnreachable"/> for a folder it cannot list, and a file that
     /// vanished between the listing and the read is drift rather than a throw - see
-    /// <c>InstanceDriftService.HasMoved</c>, which is where that one escaped from. What this is for is
+    /// <c>DriftService.HasMoved</c>, which is where that one escaped from. What this is for is
     /// the shape of the failure rather than any known instance of it: this loop runs unattended on
     /// every window activation, so one game's disk must cost that game's answer and not every other
     /// game's with it, and nothing here may arrive as an unobserved task exception.
@@ -345,7 +345,7 @@ public sealed class InstanceDriftMonitor : IDisposable
     /// that reads as quietly unreachable forever. A disk is a disk and a bug is a bug.
     /// </para>
     /// </remarks>
-    private InstanceDriftReport CheckMods(
+    private DriftReport CheckMods(
         DriftCandidate candidate,
         ActiveProfile active,
         IReadOnlyList<Savegames.SavegameDrift> savegameDrift)
@@ -372,7 +372,7 @@ public sealed class InstanceDriftMonitor : IDisposable
 
             // Unknown rather than drifted, and the savegame half is still carried: a held savegame is
             // worth saying whatever the folder turned out to be.
-            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = savegameDrift };
+            return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = savegameDrift };
         }
     }
 

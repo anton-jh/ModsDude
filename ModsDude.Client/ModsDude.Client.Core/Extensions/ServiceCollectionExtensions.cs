@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IContentStoreProvider, ContentStoreProvider>();
         services.AddSingleton<IRecycleBin, ShellRecycleBin>();
         services.AddSingleton<SyncManifestStore>();
-        services.AddSingleton<InstanceDriftService>();
+        services.AddSingleton<DriftService>();
         services.AddSingleton<StoreIntegrityService>();
         services.AddSingleton<ModSyncService>();
         services.AddSingleton<ContentStoreMaintenance>();
@@ -55,7 +55,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Savegames.IHeldSavegames>(sp => sp.GetRequiredService<Savegames.ISavegameService>());
 
         // One per app: the drift answer is app-level, and every view reads the same one.
-        services.AddSingleton<InstanceDriftMonitor>();
+        services.AddSingleton<DriftMonitor>();
 
         return services;
     }

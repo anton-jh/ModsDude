@@ -48,7 +48,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </remarks>
 public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 {
-    private readonly InstanceDriftMonitor _monitor;
+    private readonly DriftMonitor _monitor;
     private readonly RepoRepository _repoRepository;
     private readonly GameRepository _instanceRepository;
     private readonly ProfileService _profileService;
@@ -64,7 +64,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
 
     public DriftNotificationViewModel(
-        InstanceDriftMonitor monitor,
+        DriftMonitor monitor,
         RepoRepository repoRepository,
         GameRepository instanceRepository,
         ProfileService profileService,
@@ -484,14 +484,14 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// followed by no detail at all - which is how a mod folder and a profile that are both empty
     /// produced a warning with nothing in it.
     /// </remarks>
-    private static string DescribeHeadline(int count, string instanceName, string profile, InstanceDriftReport report)
+    private static string DescribeHeadline(int count, string instanceName, string profile, DriftReport report)
     {
         if (count > 1)
         {
             return $"{count} games have drifted";
         }
 
-        return (report.Status is InstanceDriftStatus.Drifted, report.HasSavegameDrift) switch
+        return (report.Status is DriftStatus.Drifted, report.HasSavegameDrift) switch
         {
             (true, true) => $"'{instanceName}' no longer matches {profile}, and its savegame has moved too",
             (false, true) => $"'{instanceName}' is holding a savegame that no longer agrees with the repo",
@@ -499,7 +499,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         };
     }
 
-    private static string Describe(InstanceDriftReport report, int files)
+    private static string Describe(DriftReport report, int files)
     {
         var parts = new List<string>();
 
@@ -523,7 +523,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// and what was installed is no longer what the profile says. Two numbers, because that is all
     /// the cheap check has - and two numbers is enough to say something specific.
     /// </summary>
-    private static string DescribeRevision(InstanceDriftReport report)
+    private static string DescribeRevision(DriftReport report)
     {
         if (report.ProfileHasMoved is false)
         {
@@ -536,7 +536,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// <summary>
     /// The dangerous case, with the consequence named rather than folded into a count.
     /// </summary>
-    private static string? DescribeLocked(InstanceDriftReport report)
+    private static string? DescribeLocked(DriftReport report)
     {
         if (report.LockedDrift.Count == 0)
         {
@@ -600,7 +600,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// to lead with: it is the state where somebody's evening exists on this disk and nowhere else.
     /// </para>
     /// </remarks>
-    private static string? DescribeSavegames(InstanceDriftReport report)
+    private static string? DescribeSavegames(DriftReport report)
     {
         if (report.SavegameDrift.Count == 0)
         {

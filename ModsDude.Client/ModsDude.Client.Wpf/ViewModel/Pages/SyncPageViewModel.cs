@@ -24,8 +24,8 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly Game _game;
     private readonly ModSyncService _syncService;
-    private readonly InstanceDriftService _driftService;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftService _driftService;
+    private readonly DriftMonitor _driftMonitor;
     private readonly ProfileService _profileService;
     private readonly ProfileApplyService _applyService;
     private readonly ModListItemViewModel.Factory _itemFactory;
@@ -48,8 +48,8 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         Repo repo,
         Game game,
         ModSyncService syncService,
-        InstanceDriftService driftService,
-        InstanceDriftMonitor driftMonitor,
+        DriftService driftService,
+        DriftMonitor driftMonitor,
         ProfileService profileService,
         ProfileApplyService applyService,
         ModListItemViewModel.Factory itemFactory,
@@ -228,7 +228,7 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
         if (_profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is not ProfileDto profile)
         {
-            ShowDrift(InstanceDriftReport.For(InstanceDriftStatus.DanglingProfile));
+            ShowDrift(DriftReport.For(DriftStatus.DanglingProfile));
             Fail("The profile this game follows no longer exists, or is no longer visible to you. Pick another on Manage.");
 
             return;
@@ -369,16 +369,16 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
         return _itemFactory.Create(_repo.Id, version);
     }
 
-    private void ShowDrift(InstanceDriftReport report)
+    private void ShowDrift(DriftReport report)
     {
         DriftNote = report.Status switch
         {
-            InstanceDriftStatus.Drifted =>
+            DriftStatus.Drifted =>
                 $"{report.DifferenceCount} files differ from what was last applied here. Mods updated inside the game look like this.",
-            InstanceDriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
-            InstanceDriftStatus.DanglingProfile => "The profile this game follows is gone.",
-            InstanceDriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
-            InstanceDriftStatus.InSync => "The mod folder still matches what was last applied here.",
+            DriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            DriftStatus.DanglingProfile => "The profile this game follows is gone.",
+            DriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
+            DriftStatus.InSync => "The mod folder still matches what was last applied here.",
             _ => null
         };
     }

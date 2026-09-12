@@ -6,7 +6,7 @@ using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Sync;
 
-public enum InstanceDriftStatus
+public enum DriftStatus
 {
     /// <summary>The folder still matches what the last sync installed, and the profile still pins it.</summary>
     InSync,
@@ -57,14 +57,14 @@ public sealed record DriftedLockedMod(ModKey ModId, string DisplayName, string? 
 /// current dependencies in hand. <see cref="ProfileHasMoved"/> answers the same question from two
 /// integers when they are not.
 /// </param>
-public sealed record InstanceDriftReport(
-    InstanceDriftStatus Status,
+public sealed record DriftReport(
+    DriftStatus Status,
     IReadOnlyList<string> Added,
     IReadOnlyList<string> Removed,
     IReadOnlyList<string> Changed,
     IReadOnlyList<ModKey> ProfileChangedMods)
 {
-    public static InstanceDriftReport For(InstanceDriftStatus status) => new(status, [], [], [], []);
+    public static DriftReport For(DriftStatus status) => new(status, [], [], [], []);
 
     /// <summary>
     /// Which revision of the profile the last sync installed, from the manifest. Null for a manifest
@@ -168,9 +168,9 @@ public sealed record InstanceDriftReport(
 /// activation - is Phase 4's, see docs/PLAN.md#phase-4--make-drift-unmissable.
 /// </para>
 /// </remarks>
-public sealed class InstanceDriftService(
+public sealed class DriftService(
     SyncManifestStore manifestStore,
-    ILogger<InstanceDriftService> logger)
+    ILogger<DriftService> logger)
 {
     /// <param name="activeProfile">
     /// The game's standing intent. Passed rather than read off the game so this depends on
@@ -194,12 +194,12 @@ public sealed class InstanceDriftService(
     /// </param>
     /// <param name="savegameDrift">
     /// What the savegame check found for this game, where the caller ran one. Carried through
-    /// rather than computed here - see <see cref="InstanceDriftReport.SavegameDrift"/> - and attached
+    /// rather than computed here - see <see cref="DriftReport.SavegameDrift"/> - and attached
     /// to <em>every</em> answer including the ones that stop early: a held savegame with an evening in
     /// it is worth saying whatever the mod folder turned out to be, and a game whose profile was
     /// deleted underneath it is precisely a case where somebody wants to hear about their save.
     /// </param>
-    public InstanceDriftReport Check(
+    public DriftReport Check(
         GameIdentity game,
         ActiveProfile? activeProfile,
         string? modFolder,
@@ -212,17 +212,17 @@ public sealed class InstanceDriftService(
 
         if (activeProfile is not ActiveProfile active)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.NoActiveProfile) with { SavegameDrift = saves };
+            return DriftReport.For(DriftStatus.NoActiveProfile) with { SavegameDrift = saves };
         }
 
         if (profileIsMissing)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.DanglingProfile) with { SavegameDrift = saves };
+            return DriftReport.For(DriftStatus.DanglingProfile) with { SavegameDrift = saves };
         }
 
         if (modFolder is null || Directory.Exists(modFolder) is false)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
+            return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
         var manifest = manifestStore.TryRead(game);
@@ -234,7 +234,7 @@ public sealed class InstanceDriftService(
             manifest.RepoId != active.RepoId ||
             FileSystemHelper.ArePathsEqual(manifest.ModFolder, modFolder) is false)
         {
-            return InstanceDriftReport.For(InstanceDriftStatus.NeverSynced) with { SavegameDrift = saves };
+            return DriftReport.For(DriftStatus.NeverSynced) with { SavegameDrift = saves };
         }
 
         List<string> listing;
@@ -249,7 +249,7 @@ public sealed class InstanceDriftService(
             // unreachable exists here or nowhere.
             logger.LogWarning(exception, "Could not list the mod folder {Folder}.", modFolder);
 
-            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = saves };
+            return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
         var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
@@ -263,10 +263,10 @@ public sealed class InstanceDriftService(
             && applied != current;
 
         var status = added.Count + removed.Count + changed.Count + profileChanged.Count > 0 || profileHasMoved
-            ? InstanceDriftStatus.Drifted
-            : InstanceDriftStatus.InSync;
+            ? DriftStatus.Drifted
+            : DriftStatus.InSync;
 
-        return new InstanceDriftReport(status, added, removed, changed, profileChanged)
+        return new DriftReport(status, added, removed, changed, profileChanged)
         {
             AppliedRevision = manifest.ProfileRevision,
             CurrentRevision = currentRevision,

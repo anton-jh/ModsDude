@@ -68,7 +68,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly NavigationLockService _navigationLock;
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftMonitor _driftMonitor;
     private readonly DriftNotificationViewModel _driftNotification;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly ActiveProfile _activeProfile;
@@ -170,7 +170,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         NavigationLockService navigationLock,
         GameRepository gameRepository,
         ProfileApplyService applyService,
-        InstanceDriftMonitor driftMonitor,
+        DriftMonitor driftMonitor,
         DriftNotificationViewModel driftNotification,
         IBackgroundTaskReporter backgroundTasks)
     {

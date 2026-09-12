@@ -72,7 +72,7 @@
                            TextWrapping="Wrap"
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding DriftStatus}" />
+                           Text="{Binding DriftNote}" />
 
                 <TextBlock Margin="0 8 0 0"
                            TextWrapping="Wrap"

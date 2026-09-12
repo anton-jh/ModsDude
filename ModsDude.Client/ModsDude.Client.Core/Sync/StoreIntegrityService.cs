@@ -43,8 +43,8 @@ public sealed record CorruptedBlob(
 /// none of them - is ever read. See <see cref="FileLinks.TryGetFileIdentity"/>.
 /// </para>
 /// <para>
-/// Computed apart from <see cref="InstanceDriftService"/> and passed to it, for the reason
-/// <see cref="InstanceDriftReport.SavegameDrift"/> gives: that class is a synchronous comparison of a
+/// Computed apart from <see cref="DriftService"/> and passed to it, for the reason
+/// <see cref="DriftReport.SavegameDrift"/> gives: that class is a synchronous comparison of a
 /// manifest against a directory listing, and this one needs the store provider and reads file bytes.
 /// </para>
 /// </remarks>
@@ -58,7 +58,7 @@ public sealed class StoreIntegrityService(
     /// rewritten.
     /// </summary>
     /// <param name="changed">
-    /// The names <see cref="InstanceDriftService"/> found no longer matching the manifest. Nothing
+    /// The names <see cref="DriftService"/> found no longer matching the manifest. Nothing
     /// else can have been rewritten: a file whose size and time still match what was installed is
     /// one nothing has written to.
     /// </param>

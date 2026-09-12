@@ -8,7 +8,7 @@ using System.Text;
 
 namespace ModsDude.Client.Core.Tests.Sync;
 
-public class InstanceDriftServiceTests
+public class DriftServiceTests
 {
     private static readonly Guid _repoId = Guid.NewGuid();
     private static readonly Guid _profileId = Guid.NewGuid();
@@ -20,7 +20,7 @@ public class InstanceDriftServiceTests
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
 
-        Assert.Equal(InstanceDriftStatus.InSync, fixture.Check().Status);
+        Assert.Equal(DriftStatus.InSync, fixture.Check().Status);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class InstanceDriftServiceTests
 
         var report = fixture.Check();
 
-        Assert.Equal(InstanceDriftStatus.Drifted, report.Status);
+        Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_a.zip"], report.Changed);
     }
 
@@ -50,7 +50,7 @@ public class InstanceDriftServiceTests
 
         var report = fixture.Check();
 
-        Assert.Equal(InstanceDriftStatus.Drifted, report.Status);
+        Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_c.zip"], report.Added);
         Assert.Equal(["fs25_b.zip"], report.Removed);
     }
@@ -61,7 +61,7 @@ public class InstanceDriftServiceTests
         using var fixture = new DriftFixture();
 
         Assert.Equal(
-            InstanceDriftStatus.NoActiveProfile,
+            DriftStatus.NoActiveProfile,
             fixture.Service.Check(fixture.Game, null, fixture.Folder.Path).Status);
     }
 
@@ -77,7 +77,7 @@ public class InstanceDriftServiceTests
             fixture.Folder.Path,
             profileIsMissing: true);
 
-        Assert.Equal(InstanceDriftStatus.DanglingProfile, report.Status);
+        Assert.Equal(DriftStatus.DanglingProfile, report.Status);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class InstanceDriftServiceTests
         using var fixture = new DriftFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
 
-        Assert.Equal(InstanceDriftStatus.NeverSynced, fixture.Check().Status);
+        Assert.Equal(DriftStatus.NeverSynced, fixture.Check().Status);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class InstanceDriftServiceTests
             new ActiveProfile(_repoId, Guid.NewGuid()),
             fixture.Folder.Path);
 
-        Assert.Equal(InstanceDriftStatus.NeverSynced, report.Status);
+        Assert.Equal(DriftStatus.NeverSynced, report.Status);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class InstanceDriftServiceTests
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Combine("gone"));
 
-        Assert.Equal(InstanceDriftStatus.FolderUnreachable, report.Status);
+        Assert.Equal(DriftStatus.FolderUnreachable, report.Status);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class InstanceDriftServiceTests
             profileDependencies: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("2.0.0"), HashOf("a newer build"), Locked: true)]);
 
-        Assert.Equal(InstanceDriftStatus.Drifted, report.Status);
+        Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal([ModKey.From("fs25_a")], report.ProfileChangedMods);
 
         // A locked mod at the wrong version is a damaged savegame waiting to happen, so it is named
@@ -155,7 +155,7 @@ public class InstanceDriftServiceTests
             profileDependencies: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("1.0.0"), HashOf("one"), Locked: false)]);
 
-        Assert.Equal(InstanceDriftStatus.InSync, report.Status);
+        Assert.Equal(DriftStatus.InSync, report.Status);
     }
 
 
@@ -190,7 +190,7 @@ public class InstanceDriftServiceTests
 
         var report = fixture.Check();
 
-        Assert.Equal(InstanceDriftStatus.Drifted, report.Status);
+        Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Empty(report.LockedDrift);
     }
 
@@ -257,7 +257,7 @@ public class InstanceDriftServiceTests
         // taken before.
         File.Delete(fixture.Folder.Combine("fs25_a.zip"));
 
-        var (added, removed, changed) = InstanceDriftService.CompareFolder(
+        var (added, removed, changed) = DriftService.CompareFolder(
             fixture.Manifests.TryRead(fixture.Game)!,
             ["fs25_a.zip", "fs25_b.zip"],
             fixture.Folder.Path);
@@ -282,13 +282,13 @@ public class InstanceDriftServiceTests
         public DriftFixture()
         {
             Manifests = new SyncManifestStore(_manifests.Path);
-            Service = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
+            Service = new DriftService(Manifests, NullLogger<DriftService>.Instance);
         }
 
 
         public TempDirectory Folder { get; } = new("drift-mods");
         public SyncManifestStore Manifests { get; }
-        public InstanceDriftService Service { get; }
+        public DriftService Service { get; }
         public GameIdentity Game { get; } = Keys.Game();
 
 
@@ -329,7 +329,7 @@ public class InstanceDriftServiceTests
             });
         }
 
-        public InstanceDriftReport Check()
+        public DriftReport Check()
             => Service.Check(Game, new ActiveProfile(_repoId, _profileId), Folder.Path);
 
         public void Dispose()

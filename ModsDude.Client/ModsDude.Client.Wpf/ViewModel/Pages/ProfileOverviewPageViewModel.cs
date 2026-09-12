@@ -30,7 +30,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly ProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
     private readonly ShellNavigationService _navigation;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftMonitor _driftMonitor;
 
     private int? _fetchedModCount;
     private IReadOnlyList<SavegameDto> _fetchedSavegames = [];
@@ -45,7 +45,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         ProfileService profileService,
         ISavegamesClient savegamesClient,
         ShellNavigationService navigation,
-        InstanceDriftMonitor driftMonitor)
+        DriftMonitor driftMonitor)
     {
         _repo = repo;
         _profile = profile;

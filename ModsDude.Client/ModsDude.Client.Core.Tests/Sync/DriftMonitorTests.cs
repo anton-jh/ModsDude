@@ -8,7 +8,7 @@ using System.Text;
 
 namespace ModsDude.Client.Core.Tests.Sync;
 
-public class InstanceDriftMonitorTests
+public class DriftMonitorTests
 {
     private readonly static Guid _repoId = Guid.NewGuid();
     private readonly static Guid _profileId = Guid.NewGuid();
@@ -166,7 +166,7 @@ public class InstanceDriftMonitorTests
 
         Assert.True(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
 
-        fixture.Time.Advance(InstanceDriftMonitor.ThrottleWindow - TimeSpan.FromSeconds(1));
+        fixture.Time.Advance(DriftMonitor.ThrottleWindow - TimeSpan.FromSeconds(1));
 
         Assert.False(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
         Assert.False(fixture.Monitor.Check(DriftCheckReason.FolderChanged));
@@ -179,7 +179,7 @@ public class InstanceDriftMonitorTests
         fixture.Sync(("fs25_a.zip", "one"));
 
         fixture.Monitor.Check(DriftCheckReason.WindowActivated);
-        fixture.Time.Advance(InstanceDriftMonitor.ThrottleWindow);
+        fixture.Time.Advance(DriftMonitor.ThrottleWindow);
 
         Assert.True(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
     }
@@ -448,7 +448,7 @@ public class InstanceDriftMonitorTests
             Folder = new TempDirectory("monitor-mods");
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new InstanceDriftService(Manifests, NullLogger<InstanceDriftService>.Instance);
+            Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
 
             if (withStore)
             {
@@ -462,14 +462,14 @@ public class InstanceDriftMonitorTests
 
             Held = new FakeHeldSavegames(Manifests);
 
-            Monitor = new InstanceDriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
+            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
         }
 
 
         public TempDirectory Folder { get; }
         public FakeCandidates Candidates { get; }
         public SyncManifestStore Manifests { get; }
-        public InstanceDriftService Drift { get; }
+        public DriftService Drift { get; }
         public TestTimeProvider Time { get; } = new();
 
         /// <summary>Null unless this fixture was built with one - see the constructor.</summary>
@@ -482,7 +482,7 @@ public class InstanceDriftMonitorTests
         /// <summary>Holding nothing by default, which is nearly every game nearly all the time.</summary>
         public FakeHeldSavegames Held { get; }
 
-        public InstanceDriftMonitor Monitor { get; }
+        public DriftMonitor Monitor { get; }
 
 
         /// <summary>Writes the files and the manifest that says they are what was installed.</summary>
@@ -534,7 +534,7 @@ public class InstanceDriftMonitorTests
         }
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
-        public InstanceDriftMonitor Restart()
+        public DriftMonitor Restart()
             => new(Candidates, Drift, Manifests, Revisions, Time, storeIntegrity: Integrity);
 
         public void Dispose()

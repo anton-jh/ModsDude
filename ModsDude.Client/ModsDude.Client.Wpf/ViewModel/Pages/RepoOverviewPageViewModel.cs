@@ -21,7 +21,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly ProfileService _profileService;
     private readonly MembershipService _membershipService;
-    private readonly InstanceDriftMonitor _driftMonitor;
+    private readonly DriftMonitor _driftMonitor;
 
     private int? _fetchedMemberCount;
 
@@ -30,7 +30,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         Repo repo,
         ProfileService profileService,
         MembershipService membershipService,
-        InstanceDriftMonitor driftMonitor)
+        DriftMonitor driftMonitor)
     {
         _repo = repo;
         _profileService = profileService;
