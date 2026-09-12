@@ -161,7 +161,7 @@ public class SavegameDriftTests
 
 
     [Fact]
-    public async Task An_game_holding_nothing_reports_nothing()
+    public async Task A_game_holding_nothing_reports_nothing()
     {
         using var harness = new DriftHarness();
 

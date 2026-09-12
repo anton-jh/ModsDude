@@ -550,7 +550,7 @@ public class ModSyncServiceTests
     /// answer. Nobody had to know a savegame was involved.
     /// </summary>
     [Fact]
-    public async Task An_game_holding_a_past_savegame_gets_its_revision_rather_than_head()
+    public async Task A_game_holding_a_past_savegame_gets_its_revision_rather_than_head()
     {
         using var fixture = new SyncFixture();
         fixture.Server.HeadRevision = 1004;

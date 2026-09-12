@@ -55,7 +55,7 @@ public class InstanceDriftMonitorTests
     }
 
     [Fact]
-    public void An_game_on_the_profiles_current_revision_is_not_drifted_by_that()
+    public void A_game_on_the_profiles_current_revision_is_not_drifted_by_that()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(8, ("fs25_a.zip", "one"));
@@ -74,7 +74,7 @@ public class InstanceDriftMonitorTests
     /// own.
     /// </summary>
     [Fact]
-    public void An_game_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
+    public void A_game_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));
@@ -288,7 +288,7 @@ public class InstanceDriftMonitorTests
     }
 
     [Fact]
-    public void An_game_with_no_active_profile_is_not_checked_at_all()
+    public void A_game_with_no_active_profile_is_not_checked_at_all()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));

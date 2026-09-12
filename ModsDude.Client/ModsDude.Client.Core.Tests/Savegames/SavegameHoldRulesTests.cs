@@ -14,7 +14,7 @@ public class SavegameHoldRulesTests
 
 
     [Fact]
-    public void An_game_holding_nothing_constrains_nothing()
+    public void A_game_holding_nothing_constrains_nothing()
     {
         Assert.Null(SavegameHoldRules.RequiredRevision([], _profileId));
         Assert.True(SavegameHoldRules.DecideApply([], _profileId, 1004).IsAllowed);

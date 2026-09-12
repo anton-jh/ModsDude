@@ -10,7 +10,7 @@ public class InstanceActivationTests
 
 
     [Fact]
-    public void An_game_already_on_the_profile_is_being_re_applied()
+    public void A_game_already_on_the_profile_is_being_re_applied()
     {
         var target = new ActiveProfile(_repoId, _profileId);
 
@@ -19,7 +19,7 @@ public class InstanceActivationTests
     }
 
     [Fact]
-    public void An_game_on_another_profile_is_being_moved()
+    public void A_game_on_another_profile_is_being_moved()
     {
         var current = new ActiveProfile(_repoId, Guid.NewGuid());
         var target = new ActiveProfile(_repoId, _profileId);
@@ -29,7 +29,7 @@ public class InstanceActivationTests
     }
 
     [Fact]
-    public void An_game_on_nothing_is_being_moved_too()
+    public void A_game_on_nothing_is_being_moved_too()
     {
         Assert.Equal(
             InstanceActivationKind.Activate,
