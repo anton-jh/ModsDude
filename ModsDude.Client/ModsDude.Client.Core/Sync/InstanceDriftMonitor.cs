@@ -278,19 +278,7 @@ public sealed class InstanceDriftMonitor : IDisposable
                 continue;
             }
 
-            var report = _driftService.Check(
-                candidate.Identity,
-                active,
-                candidate.ModFolder,
-                // A past savegame held here pins the folder to its own revision, and that is what
-                // "up to date" means for this game until it is checked in. Nothing is suppressed
-                // to achieve it: the comparison is against the number the game is supposed to be
-                // on, and it comes out equal on its own. Against head instead, a game holding a
-                // past savegame would report drift permanently and offer a re-apply to head that the
-                // apply table refuses.
-                currentRevision: _savegames?.GetRequiredRevision(candidate.Identity, active.ProfileId)
-                    ?? _profileRevisions?.GetHeadRevision(active),
-                savegameDrift: savegameDrift);
+            var report = CheckMods(candidate, active, savegameDrift);
 
             // Runs off what the folder comparison just found changed, which is the only set of files
             // that can have been written to since the sync.
@@ -335,6 +323,57 @@ public sealed class InstanceDriftMonitor : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The mod half: what this game's folder holds against what was last applied to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A backstop, not the fix.</b> The check answers
+    /// <see cref="InstanceDriftStatus.FolderUnreachable"/> for a folder it cannot list, and a file that
+    /// vanished between the listing and the read is drift rather than a throw - see
+    /// <c>InstanceDriftService.HasMoved</c>, which is where that one escaped from. What this is for is
+    /// the shape of the failure rather than any known instance of it: this loop runs unattended on
+    /// every window activation, so one game's disk must cost that game's answer and not every other
+    /// game's with it, and nothing here may arrive as an unobserved task exception.
+    /// </para>
+    /// <para>
+    /// <b>Narrower than the other two guards on purpose.</b> The savegame and store-integrity halves
+    /// are additions to an answer that works without them, so they swallow anything; this one <em>is</em>
+    /// the answer, and catching everything would turn a logic error in the drift service into a folder
+    /// that reads as quietly unreachable forever. A disk is a disk and a bug is a bug.
+    /// </para>
+    /// </remarks>
+    private InstanceDriftReport CheckMods(
+        DriftCandidate candidate,
+        ActiveProfile active,
+        IReadOnlyList<Savegames.SavegameDrift> savegameDrift)
+    {
+        try
+        {
+            return _driftService.Check(
+                candidate.Identity,
+                active,
+                candidate.ModFolder,
+                // A past savegame held here pins the folder to its own revision, and that is what
+                // "up to date" means for this game until it is checked in. Nothing is suppressed
+                // to achieve it: the comparison is against the number the game is supposed to be
+                // on, and it comes out equal on its own. Against head instead, a game holding a
+                // past savegame would report drift permanently and offer a re-apply to head that the
+                // apply table refuses.
+                currentRevision: _savegames?.GetRequiredRevision(candidate.Identity, active.ProfileId)
+                    ?? _profileRevisions?.GetHeadRevision(active),
+                savegameDrift: savegameDrift);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "Could not check the mod folder {Folder} for drift.", candidate.ModFolder);
+
+            // Unknown rather than drifted, and the savegame half is still carried: a held savegame is
+            // worth saying whatever the folder turned out to be.
+            return InstanceDriftReport.For(InstanceDriftStatus.FolderUnreachable) with { SavegameDrift = savegameDrift };
+        }
     }
 
     /// <summary>

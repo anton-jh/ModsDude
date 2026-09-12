@@ -56,7 +56,7 @@ public class InstanceDriftServiceTests
     }
 
     [Fact]
-    public void An_game_with_no_active_profile_has_nothing_to_drift_from()
+    public void A_game_with_no_active_profile_has_nothing_to_drift_from()
     {
         using var fixture = new DriftFixture();
 
@@ -227,6 +227,46 @@ public class InstanceDriftServiceTests
         // The file is the half already on disk, so that is the one reported.
         Assert.Equal(LockedDriftReason.FileChanged, locked.Reason);
         Assert.Equal([ModKey.From("fs25_map")], report.LockedMods);
+    }
+
+
+    /// <summary>
+    /// A file the listing held and the comparison could not read: drift, not an exception.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The race this is about is real and was reached in the field - an in-game update-all replaces a
+    /// mod between the directory listing and the size read, and <c>FileInfo.Length</c> throws
+    /// <c>FileNotFoundException</c> for a name that was listed a moment earlier. It used to take the
+    /// whole check with it, every other game's answer included, and arrive as an unobserved task
+    /// exception from a background thread.
+    /// </para>
+    /// <para>
+    /// Staged by handing in the listing rather than by writing files, because the whole point is the
+    /// gap between the two reads and no test can get inside a real
+    /// <see cref="Directory.EnumerateFiles"/>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_listed_file_that_has_gone_by_the_time_it_is_read_is_changed()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
+
+        // What the update-all did in the gap. The listing still names it, because the listing was
+        // taken before.
+        File.Delete(fixture.Folder.Combine("fs25_a.zip"));
+
+        var (added, removed, changed) = InstanceDriftService.CompareFolder(
+            fixture.Manifests.TryRead(fixture.Game)!,
+            ["fs25_a.zip", "fs25_b.zip"],
+            fixture.Folder.Path);
+
+        // Changed rather than removed: as far as this comparison was told, the file is there. Either
+        // way the folder no longer holds what was applied, and a re-apply is what fixes it.
+        Assert.Equal(["fs25_a.zip"], changed);
+        Assert.Empty(added);
+        Assert.Empty(removed);
     }
 
 

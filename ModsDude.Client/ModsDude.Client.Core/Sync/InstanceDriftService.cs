@@ -322,7 +322,15 @@ public sealed class InstanceDriftService(
     }
 
 
-    private static (List<string> Added, List<string> Removed, List<string> Changed) CompareFolder(
+    /// <summary>
+    /// What a directory listing says about the manifest: what is new, what is gone, what moved.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private so that a listing can be handed in. The interesting case - a name
+    /// the listing held and the file read a moment later did not - is a race no test can stage through
+    /// a real <see cref="Directory.EnumerateFiles"/>, and it is the one that used to throw.
+    /// </remarks>
+    internal static (List<string> Added, List<string> Removed, List<string> Changed) CompareFolder(
         SyncManifest manifest,
         IReadOnlyList<string> listing,
         string modFolder)
@@ -348,17 +356,47 @@ public sealed class InstanceDriftService(
                 continue;
             }
 
-            var info = new FileInfo(Path.Combine(modFolder, name));
-
-            // The recorded hashes are not read here at all. Size and time are what a listing gives
-            // for free, and only a file that fails them is worth opening.
-            if (info.Length != entry.Size || info.LastWriteTimeUtc != entry.ModifiedUtc)
+            if (HasMoved(Path.Combine(modFolder, name), entry))
             {
                 changed.Add(name);
             }
         }
 
         return (added, [.. byName.Keys.Where(x => present.Contains(x) is false)], changed);
+    }
+
+    /// <summary>
+    /// Whether the file at this path is no longer the one the manifest recorded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The recorded hashes are not read here at all. Size and time are what a listing gives for free,
+    /// and only a file that fails them is worth opening.
+    /// </para>
+    /// <para>
+    /// <b>A file that cannot be read is changed, not an error.</b> The listing is already a moment old
+    /// by the time this looks, and a mod being replaced under a running game is exactly that moment -
+    /// so a name the listing held can be gone, and <see cref="FileInfo.Length"/> throws
+    /// <see cref="FileNotFoundException"/> for it. <em>Gone</em> and <em>differs</em> are the same
+    /// answer: the folder no longer holds what was applied, and a re-apply is what fixes it either
+    /// way. Letting the throw out instead cost the whole check - every other game's answer with it -
+    /// on a background thread nobody was awaiting.
+    /// </para>
+    /// </remarks>
+    private static bool HasMoved(string path, SyncManifestEntry entry)
+    {
+        var info = new FileInfo(path);
+
+        try
+        {
+            return info.Length != entry.Size || info.LastWriteTimeUtc != entry.ModifiedUtc;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Deliberately not logged. This is the ordinary race rather than a fault, it is per file
+            // in a folder of two thousand, and the drift it reports is the visible half.
+            return true;
+        }
     }
 
     /// <summary>
