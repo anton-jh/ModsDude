@@ -34,7 +34,7 @@ User ──member of──▶ Repo ──has──▶ Profile ──has──▶
                      └──configured by──▶ Game adapter (base settings)
 
                                               ▲
-Machine ──has──▶ Instance ────configured by───┘  (instance settings)
+Machine ──has──▶ Instance ────configured by───┘  (local settings)
                      │
                      └──active profile──▶ Profile   (from one repo at a time)
 ```
@@ -48,7 +48,7 @@ An **instance is one mod folder** — a sync target. It is scoped to a *game*, n
 one Farming Simulator 25 installation is configured once and appears under every FS25 repo you
 belong to. The scope is the adapter plus whatever its base settings say about which game it was
 configured for, because one adapter can serve several — FS22 and FS25 share one, and a scripted
-adapter could serve a dozen. See [04 — Game adapters](04-game-adapters.md#instance-scope).
+adapter could serve a dozen. See [04 — Game adapters](04-game-adapters.md#game-identity).
 Games that keep mods in more than one place get one
 instance per folder: BeamNG.drive with BeamMP needs three, since singleplayer, the MP
 client, and a dedicated server each read from a different directory. The model deliberately

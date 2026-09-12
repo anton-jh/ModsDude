@@ -73,7 +73,7 @@ someone flips it in the database.
 
 1. Open a repo. If it has no instances, `RepoPageViewModel` **auto-selects "Connect game"** —
    the one thing you must do before the repo is useful.
-2. `CreateLocalInstancePageViewModel` builds `repo.Adapter.GetInstanceSettingsTemplate()`.
+2. `CreateLocalInstancePageViewModel` builds `repo.Adapter.GetLocalSettingsTemplate()`.
    For Farming Simulator the template has already probed `My Documents\My Games\` for the year
    the repo's `GameVersion` names, in both spellings the installer has used, so the path
    is usually pre-filled. The name defaults to "Game" for a first instance.
@@ -89,7 +89,7 @@ An instance is scoped to a **game**, not a repo, so one installation is configur
 appears under every repo targeting that game — and it carries an explicit **active profile**,
 the `(RepoId, ProfileId)` pair sync reconciles against. The scope is not the adapter id alone,
 because one adapter serves both FS22 and FS25; see
-[04 — Game adapters](04-game-adapters.md#instance-scope).
+[04 — Game adapters](04-game-adapters.md#game-identity).
 
 ## Importing mods from an installed game
 

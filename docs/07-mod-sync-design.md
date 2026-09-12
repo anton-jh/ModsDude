@@ -30,7 +30,7 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | Download link endpoint | `POST files/createModDownloadLink`, Guest level |
 | Local content store | `Client.Core/Sync/ContentStore.cs`, one per volume via `ContentStoreProvider` |
 | Reconciliation engine | `ModSyncPlanner` plans, `ModSyncService` executes |
-| `IInstanceModAdapter` write side | `ModFolder`, `GetModFilePath`, `GetInstalledModPath` — paths only |
+| `ILocalModAdapter` write side | `ModTargets`, `GetModFilePath`, `GetInstalledModPath` — paths only |
 | Upload half of import | `ModImportService` |
 | Drift | `InstanceDriftService`, `SyncManifest`, `SyncManifestStore` |
 | Rewritten-blob detection | `StoreIntegrityService` off the drift check, `ContentStore.VerifyAllAsync` on demand |
@@ -182,7 +182,7 @@ Both assignments are legitimate. Copying is not a fallback to warn about; it is 
 user makes with the trade-off in front of them.
 
 **Store configuration is machine-wide**, in a new global settings bag on `LocalState` — not on
-instance settings, not on repo settings. Keeping it in one place is what stops the "same thing
+local settings, not on repo settings. Keeping it in one place is what stops the "same thing
 configured in several places, then drifting" problem that scoping instances to repos created.
 It holds, per volume that hosts mod folders:
 
@@ -337,8 +337,8 @@ what is about to happen to their files before it happens.
 
 - **Desired**: the mod dependencies of the profile being activated — a set of
   `(modId, versionId, contentHash)`.
-- **Actual**: the result of `IInstanceModAdapter.GetInstalledMods` — `(modId, versionId)` with
-  file paths.
+- **Actual**: the result of `ILocalModAdapter.GetInstalledMods` for the target being synced —
+  `(modId, versionId)` with file paths.
 - **Stored**: which hashes each store on the machine holds — the serving store first, but the
   others matter too, both for installing and for deciding whether an uninstall needs to keep
   anything.
@@ -534,6 +534,13 @@ Not in the mod folder, because writing bookkeeping into a directory the game own
 updater rewrites is asking for it to be clobbered or to confuse something. It would survive the
 loss of `LocalState`, which is the one argument for it — but per the table above, losing the
 manifest costs a scan, so that is not worth buying.
+
+The name goes through `StoreFileName`, which is where a store encodes what it puts in a filename.
+An instance id needs none of it — a Guid is hex and dashes — but the key is on its way to being
+adapter-authored strings, and a rule adapter authors had to obey would fail as a manifest that
+cannot be written, found at sync time on somebody else's machine. Ordinary parts pass through and
+pathological ones are percent-escaped, with a length cap that truncates and stamps rather than
+collides. See [04 — Game adapters](04-game-adapters.md#targets).
 
 ### Nothing keeps the manifest in sync, and nothing should
 
@@ -762,7 +769,7 @@ scope — the common case for most games — the profile-side control is a plain
 dropdown at all.
 
 The two sets are **not** symmetrical, which follows from instances being scoped to a game rather
-than a repo (see [04](04-game-adapters.md#instance-scope)):
+than a repo (see [04](04-game-adapters.md#game-identity)):
 
 - **From a profile**, the candidates are simply the repo's own instance list — the same one the
   sidebar shows under that repo. `RepoPageViewModel` builds both lists, so a profile and an
@@ -986,13 +993,13 @@ content hash is MD5.
 
 ## Fitting it into the client
 
-**`IInstanceModAdapter` has a write side**, and it is deliberately only paths. Reading installed
+**`ILocalModAdapter` has a write side**, and it is deliberately only paths. Reading installed
 mods is not enough; the adapter has to say where a mod file belongs and what it should be called,
 because that is game knowledge:
 
 ```csharp
-string ModFolder { get; }
-string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
+ModTargets ModTargets { get; }
+string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 ```
 

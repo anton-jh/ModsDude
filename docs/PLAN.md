@@ -58,7 +58,7 @@ generic scripted adapter would serve a dozen games under one id — so keying in
 `InstanceScope` instead: the adapter id, plus a discriminator its **base settings** decide, and
 a repo offers the instances whose scope equals its own. Farming Simulator's base settings gain a
 `GameVersion` to feed it. Full reasoning, and the two rules a discriminator has to obey, in
-[04 — Game adapters](04-game-adapters.md#instance-scope).
+[04 — Game adapters](04-game-adapters.md#game-identity).
 
 **An instance is one mod folder, not one installation.** Games keeping mods in several places
 get several instances. BeamNG.drive with BeamMP needs three — singleplayer, MP client, and a
@@ -413,7 +413,7 @@ know which profile owns a folder and where the store lives.
 
 - [x] Add `InstanceScope` and `IBaseGameAdapter.Scope`, defaulting to the adapter id alone. An
       adapter serving more than one game overrides it from its base settings — see
-      [04 — Game adapters](04-game-adapters.md#instance-scope).
+      [04 — Game adapters](04-game-adapters.md#game-identity).
 - [x] Give `FarmingSimulatorBaseSettings` a `GameVersion`, required and not `[CanBeModified]`,
       and read it in both `FarmingSimulatorBaseGameAdapter.Scope` and the game-data-folder probe
       in `FarmingSimulatorInstanceSettings`, which had hardcoded `2025`.

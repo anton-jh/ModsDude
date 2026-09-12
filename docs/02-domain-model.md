@@ -768,7 +768,7 @@ The client does not reuse the server's entities. It has its own, in
 
 - **`Repo`** — wraps `RepoMembershipDto`, resolves the game adapter from `AdapterId` and
   hydrates it with the stored base settings, and exposes the `LocalInstance` list matching its
-  `InstanceScope`. Disposable, because it holds a collection synchronizer.
+  `GameIdentity`. Disposable, because it holds a collection synchronizer.
 - **`ModKey` / `ModVersionKey`** — the join keys, and the reason mod-id casing can no longer
   leak. `ModKey.From` normalizes, and the type has no other representable form, so nothing can
   hand raw casing to blob storage. See
@@ -783,14 +783,14 @@ The client does not reuse the server's entities. It has its own, in
   built where it is needed. Full reasoning in
   [09 — Mod catalog](09-mod-catalog.md#a-merged-model).
 - **`LocalInstance`** — **one mod folder** on this machine: a sync target. Holds the
-  deserialized `DynamicForm` instance settings and the adapter instance built from them.
+  deserialized `DynamicForm` local settings and the local adapter built from them.
   **Never sent to the server**; persisted in `state.json` (see [05 — Client](05-client.md)).
 
   An instance is scoped to a **game**, not to a repo. That matters as soon as someone joins
   two repos for the same game: they have one installation, and it should be configured once
   and offered under both. The scope is not the adapter id — one adapter serves both Farming
-  Simulator 22 and 25 — but an `InstanceScope` the base adapter derives from its base
-  settings; see [04 — Game adapters](04-game-adapters.md#instance-scope). A game that keeps
+  Simulator 22 and 25 — but a `GameIdentity` the base adapter derives from its base
+  settings; see [04 — Game adapters](04-game-adapters.md#game-identity). A game that keeps
   mods in more than one place gets one instance per folder — the model tracks folders, not
   installations, and does not assume a game is installed at all.
 

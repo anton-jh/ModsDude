@@ -138,7 +138,7 @@ instead — `ModSyncService` records falling back from hardlinks to copying.
 **The game adapters log too.** They were the awkward case: they are built by capability factories
 rather than by the container, so there was no obvious seam for a logger. There is one — the
 Farming Simulator adapter is a DI singleton like every other `IGameAdapter`, so it takes an
-`ILoggerFactory` and hands it down through `WithBaseSettings` and `WithInstanceSettings` to the mod
+`ILoggerFactory` and hands it down through `WithBaseSettings` and `WithLocalSettings` to the mod
 and savegame adapters it builds. No interface changed; the capability lists stopped being static,
 which is the whole cost.
 
@@ -303,7 +303,7 @@ app data directory. `StateStore` is `Store<LocalState>` over `state.json`.
 
 ```
 LocalState
-├─ Version                 schema version, currently 2
+├─ Version                 schema version, currently 3
 ├─ LastSelectedRepos       restores which repo you were on
 ├─ LastSelectedProfiles    and which profile
 ├─ Settings                machine-wide, not per repo, instance or adapter
@@ -311,7 +311,7 @@ LocalState
 │   ├─ StoreAssignments: { volumeRoot → servingVolumeRoot }
 │   └─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
 └─ Instances: { instanceId → { Scope, GameAdapterId, Name,
-                               AdapterInstanceSettings,
+                               AdapterLocalSettings,
                                ModFolder,
                                ActiveProfile: (RepoId, ProfileId)? } }
 
@@ -319,7 +319,7 @@ manifests/{instanceId}.json                 what the last sync installed
 ```
 
 There is no `LocalRepoState` and nothing is keyed by repo. **Instances moved out from under
-repos** and key on an `InstanceScope`, so one game
+repos** and key on a `GameIdentity`, so one game
 installation is configured once and listed under every repo targeting the same game. The scope
 is the adapter id plus — for an adapter serving more than one game — a discriminator its base
 settings decide: `_farming_simulator#fs25`. A repo offers the instances whose scope equals its
@@ -327,7 +327,7 @@ own. The `GameAdapterId` is stored alongside, recording which adapter version au
 settings; it is deliberately not part of the scope, so where the compatibility versions differ
 the repo's adapter has to be able to read settings authored by the older one, which is what
 compatibility versions are for. See
-[04 — Game adapters](04-game-adapters.md#instance-scope).
+[04 — Game adapters](04-game-adapters.md#game-identity).
 
 `ModFolder` is recorded rather than asked of the adapter every time, because the
 no-two-instances-own-one-folder check has to run across *every* scope — including an instance
@@ -392,7 +392,7 @@ property changes. Renaming a repo moves it to its new alphabetical position with
 intervention.
 
 `Repo` uses it to project the machine's instances down to the ones matching its own
-`InstanceScope`, so the sidebar lists them under each repo without any repo owning them.
+`GameIdentity`, so the sidebar lists them under each repo without any repo owning them.
 
 Re-sorting **moves** a row rather than removing and reinserting it, and the synchronizer disposes
 the target view models it created — `MenuItemViewModel` subscribes to its source's
@@ -785,10 +785,10 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
-| `CreateLocalInstancePage` | Working | Name + instance settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
+| `CreateLocalInstancePage` | Working | Name + local settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
 | `InstancePage` | Working | Instance shell over Sync and Manage. Opens on Sync |
 | `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
-| `EditLocalInstancePage` | Working | Name, instance settings, active profile, delete. Phase 4 grows this into the instance's full page — see [PLAN.md](PLAN.md#phase-4--make-drift-unmissable) |
+| `EditLocalInstancePage` | Working | Name, local settings, active profile, delete. Phase 4 grows this into the instance's full page — see [PLAN.md](PLAN.md#phase-4--make-drift-unmissable) |
 | `CreateProfilePage` | Working | |
 | `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage |
 | `ProfileOverviewPage` | Working | Mod count and current revision, plus the instances set to this profile |

@@ -112,7 +112,7 @@ actually reach. See [05](05-client.md#authentication) for what a switch does cle
 ### Savegames have a server and an adapter, and nothing that uses them
 
 The server side of [Phase 8](PLAN.md#phase-8--savegames) is built — entities, migration, endpoints,
-blob storage, the reclamation sweep — and `IInstanceSavegameAdapter` now enumerates slots, names
+blob storage, the reclamation sweep — and `ILocalSavegameAdapter` now enumerates slots, names
 them from the save's own data, and says what belongs in a packed save.
 
 What does not exist yet is everything between: no client-side pack/unpack, no checkout binding in

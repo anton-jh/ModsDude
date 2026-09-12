@@ -437,7 +437,7 @@ Present automatically, without the user configuring anything:
 
 | Source | Where |
 | --- | --- |
-| Each instance's mod folder | From the instance settings, via `IInstanceModAdapter.GetInstalledMods` |
+| Each instance's mod folder | From the local settings, via `ILocalModAdapter.GetInstalledMods` |
 | The system Downloads folder | Once per machine, not per instance |
 
 Downloads needs care to locate. .NET has no `SpecialFolder.Downloads`; the correct route on

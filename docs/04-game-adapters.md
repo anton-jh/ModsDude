@@ -17,9 +17,9 @@ IGameAdapter              catalogue entry — id, display name, what it can do
    │  .WithBaseSettings(repo's AdapterConfiguration)
    ▼
 IBaseGameAdapter          hydrated with the repo-wide settings, shared by everyone
-   │  .WithInstanceSettings(instance's settings)
+   │  .WithLocalSettings(this machine's settings)
    ▼
-IInstanceGameAdapter      bound to one game installation on this machine
+ILocalGameAdapter         bound to one game installation on this machine
 ```
 
 The reason for the split is the repo/instance divide from
@@ -27,12 +27,12 @@ The reason for the split is the repo/instance divide from
 
 - **Base settings** are stored on the server in `Repo.AdapterData.Configuration` and are the
   same for every member. Things the group agrees on — for Farming Simulator, the `GameVersion`
-  the repo targets, which is also what its [instance scope](#instance-scope) keys on.
-- **Instance settings** are per-machine and never leave it. For Farming Simulator, the path
+  the repo targets, which is also what its [game identity](#game-identity) keys on.
+- **Local settings** are per-machine and never leave it. For Farming Simulator, the path
   to the game data folder.
 
 You can go from any stage to the next, and each stage is a subtype of the previous
-(`IInstanceGameAdapter : IBaseGameAdapter : IGameAdapter`), so an instance adapter still
+(`ILocalGameAdapter : IBaseGameAdapter : IGameAdapter`), so a local adapter still
 answers `DisplayName` and still exposes its base settings.
 
 ## Capabilities
@@ -47,27 +47,27 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 
 `null` means "this game does not do that". Two capability families exist today:
 
-| Capability | Base stage | Instance stage |
+| Capability | Base stage | Local stage |
 | --- | --- | --- |
-| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `IInstanceModAdapter` — `GetInstalledMods(ct)`, plus `ModFolder`, `GetModFilePath` and `GetInstalledModPath` |
-| Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `IInstanceSavegameAdapter` — `GetSlots(ct)`, plus `GetSlotPath`, `CreateSlot` and `BelongsInPackedSave` |
+| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
+| Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `GetSlots(ct)`, plus `GetSlotPath`, `CreateSlot` and `BelongsInPackedSave` |
 
 `IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
-instance adapter to find out. They sit on the **base** stage, not the catalogue stage, because
+local adapter to find out. They sit on the **base** stage, not the catalogue stage, because
 the answer can depend on how a repo configured the adapter: for a scripted adapter, one script
 implements savegames and another does not. That is the same layering mistake as keying instances
-on the adapter id, one stage further up; see [Instance scope](#instance-scope).
+on the adapter id, one stage further up; see [Game identity](#game-identity).
 
-The capability adapters mirror the same base-then-instance shape: `IBaseModAdapter` can scan
-an arbitrary folder, and `WithInstanceSettings` turns it into an `IInstanceModAdapter` that
-knows the folder the game actually uses.
+The capability adapters mirror the same base-then-local shape: `IBaseModAdapter` can scan
+an arbitrary folder, and `WithLocalSettings` turns it into an `ILocalModAdapter` that
+knows the folders the game actually uses.
 
-The instance stage is where the **write side** lives, and it is deliberately only paths:
+The local stage is where the **write side** lives, and it is deliberately only paths:
 
 ```csharp
-string ModFolder { get; }                                   // no two instances may own the same one
-string GetModFilePath(ModKey modId, ModVersionKey versionId, ModFileName? fileName);
+ModTargets ModTargets { get; }                              // every mod folder this game reaches
+string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName);
 string GetInstalledModPath(LocalMod installed) => installed.FilePath;
 ```
 
@@ -83,6 +83,40 @@ gives every member the folder the importer had rather than one renamed to the no
 is already checked to be a bare name belonging to `modId`, so an adapter uses it as it stands and
 falls back to the id only where it is null. See
 [09 — Mod catalog](09-mod-catalog.md#the-other-half-normalizing-the-id-must-not-rename-the-file).
+
+### Targets
+
+A **target** is one mod folder and one savegame folder, paired — either half optional. Almost
+every game has exactly one, which is why the adapter used to answer with a single `ModFolder`
+and why nothing in the interface mentioned targets at all. BeamNG.drive with BeamMP has three:
+a dedicated server, the MP client that has to match it, and a singleplayer install. So the
+adapter answers with a list.
+
+```csharp
+public sealed record ModTarget(TargetKey Key, string? DisplayName, string Path);
+```
+
+**A target is a value the adapter returns, not a persisted entity.** No id, no row, no list the
+user maintains. A game that needs more than one says so in its local settings — one optional
+folder field per target — and `ModTargets` is derived from those fields every time it is asked.
+Emptying a field takes a target away; filling it in puts it back. A blank field is a target the
+adapter **omits** rather than one carrying a null path, and a game reaching no folder at all is
+an ordinary answer rather than an error.
+
+`DisplayName` is null for a game with one target, which never mentions it: Farming Simulator has
+a mod folder, not a mod folder called something. A game with several names them, because with
+three of them the interesting half of any notice is which one it is about.
+
+**Keys are the adapter author's to keep stable, and that is a real obligation.** A manifest and a
+savegame binding are keyed on `(GameIdentity, TargetKey)`, so renaming a key in a later adapter
+version orphans both on every member's machine — and nothing downstream can tell that from the
+user having emptied the field, because the two events look identical from here. A stale manifest
+is droppable; a binding is a savegame that machine is still holding. Pick a key once.
+
+Keys are **not** subject to filename rules, even though one ends up in a manifest's name. The
+store encodes what it puts in a filename, with a length cap, so an awkward key is escaped rather
+than refused — see [Two rules for the discriminator](#two-rules-for-the-discriminator), which
+this deliberately does not become a third of.
 
 ## What the sync engine and registration read off an adapter
 
@@ -170,7 +204,7 @@ settings. `GameAdapterIndex` supports both lookups:
 Note the leading underscore in `_farming_simulator`: built-in adapters are namespaced apart
 from any future third-party ones.
 
-## Instance scope
+## Game identity
 
 An instance is not scoped to a repo. One Farming Simulator installation should be configured
 once and offered under every Farming Simulator repo you belong to, which is why instances move
@@ -191,7 +225,7 @@ for**, and base settings are what configure it. So `IBaseGameAdapter` produces i
 public interface IBaseGameAdapter : IGameAdapter
 {
     // ...
-    InstanceScope Scope => new(Id.Id);
+    GameIdentity Scope => new(Id.Id);
 }
 ```
 
@@ -200,14 +234,14 @@ game says nothing and gets the adapter id alone. One serving several overrides.
 
 ```csharp
 // FarmingSimulatorBaseGameAdapter
-public InstanceScope Scope => new(Id.Id, BaseSettings.GameVersion switch
+public GameIdentity Scope => new(Id.Id, BaseSettings.GameVersion switch
 {
     { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
     null => throw new InvalidOperationException("...")
 });
 ```
 
-`InstanceScope` is a record struct over `(AdapterId, Discriminator?)`, rendering as
+`GameIdentity` is a record struct over `(AdapterId, Discriminator?)`, rendering as
 `_farming_simulator#fs25`, or plain `_farming_simulator` where there is no discriminator. It is a
 type rather than a bare string because `_farming_simulator#fs25` and `_farming_simulator@1` are
 both plausible-looking strings, and comparing the wrong pair fails as a **silently empty instance
@@ -221,13 +255,13 @@ rule that a newer adapter must be able to read settings authored by an older one
 
 | | Keyed on the adapter | Keyed on the scope |
 | --- | --- | --- |
-| Persisted on the instance | `GameAdapterId` | `InstanceScope`, plus the `GameAdapterId` that authored the settings |
+| Persisted on the instance | `GameAdapterId` | `GameIdentity`, plus the `GameAdapterId` that authored the settings |
 | A repo offers | instances whose adapter `Id` matches | instances whose scope equals `Adapter.Scope` |
 | Farming Simulator base settings | empty | `GameVersion`, required, not modifiable |
 
 Everything downstream is unchanged. The sidebar still lists instances under each repo,
 activation eligibility is still an equality test, and `CreateLocalInstancePage` still renders
-`GetInstanceSettingsTemplate()` from the repo it was opened under. Only the value being compared
+`GetLocalSettingsTemplate()` from the repo it was opened under. Only the value being compared
 is different.
 
 ### Two rules for the discriminator
@@ -265,17 +299,17 @@ adapter costs more than an override.
 **Folder collision has to be checked globally.** Adapter scope was what stopped two instances
 claiming the same directory; splitting it by game reopens the possibility, since two scopes can
 name the same folder. The check runs across all instances regardless of scope, using
-`IInstanceModAdapter.ModFolder` — and the answer is also recorded on the persisted instance, so
+`ILocalModAdapter.ModTargets` — and the answer is also recorded on the persisted instance, so
 an instance whose scope no repo on this machine serves still participates in the check even
 though it cannot hydrate an adapter to be asked.
 
-**The instance settings template genuinely varies with base settings now.**
-`FarmingSimulatorInstanceSettings` used to probe `My Documents\My Games\FarmingSimulator2025`
+**The local settings template genuinely varies with base settings now.**
+`FarmingSimulatorLocalSettings` used to probe `My Documents\My Games\FarmingSimulator2025`
 with the year hardcoded; `CreateTemplate(gameVersion)` now probes for the year the repo actually
 targets, trying both spellings the installer has used. The shape does not change, only a default
 value — which is worth noticing, because the
 mechanism gets exercised by the dullest possible case before anything exotic depends on it.
-`GetInstanceSettingsTemplate()` and `DeserializeInstanceSettings()` have always been on
+`GetLocalSettingsTemplate()` and `DeserializeLocalSettings()` have always been on
 `IBaseGameAdapter` rather than `IGameAdapter`, so the interface allowed this all along; nothing
 used it.
 
@@ -305,12 +339,12 @@ answer is `DynamicForm`: a settings class that describes itself through attribut
 the WPF layer renders generically via `DynamicFormEditor`.
 
 ```csharp
-public class FarmingSimulatorInstanceSettings : DynamicForm<FarmingSimulatorInstanceSettings>
+public class FarmingSimulatorLocalSettings : DynamicForm<FarmingSimulatorLocalSettings>
 {
     [Required, CanBeModified, Title("Game data folder"), FolderPath]
     public string? GameDataFolder { get; set; }
 
-    protected override IEnumerable<DynamicFormValidationError<FarmingSimulatorInstanceSettings>> PerformValidation()
+    protected override IEnumerable<DynamicFormValidationError<FarmingSimulatorLocalSettings>> PerformValidation()
     {
         if (!Directory.Exists(GameDataFolder))
         {
@@ -340,7 +374,7 @@ The base class provides:
 and validates at construction that the properties actually belong to that form — a typo'd
 property name is an exception, not a silently ignored error.
 
-Constructors can seed sensible defaults. `FarmingSimulatorInstanceSettings` probes
+Constructors can seed sensible defaults. `FarmingSimulatorLocalSettings` probes
 `My Documents\My Games\` for both `FarmingSimulator2025` and `Farming Simulator 2025`,
 because the installer has used both spellings and neither is derivable from the other.
 
@@ -353,11 +387,11 @@ the only one that exists.
 | --- | --- |
 | `FarmingSimulatorGameAdapter` | Catalogue entry, `_farming_simulator@1` |
 | `FarmingSimulatorBaseGameAdapter` | + base settings, exposes base capability factories |
-| `FarmingSimulatorInstanceGameAdapter` | + instance settings, exposes instance capability factories |
-| `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [instance scope](#instance-scope) |
-| `FarmingSimulatorInstanceSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
+| `FarmingSimulatorLocalGameAdapter` | + local settings, exposes local capability factories |
+| `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [game identity](#game-identity) |
+| `FarmingSimulatorLocalSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
-| `FarmingSimulatorInstanceModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
+| `FarmingSimulatorLocalModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
 | `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
 
 ### How a savegame is described
@@ -466,18 +500,20 @@ Several details in this code are load-bearing and worth preserving if you touch 
 
 1. Create a folder under `GameAdapters/Implementations/{Game}V1/`.
 2. Write `{Game}BaseSettings : DynamicForm<{Game}BaseSettings>` and
-   `{Game}InstanceSettings : DynamicForm<{Game}InstanceSettings>`, annotated with `Title`,
+   `{Game}LocalSettings : DynamicForm<{Game}LocalSettings>`, annotated with `Title`,
    `Required`, `CanBeModified`, `FolderPath` as appropriate, with `PerformValidation`
-   overridden where a value can be wrong in a way attributes cannot express.
+   overridden where a value can be wrong in a way attributes cannot express. A game with more
+   than one [target](#targets) gets one optional folder field per target here, and nowhere else.
 3. Write the three adapter stages. The Farming Simulator trio is the template; the
-   inheritance chain (`Instance : Base : Catalogue`) is what makes the stage subtyping work.
+   inheritance chain (`Local : Base : Catalogue`) is what makes the stage subtyping work.
 4. Implement `IBaseModAdapter.GetModsFromFolder` to produce `LocalMod` records, and
-   `IInstanceModAdapter.GetInstalledMods` to point it at the game's actual mod folder.
+   `ILocalModAdapter.GetInstalledMods` to point it at a target's actual mod folder.
    Respect the cancellation token — `ModCatalog` cancels the scan when the page goes away.
    Build every id through `ModKey.From` / `ModVersionKey.From`.
-5. Implement the write side — `ModFolder` and `GetModFilePath` — or sync has nowhere to put a
-   file.
-6. Register the capability factories in the base and instance adapters' `_capabilities`
+5. Implement the write side — `ModTargets` and `GetModFilePath` — or sync has nowhere to put a
+   file. One target, keyed and never named, is the ordinary answer; the key is permanent, so
+   choose it now.
+6. Register the capability factories in the base and local adapters' `_capabilities`
    lists.
 7. Nothing else. Registration is by reflection, and the UI is driven by the dynamic forms.
 
@@ -498,7 +534,7 @@ strings. Most cannot benefit from an override, and an incorrect one silently mis
 releases.
 
 Override `Scope` only if the adapter serves more than one game — see
-[Instance scope](#instance-scope). The base-settings field it reads must not be
+[Game identity](#game-identity). The base-settings field it reads must not be
 `[CanBeModified]`.
 
 ### Where the comparison runs
