@@ -38,20 +38,20 @@ Roughly one context per slice. Slice 5 may want two.
 
 Sequential. It is a stack, not a set.
 
-| | Slice | Files |
-| --- | --- | --- |
-| 1 | The adapter answers with targets | ~20 |
-| 2a | The `Game` and its state | ~15 |
-| 2b | Re-key the per-folder stores | ~20 |
-| 3 | Savegames go per game | ~15 |
-| 4 | Activate and apply become two verbs | ~12 |
-| 5 | Interface | ~25 |
+| | Slice | Files | |
+| --- | --- | --- | --- |
+| 1 | The adapter answers with targets | ~20 | **done** |
+| 2a | The `Game` and its state | ~15 | |
+| 2b | Re-key the per-folder stores | ~20 | |
+| 3 | Savegames go per game | ~15 | |
+| 4 | Activate and apply become two verbs | ~12 | |
+| 5 | Interface | ~25 | |
 
 Three things are independent and can land beside any of it:
 
 - **Relocating publish** to the repo's Saves page. Purely additive, and it is what lets slice 5
   delete the sidebar without making publish unreachable in the meantime.
-- **The store's filename encoding.**
+- **The store's filename encoding.** Landed with slice 1.
 - **The documentation pass** over 02, 04, 05 and 06, at the very end.
 
 ## What batches, and what must not
@@ -59,7 +59,11 @@ Three things are independent and can land beside any of it:
 **Batch** — these are one edit repeated, and splitting them means several rounds of half-compiling:
 
 - `ModTargets` + `SavegameSlotRef` + the FS adapter returning one target (slice 1) — one contract.
-- `RequireSingleTarget()` across every caller (slice 1) — one mechanical pass, ~16 sites.
+- `RequireSingleTarget()` across every caller (slice 1) — one mechanical pass. Estimated ~16 sites;
+  it was **two**, because widening `GetInstalledMods` and `GetModFilePath` to take the `ModTarget`
+  turned the rest into threading one value through rather than re-deriving a folder at each site.
+  `ModSyncService.PlanAsync` and `LocalInstanceRepository.GetModFolder` are the whole list, which is
+  also where 2b has to reach in from the game loop.
 - The four re-keyings in 2b — manifest, drift, eviction, mod sources.
 - Everything in slice 3. It is one concept with shared test fakes.
 

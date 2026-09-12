@@ -1464,7 +1464,7 @@ nothing else.
 manages. A game that needs more than one says so in its `LocalSettings` — which is where the BeamNG
 adapter will offer each folder, and offer leaving one blank.
 
-- [ ] **`ILocalModAdapter.ModFolder` becomes `ModTargets`**, a keyed list of
+- [x] **`ILocalModAdapter.ModFolder` becomes `ModTargets`**, a keyed list of
       `(Key, DisplayName, Path)`. The key is adapter-defined and stable, because it ends up in a
       filename. Farming Simulator returns one and names it nothing; a blank folder in `LocalSettings`
       is a target the adapter omits rather than one with a null path.
@@ -1477,7 +1477,7 @@ adapter will offer each folder, and offer leaving one blank.
 - [ ] **One manifest per target**, `manifests/{game-identity}_{target-key}.json`. Not one per game:
       syncing the dedicated server must not rewrite the MP client's manifest, and
       atomic-write-per-folder is what keeps a half-finished apply safe.
-- [ ] **The store encodes what it puts in a filename**, with a length cap — it is not a rule adapter
+- [x] **The store encodes what it puts in a filename**, with a length cap — it is not a rule adapter
       authors have to obey. **Two** adapter-authored strings land in that name: the identity's
       discriminator, which a scripted adapter declares from inside its script, and the target key.
       A third entry beside the [two discriminator
@@ -1506,10 +1506,10 @@ Farming Simulator has one target and there is no BeamNG adapter yet, so **every 
 would otherwise ship having never run.** The fake is written in slice 1, before the code that needs
 it exists, and it is what the rest of the phase is developed against.
 
-- [ ] **Targets driven by its `LocalSettings`**, the way the real BeamNG adapter will be: three
+- [x] **Targets driven by its `LocalSettings`**, the way the real BeamNG adapter will be: three
       optional folders, each present only when its field is filled in. That makes the whole matrix
       reachable from one adapter — 0, 1, 2 and 3 targets — rather than needing a fake per shape.
-- [ ] **Savegame folders independently optional.** A target with mods and no saves, one with saves
+- [x] **Savegame folders independently optional.** A target with mods and no saves, one with saves
       and no mods, and one with both all have to be ordinary — it is the pairing the whole phase
       rests on, and the MP client is exactly a target whose saves live somewhere else.
 - [ ] **Cover the transitions, which is where the orphans are.** Emptying a target's field removes a
@@ -1521,7 +1521,7 @@ it exists, and it is what the rest of the phase is developed against.
       `"multiplayer"` orphans both, and nothing can tell that from a removal — which is the argument
       for keys being adapter-stable and worth a line in
       [04 — Game adapters](04-game-adapters.md).
-- [ ] **`RequireSingleTarget` stays covered too.** Slice 1 and 2a hold every caller to one target, so
+- [x] **`RequireSingleTarget` stays covered too.** Slice 1 and 2a hold every caller to one target, so
       a test that the helper throws on two is what stops that scaffolding becoming silently
       first-target-wins.
 
@@ -1708,7 +1708,7 @@ return a list while every caller takes `RequireSingleTarget()` — a named helpe
 `.Single()`, so the tripwire explains itself. Farming Simulator behaves identically and every
 existing test stays green. The helper dies in slice 2b, which is where multi-target becomes real.
 
-- [ ] **1. The adapter answers with targets.** `ModTargets`, `SavegameSlotRef`, the store's filename
+- [x] **1. The adapter answers with targets.** `ModTargets`, `SavegameSlotRef`, the store's filename
       encoding, the adapter-layer renames, `RequireSingleTarget` at every caller — and the fake
       adapter above, which is written here because everything after this is developed against it.
 - [ ] **2a. The `Game` and its state.** `PersistedGame`, `Game`, `GameRepository`,
