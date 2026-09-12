@@ -589,10 +589,14 @@ public sealed class ModSyncService(
     /// </remarks>
     private async Task WriteManifestAsync(ModSyncPlan plan)
     {
+        // This target's own holds, because this target's manifest is what is about to move: a save in
+        // the MP client's savegame folder was played against the MP client's mods, and the dedicated
+        // server's apply has nothing to say about it.
+        //
         // Deliberately not the caller's token. By this point the folder is already what the profile
         // asked for and the manifest is about to say so; abandoning the attribution here would credit
         // everything played on the outgoing revision to the incoming one, quietly and permanently.
-        await heldSavegames.ObserveAsync(plan.Game, CancellationToken.None);
+        await heldSavegames.ObserveAsync(plan.TargetRef, CancellationToken.None);
 
         var entries = new List<SyncManifestEntry>();
 

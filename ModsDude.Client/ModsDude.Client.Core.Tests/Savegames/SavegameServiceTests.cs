@@ -23,8 +23,14 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 /// </remarks>
 public class SavegameServiceTests
 {
-    private static readonly SavegameSlotId _slot1 = new("savegame1");
-    private static readonly SavegameSlotId _slot2 = new("savegame2");
+    private static readonly SavegameSlotRef _slot1 = Keys.Slot("savegame1");
+    private static readonly SavegameSlotRef _slot2 = Keys.Slot("savegame2");
+
+    /// <summary>
+    /// The same slot number in the game's other folder, which is what two targets really look like -
+    /// an adapter numbers its slots within a folder and cannot get that wrong.
+    /// </summary>
+    private static readonly SavegameSlotRef _client = Keys.Slot("savegame1", "client");
 
 
     [Fact]
@@ -41,7 +47,7 @@ public class SavegameServiceTests
         var binding = harness.Service.GetBinding(harness.Game, harness.Server.SavegameId);
 
         Assert.NotNull(binding);
-        Assert.Equal(_slot1.Value, binding.Value.SlotId);
+        Assert.Equal(_slot1, binding.Value.Slot);
         Assert.Equal(head.Number, binding.Value.Version);
         Assert.Equal(head.ContentHash, binding.Value.ContentHash);
 
@@ -520,7 +526,7 @@ public class SavegameServiceTests
         var binding = harness.Service.GetBinding(harness.Game, savegame.Id);
 
         Assert.NotNull(binding);
-        Assert.Equal(_slot1.Value, binding.Value.SlotId);
+        Assert.Equal(_slot1, binding.Value.Slot);
         Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Service.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
     }
 
@@ -759,6 +765,209 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// <b>The BeamMP evening, and the reason attribution is per folder.</b> A save is being played in
+    /// the MP client's folder while the dedicated server's mod list moves; the play happened in the
+    /// client's folder and against the client's mods, so the server's apply has nothing to attribute
+    /// and must not say it does. Attributing per game would credit an evening to a revision that was
+    /// installed somewhere the save has never been.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_to_one_folder_does_not_attribute_the_play_held_in_another()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+
+        harness.AddSecondTarget();
+        harness.WriteManifest(harness.ProfileId, 4, "client");
+
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+
+        // An evening in the MP client's folder.
+        harness.WriteSlotFile(_client, "a savegame, played once");
+
+        // The dedicated server is applied to, and moves to 1004. Nothing that happened in the client's
+        // folder belongs to that number.
+        await harness.ApplyAsync(1004);
+
+        Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
+
+        // Then the client folder gets the same apply. Its outgoing revision is 4, which is what the
+        // evening actually ran on - and it is that folder's manifest that says so.
+        await harness.ApplyAsync(1004, "client");
+
+        Assert.Equal(4, harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
+    }
+
+    /// <summary>
+    /// The same fact seen from the check-in: the fallback for a savegame nobody has played yet is the
+    /// revision of <em>the folder it is sitting in</em>, read off that target's own manifest. Two
+    /// folders of one game are routinely on different revisions between two applies, and the other
+    /// one's number is a mod list this save has never run on.
+    /// </summary>
+    [Fact]
+    public async Task A_check_in_falls_back_to_the_revision_of_the_folder_the_save_is_in()
+    {
+        using var harness = new Harness(appliedRevision: 1004);
+
+        harness.AddSecondTarget();
+        harness.WriteManifest(harness.ProfileId, 4, "client");
+
+        // Checked out against revision 2, so the binding's own number is 2 - which is what a
+        // check-in falls back to when no manifest can answer. Asserting 4 below is therefore
+        // asserting that the client folder's manifest was the one read, rather than the server
+        // folder's 1004 or nothing at all.
+        await harness.SeedHeadAsync("a savegame", profileRevision: 2);
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+
+        Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
+    }
+
+    /// <summary>
+    /// <b>The hold limit counts per game, not per folder.</b> You play one save at a time; hosting one
+    /// on the dedicated server while playing another in singleplayer would hold two of the group's
+    /// saves and block two people - and the two folders would have to be on two mod lists to do it,
+    /// which one profile per game refuses anyway.
+    /// </summary>
+    [Fact]
+    public async Task A_savegame_held_in_one_folder_stops_another_being_taken_in_the_other()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        var other = harness.Server.Savegame with { Id = Guid.NewGuid(), Name = "Season 5" };
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.Service.CheckOutAsync(harness.Game, other, _client, CancellationToken.None));
+
+        Assert.Contains("already holding a savegame", exception.UserMessage);
+        Assert.Equal(1, harness.Server.CheckoutsTaken);
+    }
+
+    /// <summary>
+    /// Every slot of every folder, in one list, each one addressed - and named by folder only because
+    /// this game has two. A picker cannot show "savegame1" twice and expect anybody to choose.
+    /// </summary>
+    [Fact]
+    public async Task Slots_are_one_list_across_every_folder_the_game_reaches()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+
+        var slots = await harness.Service.GetSlotsAsync(harness.Game, CancellationToken.None);
+
+        Assert.Equal(
+            [_slot1, _slot2, _client, Keys.Slot("savegame2", "client")],
+            slots.Select(x => x.Ref));
+
+        Assert.All(slots, x => Assert.False(string.IsNullOrWhiteSpace(x.TargetName)));
+    }
+
+    /// <summary>A game with one folder never mentions it, which is nearly every game there is.</summary>
+    [Fact]
+    public async Task A_game_with_one_folder_does_not_name_it()
+    {
+        using var harness = new Harness();
+
+        Assert.All(
+            await harness.Service.GetSlotsAsync(harness.Game, CancellationToken.None),
+            x => Assert.Null(x.TargetName));
+    }
+
+    /// <summary>
+    /// <b>The orphan that is not droppable.</b> A settings field somebody emptied - or an adapter
+    /// author renaming a key, which is the same event from here - takes away the folder a checked-out
+    /// save is sitting in. The hold is kept, because it is a savegame on this disk and a claim
+    /// somebody else is waiting on; it is reported as unreachable, because there is no folder to pack
+    /// and pretending otherwise would offer a check-in that cannot work.
+    /// </summary>
+    [Fact]
+    public async Task A_hold_in_a_folder_the_settings_no_longer_name_survives_and_is_reported()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+
+        harness.RemoveSecondTarget();
+
+        // Still held, and still named by the binding.
+        Assert.Equal(_client, harness.Binding(harness.Server.SavegameId).Slot);
+
+        var unreachable = Assert.Single(harness.Service.GetUnreachableHolds(harness.Game));
+
+        Assert.Equal(harness.Server.SavegameId, unreachable.SavegameId);
+
+        // And it is not a slot any more: nothing lists it, and nothing that touches the bytes will
+        // pretend it can find them.
+        var slots = await harness.Service.GetSlotsAsync(harness.Game, CancellationToken.None);
+
+        Assert.DoesNotContain(slots, x => x.Ref.Target == _client.Target);
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None));
+
+        Assert.Contains("no longer has the folder", exception.UserMessage);
+    }
+
+    /// <summary>
+    /// And it reports no drift while it is unreachable, rather than guessing. There is no folder to
+    /// hash, so "this has been played and never checked in" is not something anything here knows -
+    /// and a warning that fires on a folder nobody can look at is one people learn to click past.
+    /// </summary>
+    [Fact]
+    public async Task A_hold_in_a_folder_the_settings_no_longer_name_reports_no_drift()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+
+        // Played, which in a folder that was still configured would be reported at once.
+        harness.WriteSlotFile(_client, "a savegame, played once");
+
+        harness.RemoveSecondTarget();
+
+        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Filling the field back in is all it takes. Nothing was dropped, so nothing has to be recovered
+    /// - which is the whole argument for keeping a binding a settings edit orphaned.
+    /// </summary>
+    [Fact]
+    public async Task Putting_the_folder_back_makes_the_hold_addressable_again()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+
+        harness.RemoveSecondTarget();
+        harness.AddSecondTarget();
+
+        Assert.Empty(harness.Service.GetUnreachableHolds(harness.Game));
+
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+
+        Assert.Single(harness.Server.CheckIns);
+    }
+
+    /// <summary>
     /// A savegame that follows no mod list takes no part in any of this. It claims no profile, so
     /// there is no revision its play could belong to and none for a check-in to send - and the server
     /// refuses one that sends one anyway.
@@ -809,7 +1018,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.PointTheFolderAtAnotherProfile(revision: 9);
 
-        await harness.Service.ObserveAsync(harness.Game.Identity, CancellationToken.None);
+        await harness.Service.ObserveAsync(Keys.Target(), CancellationToken.None);
 
         var observed = harness.Binding(harness.Server.SavegameId);
 
@@ -906,6 +1115,7 @@ public class SavegameServiceTests
     private sealed class Harness : IDisposable
     {
         private readonly TempDirectory _slots = new("savegame-service-slots");
+        private readonly TempDirectory _clientSlots = new("savegame-service-client-slots");
         private readonly TempDirectory _manifests = new("savegame-service-manifests");
 
 
@@ -926,7 +1136,7 @@ public class SavegameServiceTests
             Game = new Game(Keys.Game(), persisted);
 
             Uploader = new FakeSavegameUploader(Server);
-            Adapter = new FakeSavegameAdapter(_slots.Path, _slot1.Value, _slot2.Value);
+            Adapter = new FakeSavegameAdapter(_slots.Path, _slot1.Slot.Value, _slot2.Slot.Value);
             Bindings = new SavegameBindingStore(State);
             ManifestStore = new SyncManifestStore(_manifests.Path);
 
@@ -944,7 +1154,6 @@ public class SavegameServiceTests
                 new FakeSavegameDownloader(Server),
                 Uploader,
                 ManifestStore,
-                new FakeModFolders(new GameModFolder(Keys.Target(), _slots.Path)),
                 RecycleBin,
                 NullLogger<SavegameService>.Instance,
                 Heads);
@@ -986,6 +1195,19 @@ public class SavegameServiceTests
     }
 
 
+        /// <summary>
+        /// A second folder pair under this game, which is what filling in another folder field does.
+        /// Its slots are numbered exactly like the first's, because that is what two folders of one
+        /// game really look like.
+        /// </summary>
+        public void AddSecondTarget() => Adapter.AddTarget(_client.Target, _clientSlots.Path);
+
+        /// <summary>
+        /// The settings edit that takes it away again, with whatever was checked out into it still on
+        /// this disk.
+        /// </summary>
+        public void RemoveSecondTarget() => Adapter.RemoveTarget(_client.Target);
+
         /// <summary>Puts a savegame on the server whose bytes are a real packed slot.</summary>
         public async Task<SavegameVersionDto> SeedHeadAsync(string content, int? profileRevision = 1)
             => Server.Seed(await PackedBytesAsync(content), profileRevision);
@@ -995,11 +1217,11 @@ public class SavegameServiceTests
         /// attribute whatever has been played on the outgoing revision, then say the folder is on the
         /// incoming one. The mod folder itself is beside the point here - no savegame is in it.
         /// </summary>
-        public async Task ApplyAsync(int revision)
+        public async Task ApplyAsync(int revision, string target = "mods")
         {
-            await Service.ObserveAsync(Game.Identity, CancellationToken.None);
+            await Service.ObserveAsync(Keys.Target(target), CancellationToken.None);
 
-            WriteManifest(revision);
+            WriteManifest(Server.ProfileId, revision, target);
         }
 
         public void WriteManifest(int revision) => WriteManifest(Server.ProfileId, revision);
@@ -1010,13 +1232,18 @@ public class SavegameServiceTests
         /// </summary>
         public void PointTheFolderAtAnotherProfile(int revision) => WriteManifest(Guid.NewGuid(), revision);
 
-        private void WriteManifest(Guid profileId, int revision)
+        /// <param name="target">
+        /// Which of the game's folders was applied to. Defaulted to the one a single-folder game has,
+        /// so the tests that are not about targets never mention one - and named where a test has two
+        /// folders and the point is that only one of them moved.
+        /// </param>
+        public void WriteManifest(Guid profileId, int revision, string target = "mods")
         {
             AppliedRevision = revision;
 
             ManifestStore.Write(new SyncManifest
             {
-                Target = Keys.Target(),
+                Target = Keys.Target(target),
                 RepoId = Server.RepoId,
                 ProfileId = profileId,
                 ProfileRevision = revision,
@@ -1037,11 +1264,11 @@ public class SavegameServiceTests
         /// </summary>
         public async Task<byte[]> PackedBytesAsync(string content)
         {
-            var staging = new SavegameSlotId($"staging-{Guid.NewGuid():N}");
+            var staging = Keys.Slot($"staging-{Guid.NewGuid():N}");
 
             WriteSlotFile(staging, content);
 
-            var packed = await new SavegamePacker().PackAsync(Adapter, staging, CancellationToken.None);
+            var packed = await new SavegamePacker().PackAsync(Adapter, Target(staging), staging.Slot, CancellationToken.None);
 
             try
             {
@@ -1054,13 +1281,18 @@ public class SavegameServiceTests
             }
         }
 
-        public string SlotPath(SavegameSlotId slot) => Adapter.GetSlotPath(slot);
+        public string SlotPath(SavegameSlotRef slot) => Adapter.GetSlotPath(Target(slot), slot.Slot);
+
+        /// <summary>The folder a slot reference addresses, the way the service resolves one.</summary>
+        public SavegameTarget Target(SavegameSlotRef slot)
+            => Adapter.SavegameTargets[slot.Target]
+                ?? throw new InvalidOperationException($"This game reaches no savegame folder '{slot.Target}'.");
 
         /// <summary>What the packer says a slot holds now - the value an observation compares.</summary>
-        public Task<string> HashSlotAsync(SavegameSlotId slot)
-            => new SavegamePacker().HashSlotAsync(Adapter, slot, CancellationToken.None);
+        public Task<string> HashSlotAsync(SavegameSlotRef slot)
+            => new SavegamePacker().HashSlotAsync(Adapter, Target(slot), slot.Slot, CancellationToken.None);
 
-        public void WriteSlotFile(SavegameSlotId slot, string content)
+        public void WriteSlotFile(SavegameSlotRef slot, string content)
         {
             var path = Path.Combine(SlotPath(slot), "careerSavegame.xml");
 
@@ -1068,12 +1300,13 @@ public class SavegameServiceTests
             File.WriteAllText(path, content);
         }
 
-        public string ReadSlotFile(SavegameSlotId slot)
+        public string ReadSlotFile(SavegameSlotRef slot)
             => File.ReadAllText(Path.Combine(SlotPath(slot), "careerSavegame.xml"));
 
         public void Dispose()
         {
             _slots.Dispose();
+            _clientSlots.Dispose();
             _manifests.Dispose();
         }
     }

@@ -186,16 +186,23 @@ public class SavegameSlotStateTests
     }
 
 
-    private static SavegameSlot Slot(string id, bool occupied) => new(
-        new SavegameSlotId(id),
-        occupied ? "Blackthorn Valley" : null,
-        occupied,
-        occupied ? [new SavegameDetail(SavegameDetail.Ids.Playtime, "Played", "12 h")] : []);
+    /// <param name="target">
+    /// Which of the game's folders the slot is in. Defaulted, since most of these rules are about one
+    /// slot; the tests that name it are the ones about two folders numbering their slots alike.
+    /// </param>
+    private static GameSavegameSlot Slot(string id, bool occupied, string target = "mods") => new(
+        Keys.Slot(id, target),
+        null,
+        new SavegameSlot(
+            new SavegameSlotId(id),
+            occupied ? "Blackthorn Valley" : null,
+            occupied,
+            occupied ? [new SavegameDetail(SavegameDetail.Ids.Playtime, "Played", "12 h")] : []));
 
-    private static SavegameCheckoutBinding Binding(string slotId, string hash) => new(
+    private static SavegameCheckoutBinding Binding(string slotId, string hash, string target = "mods") => new(
         Guid.NewGuid(),
         Guid.NewGuid(),
-        slotId,
+        Keys.Slot(slotId, target),
         Version: 4,
         ContentHash: hash,
         WrittenAt: DateTime.UtcNow);

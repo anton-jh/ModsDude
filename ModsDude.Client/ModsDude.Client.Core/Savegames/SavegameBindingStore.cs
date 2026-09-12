@@ -68,6 +68,14 @@ public sealed class StateStoreGameState(StateStore store) : IPersistedGameState
 /// app writes a savegame into a slot and is killed before recording that it did, which leaves an
 /// unrecognised folder holding play that ModsDude put there and can no longer name.
 /// </para>
+/// <para>
+/// <b>A hold outlives the target it names, deliberately.</b> Emptying a settings field takes a target
+/// away, and an adapter author renaming a key does exactly the same thing from here - so nothing
+/// sweeps bindings the way stale manifests are swept. A manifest nobody reads costs a rescan; a
+/// binding is a savegame this machine is still holding and a claim somebody else is waiting on, and
+/// dropping one would leave a slot full of somebody's evening that nothing can name. The game says
+/// so where holds are shown, and filling the field back in makes the hold addressable again.
+/// </para>
 /// </remarks>
 public sealed class SavegameBindingStore(IPersistedGameState state)
 {
@@ -103,14 +111,29 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// <see cref="SavegameSlotAvailability.Unrecognised"/>, which is exactly this answer combined
     /// with an occupied slot.
     /// </summary>
-    public SavegameCheckoutBinding? GetBindingForSlot(GameIdentity game, string slotId)
+    /// <remarks>
+    /// The whole reference, never the slot id alone: two of a game's targets numbering their slots
+    /// from one is the ordinary case, and asking with a bare id would hand back the other folder's
+    /// hold - a binding declaring a slot protected that nothing ever wrote to.
+    /// </remarks>
+    public SavegameCheckoutBinding? GetBindingForSlot(GameIdentity game, SavegameSlotRef slot)
     {
-        return FirstOrNull(Bindings(game), x => SlotIdsMatch(x.SlotId, slotId));
+        return FirstOrNull(Bindings(game), x => x.Slot.Addresses(slot));
     }
 
-    /// <inheritdoc cref="GetBindingForSlot(Guid, string)"/>
-    public SavegameCheckoutBinding? GetBindingForSlot(GameIdentity game, SavegameSlotId slotId)
-        => GetBindingForSlot(game, slotId.Value);
+    /// <summary>
+    /// Everything this game holds in one of its targets - the folder half of a hold, for the callers
+    /// that are about one folder rather than about the game.
+    /// </summary>
+    /// <remarks>
+    /// Play attribution is exactly like this: a save in target T's savegame folder was played against
+    /// target T's mod folder, so an apply to one folder has nothing to say about what is held in
+    /// another.
+    /// </remarks>
+    public IReadOnlyList<SavegameCheckoutBinding> GetBindingsIn(ModTargetRef target)
+    {
+        return [.. GetBindings(target.Game).Where(x => x.Slot.Target == target.Key)];
+    }
 
     /// <summary>
     /// Everything this game currently holds. A short list by construction - a slot is occupied by
@@ -151,11 +174,11 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
 
         persisted.SavegameCheckouts.RemoveAll(x =>
             x.SavegameId == binding.SavegameId ||
-            SlotIdsMatch(x.SlotId, binding.SlotId));
+            x.Slot.Addresses(binding.Slot));
 
         persisted.SavegameCheckouts.Add(binding);
 
-        SetHint(persisted, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.SlotId));
+        SetHint(persisted, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.Slot));
 
         state.Save();
 
@@ -242,13 +265,24 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// put the answer "the remembered slot is taken, here is the first free one" in two places, and
     /// the picker is the one that can say it.
     /// </remarks>
-    public string? GetSlotHint(GameIdentity game, Guid savegameId)
+    public SavegameSlotRef? GetSlotHint(GameIdentity game, Guid savegameId)
     {
-        return state.Find(game)
-            ?.SavegameSlotHints
-            .Where(x => x.SavegameId == savegameId)
-            .Select(x => x.SlotId)
-            .FirstOrDefault();
+        if (state.Find(game)?.SavegameSlotHints is not List<SavegameSlotHint> hints)
+        {
+            return null;
+        }
+
+        // Written out rather than LINQ'd for the reason FirstOrNull exists: SavegameSlotHint is a
+        // struct, and the default one carries a slot reference nobody can address.
+        foreach (var hint in hints)
+        {
+            if (hint.SavegameId == savegameId)
+            {
+                return hint.Slot;
+            }
+        }
+
+        return null;
     }
 
 
@@ -259,7 +293,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// </summary>
     /// <remarks>
     /// Written out rather than <c>FirstOrDefault</c> because <see cref="SavegameCheckoutBinding"/> is
-    /// a struct: the default it hands back is a fully-formed binding with an empty slot id, a zero
+    /// a struct: the default it hands back is a fully-formed binding with a blank slot reference, a zero
     /// version and an empty hash, and every caller here reads that as a real one. A slot safety check
     /// handed that binding declares the slot held with unpublished play and refuses to write to it.
     /// </remarks>
@@ -292,12 +326,4 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
         persisted.SavegameSlotHints.RemoveAll(x => x.SavegameId == hint.SavegameId);
         persisted.SavegameSlotHints.Add(hint);
     }
-
-    /// <summary>
-    /// Whether two adapter slot ids address the same place. Case-insensitive for the same reason the
-    /// safety check is: these are folder and save names on Windows, where two spellings are one
-    /// place, and treating them as two would let a second savegame claim a slot already held.
-    /// </summary>
-    private static bool SlotIdsMatch(string left, string right)
-        => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 }

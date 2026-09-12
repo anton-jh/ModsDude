@@ -383,6 +383,51 @@ public class DriftMonitorTests
     }
 
 
+    /// <summary>
+    /// <b>A held save belongs to the folder it is in.</b> A game reaching two of them holds its saves
+    /// in particular ones, and an entry about the dedicated server saying "your savegame has moved"
+    /// about an evening played on the MP client is the same conflation this phase exists to remove.
+    /// </summary>
+    [Fact]
+    public void Savegame_drift_is_reported_on_the_folder_it_happened_in()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SyncSecondTarget(("fs25_a.zip", "one"));
+
+        fixture.Held.Drifted(Keys.Slot("savegame1", "server"));
+
+        fixture.Monitor.Check();
+
+        var drifted = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(fixture.Candidates.SecondTarget, drifted.Target?.Target);
+        Assert.Single(drifted.Report.SavegameDrift);
+    }
+
+    /// <summary>
+    /// A save held in a folder with no mods beside it - the MP client whose saves live where its mods
+    /// do not - belongs to no folder entry at all, because there is nothing there to compare. It is
+    /// still worth saying, so it gets an entry about the game rather than being dropped for having
+    /// nowhere to sit.
+    /// </summary>
+    [Fact]
+    public void A_save_held_in_a_target_with_no_mod_folder_is_reported_about_the_game()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        fixture.Held.Drifted(Keys.Slot("savegame1", "saves-only"));
+
+        fixture.Monitor.Check();
+
+        var drifted = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Null(drifted.Target);
+        Assert.Single(drifted.Report.SavegameDrift);
+    }
+
+
     private sealed class TestTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -552,7 +597,7 @@ public class DriftMonitorTests
                     NullLogger<StoreIntegrityService>.Instance);
             }
 
-            Held = new FakeHeldSavegames(Manifests, Candidates.Target);
+            Held = new FakeHeldSavegames(Manifests);
 
             Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
         }

@@ -370,17 +370,36 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
     /// <summary>What the game calls each save, keyed by slot - the name a picker shows.</summary>
     public Dictionary<string, string> DisplayNames { get; } = [];
 
+    /// <summary>
+    /// The folders this adapter answers with, keyed. One by default, named the way Farming
+    /// Simulator's is, so an ordinary test reads exactly as a one-folder game does; a test about
+    /// several folders adds them with <see cref="AddTarget"/>.
+    /// </summary>
+    public Dictionary<TargetKey, string> Folders { get; } = new() { [Keys.Target().Key] = root };
 
-    public string GetSlotPath(SavegameSlotId slot) => Path.Combine(root, slot.Value);
 
-    public Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken)
+    public SavegameTargets SavegameTargets => new(Folders.Select(x => new SavegameTarget(x.Key, x.Key.Value, x.Value)));
+
+
+    /// <summary>A second folder under the same adapter, which is what BeamNG's settings produce.</summary>
+    public void AddTarget(TargetKey key, string folder) => Folders[key] = folder;
+
+    /// <summary>
+    /// Takes a folder away, the way emptying a settings field does. What is held behind it is not
+    /// this adapter's business, which is the point of being able to do it from a test.
+    /// </summary>
+    public void RemoveTarget(TargetKey key) => Folders.Remove(key);
+
+    public string GetSlotPath(SavegameTarget target, SavegameSlotId slot) => Path.Combine(target.Path, slot.Value);
+
+    public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
     {
         IReadOnlyList<SavegameSlot> slots =
         [
             .. slotIds.Select(id => new SavegameSlot(
                 new SavegameSlotId(id),
                 DisplayNames.GetValueOrDefault(id),
-                IsOccupied(id),
+                IsOccupied(target, id),
                 []))
         ];
 
@@ -391,9 +410,9 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
     public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
 
 
-    private bool IsOccupied(string slotId)
+    private static bool IsOccupied(SavegameTarget target, string slotId)
     {
-        var path = Path.Combine(root, slotId);
+        var path = Path.Combine(target.Path, slotId);
 
         return Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any();
     }

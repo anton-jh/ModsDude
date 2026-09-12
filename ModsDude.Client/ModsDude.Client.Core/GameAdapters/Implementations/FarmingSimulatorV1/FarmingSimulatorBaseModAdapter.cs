@@ -362,14 +362,10 @@ public class FarmingSimulatorLocalModAdapter(
     /// one mod folder does not have a mod folder called something.
     /// </summary>
     /// <remarks>
-    /// Stable, and it has to stay that way. Renaming this to anything else would orphan every
-    /// manifest and every savegame binding on every member's machine, and nothing could tell that
-    /// from the folder having been taken away.
+    /// Shared with <see cref="FarmingSimulatorLocalSavegameAdapter"/>, which reaches the savegame
+    /// half of the same target - see <see cref="FarmingSimulatorTarget"/>.
     /// </remarks>
-    public static TargetKey Key { get; } = new("mods");
-
-
-    public ModTargets ModTargets => new(new ModTarget(Key, null, ModFolder));
+    public ModTargets ModTargets => new(new ModTarget(FarmingSimulatorTarget.Key, null, ModFolder));
 
     private string ModFolder => Path.Combine(
         localSettings.GameDataFolder ?? throw new InvalidOperationException("Local settings carry no game data folder."),

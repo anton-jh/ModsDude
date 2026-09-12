@@ -176,18 +176,19 @@ public sealed class SyncManifestStore
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>For the savegame side, which is keyed on the game and not yet on a target.</b> A held
-    /// savegame's revision is the revision of the folder it was played against, and a binding does
-    /// not say which folder that is until slice 3 of Phase 10 puts the target key on it. Every target
-    /// of a game follows one profile, so where they all report the same profile and the same revision
-    /// there is only one answer and it does not matter which folder the save ran in.
+    /// <b>For the questions asked of the game rather than of one of its folders</b> - which is now
+    /// one question: whether a savegame row's two buttons can act here, before anybody has chosen a
+    /// slot. Every target of a game follows one profile, so where they all report the same profile
+    /// and the same revision there is one answer and the row can state it. Everything keyed on a
+    /// binding reads its own target's manifest instead, because the binding says which folder the
+    /// save is in.
     /// </para>
     /// <para>
     /// Disagreement - including a target that has never been applied to, and a game reaching no
     /// folder at all - is <b>unknown rather than guessed</b>. It means one folder did not get an
-    /// apply that another did, and attributing an evening to either number would be recording a mod
-    /// list the save may never have run on. Nothing is recorded instead, which is the same answer
-    /// this design gives a folder sitting on a different profile.
+    /// apply that another did, and a row that called the game ready would be offering a check-out
+    /// into whichever folder was left behind. Nothing is claimed instead, which reads as "apply the
+    /// profile first" - and the apply is per target, so it is also the remedy.
     /// </para>
     /// </remarks>
     public SyncManifest? TryReadAgreed(IEnumerable<ModTargetRef> targets)

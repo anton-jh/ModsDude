@@ -831,17 +831,24 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     {
         foreach (var game in _repo.Games.ToList())
         {
+            // A hold whose folder the settings no longer name has nothing to hash, so there is
+            // nothing this chip could say about it. The game's own slot list is where that state is
+            // reported, with the one action it has.
+            var unreachable = _savegameService.GetUnreachableHolds(game)
+                .Select(x => x.SavegameId)
+                .ToHashSet();
+
             foreach (var binding in _bindingStore.GetBindings(game.Identity))
             {
                 _lifetime.ThrowIfCancellationRequested();
 
-                if (rows.FirstOrDefault(x => x.Id == binding.SavegameId) is not SavegameListItemViewModel row)
+                if (rows.FirstOrDefault(x => x.Id == binding.SavegameId) is not SavegameListItemViewModel row
+                    || unreachable.Contains(binding.SavegameId))
                 {
                     continue;
                 }
 
-                var availability = await _savegameService.ClassifySlotAsync(
-                    game, new SavegameSlotId(binding.SlotId), _lifetime);
+                var availability = await _savegameService.ClassifySlotAsync(game, binding.Slot, _lifetime);
 
                 if (availability is SavegameSlotAvailability.HeldWithUnpublishedPlay)
                 {
@@ -1286,7 +1293,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
-            await _savegameService.TakeCopyAsync(result.Game, row.Savegame, versionNumber, result.Slot.Id, _lifetime);
+            await _savegameService.TakeCopyAsync(result.Game, row.Savegame, versionNumber, result.Slot.Ref, _lifetime);
 
             Status = $"Version {versionNumber} of '{row.Name}' is in '{result.Game.Name}'. Nobody was stopped from playing it, " +
                      "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
@@ -1312,7 +1319,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         task.Report("Writing it into the slot");
 
-        await _savegameService.CheckOutAsync(result.Game, savegame, result.Slot.Id, _lifetime);
+        await _savegameService.CheckOutAsync(result.Game, savegame, result.Slot.Ref, _lifetime);
 
         Status = $"'{row.Name}' is checked out to you, in '{result.Game.Name}'.";
 
@@ -1455,8 +1462,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         foreach (var slot in slots)
         {
-            var availability = await _savegameService.ClassifySlotAsync(game, slot.Id, cancellationToken);
-            var binding = _bindingStore.GetBindingForSlot(game.Identity, slot.Id);
+            var availability = await _savegameService.ClassifySlotAsync(game, slot.Ref, cancellationToken);
+            var binding = _bindingStore.GetBindingForSlot(game.Identity, slot.Ref);
 
             options.Add(new SavegameSlotOptionViewModel(
                 slot,
@@ -1510,8 +1517,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private static string? DescribeSuggestion(
         IReadOnlyList<SavegameSlotOptionViewModel> options,
-        SavegameSlotId? suggested,
-        string? hint)
+        SavegameSlotRef? suggested,
+        SavegameSlotRef? hint)
     {
         if (suggested is null)
         {
@@ -1520,13 +1527,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 : "Every slot has something in it, so there is nothing to pre-select. Pick the one to write over - anything ModsDude has a copy of can be put back.";
         }
 
-        if (hint is null || string.Equals(hint, suggested.Value.Value, StringComparison.OrdinalIgnoreCase))
+        if (hint is not SavegameSlotRef remembered || remembered.Addresses(suggested.Value))
         {
             return null;
         }
 
-        var taken = options.FirstOrDefault(x => string.Equals(x.Id.Value, hint, StringComparison.OrdinalIgnoreCase));
+        var taken = options.FirstOrDefault(x => x.Ref.Addresses(remembered));
 
+        // Gone covers the folder having gone as well as the slot: a target somebody took out of the
+        // settings takes every slot in it with it, and "the slot this save was last in is gone" is
+        // the same sentence for both.
         return taken is null
             ? "The slot this save was last in is gone, so the first free one is picked instead."
             : $"The slot this save was last in now holds '{taken.Label}', so the first free one is picked instead.";

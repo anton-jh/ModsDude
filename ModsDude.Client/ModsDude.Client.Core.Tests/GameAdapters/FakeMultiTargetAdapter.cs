@@ -45,6 +45,16 @@ internal class FakeMultiTargetGameAdapter : IGameAdapter
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()!
             .Invoke();
     }
+
+    /// <summary>The same chain to the other half of a target - the folders saves live in.</summary>
+    public static ILocalSavegameAdapter SavegameAdapterFor(FakeMultiTargetSettings settings)
+    {
+        return new FakeMultiTargetGameAdapter()
+            .WithBaseSettings(new EmptyAdapterSettings())
+            .WithLocalSettings(settings.Serialize())
+            .GetLocalCapabilityAdapterFactory<ILocalSavegameAdapter>()!
+            .Invoke();
+    }
 }
 
 
@@ -55,7 +65,8 @@ internal class FakeMultiTargetGameAdapter : IGameAdapter
 internal class FakeMultiTargetBaseGameAdapter : FakeMultiTargetGameAdapter, IBaseGameAdapter
 {
     private readonly List<object> _capabilities = [
-        new Func<IBaseModAdapter>(() => new FakeMultiTargetBaseModAdapter())
+        new Func<IBaseModAdapter>(() => new FakeMultiTargetBaseModAdapter()),
+        new Func<IBaseSavegameAdapter>(() => new FakeMultiTargetBaseSavegameAdapter())
         ];
 
 
@@ -86,16 +97,17 @@ internal sealed class FakeMultiTargetLocalGameAdapter(FakeMultiTargetSettings se
     : FakeMultiTargetBaseGameAdapter, ILocalGameAdapter
 {
     private readonly List<object> _capabilities = [
-        new Func<ILocalModAdapter>(() => new FakeMultiTargetModAdapter(settings))
+        new Func<ILocalModAdapter>(() => new FakeMultiTargetModAdapter(settings)),
+        new Func<ILocalSavegameAdapter>(() => new FakeMultiTargetSavegameAdapter(settings))
         ];
 
 
     public DynamicForm LocalSettings { get; } = settings;
 
     /// <summary>
-    /// The pairing, which is the half <see cref="ModTargets"/> cannot express on its own. Slice 3
-    /// gives the savegame adapter the same shape; until then this is where a test asks which savegame
-    /// folder belongs to which mod folder.
+    /// The pairing, as the settings hold it. The two capability adapters each answer with their own
+    /// half of it under the same keys, which is the whole of how a save is tied to the mods it was
+    /// played against; this is where a test reads both halves at once.
     /// </summary>
     public IReadOnlyList<FakeTarget> Targets => settings.Targets;
 
@@ -165,6 +177,69 @@ internal sealed class FakeMultiTargetModAdapter(FakeMultiTargetSettings settings
 
     public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
         => Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
+}
+
+
+/// <summary>
+/// The savegame half of the fake, in the shape the real BeamNG adapter's will be: the folders come
+/// out of the same settings the mod folders do, under the same keys.
+/// </summary>
+/// <remarks>
+/// Slots are folders under a target's savegame folder, occupied when they have anything in them -
+/// which is what a real adapter decides by reading the save. Enough for a check-out to write into
+/// and a drift check to hash, and nothing more.
+/// </remarks>
+internal class FakeMultiTargetBaseSavegameAdapter : IBaseSavegameAdapter
+{
+    /// <summary>Named freely, so a test can mint a slot rather than picking from twenty.</summary>
+    public bool CanCreateSlots => true;
+
+
+    public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings)
+        => new FakeMultiTargetSavegameAdapter(FakeMultiTargetSettings.Deserialize(serializedLocalSettings));
+
+    public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings)
+        => localSettings is FakeMultiTargetSettings settings
+            ? new FakeMultiTargetSavegameAdapter(settings)
+            : throw new IncorrectGameAdapterSettingsTypeException<FakeMultiTargetSettings>(localSettings);
+}
+
+
+internal sealed class FakeMultiTargetSavegameAdapter(FakeMultiTargetSettings settings)
+    : FakeMultiTargetBaseSavegameAdapter, ILocalSavegameAdapter
+{
+    /// <summary>
+    /// Only the targets with a savegame folder. A target configured with mods and nothing else is an
+    /// ordinary target with no saves in it, rather than one with a null path.
+    /// </summary>
+    public SavegameTargets SavegameTargets => new(settings.Targets
+        .Where(x => x.SavegameFolder is not null)
+        .Select(x => new SavegameTarget(x.Key, x.DisplayName, x.SavegameFolder!)));
+
+
+    public string GetSlotPath(SavegameTarget target, SavegameSlotId slot) => Path.Combine(target.Path, slot.Value);
+
+    public SavegameSlotId CreateSlot(string name) => new(name);
+
+    public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
+    {
+        if (Directory.Exists(target.Path) is false)
+        {
+            return Task.FromResult<IReadOnlyList<SavegameSlot>>([]);
+        }
+
+        IReadOnlyList<SavegameSlot> slots =
+        [
+            .. Directory.EnumerateDirectories(target.Path)
+                .Select(x => new SavegameSlot(
+                    new SavegameSlotId(Path.GetFileName(x)),
+                    Path.GetFileName(x),
+                    Directory.EnumerateFileSystemEntries(x).Any(),
+                    []))
+        ];
+
+        return Task.FromResult(slots);
+    }
 }
 
 

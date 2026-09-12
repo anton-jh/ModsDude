@@ -89,8 +89,8 @@ public enum SavegameSlotWriteDecision
 public static class SavegameSlotStates
 {
     /// <param name="slot">
-    /// The slot as the adapter reports it. Only <see cref="SavegameSlot.IsOccupied"/> is consulted;
-    /// the display name is for the prompt, not for the decision.
+    /// The slot as the adapter reports it, addressed. Only <see cref="SavegameSlot.IsOccupied"/> and
+    /// the reference are consulted; the display name is for the prompt, not for the decision.
     /// </param>
     /// <param name="binding">
     /// What this machine records as being checked out into this slot, or null for none. A binding
@@ -103,14 +103,15 @@ public static class SavegameSlotStates
     /// skip it, and what it gets back is the cautious answer rather than the cheap one.
     /// </param>
     public static SavegameSlotAvailability Classify(
-        SavegameSlot slot,
+        GameSavegameSlot slot,
         SavegameCheckoutBinding? binding,
         string? currentContentHash)
     {
-        // A binding for another slot is a caller mistake, and the one thing that must not happen is
-        // using its hash to declare this slot clean. Reduced to "no binding", which lands on the
-        // cautious side of every remaining branch.
-        if (binding is not SavegameCheckoutBinding held || SlotIdsMatch(held.SlotId, slot.Id) is false)
+        // A binding for another slot - another target's, now, as well as another number's - is a
+        // caller mistake, and the one thing that must not happen is using its hash to declare this
+        // slot clean. Reduced to "no binding", which lands on the cautious side of every remaining
+        // branch.
+        if (binding is not SavegameCheckoutBinding held || held.Slot.Addresses(slot.Ref) is false)
         {
             // Occupied with nothing recording who put it there is somebody's own save, never
             // published. ModsDude has no copy of it, so it is never quietly replaced.
@@ -161,7 +162,7 @@ public static class SavegameSlotStates
 
     /// <inheritdoc cref="DecideWrite(SavegameSlotAvailability)"/>
     public static SavegameSlotWriteDecision DecideWrite(
-        SavegameSlot slot,
+        GameSavegameSlot slot,
         SavegameCheckoutBinding? binding,
         string? currentContentHash)
         => DecideWrite(Classify(slot, binding, currentContentHash));
@@ -180,14 +181,4 @@ public static class SavegameSlotStates
     /// </summary>
     public static bool IsRefused(SavegameSlotAvailability availability)
         => DecideWrite(availability) is SavegameSlotWriteDecision.Refused;
-
-
-    /// <summary>
-    /// Whether two adapter slot ids address the same place. Case-insensitive: these are folder names
-    /// and save names on Windows, where two spellings are one place. Treating them as two slots would
-    /// let a write land on top of a save the binding was protecting, which is the failure this whole
-    /// file exists to prevent; treating them as one at worst refuses a write that was fine.
-    /// </summary>
-    private static bool SlotIdsMatch(string left, SavegameSlotId right)
-        => string.Equals(left, right.Value, StringComparison.OrdinalIgnoreCase);
 }

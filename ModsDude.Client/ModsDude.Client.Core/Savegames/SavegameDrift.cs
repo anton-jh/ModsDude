@@ -51,11 +51,15 @@ public enum SavegameDriftKind
 /// <summary>
 /// One drifted savegame in one game, with the numbers the notice needs to say what happened.
 /// </summary>
-/// <param name="Slot">Where it is on this machine. Displayed by name, never by folder number.</param>
+/// <param name="Slot">
+/// Where it is on this machine - which of the game's targets, and which slot in it. Displayed by
+/// name, never by folder number; the target half is what lets a notice put this on the folder it
+/// happened in rather than on the game.
+/// </param>
 public sealed record SavegameDrift(
     Guid RepoId,
     Guid SavegameId,
-    SavegameSlotId Slot,
+    SavegameSlotRef Slot,
     SavegameDriftKind Kind)
 {
     /// <summary>What the game calls the save in that slot, where the adapter could read it.</summary>

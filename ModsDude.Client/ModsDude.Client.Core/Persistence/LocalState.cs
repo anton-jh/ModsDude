@@ -11,6 +11,15 @@ public class LocalState
     /// </summary>
     /// <remarks>
     /// <para>
+    /// Bumped to 6 because a savegame checkout and its slot hint carry a
+    /// <see cref="Models.SavegameSlotRef"/> rather than a bare slot id: a slot is a place in one of
+    /// the game's targets now, and "savegame3" names one on every folder a game reaches. A version 5
+    /// binding has a string where a reference is expected, which is a parse error rather than the
+    /// deliberate discard this is - and read, it would hold a slot in whichever folder happened to be
+    /// first. Local state is what this costs: the active profile, the holds and the slot hints go,
+    /// and a savegame checked out on the server has to be disconnected and taken again.
+    /// </para>
+    /// <para>
     /// Bumped to 5 because <see cref="PersistedGame.Targets"/> carries a
     /// <see cref="TargetKey"/> beside each folder. A version 4 state holds bare path strings there,
     /// and a string where an object is expected is a parse error rather than the deliberate discard
@@ -37,7 +46,7 @@ public class LocalState
     /// paying for it is how a schema grows a history nobody asked for.
     /// </para>
     /// </remarks>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
 
     public int Version { get; set; } = CurrentVersion;

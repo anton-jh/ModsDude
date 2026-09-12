@@ -22,12 +22,13 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public sealed class SavegameSlotOptionViewModel
 {
     public SavegameSlotOptionViewModel(
-        SavegameSlot slot,
+        GameSavegameSlot slot,
         SavegameSlotAvailability availability,
         Guid? occupyingSavegameId = null,
         string? occupyingSavegameName = null)
     {
-        Id = slot.Id;
+        Ref = slot.Ref;
+        TargetName = slot.TargetName;
         Availability = availability;
         OccupyingSavegameId = occupyingSavegameId;
         OccupyingSavegameName = occupyingSavegameName;
@@ -40,7 +41,7 @@ public sealed class SavegameSlotOptionViewModel
             : "Empty slot";
 
         Detail = BuildDetail();
-        ToolTip = SavegameSlotWording.DescribeFully(Label, Id, Details);
+        ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, Details);
 
         IsRefused = SavegameSlotStates.IsRefused(availability);
         NeedsConfirmation = SavegameSlotStates.RequiresConfirmation(availability);
@@ -48,7 +49,16 @@ public sealed class SavegameSlotOptionViewModel
     }
 
 
-    public SavegameSlotId Id { get; }
+    /// <summary>Which of the game's savegame folders this slot is in, and which slot in it.</summary>
+    public SavegameSlotRef Ref { get; }
+
+    public SavegameSlotId Id => Ref.Slot;
+
+    /// <summary>
+    /// What to call the folder this slot is in, or null where the game has one. The picker groups on
+    /// it, which is the whole of what a target means to somebody choosing where a save goes.
+    /// </summary>
+    public string? TargetName { get; }
 
     public SavegameSlotAvailability Availability { get; }
 

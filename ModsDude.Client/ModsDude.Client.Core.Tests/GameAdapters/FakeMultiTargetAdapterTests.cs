@@ -178,6 +178,66 @@ public class FakeMultiTargetAdapterTests
             x => Assert.False(string.IsNullOrWhiteSpace(x.DisplayName)));
     }
 
+    /// <summary>
+    /// <b>The pairing, stated as the two adapters state it.</b> One key, two halves, answered by two
+    /// capability adapters that never see each other - which is what makes "a save in target T's
+    /// savegame folder was played against target T's mods" a fact rather than a convention.
+    /// </summary>
+    [Fact]
+    public void A_targets_two_halves_are_keyed_alike()
+    {
+        var settings = Everything();
+
+        Assert.Equal(
+            FakeMultiTargetGameAdapter.ModAdapterFor(settings).ModTargets.Select(x => x.Key),
+            FakeMultiTargetGameAdapter.SavegameAdapterFor(settings).SavegameTargets.Select(x => x.Key));
+    }
+
+    /// <summary>
+    /// The shape only this fake can make, and the reason slice 3 needed it back: a folder saves live
+    /// in with no mods beside them. Sync has no business there and a check-out has every business
+    /// there.
+    /// </summary>
+    [Fact]
+    public void A_target_holding_savegames_and_no_mods_is_a_savegame_target()
+    {
+        var settings = new FakeMultiTargetSettings { ClientSavegameFolder = @"C:\client\saves" };
+        var targets = FakeMultiTargetGameAdapter.SavegameAdapterFor(settings).SavegameTargets;
+
+        Assert.Empty(FakeMultiTargetGameAdapter.ModAdapterFor(settings).ModTargets);
+        Assert.Equal(@"C:\client\saves", Assert.Single(targets).Path);
+    }
+
+    [Fact]
+    public void A_target_holding_mods_and_no_savegames_reaches_no_savegame_folder()
+    {
+        var settings = new FakeMultiTargetSettings { ServerModFolder = @"C:\server\mods" };
+
+        Assert.Single(FakeMultiTargetGameAdapter.ModAdapterFor(settings).ModTargets);
+        Assert.Empty(FakeMultiTargetGameAdapter.SavegameAdapterFor(settings).SavegameTargets);
+    }
+
+    /// <summary>
+    /// The removal, from the savegame side. This is the edit a hold has to survive: the folder a save
+    /// is sitting in stops being addressable, and nothing was asked first.
+    /// </summary>
+    [Fact]
+    public void Emptying_a_savegame_field_takes_its_savegame_target_away()
+    {
+        var settings = Everything();
+
+        settings.ClientSavegameFolder = null;
+
+        var targets = FakeMultiTargetGameAdapter.SavegameAdapterFor(settings).SavegameTargets;
+
+        Assert.Equal(2, targets.Count);
+        Assert.Null(targets[FakeMultiTargetSettings.Client]);
+
+        // And the mod half of that target is untouched - a target is two independently optional
+        // folders, not one thing with two spellings.
+        Assert.NotNull(FakeMultiTargetGameAdapter.ModAdapterFor(settings).ModTargets[FakeMultiTargetSettings.Client]);
+    }
+
 
     private static FakeMultiTargetLocalGameAdapter LocalAdapterFor(FakeMultiTargetSettings settings)
     {

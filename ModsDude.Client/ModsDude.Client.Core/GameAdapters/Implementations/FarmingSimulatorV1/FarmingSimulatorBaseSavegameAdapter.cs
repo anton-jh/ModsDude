@@ -83,9 +83,22 @@ public class FarmingSimulatorLocalSavegameAdapter(
         ?? throw new InvalidOperationException("Local settings carry no game data folder.");
 
 
-    public string GetSlotPath(SavegameSlotId slot)
+    /// <summary>
+    /// The savegame half of the one target the mod adapter names, under the same key.
+    /// </summary>
+    /// <remarks>
+    /// The saves sit in the game data folder and the mods in a <c>mods</c> folder inside it, so this
+    /// game's pairing is not a coincidence of configuration - it is the installation. Never named:
+    /// there is one, and a game with one savegame folder does not have a savegame folder called
+    /// something.
+    /// </remarks>
+    public SavegameTargets SavegameTargets => new(
+        new SavegameTarget(FarmingSimulatorTarget.Key, null, GameDataFolder));
+
+
+    public string GetSlotPath(SavegameTarget target, SavegameSlotId slot)
     {
-        return Path.Combine(GameDataFolder, slot.Value);
+        return Path.Combine(target.Path, slot.Value);
     }
 
     /// <summary>
@@ -96,7 +109,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
     /// is as quick as twenty, and the thread pool belongs to the rest of the app too. Indexed rather
     /// than collected, so the results keep the slot order rather than the order they finished in.
     /// </remarks>
-    public Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
     {
         return Task.Run<IReadOnlyList<SavegameSlot>>(() =>
         {
@@ -111,7 +124,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
             Parallel.For(0, _slotCount, options, i =>
             {
                 var id = new SavegameSlotId($"savegame{i + 1}");
-                slots[i] = ReadSlot(id, GetSlotPath(id), Log, cancellationToken);
+                slots[i] = ReadSlot(id, GetSlotPath(target, id), Log, cancellationToken);
             });
 
             return slots;

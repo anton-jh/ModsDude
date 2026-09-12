@@ -296,13 +296,17 @@ internal sealed class FakeModFolders(params GameModFolder[] folders) : IModFolde
 /// still have read, and that is the number play gets attributed to.
 /// </para>
 /// </remarks>
-internal sealed class FakeHeldSavegames(SyncManifestStore manifests, params ModTargetRef[] targets) : IHeldSavegames
+internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSavegames
 {
     private readonly List<SavegameCheckoutBinding> _held = [];
+    private readonly List<SavegameDrift> _drift = [];
 
 
     /// <summary>What the folder was on at each observation, oldest first. Null is "never synced".</summary>
     public List<int?> Observed { get; } = [];
+
+    /// <summary>Which folder each observation was about, so a test can say it was this one's.</summary>
+    public List<ModTargetRef> ObservedTargets { get; } = [];
 
 
     /// <summary>
@@ -317,13 +321,13 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests, params ModT
 
 
     /// <remarks>
-    /// Reads the manifest the same way the real one does - through the game's folders rather than
-    /// off the game - so what is observed is the revision the folders agree on, which for a game
-    /// with one folder is that folder's.
+    /// Reads the manifest the same way the real one does - this folder's own, by the key the apply
+    /// is about - so what is observed is the revision the folder being rewritten was still on.
     /// </remarks>
-    public Task ObserveAsync(GameIdentity game, CancellationToken ct)
+    public Task ObserveAsync(ModTargetRef target, CancellationToken ct)
     {
-        Observed.Add(manifests.TryReadAgreed(targets.Where(x => x.Game == game))?.ProfileRevision);
+        Observed.Add(manifests.TryRead(target)?.ProfileRevision);
+        ObservedTargets.Add(target);
 
         return Task.CompletedTask;
     }
@@ -335,16 +339,22 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests, params ModT
         => SavegameHoldRules.DecideApply(_held, profileId, revision);
 
     /// <summary>
-    /// Nothing: what the notice says about a held slot is <see cref="SavegameDriftRules"/>'s and is
-    /// exercised where that lives. A hold recorded here is about the mod folder, not about the slot.
+    /// Whatever a test put there, which is nothing by default: what the notice <em>says</em> about a
+    /// held slot is <see cref="SavegameDriftRules"/>'s and is exercised where that lives. What is
+    /// worth reaching from here is which folder each answer is about, since that is what the monitor
+    /// has to place it by.
     /// </summary>
     public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<SavegameDrift>>([]);
+        => Task.FromResult<IReadOnlyList<SavegameDrift>>([.. _drift]);
+
+    /// <summary>Records that a save held in one of this game's folders has drifted.</summary>
+    public void Drifted(SavegameSlotRef slot)
+        => _drift.Add(new SavegameDrift(Guid.NewGuid(), Guid.NewGuid(), slot, SavegameDriftKind.UncheckedInPlay));
 
 
     private void Add(Guid? profileId, int? targetRevision)
         => _held.Add(new SavegameCheckoutBinding(
-            Guid.NewGuid(), Guid.NewGuid(), "savegame1", 1, "aaaa", DateTime.UtcNow)
+            Guid.NewGuid(), Guid.NewGuid(), Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {
             ProfileId = profileId,
             ProfileRevision = targetRevision ?? 1,

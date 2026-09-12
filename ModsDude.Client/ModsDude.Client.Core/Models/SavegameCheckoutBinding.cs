@@ -16,6 +16,13 @@ namespace ModsDude.Client.Core.Models;
 /// playing, which is one or two rather than twenty.
 /// </para>
 /// </remarks>
+/// <param name="Slot">
+/// Where it is on this machine: which of the game's targets, and which slot in it. The target half
+/// is what makes the hold answerable - a check-in packs the folder that target names, and the
+/// revision the play is attributed to is that target's manifest rather than an average of the game's.
+/// A key the adapter no longer offers is a hold this machine can no longer address, and the binding
+/// deliberately survives it: see <c>SavegameBindingStore</c>.
+/// </param>
 /// <param name="Version">The version that was written into the slot - what a check-in is based on.</param>
 /// <param name="ContentHash">
 /// What was written at check-out, so that the slot having moved since is a comparison rather than a
@@ -25,7 +32,7 @@ namespace ModsDude.Client.Core.Models;
 public readonly record struct SavegameCheckoutBinding(
     Guid RepoId,
     Guid SavegameId,
-    string SlotId,
+    SavegameSlotRef Slot,
     int Version,
     string ContentHash,
     DateTime WrittenAt)
@@ -127,4 +134,4 @@ public readonly record struct SavegameCheckoutBinding(
 public readonly record struct SavegameSlotHint(
     Guid RepoId,
     Guid SavegameId,
-    string SlotId);
+    SavegameSlotRef Slot);

@@ -56,7 +56,7 @@ public interface ISavegamePacker
     /// useful answer than an exception to the one caller - the drift check - that can legitimately
     /// ask about a slot somebody deleted from under it.
     /// </remarks>
-    Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
 
     /// <summary>
     /// Replaces the slot's contents with the archive's.
@@ -75,7 +75,7 @@ public interface ISavegamePacker
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidDataException">An entry names a path outside the slot folder.</exception>
-    Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
 
     /// <summary>
     /// What <see cref="PackAsync"/> would report as the content hash, without keeping the archive.
@@ -85,7 +85,7 @@ public interface ISavegamePacker
     /// compresses every byte - the hash has to be over the same bytes the packer produces or the two
     /// could differ - but writes none of them.
     /// </remarks>
-    Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
 }
 
 
@@ -108,7 +108,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private const int _bufferSize = 64 * 1024;
 
 
-    public async Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
     {
         var archivePath = GetTemporaryArchivePath();
 
@@ -120,7 +120,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
             await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
             {
-                hash = await WriteArchiveAsync(adapter, slot, file, cancellationToken);
+                hash = await WriteArchiveAsync(adapter, target, slot, file, cancellationToken);
             }
 
             return new PackedSavegame(archivePath, hash, new FileInfo(archivePath).Length);
@@ -135,18 +135,18 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
-    public Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
     {
         // Literally the pack, discarding the bytes as they are produced. Sharing the writer rather
         // than hashing the files individually is the whole point: any difference between the two -
         // an exclusion applied in one, an ordering rule in the other - would surface as a slot that
         // reads as played the moment it is checked in.
-        return WriteArchiveAsync(adapter, slot, Stream.Null, cancellationToken);
+        return WriteArchiveAsync(adapter, target, slot, Stream.Null, cancellationToken);
     }
 
-    public async Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
     {
-        var slotPath = Path.GetFullPath(adapter.GetSlotPath(slot));
+        var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
         var parent = Path.GetDirectoryName(slotPath)
             ?? throw new ArgumentException($"'{slotPath}' is a filesystem root, not a savegame slot.", nameof(slot));
 
@@ -207,11 +207,12 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     /// </remarks>
     private static async Task<string> WriteArchiveAsync(
         ILocalSavegameAdapter adapter,
+        SavegameTarget target,
         SavegameSlotId slot,
         Stream destination,
         CancellationToken cancellationToken)
     {
-        var slotPath = Path.GetFullPath(adapter.GetSlotPath(slot));
+        var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
 
         await using var hashing = new HashingStream(destination);
 
@@ -229,9 +230,9 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
                 // Shared for write and delete: the game may hold the save open, and a hash taken for
                 // a drift check must never be the reason it fails to save.
                 await using var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                await using var target = entry.Open();
+                await using var entryStream = entry.Open();
 
-                await source.CopyToAsync(target, cancellationToken);
+                await source.CopyToAsync(entryStream, cancellationToken);
             }
         }
 

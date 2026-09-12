@@ -172,8 +172,8 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
 
             foreach (var slot in slots)
             {
-                var availability = await _savegameService.ClassifySlotAsync(_game, slot.Id, cancellationToken);
-                var binding = _bindingStore.GetBindingForSlot(_game.Identity, slot.Id);
+                var availability = await _savegameService.ClassifySlotAsync(_game, slot.Ref, cancellationToken);
+                var binding = _bindingStore.GetBindingForSlot(_game.Identity, slot.Ref);
 
                 rows.Add(new SavegameSlotRowViewModel(
                     slot,
@@ -183,6 +183,17 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
                     binding is SavegameCheckoutBinding bound ? known.StandingOf(bound.SavegameId) : SavegameBindingStanding.None,
                     CanPublish,
                     CanPublish));
+            }
+
+            // Last, because they are not slots: a hold whose folder the settings no longer name has
+            // no row of its own to sit in, and leaving it out would make a savegame this machine is
+            // holding - and somebody else is waiting on - invisible everywhere it is shown.
+            foreach (var unreachable in _savegameService.GetUnreachableHolds(_game))
+            {
+                rows.Add(SavegameSlotRowViewModel.ForUnreachableHold(
+                    unreachable,
+                    known.NameOf(unreachable.SavegameId),
+                    known.StandingOf(unreachable.SavegameId)));
             }
 
             return rows;
@@ -251,6 +262,11 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
     {
         ClearRows();
 
+        // Grouped only where the game reaches more than one savegame folder, which is what a row
+        // carrying a target name means. One heading over every slot a game has would be a heading
+        // repeating the page title.
+        SlotGrouping.Apply(Slots, rows.Any(x => x.TargetName is not null));
+
         foreach (var row in rows)
         {
             row.PublishRequested += OnPublishRequested;
@@ -309,7 +325,7 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
 
         await RunAsync(async () =>
         {
-            var published = await _flowService.PublishAsync(_game, _repo, row.Id, row.Label, _lifetime);
+            var published = await _flowService.PublishAsync(_game, _repo, row.Ref, row.Label, _lifetime);
 
             if (published is null)
             {

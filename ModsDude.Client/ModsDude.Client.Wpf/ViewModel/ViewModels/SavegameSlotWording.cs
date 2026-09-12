@@ -18,10 +18,10 @@ internal static class SavegameSlotWording
 
     /// <summary>
     /// Everything about a slot, for the tooltip: what the save is called, every detail the adapter
-    /// recorded, and - last, and only here - the adapter's own id for the slot, which is for
+    /// recorded, and - last, and only here - the slot's address, folder key and all, which is for
     /// somebody debugging rather than somebody playing.
     /// </summary>
-    public static string DescribeFully(string label, SavegameSlotId id, IReadOnlyList<SavegameDetail> details)
+    public static string DescribeFully(string label, SavegameSlotRef id, IReadOnlyList<SavegameDetail> details)
     {
         var text = new StringBuilder(label);
 
@@ -30,6 +30,6 @@ internal static class SavegameSlotWording
             text.Append('\n').Append(detail.Label).Append(": ").Append(detail.Value);
         }
 
-        return text.Append('\n').Append(id.Value).ToString();
+        return text.Append('\n').Append(id.ToString()).ToString();
     }
 }

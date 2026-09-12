@@ -198,7 +198,7 @@ public class SavegameRowRulesTests
             hasGame: true);
 
     private static SavegameCheckoutBinding Hold(Guid savegameId)
-        => new(Guid.NewGuid(), savegameId, "savegame1", 1, "aaaa", DateTime.UtcNow)
+        => new(Guid.NewGuid(), savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {
             ProfileId = _profileId,
             ProfileRevision = 1

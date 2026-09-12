@@ -124,6 +124,22 @@
                              SelectedItem="{Binding SelectedSlot, Mode=TwoWay}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              Visibility="{Binding ShowAllSlots, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <!-- Headed by folder only where the game reaches more than one of them: the
+                             view carries no grouping at all otherwise, so a game with one savegame
+                             folder shows exactly the list it always did. -->
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="0 8 0 2"
+                                                   Text="{Binding Name}"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:SavegameSlotOptionViewModel}">
                                 <StackPanel Margin="0 4" ToolTip="{Binding ToolTip}">

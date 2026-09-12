@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -162,11 +163,14 @@ public sealed class SavegameFlowService(
     public async Task<SavegameDto?> PublishAsync(
         Game game,
         Repo repo,
-        SavegameSlotId slot,
+        SavegameSlotRef slot,
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var manifest = manifestStore.TryReadAgreed(game.TargetRefs);
+        // This slot's own folder, because the first version's revision is a declaration about the
+        // mods that were beside these bytes: a save in the MP client's folder was played against the
+        // MP client's mods, whatever the dedicated server is on.
+        var manifest = manifestStore.TryRead(new ModTargetRef(game.Identity, slot.Target));
         var options = await BuildPublishOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
 
         var active = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id

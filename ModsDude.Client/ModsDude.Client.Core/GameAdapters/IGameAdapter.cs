@@ -162,18 +162,40 @@ public interface IBaseSavegameAdapter
 public interface ILocalSavegameAdapter : IBaseSavegameAdapter
 {
     /// <summary>
-    /// Every slot this game has, occupied or not, in the order a picker should show them.
+    /// Every savegame folder this game reaches on this machine, keyed the same way its mod folders
+    /// are. Almost every game answers with one and never names it.
     /// </summary>
     /// <remarks>
+    /// <b>Derived from the local settings, every time</b>, exactly as <see cref="ILocalModAdapter.ModTargets"/>
+    /// is. A key that appears here and not there is a target that holds saves and no mods, which is
+    /// ordinary; a key that appears in neither is a target that no longer exists, and what happens to
+    /// a savegame held behind one is <c>SavegameBindingStore</c>'s business rather than an adapter's.
+    /// </remarks>
+    SavegameTargets SavegameTargets { get; }
+
+    /// <summary>
+    /// Every slot one of this game's savegame folders has, occupied or not, in the order a picker
+    /// should show them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
     /// Reads each occupied slot far enough to name it, because a picker that says "savegame3" is the
     /// memory test this feature exists to remove. A slot whose contents cannot be read comes back
     /// occupied with a null name rather than being omitted or thrown over: it is still somebody's
     /// data and must still be impossible to overwrite by accident.
+    /// </para>
+    /// <para>
+    /// <b>Ids need only be unique within the target they came from</b>, which an adapter cannot get
+    /// wrong: the engine pairs each one with the key it asked about, and
+    /// <see cref="Models.SavegameSlotRef"/> is what addresses a place across a whole game. Asking
+    /// instead for ids unique across every folder would put two targets' slots on one binding the
+    /// first time somebody numbered from one twice.
+    /// </para>
     /// </remarks>
-    Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken);
+    Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken);
 
     /// <summary>The folder a slot's contents live in. It need not exist yet.</summary>
-    string GetSlotPath(SavegameSlotId slot);
+    string GetSlotPath(SavegameTarget target, SavegameSlotId slot);
 
     /// <summary>
     /// The slot a save called <paramref name="name"/> would occupy, for a game where

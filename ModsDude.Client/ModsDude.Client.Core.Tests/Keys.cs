@@ -30,4 +30,12 @@ internal static class Keys
     /// </summary>
     public static ModTargetRef Target(string key = "mods", string discriminator = "fs25")
         => new(Game(discriminator), new TargetKey(key));
+
+    /// <summary>
+    /// A place a savegame can be, in the same default target a manifest is filed under - so a test
+    /// that says nothing about targets is a one-folder game, which is what nearly every machine is.
+    /// Naming a second key is how a test reaches the two-folder half.
+    /// </summary>
+    public static SavegameSlotRef Slot(string slot, string target = "mods")
+        => new(new TargetKey(target), new SavegameSlotId(slot));
 }

@@ -13,7 +13,7 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 /// </summary>
 public class SavegameDriftTests
 {
-    private static readonly SavegameSlotId _slot = new("savegame1");
+    private static readonly SavegameSlotRef _slot = Keys.Slot("savegame1");
 
     private static readonly Guid _repoId = Guid.NewGuid();
     private static readonly Guid _savegameId = Guid.NewGuid();
@@ -303,7 +303,7 @@ public class SavegameDriftTests
         int version = 4, string hash = "aaaa", int? revision = 6, int? target = null) => new(
         _repoId,
         _savegameId,
-        _slot.Value,
+        _slot,
         version,
         hash,
         DateTime.UtcNow)
@@ -338,7 +338,7 @@ public class SavegameDriftTests
             State.Add(Keys.Game(), persisted);
             Game = new Game(Keys.Game(), persisted);
 
-            Adapter = new FakeSavegameAdapter(_slots.Path, _slot.Value);
+            Adapter = new FakeSavegameAdapter(_slots.Path, _slot.Slot.Value);
             _bindings = new SavegameBindingStore(State);
             _manifestStore = new SyncManifestStore(_manifests.Path);
 
@@ -353,7 +353,6 @@ public class SavegameDriftTests
                 new FakeSavegameDownloader(Server),
                 new FakeSavegameUploader(Server),
                 _manifestStore,
-                new FakeModFolders(new GameModFolder(Keys.Target(), _slots.Path)),
                 new FakeSlotRecycleBin(),
                 NullLogger<SavegameService>.Instance,
                 Heads);
@@ -367,7 +366,9 @@ public class SavegameDriftTests
         public SavegameService Service { get; }
         public Game Game { get; }
 
-        public string SlotPath => Adapter.GetSlotPath(_slot);
+        public SavegameTarget Target => Adapter.SavegameTargets[_slot.Target]!;
+
+        public string SlotPath => Adapter.GetSlotPath(Target, _slot.Slot);
 
 
         public void WriteManifest(int revision) => _manifestStore.Write(new SyncManifest
@@ -387,7 +388,7 @@ public class SavegameDriftTests
             => _bindings.SetBinding(Game.Identity, new SavegameCheckoutBinding(
                 _repoId,
                 _savegameId,
-                _slot.Value,
+                _slot,
                 version,
                 contentHash,
                 DateTime.UtcNow)
@@ -402,7 +403,7 @@ public class SavegameDriftTests
         {
             WriteSlotFile(content);
 
-            return await new SavegamePacker().HashSlotAsync(Adapter, _slot, CancellationToken.None);
+            return await new SavegamePacker().HashSlotAsync(Adapter, Target, _slot.Slot, CancellationToken.None);
         }
 
         public void WriteSlotFile(string content)

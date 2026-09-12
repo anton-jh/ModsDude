@@ -434,11 +434,20 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         var profile = _subject.ProfileName is string name ? $"'{name}'" : "the applied profile";
         var files = report.Added.Count + report.Removed.Count + report.Changed.Count;
 
+        // Across every entry of the game being shown, because a held save belongs to the folder it
+        // sits in and the entry on top is whichever folder came first. One notice says both halves
+        // about one game; two notices racing to say one each is how a warning becomes noise.
+        var savegames = drifted
+            .Where(x => x.Game.Identity == _subject.Game.Identity)
+            .SelectMany(x => x.Report.SavegameDrift)
+            .ToList();
+
         Headline = DescribeHeadline(
             drifted.DistinctBy(x => x.Game.Identity).Count(),
             _subject.Game.Name,
             profile,
-            report);
+            report,
+            savegames.Count > 0);
 
         // Re-applying needs somewhere to apply *to*. A game reported purely because it is holding
         // a savegame may have no active profile at all, and an accent button that returns the moment
@@ -453,7 +462,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         Detail = Describe(report, files);
         LockedWarning = DescribeLocked(report);
-        SavegameWarning = DescribeSavegames(report);
+        SavegameWarning = DescribeSavegames(savegames);
         StoreWarning = DescribeStoreCorruption(_monitor.StoreCorruption);
         ImportPrompt = files > 0 && CanReview
             ? "The versions now on disk may not be in the repo. Opening the mod list is where they get imported."
@@ -502,14 +511,19 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// drifted" for one game's three folders would be a plain lie. Slice 5 of Phase 10 is where the
     /// wording gets to name the folder.
     /// </param>
-    private static string DescribeHeadline(int count, string instanceName, string profile, DriftReport report)
+    /// <param name="hasSavegameDrift">
+    /// Whether the <em>game</em> is holding anything that has drifted, gathered across its folders -
+    /// not whether the entry being shown carries it, which with several targets is a different
+    /// question.
+    /// </param>
+    private static string DescribeHeadline(int count, string instanceName, string profile, DriftReport report, bool hasSavegameDrift)
     {
         if (count > 1)
         {
             return $"{count} games have drifted";
         }
 
-        return (report.Status is DriftStatus.Drifted, report.HasSavegameDrift) switch
+        return (report.Status is DriftStatus.Drifted, hasSavegameDrift) switch
         {
             (true, true) => $"'{instanceName}' no longer matches {profile}, and its savegame has moved too",
             (false, true) => $"'{instanceName}' is holding a savegame that no longer agrees with the repo",
@@ -618,14 +632,21 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// to lead with: it is the state where somebody's evening exists on this disk and nowhere else.
     /// </para>
     /// </remarks>
-    private static string? DescribeSavegames(DriftReport report)
+    /// <param name="drift">
+    /// Everything the game is holding that has drifted, gathered across its folders rather than read
+    /// off the one entry being shown. A held save belongs to the target it sits in, so the entry the
+    /// notice happens to be showing may carry none of them - and a notice about a game that said
+    /// nothing about its savegames because the drifted one is in another folder is exactly the
+    /// silence this phase exists to remove.
+    /// </param>
+    private static string? DescribeSavegames(IReadOnlyList<SavegameDrift> drift)
     {
-        if (report.SavegameDrift.Count == 0)
+        if (drift.Count == 0)
         {
             return null;
         }
 
-        var first = report.SavegameDrift[0];
+        var first = drift[0];
         var save = first.SlotDisplayName is { Length: > 0 } named ? $"'{named}'" : "A savegame checked out here";
 
         var what = first.Kind switch
@@ -653,8 +674,8 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             _ => $"{save} no longer agrees with what the repo holds."
         };
 
-        var more = report.SavegameDrift.Count > 1
-            ? $" {report.SavegameDrift.Count - 1} more savegame problems here as well."
+        var more = drift.Count > 1
+            ? $" {drift.Count - 1} more savegame problems here as well."
             : "";
 
         return $"{what}{more}";

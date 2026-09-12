@@ -39,12 +39,12 @@ public class SavegameBindingStoreTests
 
         store.SetBinding(_game, Binding(savegameId, "savegame3"));
 
-        Assert.Equal(savegameId, store.GetBindingForSlot(_game, "savegame3")?.SavegameId);
-        Assert.Null(store.GetBindingForSlot(_game, "savegame4"));
+        Assert.Equal(savegameId, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
+        Assert.Null(store.GetBindingForSlot(_game, Keys.Slot("savegame4")));
 
         // The same case-insensitivity the safety check uses. A lookup that missed here would report
         // an occupied slot as unrecognised and recycle a save ModsDude itself put there.
-        Assert.Equal(savegameId, store.GetBindingForSlot(_game, new SavegameSlotId("SAVEGAME3"))?.SavegameId);
+        Assert.Equal(savegameId, store.GetBindingForSlot(_game, Keys.Slot("SAVEGAME3"))?.SavegameId);
     }
 
     /// <summary>
@@ -62,8 +62,8 @@ public class SavegameBindingStoreTests
         store.SetBinding(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameCheckouts);
-        Assert.Equal("savegame7", store.GetBinding(_game, savegameId)?.SlotId);
-        Assert.Null(store.GetBindingForSlot(_game, "savegame3"));
+        Assert.Equal(Keys.Slot("savegame7"), store.GetBinding(_game, savegameId)?.Slot);
+        Assert.Null(store.GetBindingForSlot(_game, Keys.Slot("savegame3")));
     }
 
     /// <summary>
@@ -82,7 +82,7 @@ public class SavegameBindingStoreTests
         store.SetBinding(_game, Binding(second, "savegame3"));
 
         Assert.Single(Held(state).SavegameCheckouts);
-        Assert.Equal(second, store.GetBindingForSlot(_game, "savegame3")?.SavegameId);
+        Assert.Equal(second, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
         Assert.Null(store.GetBinding(_game, first));
     }
 
@@ -95,6 +95,68 @@ public class SavegameBindingStoreTests
         store.SetBinding(_game, Binding(Guid.NewGuid(), "Savegame3"));
 
         Assert.Single(Held(state).SavegameCheckouts);
+    }
+
+    /// <summary>
+    /// <b>Two folders numbering their slots from one is the ordinary case</b>, and the reason a slot
+    /// is addressed by a reference rather than by an id. Keyed on the id alone, the server's savegame
+    /// and the client's would be one binding, and the one-per-slot rule would enforce the collision
+    /// rather than catch it.
+    /// </summary>
+    [Fact]
+    public void The_same_slot_id_in_two_targets_is_two_slots()
+    {
+        var (store, _) = Store();
+        var onTheServer = Guid.NewGuid();
+        var onTheClient = Guid.NewGuid();
+
+        store.SetBinding(_game, Binding(onTheServer, "savegame1", target: "server"));
+        store.SetBinding(_game, Binding(onTheClient, "savegame1", target: "client"));
+
+        Assert.Equal(2, store.GetBindings(_game).Count);
+        Assert.Equal(onTheServer, store.GetBindingForSlot(_game, Keys.Slot("savegame1", "server"))?.SavegameId);
+        Assert.Equal(onTheClient, store.GetBindingForSlot(_game, Keys.Slot("savegame1", "client"))?.SavegameId);
+    }
+
+    /// <summary>
+    /// The holds in one folder, which is what play attribution is about: an apply moves one folder's
+    /// mod list, and only the saves sitting in that folder were played against it.
+    /// </summary>
+    [Fact]
+    public void The_holds_in_one_target_are_that_targets_own()
+    {
+        var (store, _) = Store();
+        var onTheServer = Guid.NewGuid();
+
+        store.SetBinding(_game, Binding(onTheServer, "savegame1", target: "server"));
+        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame1", target: "client"));
+
+        var held = store.GetBindingsIn(new ModTargetRef(_game, new TargetKey("server")));
+
+        Assert.Equal(onTheServer, Assert.Single(held).SavegameId);
+    }
+
+    /// <summary>
+    /// <b>A hold outlives the target it names.</b> Emptying a settings field, and an adapter author
+    /// renaming a key, both take a folder away without asking - and the savegame sitting in it is
+    /// still on this disk and still claimed on the server. A stale manifest is dropped for exactly
+    /// this event; a binding is not, because losing one loses the only record of which savegame is in
+    /// that folder.
+    /// </summary>
+    [Fact]
+    public void A_hold_survives_the_target_it_was_taken_in()
+    {
+        var (store, _) = Store();
+        var savegameId = Guid.NewGuid();
+
+        store.SetBinding(_game, Binding(savegameId, "savegame1", target: "client"));
+
+        // The settings edit happens entirely outside this store - there is no call it makes and no
+        // event it hears. That is the point: nothing here has to notice, and nothing here drops it.
+        var held = Assert.Single(store.GetBindings(_game));
+
+        Assert.Equal(savegameId, held.SavegameId);
+        Assert.Equal(Keys.Slot("savegame1", "client"), held.Slot);
     }
 
     [Fact]
@@ -123,7 +185,7 @@ public class SavegameBindingStoreTests
         store.ClearBinding(_game, savegameId);
 
         Assert.Null(store.GetBinding(_game, savegameId));
-        Assert.Equal("savegame3", store.GetSlotHint(_game, savegameId));
+        Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, savegameId));
     }
 
     [Fact]
@@ -174,7 +236,7 @@ public class SavegameBindingStoreTests
 
         store.SetBinding(_game, Binding(savegameId, "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_game, savegameId));
+        Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, savegameId));
     }
 
     [Fact]
@@ -187,7 +249,7 @@ public class SavegameBindingStoreTests
         store.SetBinding(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameSlotHints);
-        Assert.Equal("savegame7", store.GetSlotHint(_game, savegameId));
+        Assert.Equal(Keys.Slot("savegame7"), store.GetSlotHint(_game, savegameId));
     }
 
     /// <summary>
@@ -205,8 +267,8 @@ public class SavegameBindingStoreTests
         store.ClearBinding(_game, first);
         store.SetBinding(_game, Binding(second, "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_game, first));
-        Assert.Equal("savegame3", store.GetSlotHint(_game, second));
+        Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, first));
+        Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, second));
     }
 
     /// <summary>
@@ -226,7 +288,7 @@ public class SavegameBindingStoreTests
         // Somebody else's savegame is now in slot 3.
         store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame3"));
 
-        Assert.Equal("savegame3", store.GetSlotHint(_game, moved));
+        Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, moved));
     }
 
     [Fact]
@@ -250,7 +312,7 @@ public class SavegameBindingStoreTests
 
         Assert.Empty(store.GetBindings(unknown));
         Assert.Null(store.GetBinding(unknown, Guid.NewGuid()));
-        Assert.Null(store.GetBindingForSlot(unknown, "savegame1"));
+        Assert.Null(store.GetBindingForSlot(unknown, Keys.Slot("savegame1")));
         Assert.Null(store.GetSlotHint(unknown, Guid.NewGuid()));
     }
 
@@ -316,10 +378,15 @@ public class SavegameBindingStoreTests
     /// </summary>
     private PersistedGame Held(FakeGameState state) => state.Find(_game)!;
 
-    private SavegameCheckoutBinding Binding(Guid savegameId, string slotId, int version = 1, string hash = "aaaa") => new(
+    /// <param name="target">
+    /// Which of the game's folders the slot is in. Defaulted, because nearly every game has one and
+    /// a test about the rules should not have to say so; the two-folder tests name it.
+    /// </param>
+    private SavegameCheckoutBinding Binding(
+        Guid savegameId, string slotId, int version = 1, string hash = "aaaa", string target = "mods") => new(
         _repoId,
         savegameId,
-        slotId,
+        Keys.Slot(slotId, target),
         version,
         hash,
         DateTime.UtcNow);

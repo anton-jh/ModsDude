@@ -59,7 +59,7 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 public sealed record SavegameCheckOutContext(
     Game Game,
     IReadOnlyList<SavegameSlotOptionViewModel> Slots,
-    SavegameSlotId? Suggested,
+    SavegameSlotRef? Suggested,
     string? SlotNote,
     SavegameModsSummary? Mods,
     SavegameRevisionNote? Revision,
@@ -386,6 +386,11 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 
             Slots.Clear();
 
+            // Under a folder heading each, where the game reaches more than one savegame folder -
+            // which is what a slot carrying a target name means. Set before the rows go in so the
+            // view is grouped by the time anything is selected in it.
+            SlotGrouping.Apply(Slots, context.Slots.Any(x => x.TargetName is not null));
+
             foreach (var slot in context.Slots)
             {
                 Slots.Add(slot);
@@ -396,8 +401,8 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
             Revision = context.Revision;
             RunsOn = context.RunsOn;
 
-            SelectedSlot = context.Suggested is SavegameSlotId suggested
-                ? Slots.FirstOrDefault(x => string.Equals(x.Id.Value, suggested.Value, StringComparison.OrdinalIgnoreCase))
+            SelectedSlot = context.Suggested is SavegameSlotRef suggested
+                ? Slots.FirstOrDefault(x => x.Ref.Addresses(suggested))
                 : null;
 
             // Nothing pre-selected means the remembered slot is gone and none is free, which is a

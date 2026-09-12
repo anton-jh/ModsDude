@@ -560,6 +560,23 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
+    /// <b>The observation is about the folder being rewritten, not about the game.</b> A game reaching
+    /// three folders holds its savegames in particular ones of them, and an apply to the dedicated
+    /// server has nothing to say about an evening played on the MP client - so the target travels
+    /// with the observation and the savegame side reads that folder's manifest.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_observes_the_folder_it_is_about()
+    {
+        using var fixture = new SyncFixture(withSecondTarget: true);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Equal(fixture.Target, Assert.Single(fixture.Held.ObservedTargets));
+    }
+
+    /// <summary>
     /// A revision can move without a single mod doing so - a thousand edits that cancel out, or an
     /// unrelated pin added and removed. The no-work path rewrites the manifest too, so it has to
     /// attribute the play first or an evening would be credited to a list it never ran on.
@@ -713,7 +730,7 @@ public class ModSyncServiceTests
             RecycleBin = new FakeRecycleBin(recycleBinAvailable);
             Manifests = new SyncManifestStore(_manifests.Path);
             Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
-            Held = new FakeHeldSavegames(Manifests, Target);
+            Held = new FakeHeldSavegames(Manifests);
 
             // Same game, same disk, another folder - which is what makes its manifest something the
             // sweep has to consult rather than something it may skip along with this game.

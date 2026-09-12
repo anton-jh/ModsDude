@@ -126,12 +126,12 @@ public class SavegamePackerTests
 
         var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
-        var before = await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None);
+        var before = await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None);
 
         File.WriteAllText(path, "a savegame");
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(1));
 
-        Assert.Equal(before, await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None));
+        Assert.Equal(before, await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None));
     }
 
     [Fact]
@@ -142,11 +142,11 @@ public class SavegamePackerTests
 
         var path = WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
-        var before = await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None);
+        var before = await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None);
 
         File.WriteAllText(path, "a savegame, two hours later");
 
-        Assert.NotEqual(before, await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None));
+        Assert.NotEqual(before, await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None));
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public class SavegamePackerTests
         WriteSlotFile(root, _slot, "screenshot.png", "bulk that regenerates");
 
         using var archive = await Pack(adapter, _slot);
-        var hashed = await new SavegamePacker().HashSlotAsync(adapter, _slot, CancellationToken.None);
+        var hashed = await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None);
 
         Assert.Equal(archive.ContentHash, hashed);
     }
@@ -238,17 +238,17 @@ public class SavegamePackerTests
         WriteSlotFile(root, _otherSlot, "vehicles.xml", "and their tractors");
 
         using var archive = await Pack(adapter, _slot);
-        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, _otherSlot, CancellationToken.None);
+        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
 
         Assert.Equal(
             ["careerSavegame.xml", "items/placeables.xml"],
-            RelativeContents(adapter.GetSlotPath(_otherSlot)));
+            RelativeContents(adapter.GetSlotPath(adapter.Target, _otherSlot)));
 
-        Assert.Equal("a savegame", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_otherSlot), "careerSavegame.xml")));
+        Assert.Equal("a savegame", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(adapter.Target, _otherSlot), "careerSavegame.xml")));
 
         // Round trip: what was checked out hashes as what was packed, which is what makes the
         // recorded hash of a fresh checkout mean "not played yet".
-        Assert.Equal(archive.ContentHash, await new SavegamePacker().HashSlotAsync(adapter, _otherSlot, CancellationToken.None));
+        Assert.Equal(archive.ContentHash, await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _otherSlot, CancellationToken.None));
     }
 
     [Fact]
@@ -260,9 +260,9 @@ public class SavegamePackerTests
         WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         using var archive = await Pack(adapter, _slot);
-        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, _otherSlot, CancellationToken.None);
+        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
 
-        Assert.Equal(["careerSavegame.xml"], RelativeContents(adapter.GetSlotPath(_otherSlot)));
+        Assert.Equal(["careerSavegame.xml"], RelativeContents(adapter.GetSlotPath(adapter.Target, _otherSlot)));
     }
 
     /// <summary>
@@ -285,19 +285,19 @@ public class SavegamePackerTests
         var hostile = WriteArchiveWith(root, ("careerSavegame.xml", "a savegame"), (entryName, "somewhere else"));
 
         await Assert.ThrowsAsync<InvalidDataException>(
-            () => new SavegamePacker().UnpackAsync(hostile, adapter, _slot, CancellationToken.None));
+            () => new SavegamePacker().UnpackAsync(hostile, adapter, adapter.Target, _slot, CancellationToken.None));
 
         Assert.False(File.Exists(root.Combine("escaped.xml")));
         Assert.False(File.Exists("C:\\escaped.xml"));
 
         // The slot is as it was, and nothing was left staged beside it.
-        Assert.Equal("the savegame that was already there", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(_slot), "careerSavegame.xml")));
+        Assert.Equal("the savegame that was already there", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(adapter.Target, _slot), "careerSavegame.xml")));
         Assert.Empty(Directory.EnumerateDirectories(root.Path, ".modsdude-*"));
     }
 
 
-    private static async Task<OwnedArchive> Pack(ILocalSavegameAdapter adapter, SavegameSlotId slot)
-        => new(await new SavegamePacker().PackAsync(adapter, slot, CancellationToken.None));
+    private static async Task<OwnedArchive> Pack(PackerTestAdapter adapter, SavegameSlotId slot)
+        => new(await new SavegamePacker().PackAsync(adapter, adapter.Target, slot, CancellationToken.None));
 
     private static string WriteSlotFile(TempDirectory root, SavegameSlotId slot, string relativePath, string content)
         => root.WriteFile(Path.Combine(slot.Value, relativePath), content);
@@ -349,8 +349,13 @@ public class SavegamePackerTests
 
         public bool CanCreateSlots => true;
 
+        /// <summary>One folder, because the packer is handed the one it is to pack.</summary>
+        public SavegameTargets SavegameTargets => new(Target);
 
-        public string GetSlotPath(SavegameSlotId slot) => Path.Combine(root, slot.Value);
+        public SavegameTarget Target { get; } = new(Keys.Target().Key, null, root);
+
+
+        public string GetSlotPath(SavegameTarget target, SavegameSlotId slot) => Path.Combine(target.Path, slot.Value);
 
         public bool BelongsInPackedSave(string relativePath)
         {
@@ -359,7 +364,7 @@ public class SavegamePackerTests
             return excluded.Contains(relativePath, StringComparer.Ordinal) is false;
         }
 
-        public Task<IReadOnlyList<SavegameSlot>> GetSlots(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
             => throw new NotSupportedException("Packing addresses a slot it was given; it never enumerates them.");
 
         public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings) => this;

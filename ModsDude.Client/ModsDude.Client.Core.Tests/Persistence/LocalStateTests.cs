@@ -72,6 +72,40 @@ public class LocalStateTests
     }
 
     /// <summary>
+    /// A hold survives the trip knowing which folder it is in.
+    /// </summary>
+    /// <remarks>
+    /// <b>The same record-struct trap the identity key is, one level down.</b>
+    /// <see cref="SavegameSlotRef"/> has a validating constructor and get-only properties, so without
+    /// its converter it goes out as a nested object and comes back <em>blank</em> - a savegame this
+    /// machine is holding in a folder nothing can name, which is the one thing a binding exists to
+    /// prevent. Asserted on the text as well, because <c>{target}:{slot}</c> is what somebody reading
+    /// state.json to work out where their save went is going to see.
+    /// </remarks>
+    [Fact]
+    public void A_checkout_binding_survives_a_round_trip_naming_its_target()
+    {
+        var state = new LocalState();
+        var game = Game("Farming Simulator 25", @"C:\fs25\mods", null);
+        var savegameId = Guid.NewGuid();
+        var slot = new SavegameSlotRef(new TargetKey("client"), new SavegameSlotId("savegame3"));
+
+        game.SavegameCheckouts.Add(new SavegameCheckoutBinding(
+            Guid.NewGuid(), savegameId, slot, 4, "aaaa", DateTime.UtcNow));
+
+        game.SavegameSlotHints.Add(new SavegameSlotHint(Guid.NewGuid(), savegameId, slot));
+
+        state.Games[_fs25] = game;
+
+        Assert.Contains("\"client:savegame3\"", JsonSerializer.Serialize(state));
+
+        var read = RoundTrip(state).Games[_fs25];
+
+        Assert.Equal(slot, Assert.Single(read.SavegameCheckouts).Slot);
+        Assert.Equal(slot, Assert.Single(read.SavegameSlotHints).Slot);
+    }
+
+    /// <summary>
     /// A game reaching no folder is an ordinary answer, and it has to stay one across a round trip:
     /// the alternative is a null that every reader has to remember to cope with.
     /// </summary>

@@ -125,7 +125,7 @@ public class SavegameHoldRulesTests
 
     /// <param name="target">A number makes it past, pinned to that revision; null makes it current.</param>
     private static SavegameCheckoutBinding Hold(int? target = null, bool noProfile = false)
-        => new(Guid.NewGuid(), _savegameId, "savegame1", 1, "aaaa", DateTime.UtcNow)
+        => new(Guid.NewGuid(), _savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {
             ProfileId = noProfile ? null : _profileId,
             ProfileRevision = target ?? 1,

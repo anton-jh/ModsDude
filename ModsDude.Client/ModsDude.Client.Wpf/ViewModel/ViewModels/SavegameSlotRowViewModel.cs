@@ -64,28 +64,35 @@ public enum SavegameBindingStanding
 public partial class SavegameSlotRowViewModel : ObservableObject
 {
     public SavegameSlotRowViewModel(
-        SavegameSlot slot,
+        GameSavegameSlot slot,
         SavegameSlotAvailability availability,
         Guid? savegameId,
         string? savegameName,
         SavegameBindingStanding standing,
         bool canPublish,
-        bool canCheckIn)
+        bool canCheckIn,
+        bool isUnreachable = false)
     {
-        Slot = slot;
+        Ref = slot.Ref;
+        TargetName = slot.TargetName;
         Availability = availability;
         SavegameId = savegameId;
         SavegameName = savegameName;
         Standing = standing;
+        IsUnreachable = isUnreachable;
 
         SaveName = slot.DisplayName;
         Details = slot.Details;
 
-        Label = slot.IsOccupied
-            ? slot.DisplayName is { Length: > 0 } name ? name : "A save this game will not name"
-            : "Empty slot";
+        Label = isUnreachable
+            ? savegameName is { Length: > 0 } held ? held : "A savegame checked out here"
+            : slot.IsOccupied
+                ? slot.DisplayName is { Length: > 0 } name ? name : "A save this game will not name"
+                : "Empty slot";
 
-        IsHeld = availability is SavegameSlotAvailability.HeldClean or SavegameSlotAvailability.HeldWithUnpublishedPlay;
+        IsHeld = isUnreachable
+            || availability is SavegameSlotAvailability.HeldClean or SavegameSlotAvailability.HeldWithUnpublishedPlay;
+
         HasUnpublishedPlay = availability is SavegameSlotAvailability.HeldWithUnpublishedPlay;
 
         // The one state where the binding names nothing: the savegame was archived and then deleted,
@@ -96,7 +103,12 @@ public partial class SavegameSlotRowViewModel : ObservableObject
         // Publishing needs bytes nobody has claimed. An empty slot has nothing to publish and a
         // checked-out one is checked in rather than published a second time under a new name.
         CanPublish = canPublish && availability is SavegameSlotAvailability.Unrecognised;
-        CanCheckIn = canCheckIn && IsHeld && savegameId is not null && IsOrphaned is false;
+
+        // Everything that touches the bytes is off for an unreachable hold: there is no folder to
+        // pack, to hash or to recycle, and a button that refuses itself the moment it is pressed is
+        // worse than one that is not there. Disconnect is local state alone, so it still works -
+        // and it is the only way out short of putting the folder back in the settings.
+        CanCheckIn = canCheckIn && IsHeld && savegameId is not null && IsOrphaned is false && isUnreachable is false;
         CanDiscard = CanCheckIn;
 
         // Not gated on membership: it writes nothing anybody else can see. A guest holding a save is
@@ -109,15 +121,54 @@ public partial class SavegameSlotRowViewModel : ObservableObject
     }
 
 
+    /// <summary>
+    /// A savegame this game is holding in a folder its settings no longer name.
+    /// </summary>
+    /// <remarks>
+    /// <b>There is no slot to build this from</b>, which is the whole state: somebody emptied a
+    /// folder field, or an adapter author renamed a target key, and the save that was checked out
+    /// into it is still on this disk and still claimed on the server. The row exists so the hold is
+    /// visible where holds are shown - a binding that vanished with a settings edit would leave
+    /// somebody's evening in a folder nothing can name.
+    /// </remarks>
+    public static SavegameSlotRowViewModel ForUnreachableHold(
+        SavegameCheckoutBinding binding,
+        string? savegameName,
+        SavegameBindingStanding standing)
+        => new(
+            new GameSavegameSlot(binding.Slot, binding.Slot.Target.Value, new SavegameSlot(binding.Slot.Slot, null, true, [])),
+            // Unknown rather than clean or played: nothing can be hashed, so nothing is claimed
+            // about what is in the folder - only about the hold.
+            SavegameSlotAvailability.HeldClean,
+            binding.SavegameId,
+            savegameName,
+            standing,
+            canPublish: false,
+            canCheckIn: false,
+            isUnreachable: true);
+
+
     public event EventHandler? PublishRequested;
     public event EventHandler? CheckInRequested;
     public event EventHandler? DiscardRequested;
     public event EventHandler? DisconnectRequested;
 
 
-    public SavegameSlot Slot { get; }
-    public SavegameSlotId Id => Slot.Id;
+    /// <summary>Which of the game's savegame folders this row is in, and which slot in it.</summary>
+    public SavegameSlotRef Ref { get; }
+
+    public SavegameSlotId Id => Ref.Slot;
+
+    /// <summary>
+    /// What to call the folder this slot is in, or null where the game reaches one. The list groups
+    /// on it.
+    /// </summary>
+    public string? TargetName { get; }
+
     public SavegameSlotAvailability Availability { get; }
+
+    /// <summary>Whether this row is a hold in a folder the settings no longer name.</summary>
+    public bool IsUnreachable { get; }
 
     /// <summary>The savegame checked out here, where this machine records one.</summary>
     public Guid? SavegameId { get; }
@@ -153,7 +204,7 @@ public partial class SavegameSlotRowViewModel : ObservableObject
     public bool CanDisconnect { get; }
 
     /// <summary>The one line that says why this slot is worth acting on, for a row that has an action.</summary>
-    public string ToolTip => $"{Label}\n{Id.Value}";
+    public string ToolTip => $"{Label}\n{Ref}";
 
 
     [RelayCommand(CanExecute = nameof(CanPublish))]
@@ -176,6 +227,13 @@ public partial class SavegameSlotRowViewModel : ObservableObject
         if (IsOrphaned)
         {
             return new SavegameChip("No longer in the repo", SavegameChipTone.Caution);
+        }
+
+        // Likewise ahead of them, and for the mirror-image reason: the savegame is fine and the
+        // folder is the half that has gone.
+        if (IsUnreachable)
+        {
+            return new SavegameChip("Folder not configured", SavegameChipTone.Caution);
         }
 
         return Availability switch
@@ -203,6 +261,13 @@ public partial class SavegameSlotRowViewModel : ObservableObject
 
     private string Describe()
     {
+        if (IsUnreachable)
+        {
+            return $"This game's settings no longer name the folder '{Ref.Target}' - the save is still on this disk, " +
+                   "still checked out to you and still claimed on the server. Point the settings back at that folder to " +
+                   "get it back, or disconnect it to stop tracking it here.";
+        }
+
         if (IsOrphaned)
         {
             return SavegameName is { Length: > 0 } named

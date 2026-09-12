@@ -60,14 +60,16 @@ public interface IProfileRevisions
 /// <remarks>
 /// <b>One per target, because the mod half is per folder.</b> A game reaching three of them produces
 /// three of these, and <em>which one did not get the apply</em> is the interesting half of a BeamMP
-/// evening. The savegame half is the game's and is carried on every one of its entries, so whichever
-/// entry the notice is showing says both things about the game the user is looking at rather than
-/// racing a second notice to say the other.
+/// evening. The savegame half is placed the same way: a held save sits in one target's savegame
+/// folder and was played against that target's mods, so it is carried by that folder's entry alone.
+/// A notice about a game reads every entry of it, which is what keeps one notice saying both halves
+/// rather than two racing to.
 /// </remarks>
 /// <param name="Target">
-/// Null where this is about the game rather than about one of its folders - it reaches none, or it
-/// follows no profile, so there is no comparison to attribute to any particular one. Such an entry
-/// exists for the savegame half alone, which is the answer this already gave before targets existed.
+/// Null where this is about the game rather than about one of its folders - it reaches none, it
+/// follows no profile, or the savegames here are held in a target that has no mod folder at all. Such
+/// an entry exists for the savegame half alone, which is the answer this already gave before targets
+/// existed.
 /// </param>
 /// <param name="ProfileName">
 /// What the manifest recorded the profile was called. Null before a folder has ever synced, which
@@ -290,7 +292,8 @@ public sealed class DriftMonitor : IDisposable
             // Once per game rather than once per target, because the hold is the game's and the
             // check costs a hash of every held slot. Asked for every game, including ones with no
             // active profile: holding somebody's evening in a slot is worth saying whether or not
-            // any of these folders has ever been synced.
+            // any of these folders has ever been synced. Every answer names the target it is about,
+            // and is placed on that folder's entry below.
             var savegameDrift = await CheckSavegamesAsync(candidate.Identity);
 
             if (candidate.ActiveProfile is not ActiveProfile active)
@@ -325,7 +328,7 @@ public sealed class DriftMonitor : IDisposable
 
             foreach (var target in candidate.Targets)
             {
-                var report = CheckMods(candidate, target, active, savegameDrift);
+                var report = CheckMods(candidate, target, active, SavegamesIn(savegameDrift, target));
 
                 // Runs off what the folder comparison just found changed, which is the only set of
                 // files that can have been written to since the sync.
@@ -341,6 +344,23 @@ public sealed class DriftMonitor : IDisposable
                     : null;
 
                 results.Add(new TargetDrift(candidate, target, report, profileName));
+            }
+
+            // A hold in a target with savegames and no mods - the MP client whose saves live where
+            // its mods do not - belongs to no entry above, because there is no folder to compare
+            // anything in. One entry for the lot of them, about the game rather than about one of
+            // its folders, which is the same shape the two branches above use.
+            var unplaced = savegameDrift
+                .Where(x => candidate.Targets.Any(target => target.Target.Key == x.Slot.Target) is false)
+                .ToList();
+
+            if (unplaced.Count > 0)
+            {
+                results.Add(new TargetDrift(
+                    candidate,
+                    null,
+                    DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = unplaced },
+                    null));
             }
         }
 
@@ -424,6 +444,20 @@ public sealed class DriftMonitor : IDisposable
             return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = savegameDrift };
         }
     }
+
+    /// <summary>
+    /// The savegames held in one of a game's folders, out of everything the game is holding.
+    /// </summary>
+    /// <remarks>
+    /// <b>Placed rather than repeated.</b> A held save is in one folder and was played against that
+    /// folder's mods, so putting all of a game's savegame drift on every one of its entries would
+    /// say the MP client's evening was the dedicated server's problem too. The notice still says
+    /// both halves about the game it is showing - that is its job, and it reads every entry of the
+    /// game to do it.
+    /// </remarks>
+    private static IReadOnlyList<Savegames.SavegameDrift> SavegamesIn(
+        IReadOnlyList<Savegames.SavegameDrift> drift, GameModFolder target)
+        => [.. drift.Where(x => x.Slot.Target == target.Target.Key)];
 
     /// <summary>
     /// The savegame half, or nothing where this build has none.

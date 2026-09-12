@@ -82,8 +82,8 @@ public sealed class RepoSavegameAdapters(RepoRepository repos, GameRepository ga
 public interface IHeldSavegames
 {
     /// <summary>
-    /// Looks at every slot this game is holding and, where the bytes have moved since the last
-    /// look, records that the play happened on the revision the mod folder is on <em>now</em>.
+    /// Looks at every slot <em>this target</em> is holding and, where the bytes have moved since the
+    /// last look, records that the play happened on the revision its mod folder is on <em>now</em>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -94,11 +94,18 @@ public interface IHeldSavegames
     /// docs/10-savegame-profile-binding.md#play-attribution.
     /// </para>
     /// <para>
-    /// Costs one hash per held savegame, and a game holding none - which is nearly all of them,
-    /// nearly all the time - costs one list read.
+    /// <b>Per target rather than per game, because the bytes are in a folder.</b> A save in target
+    /// T's savegame folder was played against target T's mod folder and nothing else, so applying to
+    /// the dedicated server must not attribute the evening somebody played on the MP client to the
+    /// revision the server just moved to. It is the same loop it always was, run once per folder the
+    /// apply touches.
+    /// </para>
+    /// <para>
+    /// Costs one hash per savegame held in that target, and a target holding none - which is nearly
+    /// all of them, nearly all the time - costs one list read.
     /// </para>
     /// </remarks>
-    Task ObserveAsync(GameIdentity game, CancellationToken ct);
+    Task ObserveAsync(ModTargetRef target, CancellationToken ct);
 
     /// <inheritdoc cref="SavegameHoldRules.RequiredRevision"/>
     int? GetRequiredRevision(GameIdentity game, Guid profileId);
@@ -110,9 +117,19 @@ public interface IHeldSavegames
     /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Keyed on the identity rather than the game because the drift monitor walks
     /// <see cref="DriftCandidate"/>s, which exist for games no loaded repo serves. One of those
     /// reports nothing, quietly.
+    /// </para>
+    /// <para>
+    /// <b>Asked once for the game and answered per target.</b> The hold limit is the game's and the
+    /// hashing is per held slot, so a call per folder would re-read the same list N times - but every
+    /// answer is compared against <em>its own</em> target's manifest, and says which target it is
+    /// about, so the notice can put it on the folder it belongs to. A hold whose target the adapter
+    /// no longer offers is left out rather than reported: there is no folder to hash and nothing to
+    /// compare, and the game's slot list is where that hold is said.
+    /// </para>
     /// </remarks>
     Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct);
 }
@@ -157,8 +174,16 @@ public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision
 /// </remarks>
 public interface ISavegameService : IHeldSavegames
 {
-    /// <summary>Every slot this game has, occupied or not, in the order a picker should show them.</summary>
-    Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct);
+    /// <summary>
+    /// Every slot this game has, occupied or not, in the order a picker should show them.
+    /// </summary>
+    /// <remarks>
+    /// <b>One flat list across every savegame folder the game reaches</b>, each entry addressed and
+    /// carrying what to call its folder where there is more than one. Flat because choosing where a
+    /// save goes is choosing a place rather than a folder, and because a game with one target - which
+    /// is nearly all of them - then reads exactly as it always did.
+    /// </remarks>
+    Task<IReadOnlyList<GameSavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct);
 
     /// <summary>
     /// Which slot the picker should pre-select for this savegame: the slot it used last if that one
@@ -171,20 +196,20 @@ public interface ISavegameService : IHeldSavegames
     /// Null means "no free slot", which is a real state: the rest can be full of saves ModsDude knows
     /// nothing about, and the answer there is the unrecognised-slot confirmation, not an eviction.
     /// </remarks>
-    Task<SavegameSlotId?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct);
+    Task<SavegameSlotRef?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct);
 
     /// <summary>What one slot is, from the point of view of somebody about to write a savegame into it.</summary>
     /// <remarks>
     /// Hashes the slot only where a binding claims it, since that is the only case where the answer
     /// turns on the contents. An unrecognised slot is unrecognised whatever is in it.
     /// </remarks>
-    Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotId slot, CancellationToken ct);
+    Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotRef slot, CancellationToken ct);
 
     /// <summary>Takes the claim on a savegame and writes its head version into a slot.</summary>
-    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct);
+    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct);
 
     /// <summary>Writes a named version into a slot without claiming anything.</summary>
-    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct);
+    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct);
 
     /// <summary>Hands a held savegame back, minting a version from whatever is in its slot now.</summary>
     Task<SavegameVersionDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
@@ -228,7 +253,7 @@ public interface ISavegameService : IHeldSavegames
     Task<SavegameDto> PublishAsync(
         Game game,
         Guid repoId,
-        SavegameSlotId slot,
+        SavegameSlotRef slot,
         string name,
         string? label,
         SavegamePublishTarget? target,
@@ -289,10 +314,30 @@ public interface ISavegameService : IHeldSavegames
     /// half of <see cref="SavegameSlotAvailability.Unrecognised"/> that says ModsDude did not put
     /// whatever is there. The picker reads it to offer "check that one in first" on a refused slot.
     /// </summary>
-    SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotId slot);
+    SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotRef slot);
 
     /// <summary>Everything this game currently holds. Short by construction.</summary>
     IReadOnlyList<SavegameCheckoutBinding> GetBindings(Game game);
+
+    /// <summary>
+    /// The savegames this game is holding in a target its adapter no longer offers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A hold this machine can no longer address, and the reason bindings are never swept.</b>
+    /// Somebody emptied a folder field in the settings, or an adapter author renamed a key - which
+    /// are the same event from here - and a savegame that was checked out into that folder is still
+    /// checked out, still claimed on the server, and still sitting on this disk. There is no slot to
+    /// list, nothing to hash and no folder to pack, so the only honest thing the app can do is say
+    /// so where holds are shown, and let the hold come back if the field is filled in again.
+    /// </para>
+    /// <para>
+    /// Empty where no repo on this machine hydrates the adapter: nothing can be said about targets
+    /// nobody can enumerate, and reporting every hold as unreachable there would offer to forget
+    /// savegames over a repo that simply is not loaded.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<SavegameCheckoutBinding> GetUnreachableHolds(Game game);
 }
 
 
@@ -306,7 +351,6 @@ public sealed class SavegameService(
     IModFileDownloader downloader,
     IModFileUploader uploader,
     SyncManifestStore manifestStore,
-    IModFolders modFolders,
     IRecycleBin recycleBin,
     ILogger<SavegameService> logger,
     ISavegameHeadVersions? headVersions = null)
@@ -332,19 +376,31 @@ public sealed class SavegameService(
         => exception is ApiException<CustomProblemDetails> { Result.Type: ProblemType.SavegameVersionStale };
 
 
-    public async Task<IReadOnlyList<SavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct)
-        => await RequireAdapter(game).GetSlots(ct);
+    public async Task<IReadOnlyList<GameSavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct)
+        => await ReadSlotsAsync(RequireAdapter(game), ct);
 
     public bool SupportsSavegames(Game game) => adapters.TryGet(game) is not null;
 
     public SavegameCheckoutBinding? GetBinding(Game game, Guid savegameId)
         => bindings.GetBinding(game.Identity, savegameId);
 
-    public SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotId slot)
+    public SavegameCheckoutBinding? GetBindingForSlot(Game game, SavegameSlotRef slot)
         => bindings.GetBindingForSlot(game.Identity, slot);
 
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(Game game)
         => bindings.GetBindings(game.Identity);
+
+    public IReadOnlyList<SavegameCheckoutBinding> GetUnreachableHolds(Game game)
+    {
+        if (adapters.TryGet(game) is not ILocalSavegameAdapter adapter)
+        {
+            return [];
+        }
+
+        var targets = adapter.SavegameTargets;
+
+        return [.. bindings.GetBindings(game.Identity).Where(x => targets[x.Slot.Target] is null)];
+    }
 
     public int? GetPlayedRevision(Game game, Guid savegameId)
         => bindings.GetBinding(game.Identity, savegameId) is SavegameCheckoutBinding binding
@@ -435,35 +491,36 @@ public sealed class SavegameService(
         return forgotten;
     }
 
-    public async Task<SavegameSlotId?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct)
+    public async Task<SavegameSlotRef?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct)
     {
-        var adapter = RequireAdapter(game);
-        var slots = await adapter.GetSlots(ct);
+        var slots = await ReadSlotsAsync(RequireAdapter(game), ct);
 
         // Nothing is hashed here, and nothing needs to be: free-ness turns on the slot being empty
         // and unclaimed, and a hash can only ever tell two kinds of occupied apart. Reading a hint
         // must not cost twenty archive passes.
-        bool IsFree(SavegameSlot slot)
-            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(game.Identity, slot.Id), null)
+        bool IsFree(GameSavegameSlot slot)
+            => SavegameSlotStates.Classify(slot, bindings.GetBindingForSlot(game.Identity, slot.Ref), null)
                 is SavegameSlotAvailability.Free;
 
-        if (bindings.GetSlotHint(game.Identity, savegameId) is string hint &&
-            slots.FirstOrDefault(x => string.Equals(x.Id.Value, hint, StringComparison.OrdinalIgnoreCase)) is SavegameSlot remembered &&
+        // The whole reference, target included: the slot this save was last in is a place, and slot
+        // 3 of the folder somebody has since repointed is not the same place as slot 3 of this one.
+        if (bindings.GetSlotHint(game.Identity, savegameId) is SavegameSlotRef hint &&
+            slots.FirstOrDefault(x => x.Ref.Addresses(hint)) is GameSavegameSlot remembered &&
             IsFree(remembered))
         {
-            return remembered.Id;
+            return remembered.Ref;
         }
 
         // The hint was wrong, or there was none. Either way the picker says so and offers this
         // instead; the hint itself is left exactly as it was, because it is about the next time.
-        return slots.FirstOrDefault(IsFree)?.Id;
+        return slots.FirstOrDefault(IsFree)?.Ref;
     }
 
-    public async Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotId slot, CancellationToken ct)
+    public async Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotRef slot, CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
 
-        return await ClassifyAsync(game, adapter, slot, ct);
+        return await ClassifyAsync(game, adapter, RequireTarget(game, adapter, slot), slot, ct);
     }
 
     /// <summary>
@@ -495,9 +552,10 @@ public sealed class SavegameService(
     /// The slot holds play nobody has checked in, or this game already holds a savegame that
     /// claims its mod folder.
     /// </exception>
-    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotId slot, CancellationToken ct)
+    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
+        var target = RequireTarget(game, adapter, slot);
         var head = savegame.Head
             ?? throw new UserFriendlyException(
                 $"'{savegame.Name}' has nothing to check out",
@@ -508,11 +566,11 @@ public sealed class SavegameService(
         // in step - a version's profile is its savegame's - so they cannot disagree.
         EnsureModFolderIsFree(game, savegame.Id, head.ProfileId, savegame.Name);
 
-        await EnsureWritable(game, adapter, slot, savegame.Name, ct);
+        await EnsureWritable(game, adapter, target, slot, savegame.Name, ct);
 
         await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
 
-        await DownloadIntoSlotAsync(adapter, savegame.RepoId, savegame.Id, head.ContentHash, slot, ct);
+        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, ct);
 
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
         // and which version is in it, and writing it before the unpack would claim a slot holding
@@ -520,7 +578,7 @@ public sealed class SavegameService(
         bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             savegame.RepoId,
             savegame.Id,
-            slot.Value,
+            slot,
             head.Number,
             head.ContentHash,
             DateTime.UtcNow)
@@ -549,15 +607,16 @@ public sealed class SavegameService(
     /// there is no version to mint from it and no claim to give back, so it is a copy in the plainest
     /// sense.
     /// </remarks>
-    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotId slot, CancellationToken ct)
+    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
+        var target = RequireTarget(game, adapter, slot);
 
-        await EnsureWritable(game, adapter, slot, savegame.Name, ct);
+        await EnsureWritable(game, adapter, target, slot, savegame.Name, ct);
 
         var contentHash = await ResolveVersionHashAsync(savegame, versionNumber, ct);
 
-        await DownloadIntoSlotAsync(adapter, savegame.RepoId, savegame.Id, contentHash, slot, ct);
+        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, ct);
 
         // A binding that survived this would name a slot whose contents are now a different savegame
         // entirely, and the safety check would read that slot as unpublished play forever. The claim
@@ -611,8 +670,9 @@ public sealed class SavegameService(
                 "This machine is not holding that savegame",
                 $"No checkout binding for savegame '{savegameId}' in game '{game.Identity}'. Only the machine that checked a save out can check it in.");
 
-        var slot = new SavegameSlotId(binding.SlotId);
-        var packed = await packer.PackAsync(adapter, slot, ct);
+        var target = RequireTarget(game, adapter, binding.Slot);
+        var slot = binding.Slot.Slot;
+        var packed = await packer.PackAsync(adapter, target, slot, ct);
 
         // The last observation, and the packed hash is exactly what one would compute - the packer
         // hashes what it writes - so it costs no second pass over the folder. Play since the previous
@@ -621,7 +681,7 @@ public sealed class SavegameService(
 
         // Read from the slot these bytes came from, before the upload rather than after: the details
         // describe the version being minted.
-        var details = await DescribeAsync(adapter, slot, ct);
+        var details = await DescribeAsync(adapter, target, slot, ct);
 
         SavegameVersionDto version;
 
@@ -674,7 +734,7 @@ public sealed class SavegameService(
         // by a savegame that is no longer checked out - the folder left behind reads as unrecognised,
         // which needs a confirmation to displace, and that is the safe way round.
         bindings.ClearBinding(game.Identity, savegameId);
-        Recycle(adapter, slot);
+        Recycle(adapter, target, slot);
 
         return version;
     }
@@ -739,13 +799,14 @@ public sealed class SavegameService(
     public async Task<SavegameDto> PublishAsync(
         Game game,
         Guid repoId,
-        SavegameSlotId slot,
+        SavegameSlotRef slot,
         string name,
         string? label,
         SavegamePublishTarget? target,
         CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
+        var savegameTarget = RequireTarget(game, adapter, slot);
         var savegameId = Guid.NewGuid();
 
         // The check-out limit reached from the other end rather than a rule of its own: a publish
@@ -754,9 +815,9 @@ public sealed class SavegameService(
         // such precondition, which is why the id goes in nullable.
         EnsureModFolderIsFree(game, savegameId, target?.ProfileId, name);
 
-        var packed = await packer.PackAsync(adapter, slot, ct);
+        var packed = await packer.PackAsync(adapter, savegameTarget, slot.Slot, ct);
 
-        var details = await DescribeAsync(adapter, slot, ct);
+        var details = await DescribeAsync(adapter, savegameTarget, slot.Slot, ct);
 
         SavegameDto savegame;
 
@@ -787,7 +848,7 @@ public sealed class SavegameService(
         bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             repoId,
             savegameId,
-            slot.Value,
+            slot,
             savegame.Head?.Number ?? 1,
             packed.ContentHash,
             DateTime.UtcNow)
@@ -825,21 +886,27 @@ public sealed class SavegameService(
                 "This machine is not holding that savegame",
                 $"No checkout binding for savegame '{savegameId}' in game '{game.Identity}', so there is no claim of ours to give back.");
 
+        // Before the server call, not after: discarding promises the local copy goes to the Recycle
+        // Bin, and a hold whose folder the settings no longer name cannot keep that promise. Handing
+        // the claim back and then failing would leave a save on this disk that nothing claims and
+        // nothing can name - so this refuses instead, and Disconnect is the verb for that case.
+        var target = RequireTarget(game, adapter, binding.Slot);
+
         // The server first: it is the half somebody else is waiting on, and a local record cleared
         // against a claim that is still open would leave the save unclaimable by anybody, this
         // machine included.
         await savegamesClient.DiscardSavegameCheckoutV1Async(binding.RepoId, savegameId, ct);
 
         bindings.ClearBinding(game.Identity, savegameId);
-        Recycle(adapter, new SavegameSlotId(binding.SlotId));
+        Recycle(adapter, target, binding.Slot.Slot);
     }
 
-    public async Task ObserveAsync(GameIdentity game, CancellationToken ct)
+    public async Task ObserveAsync(ModTargetRef target, CancellationToken ct)
     {
-        var held = bindings.GetBindings(game);
+        var held = bindings.GetBindingsIn(target);
 
         // The overwhelmingly common answer, for one list read - the same bargain the drift check
-        // strikes, and for the same reason: nearly every apply is to a game holding nothing.
+        // strikes, and for the same reason: nearly every apply is to a folder holding nothing.
         if (held.Count == 0)
         {
             return;
@@ -847,17 +914,24 @@ public sealed class SavegameService(
 
         // A game whose scope no loaded repo serves observes nothing, quietly - the same answer
         // the drift check gives for a folder it cannot reach.
-        var adapter = adapters.TryGet(game);
-
-        if (adapter is null)
+        if (adapters.TryGet(target.Game) is not ILocalSavegameAdapter adapter)
         {
             return;
         }
 
-        // Read once, before anything is hashed: it is the same answer for every binding, and it is
-        // the outgoing revision only until the caller rewrites it.
-        var manifest = ReadAppliedManifest(game);
-        var slots = await ReadSlotsOrNothing(adapter, ct);
+        // The savegame folder paired with the mod folder being applied to. None means this target
+        // holds mods and no saves, in which case nothing here is holding anything either - the
+        // bindings above are keyed on the same key - so this is belt and braces for a settings edit
+        // that landed between the two reads.
+        if (adapter.SavegameTargets[target.Key] is not SavegameTarget savegameTarget)
+        {
+            return;
+        }
+
+        // Read once, before anything is hashed: it is this folder's own manifest, the same answer for
+        // every binding in it, and it is the outgoing revision only until the caller rewrites it.
+        var manifest = manifestStore.TryRead(target);
+        var slots = await ReadSlotsOrNothing(adapter, savegameTarget, ct);
 
         foreach (var binding in held)
         {
@@ -870,7 +944,7 @@ public sealed class SavegameService(
                 continue;
             }
 
-            var slot = slots.FirstOrDefault(x => string.Equals(x.Id.Value, binding.SlotId, StringComparison.OrdinalIgnoreCase));
+            var slot = slots.FirstOrDefault(x => x.Ref.Addresses(binding.Slot));
 
             // A slot somebody deleted from inside the game has no contents to have moved, and hashing
             // a missing folder would attribute the empty archive to this revision as an evening.
@@ -879,9 +953,9 @@ public sealed class SavegameService(
                 continue;
             }
 
-            if (await HashOrNothing(adapter, new SavegameSlotId(binding.SlotId), ct) is string current)
+            if (await HashOrNothing(adapter, savegameTarget, binding.Slot.Slot, ct) is string current)
             {
-                Observe(game, binding, current, manifest?.ProfileId, manifest?.ProfileRevision);
+                Observe(target.Game, binding, current, manifest?.ProfileId, manifest?.ProfileRevision);
             }
         }
     }
@@ -899,30 +973,49 @@ public sealed class SavegameService(
 
         // A game whose scope no loaded repo serves reports nothing. Unknown, not drifted - the
         // same answer the mod check gives for a folder it cannot reach.
-        var adapter = Maybe.From(adapters.TryGet(game));
-
-        if (adapter.HasValue is false)
+        if (adapters.TryGet(game) is not ILocalSavegameAdapter adapter)
         {
             return [];
         }
 
-        var manifest = ReadAppliedManifest(game);
-        var slots = await ReadSlotsOrNothing(adapter.Value, ct);
+        // One read per target that actually holds something, kept because a game's holds are usually
+        // one or two in one folder and listing twenty slots twice for them is a directory pass with
+        // nothing to show for it.
+        var slotsByTarget = new Dictionary<TargetKey, IReadOnlyList<GameSavegameSlot>>();
         var drift = new List<SavegameDrift>();
 
         foreach (var binding in held)
         {
             ct.ThrowIfCancellationRequested();
 
-            var slotId = new SavegameSlotId(binding.SlotId);
-            var slot = slots.FirstOrDefault(x => string.Equals(x.Id.Value, binding.SlotId, StringComparison.OrdinalIgnoreCase));
+            // A hold whose target the settings no longer name has no folder to look in, so there is
+            // nothing here that could be compared against anything. It is not dropped and it is not
+            // forgotten - the game's slot list is where an unreachable hold is said, because there
+            // is an action there and none here.
+            if (adapter.SavegameTargets[binding.Slot.Target] is not SavegameTarget savegameTarget)
+            {
+                continue;
+            }
+
+            if (slotsByTarget.TryGetValue(binding.Slot.Target, out var slots) is false)
+            {
+                slots = await ReadSlotsOrNothing(adapter, savegameTarget, ct);
+                slotsByTarget[binding.Slot.Target] = slots;
+            }
+
+            var slot = slots.FirstOrDefault(x => x.Ref.Addresses(binding.Slot));
             var head = headVersions?.GetHeadVersion(binding.RepoId, binding.SavegameId);
+
+            // This folder's own manifest, not an average of the game's: what a held save was played
+            // against is what the folder it sits in was applied to, and with several targets the
+            // others are answering about somebody else's evening.
+            var manifest = manifestStore.TryRead(new ModTargetRef(game, binding.Slot.Target));
 
             // One hash per held savegame, and only where the folder is still there. A slot the user
             // deleted from inside the game has no contents to have moved, and hashing a missing
             // folder would report the empty archive as unchecked-in play.
             var currentHash = slot?.IsOccupied is true
-                ? await HashOrNothing(adapter.Value, slotId, ct)
+                ? await HashOrNothing(adapter, savegameTarget, binding.Slot.Slot, ct)
                 : null;
 
             var kinds = SavegameDriftRules.Classify(
@@ -932,7 +1025,7 @@ public sealed class SavegameService(
                 manifest?.ProfileId,
                 manifest?.ProfileRevision);
 
-            drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, slotId, kind)
+            drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
             {
                 SlotDisplayName = slot?.DisplayName,
                 HeldVersion = binding.Version,
@@ -1018,28 +1111,24 @@ public sealed class SavegameService(
     /// <remarks>Reads the manifest itself, for the caller that has not already.</remarks>
     private SavegameCheckoutBinding Observe(GameIdentity game, SavegameCheckoutBinding binding, string currentContentHash)
     {
-        var manifest = ReadAppliedManifest(game);
+        var manifest = ReadAppliedManifest(game, binding);
 
         return Observe(game, binding, currentContentHash, manifest?.ProfileId, manifest?.ProfileRevision);
     }
 
     /// <summary>
-    /// Which mod list this game's folders are on, where they all say the same thing.
+    /// Which mod list the folder this savegame sits in is on.
     /// </summary>
     /// <remarks>
-    /// <b>A savegame is held by the game and played against one folder, and the binding does not yet
-    /// say which.</b> A manifest is per target, so a game reaching three has three answers to a
-    /// question asked of the game - and every target of a game follows one profile, so where they
-    /// agree the ambiguity does not matter. Where they do not, one folder did not get an apply
-    /// another did, and the answer is <see cref="SyncManifestStore.TryReadAgreed"/>'s null: unknown,
-    /// which records nothing rather than a mod list this save may never have run on. Slice 3 of
-    /// Phase 10 puts the target key on the binding and turns this into a lookup.
+    /// <b>A lookup, because the binding says which folder.</b> A manifest is per target and a held
+    /// save was played against the mods in its own target's folder, so a game reaching three of them
+    /// has one answer here rather than three - which is what the binding's target key bought. A
+    /// target with no manifest has never been applied to, and null records nothing rather than
+    /// guessing a mod list this save may never have run on.
     /// </remarks>
-    private SyncManifest? ReadAppliedManifest(GameIdentity game)
+    private SyncManifest? ReadAppliedManifest(GameIdentity game, SavegameCheckoutBinding binding)
     {
-        return manifestStore.TryReadAgreed(modFolders.GetAll()
-            .Where(x => x.Target.Game == game)
-            .Select(x => x.Target));
+        return manifestStore.TryRead(new ModTargetRef(game, binding.Slot.Target));
     }
 
     /// <summary>
@@ -1088,11 +1177,12 @@ public sealed class SavegameService(
     private async Task EnsureWritable(
         Game game,
         ILocalSavegameAdapter adapter,
-        SavegameSlotId slot,
+        SavegameTarget target,
+        SavegameSlotRef slot,
         string savegameName,
         CancellationToken ct)
     {
-        var availability = await ClassifyAsync(game, adapter, slot, ct);
+        var availability = await ClassifyAsync(game, adapter, target, slot, ct);
 
         if (SavegameSlotStates.IsRefused(availability) is false)
         {
@@ -1101,31 +1191,33 @@ public sealed class SavegameService(
 
         throw new UserFriendlyException(
             "That slot holds play nobody has checked in",
-            $"Writing '{savegameName}' into slot '{slot.Value}' would destroy a savegame that has been played since it was checked out and exists nowhere else. Check that one in first.");
+            $"Writing '{savegameName}' into slot '{slot}' would destroy a savegame that has been played since it was checked out and exists nowhere else. Check that one in first.");
     }
 
     private async Task<SavegameSlotAvailability> ClassifyAsync(
         Game game,
         ILocalSavegameAdapter adapter,
-        SavegameSlotId slotId,
+        SavegameTarget target,
+        SavegameSlotRef slotRef,
         CancellationToken ct)
     {
-        var slots = await adapter.GetSlots(ct);
-        var slot = slots.FirstOrDefault(x => string.Equals(x.Id.Value, slotId.Value, StringComparison.OrdinalIgnoreCase))
+        var slots = await adapter.GetSlots(target, ct);
+        var slot = slots.FirstOrDefault(x => string.Equals(x.Id.Value, slotRef.Slot.Value, StringComparison.OrdinalIgnoreCase))
             // A slot the adapter does not list, for a game that can mint them. Nothing is there, so
             // there is nothing to lose - and a game that cannot mint them will refuse the write when
             // it comes to it, which is its call to make and not this one's.
-            ?? new SavegameSlot(slotId, null, false, []);
+            ?? new SavegameSlot(slotRef.Slot, null, false, []);
 
-        var binding = bindings.GetBindingForSlot(game.Identity, slot.Id);
+        var addressed = new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), target.DisplayName, slot);
+        var binding = bindings.GetBindingForSlot(game.Identity, addressed.Ref);
 
         // Hashed only where something claims the slot: without a binding there is no recorded hash to
         // compare against, so the pass would cost a full archive read to change no answer.
         var currentHash = binding is not null && slot.IsOccupied
-            ? await packer.HashSlotAsync(adapter, slot.Id, ct)
+            ? await packer.HashSlotAsync(adapter, target, slot.Id, ct)
             : null;
 
-        return SavegameSlotStates.Classify(slot, binding, currentHash);
+        return SavegameSlotStates.Classify(addressed, binding, currentHash);
     }
 
     /// <summary>
@@ -1139,6 +1231,7 @@ public sealed class SavegameService(
     /// </remarks>
     private async Task DownloadIntoSlotAsync(
         ILocalSavegameAdapter adapter,
+        SavegameTarget target,
         Guid repoId,
         Guid savegameId,
         string contentHash,
@@ -1176,7 +1269,7 @@ public sealed class SavegameService(
                 }
             }
 
-            await packer.UnpackAsync(archivePath, adapter, slot, ct);
+            await packer.UnpackAsync(archivePath, adapter, target, slot, ct);
         }
         finally
         {
@@ -1303,7 +1396,7 @@ public sealed class SavegameService(
             return played;
         }
 
-        var manifest = ReadAppliedManifest(game.Identity);
+        var manifest = ReadAppliedManifest(game.Identity, binding);
 
         if (manifest?.ProfileRevision is int applied && profileId == manifest.ProfileId)
         {
@@ -1323,11 +1416,11 @@ public sealed class SavegameService(
     /// would be the one thing the uninstall rules never permit, and failing the check-in over it
     /// would report a hand-back that plainly succeeded as broken.
     /// </remarks>
-    private void Recycle(ILocalSavegameAdapter adapter, SavegameSlotId slot)
+    private void Recycle(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
     {
         try
         {
-            var path = adapter.GetSlotPath(slot);
+            var path = adapter.GetSlotPath(target, slot);
 
             if (Directory.Exists(path))
             {
@@ -1358,11 +1451,11 @@ public sealed class SavegameService(
     /// </para>
     /// </remarks>
     private async Task<List<SavegameDetailDto>> DescribeAsync(
-        ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
+        ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken ct)
     {
         try
         {
-            var slots = await adapter.GetSlots(ct);
+            var slots = await adapter.GetSlots(target, ct);
 
             return [.. slots
                 .FirstOrDefault(x => x.Id == slot)?.Details
@@ -1383,18 +1476,63 @@ public sealed class SavegameService(
                 $"'{game.Name}' has no savegames",
                 $"No loaded repo hydrates a savegame adapter for game '{game.Identity}' - either its game does not support savegames, or no repo on this machine serves its scope.");
 
-    /// <summary>Slots, or nothing where the game folder is unreachable - unknown, never drifted.</summary>
-    private async Task<IReadOnlyList<SavegameSlot>> ReadSlotsOrNothing(ILocalSavegameAdapter adapter, CancellationToken ct)
+    /// <summary>
+    /// The savegame folder a slot reference addresses.
+    /// </summary>
+    /// <remarks>
+    /// <b>Where an unreachable hold is refused, and it has to be a refusal.</b> A settings field
+    /// somebody emptied takes a target away while a savegame checked out into it is still on this
+    /// disk; every verb that touches the bytes needs a folder, and the honest answer is to say which
+    /// folder is missing rather than to pick another of the game's and write into it.
+    /// </remarks>
+    private static SavegameTarget RequireTarget(Game game, ILocalSavegameAdapter adapter, SavegameSlotRef slot)
+        => adapter.SavegameTargets[slot.Target]
+            ?? throw new UserFriendlyException(
+                $"'{game.Name}' no longer has the folder that save is in",
+                $"No savegame folder is configured for target '{slot.Target}' of game '{game.Identity}', so slot '{slot.Slot}' cannot be reached. Point the settings back at it, or disconnect the savegame to stop tracking it here.");
+
+    /// <summary>
+    /// Every slot of every savegame folder this game reaches, addressed and named.
+    /// </summary>
+    /// <remarks>
+    /// The target's name only where there is more than one of them: a game with one savegame folder
+    /// does not have a savegame folder called something, and a picker grouping one group is a heading
+    /// repeating the page title. A folder the adapter named nothing falls back to its key, which is
+    /// at least a word somebody can tell two headings apart by.
+    /// </remarks>
+    private async Task<IReadOnlyList<GameSavegameSlot>> ReadSlotsAsync(ILocalSavegameAdapter adapter, CancellationToken ct)
+    {
+        var targets = adapter.SavegameTargets;
+        var slots = new List<GameSavegameSlot>();
+
+        foreach (var target in targets)
+        {
+            var name = targets.Count > 1 ? target.DisplayName ?? target.Key.Value : null;
+
+            foreach (var slot in await adapter.GetSlots(target, ct))
+            {
+                slots.Add(new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), name, slot));
+            }
+        }
+
+        return slots;
+    }
+
+    /// <summary>Slots, or nothing where the savegame folder is unreachable - unknown, never drifted.</summary>
+    private async Task<IReadOnlyList<GameSavegameSlot>> ReadSlotsOrNothing(
+        ILocalSavegameAdapter adapter, SavegameTarget target, CancellationToken ct)
     {
         try
         {
-            return await adapter.GetSlots(ct);
+            return [.. (await adapter.GetSlots(target, ct))
+                .Select(x => new GameSavegameSlot(new SavegameSlotRef(target.Key, x.Id), target.DisplayName, x))];
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // An unreachable game folder reads as "no slots", which is deliberately indistinguishable
-            // from an empty one to everything above - so this is the only place it is visible.
-            logger.LogWarning(exception, "Could not read the savegame slots; treating the game as having none.");
+            // An unreachable savegame folder reads as "no slots", which is deliberately
+            // indistinguishable from an empty one to everything above - so this is the only place it
+            // is visible.
+            logger.LogWarning(exception, "Could not read the savegame slots in {Folder}; treating it as having none.", target.Path);
 
             return [];
         }
@@ -1405,11 +1543,12 @@ public sealed class SavegameService(
     /// play, for the reason <see cref="SavegameDriftRules"/> gives: a warning that fires when nothing
     /// is wrong is one everybody learns to click past.
     /// </summary>
-    private async Task<string?> HashOrNothing(ILocalSavegameAdapter adapter, SavegameSlotId slot, CancellationToken ct)
+    private async Task<string?> HashOrNothing(
+        ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken ct)
     {
         try
         {
-            return await packer.HashSlotAsync(adapter, slot, ct);
+            return await packer.HashSlotAsync(adapter, target, slot, ct);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
