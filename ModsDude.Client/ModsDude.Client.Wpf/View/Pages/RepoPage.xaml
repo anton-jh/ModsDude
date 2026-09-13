@@ -13,7 +13,7 @@
 
     <Grid ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto auto auto">
+        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
 
             <ListView Grid.Row="0"
                       Style="{StaticResource SidebarList}"
@@ -38,13 +38,6 @@
                       ItemsSource="{Binding Path=ArchivedProfiles}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                       Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-            <uc:SidebarHeader Grid.Row="5" Title="Games" Command="" ActionIcon="&#xE72C;" />
-
-            <ListView Grid.Row="6"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=Games}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
         </Grid>
 
         <Frame

@@ -16,42 +16,61 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The game's own page: which profile it follows, whether its mod folder still matches, and the
-/// one action that fixes it - with the settings and the name on the Manage sub-page below.
+/// One of a game's folders on the game's own page: where it is, and whether it still holds what was
+/// applied to it.
+/// </summary>
+/// <param name="Name">
+/// What to call this folder, or null where the game reaches one - which is nearly every game, and
+/// which is why this page reads as a path and a sentence for almost everybody.
+/// </param>
+public sealed record GameTargetRow(string? Name, string Path, string DriftNote, string? LockedWarning)
+{
+    public bool HasName => Name is not null;
+    public bool HasLockedWarning => LockedWarning is not null;
+}
+
+
+/// <summary>
+/// The game's own page: which profile it follows, what it is holding, and a line for each folder it
+/// reaches - with the settings on the Manage sub-page below.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Activation lives here because this is the end of it where the target is fixed and the profile is
-/// chosen. The choice spans every repo sharing this game's scope rather than the repo the user
-/// navigated in through, since the game is shared across all of them and holds one active profile
-/// that may have come from any.
+/// <b>Reached rarely and on purpose.</b> Nothing in a normal evening opens it: activating a profile
+/// is on the profile's page, taking and handing back a save is on the repo's, and the drift notice
+/// carries whatever went wrong from wherever the user happens to be. What is left here is the three
+/// things that are about the installation rather than about the sharing of it - its settings, its
+/// folders and its slots.
 /// </para>
 /// <para>
-/// The picker used to sit on Manage as well. It does not any more - two places to set one thing is
-/// how they disagree.
-/// </para>
-/// <para>
-/// <b>A held savegame changes what both controls mean.</b> One with a profile claims this mod folder,
-/// so the picker is disabled rather than offering a switch the apply table refuses; and a <em>past</em>
-/// one pins the folder to its own revision, so the button stops meaning "put this on the profile's
-/// latest" and says which revision it is repairing to instead. Both are the same rule read from the
-/// game's end - see docs/10-savegame-profile-binding.md#game-page.
+/// <b>It used to carry a second copy of activation</b>: a profile dropdown spanning every repo that
+/// shares this game's scope, an apply button beside it, and the hold rule greying the dropdown out.
+/// All three were the profile page's controls seen from the other end, and two places to set one
+/// thing is how they come to disagree. What survives of the hold is the sentence saying what is
+/// checked out here, which is a fact about the game rather than a control on it.
 /// </para>
 /// </remarks>
 public partial class GamePageViewModel : PageViewModel, IDisposable
 {
+    private readonly Repo _repo;
     private readonly Game _game;
-    private readonly RepoRepository _repoRepository;
     private readonly IProfilesClient _profilesClient;
     private readonly DriftService _driftService;
     private readonly DriftMonitor _driftMonitor;
-    private readonly ProfileApplyService _applyService;
     private readonly ISavegameService _savegameService;
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
 
-    private IReadOnlyList<InstanceProfileOptionViewModel> _fetchedOptions = [];
+    /// <summary>
+    /// What the game's active profile is called, and whether anything could find out.
+    /// </summary>
+    /// <remarks>
+    /// One request, to the repo the active profile belongs to - which need not be the repo navigated
+    /// in through, since a game is offered by every repo sharing its scope and holds one profile that
+    /// may have come from any of them.
+    /// </remarks>
+    private ActiveProfileName _activeProfile = ActiveProfileName.Unknown;
 
     /// <summary>What the held savegames are called, so the status line can name one. Best effort.</summary>
     private IReadOnlyDictionary<Guid, string> _savegameNames = new Dictionary<Guid, string>();
@@ -61,11 +80,9 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         Repo repo,
         Game game,
         NavigationManager navigationManager,
-        RepoRepository repoRepository,
         IProfilesClient profilesClient,
         DriftService driftService,
         DriftMonitor driftMonitor,
-        ProfileApplyService applyService,
         ISavegameService savegameService,
         SavegameBindingStore bindingStore,
         ProfileService profileService,
@@ -74,12 +91,11 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         GameSavegamesPageViewModel.Factory gameSavegamesPageViewModelFactory,
         GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory)
     {
+        _repo = repo;
         _game = game;
-        _repoRepository = repoRepository;
         _profilesClient = profilesClient;
         _driftService = driftService;
         _driftMonitor = driftMonitor;
-        _applyService = applyService;
         _savegameService = savegameService;
         _bindingStore = bindingStore;
         _profileService = profileService;
@@ -87,12 +103,10 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         // This page outlives a check-in, unlike every other surface that asks the hold question: the
         // slot list is its own sub-page, so checking a savegame in there leaves this shell standing
-        // with a disabled dropdown and a Re-apply rev 4 that are both about a hold that has ended.
+        // with a sentence about a hold that has ended.
         _bindingStore.BindingsChanged += OnBindingsChanged;
 
         GameName = game.Name;
-        // Joined for now: slice 5 turns this into the target list it really is.
-        ModFolder = game.Targets.Count > 0 ? string.Join(", ", game.Targets.Select(x => x.ModFolder)) : "No mod folder configured";
 
         NavManager = navigationManager;
         MenuItems = [
@@ -100,8 +114,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
                 .WithIcon(MenuIcons.Sync)
         ];
 
-        // The local half of savegames: the slot list, and the one verb - publish - that is inherently
-        // about a slot. Absent rather than closed where the game has no saves, for the same reason the
+        // The local half of savegames: the slot list, and the states a slot can be in that no server
+        // knows about. Absent rather than closed where the game has no saves, for the same reason the
         // repo's Saves entry is.
         if (repo.Adapter.CanSupportSavegames)
         {
@@ -120,174 +134,61 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
     public NavigationManager NavManager { get; }
 
-    public ObservableCollection<InstanceProfileOptionViewModel> Profiles { get; } = [];
-
     public string GameName { get; }
-    public string ModFolder { get; }
-
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActivationLabel))]
-    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
-    private InstanceProfileOptionViewModel? _selectedProfile;
 
     /// <summary>
-    /// What this game is holding and what that demands of its mod folder, said in one Neutral
-    /// line. Null - nearly always - where nothing with a profile is checked out here.
+    /// One row per folder this game reaches, since each of them matches its profile or does not on
+    /// its own. Empty for a game whose settings point at no folder, which is an ordinary answer.
+    /// </summary>
+    public ObservableCollection<GameTargetRow> Targets { get; } = [];
+
+    public bool HasTargets => Targets.Count > 0;
+
+
+    /// <summary>
+    /// Which profile this game follows, said rather than chosen. Activation is on the profile's own
+    /// page - see the remarks on this class.
+    /// </summary>
+    [ObservableProperty]
+    private string _activeProfileNote = "Reading this game's profile...";
+
+    /// <summary>
+    /// What this game is holding, said in one Neutral line. Null - nearly always - where nothing
+    /// with a profile is checked out here.
     /// </summary>
     /// <remarks>
     /// Neutral on purpose. Holding a past savegame is a state somebody chose and is playing in, not a
-    /// problem with the game, so it reads like the mod-folder path underneath it rather than like
-    /// the locked-mod warning above it.
+    /// problem with the game, so it reads like the folder paths beside it rather than like the
+    /// locked-mod warning under them.
     /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHoldingStatus))]
     private string? _holdingStatus;
 
     /// <summary>
-    /// Why the profile picker is disabled, where it is. Absent in the ordinary case, because a control
-    /// that is not greyed out has nothing to explain.
+    /// Why there is no folder row to read, where there is none. Null wherever <see cref="Targets"/>
+    /// has something in it.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanChooseProfile))]
-    [NotifyPropertyChangedFor(nameof(HasProfileLock))]
-    private string? _profileLock;
-
-    /// <summary>The revision a past savegame held here pins the mod folder to. Null for everything else.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActivationLabel))]
-    private int? _pinnedRevision;
-
-    [ObservableProperty]
-    private string _driftNote = "Checking the mod folder...";
-
-    /// <summary>
-    /// Named separately from the count: an unlocked mod at the wrong version is untidy, a locked map
-    /// at the wrong version is a damaged savegame waiting to happen.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasLockedWarning))]
-    private string? _lockedWarning;
-
-    /// <summary>
-    /// The profile was deleted, or the user was removed from its repo. Said out loud, with the list
-    /// still offering everything else - rather than reporting drift against something unreachable.
-    /// </summary>
-    [ObservableProperty]
-    private bool _hasDanglingActiveProfile;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
-    private bool _isApplying;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasApplyStatus))]
-    private string? _applyStatus;
+    [NotifyPropertyChangedFor(nameof(HasNoTargetsNote))]
+    private string? _noTargetsNote;
 
 
-    public bool HasLockedWarning => LockedWarning is not null;
-    public bool HasApplyStatus => ApplyStatus is not null;
     public bool HasHoldingStatus => HoldingStatus is not null;
-    public bool HasProfileLock => ProfileLock is not null;
-
-    /// <summary>
-    /// Whether the game may be pointed at a different profile at all. False while a savegame with
-    /// a profile is checked out here: every switch in the app applies first, a held savegame refuses that
-    /// apply, and a dropdown whose every other entry leads to a refusal is worse than one that says so
-    /// and does not open. Savegames following no mod list leave it alone.
-    /// </summary>
-    public bool CanChooseProfile => ProfileLock is null;
-
-    public ProfileActivationKind ActivationKind => SelectedProfile is InstanceProfileOptionViewModel option
-        ? ProfileActivation.Describe(_game.ActiveProfile, option.Value)
-        : ProfileActivationKind.Activate;
-
-    public string ActivationLabel => ProfileActivation.Label(ActivationKind, PinnedRevision);
+    public bool HasNoTargetsNote => NoTargetsNote is not null;
 
 
     protected override async Task InitAsync()
     {
-        _fetchedOptions = await LoadProfileOptionsAsync(CancellationToken.None);
+        _activeProfile = await LoadActiveProfileNameAsync(CancellationToken.None);
         _savegameNames = await LoadSavegameNamesAsync(CancellationToken.None);
     }
 
     protected override void OnInitCompleted()
     {
-        Profiles.Clear();
-
-        foreach (var option in _fetchedOptions)
-        {
-            Profiles.Add(option);
-        }
-
-        SelectedProfile = _game.ActiveProfile is ActiveProfile active
-            ? Profiles.FirstOrDefault(x => x.Value == active)
-            : null;
-
-        HasDanglingActiveProfile = _game.ActiveProfile is not null && SelectedProfile is null;
-
         RefreshHolding();
         RefreshDrift();
     }
-
-    [RelayCommand(CanExecute = nameof(CanApply), IncludeCancelCommand = true)]
-    private async Task Apply(CancellationToken cancellationToken)
-    {
-        if (SelectedProfile is not InstanceProfileOptionViewModel option)
-        {
-            return;
-        }
-
-        // A game is offered by every repo sharing its scope, so the profile picked here may well
-        // belong to a repo other than the one navigated in through - and that repo's adapter is the
-        // one that knows how to read its mod folder.
-        if (FindRepo(option.Value.RepoId) is not Repo owner)
-        {
-            ApplyStatus = "That repo is no longer available on this machine.";
-
-            return;
-        }
-
-        var kind = ActivationKind;
-
-        IsApplying = true;
-        ApplyStatus = kind is ProfileActivationKind.Apply ? "Re-applying..." : "Activating...";
-
-        try
-        {
-            // The intent is recorded by the service, before any file moves and even where the folder
-            // could not be touched: the game is still meant to follow this profile, and being left
-            // drifted is what the notice is for.
-            var outcome = await _applyService.ActivateAsync(
-                owner,
-                _game,
-                option.Value.ProfileId,
-                option.ProfileName,
-                confirmPlan: kind is ProfileActivationKind.Activate,
-                progress: null,
-                cancellationToken);
-
-            if (outcome.Activated)
-            {
-                HasDanglingActiveProfile = false;
-            }
-
-            ApplyStatus = outcome.Message;
-
-            OnPropertyChanged(nameof(ActivationKind));
-            OnPropertyChanged(nameof(ActivationLabel));
-
-            RefreshDrift();
-
-            await _driftMonitor.CheckAsync();
-        }
-        finally
-        {
-            IsApplying = false;
-        }
-    }
-
-    private bool CanApply() => SelectedProfile is not null && IsApplying is false;
 
     [RelayCommand]
     private async Task Recheck()
@@ -304,8 +205,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     /// </summary>
     public void Dispose()
     {
-        ApplyCancelCommand.Execute(null);
-
         _bindingStore.BindingsChanged -= OnBindingsChanged;
 
         NavManager.Dispose();
@@ -330,9 +229,9 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     /// What the savegames checked out here demand of the mod folder, read off local state.
     /// </summary>
     /// <remarks>
-    /// <b>Asked of <see cref="SavegameHoldRules"/> rather than worked out here.</b> The same three
+    /// <b>Asked of <see cref="SavegameHoldRules"/> rather than worked out here.</b> The same
     /// questions decide whether the sync engine refuses an apply, and a second copy of them on this
-    /// page is one that eventually disagrees with the button it is greying out.
+    /// page is one that eventually disagrees with the surfaces that act on it.
     /// </remarks>
     private void RefreshHolding()
     {
@@ -342,8 +241,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         if (claiming.ProfileId is not Guid profileId)
         {
             HoldingStatus = null;
-            ProfileLock = null;
-            PinnedRevision = null;
 
             return;
         }
@@ -357,58 +254,63 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         var profile = _profileService.Profiles.FirstOrDefault(x => x.Id == profileId)?.Name ?? "its mod list";
 
-        PinnedRevision = SavegameHoldRules.RequiredRevision(held, profileId);
-
-        ProfileLock = $"This game is holding {savegame}, which follows '{profile}', so it stays on it. Check that savegame in to move somewhere else.";
-
-        HoldingStatus = PinnedRevision is int pinned
+        HoldingStatus = SavegameHoldRules.RequiredRevision(held, profileId) is int pinned
             ? $"Holding {profile} rev {pinned} for {savegame}. Check {savegame} in to move this game forward."
             : $"Holding {savegame}, which follows {profile}.";
     }
 
     /// <summary>
-    /// One line per folder this game reaches, since each of them matches its profile or does not on
+    /// One row per folder this game reaches, since each of them matches its profile or does not on
     /// its own. The folder is named only where there is more than one to tell apart.
     /// </summary>
     private void RefreshDrift()
     {
+        ActiveProfileNote = _activeProfile.Describe();
+
+        Targets.Clear();
+
         if (_game.Targets.Count == 0)
         {
             // No folder means no comparison, and there is no target to ask about one. The profile is
-            // still worth a sentence, since setting one is what this page is for.
-            DriftNote = (_game.ActiveProfile, HasDanglingActiveProfile) switch
-            {
-                (null, _) => "No profile is set on this game yet.",
-                (_, true) => "The profile this game followed is gone. Pick another one.",
-                _ => "No mod folder is configured, so nothing is known about what is installed."
-            };
-            LockedWarning = null;
+            // still worth a sentence, which is the line above this one.
+            NoTargetsNote = "No mod folder is configured, so nothing is known about what is installed.";
+
+            OnPropertyChanged(nameof(HasTargets));
 
             return;
         }
 
-        var reports = _game.Targets
-            .Select(target => (
-                // Named by the one rule every folder name in the app follows, which answers null
-                // for a game with a single folder - and that is what makes this one line rather
-                // than a labelled list for almost every game.
-                Name: TargetNames.Distinguishing(target.Key, target.DisplayName, _game.Targets.Count),
-                Report: _driftService.Check(
-                    new ModTargetRef(_game.Identity, target.Key),
-                    _game.ActiveProfile,
-                    target.ModFolder,
-                    profileIsMissing: HasDanglingActiveProfile)))
-            .ToList();
+        NoTargetsNote = null;
 
-        DriftNote = string.Join(
-            '\n',
-            reports.Select(x => x.Name is string name
-                ? $"{name}: {Describe(x.Report)}"
-                : Describe(x.Report)));
+        foreach (var target in _game.Targets)
+        {
+            var report = _driftService.Check(
+                new ModTargetRef(_game.Identity, target.Key),
+                _game.ActiveProfile,
+                target.ModFolder,
+                profileIsMissing: _activeProfile.IsGone);
 
-        var locked = reports.SelectMany(x => x.Report.LockedDrift).DistinctBy(x => x.ModId).ToList();
+            Targets.Add(new GameTargetRow(
+                // Named by the one rule every folder name in the app follows, which answers null for
+                // a game with a single folder.
+                TargetNames.Distinguishing(target.Key, target.DisplayName, _game.Targets.Count),
+                target.ModFolder,
+                Describe(report),
+                DescribeLocked(report)));
+        }
 
-        LockedWarning = locked.Count > 0
+        OnPropertyChanged(nameof(HasTargets));
+    }
+
+    /// <summary>
+    /// Named separately from the count: an unlocked mod at the wrong version is untidy, a locked map
+    /// at the wrong version is a damaged savegame waiting to happen.
+    /// </summary>
+    private static string? DescribeLocked(DriftReport report)
+    {
+        var locked = report.LockedDrift.DistinctBy(x => x.ModId).ToList();
+
+        return locked.Count > 0
             ? $"{string.Join(", ", locked.Select(x => $"'{x.DisplayName}'"))} " +
               "are locked and no longer match what was applied. Hosting a savegame on them may damage that save."
             : null;
@@ -418,7 +320,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     {
         return report.Status switch
         {
-            DriftStatus.InSync => "The mod folder matches what was last applied here.",
+            DriftStatus.InSync => "Matches what was last applied here.",
             DriftStatus.Drifted =>
                 $"{report.DifferenceCount} differences from what was last applied here. Updating mods from inside the game looks like this.",
             DriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
@@ -426,43 +328,47 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             // land leaves the folder on the list it was on, and a repointed folder is a settings edit
             // somebody made a moment ago.
             DriftStatus.NotApplied => report.AppliedProfileName is string applied
-                ? $"The mod folder is still on '{applied}'. This profile has not been applied here yet."
-                : "The mod folder is still on the profile it was last applied to, not this one.",
-            DriftStatus.FolderRepointed => "The mod folder has been pointed somewhere else, and nothing has been applied there yet.",
+                ? $"Still on '{applied}'. This profile has not been applied here yet."
+                : "Still on the profile it was last applied to, not this one.",
+            DriftStatus.FolderRepointed => "The settings have been pointed somewhere else, and nothing has been applied there yet.",
             DriftStatus.NoActiveProfile => "No profile is set on this game yet.",
-            DriftStatus.DanglingProfile => "The profile this game followed is gone. Pick another one.",
+            DriftStatus.DanglingProfile => "The profile this game followed is gone. Activate another one from a profile's page.",
             // Unknown, not drifted: warning about mods that may be perfectly fine is worse than
             // saying nothing.
-            DriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
+            DriftStatus.FolderUnreachable => "This folder cannot be reached right now, so nothing is known about it.",
             _ => ""
         };
     }
 
     /// <summary>
-    /// Every profile in every repo that shares this game's scope. One request per repo, and there
-    /// are usually one or two.
+    /// What the game's active profile is called, in one request to the repo that owns it.
     /// </summary>
-    private async Task<IReadOnlyList<InstanceProfileOptionViewModel>> LoadProfileOptionsAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// <b>Three answers, and the third is not the second.</b> A profile that is gone - deleted, or in
+    /// a repo this user was removed from - is a state the drift check has its own status for, and
+    /// this page is where somebody finds out. A request that simply failed is not that and must not
+    /// be reported as it: the honest answer there is that nothing was found out, which leaves the
+    /// folders' own comparison to stand on its own.
+    /// </remarks>
+    private async Task<ActiveProfileName> LoadActiveProfileNameAsync(CancellationToken cancellationToken)
     {
-        var repos = _repoRepository.Repos.Where(x => x.Scope == _game.Identity).ToList();
-        var options = new List<InstanceProfileOptionViewModel>();
-
-        foreach (var repo in repos)
+        if (_game.ActiveProfile is not ActiveProfile active)
         {
-            try
-            {
-                var profiles = await _profilesClient.GetProfilesV1Async(repo.Id, cancellationToken);
-
-                options.AddRange(profiles.Select(x =>
-                    new InstanceProfileOptionViewModel(repo.Id, repo.Name, x.Id, x.Name, qualify: repos.Count > 1)));
-            }
-            catch (ApiException)
-            {
-                // One repo being unreadable is not a reason to offer none of the others.
-            }
+            return ActiveProfileName.None;
         }
 
-        return options;
+        try
+        {
+            var profiles = await _profilesClient.GetProfilesV1Async(active.RepoId, cancellationToken);
+
+            return profiles.FirstOrDefault(x => x.Id == active.ProfileId) is ProfileDto profile
+                ? ActiveProfileName.Named(profile.Name, active.RepoId == _repo.Id)
+                : ActiveProfileName.Gone;
+        }
+        catch (ApiException)
+        {
+            return ActiveProfileName.Unknown;
+        }
     }
 
     /// <summary>
@@ -500,7 +406,45 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         return names;
     }
 
-    private Repo? FindRepo(Guid repoId) => _repoRepository.Repos.FirstOrDefault(x => x.Id == repoId);
+
+    /// <summary>
+    /// The three answers to "which profile does this game follow", which are three different
+    /// sentences and one of which is a drift status.
+    /// </summary>
+    private sealed record ActiveProfileName(string? Name, bool IsGone, bool IsFromThisRepo)
+    {
+        /// <summary>No profile has ever been activated on this game.</summary>
+        public static ActiveProfileName None { get; } = new(null, false, false);
+
+        /// <summary>The repo answered and does not have it: deleted, or this user was removed.</summary>
+        public static ActiveProfileName Gone { get; } = new(null, true, false);
+
+        /// <summary>Nothing was found out. Deliberately not <see cref="Gone"/>.</summary>
+        public static ActiveProfileName Unknown { get; } = new(null, false, false);
+
+        public static ActiveProfileName Named(string name, bool isFromThisRepo) => new(name, false, isFromThisRepo);
+
+
+        public string Describe()
+        {
+            if (IsGone)
+            {
+                return "The profile this game followed is gone - it was deleted, or you were removed from its repo. Activate another one from a profile's page.";
+            }
+
+            if (Name is not string name)
+            {
+                return "No profile is set on this game. Open a profile and activate it here.";
+            }
+
+            // Which repo, where it is not this one: a game is offered by every repo sharing its
+            // scope and holds one profile that may have come from any of them, so a bare name would
+            // be one the user cannot find in the sidebar they are looking at.
+            return IsFromThisRepo
+                ? $"Follows '{name}'."
+                : $"Follows '{name}', which belongs to another repo about this game.";
+        }
+    }
 
 
     public class Factory(IServiceProvider serviceProvider)

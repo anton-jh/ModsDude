@@ -8,6 +8,7 @@ using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -43,7 +44,19 @@ public partial class RepoPageViewModel
     private bool _showPastSavegamesOnce;
 
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
-    private readonly ObservableCollectionSynchronizer<Game, MenuItemViewModel, string> _gameSynchronizer;
+
+    /// <summary>
+    /// The two entries at the bottom of the menu, exactly one of which is in it at a time: the game
+    /// this machine has connected for this repo, or the invitation to connect one.
+    /// </summary>
+    /// <remarks>
+    /// <b>There is no game list any more.</b> A game is keyed by its identity and a repo is about one
+    /// game, so a repo offers at most one - which makes a list of them a list that is always empty or
+    /// always one long, under a heading saying "Games". The entry leads to the game's own page, which
+    /// is reached rarely and on purpose.
+    /// </remarks>
+    private readonly MenuItemViewModel _connectGameMenuItem;
+    private readonly MenuItemViewModel _gameMenuItem;
 
     private bool _selectionRestored;
 
@@ -77,8 +90,18 @@ public partial class RepoPageViewModel
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _instancePageViewModelFactory = gamePageViewModelFactory;
 
-        var connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo))
+        _connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.ConnectGame);
+
+        // Built once and re-titled whenever the game arrives, because the game it leads to is
+        // whichever one the repo offers at the time it is clicked - and a repo offers at most one,
+        // so there is nothing to pick between. It falls back to Connect game rather than asserting:
+        // the entry is only in the menu while there is a game, but nothing stops a deep link setting
+        // the selection to it, and the shell must not fall over on a race with a disconnect.
+        _gameMenuItem = new MenuItemViewModel("Game", () => ConnectedGame() is Game game
+            ? _instancePageViewModelFactory.Create(_repo, game)
+            : _createLocalInstancePageViewModelFactory.Create(_repo))
+            .WithIcon(MenuIcons.Game);
 
         // Every entry whose page is gated end to end is closed here rather than left to fail at the
         // server. Mods is absent from this list on purpose: a guest can read the catalog, and only
@@ -134,10 +157,6 @@ public partial class RepoPageViewModel
         MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.CreateProfile)
             .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));
-        MenuItems.Add(connectGameMenuItem);
-
-        Games = [];
-        _gameSynchronizer = new(repo.Games, Games, MapGameToVm, x => x.Title, NaturalOrder.Comparer);
 
         Profiles = [];
         _profileService.ProfileCreated += OnProfileCreated;
@@ -149,11 +168,18 @@ public partial class RepoPageViewModel
             Selected = MenuItems.First()
         };
 
-        if (Games.Count == 0)
+        // Before the selection below and after the manager exists, because it moves the selection
+        // when the entry under it leaves the menu.
+        RefreshGameEntry();
+
+        // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
+        // that fixes that beats landing on an overview describing it.
+        if (ConnectedGame() is null)
         {
-            NavManager.Selected = connectGameMenuItem;
+            NavManager.Selected = _connectGameMenuItem;
         }
 
+        _repo.Games.CollectionChanged += OnGamesChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
     }
 
@@ -173,8 +199,6 @@ public partial class RepoPageViewModel
 
     public bool HasArchivedProfileOpen => ArchivedProfiles.Count > 0;
 
-    public ObservableCollection<MenuItemViewModel> Games { get; }
-
 
     protected override void Init()
     {
@@ -185,10 +209,10 @@ public partial class RepoPageViewModel
     {
         _profileService.ProfileCreated -= OnProfileCreated;
         _profileService.ProfileUpdated -= OnProfileUpdated;
+        _repo.Games.CollectionChanged -= OnGamesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
 
         _profilesSynchronizer.Dispose();
-        _gameSynchronizer.Dispose();
         NavManager.Dispose();
     }
 
@@ -416,7 +440,7 @@ public partial class RepoPageViewModel
 
         _selectionRestored = true;
 
-        if (Games.Count == 0)
+        if (ConnectedGame() is null)
         {
             return;
         }
@@ -475,9 +499,55 @@ public partial class RepoPageViewModel
         return new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
     }
 
-    private InstanceItemViewModel MapGameToVm(Game game)
+    /// <summary>
+    /// This machine's installation of the game this repo is about, or null where none is connected.
+    /// </summary>
+    /// <remarks>
+    /// At most one by construction: a game is keyed by its identity, and <see cref="Repo.Games"/> is
+    /// filtered to the identity this repo is about. <c>FirstOrDefault</c> rather than
+    /// <c>SingleOrDefault</c> because a shell throwing on a state the model cannot produce is a crash
+    /// where a blank sidebar would do.
+    /// </remarks>
+    private Game? ConnectedGame() => _repo.Games.FirstOrDefault();
+
+    /// <summary>
+    /// Puts exactly one of the two bottom entries in the menu: the connected game, or the
+    /// invitation to connect one.
+    /// </summary>
+    /// <remarks>
+    /// Absent rather than closed, the same way the Saves entry is for an adapter with no savegames:
+    /// "Connect game" on a repo that already has one, or a game entry leading to a page about
+    /// nothing, are both entries that describe a state the user is not in.
+    /// </remarks>
+    private void RefreshGameEntry()
     {
-        return new InstanceItemViewModel(_repo, game, _instancePageViewModelFactory);
+        var game = ConnectedGame();
+
+        if (game is not null)
+        {
+            _gameMenuItem.Title = game.Name;
+        }
+
+        var wanted = game is null ? _connectGameMenuItem : _gameMenuItem;
+        var unwanted = game is null ? _gameMenuItem : _connectGameMenuItem;
+
+        if (MenuItems.Remove(unwanted) && ReferenceEquals(NavManager.Selected, unwanted))
+        {
+            // Whatever was on screen is about a game that has just gone, or about connecting one
+            // that has just arrived. Either way the entry behind it is not in the list any more, and
+            // a selection pointing outside it leaves the sidebar with nothing highlighted.
+            NavManager.Selected = wanted;
+        }
+
+        if (MenuItems.Contains(wanted) is false)
+        {
+            MenuItems.Add(wanted);
+        }
+    }
+
+    private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RefreshGameEntry();
     }
 
 

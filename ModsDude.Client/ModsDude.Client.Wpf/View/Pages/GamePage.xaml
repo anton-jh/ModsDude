@@ -18,46 +18,15 @@
                       ItemsSource="{Binding Path=MenuItems}"
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-            <!-- The game's own state, on its own page: which profile it follows, whether the
-                 folder still matches, and the one action that fixes it. -->
+            <!-- What this installation is, rather than what to do with it: which profile it follows,
+                 what it is holding, and a line for each folder it reaches. Activating a profile is
+                 on the profile's own page, which is the end of it where the choice belongs. -->
             <StackPanel Grid.Row="1" Orientation="Vertical" Margin="12 16 12 0">
 
-                <TextBlock Text="Active profile"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-
-                <!-- Disabled while a savegame with a profile is checked out here. Every switch in the
-                     app applies first, a held savegame refuses that apply, and a dropdown whose every
-                     other entry leads to a refusal is worse than one that says so and does not open. -->
-                <ComboBox Margin="0 4 0 0"
-                          ItemsSource="{Binding Profiles}"
-                          DisplayMemberPath="Label"
-                          IsEnabled="{Binding CanChooseProfile}"
-                          ToolTip="{Binding ProfileLock}"
-                          SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
-
-                <TextBlock Margin="0 6 0 0"
-                           TextWrapping="Wrap"
+                <TextBlock TextWrapping="Wrap"
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding ProfileLock}"
-                           Visibility="{Binding HasProfileLock, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <TextBlock Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                           Text="The profile this game followed is gone - it was deleted, or you were removed from its repo. Pick another one."
-                           Visibility="{Binding HasDanglingActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <!-- Reads 'Re-apply rev 4' while a past savegame is held: applying the profile's
-                     latest is exactly what the apply table refuses there, and repairing folder drift
-                     back to that revision is the whole of what this button still does. -->
-                <Button Margin="0 8 0 0"
-                        HorizontalAlignment="Stretch"
-                        Style="{DynamicResource AccentButtonStyle}"
-                        Content="{Binding ActivationLabel}"
-                        Command="{Binding ApplyCommand}" />
+                           Text="{Binding ActiveProfileNote}" />
 
                 <!-- Neutral. Holding a past savegame is a state somebody chose and is playing in, not a
                      problem with the game. -->
@@ -68,37 +37,57 @@
                            Text="{Binding HoldingStatus}"
                            Visibility="{Binding HasHoldingStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                <!-- One block per folder, because each of them matches its profile or does not on its
+                     own. The heading is absent for a game with one folder, which is nearly all of
+                     them. -->
+                <ItemsControl Margin="0 12 0 0"
+                              ItemsSource="{Binding Targets}"
+                              Visibility="{Binding HasTargets, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type pvm:GameTargetRow}">
+                            <StackPanel Orientation="Vertical" Margin="0 0 0 12">
+                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Text="{Binding Name}"
+                                           Visibility="{Binding HasName, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <TextBlock TextWrapping="Wrap"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding DriftNote}" />
+
+                                <TextBlock Margin="0 4 0 0"
+                                           TextWrapping="Wrap"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           Text="{Binding LockedWarning}"
+                                           Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <TextBlock Margin="0 4 0 0"
+                                           TextTrimming="CharacterEllipsis"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           ToolTip="{Binding Path}"
+                                           Text="{Binding Path}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <TextBlock Margin="0 12 0 0"
                            TextWrapping="Wrap"
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding DriftNote}" />
+                           Text="{Binding NoTargetsNote}"
+                           Visibility="{Binding HasNoTargetsNote, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <TextBlock Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                           Text="{Binding LockedWarning}"
-                           Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <TextBlock Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="{Binding ApplyStatus}"
-                           Visibility="{Binding HasApplyStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <Button Margin="0 8 0 0"
+                <Button Margin="0 4 0 0"
                         HorizontalAlignment="Left"
                         Style="{DynamicResource SubtleMenuButton}"
                         Content="Re-check"
                         Command="{Binding RecheckCommand}" />
-
-                <TextBlock Margin="0 12 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="{Binding ModFolder}" />
             </StackPanel>
         </Grid>
 
