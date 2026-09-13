@@ -129,11 +129,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     private void RefreshInstances()
     {
-        // One row per game, so a game whose server folder drifted and whose client folder did not
-        // shows the drifted one. Slice 5 of Phase 10 gives the row a line per folder.
+        // Every entry per game rather than the first of them: a game reaching three folders has an
+        // entry each, and the row places them onto the folders they are about. Picking one was the
+        // silent-first-target-wins failure this phase exists to prevent, wearing a display bug.
         var drifted = _driftMonitor.Drifted
             .GroupBy(x => x.Game.Identity)
-            .ToDictionary(x => x.Key, x => x.First().Report);
+            .ToDictionary(x => x.Key, IReadOnlyList<TargetDrift> (x) => [.. x]);
 
         Games.Clear();
 
@@ -142,7 +143,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             Games.Add(new InstanceOverviewViewModel(
                 game,
                 DescribeActiveProfile(game),
-                drifted.GetValueOrDefault(game.Identity)));
+                drifted.GetValueOrDefault(game.Identity, [])));
         }
 
         OnPropertyChanged(nameof(HasInstances));

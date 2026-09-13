@@ -505,8 +505,10 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// <param name="count">
     /// How many <em>games</em> are drifted, not how many entries: a game reaching three folders
     /// contributes one line's worth of news however many of them went out of step, and "3 games have
-    /// drifted" for one game's three folders would be a plain lie. Slice 5 of Phase 10 is where the
-    /// wording gets to name the folder.
+    /// drifted" for one game's three folders would be a plain lie. Which folder is
+    /// <see cref="Describe"/>'s to say, and it says it in every sentence it has - a headline is one
+    /// line about one game, and putting a folder name in it would make the common case read as
+    /// though a game had several when it does not.
     /// </param>
     /// <param name="hasSavegameDrift">
     /// Whether the <em>game</em> is holding anything that has drifted, gathered across its folders -
@@ -550,10 +552,10 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     }
 
     /// <param name="subject">
-    /// The entry being shown, so the two statuses that are about a folder rather than about its
-    /// contents can say <em>which</em> folder - with several targets, which one did not get the apply
-    /// is the interesting half. Named by key and only where the game reaches more than one, the same
-    /// rule every other folder name in the app follows.
+    /// The entry being shown, so every sentence here can say <em>which</em> folder it is about - with
+    /// several targets, which one did not get the apply is the interesting half, and so is which one
+    /// somebody's update-all rewrote. Named by <see cref="TargetNames"/> and only where the game
+    /// reaches more than one, the same rule every other folder name in the app follows.
     /// </param>
     private static string Describe(TargetDrift subject, DriftReport report, int files)
     {
@@ -582,15 +584,19 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         if (report.Added.Count > 0) parts.Add($"{report.Added.Count} added");
         if (report.Removed.Count > 0) parts.Add($"{report.Removed.Count} removed");
 
+        // Named where the game reaches more than one, because "3 replaced" says nothing useful about
+        // a machine running a dedicated server and an MP client until it says which of them.
+        var where = Folder(subject) is string named ? $"the '{named}' folder" : "the mod folder";
+
         var folder = files > 0
-            ? $"{string.Join(", ", parts)} in the mod folder since it was last applied. Updating mods from inside the game looks like this."
+            ? $"{string.Join(", ", parts)} in {where} since it was last applied. Updating mods from inside the game looks like this."
             : "";
 
         var pins = report.ProfileChangedMods.Count > 0
-            ? $"{report.ProfileChangedMods.Count} mods are pinned differently than what is installed - somebody has edited the profile since."
+            ? $"{report.ProfileChangedMods.Count} mods in {where} are pinned differently than what is installed - somebody has edited the profile since."
             : "";
 
-        return string.Join(' ', new[] { folder, DescribeRevision(report), pins }.Where(x => x.Length > 0));
+        return string.Join(' ', new[] { folder, DescribeRevision(subject, report), pins }.Where(x => x.Length > 0));
     }
 
     /// <summary>
@@ -619,14 +625,16 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// and what was installed is no longer what the profile says. Two numbers, because that is all
     /// the cheap check has - and two numbers is enough to say something specific.
     /// </summary>
-    private static string DescribeRevision(DriftReport report)
+    private static string DescribeRevision(TargetDrift subject, DriftReport report)
     {
         if (report.ProfileHasMoved is false)
         {
             return "";
         }
 
-        return $"This folder was made to match revision {report.AppliedRevision}; the profile is now at revision {report.CurrentRevision}.";
+        var folder = Folder(subject) is string named ? $"The '{named}' folder" : "This folder";
+
+        return $"{folder} was made to match revision {report.AppliedRevision}; the profile is now at revision {report.CurrentRevision}.";
     }
 
     /// <summary>

@@ -53,14 +53,30 @@
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
                                             <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                        Text="{Binding Name}" />
+
+                                            <!-- A line per folder, each with its own drift: a game
+                                                 whose server folder drifted and whose client folder
+                                                 did not has to say which. -->
+                                            <ItemsControl ItemsSource="{Binding Folders}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:GameFolderLine}">
+                                                        <StackPanel Orientation="Vertical">
+                                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       ToolTip="{Binding Text}"
+                                                                       Text="{Binding Text}" />
+                                                            <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                                       TextWrapping="Wrap"
+                                                                       Text="{Binding Drift}"
+                                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding ModFolder}"
-                                                       Text="{Binding ModFolder}" />
-                                            <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding DriftSummary}"
-                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                       Text="No mod folder configured"
+                                                       Visibility="{Binding HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

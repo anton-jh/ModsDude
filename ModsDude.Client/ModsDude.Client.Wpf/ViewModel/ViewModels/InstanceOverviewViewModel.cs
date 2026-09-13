@@ -1,36 +1,85 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// One game as an overview shows it: where it installs, which profile it is meant to match,
-/// and whether its mod folder still does. Read-only and rebuilt whenever the underlying lists change
-/// - the game's own page is where it is edited.
+/// One of a game's folders as an overview shows it: where it is, and whether it still matches what
+/// was applied to it.
 /// </summary>
-public class InstanceOverviewViewModel(
-    Game game,
-    string activeProfileSummary,
-    DriftReport? drift = null)
+/// <param name="Text">
+/// The path, with the folder's name in front of it where the game reaches more than one. A game with
+/// a single folder does not have a mod folder <em>called</em> something, so it reads as the bare path
+/// it always did.
+/// </param>
+/// <param name="Drift">
+/// What the last check found here, or null where it found nothing worth saying. Per folder, because
+/// each of them matches its profile or does not on its own - which is the whole of what a game with
+/// three of them changes about this row.
+/// </param>
+public sealed record GameFolderLine(string Text, string? Drift)
 {
-    public string Name { get; } = game.Name;
+    public bool HasDrift => Drift is not null;
+}
 
-    /// <summary>Joined for now; slice 5 turns this into the target list it really is.</summary>
-    public string ModFolder { get; } = game.Targets.Count > 0
-        ? string.Join(", ", game.Targets.Select(x => x.ModFolder))
-        : "No mod folder configured";
 
-    public string ActiveProfileSummary { get; } = activeProfileSummary;
+/// <summary>
+/// One game as an overview shows it: which profile it is meant to match, and a line for each folder
+/// that has to match it. Read-only and rebuilt whenever the underlying lists change - the game's own
+/// page is where it is edited.
+/// </summary>
+/// <remarks>
+/// <b>A line per folder rather than a row per game with one drift sentence on it.</b> A game whose
+/// dedicated server drifted and whose MP client did not used to show the first entry the monitor
+/// happened to produce, with nothing saying which folder it was about - which is exactly the silence
+/// this phase exists to remove.
+/// </remarks>
+public class InstanceOverviewViewModel
+{
+    /// <param name="drift">
+    /// Every entry the monitor has for this game, placed onto the folders below by key. Entries
+    /// about the game rather than one of its folders - a held savegame in a folder with no mods -
+    /// carry no mod drift and land nowhere here, which is right: this row is about mod folders, and
+    /// the app-level notice is what says the savegame half.
+    /// </param>
+    public InstanceOverviewViewModel(
+        Game game,
+        string activeProfileSummary,
+        IReadOnlyList<TargetDrift> drift)
+    {
+        Name = game.Name;
+        ActiveProfileSummary = activeProfileSummary;
+
+        Folders = [.. game.Targets.Select(target => new GameFolderLine(
+            Describe(target, game.Targets.Count),
+            Describe(drift.FirstOrDefault(x => x.Target?.Target.Key == target.Key)?.Report)))];
+    }
+
+
+    public string Name { get; }
+
+    /// <summary>Empty for a game whose settings point at no folder at all, which is an ordinary answer.</summary>
+    public IReadOnlyList<GameFolderLine> Folders { get; }
+
+    public bool HasFolders => Folders.Count > 0;
+
+    /// <summary>The pair, because the sidebar's converters only go one way. Same idiom as HasNoGames.</summary>
+    public bool HasNoFolders => Folders.Count == 0;
+
+    public string ActiveProfileSummary { get; }
+
+
+    private static string Describe(PersistedModTarget target, int targetCount)
+        => TargetNames.Distinguishing(target.Key, target.DisplayName, targetCount) is string name
+            ? $"{name}: {target.ModFolder}"
+            : target.ModFolder;
 
     /// <summary>
     /// Null where the last check found nothing to say. Drift belongs wherever the game appears,
-    /// but a game that matches its profile does not need a line saying so on every list.
+    /// but a folder that matches its profile does not need a line saying so on every list.
     /// </summary>
-    public string? DriftSummary { get; } = Describe(drift);
-
-    public bool HasDrift => DriftSummary is not null;
-
-
     private static string? Describe(DriftReport? report)
     {
         if (report is not DriftReport drift || drift.Status is not DriftStatus.Drifted)
