@@ -53,41 +53,6 @@ The consequence is bounded by the store's central property: everything in it is 
 repo and re-downloadable, so the cost of a caught blob is a download. See
 [07](07-mod-sync-design.md#detecting-a-rewritten-blob).
 
-### An activation whose apply failed is recorded, and then never mentioned again
-
-Applying a profile records the standing intent even when the folder could not be put right —
-`ProfileApplyOutcome.RecordsIntent` is false only for `Declined` and `Refused`, so `Unavailable` and
-`Failed` both leave `ActiveProfile` pointing at the new profile. That is correct: the instance is
-still meant to follow it, and being left drifted is what the notice is for.
-
-The notice does not report it. `ModSyncService` writes the manifest **only on success**, so a failed
-apply leaves one describing the *previous* profile, and `InstanceDriftService.Check` early-returns
-`NeverSynced` for a manifest whose `ProfileId` is not the active one — *"a manifest describing
-another profile says nothing about this one"*, which is sound reasoning for the comparison it is
-about to skip and the wrong conclusion to hand a caller. `InstanceDrift.IsDrifted` is
-`Status is Drifted || HasSavegameDrift`, so `NeverSynced` never enters `InstanceDriftMonitor.Drifted`
-and never reaches the app-level notice. The instance's own page says *"This profile has not been
-applied to this instance yet"*, but only to somebody who goes and looks.
-
-Two failure shapes land there, and the second is the one the word is wrong for. A **fetch** failure
-stops before the destructive phase deliberately, so the folder is untouched and genuinely still on
-the old profile. A **remove or install** failure leaves it half-applied — on neither profile — and
-`NeverSynced` describes a folder nothing has written to.
-
-A savegame held on that instance is still reported: `savegameDrift` is attached to every answer
-including the early returns. It is the mod folder that goes quiet.
-
-**Nothing is corrupt, and nothing needs repairing.** A later re-apply produces the right plan:
-reconciliation works from the folder's contents, and `ModSyncPlanner` reads the manifest purely as a
-filename-size-time to hash cache, which is profile-independent. The defect is that nobody is prompted
-to run one.
-
-Reaching it needs an activation that fails, which is uncommon today — every activation targets one
-instance, and most of them succeed.
-[Phase 10](PLAN.md#an-intent-that-was-not-carried-out-is-drift) both makes it ordinary, by giving one
-game several targets that can fail independently, and fixes it: `NeverSynced` splits so that *no
-manifest at all* stays quiet while *a manifest for a different profile* becomes drift.
-
 ### `IsTrusted` has no write path
 
 `User.IsTrusted` has a private setter and nothing sets it to `true`. Repo creation is

@@ -52,7 +52,7 @@ Sequential. It is a stack, not a set.
 | 2a | The `Game` and its state | 117 + 51 | **done** |
 | 2b | Re-key the per-folder stores | 18 + 48 + 3 | **done** |
 | 3 | Savegames go per game | 42 | **done** |
-| 4 | Activate and apply become two verbs | ~12 | |
+| 4 | Activate and apply become two verbs | 6 + 7 + 13 | **done** |
 | 5 | Interface | ~25 | |
 
 **2a was ~15 files in two commits of 117 and 51.** The estimate was of the *semantic* half and it was
@@ -76,6 +76,12 @@ about ten files and went as expected; the picker, the slot list and the hold sta
 as predicted. The twenty nobody counted are what giving `ILocalSavegameAdapter` targets costs — the
 packer takes a target now, and so does every fake adapter and every test harness that ever addressed
 a slot. Slice 5 has no contract change in it, so its ~25 is probably honest.
+
+**4 was estimated at ~12 and was 26 across three commits** — the rename (6), the drift split (7) and
+the two verbs (13) — which is the first estimate in the phase that was only about twice out. The
+reason is worth knowing: **this slice changed no keys**. Nothing was re-addressed, so nothing fanned
+out; what it touched, it touched deliberately. The commits split cleanly along the rename rule and
+each one compiled and was green on its own, which none of 2b's or 3's could have been.
 
 Three things are independent and can land beside any of it:
 
@@ -166,7 +172,11 @@ matters more than usual here, because the rename table touches most of the 78 fi
   and it collided with `DriftStatus` the moment the rename took the prefix off the enum. It is
   `DriftNote` now, which is what the sync page had always called the same sentence. Worth expecting
   again in slice 4: `InstanceActivation` → `ProfileActivation` lands next to view-model properties
-  with activation in their names.
+  with activation in their names. **It did not collide**: the pages' own members are
+  `ActivationKind`, `ActivationLabel` and `ActivationStatus`, and the type is `ProfileActivation`,
+  so the prefix that looked redundant is what kept them apart. The collision to watch for in slice 5
+  is the other direction - `Game` the model beside `Game` the property name, which several view
+  models already have.
 - **The notice's subject is a target now, and slices 4 and 5 need to know the shape.**
   `InstanceDrift` became `TargetDrift(Game, Target, Report, ProfileName)` — one per folder, with
   `Target` null for the entry that is about the game rather than one of its folders (it reaches none,
@@ -225,6 +235,47 @@ matters more than usual here, because the rename table touches most of the 78 fi
   to something that reads better for a savegame folder would orphan every manifest and binding on
   every machine, which is the rule this phase spends a bullet on — a key is not a description.
 
+- **`RecordsIntent` was deleted rather than made structural, and that is what structural meant.**
+  The plan said to check the refusals, record the intent, then do the work; once `ActivateAsync` does
+  that in that order, a property saying *whether* to record one has nothing left to decide. Every
+  caller that used to ask it now names the verb it meant instead — which turned out to be the whole
+  point: two of them had been calling one method and telling the difference afterwards. The outcome
+  keeps an `Activated` flag, and it is a fact rather than a rule: it is read only by pages with their
+  own bookkeeping to do about it.
+
+- **The savegame page was the site that proved the order matters.** Its unrecognised-mods branch
+  bypasses `ProfileApplyService` and executes plans itself, and it recorded the intent *after* the
+  loop — so an exception mid-apply left a half-applied folder and a game still following the old
+  profile, which is exactly the state slice 4 exists to remove. It records before the loop now.
+  **Slice 5 should look at that branch again**: it is the last place that applies without going
+  through the two verbs, and its Review path is a third way of saying "left drifted deliberately".
+
+- **`ProfileApplyService` is in the WPF project and has no tests, which is now the phase's biggest
+  untested seam.** What can be exercised from `ModsDude.Client.Core.Tests` is the rule material -
+  `ProfileActivation`, `ProfileApplyTarget`, `SavegameHoldRules`, the drift split - and all of it is.
+  What is not is the *order*: refuse, ask, record, work. It is four statements in one method and it
+  is the guarantee the whole slice rests on. Moving the service into Core would need `IModalService`
+  and `IBackgroundTaskReporter` to go with it, which is a bigger move than this slice wanted; worth
+  considering when slice 5 has finished moving the surfaces around.
+
+- **`NeverSynced` stayed quiet for a reason the plan did not give.** The plan's argument was that no
+  manifest promises nothing; the stronger one is that `SyncManifestStore.TryRead` answers null for a
+  locked file, a half-written one and an older format too, so making absence drift would fire on
+  every game on the machine at once the first time the manifest format is bumped. Both arguments
+  point the same way, and the second is the one written into `DriftStatus`.
+
+- **The re-apply button does not name the folder; the sentence does.** The plan's bullet reads as
+  though the button should, but the action applies the whole game - every folder, the ones already
+  right included - and a button claiming to act on one of them would be lying about its scope. The
+  `NotApplied` and `FolderRepointed` sentences carry *"in the 'server' folder"* instead, by key,
+  because the notice is up before the repo list loads and a display name needs a hydrated adapter.
+  **Slice 5 is where every folder name in the app gets one answer**, and this is one of the sites.
+
+- **"Save and apply, always" is not what landed.** With the target collapsed to a lookup the plural
+  wording died, which is what that bullet was about, but the zero case is still *Save changes*: a
+  profile no game follows yet is the onboarding case the editor already handles with an offer after
+  the save, and a button promising an apply that would reach nowhere is a worse lie than a plain one.
+
 ## Definition of done, per slice
 
 Three test projects green, the app launches, and the Farming Simulator flow works end to end —
@@ -238,10 +289,18 @@ would have put a settings round trip in the middle of a test about a file name. 
 place where the *targets themselves* are under test — that a settings edit removes one — and slice 3
 is where it comes back, because a savegame folder without a mod folder is a shape only it can make.
 
+**4 had almost nothing new to cover, which is itself the measurement.** Its rules are pure and were
+already under test - what changed is where they are called from and in what order. The drift split
+got four tests (two statuses in `DriftServiceTests`, and in `DriftMonitorTests` that an activation
+which did not land now reaches the notice while no manifest at all still does not), and
+`ProfileApplyTarget` was rewritten around the lookup. The order the verbs run in is untested and
+cannot be tested from here; see the trap about `ProfileApplyService` living in the WPF project.
+
 **3 split the same way, and the split is worth repeating in 4 and 5.** The fake adapter holds the
 pairing — that both halves come from one settings form under one key, that either half can be absent
 — and the service harness grew a second savegame folder for everything else, because what a hold, an
 observation and a check-in need is *two keyed folders on two revisions* and the fake would have put a
-settings round trip in the middle of a test about attribution. Three test projects are green at
-645 + 239 + 109, and the solution builds; the Farming Simulator flow is one target and unchanged by
-this slice, so the multi-target half is those tests and nothing else until a BeamNG adapter exists.
+settings round trip in the middle of a test about attribution. Three test projects are green
+(650 + 239 + 109 after slice 4), and the solution builds; the Farming Simulator flow is one target
+and unchanged by these slices, so the multi-target half is those tests and nothing else until a
+BeamNG adapter exists.

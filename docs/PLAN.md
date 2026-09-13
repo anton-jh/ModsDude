@@ -1548,22 +1548,27 @@ They have been one word and one button, and the split is load-bearing everywhere
 | Can fail | Only by **refusal** | Yes, per target |
 | On failure | Nothing is recorded | Intent stands, the target is drifted |
 
-- [ ] **Activating implies applying; applying never implies activating.** Activation runs the apply
+- [x] **Activating implies applying; applying never implies activating.** Activation runs the apply
       immediately after — one gesture. *Save and apply* in the mod list editor is pure apply: the
       profile is already active on whatever game follows it.
-- [ ] **A failed apply does not retract the activation.** The game still means to be on that profile,
+- [x] **A failed apply does not retract the activation.** The game still means to be on that profile,
       the target is drifted, and the app-level notice carries it from there — which is
       [the next section](#an-intent-that-was-not-carried-out-is-drift), and is not true today. Two
       things stop an activation happening at all: a held savegame refusing it, and the user declining
       the plan.
-- [ ] **That line already exists and only needs naming.** `ProfileApplyOutcome.RecordsIntent` is
+- [x] **That line already exists and only needs naming.** `ProfileApplyOutcome.RecordsIntent` is
       false for `Refused` and `Declined` and true for `Unavailable` and `Failed` — refusals are
       intent-level, failures are work-level. The split makes it structural: check the refusals,
       record the intent, then do the work.
-- [ ] **The plan confirmation moves to once per activation**, showing what happens across every
+
+      **Structural turned out to mean deleted.** `RecordsIntent` was a rule every caller had to
+      remember to consult; the order in `ActivateAsync` is the same rule with nothing to remember,
+      so the property is gone and `Activated` says what happened rather than what to do. The
+      callers stopped choosing and started naming the verb they meant.
+- [x] **The plan confirmation moves to once per activation**, showing what happens across every
       target, rather than once per target. Otherwise declining the server's plan while accepting the
       client's leaves an activation half-consented-to.
-- [ ] **`InstanceActivation` becomes `ProfileActivation`**, and its two kinds stop describing a label
+- [x] **`InstanceActivation` becomes `ProfileActivation`**, and its two kinds stop describing a label
       and start naming which verb runs.
 
 ### An intent that was not carried out is drift
@@ -1587,26 +1592,26 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 | Fetch — download or store population | Untouched; sync stops before the destructive phase on purpose | `NeverSynced`, silent |
 | Remove or install | Genuinely half-applied — neither profile | `NeverSynced`, silent |
 
-- [ ] **Split `NeverSynced` in two.** *No manifest at all* — a fresh install, discarded local state —
+- [x] **Split `NeverSynced` in two.** *No manifest at all* — a fresh install, discarded local state —
       is genuinely nothing-known, promises nothing, and stays quiet. *A manifest describing a
       different profile* is, under the two verbs above, **definitionally intent recorded and work not
       done**, which is the cleanest description there is of a target needing an apply. It becomes
       `NotApplied` and `IsDrifted` includes it. Nothing has to be invented: the split names the state.
-- [ ] **The third case in that guard gets its own sentence.** A manifest describing a different
+- [x] **The third case in that guard gets its own sentence.** A manifest describing a different
       *folder* is the settings having been repointed, not an apply that did not happen, and it should
       not inherit the wording of one.
-- [ ] **Surfacing only — there is nothing to repair.** A later re-apply already produces the right
+- [x] **Surfacing only — there is nothing to repair.** A later re-apply already produces the right
       plan: reconciliation works from the folder's contents, and the planner reads the manifest purely
       as a filename-size-time to hash cache, which is profile-independent. The state is unprompted,
       not wrong. See [07 — Mod sync design](07-mod-sync-design.md#it-has-to-be-unmissable-everywhere).
-- [ ] **Re-apply on this drift names the target**, since with several of them the interesting half is
+- [x] **Re-apply on this drift names the target**, since with several of them the interesting half is
       *which* one did not get there.
 
 ### One profile per game
 
 - [x] **`Game.ActiveProfile` replaces `LocalInstance.ActiveProfile`.** Every target follows it. Two
       targets of one game cannot disagree, which is the BeamMP requirement stated as a type.
-- [ ] **`ProfileApplyTargets` collapses to a lookup.** A profile belongs to a repo, a repo has one
+- [x] **`ProfileApplyTargets` collapses to a lookup.** A profile belongs to a repo, a repo has one
       `GameIdentity`, games are keyed by identity — so a profile maps to exactly one game. Repo →
       game → its targets, with no search. `DescribeSaveAction` says *Save and apply*, always.
 - [ ] **A folder that wants a different mod list does not get connected.** "A group runs the same
@@ -1669,7 +1674,7 @@ per-game looks simpler and is not.
       and the case breaks exactly where it matters — activate rev 12, the server's apply fails, the
       folder is still physically on rev 8, and a check-in stamps the version with 12. The save then
       reproduces wrong for whoever checks it out next.
-- [ ] **Activated-but-not-applied becomes a normal state** under this phase rather than an
+- [x] **Activated-but-not-applied becomes a normal state** under this phase rather than an
       exceptional one, so divergence gets *more* reachable, not less. That argues for observing
       harder, not for trusting intent.
 - [x] **Both existing guards survive verbatim**: a folder on a *different* profile records no number
@@ -1747,7 +1752,7 @@ existing test stays green. The helper dies in slice 2b, which is where multi-tar
       means four rounds of half-compiling. `RequireSingleTarget` is deleted here.
 - [x] **3. Savegames go per game.** The hold limit, the `IHeldSavegames` split, slot identity and
       grouping. Attribution is deliberately untouched.
-- [ ] **4. Activate and apply become two verbs**, with the confirmation moved, `RecordsIntent` made
+- [x] **4. Activate and apply become two verbs**, with the confirmation moved, `RecordsIntent` made
       structural, and `NeverSynced` split so an activation that did not land is drift. The split
       belongs in this slice rather than slice 2: it is only *definable* once the two verbs are, and
       until then there is no such thing as an intent that was not carried out.

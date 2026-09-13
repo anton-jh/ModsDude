@@ -48,7 +48,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <b>Save re-applies by default.</b> The user came here to fold what the game did into the profile;
 /// the re-apply is what actually reverts an auto-updated locked map, and separating it into a second
 /// deliberate action is precisely how it gets forgotten. The targets are derived rather than asked -
-/// see <see cref="ProfileApplyTargets"/> - and <em>Save only</em> costs a second click through the
+/// see <see cref="ProfileApplyTarget"/> - and <em>Save only</em> costs a second click through the
 /// dropdown, because a control that can be left in the dangerous position turns a per-save decision
 /// into a standing mode.
 /// </para>
