@@ -20,18 +20,12 @@
                       SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
             <!-- On the shell rather than on Overview, so applying this profile to a game is
-                 reachable from every sub-page. -->
+                 reachable from every sub-page - and with nothing to pick, because a repo is about
+                 one game and a machine has one installation of it. -->
             <StackPanel Grid.Row="2"
                         Orientation="Vertical"
                         Margin="12 16 12 16"
                         Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
-
-                <ComboBox Margin="0 0 0 8"
-                          ItemsSource="{Binding Games}"
-                          DisplayMemberPath="Name"
-                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
-                          ToolTip="Which game to use this profile on"
-                          Visibility="{Binding HasGameChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <Button HorizontalAlignment="Stretch"
                         Style="{DynamicResource AccentButtonStyle}"

@@ -17,13 +17,15 @@ using System.ComponentModel;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The profile's shell, and the profile-side half of activation.
+/// The profile's shell, and the only place a profile is activated.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The activation control sits here rather than on Overview so that it is present on every sub-page.
-/// From this end the profile is fixed and the game is chosen, which is why there is a dropdown at
-/// all - and none when the repo offers a single game, which is the common case for most games.
+/// The activation control sits here rather than on Overview so that it is present on every sub-page,
+/// and it takes no target: a repo is about one game and a machine has one installation of it, so
+/// there is nothing to pick. The picker it used to have was the answer to "which folder does this
+/// act on" while policy lived on folders; a game reaching three of them applies to all three, which
+/// is the apply's own loop rather than a question for the user.
 /// </para>
 /// <para>
 /// It is <b>labelled for what it will do</b>: a game already on this profile is being re-applied,
@@ -31,10 +33,9 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-game.
 /// </para>
 /// <para>
-/// <b>And refused before the click where a held savegame forbids it.</b> This is the game page's
-/// disabled profile dropdown seen from the other end - the same switch, the same rule - and the apply
-/// table refuses it either way. A control that offers the move and then reports a refusal is the
-/// thing slice 4 set out to remove, so it is asked here too.
+/// <b>And refused before the click where a held savegame forbids it.</b> The apply table refuses it
+/// anyway; asking here is what makes the refusal arrive before the click rather than after it, which
+/// is the rule slice 4 set out to hold everywhere.
 /// </para>
 /// </remarks>
 public partial class ProfilePageViewModel : PageViewModel, IDisposable
@@ -121,14 +122,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
         ];
 
-        Games = [];
-
         NavManager.Selected = MenuItems.First();
         NavManager.PropertyChanged += OnNavigationChanged;
 
         _repo.Games.CollectionChanged += OnGamesChanged;
 
-        RefreshInstances();
+        RefreshConnectedGame();
     }
 
 
@@ -136,19 +135,25 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public NavigationManager NavManager { get; }
 
-    /// <summary>The games this repo offers, which are compatible with it by construction.</summary>
-    public ObservableCollection<Game> Games { get; }
 
-
+    /// <summary>
+    /// This machine's installation of the game this repo is about, or null where none is connected -
+    /// which is the only state in which the control is not drawn at all.
+    /// </summary>
+    /// <remarks>
+    /// Named for what it is rather than <c>Game</c>, which would put a member and the type of that
+    /// member's value under one name in a file that uses both.
+    /// </remarks>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActivation))]
     [NotifyPropertyChangedFor(nameof(ActivationLabel))]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
-    private Game? _selectedGame;
+    private Game? _connectedGame;
 
     /// <summary>
-    /// Why the selected game cannot be put on this profile, where it cannot. Null - nearly
-    /// always - where nothing is in the way.
+    /// Why the game cannot be put on this profile, where it cannot. Null - nearly always - where
+    /// nothing is in the way.
     /// </summary>
     /// <remarks>
     /// Asked of <see cref="IHeldSavegames.DecideApply"/>, which is the rule the sync engine refuses
@@ -162,11 +167,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private string? _holdRefusal;
 
     public bool HasHoldRefusal => HoldRefusal is not null;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasGameChoice))]
-    [NotifyPropertyChangedFor(nameof(HasActivation))]
-    private int _instanceCount;
 
     /// <summary>
     /// The mod list editor's own <em>Save and apply</em> is the way to apply pending edits. This
@@ -186,15 +186,17 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private string? _activationStatus;
 
 
-    public bool HasActivation => InstanceCount > 0;
-
-    /// <summary>With one game there is nothing to pick, so the dropdown does not appear at all.</summary>
-    public bool HasGameChoice => InstanceCount > 1;
+    /// <summary>
+    /// Whether there is anything to activate on. Nothing at all is drawn where this repo's game is
+    /// not connected on this machine - a button whose only outcome is a sentence about connecting one
+    /// is worse than the sidebar entry that already says so.
+    /// </summary>
+    public bool HasActivation => ConnectedGame is not null;
 
     public bool HasActivationStatus => ActivationStatus is not null;
 
     public ProfileActivationKind ActivationKind => ProfileActivation.Describe(
-        SelectedGame?.ActiveProfile,
+        ConnectedGame?.ActiveProfile,
         new ActiveProfile(_repo.Id, _profile.Id));
 
     public string ActivationLabel => ProfileActivation.Label(ActivationKind);
@@ -213,7 +215,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return refused;
             }
 
-            if (SelectedGame is not Game game)
+            if (ConnectedGame is not Game game)
             {
                 return "";
             }
@@ -228,7 +230,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanActivate), IncludeCancelCommand = true)]
     private async Task Activate(CancellationToken cancellationToken)
     {
-        if (SelectedGame is not Game game)
+        if (ConnectedGame is not Game game)
         {
             return;
         }
@@ -271,7 +273,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanActivate()
-        => SelectedGame is not null
+        => ConnectedGame is not null
         && IsApplying is false
         && BlockedByUnsavedChanges is false
         && HasHoldRefusal is false;
@@ -287,7 +289,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private void RefreshHoldRefusal()
     {
-        if (SelectedGame is not Game game)
+        if (ConnectedGame is not Game game)
         {
             HoldRefusal = null;
 
@@ -370,42 +372,31 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// Re-asks the hold question for whichever game is selected now.
+    /// Re-asks the hold question for the game the control now acts on.
     /// </summary>
     /// <remarks>
-    /// Selection is the only thing that can change the answer while this page is up: checking a
-    /// savegame in happens on a repo's Saves list or a game's own, and reaching either means
-    /// leaving this page - which rebuilds it. Subscribing to the binding store as well would be
-    /// covering a window that does not exist.
+    /// A game being connected or disconnected is the only thing that can change the answer while
+    /// this page is up: checking a savegame in happens on a repo's Saves list or a game's own, and
+    /// reaching either means leaving this page - which rebuilds it. Subscribing to the binding store
+    /// as well would be covering a window that does not exist.
     /// </remarks>
-    partial void OnSelectedGameChanged(Game? value)
+    partial void OnConnectedGameChanged(Game? value)
     {
         RefreshHoldRefusal();
     }
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        RefreshInstances();
+        RefreshConnectedGame();
     }
 
-    private void RefreshInstances()
+    /// <summary>
+    /// Which game this control acts on, which is not a choice: a repo is about one game and a
+    /// machine has one installation of it.
+    /// </summary>
+    private void RefreshConnectedGame()
     {
-        var previous = SelectedGame;
-
-        Games.Clear();
-
-        foreach (var game in _repo.Games)
-        {
-            Games.Add(game);
-        }
-
-        InstanceCount = Games.Count;
-
-        // Prefer one already on this profile: with several games the likeliest intent is
-        // re-applying, and that is also the one the label has to get right on first sight.
-        SelectedGame = previous is not null && Games.Contains(previous) ? previous : Games
-            .FirstOrDefault(x => x.ActiveProfile == new ActiveProfile(_repo.Id, _profile.Id))
-            ?? Games.FirstOrDefault();
+        ConnectedGame = _repo.Games.FirstOrDefault();
 
         OnPropertyChanged(nameof(ActivationKind));
     }
