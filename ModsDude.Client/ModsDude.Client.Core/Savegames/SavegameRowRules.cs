@@ -7,18 +7,23 @@ namespace ModsDude.Client.Core.Savegames;
 /// offer against a particular game installation.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Every value here is a sentence a disabled button carries instead of working.
 /// <see cref="SavegameHoldRules"/>, <see cref="SavegameService.CheckOutAsync"/> and the sync engine
 /// already refuse all of it; those are the backstops nothing gets past, and this is the half that
 /// makes the refusal arrive before the click rather than after it.
+/// </para>
+/// <para>
+/// <b>Every value is about the pair - this savegame and this game.</b> "No game is connected here"
+/// used to be one of them, carried through on a <c>hasGame</c> flag that was false at exactly one
+/// call site; it is the absence of the thing this rule is about rather than something the rule
+/// decides, so the caller that has no game says so itself and never asks.
+/// </para>
 /// </remarks>
 public enum SavegameRowBlock
 {
     /// <summary>Nothing is in the way.</summary>
     None,
-
-    /// <summary>No installation of this game is connected here, so there is nowhere to write a save.</summary>
-    NoGame,
 
     /// <summary>
     /// <em>Apply profile</em> only: this savegame follows no mod list, so there is no profile to apply and
@@ -96,7 +101,10 @@ public static class SavegameRowRules
     /// <paramref name="appliedRevision"/> which revision of it. The manifest is the only thing that
     /// says what a folder is on, so a folder that has never been synced is one that is not ready.
     /// </param>
-    /// <param name="hasGame">Whether there is any installation of this game to act on.</param>
+    /// <remarks>
+    /// Only ever asked about a game that <em>is</em> connected here. A caller with none has nothing
+    /// for this to decide - see the remarks on <see cref="SavegameRowBlock"/>.
+    /// </remarks>
     public static SavegameRowOffer Describe(
         Guid savegameId,
         Guid? profileId,
@@ -104,15 +112,8 @@ public static class SavegameRowRules
         int? pinnedRevision,
         IReadOnlyList<SavegameCheckoutBinding> held,
         Guid? appliedProfileId,
-        int? appliedRevision,
-        bool hasGame)
+        int? appliedRevision)
     {
-        if (hasGame is false)
-        {
-            return new SavegameRowOffer(
-                SavegameRowBlock.NoGame, SavegameRowBlock.NoGame, Guid.Empty, pinnedRevision);
-        }
-
         // Ahead of everything about the folder, because no apply clears it and because it holds even
         // where the folder is already exactly right: the limit is one savegame claiming a mod folder,
         // and the way past it is checking that one in.
@@ -163,8 +164,6 @@ public static class SavegameRowRules
     {
         return block switch
         {
-            SavegameRowBlock.NoGame => "This game is not connected here",
-
             SavegameRowBlock.NoModList => "This save follows no mod list",
 
             // The number only where the savegame pins one. A current savegame follows its profile, so naming

@@ -676,10 +676,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var ambiguous = UserDisplay.FindAmbiguous(
             savegames.Select(x => x.Checkout?.User).OfType<UserDto>());
 
-        // One read of each game's folder state for the whole list, rather than one per row: a
+        // One read of the game's folder state for the whole list, rather than one per row: a
         // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
         // parses of it.
-        var hosts = ReadHosts();
+        var host = ReadHost();
 
         foreach (var savegame in shown.OrderBy(x => x.Name, NaturalOrder.Comparer))
         {
@@ -703,7 +703,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // this same list.
         foreach (var row in Savegames)
         {
-            Offer(row, hosts);
+            Offer(row, host);
         }
 
         IsEmpty = Savegames.Count == 0;
@@ -759,94 +759,64 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Every game this repo offers, with what it is holding and what its mod folder was last
-    /// synced to - the two facts <see cref="SavegameRowRules.Describe"/> needs about a host.
+    /// The game this repo's rows act on, with what it is holding and what its mod folder was last
+    /// synced to - the two facts <see cref="SavegameRowRules.Describe"/> needs. Null where nothing
+    /// is connected here.
     /// </summary>
-    private IReadOnlyList<SavegameHost> ReadHosts()
+    /// <remarks>
+    /// <b>One, not a list to choose from.</b> A game is keyed by its identity and a repo is about one
+    /// game, so there is nothing to rank - the ranking this replaced picked whichever installation
+    /// would accept a check-out, then whichever followed the save's profile, then the first.
+    /// </remarks>
+    private SavegameHost? ReadHost()
     {
-        var hosts = new List<SavegameHost>();
-
-        foreach (var game in _repo.Games)
+        if (_repo.Games.FirstOrDefault() is not Game game)
         {
-            var manifest = _manifestStore.TryReadAgreed(game.TargetRefs);
-
-            hosts.Add(new SavegameHost(
-                game,
-                _bindingStore.GetBindings(game.Identity),
-                manifest?.ProfileId,
-                manifest?.ProfileRevision));
+            return null;
         }
 
-        return hosts;
+        var manifest = _manifestStore.TryReadAgreed(game.TargetRefs);
+
+        return new SavegameHost(
+            game,
+            _bindingStore.GetBindings(game.Identity),
+            manifest?.ProfileId,
+            manifest?.ProfileRevision);
     }
 
     /// <summary>
-    /// Tells a row which game its two buttons act on and what they can do there.
+    /// Tells a row what its two buttons can do, and where the local copy of the save is.
     /// </summary>
     /// <remarks>
-    /// <b>The game that could host it now wins.</b> That is the whole question the row is
-    /// answering - the buttons either work or they carry a sentence saying what would make them work -
-    /// and choosing one that refuses while another would accept turns a one-click evening into a
-    /// puzzle. Failing that, the one already following this save's profile, whose folder is the
-    /// closest to right and which is the likeliest target anyway; failing that the first, whose
-    /// refusal is at least about a folder that exists.
+    /// <b>Two questions, still.</b> Whether the game would accept a check-out and whether it is
+    /// already holding this save are different facts - a claim taken on the desktop is still yours on
+    /// the laptop, and there is nothing here to check in - so they are answered separately even now
+    /// that both are about the same installation.
     /// </remarks>
-    private void Offer(SavegameListItemViewModel row, IReadOnlyList<SavegameHost> hosts)
+    private void Offer(SavegameListItemViewModel row, SavegameHost? host)
     {
-        // Answered across every host and before the loop below, which returns the moment it finds an
-        // game that would accept a check-out. Where the copy is is not that question and cannot
-        // share its search: the game holding a save is routinely the one a check-out likes least,
-        // since the folder it is on belongs to the save already in it.
-        row.SetHeldHere(hosts
-            .FirstOrDefault(x => x.Held.Any(y => y.SavegameId == row.Id))
-            ?.Game);
-
-        if (hosts.Count == 0)
+        if (host is null)
         {
-            row.SetOffer(SavegameRowRules.Describe(
-                row.Id, row.Savegame.ProfileId, null, row.PinnedRevision, [], null, null, hasGame: false),
-                null);
+            // Nothing connected: no buttons work, and the row says so rather than the rule doing it.
+            // Whether there is a game to act on is not a fact about this savegame.
+            row.SetHeldHere(null);
+            row.SetOffer(null, null);
 
             return;
         }
 
-        var head = FindProfile(row.Savegame.ProfileId)?.HeadRevision;
+        row.SetHeldHere(host.Held.Any(x => x.SavegameId == row.Id) ? host.Game : null);
 
-        SavegameHost? fallback = null;
-        SavegameRowOffer? fallbackOffer = null;
+        var offer = SavegameRowRules.Describe(
+            row.Id,
+            row.Savegame.ProfileId,
+            FindProfile(row.Savegame.ProfileId)?.HeadRevision,
+            row.PinnedRevision,
+            host.Held,
+            host.AppliedProfileId,
+            host.AppliedRevision);
 
-        foreach (var host in hosts)
-        {
-            var offer = SavegameRowRules.Describe(
-                row.Id,
-                row.Savegame.ProfileId,
-                head,
-                row.PinnedRevision,
-                host.Held,
-                host.AppliedProfileId,
-                host.AppliedRevision,
-                hasGame: true);
-
-            if (offer.CanCheckOut)
-            {
-                row.SetOffer(offer, null);
-                row.Host = host.Game;
-
-                return;
-            }
-
-            var follows = row.Savegame.ProfileId is Guid profileId
-                && host.Game.ActiveProfile == new ActiveProfile(_repo.Id, profileId);
-
-            if (fallbackOffer is null || follows)
-            {
-                fallback = host;
-                fallbackOffer = offer;
-            }
-        }
-
-        row.SetOffer(fallbackOffer!, NameOfHeld(fallbackOffer!.BlockingSavegameId));
-        row.Host = fallback!.Game;
+        row.SetOffer(offer, offer.CanCheckOut ? null : NameOfHeld(offer.BlockingSavegameId));
     }
 
     /// <summary>
@@ -1223,7 +1193,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private async void OnApplyProfileRequested(object? sender, EventArgs e)
     {
         if (sender is not SavegameListItemViewModel row
-            || row.Host is not Game game
+            || _repo.Games.FirstOrDefault() is not Game game
             || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
         {
             return;
@@ -1282,9 +1252,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var games = _repo.Games.ToList();
-
-        if (games.Count == 0)
+        if (_repo.Games.FirstOrDefault() is not Game game)
         {
             await _modalService.Show(ConfirmationDialogViewModel.Refusal(
                 "No game is connected here",
@@ -1297,12 +1265,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            // The one the row's buttons were about, so the dialog opens on the folder the row just
-            // described. Choosing again here is how a row comes to say "ready" about one game and
-            // open a dialog about another.
-            var preferred = row.Host ?? games[0];
-
-            var context = await BuildContextAsync(row, preferred, mode, _lifetime);
+            var context = await BuildContextAsync(row, game, mode, _lifetime);
 
             var modal = new SavegameCheckOutModalViewModel(
                 mode,
@@ -1310,25 +1273,23 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 row.ProfileName,
                 versionNumber,
                 row.Savegame.Head.Number,
-                games,
-                context,
-                (game, cancellationToken) => BuildContextAsync(row, game, mode, cancellationToken));
+                context);
 
             await _modalService.Show(modal);
 
             if (modal.CheckInFirstSavegameId is Guid blocking)
             {
-                await CheckInBlockingAsync(modal.SelectedGame, blocking, row, versionNumber, mode);
+                await CheckInBlockingAsync(game, blocking, row, versionNumber, mode);
 
                 return;
             }
 
-            if (modal.Result is not SavegameCheckOutResult result)
+            if (modal.Result is not SavegameSlotOptionViewModel slot)
             {
                 return;
             }
 
-            await ExecuteAsync(row, versionNumber, mode, result);
+            await ExecuteAsync(row, versionNumber, mode, game, slot);
         }
         catch (OperationCanceledException)
         {
@@ -1351,17 +1312,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// with the slot free. One action rather than a warning, per docs/PLAN.md#slot-safety.
     /// </summary>
     private async Task CheckInBlockingAsync(
-        Game? game,
+        Game game,
         Guid blockingSavegameId,
         SavegameListItemViewModel row,
         int versionNumber,
         SavegameCheckOutMode mode)
     {
-        if (game is null)
-        {
-            return;
-        }
-
         var blocking = Savegames.FirstOrDefault(x => x.Id == blockingSavegameId);
 
         var outcome = await _flowService.CheckInAsync(
@@ -1392,21 +1348,22 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameListItemViewModel row,
         int versionNumber,
         SavegameCheckOutMode mode,
-        SavegameCheckOutResult result)
+        Game game,
+        SavegameSlotOptionViewModel slot)
     {
         // Downloading and unpacking a save is the slow half of both verbs, and both are safe to walk
         // away from - the claim, where there is one, is taken before the bytes move.
         using var task = _backgroundTasks.Begin(
             mode is SavegameCheckOutMode.TakeCopy
-                ? $"Copying '{row.Name}' into '{result.Game.Name}'"
-                : $"Checking '{row.Name}' out into '{result.Game.Name}'",
+                ? $"Copying '{row.Name}' into '{game.Name}'"
+                : $"Checking '{row.Name}' out into '{game.Name}'",
             $"Version {versionNumber}");
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
-            await _savegameService.TakeCopyAsync(result.Game, row.Savegame, versionNumber, result.Slot.Ref, _lifetime);
+            await _savegameService.TakeCopyAsync(game, row.Savegame, versionNumber, slot.Ref, _lifetime);
 
-            Status = $"Version {versionNumber} of '{row.Name}' is in '{result.Game.Name}'. Nobody was stopped from playing it, " +
+            Status = $"Version {versionNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
                      "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
 
             return;
@@ -1430,11 +1387,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         task.Report("Writing it into the slot");
 
-        await _savegameService.CheckOutAsync(result.Game, savegame, result.Slot.Ref, _lifetime);
+        await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime);
 
-        Status = $"'{row.Name}' is checked out to you, in '{result.Game.Name}'.";
+        Status = $"'{row.Name}' is checked out to you, in '{game.Name}'.";
 
-        await ApplyProfileAsync(result.Game, savegame);
+        await ApplyProfileAsync(game, savegame);
 
         await ReloadAsync(row.Id);
     }
@@ -1586,7 +1543,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var hint = _bindingStore.GetSlotHint(game.Identity, row.Id);
 
         return new SavegameCheckOutContext(
-            game,
             options,
             suggested,
             DescribeSuggestion(options, suggested, hint),
@@ -1748,8 +1704,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// One game this repo offers, with the two things a row's buttons turn on: what it is holding,
-    /// and which revision of which profile its mod folder was last made to match.
+    /// The game this repo's rows act on, with the two things their buttons turn on: what it is
+    /// holding, and which revision of which profile its mod folder was last made to match.
     /// </summary>
     private sealed record SavegameHost(
         Game Game,

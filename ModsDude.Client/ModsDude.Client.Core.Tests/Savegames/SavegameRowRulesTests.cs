@@ -130,7 +130,7 @@ public class SavegameRowRulesTests
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
-            held: [], appliedProfileId: null, appliedRevision: null, hasGame: true);
+            held: [], appliedProfileId: null, appliedRevision: null);
 
         Assert.True(offer.CanCheckOut);
         Assert.False(offer.CanApply);
@@ -148,18 +148,6 @@ public class SavegameRowRulesTests
 
         Assert.True(offer.CanCheckOut);
         Assert.False(offer.CanApply);
-    }
-
-    [Fact]
-    public void With_no_game_there_is_nowhere_to_write_a_save()
-    {
-        var offer = SavegameRowRules.Describe(
-            _savegameId, _profileId, headRevision: 1004, pinnedRevision: null,
-            held: [], appliedProfileId: null, appliedRevision: null, hasGame: false);
-
-        Assert.False(offer.CanCheckOut);
-        Assert.False(offer.CanApply);
-        Assert.Equal("This game is not connected here", SavegameRowRules.Explain(offer.CheckOut, "Old-school", null, null));
     }
 
     /// <summary>
@@ -194,8 +182,7 @@ public class SavegameRowRulesTests
             pinned,
             held ?? [],
             appliedProfileId,
-            appliedRevision,
-            hasGame: true);
+            appliedRevision);
 
     private static SavegameCheckoutBinding Hold(Guid savegameId)
         => new(Guid.NewGuid(), savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)

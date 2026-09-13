@@ -48,16 +48,19 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 
 
 /// <summary>
-/// Everything the dialog needs about one game. Recomputed when the game selection changes,
-/// because the slots, the mod plan and the revision note are all facts about a particular folder.
+/// Everything the dialog needs about the game this save is going into.
 /// </summary>
+/// <remarks>
+/// <b>Built once.</b> It used to be recomputed whenever the game selection changed, because the
+/// slots, the mod plan and the revision note are all facts about a particular installation - and
+/// there is one of those now, so there is no selection to change and nothing to recompute.
+/// </remarks>
 /// <param name="RunsOn">
 /// Which mod list the folder will be on once this check-out and the apply beside it have run - one
 /// line, and the number said out loud. Null for a copy, which applies nothing, and for a savegame that
 /// follows no mod list.
 /// </param>
 public sealed record SavegameCheckOutContext(
-    Game Game,
     IReadOnlyList<SavegameSlotOptionViewModel> Slots,
     SavegameSlotRef? Suggested,
     string? SlotNote,
@@ -67,15 +70,22 @@ public sealed record SavegameCheckOutContext(
 
 
 /// <summary>
-/// The one confirmation a check-out gets, carrying four sections - mods, game, slot, revision -
-/// each of which disappears when it has nothing to say.
+/// The one confirmation a check-out gets, carrying three sections - mods, slot, revision - each of
+/// which disappears when it has nothing to say.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>The common case is a name, a slot and one button.</b> That is the whole design: an ordinary
-/// evening, where the mods are already right and there is one game and a free slot, must not read
-/// like a form. Everything here is either an answer the user has to give or a consequence they have
-/// to see, and anything that is neither is absent rather than greyed out.
+/// evening, where the mods are already right and there is a free slot, must not read like a form.
+/// Everything here is either an answer the user has to give or a consequence they have to see, and
+/// anything that is neither is absent rather than greyed out.
+/// </para>
+/// <para>
+/// <b>There is no game step.</b> A machine has one installation of the game a repo is about, so the
+/// question was one with a single answer - and the slot list underneath is one flat list across
+/// every savegame folder that installation reaches, grouped under a folder heading only where there
+/// is more than one. Which folder a save goes into is a fact about the slot rather than a step of
+/// its own.
 /// </para>
 /// <para>
 /// <b>The picker is shown on every check-out.</b> The remembered slot pre-selects it; it never decides
@@ -91,10 +101,7 @@ public sealed record SavegameCheckOutContext(
 /// </remarks>
 public partial class SavegameCheckOutModalViewModel : ModalViewModel
 {
-    private readonly Func<Game, CancellationToken, Task<SavegameCheckOutContext>> _load;
     private readonly int _headVersion;
-
-    private bool _reloading;
 
 
     /// <param name="versionNumber">
@@ -107,23 +114,38 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         string profileName,
         int versionNumber,
         int headVersion,
-        IReadOnlyList<Game> games,
-        SavegameCheckOutContext context,
-        Func<Game, CancellationToken, Task<SavegameCheckOutContext>> load)
+        SavegameCheckOutContext context)
     {
         Mode = mode;
         SavegameName = savegameName;
         ProfileName = profileName;
         VersionNumber = versionNumber;
         _headVersion = headVersion;
-        _load = load;
 
-        Games = [.. games];
         Slots = [];
 
-        _selectedGame = context.Game;
+        // Under a folder heading each, where the game reaches more than one savegame folder - which
+        // is what a slot carrying a target name means. Set before the rows go in so the view is
+        // grouped by the time anything is selected in it.
+        SlotGrouping.Apply(Slots, context.Slots.Any(x => x.TargetName is not null));
 
-        Apply(context);
+        foreach (var slot in context.Slots)
+        {
+            Slots.Add(slot);
+        }
+
+        SlotNote = context.SlotNote;
+        Mods = context.Mods;
+        Revision = context.Revision;
+        RunsOn = context.RunsOn;
+
+        SelectedSlot = context.Suggested is SavegameSlotRef suggested
+            ? Slots.FirstOrDefault(x => x.Ref.Addresses(suggested))
+            : null;
+
+        // Nothing pre-selected means the remembered slot is gone and none is free, which is a state
+        // the user has to see rather than a dialog that looks empty.
+        ShowAllSlots = SelectedSlot is null;
     }
 
 
@@ -158,13 +180,14 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         }
     }
 
-    /// <summary>Every game this repo offers. The section is absent where there is one.</summary>
-    public IReadOnlyList<Game> Games { get; }
-
+    /// <summary>
+    /// Every slot the game reaches, across every savegame folder it has - one flat list, grouped
+    /// under a folder heading only where there is more than one.
+    /// </summary>
     public ObservableCollection<SavegameSlotOptionViewModel> Slots { get; }
 
-    /// <summary>The chosen game and slot, or null where the dialog was dismissed.</summary>
-    public SavegameCheckOutResult? Result { get; private set; }
+    /// <summary>The chosen slot, or null where the dialog was dismissed.</summary>
+    public SavegameSlotOptionViewModel? Result { get; private set; }
 
     /// <summary>
     /// Set instead of <see cref="Result"/> when the user took the way out of a refused slot. The page
@@ -172,11 +195,6 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     /// </summary>
     public Guid? CheckInFirstSavegameId { get; private set; }
 
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowInstanceSection))]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    private Game? _selectedGame;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSlotRefused))]
@@ -223,14 +241,6 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     [NotifyPropertyChangedFor(nameof(ShowRevisionSection))]
     [NotifyPropertyChangedFor(nameof(HasRunsOn))]
     private string? _runsOn;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    private bool _isBusy;
-
-
-    /// <summary>Absent where the repo offers one game - there is nothing to ask.</summary>
-    public bool ShowInstanceSection => Games.Count > 1;
 
     public bool ShowModsSection => Mods is not null;
 
@@ -292,17 +302,16 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     [RelayCommand(CanExecute = nameof(CanConfirm))]
     private void Confirm()
     {
-        if (SelectedGame is not Game game || SelectedSlot is not SavegameSlotOptionViewModel slot)
+        if (SelectedSlot is not SavegameSlotOptionViewModel slot)
         {
             return;
         }
 
-        Result = new SavegameCheckOutResult(game, slot);
+        Result = slot;
         Done = true;
     }
 
-    private bool CanConfirm()
-        => IsBusy is false && SelectedGame is not null && SelectedSlot is { IsRefused: false };
+    private bool CanConfirm() => SelectedSlot is { IsRefused: false };
 
     /// <summary>
     /// The one action a refused slot offers. It closes this dialog rather than checking in behind it:
@@ -329,101 +338,8 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     }
 
 
-    /// <summary>
-    /// A different game is a different folder, so every section is re-read rather than patched.
-    /// The guard is what stops the reload's own write to <see cref="SelectedGame"/> - when the
-    /// load fails and the selection is put back - from starting another one.
-    /// </summary>
-    partial void OnSelectedGameChanged(Game? value)
-    {
-        if (_reloading || value is null)
-        {
-            return;
-        }
-
-        _ = ReloadAsync(value);
-    }
-
-    private async Task ReloadAsync(Game game)
-    {
-        IsBusy = true;
-
-        try
-        {
-            Apply(await _load(game, CancellationToken.None));
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // Nothing awaits this, so an escaping exception would go unobserved rather than reaching
-            // the shell's handler. The dialog says so and offers no slots, which refuses Confirm.
-            _reloading = true;
-
-            try
-            {
-                Slots.Clear();
-                SelectedSlot = null;
-                SlotNote = $"'{game.Name}' could not be read: {exception.Message}";
-                ShowAllSlots = true;
-            }
-            finally
-            {
-                _reloading = false;
-            }
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private void Apply(SavegameCheckOutContext context)
-    {
-        _reloading = true;
-
-        try
-        {
-            SelectedGame = context.Game;
-
-            Slots.Clear();
-
-            // Under a folder heading each, where the game reaches more than one savegame folder -
-            // which is what a slot carrying a target name means. Set before the rows go in so the
-            // view is grouped by the time anything is selected in it.
-            SlotGrouping.Apply(Slots, context.Slots.Any(x => x.TargetName is not null));
-
-            foreach (var slot in context.Slots)
-            {
-                Slots.Add(slot);
-            }
-
-            SlotNote = context.SlotNote;
-            Mods = context.Mods;
-            Revision = context.Revision;
-            RunsOn = context.RunsOn;
-
-            SelectedSlot = context.Suggested is SavegameSlotRef suggested
-                ? Slots.FirstOrDefault(x => x.Ref.Addresses(suggested))
-                : null;
-
-            // Nothing pre-selected means the remembered slot is gone and none is free, which is a
-            // state the user has to see rather than a dialog that looks empty.
-            ShowAllSlots = SelectedSlot is null;
-        }
-        finally
-        {
-            _reloading = false;
-        }
-
-        OnPropertyChanged(nameof(ConfirmLabel));
-        ConfirmCommand.NotifyCanExecuteChanged();
-    }
-
     partial void OnSelectedSlotChanged(SavegameSlotOptionViewModel? value)
     {
         OnPropertyChanged(nameof(ConfirmLabel));
     }
 }
-
-
-/// <summary>What the dialog settled: which game, and which slot in it.</summary>
-public sealed record SavegameCheckOutResult(Game Game, SavegameSlotOptionViewModel Slot);

@@ -34,8 +34,21 @@ public partial class SavegameListItemViewModel : ObservableObject
     private int _revisionsBehind;
     private bool _lockedPinMoved;
 
-    private SavegameRowOffer _offer = new(SavegameRowBlock.NoGame, SavegameRowBlock.NoGame, Guid.Empty, null);
+    /// <summary>
+    /// What this machine can do with this savegame, or null where there is no installation of the
+    /// game to do it on.
+    /// </summary>
+    /// <remarks>
+    /// <b>Null rather than a value on the rule's enum.</b> Whether a game is connected here is not a
+    /// fact about this savegame - it is the absence of the thing the rule is about - so
+    /// <see cref="SavegameRowRules"/> is only ever asked where there is one, and the sentence for the
+    /// other case is <see cref="_notConnected"/> below.
+    /// </remarks>
+    private SavegameRowOffer? _offer;
     private string? _blockingSavegameName;
+
+    /// <summary>What both buttons say when this repo's game is not connected on this machine.</summary>
+    private const string _notConnected = "This game is not connected here";
 
 
     /// <param name="profileName">
@@ -110,10 +123,10 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Whether taking the claim is on offer here and now: Member, and nothing about this machine in
     /// the way. <see cref="CheckOutBlockedReason"/> is the half that says why not.
     /// </summary>
-    public bool CanCheckOut => IsMember && _offer.CanCheckOut;
+    public bool CanCheckOut => IsMember && _offer?.CanCheckOut is true;
 
     /// <summary>Whether putting the mod folder on this savegame's list is on offer. Member, like check-out.</summary>
-    public bool CanApplyProfile => IsMember && _offer.CanApply;
+    public bool CanApplyProfile => IsMember && _offer?.CanApply is true;
 
     /// <summary>
     /// Whether this savegame can be put back in its profile's current slot.
@@ -126,26 +139,15 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool CanMakeCurrent => IsMember && IsPast;
 
     /// <summary>
-    /// The installation both buttons act on, decided by the page.
-    /// </summary>
-    /// <remarks>
-    /// Held here rather than worked out at the click, so the game the refusal is about is the
-    /// game the action runs against. Two answers to "where would this go" is how a row comes to
-    /// explain one folder and act on another.
-    /// </remarks>
-    public Game? Host { get; set; }
-
-    /// <summary>
     /// The installation on this machine whose slot actually holds this savegame, or null where none
     /// does - including where the claim is yours but you took it somewhere else.
     /// </summary>
     /// <remarks>
-    /// <b>A different question from <see cref="Host"/>, and not interchangeable with it.</b> Host is
-    /// where a check-out <em>would</em> write, chosen by the page from whichever game can accept
-    /// one; this is where the copy already is, and a check-in has no choice about it at all - a save
-    /// is handed back from the slot it is in or not handed back here. The two differ the moment a
-    /// check-out would rather use some other game, and swapping them is how a row comes to check
-    /// one machine's copy in against another machine's folder.
+    /// <b>Still a question worth asking now that a repo offers one game.</b> Whether that game would
+    /// accept a check-out and whether it is already holding this save are different facts: a claim
+    /// taken on the desktop is still yours on the laptop, and there is nothing there to check in.
+    /// That row falls back to checking out, which is the honest offer - it fetches the save onto this
+    /// machine and renews the claim it already has.
     /// </remarks>
     public Game? HeldHere { get; private set; }
 
@@ -182,11 +184,13 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public string CheckOutLabel => IsHeldByMe ? "Check out again" : "Check out";
 
-    public string? CheckOutBlockedReason
-        => SavegameRowRules.Explain(_offer.CheckOut, ProfileName, _offer.PinnedRevision, _blockingSavegameName);
+    public string? CheckOutBlockedReason => _offer is SavegameRowOffer offer
+        ? SavegameRowRules.Explain(offer.CheckOut, ProfileName, offer.PinnedRevision, _blockingSavegameName)
+        : _notConnected;
 
-    public string? ApplyBlockedReason
-        => SavegameRowRules.Explain(_offer.Apply, ProfileName, _offer.PinnedRevision, _blockingSavegameName);
+    public string? ApplyBlockedReason => _offer is SavegameRowOffer offer
+        ? SavegameRowRules.Explain(offer.Apply, ProfileName, offer.PinnedRevision, _blockingSavegameName)
+        : _notConnected;
 
     /// <summary>
     /// What the row says under its buttons: the check-out refusal, which is the one somebody is
@@ -353,7 +357,11 @@ public partial class SavegameListItemViewModel : ObservableObject
         CheckInCommand.NotifyCanExecuteChanged();
     }
 
-    public void SetOffer(SavegameRowOffer offer, string? blockingSavegameName)
+    /// <param name="offer">
+    /// What the game this repo offers can do with this savegame, or null where none is connected on
+    /// this machine.
+    /// </param>
+    public void SetOffer(SavegameRowOffer? offer, string? blockingSavegameName)
     {
         _offer = offer;
         _blockingSavegameName = blockingSavegameName;

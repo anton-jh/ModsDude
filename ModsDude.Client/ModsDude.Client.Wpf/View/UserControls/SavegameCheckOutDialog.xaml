@@ -62,23 +62,10 @@
                                Visibility="{Binding Mods.HasConsequence, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
 
-                <!-- Game. Absent where the repo offers one - there is nothing to ask. -->
-                <StackPanel Margin="0 20 0 0"
-                            Visibility="{Binding ShowInstanceSection, Converter={StaticResource BoolToVisibilityConverter}}">
-
-                    <TextBlock Text="Where"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-
-                    <ComboBox Margin="0 4 0 0"
-                              HorizontalAlignment="Stretch"
-                              ItemsSource="{Binding Games}"
-                              DisplayMemberPath="Name"
-                              SelectedItem="{Binding SelectedGame, Mode=TwoWay}" />
-                </StackPanel>
-
                 <!-- Slot. Shown on every check-out: the remembered one pre-selects it, it never
-                     decides it. -->
+                     decides it. One flat list across every savegame folder the game reaches, with a
+                     folder heading only where there is more than one - there is no game step above
+                     it, because a machine has one installation of the game a repo is about. -->
                 <StackPanel Margin="0 20 0 0">
 
                     <TextBlock Text="Slot"
