@@ -1,5 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
@@ -8,6 +7,16 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
+/// <summary>
+/// Connecting this machine's installation of the game a repo is about.
+/// </summary>
+/// <remarks>
+/// <b>It is the settings form and nothing else.</b> There used to be a name box above it, defaulting
+/// to "Game" and checked for uniqueness within the scope; both went in slice 5. A game is called what
+/// its adapter calls it - Farming Simulator 25 - and one is configured once per identity, so there
+/// was nothing left for a typed name to distinguish and nothing it could say that
+/// <c>Adapter.GameDisplayName</c> did not already.
+/// </remarks>
 public partial class ConnectGamePageViewModel
     : PageViewModel, IDisposable
 {
@@ -26,16 +35,15 @@ public partial class ConnectGamePageViewModel
         IModalService modalService)
     {
         // One game per identity, so connecting a second one is refused rather than offered - see
-        // GameRepository.Create. The name stays a free-text label until slice 5 takes the field away
-        // and the adapter's own display name stands in for it.
+        // GameRepository.Create.
         _alreadyConnected = gameRepository.Find(repo.Scope) is not null;
 
-        _name = "Game";
         _repo = repo;
         _gameRepository = gameRepository;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         RepoName = _repo.Name;
+        GameName = _repo.Adapter.GameDisplayName;
 
         LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
         LocalSettingsEditor.Modified += OnLocalSettingsModified;
@@ -44,11 +52,14 @@ public partial class ConnectGamePageViewModel
 
     public string RepoName { get; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsValid))]
-    private string _name;
+    /// <summary>
+    /// What is being connected, said rather than asked. It is the adapter's own name for the game
+    /// these base settings configure it for, which is the same name the sidebar groups this repo
+    /// under.
+    /// </summary>
+    public string GameName { get; }
 
-    public bool IsValid => _alreadyConnected is false && string.IsNullOrWhiteSpace(Name) is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => _alreadyConnected is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
 
@@ -63,7 +74,7 @@ public partial class ConnectGamePageViewModel
             return;
         }
 
-        _gameRepository.Create(_repo.Adapter, Name, LocalSettingsEditor.ExtractResults());
+        _gameRepository.Create(_repo.Adapter, LocalSettingsEditor.ExtractResults());
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -98,11 +109,6 @@ public partial class ConnectGamePageViewModel
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            errors.Add("Name is required.");
-        }
-
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
         if (_alreadyConnected)
@@ -116,11 +122,6 @@ public partial class ConnectGamePageViewModel
         }
 
         return errors;
-    }
-
-    partial void OnNameChanged(string value)
-    {
-        _navigationLockService.AcquireLock(this);
     }
 
 

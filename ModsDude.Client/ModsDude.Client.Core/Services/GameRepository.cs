@@ -120,10 +120,19 @@ public class GameRepository : IModFolders, IDriftCandidateSource
             game.ActiveProfile))];
     }
 
-    /// <summary>Every folder one game reaches, each addressed by the key its manifest is under.</summary>
+    /// <summary>
+    /// Every folder one game reaches, each addressed by the key its manifest is under and carrying
+    /// what to call it.
+    /// </summary>
+    /// <remarks>
+    /// The name comes off the persisted list rather than off an adapter, which is the whole point of
+    /// it being persisted: this feeds the drift check, which runs for a game whose identity no loaded
+    /// repo serves.
+    /// </remarks>
     private static IEnumerable<GameModFolder> TargetsOf(Game game)
     {
-        return game.Targets.Select(x => new GameModFolder(new ModTargetRef(game.Identity, x.Key), x.ModFolder));
+        return game.Targets.Select(x => new GameModFolder(
+            new ModTargetRef(game.Identity, x.Key), x.ModFolder, x.DisplayName));
     }
 
     /// <summary>
@@ -136,10 +145,19 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         return ProfileApplyTarget.Find(Games, scope, profile);
     }
 
+    /// <summary>
+    /// Connects this machine's installation of the game the adapter is configured for.
+    /// </summary>
+    /// <remarks>
+    /// <b>No name is asked for.</b> A game is called what its adapter calls it - Farming Simulator
+    /// 25 - so connecting is filling in the settings form and nothing else. The name is still
+    /// written down, because everything that says it does so without a hydrated adapter; see
+    /// <see cref="PersistedGame.Name"/>.
+    /// </remarks>
     /// <exception cref="UserFriendlyException">
     /// This game is already configured, or one of its folders is claimed.
     /// </exception>
-    public Game Create(IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
+    public Game Create(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
         var identity = baseAdapter.Scope;
 
@@ -160,7 +178,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         var persistedModel = new PersistedGame()
         {
             GameAdapterId = baseAdapter.Id,
-            Name = name,
+            Name = baseAdapter.GameDisplayName,
             AdapterLocalSettings = localSettings.Serialize(),
             Targets = [.. targets]
         };
@@ -174,13 +192,18 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         return game;
     }
 
-    public void Update(Game game, IBaseGameAdapter baseAdapter, string name, DynamicForm localSettings)
+    /// <remarks>
+    /// The name and the folder names are re-derived here as well as at
+    /// <see cref="Create(IBaseGameAdapter, DynamicForm)"/>, so an adapter release that renames
+    /// either catches up the next time anything is saved rather than needing the game reconnected.
+    /// </remarks>
+    public void Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
         var targets = GetTargets(baseAdapter, localSettings);
 
         EnsureFoldersAreUnclaimed(targets, game.Identity);
 
-        game.Update(name, localSettings, targets);
+        game.Update(baseAdapter.GameDisplayName, localSettings, targets);
         _store.Save();
 
         // A field somebody emptied has taken a target away, and the manifest describing what used to
@@ -273,9 +296,10 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// <remarks>
     /// Every target, not the one: this is the list that gets persisted, and it is the only thing that
     /// has to be complete for eviction to spare a folder nothing else can name. The key travels with
-    /// the path because a path on its own names no manifest. A game reaching no folder claims none,
-    /// which is the same empty list this returns for an adapter with no mod capability at all - both
-    /// mean "nothing here can collide with anybody".
+    /// the path because a path on its own names no manifest, and the adapter's name for the folder
+    /// travels with both because the drift notice reads this list and has no adapter to ask. A game
+    /// reaching no folder claims none, which is the same empty list this returns for an adapter with
+    /// no mod capability at all - both mean "nothing here can collide with anybody".
     /// </remarks>
     public static IReadOnlyList<PersistedModTarget> GetTargets(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
@@ -284,7 +308,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
             .ModTargets
-            .Select(x => new PersistedModTarget(x.Key, x.Path)) ?? []];
+            .Select(x => new PersistedModTarget(x.Key, x.Path, x.DisplayName)) ?? []];
     }
 
 

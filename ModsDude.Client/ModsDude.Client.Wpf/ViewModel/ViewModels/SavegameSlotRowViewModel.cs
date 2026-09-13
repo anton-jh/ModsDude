@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
 
@@ -133,7 +134,13 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
         string? savegameName,
         SavegameBindingStanding standing)
         => new(
-            new GameSavegameSlot(binding.Slot, binding.Slot.Target.Value, new SavegameSlot(binding.Slot.Slot, null, true, [])),
+            // Named by its key, and by nothing else there is: the target this hold is in no longer
+            // exists, so no adapter can be asked what it was called. That is the fallback half of
+            // TargetNames, and this is the site it was written for.
+            new GameSavegameSlot(
+                binding.Slot,
+                TargetNames.Of(binding.Slot.Target, null),
+                new SavegameSlot(binding.Slot.Slot, null, true, [])),
             // Unknown rather than clean or played: nothing can be hashed, so nothing is claimed
             // about what is in the folder - only about the hold.
             SavegameSlotAvailability.HeldClean,

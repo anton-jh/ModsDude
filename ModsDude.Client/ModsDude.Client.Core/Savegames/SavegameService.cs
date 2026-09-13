@@ -1495,10 +1495,11 @@ public sealed class SavegameService(
     /// Every slot of every savegame folder this game reaches, addressed and named.
     /// </summary>
     /// <remarks>
-    /// The target's name only where there is more than one of them: a game with one savegame folder
-    /// does not have a savegame folder called something, and a picker grouping one group is a heading
-    /// repeating the page title. A folder the adapter named nothing falls back to its key, which is
-    /// at least a word somebody can tell two headings apart by.
+    /// Named by <see cref="TargetNames"/>, which is the one rule every folder name in the app
+    /// follows: the adapter's own name where there is one, the key where there is not, and nothing
+    /// at all where the game reaches a single savegame folder - a game with one does not have a
+    /// savegame folder <em>called</em> something, and a picker grouping one group is a heading
+    /// repeating the page title.
     /// </remarks>
     private async Task<IReadOnlyList<GameSavegameSlot>> ReadSlotsAsync(ILocalSavegameAdapter adapter, CancellationToken ct)
     {
@@ -1507,7 +1508,7 @@ public sealed class SavegameService(
 
         foreach (var target in targets)
         {
-            var name = targets.Count > 1 ? target.DisplayName ?? target.Key.Value : null;
+            var name = TargetNames.Distinguishing(target.Key, target.DisplayName, targets.Count);
 
             foreach (var slot in await adapter.GetSlots(target, ct))
             {

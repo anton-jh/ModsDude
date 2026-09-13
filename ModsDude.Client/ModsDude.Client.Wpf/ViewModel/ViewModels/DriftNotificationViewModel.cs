@@ -594,18 +594,25 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// " in the 'server' folder", or nothing at all for a game with one - which is nearly every game,
-    /// and which is why these sentences read exactly as they did before targets existed.
+    /// " in the 'MP client' folder", or nothing at all for a game with one - which is nearly every
+    /// game, and which is why these sentences read exactly as they did before targets existed.
     /// </summary>
     /// <remarks>
-    /// The adapter's own key, because the display name it would rather be called needs an adapter
-    /// hydrated from a repo, and this notice is up before the repo list has loaded. Slice 5 of Phase
-    /// 10 is where every folder name in the app gets the same answer.
+    /// <see cref="TargetNames"/>' answer, which is the same one every other folder name in the app
+    /// gets. The adapter's own name for the folder is available here without an adapter because it
+    /// is written down beside the path - this notice is up before the repo list has loaded, and that
+    /// is precisely why it is persisted; a list written before names were recorded falls back to the
+    /// key.
     /// </remarks>
     private static string In(TargetDrift subject)
-        => subject.Target is GameModFolder target && subject.Game.Targets.Count > 1
-            ? $" in the '{target.Target.Key}' folder"
-            : "";
+        => Folder(subject) is string folder ? $" in the '{folder}' folder" : "";
+
+    /// <summary>
+    /// Which of the game's folders this entry is about, or null where there is nothing to tell apart
+    /// - one folder, or an entry that is about the game rather than a folder of it.
+    /// </summary>
+    private static string? Folder(TargetDrift subject)
+        => subject.Target?.NameAmong(subject.Game.Targets.Count);
 
     /// <summary>
     /// The half of drift no directory listing can find: the folder is exactly what was installed,

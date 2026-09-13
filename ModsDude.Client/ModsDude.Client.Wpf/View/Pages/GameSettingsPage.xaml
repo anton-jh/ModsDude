@@ -19,24 +19,14 @@
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Text="{Binding RepoName}" />
                 <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="{Binding OriginalName}"
+                           Text="{Binding GameName}"
                            Margin="0 8 0 36" />
 
+                <!-- The settings are the whole of what a machine decides about a game: every folder
+                     it reaches falls out of them, and its name comes from the adapter. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16">
-                    <GroupBox Header="Basics" Padding="0 16 0 16">
-                        <StackPanel Orientation="Vertical">
-                            <Label Content="Name" Margin="0 0 0 12"/>
-                            <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
-                        </StackPanel>
-                    </GroupBox>
-                </Border>
-
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
                         <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>

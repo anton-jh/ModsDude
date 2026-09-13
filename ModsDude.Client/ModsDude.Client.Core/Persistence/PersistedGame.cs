@@ -21,7 +21,19 @@ public class PersistedGame
     /// </summary>
     public required GameAdapterId GameAdapterId { get; init; }
 
+    /// <summary>
+    /// What this game is called, which is what its adapter calls it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Derived and still persisted</b>, for the reason <see cref="Targets"/> is: it is
+    /// <see cref="GameAdapters.IBaseGameAdapter.GameDisplayName"/>, rewritten whenever the settings
+    /// are, and everything that names a game does so without a hydrated adapter - the app-level
+    /// notice most of all, which is on screen before the repo list has loaded. It stopped being
+    /// free text in slice 5: a game is called Farming Simulator 25, and asking somebody to type that
+    /// was asking them to name the one thing the adapter already knows.
+    /// </remarks>
     public required string Name { get; set; }
+
     public required string AdapterLocalSettings { get; set; }
 
     /// <summary>
@@ -62,12 +74,24 @@ public class PersistedGame
 /// One of a game's targets as it is written down: the adapter's key for it, and the folder it
 /// reached when the settings were last saved.
 /// </summary>
+/// <param name="DisplayName">
+/// What the adapter called this folder when the settings were last saved, or null where it named it
+/// nothing - which is every game with one folder. Read through
+/// <see cref="GameAdapters.TargetNames"/>, never directly, so a list written before names were
+/// recorded falls back to the key rather than to a blank.
+/// </param>
 /// <remarks>
+/// <para>
 /// <b>The key is the half that earns this being a record rather than a string.</b> A manifest and an
 /// eviction pin are filed under <see cref="ModTargetRef"/>, so reading a folder path without
 /// hydrating an adapter is only useful if the key beside it says which manifest the folder's contents
-/// are described by. <see cref="ModTarget.DisplayName"/> is deliberately not here: it is what to call
-/// the folder on screen, which needs the adapter that named it and is re-derived whenever there is
-/// one.
+/// are described by.
+/// </para>
+/// <para>
+/// <b>The name is persisted on the same argument as the path</b>, and it did not used to be: the
+/// drift check runs off this list without hydrating an adapter, and slice 5's notice says <em>in the
+/// 'MP client' folder</em> rather than <em>in the 'mp' folder</em>. Re-derived on every settings
+/// save, so an adapter release that renames a folder catches up the next time anything is edited.
+/// </para>
 /// </remarks>
-public sealed record PersistedModTarget(TargetKey Key, string ModFolder);
+public sealed record PersistedModTarget(TargetKey Key, string ModFolder, string? DisplayName = null);

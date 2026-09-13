@@ -389,7 +389,10 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         var reports = _game.Targets
             .Select(target => (
-                target.Key,
+                // Named by the one rule every folder name in the app follows, which answers null
+                // for a game with a single folder - and that is what makes this one line rather
+                // than a labelled list for almost every game.
+                Name: TargetNames.Distinguishing(target.Key, target.DisplayName, _game.Targets.Count),
                 Report: _driftService.Check(
                     new ModTargetRef(_game.Identity, target.Key),
                     _game.ActiveProfile,
@@ -399,8 +402,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         DriftNote = string.Join(
             '\n',
-            reports.Select(x => reports.Count > 1
-                ? $"{x.Key}: {Describe(x.Report)}"
+            reports.Select(x => x.Name is string name
+                ? $"{name}: {Describe(x.Report)}"
                 : Describe(x.Report)));
 
         var locked = reports.SelectMany(x => x.Report.LockedDrift).DistinctBy(x => x.ModId).ToList();

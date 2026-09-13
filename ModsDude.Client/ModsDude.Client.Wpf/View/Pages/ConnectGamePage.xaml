@@ -22,21 +22,20 @@
                            Text="Connect game"
                            Margin="0 8 0 36" />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
-                    <GroupBox Header="Basics" Padding="0 16 0 16">
-                        <StackPanel Orientation="Vertical">
-                            <Label Content="Name" Margin="0 0 0 12"/>
-                            <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
-                        </StackPanel>
-                    </GroupBox>
-                </Border>
+                <!-- Said rather than asked. The game is called what the adapter calls it, and one is
+                     configured once per machine, so there is nothing a typed name could
+                     distinguish. -->
+                <TextBlock Margin="0 0 0 16"
+                           TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                    <Run Text="Points ModsDude at your installation of" />
+                    <Run Text="{Binding GameName, Mode=OneWay}" FontWeight="SemiBold" />
+                    <Run Text="on this machine. It is configured once and offered under every repo about that game." />
+                </TextBlock>
 
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                        Padding="16">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
                         <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>

@@ -1,5 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
@@ -9,12 +8,19 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The game's name and adapter settings, and disconnecting it.
+/// The game's adapter settings - which folders it reaches - and disconnecting it.
 /// </summary>
 /// <remarks>
-/// The active profile used to be here too. It is on <see cref="GamePageViewModel"/> now, beside
-/// the drift status and the Re-apply it belongs with - and only there, because two places to set one
-/// thing is how they come to disagree.
+/// <para>
+/// The active profile used to be here too. It is on the profile's own page now, which is the end of
+/// activation where the target is fixed and the profile is chosen - and only there, because two
+/// places to set one thing is how they come to disagree.
+/// </para>
+/// <para>
+/// So did a name box. A game is called what its adapter calls it, so there is nothing here to type:
+/// the settings are the whole of what a machine decides about a game, and every folder it reaches
+/// falls out of them.
+/// </para>
 /// </remarks>
 public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 {
@@ -33,13 +39,12 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         IModalService modalService,
         NavigationLockService navigationLockService)
     {
-        _name = subject.Name;
         _repo = repo;
         _subject = subject;
         _gameRepository = gameRepository;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
-        OriginalName = subject.Name;
+        GameName = subject.Name;
         RepoName = repo.Name;
 
         LocalSettingsEditor = new DynamicFormViewModel(true, subject.GetLocalSettings(repo.Adapter), dialogService);
@@ -51,16 +56,11 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     }
 
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsValid))]
-    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
-    private string _name;
-
     public string RepoName { get; }
 
-    public string OriginalName { get; }
+    public string GameName { get; }
 
-    public bool IsValid => string.IsNullOrWhiteSpace(Name) is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
+    public bool IsValid => LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
 
@@ -80,7 +80,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
         _navigationLockService.ReleaseLock(this);
 
-        _gameRepository.Update(_subject, _repo.Adapter, Name, localSettings);
+        _gameRepository.Update(_subject, _repo.Adapter, localSettings);
     }
 
     [RelayCommand]
@@ -132,11 +132,6 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            errors.Add("Name is required.");
-        }
-
         errors.AddRange(LocalSettingsEditor.GetValidationErrors());
 
         if (FindFolderConflict() is FolderClaim claim)
@@ -145,11 +140,6 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         }
 
         return errors;
-    }
-
-    partial void OnNameChanged(string value)
-    {
-        _navigationLockService.AcquireLock(this);
     }
 
 

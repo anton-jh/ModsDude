@@ -11,6 +11,16 @@ public class LocalState
     /// </summary>
     /// <remarks>
     /// <para>
+    /// Bumped to 7 because a <see cref="PersistedGame.Name"/> stopped being something somebody typed
+    /// and became what the adapter calls the game, and because
+    /// <see cref="PersistedModTarget.DisplayName"/> is written down beside each folder now. Neither
+    /// is a parse error on the way in - a version 6 state reads with the name the user gave and no
+    /// folder names at all - and that is exactly why it is a bump rather than a shrug: a game left
+    /// calling itself 'Game' until its settings are next saved, and folders the drift notice can
+    /// only name by key, are both this machine quietly disagreeing with what the code now means.
+    /// Everything is rewritten the moment the game is connected again, which is the whole cost.
+    /// </para>
+    /// <para>
     /// Bumped to 6 because a savegame checkout and its slot hint carry a
     /// <see cref="Models.SavegameSlotRef"/> rather than a bare slot id: a slot is a place in one of
     /// the game's targets now, and "savegame3" names one on every folder a game reaches. A version 5
@@ -46,7 +56,7 @@ public class LocalState
     /// paying for it is how a schema grows a history nobody asked for.
     /// </para>
     /// </remarks>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
 
     public int Version { get; set; } = CurrentVersion;
