@@ -20,15 +20,15 @@ out right; that slice is now closed end to end.
 | --- | --- |
 | Identity, users, memberships | Working, with a members UI |
 | Repos, adapters, base settings | Working |
-| Local instances | Working, scoped to a game and carrying an active profile. [Phase 10](#phase-10--one-game-many-targets) splits the folder from the policy it carries and retires the word |
+| Connected games | Working. One per game per machine, keyed by identity: it holds the active profile and the savegame hold, and reaches however many mod and savegame folders its adapter says |
 | Profiles (create/rename/delete) | Working. Creating one can branch off a revision of another |
 | Mod dependencies | Server and the profile mod list editor both work. A save is one revision |
 | Profile history | Working — every save is a revision, readable, restorable, branchable |
 | Mod catalog, import, imagery | Working — sources, merged catalog, real import, server-side derivatives |
 | Mod upload / download | Working, both directions, straight to blob storage |
-| Profile → instance sync | Working — content store, plan, execute, manifest |
+| Profile → game sync | Working — content store, plan, execute, manifest, one folder at a time |
 | Drift | Detected at startup and on window activation, surfaced app-wide, re-appliable in one click |
-| Savegames | Working end to end — publish, check out, check in, force, keep playing, take a copy, discard. Packing, the checkout binding and slot safety on the client; savegame drift folded into the app-wide notice; repo and instance pages with their dialogs. [Phase 9](#phase-9--one-current-savegame-per-profile) reworks which revision a save runs on |
+| Savegames | Working end to end — publish, check out, check in, force, keep playing, take a copy, discard. Packing, the checkout binding and slot safety on the client; savegame drift folded into the app-wide notice; repo and game pages with their dialogs. Publishing is reached from the repo's saves list |
 | Tests | Three projects: server domain, server persistence (needs PostgreSQL), client core |
 | CI | Two jobs — Linux for the server and the OpenAPI diff, Windows for the client |
 | Deployment | None |
@@ -728,12 +728,11 @@ only once the core works.
       pointer passes over while the button is held, and selection drives navigation, so dragging
       through the menu visits every item on the way. Nobody asked for that; it is why the catalog
       keeps its 150 ms scan delay. Worth fixing on its own merits.
-- [ ] *Nice to have:* **drag a profile onto an instance in the sidebar to activate it.** Depends
-      on the fix above — once a drag passes the threshold and `DragDrop.DoDragDrop` captures the
-      mouse, selection stops following, which is exactly what makes the gesture possible. No
-      drop-target filtering is needed: both lists belong to `RepoPageViewModel`, so everything
-      visible is already scoped to the selected repo and therefore to its scope. One direction
-      is enough: "put this profile into that game" reads correctly, the reverse does not.
+- [ ] ~~*Nice to have:* **drag a profile onto an instance in the sidebar to activate it.**~~ —
+      **superseded by [Phase 10](#phase-10--one-game-many-targets).** It was a gesture between two
+      sidebar lists, and there is one list now: a repo offers at most one game, so the drop target
+      is the only answer there is and activation asks nothing about where. The `DragSelection` fix
+      it depended on stands on its own merits and stays.
 
 ## Phase 6 — Scale and hygiene
 
@@ -1113,7 +1112,7 @@ Manage removed.
       and no bytes move because the blob is addressed by its hash. So **check-out always takes the
       head** — there is no stale base to reason about at the moment somebody wants to play, and
       looking at an old version without disturbing anybody is what *Take a copy* is for.
-- [ ] **The repo overview does not repeat the list.** It answers *where was I* — the instance, its
+- [ ] **The repo overview does not repeat the list.** It answers *where was I* — the game, its
       active profile, drift, and what you are holding — and links into Saves.
 
       *Not started. `RepoOverviewPageViewModel` mentions savegames nowhere.*
@@ -1121,6 +1120,11 @@ Manage removed.
       with unchecked-in play called out, or unrecognised. **Publish lives here**, because it is
       inherently about a slot, and it asks nothing about the profile: the instance has an active one
       to derive from.
+
+      **Publish moved out again in [Phase 10](#interface).** Still inherently about a slot, and it
+      still picks one out of this same list — but it is how a repo's first savegame comes into
+      existence, so it belongs on the list that is empty and saying so rather than behind a page
+      that phase made rare. It does ask about the profile, which Phase 9 settled separately.
 
 ### Checking out, in order
 
@@ -1168,11 +1172,12 @@ mod question is last because it is the only one that can be deferred.
 
       | From | Fixed | Chosen |
       | --- | --- | --- |
-      | The Saves page | the savegame, and therefore its profile | the instance, where there is more than one, and the slot |
-      | The instance's Saves | the instance | the savegame, grouped by profile |
+      | The Saves page | the savegame, and therefore its profile | the slot |
+      | The game's Saves | the game | the savegame, grouped by profile |
 
-      *The Saves-page end is done. The instance's Saves page publishes and checks in but offers no
-      check-out, so the second row is missing.*
+      *The Saves-page end is done, and [Phase 10](#interface) took the game step out of it — there
+      is one game to write into, so only the slot is chosen. The game's own Saves page checks in and
+      offers no check-out, so the second row is still missing.*
 - [x] **State is one chip per row**, in the vocabulary the member list already uses: *Available*;
       *You have it*, plus *unchecked-in play* where the slot has moved; *Anton has it, since 20
       minutes ago*; *Anton has had it since 3 March* for a stale claim; *2 revisions behind*,
@@ -1430,6 +1435,11 @@ Worth knowing before starting, so none of it gets rediscovered:
 
 ## Phase 10 — One game, many targets
 
+**Done.** Five slices, and the word *instance* is gone from the client and from these documents.
+The multi-target half has never run against a real BeamNG adapter, because there is not one — it is
+covered by the fake adapter's tests and by fixtures with a second target, and by nothing else until
+somebody writes it. Farming Simulator has one target and works end to end.
+
 The instance is two things wearing one name: **a policy holder** — which profile this follows, which
 savegame is held here — and **a folder** on disk. Almost every game has one folder, so the two look
 identical and the conflation costs nothing to notice. BeamNG.drive with BeamMP has three, and there
@@ -1623,10 +1633,14 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
 - [x] **`ProfileApplyTargets` collapses to a lookup.** A profile belongs to a repo, a repo has one
       `GameIdentity`, games are keyed by identity — so a profile maps to exactly one game. Repo →
       game → its targets, with no search. `DescribeSaveAction` says *Save and apply*, always.
-- [ ] **A folder that wants a different mod list does not get connected.** "A group runs the same
+- [x] **A folder that wants a different mod list does not get connected.** "A group runs the same
       mods at the same versions" is the premise of the system, so a private singleplayer mod set is
       out of scope by construction. The two ways out are a repo of your own for it, or leaving the
       folder out — which the adapter offers as a blank field in `LocalSettings`.
+
+      **Nothing enforces this and nothing has to.** There is no place to put a per-target profile:
+      `ActiveProfile` is on the game and every target reads it, so the state a rule would forbid is
+      not representable.
 
 ### One savegame held per game
 
@@ -1692,24 +1706,68 @@ per-game looks simpler and is not.
 
 ### Interface
 
-- [ ] **No instance list in the sidebar, and no current-instance dropdown.** The dropdown was the
+- [x] **No instance list in the sidebar, and no current-instance dropdown.** The dropdown was the
       answer to "which folder does this act on" while policy lived on folders. Under one game per
       machine there is no such question, so it is not built.
-- [ ] **Activation lives on the profile page only**, and loses its instance picker —
+
+      **A list of at most one is one entry, not none.** The repo's menu ends with either the game
+      or *Connect game*, exactly one of the two present, absent rather than closed — the idiom the
+      Saves entry already used. `InstanceItemViewModel` and `InstanceProfileOptionViewModel` are
+      gone. **`MenuItemViewModel`'s title tracking is not**: the plan called it their only
+      consumer and `RepoItemViewModel` uses it too, and has to — a rename folds into the live
+      `Repo` rather than rebuilding the sidebar, precisely so the entry and the page under it
+      survive one.
+- [x] **Activation lives on the profile page only**, and loses its instance picker —
       `ProfilePageViewModel.SelectedInstance` and `HasInstanceChoice` go with it. The target is the
       game.
-- [ ] **Check-out is one flat slot list** across every target with a savegame folder, grouped under a
+
+      Half of the game page went with them: the profile dropdown spanning every repo sharing the
+      scope, the apply button beside it and the hold rule greying the dropdown out. What survives
+      of the hold is the sentence saying what is checked out here, which is a fact about the game
+      rather than a control on it.
+- [x] **Check-out is one flat slot list** across every target with a savegame folder, grouped under a
       target header only where more than one has them. No instance step. Slots are already labelled
       with the game's own name for the save, so the list reads the same at one target or three.
-- [ ] **Publish moves to the repo's Saves page**, where it can be reached without opening a game
+
+      The reload machinery went with the game step — a different game was a different set of slots,
+      a different mod plan and a different revision note, so the context is built once now. So did
+      `Offer`'s host ranking and `SavegameRowBlock.NoGame`: whether a game is connected here is the
+      absence of the thing the rule is about rather than a fact about a savegame, so the page says
+      it and never asks.
+- [x] **Publish moves to the repo's Saves page**, where it can be reached without opening a game
       page. It is still inherently about a slot; the slot list is the same one.
-- [ ] **Drift reports per target**, naming the folder only where the game has more than one — *"your
+
+      Which means it grew a slot-picking step it did not have as a row action: the same flat list,
+      filtered to the slots ModsDude has no copy of. Landed first, as planned, since it is what let
+      the sidebar go.
+- [x] **Drift reports per target**, naming the folder only where the game has more than one — *"your
       MP client folder has 2 differences"*.
-- [ ] **Connect game loses its name field.** A game is called Farming Simulator 25 and
+
+      Every sentence of the notice names it, not only the two that are about a folder rather than
+      its contents. The headline deliberately does not: a game reaching three folders is one line's
+      worth of news, and a folder name up there would make the common case read as though a game
+      had several. The two overview rows were the other half — they were showing whichever entry
+      the monitor produced first, with nothing saying which folder it was about.
+- [x] **Connect game loses its name field.** A game is called Farming Simulator 25 and
       `Adapter.DisplayName` already says so. The name box, its "Game" default and its
       uniqueness-within-scope check all go; connecting becomes filling in the settings form.
-- [ ] **`GamePage` is reached rarely and on purpose**: its settings, its targets and its slot list.
+
+      Manage lost its box too — a derived name is not something to edit — and `PersistedGame.Name`
+      became `GameDisplayName`, written down rather than typed. That is the same trick the target
+      list uses and for the same reason: everything that names a game does so without a hydrated
+      adapter.
+- [x] **`GamePage` is reached rarely and on purpose**: its settings, its targets and its slot list.
       Nothing in a normal evening requires opening it.
+
+      Its targets are a row each now rather than a joined string and a joined drift note, which was
+      the last "joined for now" placeholder the phase left behind.
+
+- [x] **Folder naming got one answer**, which the four slices before this one kept deferring.
+      `TargetNames`: the adapter's own name where anything can still ask for it, the key where
+      nothing can, and nothing at all where the game reaches one folder. The half that makes it
+      possible is that the name is **written down** beside the path — the app-level notice is on
+      screen before the repo list has loaded, and *"in the 'MP client' folder"* cannot go and ask.
+      `LocalState.CurrentVersion` is 7 for that and for the derived game name.
 
 ### Naming
 
@@ -1765,8 +1823,21 @@ existing test stays green. The helper dies in slice 2b, which is where multi-tar
       structural, and `NeverSynced` split so an activation that did not land is drift. The split
       belongs in this slice rather than slice 2: it is only *definable* once the two verbs are, and
       until then there is no such thing as an intent that was not carried out.
-- [ ] **5. Interface.** The sidebar, the profile page's activation, the check-out list, publish, the
+- [x] **5. Interface.** The sidebar, the profile page's activation, the check-out list, publish, the
       drift wording, and Connect game losing its name.
+
+      **Estimated at ~25 files and it was ~40, in nine commits**, and the shape of the overrun is
+      the one every slice in this phase had: the named work was the named work, and the fan-out was
+      the sentences. Publish landed first because it gated the sidebar; the documentation pass over
+      nine files was the largest single piece and is the reason the count is what it is. Two things
+      the plan got wrong are recorded on their bullets above: `MenuItemViewModel`'s title tracking
+      is not dead, and publish needed a slot-picking step it never had as a row action.
+
+      **One thing outside the slice's list was fixed because slice 4 asked for it to be looked at
+      again.** The savegame check-out's apply was the last place applying without the two verbs, and
+      its Review answer declined the plan and recorded the intent anyway — a third way of saying
+      "left drifted deliberately", contradicting the rule slice 4 made structural. Declining is
+      declining now, and the savegame half of the drift check is what keeps the state visible.
 
 ### What this deletes
 
