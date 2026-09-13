@@ -406,11 +406,22 @@
                         <Border Grid.Row="3"
                                 BorderThickness="0 1 0 0"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
-                            <Button Margin="12"
-                                    HorizontalAlignment="Left"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Content="Refresh"
-                                    Command="{Binding RefreshCommand}" />
+                            <StackPanel Orientation="Horizontal" Margin="12">
+                                <Button Style="{DynamicResource SubtleMenuButton}"
+                                        Content="Refresh"
+                                        Command="{Binding RefreshCommand}" />
+
+                                <!-- Where a repo's first savegame comes from, which is why it sits
+                                     under the list that is empty and saying so. It asks which save
+                                     on this disk it is about, then the publish dialog asks the
+                                     rest. -->
+                                <Button Margin="8 0 0 0"
+                                        Style="{DynamicResource SubtleMenuButton}"
+                                        Content="Publish a save"
+                                        ToolTip="Takes a save already on this machine and makes a savegame of it in this repo."
+                                        Command="{Binding PublishSaveCommand}"
+                                        Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>

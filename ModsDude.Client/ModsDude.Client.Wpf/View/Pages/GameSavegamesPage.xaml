@@ -114,15 +114,6 @@
                                                     Margin="12 0 0 0"
                                                     VerticalAlignment="Center">
 
-                                            <!-- Publish is only ever offered on bytes nobody has
-                                                 claimed. An empty slot has nothing to publish and a
-                                                 checked-out one is checked in, not published again. -->
-                                            <Button Content="Publish this save"
-                                                    Style="{DynamicResource AccentButtonStyle}"
-                                                    ToolTip="Uploads it as a savegame of its own. It stays where it is, checked out to you."
-                                                    Command="{Binding PublishCommand}"
-                                                    Visibility="{Binding CanPublish, Converter={StaticResource BoolToVisibilityConverter}}" />
-
                                             <Button Content="Check in"
                                                     Style="{DynamicResource AccentButtonStyle}"
                                                     ToolTip="Uploads what is here as a new version, and frees the slot unless you keep playing."

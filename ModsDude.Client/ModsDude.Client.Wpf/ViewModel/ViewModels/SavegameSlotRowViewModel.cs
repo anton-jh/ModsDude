@@ -45,9 +45,11 @@ public enum SavegameBindingStanding
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>This is where Publish lives</b>, because publishing is inherently about a slot: it takes bytes
-/// that are already on this disk and makes a savegame of them. It asks nothing about the profile - the
-/// game has an active one, and that is what the first version records.
+/// <b>Publish is not here.</b> It is still inherently about a slot - it takes bytes already on this
+/// disk and makes a savegame of them - but it is the act that puts a repo's first savegame into
+/// existence, so it lives on the repo's Saves list where somebody looking at an empty one can find
+/// it, and picks its slot out of this same list. What stays here are the verbs about a save
+/// ModsDude is already holding.
 /// </para>
 /// <para>
 /// <b>Unchecked-in play is called out rather than left to be inferred.</b> A slot whose contents have
@@ -69,7 +71,6 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
         Guid? savegameId,
         string? savegameName,
         SavegameBindingStanding standing,
-        bool canPublish,
         bool canCheckIn,
         bool isUnreachable = false)
     {
@@ -99,10 +100,6 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
         // so there is no claim to release and no history to check a version into. Offering either
         // would be offering a round trip that is going to come back 404.
         IsOrphaned = IsHeld && standing is SavegameBindingStanding.Gone;
-
-        // Publishing needs bytes nobody has claimed. An empty slot has nothing to publish and a
-        // checked-out one is checked in rather than published a second time under a new name.
-        CanPublish = canPublish && availability is SavegameSlotAvailability.Unrecognised;
 
         // Everything that touches the bytes is off for an unreachable hold: there is no folder to
         // pack, to hash or to recycle, and a button that refuses itself the moment it is pressed is
@@ -143,12 +140,10 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
             binding.SavegameId,
             savegameName,
             standing,
-            canPublish: false,
             canCheckIn: false,
             isUnreachable: true);
 
 
-    public event EventHandler? PublishRequested;
     public event EventHandler? CheckInRequested;
     public event EventHandler? DiscardRequested;
     public event EventHandler? DisconnectRequested;
@@ -198,7 +193,6 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
     public bool IsHeld { get; }
     public bool HasUnpublishedPlay { get; }
 
-    public bool CanPublish { get; }
     public bool CanCheckIn { get; }
     public bool CanDiscard { get; }
     public bool CanDisconnect { get; }
@@ -206,9 +200,6 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
     /// <summary>The one line that says why this slot is worth acting on, for a row that has an action.</summary>
     public string ToolTip => $"{Label}\n{Ref}";
 
-
-    [RelayCommand(CanExecute = nameof(CanPublish))]
-    private void Publish() => PublishRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand(CanExecute = nameof(CanCheckIn))]
     private void CheckIn() => CheckInRequested?.Invoke(this, EventArgs.Empty);
@@ -290,7 +281,10 @@ public partial class SavegameSlotRowViewModel : ObservableObject, IGroupedSlot
             SavegameSlotAvailability.HeldWithUnpublishedPlay => (SavegameName is { Length: > 0 } played
                 ? $"'{played}' has been played here. This exists nowhere else until it is checked in."
                 : "This has been played here and exists nowhere else until it is checked in.") + archived,
-            _ => "ModsDude has no copy of this. Publishing it is what puts it in the repo."
+            // Named for where the verb is rather than only for the verb, because the row no longer
+            // carries it: publishing is on the repo's Saves list, and this slot is one of the ones
+            // its picker offers.
+            _ => "ModsDude has no copy of this. Publishing it from the repo's Saves list is what puts it in the repo."
         };
     }
 }

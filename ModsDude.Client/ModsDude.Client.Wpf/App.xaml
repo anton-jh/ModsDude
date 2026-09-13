@@ -151,6 +151,9 @@
             <DataTemplate DataType="{x:Type vm:SavegamePublishModalViewModel}">
                 <uc:SavegamePublishDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SavegameSlotPickerModalViewModel}">
+                <uc:SavegameSlotPickerDialog />
+            </DataTemplate>
 
             <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so
                  that "this can damage a save" is never a colour somebody picked in a template. -->

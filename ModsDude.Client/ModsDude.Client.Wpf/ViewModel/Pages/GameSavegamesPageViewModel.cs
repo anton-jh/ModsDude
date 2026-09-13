@@ -13,22 +13,23 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// The game's savegame slots: the local half of the feature, and where publishing lives.
+/// The game's savegame slots: what is in each place this machine can hold a save.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Reachable from both ends.</b> From the repo's Saves page the savegame is fixed and the game
-/// and slot are chosen; from here the game is fixed and the slot is what everything hangs off. The
-/// two are the same three verbs seen from opposite sides, exactly as activation is.
+/// <b>Reached rarely and on purpose</b>, like the rest of the game's own page. Everything an
+/// ordinary evening needs - taking a save, handing it back, publishing one - is on the repo's Saves
+/// list, which is where the savegames themselves are. This is the local view of the same thing: the
+/// slots rather than the saves, and the state a slot can be in that no server knows about.
 /// </para>
 /// <para>
-/// <b>Publish belongs here</b> because it is inherently about a slot: it takes bytes already on this
-/// disk and makes a savegame of them. Which mod list that savegame follows is the dialog's question
-/// rather than this page's - every profile in the repo is a legitimate answer and so is none of them -
-/// so the page says what the folder is on and leaves the choosing to the dialog.
+/// <b>Publish is not here any more.</b> It is still inherently about a slot, and it still picks one
+/// out of this same list - but it is how a repo's first savegame comes into existence, so it belongs
+/// where somebody looking at an empty list of savegames can find it. See
+/// <see cref="RepoSavegamesPageViewModel"/>.
 /// </para>
 /// <para>
-/// <b>Check-in asks nothing about the slot either.</b> The row it is clicked on is the slot, and the
+/// <b>Check-in asks nothing about the slot.</b> The row it is clicked on is the slot, and the
 /// open checkout names it. Choosing between twenty near-identical folders from memory is precisely
 /// where a wrong answer publishes somebody else's slot under this save's name.
 /// </para>
@@ -73,7 +74,7 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
         _lifetime = _pageLifetime.Token;
 
         GameName = game.Name;
-        CanPublish = repo.MembershipLevel >= RepoMembershipLevel.Member;
+        CanCheckIn = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
         Slots = [];
     }
@@ -81,8 +82,8 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
 
     public string GameName { get; }
 
-    /// <summary>Publishing and checking in both write to the repo, so both need Member.</summary>
-    public bool CanPublish { get; }
+    /// <summary>Checking a save in writes a version everybody sees, so it needs Member.</summary>
+    public bool CanCheckIn { get; }
 
     public ObservableCollection<SavegameSlotRowViewModel> Slots { get; }
 
@@ -105,16 +106,17 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
     public bool HasStatus => Status is not null;
 
     /// <summary>
-    /// Which mod list this game is on, which is the answer a publish arrives pre-selecting.
+    /// Which mod list this game is on, which is what the saves in these slots are being played
+    /// against.
     /// </summary>
     /// <remarks>
-    /// A statement rather than a constraint. A save can be published to any profile in the repo or to
-    /// none, so this says where the folder stands and the dialog asks the question - including on an
-    /// game that follows no profile, which used to be refused outright.
+    /// A statement rather than a constraint, and the reason it survives publish having moved away:
+    /// a slot list is a list of saves with no mod lists in it, and which mods were beside them is the
+    /// one fact about this machine that decides whether playing one damages it.
     /// </remarks>
     public string ActiveProfileText => ActiveProfileName is string name
-        ? $"This game follows '{name}'. A save published from here is offered that mod list first, and any other in the repo - or none at all."
-        : "This game follows no profile in this repo. A save published from here can still be recorded against any of the repo's mod lists, or against none.";
+        ? $"This game follows '{name}', so that is the mod list the saves in these slots are being played against."
+        : "This game follows no profile in this repo, so nothing here says which mod list these saves are being played against.";
 
     public string? ActiveProfileName => _game.ActiveProfile is ActiveProfile active && active.RepoId == _repo.Id
         ? _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId)?.Name
@@ -181,8 +183,7 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
                     binding?.SavegameId,
                     binding is SavegameCheckoutBinding held ? known.NameOf(held.SavegameId) : null,
                     binding is SavegameCheckoutBinding bound ? known.StandingOf(bound.SavegameId) : SavegameBindingStanding.None,
-                    CanPublish,
-                    CanPublish));
+                    CanCheckIn));
             }
 
             // Last, because they are not slots: a hold whose folder the settings no longer name has
@@ -269,7 +270,6 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
 
         foreach (var row in rows)
         {
-            row.PublishRequested += OnPublishRequested;
             row.CheckInRequested += OnCheckInRequested;
             row.DiscardRequested += OnDiscardRequested;
             row.DisconnectRequested += OnDisconnectRequested;
@@ -288,7 +288,6 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
     {
         foreach (var row in Slots)
         {
-            row.PublishRequested -= OnPublishRequested;
             row.CheckInRequested -= OnCheckInRequested;
             row.DiscardRequested -= OnDiscardRequested;
             row.DisconnectRequested -= OnDisconnectRequested;
@@ -315,29 +314,6 @@ public partial class GameSavegamesPageViewModel : PageViewModel, IDisposable
         }
     }
 
-
-    private async void OnPublishRequested(object? sender, EventArgs e)
-    {
-        if (sender is not SavegameSlotRowViewModel row)
-        {
-            return;
-        }
-
-        await RunAsync(async () =>
-        {
-            var published = await _flowService.PublishAsync(_game, _repo, row.Ref, row.Label, _lifetime);
-
-            if (published is null)
-            {
-                return;
-            }
-
-            Status = $"'{published.Name}' is in {_repo.Name}, and checked out to you. " +
-                     "The save has not moved - check it in when you want somebody else to be able to take it.";
-
-            await ReloadAsync();
-        });
-    }
 
     private async void OnCheckInRequested(object? sender, EventArgs e)
     {

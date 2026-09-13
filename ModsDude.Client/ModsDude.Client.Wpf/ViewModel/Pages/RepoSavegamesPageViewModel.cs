@@ -174,7 +174,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     public string EmptyText => HasHiddenPast
         ? "Every save here is a past savegame. Turn on 'Show past savegames' to see them - they are still playable."
-        : "No saves here yet. Publish one from a game installation's Saves tab, and it appears in this list for everybody.";
+        : "No saves here yet. Publish one of the saves already on this machine, and it appears in this list for everybody.";
 
     /// <summary>Versions and checkouts as one column, newest first.</summary>
     public ObservableCollection<SavegameTimelineEntryViewModel> Timeline { get; }
@@ -205,6 +205,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(TakeCopyVersionCommand))]
     [NotifyCanExecuteChangedFor(nameof(RenameSavegameCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSavegameCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PublishSaveCommand))]
     private bool _isWorking;
 
     [ObservableProperty]
@@ -273,6 +274,116 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private async Task Refresh()
     {
         await ReloadAsync(Selected?.Id);
+    }
+
+    /// <summary>
+    /// Makes a savegame out of a save that is already on this disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Here rather than on the game's own slot list</b>, which is where it used to be a button on
+    /// a row. Publishing is the way a repo's first savegame comes into existence, so it has to be
+    /// reachable from the list that is empty and saying so - and under one game per machine there is
+    /// no sidebar of installations to go looking through for it.
+    /// </para>
+    /// <para>
+    /// <b>The slot is still what it is about</b>, so it is asked for first: the same flat slot list
+    /// across every savegame folder the game reaches, filtered to the ones ModsDude has no copy of.
+    /// Everything after that - the name, the mod list, the revision this first version declares - is
+    /// the publish dialog's, unchanged.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanPublish))]
+    private async Task PublishSave()
+    {
+        if (_repo.Games.FirstOrDefault() is not Game game)
+        {
+            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
+                "No game is connected here",
+                $"Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from. Use 'Connect game' in {_repo.Name} first."));
+
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            var slots = await ReadPublishableSlotsAsync(game, _lifetime);
+
+            if (slots.Count == 0)
+            {
+                await _modalService.Show(ConfirmationDialogViewModel.Refusal(
+                    "There is nothing here to publish",
+                    "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in this list."));
+
+                return;
+            }
+
+            var picker = new SavegameSlotPickerModalViewModel(_repo.Name, slots);
+
+            await _modalService.Show(picker);
+
+            if (picker.Result is not SavegameSlotOptionViewModel chosen)
+            {
+                return;
+            }
+
+            var published = await _flowService.PublishAsync(game, _repo, chosen.Ref, chosen.Label, _lifetime);
+
+            if (published is null)
+            {
+                return;
+            }
+
+            Status = $"'{published.Name}' is in {_repo.Name}, and checked out to you. " +
+                     "The save has not moved - check it in when you want somebody else to be able to take it.";
+
+            await ReloadAsync(published.Id);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "publishing a savegame");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    // Member, like checking in and archiving: it writes to the repo, and everybody in it sees the
+    // result.
+    private bool CanPublish() => IsMember && IsWorking is false;
+
+    /// <summary>
+    /// The slots holding bytes ModsDude has no copy of, which are the only ones a publish can be
+    /// about.
+    /// </summary>
+    /// <remarks>
+    /// An empty slot has nothing to publish, and a slot holding a checked-out save is checked in
+    /// rather than published a second time under a new name - so both are absent from the picker
+    /// rather than present and refused.
+    /// </remarks>
+    private async Task<IReadOnlyList<SavegameSlotOptionViewModel>> ReadPublishableSlotsAsync(
+        Game game, CancellationToken cancellationToken)
+    {
+        var options = new List<SavegameSlotOptionViewModel>();
+
+        foreach (var slot in await _savegameService.GetSlotsAsync(game, cancellationToken))
+        {
+            var availability = await _savegameService.ClassifySlotAsync(game, slot.Ref, cancellationToken);
+
+            if (availability is SavegameSlotAvailability.Unrecognised)
+            {
+                options.Add(new SavegameSlotOptionViewModel(slot, availability));
+            }
+        }
+
+        return options;
     }
 
     /// <summary>
