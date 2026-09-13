@@ -882,6 +882,45 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// The same rule, asked about a hold rather than about a slot - which is what the savegame list
+    /// needs now that a game's holds are lines on it rather than a page of their own.
+    /// </summary>
+    [Fact]
+    public void Naming_the_folder_a_hold_is_in_follows_the_one_folder_rule()
+    {
+        using var harness = new Harness();
+
+        // One folder, so there is nothing to tell apart and nothing worth saying.
+        Assert.Null(harness.Service.DescribeFolder(harness.Game, _slot1.Target));
+
+        harness.AddSecondTarget();
+
+        Assert.NotNull(harness.Service.DescribeFolder(harness.Game, _slot1.Target));
+        Assert.NotNull(harness.Service.DescribeFolder(harness.Game, _client.Target));
+    }
+
+    /// <summary>
+    /// <b>And a folder the settings no longer name is always named, by its key.</b> That is the
+    /// opposite of the rule above and deliberately so: the hold is stuck until somebody puts that
+    /// field back, and the key is the only handle they have on which field it was. No adapter offers
+    /// the folder any more, so there is nothing else to call it.
+    /// </summary>
+    [Fact]
+    public void A_folder_the_settings_no_longer_name_is_named_anyway()
+    {
+        using var harness = new Harness();
+
+        harness.AddSecondTarget();
+        harness.RemoveSecondTarget();
+
+        Assert.Equal(_client.Target.Value, harness.Service.DescribeFolder(harness.Game, _client.Target));
+
+        // And the folder that is still there goes back to being unnamed, because the game reaches
+        // one again.
+        Assert.Null(harness.Service.DescribeFolder(harness.Game, _slot1.Target));
+    }
+
+    /// <summary>
     /// <b>The orphan that is not droppable.</b> A settings field somebody emptied - or an adapter
     /// author renaming a key, which is the same event from here - takes away the folder a checked-out
     /// save is sitting in. The hold is kept, because it is a savegame on this disk and a claim

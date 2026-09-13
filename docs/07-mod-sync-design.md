@@ -35,7 +35,7 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | Drift | `DriftService`, `DriftMonitor`, `SyncManifest`, `SyncManifestStore` |
 | Rewritten-blob detection | `StoreIntegrityService` off the drift check, `ContentStore.VerifyAllAsync` on demand |
 | Store housekeeping | `ContentStoreMaintenance` — sweep, verify, and what a store is costing |
-| The UI | `SyncPage`, under the game's own `GamePage`; the activation control on `ProfilePage`; the app-level drift notice |
+| The UI | The activation bar on `ProfilePage`; the plan confirmation from `ProfileApplyService`; the background-task strip; the app-level drift notice; the folder lines on `RepoOverviewPage` |
 
 ## Content hashing
 
@@ -621,8 +621,10 @@ watchers miss events across sleep, and on network paths.
 > Drift is checked at startup and on window activation — throttled, since `Window.Activated`
 > fires on every alt-tab — and surfaced in the shell rather than on one page.
 
-Drift status belongs wherever the game appears: the app-level notice, the game's own page, and the
-repo and profile overview pages. *"3 mods differ from Season 4"* with a Re-apply action.
+Drift status belongs wherever the game appears: the app-level notice, and the repo and profile
+overview pages. (It was also on the game's own page, until there stopped being one — see
+[05](05-client.md#the-game-is-not-a-place). The repo's Overview is what inherited it, which is why
+it says every status the monitor reports and not only `Drifted`.) *"3 mods differ from Season 4"* with a Re-apply action.
 
 **Drift on a locked mod is the dangerous case and deserves different treatment.** An unlocked mod
 sitting at the wrong version is untidy; a locked map at the wrong version is a corrupted save
@@ -1046,9 +1048,24 @@ I/O beyond hashing the few files whose stat no longer matches the manifest and c
 the service executes and reports per-mod progress. Cancellable, because 2,000 files is minutes
 of work even on the fast path and a frozen progress bar is indistinguishable from a hang.
 
-**`SyncPage`**, under the game's own `GamePage`, shows the plan (install / replace /
-uninstall / quarantine counts), the confirmation naming anything unrecognised, drift status, and
-live progress.
+### Where applying is reached from
+
+There is no page for it, and there used to be: **`SyncPage`**, under the game's own `GamePage`,
+showed the plan, the unrecognised-files confirmation, drift status and live progress. Every part of
+it had grown a second home, and the page itself was reachable only by opening a game page nobody
+otherwise had reason to open.
+
+| What the page did | Where it is |
+| --- | --- |
+| The plan, before anything moves | `ProfileApplyService.ConfirmPlanAsync` — the reconciler's own plan, a block per folder, in one dialog |
+| The unrecognised-files confirmation | The same place, and asked even where the caller waived the first |
+| Per-mod progress, and Stop | The background-task strip, which is what the apply reports to anyway |
+| Drift status, and Re-check | The app-level notice, and the folder lines on the repo's Overview |
+| Apply | **Activate** on the profile, *Save and apply* in the mod editor, *Re-apply* on the notice |
+
+What was genuinely lost with it is the browsable preview: the plan as mod rows with icons, rather
+than as counts. If that turns out to be wanted, the answer is a richer confirmation dialog — not a
+page nobody navigates to.
 
 ## Things this design deliberately does not do
 

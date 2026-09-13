@@ -194,12 +194,16 @@ The app is a sidebar app, nested up to three levels deep:
 ```
 MainWindow
 └─ MainPage                    Home │ Create repo │ Join repo │ Archive │ Settings │ ...repos
-   └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Saves │ Archive │ Create profile │ (Game | Connect game) │ ...profiles
+   └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Saves │ Archive │ Create profile │ (Game configuration | Connect game) │ ...profiles
       ├─ RepoModsPage          (one page — the catalog)
-      ├─ RepoSavegamesPage     (one page — the saves and their history)
-      ├─ ProfilePage           Overview │ Mods │ History │ Manage
-      └─ GamePage              Sync │ Saves │ Manage
+      ├─ RepoSavegamesPage     (one page — the saves, their history, and what this machine holds)
+      ├─ GameSettingsPage      (one page — this machine's folders, and disconnecting)
+      └─ ProfilePage           Overview │ Mods │ History │ Manage
 ```
+
+**Two levels of shell, not three.** There used to be a `GamePage` at the third level, over Sync,
+Saves and Manage, reached through an entry titled with the game's own name — see [the game is not a
+place](#the-game-is-not-a-place).
 
 `RepoModsPage` used to be a shell over Import and Manage. They were sibling pages showing
 overlapping data under different rules, which is the main thing about that area that confused;
@@ -215,13 +219,28 @@ re-checking it.
 
 **There is no list of games beside it, and exactly one of the two bottom entries is present.** A
 game is keyed by its identity and a repo is about one game, so a repo offers at most one — which
-made a list under a "Games" heading a list that is always empty or always one long. It is the
-game's entry when one is connected on this machine and *Connect game* when none is.
+made a list under a "Games" heading a list that is always empty or always one long. It is *Game
+configuration* when one is connected on this machine and *Connect game* when none is.
 
-`GamePage` behind it is **reached rarely and on purpose**: its settings, its folders and its slot
-list. Nothing in a normal evening opens it — activating a profile is on the profile's page,
-taking and handing a save back is on the repo's, and the drift notice carries whatever went wrong
-from wherever the user happens to be.
+### The game is not a place
+
+A local installation is a handful of folder paths this machine remembers. It is **not** a fourth
+kind of entity beside repos, profiles and savegames, and the interface had stopped saying so: the
+repo's menu ended with an entry titled *Farming Simulator 25* — a proper noun in a list of
+nouns-of-function — and behind it a shell of its own over Sync, Saves and Manage.
+
+All four are gone. What was on them, and where it went:
+
+| Was | Is |
+| --- | --- |
+| `GamePage` — the shell, and its sidebar of status | Nothing. The status is on `RepoOverviewPage`, under *This machine* |
+| Game ▸ Sync — plan preview, progress, cancel | Nothing. See [07](07-mod-sync-design.md#where-applying-is-reached-from) |
+| Game ▸ Saves — the slot list | Folded into `RepoSavegamesPage`, as lines and buttons on the savegame's own row |
+| Game ▸ Manage — local settings, disconnect | `GameSettingsPage`, reached straight from the repo's menu as *Game configuration* |
+
+**The word "game" has not left the interface — the entity has.** Connecting one still says *game*,
+and so does *Game configuration*, because in both places it means the copy installed on the user's
+own machine. What it never means again is a row to select and navigate into.
 
 Each level owns a `NavigationManager` and a collection of `MenuItemViewModel`. A menu item is
 a title plus a `Func<PageViewModel>` — **the page is constructed on selection, not up front**,
@@ -243,9 +262,8 @@ selection has to be *refusable*:
 3. Otherwise dispose the outgoing page, set the new one, and call `TriggerInit()`.
 
 **Disposing the outgoing page matters.** A page constructed and then navigated away from keeps
-its initialization running unless it is disposed. `ProfilePageViewModel.Dispose` and
-`GamePageViewModel.Dispose` exist solely to propagate disposal to the sub-page their own
-`NavigationManager` owns.
+its initialization running unless it is disposed. `ProfilePageViewModel.Dispose` exists solely to
+propagate disposal to the sub-page its own `NavigationManager` owns.
 
 ### Drag-selection was a `ListBox` default, not a feature
 
@@ -808,20 +826,17 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when this machine has no game for it |
-| `RepoOverviewPage` | Working | The game, a line per folder it reaches with that folder's drift, and the profiles at a glance |
+| `RepoOverviewPage` | Working | Where this machine stands: the game, which profile it follows, what it is holding, a line per folder it reaches with that folder's drift, and Re-check. Plus the profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, archive repo |
 | `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
-| `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's versions and claims on the right. Check out, take a copy, check in, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it |
+| `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's versions and claims on the right. Check out, take a copy, check in, **discard**, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it. A held row also says which of the game's folders holds the copy, and offers **Stop tracking** where the settings no longer name that folder |
 | `ConnectGamePage` | Working | The local settings form and nothing else. Refuses a game already connected here, and a folder another game owns |
-| `GamePage` | Working | The game's shell over Sync, Saves and Manage. Which profile it follows, what it is holding, and a line per folder. Reached rarely and on purpose |
-| `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
-| `GameSavegamesPage` | Working | Its slot list: what is in each place this machine can hold a save, with check in, discard and disconnect |
-| `GameSettingsPage` | Working | Local settings and disconnect |
+| `GameSettingsPage` | Working | *Game configuration* in the repo's menu: this machine's folders for the game, and disconnecting it. The only page a local installation has |
 | `CreateProfilePage` | Working | |
-| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage — and the one activation control, which asks nothing about where |
+| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage — and the one activation control, a bar across the top of the profile, which asks nothing about where |
 | `ProfileOverviewPage` | Working | Mod count and current revision, plus the game set to this profile and each of its folders |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |

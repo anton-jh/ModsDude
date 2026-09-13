@@ -23,7 +23,7 @@ public partial class RepoPageViewModel
     private readonly LastSelectionRepository _lastSelectionRepository;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
-    private readonly GamePageViewModel.Factory _gamePageViewModelFactory;
+    private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
     /// <summary>
     /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
     /// versions holding a revision, and a link that could not open the list would be no link at all.
@@ -46,14 +46,25 @@ public partial class RepoPageViewModel
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
 
     /// <summary>
-    /// The two entries at the bottom of the menu, exactly one of which is in it at a time: the game
-    /// this machine has connected for this repo, or the invitation to connect one.
+    /// The two entries at the bottom of the menu, exactly one of which is in it at a time: the
+    /// settings of the game this machine has connected for this repo, or the invitation to connect
+    /// one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>There is no game list any more.</b> A game is keyed by its identity and a repo is about one
     /// game, so a repo offers at most one - which makes a list of them a list that is always empty or
-    /// always one long, under a heading saying "Games". The entry leads to the game's own page, which
-    /// is reached rarely and on purpose.
+    /// always one long, under a heading saying "Games".
+    /// </para>
+    /// <para>
+    /// <b>And no game page behind it either.</b> The entry used to be titled with the game's own
+    /// name and to open a shell of its own over Sync, Saves and Manage - a proper noun sitting in a
+    /// list of nouns-of-function, which is what made a local installation read as a fourth kind of
+    /// entity beside repos and profiles. It is settings now, named for what it holds and nothing
+    /// else: <em>Game configuration</em>, the folders this machine points at. Where the game stands -
+    /// which profile it follows, what it is holding, how far each folder has drifted - is on the
+    /// repo's Overview, and what to do about it is on a profile's page or the app-level notice.
+    /// </para>
     /// </remarks>
     private readonly MenuItemViewModel _connectGameMenuItem;
     private readonly MenuItemViewModel _gameMenuItem;
@@ -68,7 +79,7 @@ public partial class RepoPageViewModel
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
-        GamePageViewModel.Factory gamePageViewModelFactory,
+        GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory,
         ConnectGamePageViewModel.Factory connectGamePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
@@ -88,18 +99,19 @@ public partial class RepoPageViewModel
         _lastSelectionRepository = lastSelectionRepository;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
-        _gamePageViewModelFactory = gamePageViewModelFactory;
+        _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
 
         _connectGameMenuItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.ConnectGame);
 
-        // Built once and re-titled whenever the game arrives, because the game it leads to is
-        // whichever one the repo offers at the time it is clicked - and a repo offers at most one,
-        // so there is nothing to pick between. It falls back to Connect game rather than asserting:
-        // the entry is only in the menu while there is a game, but nothing stops a deep link setting
-        // the selection to it, and the shell must not fall over on a race with a disconnect.
-        _gameMenuItem = new MenuItemViewModel("Game", () => ConnectedGame() is Game game
-            ? _gamePageViewModelFactory.Create(_repo, game)
+        // Titled for what it holds rather than for the game, which is the whole of the entry's job
+        // now: the game it acts on is whichever one the repo offers at the time it is clicked, and a
+        // repo offers at most one, so there is nothing to pick between and nothing to re-title. It
+        // falls back to Connect game rather than asserting: the entry is only in the menu while
+        // there is a game, but nothing stops a deep link setting the selection to it, and the shell
+        // must not fall over on a race with a disconnect.
+        _gameMenuItem = new MenuItemViewModel("Game configuration", () => ConnectedGame() is Game game
+            ? _gameSettingsPageViewModelFactory.Create(_repo, game)
             : _connectGamePageViewModelFactory.Create(_repo))
             .WithIcon(MenuIcons.Game);
 
@@ -511,22 +523,17 @@ public partial class RepoPageViewModel
     private Game? ConnectedGame() => _repo.Games.FirstOrDefault();
 
     /// <summary>
-    /// Puts exactly one of the two bottom entries in the menu: the connected game, or the
+    /// Puts exactly one of the two bottom entries in the menu: the connected game's settings, or the
     /// invitation to connect one.
     /// </summary>
     /// <remarks>
     /// Absent rather than closed, the same way the Saves entry is for an adapter with no savegames:
-    /// "Connect game" on a repo that already has one, or a game entry leading to a page about
+    /// "Connect game" on a repo that already has one, or a settings entry leading to a form about
     /// nothing, are both entries that describe a state the user is not in.
     /// </remarks>
     private void RefreshGameEntry()
     {
         var game = ConnectedGame();
-
-        if (game is not null)
-        {
-            _gameMenuItem.Title = game.Name;
-        }
 
         var wanted = game is null ? _connectGameMenuItem : _gameMenuItem;
         var unwanted = game is null ? _gameMenuItem : _connectGameMenuItem;

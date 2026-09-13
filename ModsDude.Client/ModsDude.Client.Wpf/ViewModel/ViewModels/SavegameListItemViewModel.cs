@@ -9,6 +9,28 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
+/// Where on this machine the local copy of a savegame is sitting.
+/// </summary>
+/// <remarks>
+/// <b>The slot list folded into the savegame list, and this is what carries it.</b> There used to be
+/// a page per game listing every place it can hold a save; it was a second list of the same holds
+/// keyed the other way round, reachable only through a game page nobody had reason to open. A
+/// savegame that is checked out is one row here, and where it is sitting is a fact about that row.
+/// </remarks>
+/// <param name="FolderName">
+/// Which of the game's savegame folders, or null where it reaches one - the same rule every folder
+/// name in the app follows. A single-folder game does not have its save in a folder <em>called</em>
+/// something, and a slot id is a name the player has never thought in.
+/// </param>
+/// <param name="IsUnreachable">
+/// Whether the folder holding it is one the game's settings no longer name. The save is still on this
+/// disk and still claimed; nothing can read, pack or recycle it until the settings point back at that
+/// folder. See <see cref="ModsDude.Client.Core.Savegames.ISavegameService.GetUnreachableHolds"/>.
+/// </param>
+public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? FolderName, bool IsUnreachable);
+
+
+/// <summary>
 /// One savegame on the repo's Saves list: what it is called, which profile it follows, and one chip
 /// saying whose it is right now.
 /// </summary>
@@ -87,6 +109,8 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <summary>Raised when the row's own action is clicked. The page owns all of the flows.</summary>
     public event EventHandler? CheckOutRequested;
     public event EventHandler? CheckInRequested;
+    public event EventHandler? DiscardRequested;
+    public event EventHandler? DisconnectRequested;
     public event EventHandler? TakeCopyRequested;
     public event EventHandler? ApplyProfileRequested;
     public event EventHandler? MakeCurrentRequested;
@@ -149,20 +173,68 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// That row falls back to checking out, which is the honest offer - it fetches the save onto this
     /// machine and renews the claim it already has.
     /// </remarks>
-    public Game? HeldHere { get; private set; }
+    public Game? HeldHere => Hold?.Game;
 
-    public bool IsHeldHere => HeldHere is not null;
+    public bool IsHeldHere => Hold is not null;
+
+    /// <summary>
+    /// Where the local copy is sitting, or null where it is not on this machine. See
+    /// <see cref="SavegameHoldHere"/>.
+    /// </summary>
+    public SavegameHoldHere? Hold { get; private set; }
+
+    /// <summary>
+    /// Whether the folder holding the local copy is one the game's settings no longer name. Nothing
+    /// that touches the bytes works in that state - there is no folder to pack or recycle - so the
+    /// row's only offer is to stop tracking it.
+    /// </summary>
+    public bool IsHoldUnreachable => Hold?.IsUnreachable is true;
 
     /// <summary>
     /// Whether handing the save back is what this row offers - which needs the claim to be yours
-    /// <em>and</em> the copy to be on this machine.
+    /// <em>and</em> the copy to be on this machine, in a folder that can still be reached.
     /// </summary>
     /// <remarks>
-    /// Both halves, because they come apart: a claim taken on the desktop is still yours on the
-    /// laptop, and there is nothing there to check in. That row falls back to checking out, which is
-    /// the honest offer - it fetches the save onto this machine and renews the claim it already has.
+    /// The first two halves come apart: a claim taken on the desktop is still yours on the laptop,
+    /// and there is nothing there to check in. That row falls back to checking out, which is the
+    /// honest offer - it fetches the save onto this machine and renews the claim it already has.
     /// </remarks>
-    public bool CanCheckIn => IsMember && IsHeldByMe && IsHeldHere;
+    public bool CanCheckIn => IsMember && IsHeldByMe && IsHeldHere && IsHoldUnreachable is false;
+
+    /// <summary>
+    /// Whether giving the save back without minting a version is on offer - the verb for a save
+    /// taken by mistake and never played.
+    /// </summary>
+    /// <remarks>
+    /// <b>Exactly where Check in is, and beside it.</b> They are the two ways out of holding a save
+    /// and the choice between them is about what happened while you had it, not about where you are
+    /// standing - so putting one on the savegame list and the other on a slot list somewhere else was
+    /// how somebody came to check a save in because Discard was not in front of them.
+    /// </remarks>
+    public bool CanDiscard => CanCheckIn;
+
+    /// <summary>
+    /// Whether ModsDude can be told to forget the local copy. Offered only where the folder holding
+    /// it has gone out of the settings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The one state nothing else gets out of.</b> Check in and Discard both need the bytes, and
+    /// there are none to be had: the game's settings no longer name the folder they are in. This
+    /// writes local state alone, which is why it still works when everything else is refused.
+    /// </para>
+    /// <para>
+    /// <b>Not gated on membership</b>, because it writes nothing anybody else can see. A guest
+    /// holding a save is as entitled to stop holding it as anybody.
+    /// </para>
+    /// <para>
+    /// <b>And not offered on an ordinary held row.</b> "Keep this as my own save while the claim stays
+    /// taken" is a real thing to want and a rare one, and a third button on every held row is what it
+    /// would cost. A hold whose savegame the repo has deleted is not here either - there is no reason
+    /// to leave one standing, so it is dropped on sight rather than turned into a question.
+    /// </para>
+    /// </remarks>
+    public bool CanDisconnect => IsHeldHere && IsHoldUnreachable;
 
     /// <summary>
     /// Whether taking the save is the row's accent button. Exactly one of this and
@@ -217,6 +289,56 @@ public partial class SavegameListItemViewModel : ObservableObject
     public string CheckInToolTip =>
         "Uploads what is in the slot as a new version and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.";
 
+    public string DiscardToolTip =>
+        "Hands the claim back without minting a version. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
+
+    public string DisconnectToolTip =>
+        "ModsDude forgets this copy. Nothing on disk changes and the server is not told, so the claim stays yours.";
+
+    /// <summary>
+    /// Which of the game's savegame folders the local copy is in, where that is worth saying.
+    /// </summary>
+    /// <remarks>
+    /// <b>Null in the ordinary case, deliberately.</b> The chip already says the save is yours, and a
+    /// game that reaches one savegame folder does not have the copy in a folder <em>called</em>
+    /// anything - so there is nothing here that a slot id would not make worse. It speaks up for a
+    /// game with several folders, which is the case the game's own slot list used to exist for.
+    /// </remarks>
+    public string? HoldNote => Hold is { IsUnreachable: false, FolderName: string named }
+        ? $"Your copy is in the '{named}' folder."
+        : null;
+
+    public bool HasHoldNote => HoldNote is not null;
+
+    /// <summary>
+    /// Why the local copy cannot be reached, where it cannot. Null - nearly always - for a hold in a
+    /// folder the settings still name.
+    /// </summary>
+    /// <remarks>
+    /// Its own property rather than a tone on <see cref="HoldNote"/>, because the two are not the
+    /// same kind of statement: which of three folders a save is in is a fact, and a folder that has
+    /// left the settings is a save nothing on this machine can open. Only the second is coloured.
+    /// </remarks>
+    public string? UnreachableHoldNote
+    {
+        get
+        {
+            if (Hold is not { IsUnreachable: true } hold)
+            {
+                return null;
+            }
+
+            var where = hold.FolderName is string folder
+                ? $"in '{folder}', a folder this game's settings no longer name"
+                : "in a folder this game's settings no longer name";
+
+            return $"Your copy is {where}. It is still on this disk and still claimed - point the settings " +
+                   "back at that folder to check it in, or stop tracking it here.";
+        }
+    }
+
+    public bool HasUnreachableHoldNote => UnreachableHoldNote is not null;
+
     public string ApplyToolTip => ApplyBlockedReason
         ?? (PinnedRevision is int revision
             ? $"Puts this game's mod folder on '{ProfileName}' revision {revision}, which is what this savegame runs on."
@@ -265,12 +387,34 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Hands the save back from the slot holding it, as a new version.
     /// </summary>
     /// <remarks>
-    /// The same flow the game's own slot list runs, reached from here because this is the list
-    /// somebody is looking at when they finish an evening - and a row saying "You have it" whose only
-    /// button offered to take it again was the thing that sent them hunting for the other page.
+    /// Here rather than on a slot list of its own, because this is the list somebody is looking at when
+    /// they finish an evening - and a row saying "You have it" whose only button offered to take it
+    /// again was the thing that sent them hunting for the other page.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanCheckIn))]
     private void CheckIn() => CheckInRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Gives the save back without minting anything - taken by mistake, never played.
+    /// </summary>
+    /// <remarks>
+    /// Beside Check in, because it is the other half of the same decision. It used to be a row action
+    /// on the game's own slot list, which is a page away from the list somebody is looking at when
+    /// they realise they took the wrong save.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanDiscard))]
+    private void Discard() => DiscardRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Stops tracking the local copy, for a hold in a folder the settings no longer name.
+    /// </summary>
+    /// <remarks>
+    /// The way out of the binding rather than out of the checkout: nothing on disk changes and the
+    /// server is not told, which is what makes it the only thing that can work when there is no
+    /// folder left to read.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private void Disconnect() => DisconnectRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
     /// The other half of the pair. Two actions rather than one because checking a save out never
@@ -331,30 +475,41 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// its own list.
     /// </param>
     /// <summary>
-    /// Records which installation on this machine is holding the local copy - the fact that decides
-    /// whether this row's primary action is Check in or Check out.
+    /// Records where on this machine the local copy is sitting - the fact that decides whether this
+    /// row's primary action is Check in or Check out, and which of the three ways out of a hold it
+    /// offers.
     /// </summary>
     /// <remarks>
     /// Arrives from outside for the same reason the offer does: it is not a fact about the savegame.
-    /// It needs every game this repo offers and what each one's binding store says it is holding,
-    /// none of which a row has.
+    /// It needs the game this repo offers, what its binding store says it is holding and which of its
+    /// folders the settings still name - none of which a row has.
     /// </remarks>
-    public void SetHeldHere(Game? game)
+    public void SetHeldHere(SavegameHoldHere? hold)
     {
-        if (ReferenceEquals(HeldHere, game))
+        if (Hold == hold)
         {
             return;
         }
 
-        HeldHere = game;
+        Hold = hold;
 
+        OnPropertyChanged(nameof(Hold));
         OnPropertyChanged(nameof(HeldHere));
         OnPropertyChanged(nameof(IsHeldHere));
+        OnPropertyChanged(nameof(IsHoldUnreachable));
         OnPropertyChanged(nameof(CanCheckIn));
+        OnPropertyChanged(nameof(CanDiscard));
+        OnPropertyChanged(nameof(CanDisconnect));
+        OnPropertyChanged(nameof(HoldNote));
+        OnPropertyChanged(nameof(HasHoldNote));
+        OnPropertyChanged(nameof(UnreachableHoldNote));
+        OnPropertyChanged(nameof(HasUnreachableHoldNote));
         OnPropertyChanged(nameof(ChecksOutAsPrimary));
         OnPropertyChanged(nameof(ChecksOutAsSecondary));
 
         CheckInCommand.NotifyCanExecuteChanged();
+        DiscardCommand.NotifyCanExecuteChanged();
+        DisconnectCommand.NotifyCanExecuteChanged();
     }
 
     /// <param name="offer">

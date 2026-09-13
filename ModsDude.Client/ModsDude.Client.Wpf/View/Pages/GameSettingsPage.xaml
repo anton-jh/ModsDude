@@ -1,9 +1,8 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.GameSettingsPage"
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.GameSettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       mc:Ignorable="d"
@@ -19,15 +18,23 @@
                 <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Text="{Binding RepoName}" />
                 <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="{Binding GameName}"
-                           Margin="0 8 0 36" />
+                           Text="Game configuration"
+                           Margin="0 8 0 24" />
+
+                <!-- Said out loud, because it is the whole reason this page is settings and not a
+                     place: what is being configured is the copy of the game on this machine, not
+                     anything the repo holds or anybody else can see. -->
+                <TextBlock Margin="0 0 0 24"
+                           TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding Summary}" />
 
                 <!-- The settings are the whole of what a machine decides about a game: every folder
                      it reaches falls out of them, and its name comes from the adapter. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16">
-                    <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
+                    <GroupBox Header="Folders" Padding="0 16 0 16">
                         <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>
                 </Border>
@@ -36,10 +43,11 @@
         </Border>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" >
-            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+            <Button Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
 
-            <Button Grid.Column="2" Width="250" Margin="4 24 32 24"
+            <Button Width="250" Margin="4 24 32 24"
+                    ToolTip="ModsDude stops managing this installation. Nothing on disk is changed or removed."
                     Content="Disconnect game" Command="{Binding Path=DeleteCommand}" />
         </StackPanel>
 

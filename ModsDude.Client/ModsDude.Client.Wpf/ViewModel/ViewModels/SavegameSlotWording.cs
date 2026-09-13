@@ -4,8 +4,8 @@ using System.Text;
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// How a slot is described where there is room for all of it. Shared by the slot row and the slot
-/// picker, which show the same slot and must not describe it two different ways.
+/// How a slot is described where there is room for all of it. Shared by the two pickers - check-out
+/// and publish - which show the same slots and must not describe them two different ways.
 /// </summary>
 internal static class SavegameSlotWording
 {

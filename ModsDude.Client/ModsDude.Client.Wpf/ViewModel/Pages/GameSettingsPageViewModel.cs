@@ -12,6 +12,14 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>Reached straight from the repo's menu, as <em>Game configuration</em>.</b> It had a shell of
+/// its own over Sync, Saves and Manage, under an entry titled with the game's own name; all three
+/// sub-pages are gone and so is the shell, and what is left is this form. That is the whole of the
+/// point: a local installation is not a fourth kind of entity to navigate into beside repos and
+/// profiles, it is a handful of folder paths this machine remembers. Where the game <em>stands</em>
+/// is on the repo's Overview, and what to do about it is on a profile's page or the app-level notice.
+/// </para>
+/// <para>
 /// The active profile used to be here too. It is on the profile's own page now, which is the end of
 /// activation where the target is fixed and the profile is chosen - and only there, because two
 /// places to set one thing is how they come to disagree.
@@ -59,6 +67,19 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     public string RepoName { get; }
 
     public string GameName { get; }
+
+    /// <summary>
+    /// What this page is about, in one sentence: <em>your</em> copy of the game, not anything the
+    /// repo holds.
+    /// </summary>
+    /// <remarks>
+    /// Worth a line rather than left to be inferred from the folder pickers. Every other entry in
+    /// this menu is about the repo and is the same for everybody in it; this one is the only local
+    /// thing there, and the settings on it are the only settings in the app nobody else ever sees.
+    /// </remarks>
+    public string Summary =>
+        $"Where '{GameName}' is installed on this machine. These settings belong to this machine alone - " +
+        $"nobody else in '{RepoName}' sees them, and changing them changes nothing in the repo.";
 
     public bool IsValid => LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 

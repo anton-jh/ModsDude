@@ -128,7 +128,7 @@ public interface IHeldSavegames
     /// answer is compared against <em>its own</em> target's manifest, and says which target it is
     /// about, so the notice can put it on the folder it belongs to. A hold whose target the adapter
     /// no longer offers is left out rather than reported: there is no folder to hash and nothing to
-    /// compare, and the game's slot list is where that hold is said.
+    /// compare, and the repo's Saves list is where that hold is said, on the savegame's own row.
     /// </para>
     /// </remarks>
     Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct);
@@ -338,6 +338,26 @@ public interface ISavegameService : IHeldSavegames
     /// </para>
     /// </remarks>
     IReadOnlyList<SavegameCheckoutBinding> GetUnreachableHolds(Game game);
+
+    /// <summary>
+    /// What to call the savegame folder a hold is in, or null where naming it would be noise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One rule in one place, because the answer differs between the two cases and both are said on
+    /// the same list. A folder the game still reaches follows the rule every folder name in the app
+    /// follows - <see cref="TargetNames.Distinguishing"/>, which is null for the single-folder game
+    /// that nearly every game is, because a save is not in a folder <em>called</em> anything there.
+    /// </para>
+    /// <para>
+    /// A folder it no longer reaches is always named, and by its key: no adapter can be asked what it
+    /// was called, and the key is the only handle the user has on the thing they have to put back in
+    /// the settings. That is the fallback half of <see cref="TargetNames"/>, and this is the second
+    /// site written for it.
+    /// </para>
+    /// </remarks>
+    /// <param name="target">The folder a hold is in, which need not be one the settings still name.</param>
+    string? DescribeFolder(Game game, TargetKey target);
 }
 
 
@@ -400,6 +420,21 @@ public sealed class SavegameService(
         var targets = adapter.SavegameTargets;
 
         return [.. bindings.GetBindings(game.Identity).Where(x => targets[x.Slot.Target] is null)];
+    }
+
+    public string? DescribeFolder(Game game, TargetKey target)
+    {
+        // No adapter at all reads as "cannot be asked", which is the unreachable answer: the caller
+        // is naming a folder a hold is in, and a hold nothing can address is exactly the case the key
+        // is the only handle for.
+        if (adapters.TryGet(game)?.SavegameTargets is not SavegameTargets targets)
+        {
+            return TargetNames.Of(target, null);
+        }
+
+        return targets[target] is SavegameTarget named
+            ? TargetNames.Distinguishing(target, named.DisplayName, targets.Count)
+            : TargetNames.Of(target, null);
     }
 
     public int? GetPlayedRevision(Game game, Guid savegameId)
@@ -990,8 +1025,8 @@ public sealed class SavegameService(
 
             // A hold whose target the settings no longer name has no folder to look in, so there is
             // nothing here that could be compared against anything. It is not dropped and it is not
-            // forgotten - the game's slot list is where an unreachable hold is said, because there
-            // is an action there and none here.
+            // forgotten - the repo's Saves list is where an unreachable hold is said, on the
+            // savegame's own row, because there is an action there and none here.
             if (adapter.SavegameTargets[binding.Slot.Target] is not SavegameTarget savegameTarget)
             {
                 continue;

@@ -245,6 +245,74 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
 
         _fetched = [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime)];
+
+        await ForgetDeletedHoldsAsync();
+    }
+
+    /// <summary>
+    /// Drops the holds this machine keeps for savegames the repo no longer has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Done rather than asked.</b> A binding whose savegame has been archived and then deleted for
+    /// good names something nobody can produce: there is no claim left to hand back, no history to
+    /// check a version into, and every server-side verb on it answers 404. The only thing anybody can
+    /// do about it is stop tracking it, and a dialog offering a choice with one sane answer is a
+    /// dialog that exists to be clicked through. So the row is not built, the button is not offered,
+    /// and the state is simply gone the next time this list is opened.
+    /// </para>
+    /// <para>
+    /// <b>Nothing on disk is touched</b>, which is what makes this safe to do unasked. The save stays
+    /// exactly where it is and becomes an ordinary save of the user's own - the same outcome the
+    /// button had, reached without the question.
+    /// </para>
+    /// <para>
+    /// <b>Only on two good reads, and only for this repo's bindings.</b> A failed round trip must
+    /// never be read as a deletion - that is how an app comes to forget somebody's savegame over a
+    /// flaky connection - so anything less than both lists arriving leaves every binding alone. The
+    /// archived list is read as well as the live one because archiving deliberately does not release
+    /// a hold: an archived savegame is still perfectly real and still checks in.
+    /// </para>
+    /// </remarks>
+    private async Task ForgetDeletedHoldsAsync()
+    {
+        if (_repo.Games.FirstOrDefault() is not Game game)
+        {
+            return;
+        }
+
+        var held = _bindingStore.GetBindings(game.Identity)
+            .Where(x => x.RepoId == _repo.Id)
+            .ToList();
+
+        if (held.Count == 0)
+        {
+            return;
+        }
+
+        HashSet<Guid> known;
+
+        try
+        {
+            known =
+            [
+                .. _fetched.Select(x => x.Id),
+                .. (await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, _lifetime)).Select(x => x.Id)
+            ];
+        }
+        catch (Exception)
+        {
+            // Nothing was found out, so nothing is forgotten - see the remarks. Every exception and
+            // not just ApiException: this is optional housekeeping on the way into a page, and a
+            // transport failure taking the savegame list down with it would be a far worse trade
+            // than a binding that gets swept on the next visit instead.
+            return;
+        }
+
+        foreach (var binding in held.Where(x => known.Contains(x.SavegameId) is false))
+        {
+            _savegameService.Forget(game, binding.SavegameId);
+        }
     }
 
     protected override void OnInitCompleted()
@@ -686,6 +754,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             row.CheckOutRequested += OnCheckOutRequested;
             row.CheckInRequested += OnCheckInRequested;
+            row.DiscardRequested += OnDiscardRequested;
+            row.DisconnectRequested += OnDisconnectRequested;
             row.TakeCopyRequested += OnTakeCopyRequested;
             row.ApplyProfileRequested += OnApplyProfileRequested;
             row.MakeCurrentRequested += OnMakeCurrentRequested;
@@ -714,6 +784,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             row.CheckOutRequested -= OnCheckOutRequested;
             row.CheckInRequested -= OnCheckInRequested;
+            row.DiscardRequested -= OnDiscardRequested;
+            row.DisconnectRequested -= OnDisconnectRequested;
             row.TakeCopyRequested -= OnTakeCopyRequested;
             row.ApplyProfileRequested -= OnApplyProfileRequested;
             row.MakeCurrentRequested -= OnMakeCurrentRequested;
@@ -774,6 +846,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         return new SavegameHost(
             game,
             _bindingStore.GetBindings(game.Identity),
+            // Once for the list rather than once per row: it hydrates the adapter to read the
+            // folders the settings still name, and twenty rows must not cost twenty of those.
+            _savegameService.GetUnreachableHolds(game).Select(x => x.SavegameId).ToHashSet(),
             manifest?.ProfileId,
             manifest?.ProfileRevision);
     }
@@ -799,7 +874,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        row.SetHeldHere(host.Held.Any(x => x.SavegameId == row.Id) ? host.Game : null);
+        row.SetHeldHere(FindHold(row.Id, host));
 
         var offer = SavegameRowRules.Describe(
             row.Id,
@@ -811,6 +886,36 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             host.AppliedRevision);
 
         row.SetOffer(offer, offer.CanCheckOut ? null : NameOfHeld(offer.BlockingSavegameId));
+    }
+
+    /// <summary>
+    /// Where the local copy of one savegame is sitting, or null where this machine holds none.
+    /// </summary>
+    /// <remarks>
+    /// <b>The slot list, folded into the row it is about.</b> A game's holds used to be a page of
+    /// their own keyed by slot; they are a line and up to two buttons on the savegame's own row now,
+    /// which is the list somebody is looking at when they finish an evening.
+    /// </remarks>
+    private SavegameHoldHere? FindHold(Guid savegameId, SavegameHost host)
+    {
+        // Written out rather than FirstOrDefault because a binding is a struct: the default is a
+        // fully-formed one with a blank slot reference, and a row handed that would offer to
+        // disconnect a hold that does not exist.
+        foreach (var binding in host.Held)
+        {
+            if (binding.SavegameId != savegameId)
+            {
+                continue;
+            }
+
+            return new SavegameHoldHere(
+                host.Game,
+                binding.Slot,
+                _savegameService.DescribeFolder(host.Game, binding.Slot.Target),
+                host.UnreachableHolds.Contains(savegameId));
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -907,8 +1012,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         foreach (var game in _repo.Games.ToList())
         {
             // A hold whose folder the settings no longer name has nothing to hash, so there is
-            // nothing this chip could say about it. The game's own slot list is where that state is
-            // reported, with the one action it has.
+            // nothing this chip could say about it. The row says that state in its own words instead,
+            // and offers the one action it has - see SavegameListItemViewModel.HoldNote.
             var unreachable = _savegameService.GetUnreachableHolds(game)
                 .Select(x => x.SavegameId)
                 .ToHashSet();
@@ -1070,6 +1175,108 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             // The rows raise plain events rather than running commands, so a failure here has no
             // command to carry it to the global handler and has to reach the user itself.
             await _errorReporter.ShowAsync(exception, "checking a savegame in");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    /// <summary>
+    /// Gives a save back without minting a version - taken by mistake, never played.
+    /// </summary>
+    /// <remarks>
+    /// <b>Beside Check in, because it is the other answer to the same question.</b> It was a row
+    /// action on the game's own slot list, which is one page and one sidebar away from the list
+    /// somebody is looking at when they realise they took the wrong save - and the flow it runs is
+    /// the same one, dialog and all.
+    /// </remarks>
+    private async void OnDiscardRequested(object? sender, EventArgs e)
+    {
+        if (sender is not SavegameListItemViewModel row || row.Hold is not SavegameHoldHere hold)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            // Asked of the disk here rather than read off the row's chip. The chip arrives from a
+            // background pass that may not have reached this row yet, and the two confirmations this
+            // decides between are "nothing is lost" and "an evening of play goes to the Recycle Bin".
+            // A stale false there is the one wrong answer this whole feature cannot afford, and it
+            // costs one slot hash at the moment somebody is about to be asked anyway.
+            var played = await _savegameService.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
+                is SavegameSlotAvailability.HeldWithUnpublishedPlay;
+
+            // The savegame's name where the dialog wants a slot label, as the check-in does: a slot
+            // id is a folder name the player has never thought in, and what they are giving back is
+            // the save rather than the folder.
+            var discarded = await _flowService.DiscardAsync(
+                hold.Game, row.Id, row.Name, row.Name, played, _lifetime);
+
+            if (discarded is false)
+            {
+                return;
+            }
+
+            Status = $"'{row.Name}' was given back without a version. The local copy is in the Recycle Bin.";
+
+            await _driftMonitor.CheckAsync();
+            await ReloadAsync(row.Id);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away mid-discard. There is no page left to report on.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "giving a savegame back");
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    /// <summary>
+    /// Stops tracking a copy sitting in a folder the game's settings no longer name.
+    /// </summary>
+    /// <remarks>
+    /// The only state this is offered in, and the only thing offered in it: check in and discard both
+    /// need the bytes, and there is no folder left to read them from. A hold whose <em>savegame</em>
+    /// the repo has deleted never gets this far - it is dropped on sight, see
+    /// <see cref="ForgetDeletedHoldsAsync"/>.
+    /// </remarks>
+    private async void OnDisconnectRequested(object? sender, EventArgs e)
+    {
+        if (sender is not SavegameListItemViewModel row || row.Hold is not SavegameHoldHere hold)
+        {
+            return;
+        }
+
+        IsWorking = true;
+
+        try
+        {
+            if (await _flowService.DisconnectAsync(hold.Game, row.Id, row.Name, hold.FolderName) is false)
+            {
+                return;
+            }
+
+            Status = $"ModsDude has stopped tracking '{row.Name}'. The save is still on this disk, and the claim is still yours.";
+
+            await _driftMonitor.CheckAsync();
+            await ReloadAsync(row.Id);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away. Forgetting a binding is local and already done or not done.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "disconnecting a savegame");
         }
         finally
         {
@@ -1681,9 +1888,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// The game this repo's rows act on, with the two things their buttons turn on: what it is
     /// holding, and which revision of which profile its mod folder was last made to match.
     /// </summary>
+    /// <param name="UnreachableHolds">
+    /// The savegames held in a folder the settings no longer name, read once for the whole list. They
+    /// are still held and still claimed, and nothing that touches the bytes works on them - see
+    /// <see cref="ISavegameService.GetUnreachableHolds"/>.
+    /// </param>
     private sealed record SavegameHost(
         Game Game,
         IReadOnlyList<SavegameCheckoutBinding> Held,
+        IReadOnlySet<Guid> UnreachableHolds,
         Guid? AppliedProfileId,
         int? AppliedRevision);
 

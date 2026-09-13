@@ -329,7 +329,7 @@ control it explains.
 
 ## Applying a profile to a game
 
-Repo → a profile → **Activate**, or the game's own **Sync** page for the plan in full. This is
+Repo → a profile → **Activate**, the bar across the top of every one of a profile's pages. This is
 the system's central feature; the design and its reasoning are in
 [07 — Mod sync design](07-mod-sync-design.md).
 
@@ -345,7 +345,7 @@ retracting a decision the user made.
 one installation of it, and a game reaching three folders applies to all three — that loop is the
 apply's, not a question for the user.
 
-1. `SyncPageViewModel` reads the game's `ActiveProfile` and pulls that profile's
+1. `ProfileApplyService` pulls the profile's
    dependencies — each of which carries its `ContentHash`, so nothing has to fetch the repo's
    mod list to find out what bytes are wanted.
 2. `ModSyncPlanner` classifies every mod: Keep, Rename, Install, Replace, uninstall-recoverable,
@@ -360,8 +360,8 @@ apply's, not a question for the user.
 5. On success, and only on success, the manifest is written atomically.
 
 Drift — a folder no longer matching what was applied, which is what an in-game update-all
-leaves behind — is reported on this page, on the game's own page a line per folder, and by the
-app-level notice from wherever the user happens to be. With more than one folder every sentence
+leaves behind — is reported on the repo's Overview a line per folder, and by the app-level notice
+from wherever the user happens to be. With more than one folder every sentence
 names which: *"3 replaced, 1 added in the 'MP client' folder since it was last applied."*
 
 A profile somebody else saved counts as drift too, and the notice says which revision: *"this

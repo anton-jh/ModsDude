@@ -1882,6 +1882,76 @@ Worth knowing before starting, because it is most of the argument for doing it:
 - **Attribution is observed, never declared** — except a published savegame's first version, which
   declares because the bytes predate ModsDude and nothing recovers what was in the folder then.
 
+## Phase 11 — The game stops being a place
+
+Phase 10 took the instance out of the model and left it in the interface. A repo's menu still ended
+with an entry titled *Farming Simulator 25* — a proper noun in a list of nouns-of-function — and
+behind it a shell of its own over Sync, Saves and Manage. Nothing in a normal evening opened it, and
+the phase said so approvingly; a page reached rarely and on purpose is still a page teaching the
+user that their installation is a fourth kind of entity beside repos, profiles and savegames.
+
+**The concept of a Game should not be visible at all except when connecting one** — and there "the
+game" means the copy installed on this machine, not an object in ModsDude.
+
+Client-only, interface-only. No model, no server, no local state changed.
+
+- [x] **`SyncPage` is deleted.** Every part of it had grown a second home and the page was reachable
+      only through the game page: the plan is `ProfileApplyService.ConfirmPlanAsync`, progress and
+      cancellation are the background-task strip the apply already reports to, drift and Re-check are
+      the app-level notice and the repo's Overview, and applying is *Activate*, *Save and apply* and
+      *Re-apply*. The browsable preview — the plan as mod rows with icons rather than counts — is the
+      one thing genuinely lost; if it is wanted the answer is a richer dialog, not a page nobody
+      navigates to. `ModSyncRowViewModel` went with it.
+- [x] **Game ▸ Saves folds into the repo's Saves list.** Two lists of the same holds keyed opposite
+      ways round: one by savegame, one by slot. `Check in` was already on both. `Discard` joins it,
+      because the choice between them is about what happened while you had the save rather than about
+      where you are standing. Which folder the copy is in becomes a line on the row, said only where
+      the game reaches more than one. Slots ModsDude has no copy of were already the publish picker.
+      `GameSavegamesPage` and `SavegameSlotRowViewModel` are deleted.
+- [x] **An orphaned hold is dropped rather than made into a question.** A binding whose savegame the
+      repo deleted for good has no claim to hand back and no history to check into; the only thing
+      anybody can do is stop tracking it, so a dialog offering that choice exists to be clicked
+      through. `RepoSavegamesPageViewModel.ForgetDeletedHoldsAsync` forgets those on load, and only
+      when both the live and the archived list came back — a failed round trip must never be read as
+      a deletion. Nothing on disk is touched, which is what makes it safe unasked.
+
+      That collapses `SavegameFlowService.DisconnectAsync` to its one remaining case — a hold in a
+      folder the settings no longer name — which drops its `stillInRepo` branch and is the only
+      state the button is offered in. It reads *Stop tracking*.
+- [x] **Activation becomes a bar across the top of the profile, not a button at the foot of its
+      sidebar.** The shell was the right owner and always was — it is what makes the control present
+      on every sub-page — but the bottom-left corner of a 200px column is the least prominent place
+      the window has, and the app's primary act was in it under two paragraphs of caption. The long
+      sentence is still said, beside the button rather than below it.
+- [x] **Game ▸ Manage is lifted to the repo's menu as *Game configuration*.** Not *Manage*: the repo
+      menu already has **Admin** for repo settings, and *Manage* means "this shell's own settings" on
+      the profile page — `Repo/Manage` beside `Repo/Admin` would read as two doors to the same room,
+      and the one being added is the only local thing in that menu. The entry swaps with *Connect
+      game* exactly as the game entry did, is titled for what it holds rather than for the game, and
+      the page says in one line that these settings belong to this machine alone.
+- [x] **`GamePage` is deleted, and its status moves to the repo's Overview.** Which profile the game
+      follows, what it is holding and a line per folder were already there in part; what they gained
+      is the holding sentence, a Re-check button, and every drift status the monitor reports rather
+      than `Drifted` alone — an apply that never landed and a folder that was repointed are exactly
+      what somebody opens an overview to find. The box is headed *This machine*.
+- [x] **The stale sentences went with them.** The profile Overview still said to pick the profile on
+      a game (the picker was deleted in Phase 10 slice 5) and that applying happens on a game's Sync
+      page; the repo Overview still had a *Sync* card saying nothing syncs yet, under a list of
+      per-folder drift.
+
+### Settled
+
+- **The word "game" stays; the entity goes.** *Connect game* and *Game configuration* both mean the
+  copy installed on this machine, which is what the user calls it too. What it never means again is a
+  row to select and navigate into.
+- **`Disconnect` is not offered on an ordinary held row.** "Keep this as my own save while the claim
+  stays taken" is a real want and a rare one, and a third button on every held row is what it would
+  cost.
+- **The discard confirmation asks the disk, not the chip.** Unpublished play arrives from a
+  background annotation pass that may not have reached a row yet, and the two confirmations it picks
+  between are "nothing is lost" and "an evening goes to the Recycle Bin". One slot hash at the moment
+  somebody is about to be asked anyway is the right price.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint

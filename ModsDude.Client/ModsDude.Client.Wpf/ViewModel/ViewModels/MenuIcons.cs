@@ -7,16 +7,15 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// Segoe Fluent Icons code points, which is the font the rest of the app's iconography already uses -
 /// the dialogs' icon converter, the sidebar headers' refresh button, the subtle icon buttons. Kept as
-/// constants rather than written into the XAML because several of them appear in more than one
-/// sidebar: <b>Saves</b> is an entry under a repo and under a game, and <b>Manage</b> is one
-/// under a game and under a profile, and those have to be the same glyph or the icons stop being
-/// a way to find things.
+/// constants rather than written into the XAML so that the same idea keeps the same glyph wherever it
+/// appears, which is what lets somebody find an entry by its shape rather than by reading the column.
 /// </para>
 /// <para>
-/// <b>Entities get one too.</b> A repo, a profile and a game are the rows there are most of, and
-/// they are the rows an icon says least about - so they take the plainest glyph of the three kinds,
-/// which is enough to keep every row's text starting at the same x and to say which kind of thing a
-/// row is when three lists are stacked in one sidebar.
+/// <b>Two sidebars, not three.</b> There is no game sidebar any more - a local installation is a
+/// settings entry under its repo rather than a shell of its own - so <b>Saves</b> and <b>Manage</b>
+/// each appear once. <see cref="Game"/> and <see cref="ConnectGame"/> are deliberately the same
+/// glyph: they are the two states of one entry, and it would flicker between shapes as a game is
+/// connected and disconnected otherwise.
 /// </para>
 /// </remarks>
 internal static class MenuIcons
@@ -41,10 +40,8 @@ internal static class MenuIcons
     public const string History = "\xE81C";
     public const string Manage = "\xE713";
 
-    // Game
-    public const string Sync = "\xE895";
-
-    // The three kinds of entity a sidebar names.
+    // The kinds of entity a sidebar names. Game is the repo menu's settings entry rather than a row
+    // in a list of its own, and shares ConnectGame's glyph because the two are one entry's two states.
     public const string Repo = "\xE8B7";
     public const string Profile = "\xE8FD";
     public const string Game = "\xE7FC";

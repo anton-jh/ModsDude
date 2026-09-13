@@ -28,6 +28,14 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// is the apply's own loop rather than a question for the user.
 /// </para>
 /// <para>
+/// <b>It is a bar across the top of the profile, not a button at the foot of its sidebar.</b> The
+/// shell is the right owner and always was; the foot of a 200px column was the wrong place in it.
+/// Applying a profile to the game is the act the rest of the app exists to set up, and it was in the
+/// least prominent position the window has, under two paragraphs of caption. The long sentence is
+/// still said - it is the one thing standing between the user and files being moved - but beside the
+/// button rather than below it.
+/// </para>
+/// <para>
 /// It is <b>labelled for what it will do</b>: a game already on this profile is being re-applied,
 /// one on another profile or none is being moved, and moving it uninstalls whatever the previous
 /// profile put in the folder. See docs/07-mod-sync-design.md#activating-is-intent-applying-is-work.

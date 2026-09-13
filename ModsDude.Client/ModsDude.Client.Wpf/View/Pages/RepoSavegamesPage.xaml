@@ -303,6 +303,28 @@
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
 
+                                            <!-- Which of the game's savegame folders the copy is in,
+                                                 on the rare rows where that is not obvious. This is
+                                                 what the game's own slot list used to be a page of,
+                                                 and for a game reaching one folder it says nothing
+                                                 at all. -->
+                                            <TextBlock Margin="0 4 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       Text="{Binding HoldNote}"
+                                                       Visibility="{Binding HasHoldNote, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- Coloured, unlike the line above it, because this one
+                                                 is a save nothing on this machine can open rather
+                                                 than a fact about which folder it is in. -->
+                                            <TextBlock Margin="0 4 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                       Text="{Binding UnreachableHoldNote}"
+                                                       Visibility="{Binding HasUnreachableHoldNote, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                             <!-- Why Check out is greyed out, and which apply would
                                                  clear it. Tertiary rather than caution: nothing is
                                                  wrong here, the folder is simply somewhere else. -->
@@ -349,6 +371,31 @@
                                                     ToolTip="{Binding CheckOutToolTip}"
                                                     Command="{Binding CheckOutCommand}"
                                                     Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- The other way out of a hold, immediately below the
+                                                 first: Check in mints a version, Discard mints
+                                                 nothing and recycles the copy. The choice between
+                                                 them is about what happened while you had the save,
+                                                 so they belong on the same row rather than a page
+                                                 apart - which is where Discard used to live. -->
+                                            <Button Margin="0 4 0 0"
+                                                    Content="Discard"
+                                                    HorizontalAlignment="Stretch"
+                                                    ToolTip="{Binding DiscardToolTip}"
+                                                    Command="{Binding DiscardCommand}"
+                                                    Visibility="{Binding CanDiscard, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- Only where the folder holding the copy has gone out
+                                                 of the game's settings, which is the one state
+                                                 nothing else gets out of. A hold whose savegame the
+                                                 repo deleted never reaches a row at all - it is
+                                                 dropped on sight. -->
+                                            <Button Margin="0 4 0 0"
+                                                    Content="Stop tracking"
+                                                    HorizontalAlignment="Stretch"
+                                                    ToolTip="{Binding DisconnectToolTip}"
+                                                    Command="{Binding DisconnectCommand}"
+                                                    Visibility="{Binding CanDisconnect, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                             <!-- The same command again, quietly, beside Check in. It is
                                                  how a held save moves to another slot without being

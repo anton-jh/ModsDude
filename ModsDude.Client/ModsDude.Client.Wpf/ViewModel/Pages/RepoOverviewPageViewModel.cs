@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -13,15 +15,25 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// What the repo looks like from here: the games it offers, whether each still matches its
-/// profile, the profiles it holds, and the caller's standing in it.
+/// What the repo looks like from here: the game it offers and how that installation stands, the
+/// profiles it holds, and the caller's standing in it.
 /// </summary>
+/// <remarks>
+/// <b>Where a local installation is read now.</b> It had a page of its own whose sidebar said which
+/// profile it follows, what it is holding and how each of its folders compares; that page is gone,
+/// because a game is a handful of folder paths rather than a place to navigate into. The same three
+/// facts are here, one repo-level list up, and nothing on them is editable: activating is on a
+/// profile's page, handing a savegame back is on the repo's Saves list, and the folders are edited
+/// under <em>Game configuration</em>.
+/// </remarks>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileService _profileService;
     private readonly MembershipService _membershipService;
     private readonly DriftMonitor _driftMonitor;
+    private readonly ISavegameService _savegameService;
+    private readonly SavegameBindingStore _bindingStore;
 
     private int? _fetchedMemberCount;
 
@@ -30,12 +42,16 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         Repo repo,
         ProfileService profileService,
         MembershipService membershipService,
-        DriftMonitor driftMonitor)
+        DriftMonitor driftMonitor,
+        ISavegameService savegameService,
+        SavegameBindingStore bindingStore)
     {
         _repo = repo;
         _profileService = profileService;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
+        _savegameService = savegameService;
+        _bindingStore = bindingStore;
 
         Games = [];
 
@@ -43,6 +59,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo.Games.CollectionChanged += OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
         _driftMonitor.Changed += OnDriftChanged;
+
+        // A savegame taken or handed back changes the holding line without touching a mod folder or
+        // a profile, so nothing else here would say so.
+        _bindingStore.BindingsChanged += OnBindingsChanged;
 
         RefreshGames();
     }
@@ -82,6 +102,24 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo.Games.CollectionChanged -= OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged -= OnSourceCollectionChanged;
         _driftMonitor.Changed -= OnDriftChanged;
+        _bindingStore.BindingsChanged -= OnBindingsChanged;
+    }
+
+
+    /// <summary>
+    /// Reads the folders again, for somebody who has just changed something outside the app.
+    /// </summary>
+    /// <remarks>
+    /// The game page's Re-check, which came here with the rest of its sidebar. Worth keeping: mods
+    /// updated from inside the game are the commonest way a folder drifts, and the alternative to a
+    /// button is waiting for the next window activation and wondering whether it ran.
+    /// </remarks>
+    [RelayCommand]
+    private async Task Recheck()
+    {
+        await _driftMonitor.CheckAsync();
+
+        RefreshGames();
     }
 
 
@@ -127,6 +165,13 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
     }
 
+    /// <summary>A savegame taken or handed back, here or anywhere else on this machine.</summary>
+    /// <remarks>Dispatched for the same reason: a check-in completing is not guaranteed to be on the UI thread.</remarks>
+    private void OnBindingsChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
+    }
+
     private void RefreshGames()
     {
         // Every entry per game rather than the first of them: a game reaching three folders has an
@@ -144,6 +189,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
                 game,
                 _repo.Adapter,
                 DescribeActiveProfile(game),
+                DescribeHolding(game),
                 drifted.GetValueOrDefault(game.Identity, [])));
         }
 
@@ -168,6 +214,41 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         return _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is ProfileDto profile
             ? $"Set to '{profile.Name}'"
             : "Set to a profile that no longer exists";
+    }
+
+    /// <summary>
+    /// What this game is holding, in one line, or null - nearly always - where it holds nothing with
+    /// a mod list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Asked of <see cref="SavegameHoldRules"/> rather than worked out here.</b> The same questions
+    /// decide whether the sync engine refuses an apply, and a second copy of them on this page is one
+    /// that eventually disagrees with the surfaces that act on it.
+    /// </para>
+    /// <para>
+    /// <b>It names the mod list rather than the savegame</b>, which is where this differs from the
+    /// game page's version of the line. Naming the save cost a round trip per repo holding one, and
+    /// the repo's Saves list is both where the name is and where anything can be done about it - so
+    /// the half worth a line here is the half that explains why the folder will not move: a pinned
+    /// revision.
+    /// </para>
+    /// </remarks>
+    private string? DescribeHolding(Game game)
+    {
+        var held = _savegameService.GetBindings(game);
+        var claiming = held.FirstOrDefault(x => x.ProfileId is not null);
+
+        if (claiming.ProfileId is not Guid profileId)
+        {
+            return null;
+        }
+
+        var profile = _profileService.Profiles.FirstOrDefault(x => x.Id == profileId)?.Name ?? "a mod list";
+
+        return SavegameHoldRules.RequiredRevision(held, profileId) is int pinned
+            ? $"Holding a savegame that runs on '{profile}' rev {pinned}. Check it in from Saves to move this game forward."
+            : $"Holding a savegame that follows '{profile}'.";
     }
 
 

@@ -290,6 +290,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
                 game,
                 _repo.Adapter,
                 "Set to this profile",
+                // Null: this page has a Savegames card of its own saying which savegame the profile
+                // follows, which is the same fact from the end somebody reading a profile cares
+                // about. The repo's Overview is where the hold is said as a fact about the machine.
+                holdingSummary: null,
                 drifted.GetValueOrDefault(game.Identity, [])));
         }
 

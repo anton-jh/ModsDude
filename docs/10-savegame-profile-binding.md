@@ -169,8 +169,7 @@ and are not promoted, and the next publish creates a new current savegame.
 
 `IBaseGameAdapter.CanSupportSavegames` is a client-side capability read from the adapter's base
 settings. Where it is false, savegames do not exist in the repo: `SavegameService` returns no
-adapter, and the savegames pages are not offered
-(`RepoPageViewModel`, `GamePageViewModel`, `GameSavegamesPageViewModel`).
+adapter, and the repo's Saves entry is not offered (`RepoPageViewModel`).
 
 Nothing in this document applies to such a repo.
 
@@ -530,10 +529,20 @@ key does exactly the same thing from here — the two are indistinguishable, so 
 them apart. A stale sync manifest is dropped for it: losing one costs a rescan.
 
 **A binding is not.** It is a savegame on this disk and a claim somebody else is waiting on, so it
-outlives the folder it can no longer address. The game's own slot list shows it last, after the
-slots, saying the folder is gone and offering **Disconnect** and nothing else — check-in and
-discard both need a folder to pack or recycle, and the engine refuses them before the server is
-told anything. Putting the setting back is the other way out.
+outlives the folder it can no longer address. Its row in the repo's Saves list says so in caution
+colour — *"Your copy is in 'MP client', a folder this game's settings no longer name"* — and offers
+**Stop tracking** and nothing else: check-in and discard both need a folder to pack or recycle, and
+the engine refuses them before the server is told anything. Putting the setting back is the other
+way out.
+
+**A binding whose savegame the repo has deleted is the opposite case, and is dropped unasked.**
+There is no claim left to hand back, no history to check a version into, and every server-side verb
+on it answers 404 — so the only thing anybody can do about it is stop tracking it, and a dialog
+offering a choice with one sane answer exists to be clicked through. `RepoSavegamesPageViewModel`
+forgets those holds when it loads, and only when **both** the live and archived lists came back:
+a failed round trip must never be read as a deletion. Nothing on disk is touched, which is what
+makes it safe to do without asking — the save stays where it is and becomes an ordinary save of the
+user's own, which is exactly what the button did.
 
 ## Slots ModsDude did not write
 
@@ -594,6 +603,15 @@ than a fact about the savegame — which is why `SavegameRowRules` is never aske
 the page says so itself. The ranking that used to pick between installations — the one that would
 accept, else the one already following this profile, else the first — had nothing left to rank.
 
+**The ways out of a hold are on the row too, both of them.** A row holding the local copy carries
+`Check in` as its accent button and `Discard` immediately under it — the two answers to the same
+question, and the choice between them is about what happened while you had the save rather than
+about where you are standing. `Discard` used to be a row action on the game's own slot list, one
+page and one sidebar away from the list somebody is looking at when they realise they took the
+wrong save. Which of the game's savegame folders the copy is in is a line on the row, said only
+where the game reaches more than one — the single-folder case has no folder *called* anything, and
+a slot id is a name the player has never thought in.
+
 A **past** row carries a third: `Make current`. It is the other end of the swap a publish performs,
 so it is stated before it runs the same way — a confirmation naming the savegame it displaces, what
 happens to it (past, still playable, and its mod list stops moving), and that this one stops being
@@ -605,9 +623,10 @@ somebody else's publish, which nobody states to whoever is playing.
 
 ### Where activation is refused
 
-**On the profile's page, which is the only place a profile is activated.** The game's own page used
-to carry a second copy of the control — a profile dropdown, greyed out while a savegame with a
-profile was held — and two places to set one thing is how they come to disagree. The refusal is
+**On the profile's page, which is the only place a profile is activated** — a bar across the top of
+it, present on every sub-page. The game's own page used to carry a second copy of the control — a
+profile dropdown, greyed out while a savegame with a profile was held — and two places to set one
+thing is how they come to disagree. The refusal is
 asked once, before the click: a control that offers the move and then reports a refusal is the
 thing this section exists to remove.
 
@@ -617,9 +636,11 @@ A held past savegame changes what the button means rather than whether it works.
 applies the profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job
 is repairing folder drift back to that revision.
 
-The game's page keeps the sentence, Neutral, because what a game is holding is a fact about it
-rather than a control on it: *"Holding Old-school rev 4 for **Riverbend 2023**. Check **Riverbend
-2023** in to move this game forward."*
+The repo's Overview keeps the sentence, Neutral, because what a game is holding is a fact about it
+rather than a control on it: *"Holding a savegame that runs on 'Old-school' rev 4. Check it in from
+Saves to move this game forward."* It names the mod list rather than the savegame: naming the save
+cost a round trip per repo holding one, and the Saves list is both where the name is and where
+anything can be done about it.
 
 ### Drift notice
 
@@ -648,8 +669,8 @@ had a single answer.
 
 The slot picker is one flat list across every savegame folder the game reaches, under a folder
 heading only where there is more than one to tell apart. Which folder a save goes into is a fact
-about the slot rather than a step of its own, and the grouping is the same `SlotGrouping.Apply`
-the game's own slot list uses, so the two cannot decide differently about the same slots.
+about the slot rather than a step of its own, and the grouping is `SlotGrouping.Apply`, shared with
+the publish picker so the two cannot decide differently about the same slots.
 
 One line naming the revision the folder will be on: *"Will run on Old-school rev 1004."*
 

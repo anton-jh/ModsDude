@@ -43,7 +43,10 @@
                         CornerRadius="4"
                         Padding="16"
                         Margin="0 16 0 0">
-                    <GroupBox Header="Games" Padding="0 16 0 16">
+                    <!-- Singular, because a repo is about one game and a machine configures that
+                         game once. This is where a local installation is read now: there is no page
+                         behind it, only the settings entry that edits its folders. -->
+                    <GroupBox Header="This machine" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -85,23 +88,31 @@
 
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding ActiveProfileSummary}" />
+
+                                            <!-- Neutral. Holding a past savegame is a state
+                                                 somebody chose and is playing in, not a problem
+                                                 with the game - so it reads like the folder paths
+                                                 above it rather than like the drift lines. -->
+                                            <TextBlock Margin="0 4 0 0"
+                                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding HoldingSummary}"
+                                                       Visibility="{Binding HasHoldingSummary, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                        </StackPanel>
-                    </GroupBox>
-                </Border>
+                            <!-- Mods updated from inside the game are the commonest way a folder
+                                 drifts, and there is nowhere else left to ask for a fresh look. -->
+                            <Button Margin="0 8 0 0"
+                                    HorizontalAlignment="Left"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Content="Re-check the folders"
+                                    Command="{Binding RecheckCommand}"
+                                    Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
-                    <GroupBox Header="Sync" Padding="0 16 0 16">
-                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                   Text="Nothing syncs yet. When it does, each game's drift from its profile and the time it last synced will be shown here." />
+                        </StackPanel>
                     </GroupBox>
                 </Border>
 

@@ -44,7 +44,7 @@
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                        Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="No game on this machine is set to this profile. Pick it on a game to make that game's mod folder match this profile." />
+                                       Text="This machine's game is not set to this profile. Use the button at the top of this page to put it on this profile and make its mod folder match." />
 
                             <ItemsControl ItemsSource="{Binding Games}"
                                           Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -124,10 +124,10 @@
                         CornerRadius="4"
                         Padding="16"
                         Margin="0 16 0 0">
-                    <GroupBox Header="Sync" Padding="0 16 0 16">
+                    <GroupBox Header="Applying" Padding="0 16 0 16">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                   Text="Applying this profile happens on a game's own Sync page, which shows what would change before anything does. How far each game above has drifted, and when it last synced, will be summarised here." />
+                                   Text="The button at the top of this page puts this machine's game on this profile and makes its mod folders match. It shows exactly what would change, and asks, before anything moves." />
                     </GroupBox>
                 </Border>
 

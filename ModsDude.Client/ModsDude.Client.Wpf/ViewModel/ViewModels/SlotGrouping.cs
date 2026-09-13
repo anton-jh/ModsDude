@@ -9,7 +9,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <remarks>
 /// Two lines of interface for one reason: <see cref="PropertyGroupDescription"/> takes a property
 /// name as a string, and a string that stops matching groups everything under one silent null
-/// heading rather than failing. Both slot lists implement this, so <c>nameof</c> has something to
+/// heading rather than failing. Both pickers implement this, so <c>nameof</c> has something to
 /// check the name against.
 /// </remarks>
 internal interface IGroupedSlot
@@ -24,9 +24,9 @@ internal interface IGroupedSlot
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The key is what groups the picker</b>, and this is the whole of that: both the game's slot
-/// list and the check-out dialog show one flat list across every savegame folder a game reaches, and
-/// a heading appears over each folder only where there is more than one to tell apart. Shared so the
+/// <b>The key is what groups a picker</b>, and this is the whole of that: the check-out dialog and
+/// the publish dialog each show one flat list across every savegame folder a game reaches, and a
+/// heading appears over each folder only where there is more than one to tell apart. Shared so the
 /// two cannot decide differently - they are showing the same slots.
 /// </para>
 /// <para>

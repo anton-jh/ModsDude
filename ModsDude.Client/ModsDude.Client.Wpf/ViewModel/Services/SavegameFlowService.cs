@@ -17,7 +17,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 /// <remarks>
 /// <para>
 /// The same shape as <see cref="ProfileApplyService"/>, and for the same reason: check-in is reached
-/// from the game's slot list <em>and</em> from the check-out dialog's way out of a refused slot,
+/// from the repo's Saves list <em>and</em> from the check-out dialog's way out of a refused slot,
 /// and two copies of "ask, send, resolve a stale base" would be two copies that eventually disagree
 /// about what force means.
 /// </para>
@@ -107,37 +107,42 @@ public sealed class SavegameFlowService(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Two situations, one act, two very different confirmations.</b> Where the savegame is gone
-    /// from the repo there is nothing to warn about - the slot is claiming to hold something that does
-    /// not exist, and this is the only thing that can be done about it. Where it still exists, the
-    /// claim stays taken and somebody else is waiting on it, so that is said plainly and Discard is
-    /// named as the thing they probably meant.
+    /// <b>One situation now, where there were two.</b> The other was a hold whose savegame the repo
+    /// had deleted for good - nothing to hand back, nothing to check in to, and no reason on earth
+    /// for anybody to answer no. Those are dropped on sight by
+    /// <c>RepoSavegamesPageViewModel.ForgetDeletedHoldsAsync</c> rather than turned into a question,
+    /// which is what a choice with one sane answer always is.
     /// </para>
     /// <para>
-    /// Nothing in the slot is touched either way, which is the difference from Discard: that one
-    /// recycles the local copy, this one leaves an ordinary save of the user's own behind.
+    /// What is left is the hold in a folder the settings no longer name. The save is real, the claim
+    /// is real and still taken, and nothing that touches the bytes can run - so this is the only way
+    /// out short of putting the folder back, and the confirmation says exactly what stays behind.
+    /// </para>
+    /// <para>
+    /// Nothing in the slot is touched, which is the difference from Discard: that one recycles the
+    /// local copy, this one leaves an ordinary save of the user's own behind.
     /// </para>
     /// </remarks>
+    /// <param name="folderName">
+    /// What the folder holding it is called, where the caller could name it - by key, since no
+    /// adapter offers the folder any more. Null falls back to a sentence that names no folder.
+    /// </param>
     /// <returns>False where the dialog was dismissed, or there was nothing to forget.</returns>
     public async Task<bool> DisconnectAsync(
         Game game,
         Guid savegameId,
         string savegameName,
-        string slotLabel,
-        bool stillInRepo)
+        string? folderName)
     {
-        var consequence = stillInRepo
-            ? $"'{slotLabel}' stays exactly where it is and becomes an ordinary save of your own - ModsDude stops recognising it. "
-              + $"The claim on '{savegameName}' is not handed back, so nobody else can take it until you do. "
-              + "Use Discard instead if what you meant was to give it back."
-            : $"'{savegameName}' is not in this repo any more, so there is no claim left to hand back and nothing to check in to. "
-              + $"'{slotLabel}' stays exactly where it is and becomes an ordinary save of your own.";
+        var where = folderName is string named ? $"the '{named}' folder" : "a folder this game's settings no longer name";
 
         var modal = new ConfirmationDialogViewModel(
-            $"Disconnect '{slotLabel}' from ModsDude?",
-            consequence,
-            stillInRepo ? IconKind.Warning : IconKind.Question,
-            "Disconnect it - nothing on disk changes",
+            $"Stop tracking '{savegameName}'?",
+            $"Your copy stays exactly where it is, in {where}, and becomes an ordinary save of your own - ModsDude stops recognising it. "
+              + $"The claim on '{savegameName}' is not handed back, so nobody else can take it until you do. "
+              + "Point the settings back at that folder instead if you want to check it in.",
+            IconKind.Warning,
+            "Stop tracking it - nothing on disk changes",
             "Leave it connected");
 
         await modalService.Value.Show(modal);
@@ -215,7 +220,7 @@ public sealed class SavegameFlowService(
         int? appliedRevision,
         CancellationToken cancellationToken)
     {
-        // This dialog can be the first thing that needs them: the game's Saves page is reachable
+        // This dialog can be the first thing that needs them: the repo's Saves page is reachable
         // without ever having opened a profile.
         if (profileService.Profiles.Any(x => x.RepoId == repo.Id) is false)
         {

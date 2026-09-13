@@ -75,17 +75,8 @@
             <DataTemplate DataType="{x:Type pvm:GameSettingsPageViewModel}">
                 <p:GameSettingsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:GamePageViewModel}">
-                <p:GamePage />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:SyncPageViewModel}">
-                <p:SyncPage />
-            </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoSavegamesPageViewModel}">
                 <p:RepoSavegamesPage />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:GameSavegamesPageViewModel}">
-                <p:GameSavegamesPage />
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
                 <p:RepoModsPage />

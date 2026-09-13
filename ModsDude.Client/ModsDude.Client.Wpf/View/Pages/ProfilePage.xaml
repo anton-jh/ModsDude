@@ -1,55 +1,62 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.ProfilePage"
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.ProfilePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
-      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:ProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="ProfilePage">
 
-    <Grid ColumnDefinitions="200 *">
+    <Grid RowDefinitions="auto *" ColumnDefinitions="200 *">
 
-        <Grid Grid.Column="0" RowDefinitions="auto * auto">
+        <!-- Across the top of the whole profile rather than at the foot of its sidebar, and on the
+             shell rather than on Overview: applying this profile to the game is the primary act of
+             the app, it is the same act from every sub-page, and the bottom-left corner of a 200px
+             column is the least prominent place in the window. It takes no target - a repo is about
+             one game and a machine configures that game once - so there is nothing to pick. -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2"
+                Margin="8 8 0 8"
+                Padding="16 12"
+                CornerRadius="4"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
 
-            <ListView Grid.Row="0"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+            <Grid ColumnDefinitions="* auto">
 
-            <!-- On the shell rather than on Overview, so applying this profile to a game is
-                 reachable from every sub-page - and with nothing to pick, because a repo is about
-                 one game and a machine has one installation of it. -->
-            <StackPanel Grid.Row="2"
-                        Orientation="Vertical"
-                        Margin="12 16 12 16"
-                        Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Center">
 
-                <Button HorizontalAlignment="Stretch"
+                    <TextBlock TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding ActivationDescription}" />
+
+                    <TextBlock Margin="0 6 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                               Text="{Binding ActivationStatus}"
+                               Visibility="{Binding HasActivationStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        MinWidth="200"
+                        Margin="24 0 0 0"
+                        Padding="16 8"
+                        VerticalAlignment="Center"
                         Style="{DynamicResource AccentButtonStyle}"
                         Content="{Binding ActivationLabel}"
                         ToolTip="{Binding ActivationDescription}"
                         Command="{Binding ActivateCommand}" />
+            </Grid>
+        </Border>
 
-                <TextBlock Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding ActivationDescription}" />
+        <ListView Grid.Row="1" Grid.Column="0"
+                  VerticalAlignment="Top"
+                  Style="{StaticResource SidebarList}"
+                  ItemsSource="{Binding Path=MenuItems}"
+                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-                <TextBlock Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="{Binding ActivationStatus}"
-                           Visibility="{Binding HasActivationStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </StackPanel>
-        </Grid>
-
-        <Frame
-            Grid.Column="1"
-            Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+        <Frame Grid.Row="1" Grid.Column="1"
+               Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
 </Page>

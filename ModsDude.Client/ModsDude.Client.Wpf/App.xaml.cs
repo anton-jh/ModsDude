@@ -137,13 +137,10 @@ public partial class App : Application
         services.AddSingleton<ProfileHistoryPageViewModel.Factory>();
         services.AddSingleton<ConnectGamePageViewModel.Factory>();
         services.AddSingleton<GameSettingsPageViewModel.Factory>();
-        services.AddSingleton<GamePageViewModel.Factory>();
-        services.AddSingleton<SyncPageViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
         services.AddSingleton<RepoArchivePageViewModel.Factory>();
         services.AddFactory<ArchivePageViewModel>();
-        services.AddSingleton<GameSavegamesPageViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
