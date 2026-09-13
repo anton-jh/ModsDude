@@ -43,7 +43,7 @@ shared PC is the case it exists for: two people, one machine, one set of game fo
    `IUserScopedState` — `RepoRepository` and `ProfileService` — and builds a new
    `MainPageViewModel`, which loads the new user's repos from step 5 of the launch flow
    above.
-6. **What survives:** local instances, content stores, the image cache, and the synced mod
+6. **What survives:** the connected games, content stores, the image cache, and the synced mod
    folders themselves. Those describe this PC, not this account. **What does not:** the repo
    and profile lists, and every page built from them.
 
@@ -69,27 +69,33 @@ list.
 **Gate:** a new user cannot do this. `IsTrusted` defaults to `false` and nothing sets it —
 someone flips it in the database.
 
-## Connecting a game (creating an instance)
+## Connecting a game
 
-1. Open a repo. If it has no instances, `RepoPageViewModel` **auto-selects "Connect game"** —
-   the one thing you must do before the repo is useful.
-2. `CreateLocalInstancePageViewModel` builds `repo.Adapter.GetLocalSettingsTemplate()`.
+1. Open a repo. If this machine has no game for it, `RepoPageViewModel` **auto-selects "Connect
+   game"** — the one thing you must do before the repo is useful.
+2. `ConnectGamePageViewModel` builds `repo.Adapter.GetLocalSettingsTemplate()`.
    For Farming Simulator the template has already probed `My Documents\My Games\` for the year
    the repo's `GameVersion` names, in both spellings the installer has used, so the path
-   is usually pre-filled. The name defaults to "Game" for a first instance.
-3. Validation covers the name (non-empty, not already used in this scope), the form's own
-   `PerformValidation` — for FS, that the folder actually exists — and that **no other instance
-   already owns that folder**, checked across every scope rather than within this one.
-4. Save adds the instance to `LocalInstanceRepository`, which writes `state.json`.
+   is usually pre-filled. **There is no name to type**: a game is called what its adapter calls
+   it, and the page says so above the form.
+3. Validation covers the form's own `PerformValidation` — for FS, that the folder actually
+   exists — that this game is not already connected here, and that **no other game already owns
+   any of the folders these settings reach**, checked across every game rather than within one.
+4. Save adds the game to `GameRepository`, which writes `state.json`.
 
-**Nothing is sent to the server.** Instances are per-machine by design; two members of the
-same repo have entirely separate instance lists.
+**Nothing is sent to the server.** Games are per-machine by design; two members of the
+same repo have entirely separate ones.
 
-An instance is scoped to a **game**, not a repo, so one installation is configured once and
-appears under every repo targeting that game — and it carries an explicit **active profile**,
-the `(RepoId, ProfileId)` pair sync reconciles against. The scope is not the adapter id alone,
-because one adapter serves both FS22 and FS25; see
-[04 — Game adapters](04-game-adapters.md#game-identity).
+A game is keyed by its **identity**, not by a repo, so a machine configures that game once and
+every repo about it offers the same one. It carries an explicit **active profile** — the
+`(RepoId, ProfileId)` pair sync reconciles against — and every folder it reaches follows that one
+profile. The identity is not the adapter id alone, because one adapter serves both FS22 and FS25;
+see [04 — Game adapters](04-game-adapters.md#game-identity).
+
+Note what "configured once" does *not* mean. A game reaching three folders is usually three
+installations — a dedicated server, an MP client and a singleplayer copy — and this system has
+never modelled installations. What a machine has one of is the policy: one active profile, one
+savegame held, for however many folders the adapter reaches.
 
 ## Importing mods from an installed game
 
@@ -102,7 +108,7 @@ Repo → **Mods**. This is the most performance-sensitive path in the app.
    source in the Sources panel and that folder is walked. The 150 ms delay before touching the
    disk still stands behind that, so a page nobody stopped on never opens a file even once sources
    are enabled.
-3. Its **sources** are every instance's mod folder in this scope, the system Downloads folder,
+3. Its **sources** are every mod folder the game reaches, the system Downloads folder,
    and anything the user adds for the session — the last of those enabled on the spot, since
    picking a folder is the act of asking for it to be read. Each is scanned by
    `GetModsFromFolder` — every `.zip` opened in parallel, capped at `ProcessorCount`, reading
@@ -321,12 +327,25 @@ has stopped existing for you, and reloading it would only earn a 403. The last-a
 the disabled button's tooltip rather than a line under the row, so the explanation sits on the
 control it explains.
 
-## Applying a profile to an instance
+## Applying a profile to a game
 
-Repo → an instance → **Sync**. This is the system's central feature; the design and its
-reasoning are in [07 — Mod sync design](07-mod-sync-design.md).
+Repo → a profile → **Activate**, or the game's own **Sync** page for the plan in full. This is
+the system's central feature; the design and its reasoning are in
+[07 — Mod sync design](07-mod-sync-design.md).
 
-1. `SyncPageViewModel` reads the instance's `ActiveProfile` and pulls that profile's
+**Activating is intent; applying is work.** Activating records which profile the game follows and
+then applies it, as one gesture; applying only does the work, because whatever it is applying is
+already the game's standing intent. The order inside is the guarantee: the refusals are answered
+first, then the one confirmation covering every folder, then the intent is written down, and only
+then does a file move. So an apply that fails leaves a game that still means to follow the
+profile, with the folder that did not get there reported as drifted — rather than quietly
+retracting a decision the user made.
+
+**The activation control asks nothing about where.** A repo is about one game and a machine has
+one installation of it, and a game reaching three folders applies to all three — that loop is the
+apply's, not a question for the user.
+
+1. `SyncPageViewModel` reads the game's `ActiveProfile` and pulls that profile's
    dependencies — each of which carries its `ContentHash`, so nothing has to fetch the repo's
    mod list to find out what bytes are wanted.
 2. `ModSyncPlanner` classifies every mod: Keep, Rename, Install, Replace, uninstall-recoverable,
@@ -340,9 +359,10 @@ reasoning are in [07 — Mod sync design](07-mod-sync-design.md).
    phase run, so it never runs against an incomplete store.
 5. On success, and only on success, the manifest is written atomically.
 
-Drift — the folder no longer matching what was applied, which is what an in-game update-all
-leaves behind — is reported on this page. Making it visible from everywhere else is
-[Phase 4](PLAN.md#phase-4--make-drift-unmissable).
+Drift — a folder no longer matching what was applied, which is what an in-game update-all
+leaves behind — is reported on this page, on the game's own page a line per folder, and by the
+app-level notice from wherever the user happens to be. With more than one folder every sentence
+names which: *"3 replaced, 1 added in the 'MP client' folder since it was last applied."*
 
 A profile somebody else saved counts as drift too, and the notice says which revision: *"this
 folder was made to match revision 6; the profile is now at revision 8."* It is the one kind of
@@ -354,29 +374,30 @@ and not for the others. See
 
 ## Checking out a savegame
 
-Not built on the client yet — the server, the storage and the adapter's slot reading are. The
-design and its reasoning are in [PLAN.md](PLAN.md#phase-8--savegames); this is the shape the flow
-takes.
-
 Repo → **Saves** → a save → *Check out*. One gesture, whose second half is derived: a savegame
 version records the profile revision it was played on, so the mod list the user needs is not
 something to ask about.
 
 1. **The slot picker**, blocking and up front, because writing a slot is the destructive local step.
-   The remembered slot for this save is pre-selected if it is free, else the first free one with a
-   note that the remembered one is taken. Slots are labelled with the game's own name for the save
-   and its playtime, never `savegame3`.
+   One flat list across every savegame folder the game reaches, under a folder heading only where
+   there is more than one — there is no step above it asking which installation, because a machine
+   has one. The remembered slot for this save is pre-selected if it is free, else the first free one
+   with a note that the remembered one is taken. Slots are labelled with the game's own name for the
+   save and its playtime, never `savegame3`.
 2. **The claim and the bytes.** `POST .../savegames/{id}/checkouts` takes the claim — closing
    somebody else's open row as `TakenOver` if they had it, with a warning naming them — and the
    packed save is downloaded over a SAS and unpacked into the slot. Neither depends on the mods
    being right, so a user who wanders off here still holds the save and has it on disk.
-3. **The mods.** With nothing unrecognised in the mod folder, the profile is applied and there is no
-   dialog: the ordinary night is one click. Otherwise the drift notice's own two verbs — *Apply*,
-   which says that the unrecognised mods go to the Recycle Bin, or *Review*, which opens that
-   profile's mod list editor with the folder scanned. **Nothing offers to import from that dialog**;
-   import is what Save does once somebody has chosen, which is the rule the editor already follows.
-4. *Review* leaves the instance drifted, and the persistent drift notification carries it from
-   there — the answer this design already gives for an instance that cannot be applied to right now.
+3. **The mods**, as an ordinary activation. With nothing unrecognised in the mod folders it runs
+   without a dialog and the evening is one click; otherwise the apply's own disclosure names the
+   files nothing else on the machine has a copy of and says where they are going.
+4. **Declining is declining.** Nothing is recorded, and the save this machine now holds follows a
+   mod list its folder is not on — which is exactly what the savegame half of the drift check
+   reports, so the state stays visible without an intent having to be invented for it. The page
+   then offers the one thing somebody who declined probably wanted: the profile's mod list editor,
+   with the folder already scanned, because the unrecognised files are versions they may want to
+   import rather than recycle. **Nothing offers to import from that dialog**; import is what Save
+   does once somebody has chosen, which is the rule the editor already follows.
 
 Checking back in is the reverse and asks nothing, because the claim already names the slot. It is
 clicked from the drift notification rather than found by navigating: unchecked-in play is one of the

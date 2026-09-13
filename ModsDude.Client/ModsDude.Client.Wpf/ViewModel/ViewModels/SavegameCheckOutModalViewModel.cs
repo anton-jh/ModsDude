@@ -52,7 +52,7 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 /// </summary>
 /// <remarks>
 /// <b>Built once.</b> It used to be recomputed whenever the game selection changed, because the
-/// slots, the mod plan and the revision note are all facts about a particular installation - and
+/// slots, the mod plan and the revision note are all facts about a particular game - and
 /// there is one of those now, so there is no selection to change and nothing to recompute.
 /// </remarks>
 /// <param name="RunsOn">
@@ -81,9 +81,9 @@ public sealed record SavegameCheckOutContext(
 /// anything that is neither is absent rather than greyed out.
 /// </para>
 /// <para>
-/// <b>There is no game step.</b> A machine has one installation of the game a repo is about, so the
+/// <b>There is no game step.</b> A machine configures the game a repo is about once, so the
 /// question was one with a single answer - and the slot list underneath is one flat list across
-/// every savegame folder that installation reaches, grouped under a folder heading only where there
+/// every savegame folder that game reaches, grouped under a folder heading only where there
 /// is more than one. Which folder a save goes into is a fact about the slot rather than a step of
 /// its own.
 /// </para>

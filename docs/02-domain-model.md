@@ -466,7 +466,7 @@ Restoring revision 3 while the head is 8 produces **revision 9**, pinning what 3
 
 Moving the head backwards instead would strand 4 through 8 as a future nobody can reach, and
 force a tree the moment anyone saved after rolling back. Deleting them would destroy the record
-of what people were actually running, and can invalidate the sync manifest of an instance that
+of what people were actually running, and can invalidate the sync manifest of a folder that
 applied one. So a rollback is an ordinary edit whose contents happen to equal an old revision's,
 and undoing a bad rollback is another rollback.
 
@@ -723,7 +723,7 @@ reached from an archive and refused outright on anything still live (`not-archiv
 takes a replacement name for the two kinds that need one.
 
 **Archiving changes exactly two things: visibility, and the name.** The entity still exists, still
-answers to its id, and everything pointing at it keeps pointing at it — an instance goes on tracking
+answers to its id, and everything pointing at it keeps pointing at it — a game goes on tracking
 an archived profile, a savegame goes on following one, a claim on an archived savegame is not
 released. Anything more would make the archive a second kind of deletion wearing a gentler word.
 
@@ -767,7 +767,7 @@ The client does not reuse the server's entities. It has its own, in
 `ModsDude.Client.Core/Models/`:
 
 - **`Repo`** — wraps `RepoMembershipDto`, resolves the game adapter from `AdapterId` and
-  hydrates it with the stored base settings, and exposes the `LocalInstance` list matching its
+  hydrates it with the stored base settings, and exposes the `Game` list matching its
   `GameIdentity`. Disposable, because it holds a collection synchronizer.
 - **`ModKey` / `ModVersionKey`** — the join keys, and the reason mod-id casing can no longer
   leak. `ModKey.From` normalizes, and the type has no other representable form, so nothing can
@@ -782,29 +782,37 @@ The client does not reuse the server's entities. It has its own, in
   older versions was deleted with the flattening, and grouping is a `ToLookup(x => x.ModId)`
   built where it is needed. Full reasoning in
   [09 — Mod catalog](09-mod-catalog.md#a-merged-model).
-- **`LocalInstance`** — **one mod folder** on this machine: a sync target. Holds the
-  deserialized `DynamicForm` local settings and the local adapter built from them.
-  **Never sent to the server**; persisted in `state.json` (see [05 — Client](05-client.md)).
+- **`Game`** — **the policy holder** on this machine: one active profile, at most one savegame
+  held, and however many folders its adapter reaches. Holds the deserialized `DynamicForm` local
+  settings and the local adapter built from them. **Never sent to the server**; persisted in
+  `state.json` (see [05 — Client](05-client.md)).
 
-  An instance is scoped to a **game**, not to a repo. That matters as soon as someone joins
-  two repos for the same game: they have one installation, and it should be configured once
-  and offered under both. The scope is not the adapter id — one adapter serves both Farming
-  Simulator 22 and 25 — but a `GameIdentity` the base adapter derives from its base
-  settings; see [04 — Game adapters](04-game-adapters.md#game-identity). A game that keeps
-  mods in more than one place gets one instance per folder — the model tracks folders, not
-  installations, and does not assume a game is installed at all.
+  A game is keyed by its `GameIdentity`, so **a machine configures that game once** and every
+  repo about it offers the same one. Note what that sentence is not: it is not "one installation
+  is configured once". A game reaching three folders is usually three installations — a dedicated
+  server, an MP client and a singleplayer copy are separate downloads in separate places — and
+  this system has never modelled installations at all. What there is one of is the policy: which
+  profile, which savegame. The identity is not the adapter id, since one adapter serves both
+  Farming Simulator 22 and 25, but a value the base adapter derives from its base settings; see
+  [04 — Game adapters](04-game-adapters.md#game-identity).
 
-  Because sync makes a folder match a profile exactly, an instance has **one active profile
-  at a time, from one repo**, recorded as a `(RepoId, ProfileId)` pair. Ownership is
-  explicit: the persisted instance also records the folder its adapter says it owns, so the
-  no-two-instances-own-one-folder check can run across every scope — including for an instance
-  whose scope no repo on this machine serves, which cannot hydrate an adapter and still owns its
-  folder.
+  **Its folders are its *targets*, and a target is a value the adapter returns rather than an
+  entity.** Each is a key, an optional mod folder and an optional savegame folder, paired: a save
+  in target T's savegame folder was played against target T's mods. There is no list for the user
+  to manage — a game that needs more than one says so in its local settings, and emptying a field
+  there takes a target away again. Farming Simulator answers with one and never names it.
+
+  Because sync makes a folder match a profile exactly, and because two folders of one game must
+  never disagree, a game has **one active profile at a time, from one repo**, recorded as a
+  `(RepoId, ProfileId)` pair. Every target follows it. Ownership is explicit: the persisted game
+  also records the folders its adapter says it reaches, so the no-two-games-own-one-folder check
+  can run across every identity — including for a game no loaded repo serves, which cannot
+  hydrate an adapter and still owns its folders.
 - **`LocalMod` / `ModImage`** — a mod as found on disk, with lazy `Func` accessors for
   the file stream and image bytes. Everything is deferred: at two thousand mods per folder,
   eagerly reading icons would mean unpacking every archive. `ModImage` says nothing about where
   bytes come from, which is what lets a server-backed derivative be the same record with an HTTP
   fetch in its loader.
-- **`ModSource`** — somewhere to look for mods: an instance's mod folder, the system Downloads
+- **`ModSource`** — somewhere to look for mods: one of a game's mod folders, the system Downloads
   folder, or a folder added for the session. See
   [09 — Mod catalog](09-mod-catalog.md#mod-sources).

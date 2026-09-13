@@ -8,7 +8,7 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
-/// Connecting this machine's installation of the game a repo is about.
+/// Connecting the game a repo is about, as this machine has it.
 /// </summary>
 /// <remarks>
 /// <b>It is the settings form and nothing else.</b> There used to be a name box above it, defaulting

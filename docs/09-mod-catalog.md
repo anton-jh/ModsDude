@@ -16,7 +16,7 @@ So "local only / server only / both" is **not three kinds of mod**. It is one id
 two independent facts:
 
 ```csharp
-public bool IsLocal { get; }      // found in some instance's mod folder
+public bool IsLocal { get; }      // found in one of the game's mod folders
 public bool IsOnServer { get; }   // registered in the repo
 ```
 
@@ -427,7 +427,7 @@ anything.
 
 ## Mod sources
 
-A mod does not only arrive via an instance's mod folder. It is at least as common for it to be
+A mod does not only arrive via the game's mod folder. It is at least as common for it to be
 sitting in Downloads, freshly fetched from wherever the group gets mods. The import surfaces —
 Manage and the profile editor — scan a **set of sources**, not a fixed folder.
 
@@ -437,8 +437,8 @@ Present automatically, without the user configuring anything:
 
 | Source | Where |
 | --- | --- |
-| Each instance's mod folder | From the local settings, via `ILocalModAdapter.GetInstalledMods` |
-| The system Downloads folder | Once per machine, not per instance |
+| Each mod folder the game reaches | From the local settings, via `ILocalModAdapter.GetInstalledMods` — one source per target, named where the game has more than one |
+| The system Downloads folder | Once per machine, not once per folder |
 
 Downloads needs care to locate. .NET has no `SpecialFolder.Downloads`; the correct route on
 Windows is `SHGetKnownFolderPath` with `FOLDERID_Downloads`, because the user may have
@@ -456,7 +456,7 @@ extracted archive should not have that folder haunting the UI for months.
 
 Every currently available source is listed, each with an enable/disable checkbox. Disabling one
 removes its mods from the merged list without removing the source, so a user can narrow to "just
-what is in Downloads" without losing their instance sources.
+what is in Downloads" without losing their game's own folders.
 
 **Every source starts switched off, every time.** The enabled set lives in the `ModCatalog`
 itself and **nothing about it is persisted**: opening a page must never read a disk, and a folder
@@ -474,8 +474,8 @@ Two things switch a source on, and both are the user asking for that folder spec
   it is enabled as it is added. It stays view-scoped — there is nothing to persist about a folder
   that stops existing when the page closes.
 - **Arriving from the drift notice.** `ShellNavigationService.GoToProfileModsAsync` carries the
-  drifted instance's id through to `ProfileModsEditorPageViewModel.ScanInstance`, which enables
-  that instance's mod folder. The versions the game downloaded are sitting in it and looking at
+  drifted folder's `ModTargetRef` through to `ProfileModsEditorPageViewModel.ScanTarget`, which enables
+  that one folder. The versions the game downloaded are sitting in it and looking at
   them is the whole reason the user was sent there; making them find and tick the source first
   would be answering a question with a chore. Nothing else pre-enables anything — navigating to
   Repo → Mods or opening the editor from the sidebar scans nothing.
@@ -484,7 +484,7 @@ Because the list otherwise starts empty, the profile editor's **Sources** pane i
 default: a collapsed pane would hide the one control that explains why the left-hand list has
 nothing in it.
 
-Disabling an instance as a *source* has no effect on syncing to it. The two roles are
+Disabling a mod folder as a *source* has no effect on syncing to it. The two roles are
 independent; see below.
 
 #### The repo is a source too, in the profile editor
@@ -508,8 +508,8 @@ line, and unregistered-and-local is what the left-hand one *is*.
 
 ### Scanning arbitrary folders already works
 
-`IBaseModAdapter.GetModsFromFolder(path, ct)` takes any path, and the instance variant is a
-thin wrapper that supplies the game's own folder. Non-mods are already handled: `GetZip`
+`IBaseModAdapter.GetModsFromFolder(path, ct)` takes any path, and the local variant is a
+thin wrapper that supplies one of the game's own folders. Non-mods are already handled: `GetZip`
 returns `null` on `InvalidDataException`, and a zip with no `modDesc.xml` yields `None`. A
 Downloads folder full of installers and PDFs scans cleanly.
 
@@ -525,7 +525,7 @@ open question; leaving it flat is the safer default.
 
 Worth stating plainly, because the two look similar and are not: a **source** is somewhere to
 *find* mods to import. A **sync target** is a mod folder that sync will make match a profile,
-which means uninstalling things from it. An instance's mod folder is both. Downloads and ad-hoc
+which means uninstalling things from it. A game's own mod folder is both. Downloads and ad-hoc
 folders are **only ever sources** — nothing in sync will ever delete, move, or quarantine a file
 in them.
 
@@ -596,7 +596,7 @@ costs a duplicate on disk and nothing else, and every failure is in the log.
 ## The `ModCatalog` service
 
 The import page used to do the folder scan, the dedupe and the
-instance-source dictionary inline in `InitAsync`. The profile editor needs all three, so it is a
+source dictionary inline in `InitAsync`. The profile editor needs all three, so it is a
 repo-scoped `ModCatalog` in `Client.Core/Services`, merging the source scans with
 `GET repos/{repoId}/mods` — walked a page at a time, since the stated target is thousands of
 registered versions per repo.
@@ -607,7 +607,7 @@ registered versions per repo.
   adding one scans only the new folder rather than every folder again.
 - **Cache the `Task`, not the result.** A second caller arriving during an in-flight scan joins
   it rather than starting a second `Parallel.For` over a thousand archives.
-- **Invalidate explicitly** — on import, and on instance-settings change. Never silently. A
+- **Invalidate explicitly** — on import, and on a change to the game's settings. Never silently. A
   stale catalog that quietly refreshes mid-interaction is worse than one the user re-triggers,
   so expose a Rescan action, per source and for all. The pages surface only the one that covers
   every source — a per-source button is one more control on every row for something the whole-list
@@ -630,9 +630,9 @@ confused. Same rows, same templates, one service.
 
 **It is laid out like the profile mod editor**, and for the same reason: both pages are one act —
 deciding what a collection should hold, then writing it. Two lists. On the left, what the enabled
-sources hold and the repo does not; under it, the source pane described above — instance folders,
+sources hold and the repo does not; under it, the source pane described above — the game's own folders,
 Downloads, anything the user adds for the session — each with its checkbox, so the set of local
-candidates is adjustable in place rather than being a fixed consequence of the repo's instances. On
+candidates is adjustable in place rather than being a fixed consequence of where the game is. On
 the right, what the repo holds, plus whatever has been lined up to join it.
 
 A mod is **never on both sides at once**, and the row that moves rightwards is the same row object,
@@ -916,13 +916,13 @@ registration below fall out for free.
 ### Importing several versions of one mod at once
 
 Nothing stops a single import carrying two new versions of the same mod — one sitting in an
-instance's mod folder, another in Downloads. A worked example, mod A:
+the game's mod folder, another in Downloads. A worked example, mod A:
 
 | Version | State |
 | --- | --- |
 | v1 | registered, sequence 0 |
 | v4 | registered, sequence 1 |
-| v2 | unregistered, in the instance's mod folder |
+| v2 | unregistered, in the game's mod folder |
 | v3 | unregistered, in Downloads |
 
 The intended result is `v1, v2, v3, v4`, which means **v4's sequence number moves too** — two

@@ -42,7 +42,7 @@ version on demand, which is what covers a blob damaged by something that never w
 folder.
 
 The limits are the ones detection always has. **There is a window** between the rewrite and the next
-drift check in which the wrong bytes are installable into other instances on that volume. Nothing
+drift check in which the wrong bytes are installable into other mod folders on that volume. Nothing
 verifies a store on a schedule, because a pass reads every byte in it — so the exhaustive answer
 exists only when somebody asks for it. And **dropping a blob does not repair a mod folder**: where
 the entry was hardlinked, the folder still holds the same wrong bytes under the same name, and only
@@ -66,28 +66,23 @@ from inside the app; the consequence is that the refusal says only that it was r
 
 ### A drift notice can outlive the account that could act on it
 
-Instances and their active profiles are machine state and survive a **Switch user** — correctly,
-since the mod folders on disk did not change. But `InstanceDrift` names a repo and a profile, and
+Connected games and their active profiles are machine state and survive a **Switch user** — correctly,
+since the mod folders on disk did not change. But `TargetDrift` names a repo and a profile, and
 the new user may be in neither. `DriftNotificationViewModel` degrades rather than breaks: **Review
 and import** reports that the profile could not be opened, and **Re-apply now** finds no matching
 `Repo` and quietly does nothing. So the notice is still shown, still correct about the drift, and
 both of its buttons are dead. Nothing narrows the drift set to repos the signed-in user can
 actually reach. See [05](05-client.md#authentication) for what a switch does clear.
 
-### Savegames have a server and an adapter, and nothing that uses them
+### The Farming Simulator slot reader has never been run against the real game
 
-The server side of [Phase 8](PLAN.md#phase-8--savegames) is built — entities, migration, endpoints,
-blob storage, the reclamation sweep — and `ILocalSavegameAdapter` now enumerates slots, names
-them from the save's own data, and says what belongs in a packed save.
+It is **written against the observed layout** — twenty `savegameN` folders, `careerSavegame.xml`,
+`settings/savegameName` and `settings/playTime`. It degrades rather than throws where that is wrong
+(a slot it cannot read is occupied and unnamed, never empty), but the names and the playtimes it
+produces are unverified.
 
-What does not exist yet is everything between: no client-side pack/unpack, no checkout binding in
-`LocalState`, no slot safety checks, no UI, and `CanSupportSavegames` is still read by nothing. So a
-savegame can be created, checked in and out through the API, and no part of the app offers to.
-
-The Farming Simulator slot reader is also **written against the observed layout and never run
-against the real game** — twenty `savegameN` folders, `careerSavegame.xml`, `settings/savegameName`
-and `settings/playTime`. It degrades rather than throws where that is wrong (a slot it cannot read
-is occupied and unnamed, never empty), but the names and the playtimes it produces are unverified.
+Everything above it is built and used: pack and unpack, the checkout bindings in `LocalState`, the
+slot safety rules, the hold limit, play attribution and the whole interface.
 
 ## Traps in the model
 

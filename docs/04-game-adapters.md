@@ -19,10 +19,10 @@ IGameAdapter              catalogue entry — id, display name, what it can do
 IBaseGameAdapter          hydrated with the repo-wide settings, shared by everyone
    │  .WithLocalSettings(this machine's settings)
    ▼
-ILocalGameAdapter         bound to one game installation on this machine
+ILocalGameAdapter         bound to this machine's copy of that game
 ```
 
-The reason for the split is the repo/instance divide from
+The reason for the split is the repo/machine divide from
 [01 — Overview](01-overview.md):
 
 - **Base settings** are stored on the server in `Repo.AdapterData.Configuration` and are the
@@ -56,7 +56,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 consult before offering a feature, so a page can grey out an option without constructing an
 local adapter to find out. They sit on the **base** stage, not the catalogue stage, because
 the answer can depend on how a repo configured the adapter: for a scripted adapter, one script
-implements savegames and another does not. That is the same layering mistake as keying instances
+implements savegames and another does not. That is the same layering mistake as keying games
 on the adapter id, one stage further up; see [Game identity](#game-identity).
 
 The capability adapters mirror the same base-then-local shape: `IBaseModAdapter` can scan
@@ -144,7 +144,7 @@ bool SupportsHardlinks { get; }   // on IBaseModAdapter, default false
 
 Whether the game's mod files are safe to hardlink into the content store. False when the game
 or its updater may **rewrite a mod file in place**, which through a hardlink would corrupt the
-store blob shared with every other repo and instance on that volume. False also means "nobody
+store blob shared with every other repo and game on that volume. False also means "nobody
 has checked yet" — it is deliberately the default, because the failure is silent and the
 blast radius is every repo on the disk. `_farming_simulator@1` declares `true`: its in-game
 updater was tested and renames a new file over the old one, which breaks the link harmlessly. See
@@ -224,10 +224,10 @@ from any future third-party ones.
 
 ## Game identity
 
-An instance is not scoped to a repo. One Farming Simulator installation should be configured
-once and offered under every Farming Simulator repo you belong to, which is why instances move
-out from under repos. The obvious key for that is the adapter id — and it is not quite right,
-because **one adapter can serve more than one game**.
+A game is not scoped to a repo. A machine configures Farming Simulator 25 once and it is offered
+under every Farming Simulator 25 repo you belong to, which is why games are not owned by repos.
+The obvious key for that is the adapter id — and it is not quite right, because **one adapter can
+serve more than one game**.
 
 Farming Simulator 22 and 25 read the same `modDesc.xml` out of the same kind of archive and
 differ only in where the folder is and which mods belong in it. One adapter handles both. But an
@@ -262,23 +262,23 @@ public GameIdentity Scope => new(Id.Id, BaseSettings.GameVersion switch
 `GameIdentity` is a record struct over `(AdapterId, Discriminator?)`, rendering as
 `_farming_simulator#fs25`, or plain `_farming_simulator` where there is no discriminator. It is a
 type rather than a bare string because `_farming_simulator#fs25` and `_farming_simulator@1` are
-both plausible-looking strings, and comparing the wrong pair fails as a **silently empty instance
+both plausible-looking strings, and comparing the wrong pair fails as a **silently empty game
 list** rather than as a compile error — the same reason `GameAdapterId` exists.
 
 Note `Id.Id`, not `Id`: **the compatibility version is deliberately not part of the scope.** A
-repo on `_farming_simulator@2` still matches instances created under `@1`, which is the standing
+repo on `_farming_simulator@2` still matches a game configured under `@1`, which is the standing
 rule that a newer adapter must be able to read settings authored by an older one.
 
 ### What it changed
 
 | | Keyed on the adapter | Keyed on the scope |
 | --- | --- | --- |
-| Persisted on the instance | `GameAdapterId` | `GameIdentity`, plus the `GameAdapterId` that authored the settings |
-| A repo offers | instances whose adapter `Id` matches | instances whose scope equals `Adapter.Scope` |
+| Persisted on the game | `GameAdapterId` | `GameIdentity`, plus the `GameAdapterId` that authored the settings |
+| A repo offers | games whose adapter `Id` matches | the game whose identity equals `Adapter.Scope` |
 | Farming Simulator base settings | empty | `GameVersion`, required, not modifiable |
 
-Everything downstream is unchanged. The sidebar still lists instances under each repo,
-activation eligibility is still an equality test, and `CreateLocalInstancePage` still renders
+Everything downstream is unchanged. A repo's sidebar still shows the game it is about,
+activation eligibility is still an equality test, and `ConnectGamePage` still renders
 `GetLocalSettingsTemplate()` from the repo it was opened under. Only the value being compared
 is different.
 
@@ -289,7 +289,7 @@ Neither is cheap to enforce in code, so they are written down here instead.
 **Only base-settings fields that lack `[CanBeModified]` may feed it.** Those are the identity
 fields — the attribute's whole meaning is that a game path can change and a game identity cannot.
 An adapter deriving its scope from a modifiable field turns an admin editing base settings into a
-silent orphaning of every instance on every member's machine.
+silent orphaning of every game on every member's machine.
 
 **A scripted adapter takes the discriminator from inside the script, not from the reference to
 it.** Two repos pointing at the same Lua script by different paths or URLs must land on the same
@@ -301,7 +301,7 @@ accidental non-sharing that looks exactly like a bug.
 **Game identity is immutable, so an FS22 repo cannot become an FS25 repo.** That follows from the
 first rule, and it is the right answer — the mods are different files, so it is a new repo rather
 than an edit — but treat it as a decision rather than a side effect. If it is ever wanted, it is
-an admin-level *re-scope repo* operation that has to re-point or orphan every member's instances,
+an admin-level *re-scope repo* operation that has to re-point or orphan every member's games,
 not a field on a form.
 
 **This is not what compatibility versions are for.** `@2` means the adapter's settings shape
@@ -309,16 +309,16 @@ broke and existing repos stay on `@1`. FS22 and FS25 coexist indefinitely and ne
 the other; conflating the two axes would strand every FS22 repo the day FS26 ships.
 
 **Scope resolution can become asynchronous.** A scripted adapter cannot report a scope until the
-client holds the script, so a repo whose script has not been fetched cannot list its instances
+client holds the script, so a repo whose script has not been fetched cannot say which game it is about
 yet — and `Repo` hydrates its adapter synchronously in its constructor today. Farming Simulator
 resolves synchronously, so nothing is blocked on this now. It is the one place where a generic
 adapter costs more than an override.
 
-**Folder collision has to be checked globally.** Adapter scope was what stopped two instances
+**Folder collision has to be checked globally.** Adapter scope was what stopped two games
 claiming the same directory; splitting it by game reopens the possibility, since two scopes can
-name the same folder. The check runs across all instances regardless of scope, using
-`ILocalModAdapter.ModTargets` — and the answer is also recorded on the persisted instance, so
-an instance whose scope no repo on this machine serves still participates in the check even
+name the same folder. The check runs across every game regardless of identity, using
+`ILocalModAdapter.ModTargets` — and the answer is also recorded on the persisted game, so
+a game no repo on this machine serves still participates in the check even
 though it cannot hydrate an adapter to be asked.
 
 **The local settings template genuinely varies with base settings now.**
@@ -448,7 +448,7 @@ hosted and never joined from a singleplayer one, and the wording does not preten
 
 **The adapter is handed an `ILoggerFactory`.** It is a DI singleton like every other `IGameAdapter`,
 and it passes the factory down to the mod and savegame adapters its capability factories build - so
-the capability lists are instance fields rather than static ones. That matters here more than
+the capability lists are per-object fields rather than static ones. That matters here more than
 anywhere: every read in this file degrades rather than throws, and a degraded slot is
 indistinguishable on screen from an ordinary one. A career file that will not parse is a `Warning`;
 a field that is merely absent says nothing, and one that is present and unreadable is a `Debug`,

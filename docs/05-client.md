@@ -57,7 +57,7 @@ lifetimes worth knowing:
 | Registration | Lifetime | Why |
 | --- | --- | --- |
 | `MainWindow`, `MainWindowViewModel` | Singleton | The shell |
-| `RepoRepository`, `ProfileService`, `MembershipService`, `InviteService`, `LocalInstanceRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
+| `RepoRepository`, `ProfileService`, `MembershipService`, `InviteService`, `GameRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
 | `IModImageProvider`, `ModImageCache`, `IModImageStore`, `IModImagerySource` | Singleton | So decoded thumbnails survive navigating away and back, and one disk cache serves the machine |
 | `ModImagePublisher` | Singleton, and registered as both `IModImagePublisher` and `IModImageBackfill` | One object, two roles: publishing at import and backfilling on demand |
 | `NavigationLockService` | Singleton | One global "there are unsaved changes" flag |
@@ -193,11 +193,12 @@ The app is a sidebar app, nested up to three levels deep:
 
 ```
 MainWindow
-└─ MainPage                    Home │ Create repo │ Join repo │ Settings │ ...repos
-   └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Create profile │ Connect game │ ...profiles │ ...instances
+└─ MainPage                    Home │ Create repo │ Join repo │ Archive │ Settings │ ...repos
+   └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Saves │ Archive │ Create profile │ (Game | Connect game) │ ...profiles
       ├─ RepoModsPage          (one page — the catalog)
-      ├─ ProfilePage           Overview │ Mods │ Manage
-      └─ InstancePage          Sync │ Manage
+      ├─ RepoSavegamesPage     (one page — the saves and their history)
+      ├─ ProfilePage           Overview │ Mods │ History │ Manage
+      └─ GamePage              Sync │ Saves │ Manage
 ```
 
 `RepoModsPage` used to be a shell over Import and Manage. They were sibling pages showing
@@ -206,21 +207,31 @@ they are now one page laid out like the profile mod editor - what the sources ho
 what the repo holds on the right, and importing as the move between them rather than a separate
 destination. See [09 — Mod catalog](09-mod-catalog.md#manage).
 
-**Both the profile list and the instance list belong to `RepoPageViewModel`**, so they only
-appear once a repo is selected and everything in them is scoped to that repo — and therefore to
-its adapter. Only one repo's menu is current at a time, since navigating to another repo
-disposes the previous `RepoPage`. Anything operating between two entries of that menu can take
-compatibility for granted rather than re-checking it.
+**The profile list belongs to `RepoPageViewModel`**, so it only appears once a repo is selected
+and everything in it is scoped to that repo — and therefore to its adapter. Only one repo's menu
+is current at a time, since navigating to another repo disposes the previous `RepoPage`. Anything
+operating between two entries of that menu can take compatibility for granted rather than
+re-checking it.
+
+**There is no list of games beside it, and exactly one of the two bottom entries is present.** A
+game is keyed by its identity and a repo is about one game, so a repo offers at most one — which
+made a list under a "Games" heading a list that is always empty or always one long. It is the
+game's entry when one is connected on this machine and *Connect game* when none is.
+
+`GamePage` behind it is **reached rarely and on purpose**: its settings, its folders and its slot
+list. Nothing in a normal evening opens it — activating a profile is on the profile's page,
+taking and handing a save back is on the repo's, and the drift notice carries whatever went wrong
+from wherever the user happens to be.
 
 Each level owns a `NavigationManager` and a collection of `MenuItemViewModel`. A menu item is
 a title plus a `Func<PageViewModel>` — **the page is constructed on selection, not up front**,
 which is what makes a sidebar of twenty repos cheap.
 
 `MenuItemViewModel` can optionally track its title from a source object's
-`PropertyChanged`. Only `InstanceItemViewModel` uses this, following `LocalInstance.Name`,
-because instances live entirely client-side and have no server refresh to rebuild them.
-Repos and profiles instead get their menu entries rebuilt when the service refreshes from
-the server.
+`PropertyChanged`. Only `RepoItemViewModel` uses this, following `Repo.Name`, because a rename is
+folded into the live `Repo` rather than rebuilding the sidebar — which is deliberate, so that the
+entry and whatever page is open under it survive one. Profiles instead get their menu entries
+rebuilt when the service refreshes from the server.
 
 `NavigationManager.Selected` is a manual property rather than `[ObservableProperty]` because
 selection has to be *refusable*:
@@ -233,7 +244,7 @@ selection has to be *refusable*:
 
 **Disposing the outgoing page matters.** A page constructed and then navigated away from keeps
 its initialization running unless it is disposed. `ProfilePageViewModel.Dispose` and
-`InstancePageViewModel.Dispose` exist solely to propagate disposal to the sub-page their own
+`GamePageViewModel.Dispose` exist solely to propagate disposal to the sub-page their own
 `NavigationManager` owns.
 
 ### Drag-selection was a `ListBox` default, not a feature
@@ -303,47 +314,58 @@ app data directory. `StateStore` is `Store<LocalState>` over `state.json`.
 
 ```
 LocalState
-├─ Version                 schema version, currently 3
+├─ Version                 schema version, currently 7
 ├─ LastSelectedRepos       restores which repo you were on
 ├─ LastSelectedProfiles    and which profile
-├─ Settings                machine-wide, not per repo, instance or adapter
+├─ Settings                machine-wide, not per repo, game or adapter
 │   ├─ Stores: { volumeRoot → { Path, MaxSizeBytes } }
 │   ├─ StoreAssignments: { volumeRoot → servingVolumeRoot }
 │   └─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
-└─ Instances: { instanceId → { Scope, GameAdapterId, Name,
-                               AdapterLocalSettings,
-                               ModFolder,
-                               ActiveProfile: (RepoId, ProfileId)? } }
+└─ Games: { gameIdentity → { GameAdapterId, Name,
+                             AdapterLocalSettings,
+                             Targets: [ { Key, ModFolder, DisplayName } ],
+                             ActiveProfile: (RepoId, ProfileId)?,
+                             SavegameCheckouts, SavegameSlotHints } }
 
-manifests/{instanceId}.json                 what the last sync installed
+manifests/{game-identity}_{target-key}.json  what the last sync installed in one folder
 ```
 
-There is no `LocalRepoState` and nothing is keyed by repo. **Instances moved out from under
-repos** and key on a `GameIdentity`, so one game
-installation is configured once and listed under every repo targeting the same game. The scope
-is the adapter id plus — for an adapter serving more than one game — a discriminator its base
-settings decide: `_farming_simulator#fs25`. A repo offers the instances whose scope equals its
-own. The `GameAdapterId` is stored alongside, recording which adapter version authored the
-settings; it is deliberately not part of the scope, so where the compatibility versions differ
-the repo's adapter has to be able to read settings authored by the older one, which is what
-compatibility versions are for. See
-[04 — Game adapters](04-game-adapters.md#game-identity).
+There is no `LocalRepoState` and nothing is keyed by repo. **Games are not owned by repos** and
+are keyed by `GameIdentity`, so a machine configures that game once and every repo about it
+offers the same one. The identity is the adapter id plus — for an adapter serving more than one
+game — a discriminator its base settings decide: `_farming_simulator#fs25`. The `GameAdapterId`
+is stored alongside, recording which adapter version authored the settings; it is deliberately
+not part of the identity, so where the compatibility versions differ the repo's adapter has to be
+able to read settings authored by the older one, which is what compatibility versions are for.
+See [04 — Game adapters](04-game-adapters.md#game-identity).
 
-`ModFolder` is recorded rather than asked of the adapter every time, because the
-no-two-instances-own-one-folder check has to run across *every* scope — including an instance
-whose scope no repo on this machine serves, which cannot hydrate an adapter and still owns its
-folder.
+**Being the dictionary key is what makes "configured twice" unrepresentable** rather than
+something to check for. There is no id on a game and nothing mints one.
+
+`Targets` is recorded rather than asked of the adapter every time. Three things read a folder
+without being able to hydrate an adapter — store eviction, the drift candidate list, and the
+no-two-games-own-one-folder check — and a game no loaded repo serves still owns its folders and
+still has a standing intent. The key travels with the path because a path on its own names no
+manifest, and the adapter's `DisplayName` travels with both because the app-level drift notice is
+on screen before the repo list has loaded and still has to be able to say *in the 'MP client'
+folder*. All three are re-derived whenever the settings are saved. `Name` is the same trick: it is
+`Adapter.GameDisplayName`, written down rather than typed.
 
 `ActiveProfile` has to be persisted: a mod folder cannot tell you which profile it was meant to
-match, so nothing can reconstruct it once the contents change. The sync manifest is a separate
-file per instance rather than part of `LocalState`, which is loaded eagerly and rewritten on
-every instance change — a manifest for 2,000 mods is a few hundred kilobytes. See
+match, so nothing can reconstruct it once the contents change. It is one per game rather than one
+per folder, which is the BeamMP requirement stated as a type — two folders of one game cannot
+disagree about which mod list they are on.
+
+The sync manifest is **one file per folder**, rather than part of `LocalState`, which is loaded
+eagerly and rewritten on every edit — a manifest for 2,000 mods is a few hundred kilobytes. Per
+folder rather than per game because syncing the dedicated server must not rewrite the MP client's
+record, and because atomic-write-per-folder is what keeps a half-finished apply safe. See
 [07](07-mod-sync-design.md#what-sync-records-and-why-it-has-to).
 
 **Content store settings are machine-wide.** The store is content-addressed, so it does not
 care which game or which repo a file belongs to — a Farming Simulator archive and a BeamNG
-archive are both just bytes at an address. Keeping the configuration out of instance and
-repo settings is what stops the "same thing configured in several places, then drifting"
+archive are both just bytes at an address. Keeping the configuration out of the games' and the
+repos' settings is what stops the "same thing configured in several places, then drifting"
 problem from reappearing. `LocalState.Settings` was the first genuinely global client setting;
 `SettingsPage`, reached from the top-level sidebar, is where it is edited.
 
@@ -351,7 +373,7 @@ The same page is where the stores are **managed**, not only configured: it repor
 holds and what emptying it would actually reclaim, and offers a sweep and an empty per store plus
 an empty for the image cache. That is there because the two things automatic eviction cannot do
 are exactly the two things a user needs — reconsider a cap they agreed to once, and reclaim a
-store on a disk no instance points at any more, which nothing sweeps because nothing syncs
+store on a disk no mod folder points at any more, which nothing sweeps because nothing syncs
 through it. See [07](07-mod-sync-design.md#the-user-has-to-be-able-to-see-it-and-take-it-back).
 
 There is no migration. The system has no users yet, so `Version` gets bumped and old state
@@ -360,18 +382,19 @@ is discarded. `Store<T>` takes an optional compatibility predicate for exactly t
 version would silently deserialize old JSON into the new shape rather than discarding it.
 
 Neither a corrupt file nor an incompatible one is fatal: both move the file aside as
-`{name}_discarded_{unixMillis}.json` and start fresh, so the cost is the user's instance list
+`{name}_discarded_{unixMillis}.json` and start fresh, so the cost is the user's connected games
 rather than the ability to launch. Saves go through a temp file and an atomic move, so an
 interrupted write cannot be the thing that produces a corrupt file in the first place.
 
-`LocalInstanceRepository` owns one `ObservableCollection<LocalInstance>` for the whole machine,
-across every scope, and each mutating method — create, update, set the active profile, delete —
+`GameRepository` owns one `ObservableCollection<Game>` for the whole machine,
+across every identity, and each mutating method — create, update, set the active profile, delete —
 saves explicitly. It used to hand out a per-repo collection and subscribe `store.Save()` to
 `CollectionChanged`, which persisted adds and removes but silently dropped an edit to an
-existing instance's fields.
+existing game's fields.
 
-It also implements `IInstanceModFolders`, which is how store eviction learns which blobs a live
-mod folder is relying on — across *every* scope, since a store serves a disk rather than a game.
+It also implements `IModFolders`, which is how store eviction learns which blobs a live
+mod folder is relying on — one entry per folder across every game, since a store serves a disk
+rather than a game.
 
 Alongside `state.json` in the same directory sits `msal_cache.dat`, MSAL's encrypted token
 cache, configured in `AuthenticationService.ConfigureTokenCacheAsync`.
@@ -391,8 +414,8 @@ the synchronizer can subscribe to `PropertyChanged` on each target and re-sort w
 property changes. Renaming a repo moves it to its new alphabetical position with no
 intervention.
 
-`Repo` uses it to project the machine's instances down to the ones matching its own
-`GameIdentity`, so the sidebar lists them under each repo without any repo owning them.
+`Repo` uses it to project the machine's games down to the one matching its own
+`GameIdentity`, so a repo can show the game it is about without owning it.
 
 Re-sorting **moves** a row rather than removing and reinserting it, and the synchronizer disposes
 the target view models it created — `MenuItemViewModel` subscribes to its source's
@@ -405,7 +428,7 @@ long-lived source, and a leaked subscription keeps a whole page graph alive.
 ## Names sort naturally
 
 `NaturalOrder.Comparer` is the one comparer behind every sort of a name a person wrote —
-mods, profiles, repos, savegames, members, instances — so "Mod 10" comes after
+mods, profiles, repos, savegames, members — so "Mod 10" comes after
 "Mod 9" rather than after "Mod 1". It wraps `StringComparer.CurrentCultureIgnoreCase` with
 `NaturalSort.Extension`, which leaves the letters to the culture and reads the digit runs as
 numbers.
@@ -482,7 +505,7 @@ current page, clears every `IUserScopedState`, and builds a fresh `MainPageViewM
 
 `IUserScopedState` is the line between what belongs to the account and what belongs to the
 machine. `RepoRepository` and `ProfileService` implement it and are emptied on a switch; local
-instances, content stores and the image cache describe the game installations on this PC and
+games, content stores and the image cache describe what is installed on this PC and
 deliberately do not.
 
 ## What a level closes, and how it says so
@@ -650,9 +673,9 @@ savegame would look archived.
 now. The one place a permanent delete exists is the archive, which is what makes it a second
 deliberate act rather than a click away from a list somebody is browsing.
 
-**Deleting a profile makes every instance let go of it.** `LocalInstanceRepository.StopTracking`
-clears the active profile of any instance pointed at it — local state the server knows nothing
-about, and an instance whose active profile is a dangling id would report drift against a mod list
+**Deleting a profile makes every game let go of it.** `GameRepository.StopTracking`
+clears the active profile of any game pointed at it — local state the server knows nothing
+about, and a game whose active profile is a dangling id would report drift against a mod list
 nobody can read. An *archived* profile is deliberately still tracked: it exists, and everything
 pointing at it goes on pointing at it. It is the deletion that lets go, not the archiving.
 
@@ -778,20 +801,22 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
-| `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when the repo has no instances |
-| `RepoOverviewPage` | Working | Instance status and profiles at a glance |
+| `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when this machine has no game for it |
+| `RepoOverviewPage` | Working | The game, a line per folder it reaches with that folder's drift, and the profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, archive repo |
 | `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
-| `CreateLocalInstancePage` | Working | Name + local settings form. Defaults the name to "Game" for the first instance, blocks duplicate names, and refuses a folder another instance owns |
-| `InstancePage` | Working | Instance shell over Sync and Manage. Opens on Sync |
+| `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's versions and claims on the right. Check out, take a copy, check in, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it |
+| `ConnectGamePage` | Working | The local settings form and nothing else. Refuses a game already connected here, and a folder another game owns |
+| `GamePage` | Working | The game's shell over Sync, Saves and Manage. Which profile it follows, what it is holding, and a line per folder. Reached rarely and on purpose |
 | `SyncPage` | Working | Plan preview, the unrecognised-files confirmation, per-mod progress, drift status, cancellation |
-| `EditLocalInstancePage` | Working | Name, local settings, active profile, delete. Phase 4 grows this into the instance's full page — see [PLAN.md](PLAN.md#phase-4--make-drift-unmissable) |
+| `GameSavegamesPage` | Working | Its slot list: what is in each place this machine can hold a save, with check in, discard and disconnect |
+| `GameSettingsPage` | Working | Local settings and disconnect |
 | `CreateProfilePage` | Working | |
-| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage |
-| `ProfileOverviewPage` | Working | Mod count and current revision, plus the instances set to this profile |
+| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage — and the one activation control, which asks nothing about where |
+| `ProfileOverviewPage` | Working | Mod count and current revision, plus the game set to this profile and each of its folders |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |
 | `ProfileHistoryPage` | Working | The profile's revisions on the left; on the right, either what the selected one pinned or what changed between it and another. Restore and Save as… for a member; readable by a guest |

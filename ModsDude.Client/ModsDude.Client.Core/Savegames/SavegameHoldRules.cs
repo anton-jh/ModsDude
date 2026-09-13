@@ -95,7 +95,7 @@ public static class SavegameHoldRules
 
     /// <summary>
     /// Whether a profile may be applied to this game, per the apply table in
-    /// docs/10-savegame-profile-binding.md#applying-to-an-game-that-holds-a-savegame.
+    /// docs/10-savegame-profile-binding.md#applying-to-a-game-that-holds-a-savegame.
     /// </summary>
     /// <param name="revision">
     /// The revision about to be installed, or null where the caller has not chosen one and will take

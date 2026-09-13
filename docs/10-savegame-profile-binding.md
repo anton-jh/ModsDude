@@ -3,11 +3,16 @@
 *Built.* Schema, publish, the swap and the rename are in the tree
 ([Phase 9 slice 1](PLAN.md#1-server-schema-and-api)); the two hashes, the observation and the
 revision a sync installs are ([slice 2](PLAN.md#2-play-attribution-on-the-client)); so are the
-check-out targets, the apply table, the drift rules and the one-mod-list-per-instance limit
+check-out targets, the apply table, the drift rules and the one-mod-list-per-game limit
 ([slice 3](PLAN.md#3-the-rules)); and so is the [interface](#interface) — the chips, the two row
 actions, the wording of the notices and the three dialogs ([slice 4](PLAN.md#4-interface)). A refusal
 now reaches the user as a button that was never offered, with the engine's own sentence behind it as
 the backstop it always was.
+
+[Phase 10](PLAN.md#phase-10--one-game-many-targets) then moved the policy up from the folder to the
+game. What that changed here: the hold limit counts per **game** rather than per folder, a slot is
+addressed by the folder it is in as well as its own id, publishing is reached from the repo's saves
+list, and the check-out dialog has no step asking which installation.
 
 The application is in early development. Nothing here migrates existing local or server state,
 and no shape below is constrained by what an older client wrote.
@@ -66,11 +71,17 @@ is an ordering the two updates must guarantee rather than leave to the change tr
 A profile is durable identity across a succession of savegames. "Old-school" stays one profile
 when the group starts a new savegame on it; the previous savegame becomes past.
 
-An instance holds **at most one checked-out savegame that has a profile**.
+A game holds **at most one checked-out savegame that has a profile**, counted across every folder it
+reaches rather than per folder.
 
-The limit is not about savegames but about the mod folder, which can only be on one revision. A
-savegame with no profile makes no claim on it and cannot conflict with anything, so any number of
-those may be held alongside — bounded only by the slots the adapter offers, and by
+The limit is not about savegames but about the mod list, which the whole game is on: every folder
+follows the game's one active profile, so two folders cannot be on two revisions and there is
+nothing per folder to count. It is also the answer to the other question — hosting one save on
+the dedicated server while playing another in singleplayer would hold two of the group's saves and
+block two people.
+
+A savegame with no profile makes no claim on the mod list and cannot conflict with anything, so any
+number of those may be held alongside — bounded only by the slots the adapter offers, and by
 `SavegameBindingStore`'s existing one-binding-per-slot rule.
 
 Stating it this way needs no adapter-capability check. In a repo whose adapter has no mod support
@@ -147,7 +158,7 @@ group never publishes a save — stays here.
 | | Behaviour |
 | --- | --- |
 | Editing the profile | Unrestricted. Every save mints a revision as it does today |
-| Applying it to an instance | Applies head. No savegame to attribute play to, and no past-savegame refusal |
+| Applying it to a game | Applies head. No savegame to attribute play to, and no past-savegame refusal |
 | Checking out | Nothing to check out |
 | Publishing to it | Creates the profile's first savegame, which becomes current. Nothing becomes past, and there is no confirmation to show |
 
@@ -159,7 +170,7 @@ and are not promoted, and the next publish creates a new current savegame.
 `IBaseGameAdapter.CanSupportSavegames` is a client-side capability read from the adapter's base
 settings. Where it is false, savegames do not exist in the repo: `SavegameService` returns no
 adapter, and the savegames pages are not offered
-(`RepoPageViewModel`, `InstancePageViewModel`, `InstanceSavegamesPageViewModel`).
+(`RepoPageViewModel`, `GamePageViewModel`, `GameSavegamesPageViewModel`).
 
 Nothing in this document applies to such a repo.
 
@@ -167,7 +178,7 @@ Nothing in this document applies to such a repo.
 | --- | --- |
 | Current and past | Do not exist. No savegame does |
 | Applying a profile | Always applies head. Never refused on savegame grounds |
-| One checkout per instance | Vacuous. The limit counts savegames with a profile, and none has one. Any number may be held at once |
+| One checkout per game | Vacuous. The limit counts savegames with a profile, and none has one. Any number may be held at once |
 | `Observe()`, `LastObservedHash`, `LastPlayedRevision` | Never run and never written. They live on the checkout binding, and no binding is ever taken |
 | `SyncManifest.ProfileRevision` | Still recorded, as it is today. It describes the folder, not a savegame |
 
@@ -234,18 +245,18 @@ equals `Savegame.ProfileId`.
 `GET repos/{repoId}/profiles/{profileId}/modDependencies?revision=` had served any revision all along.
 
 The table is enforced by resolution rather than by every caller reading it. `ModSyncRequest.Revision`
-null means "whatever this instance must be on", and `PlanAsync` resolves it from what the instance is
-holding — so the drift notice's re-apply, the mod list editor's save and the instance page's apply all
+null means "whatever this game must be on", and `PlanAsync` resolves it from what the game is
+holding — so the drift notice's re-apply, the mod list editor's save and the profile page's activation all
 target a past savegame's revision without any of them knowing what a savegame is. The one caller that
 names a number is the check-out dialog, previewing the apply for a savegame nothing is holding yet.
 
 ### Two actions, not one
 
 A savegame carries two separate actions: **Apply profile** and **Check out**. Check out is
-disabled until the instance is on the revision the table above names, and says which apply would
+disabled until the mod folder is on the revision the table above names, and says which apply would
 enable it.
 
-Where the instance is already there — the ordinary case for a current savegame on an instance
+Where it is already there — the ordinary case for a current savegame on a game
 that follows its profile — Check out is enabled on arrival and the flow is one click. The second
 click appears only when the mod folder is genuinely wrong.
 
@@ -255,27 +266,27 @@ before anything is written. What check-out gained is bookkeeping and a refusal, 
 `TargetRevision` from the savegame's current-or-past state, and it refuses a second savegame that
 claims the same mod folder.
 
-### Applying to an instance that holds a savegame
+### Applying to a game that holds a savegame
 
 Only savegames **with a profile** appear here. One holding nothing but profile-less savegames is
 the "Nothing" row: they claim no mod list, so nothing about the mod folder is theirs to constrain.
 
-| Instance holds | Apply |
+| The game holds | Apply |
 | --- | --- |
 | Nothing, or only savegames with no profile | Unchanged |
 | The **current** savegame of the profile being applied | Allowed. This is how a savegame follows its profile |
 | A **past** savegame | Allowed only for that savegame's own revision — re-applying it, repairing folder drift. Any other revision is refused |
 | A savegame with a profile, and the apply names a **different** profile | Refused. This is the active-profile switch below |
 
-Switching an instance's active profile is refused while a savegame with a profile is checked out.
+Switching a game's active profile is refused while a savegame with a profile is checked out.
 
-An instance's mod folder never changes. Keeping the folder fixed across a settings change is the
+A target's mod folder never changes under it. Keeping the folder fixed across a settings change is the
 adapter's responsibility, so `SyncManifest.ModFolder` is checked defensively rather than as a
 state the design expects.
 
 ### Holding a past savegame is stored state
 
-That an instance holds a past savegame is recorded on the instance, not inferred from revision
+That a game holds a past savegame is recorded on the binding, not inferred from revision
 numbers: it is `SavegameCheckoutBinding.TargetRevision`, written at check-out from the savegame's own
 current-or-past state and read back off local state afterwards. Inferring it would need the server's
 answer to "is this still its profile's current savegame?", and the two things that read it — the apply
@@ -291,9 +302,9 @@ profile until it is checked in, the version that check-in mints records the revi
 played on, and its target moves forward to that revision with it, so the invariant below still holds.
 The next check-out reads the truth.
 
-`InstanceDriftService.Check` already took the revision and the dependencies to compare against as
+`DriftService.Check` already took the revision and the dependencies to compare against as
 parameters (`currentRevision`, `profileDependencies`), and its callers passed the profile's head. For
-an instance holding a past savegame they pass **the revision that savegame targets** instead.
+a game holding a past savegame they pass **the revision that savegame targets** instead.
 
 Nothing in the drift check is suppressed. `profileHasMoved` compares the applied revision against
 the targeted one and finds them equal; `CompareProfile` diffs the manifest against that revision's
@@ -301,10 +312,10 @@ dependencies. Folder drift — added, removed or changed files, a locked mod the
 found and reported exactly as it is for a current savegame, and its re-apply targets the revision
 the savegame needs rather than head.
 
-Without this the instance would be behind head by construction and would report drift
+Without this the folder would be behind head by construction and would report drift
 permanently, offering a re-apply to head that the apply table refuses.
 
-The instance still says which revision it is holding and for which savegame, so being behind head
+The game still says which revision it is holding and for which savegame, so being behind head
 is visible without being reported as a problem.
 
 ## Play attribution
@@ -315,11 +326,16 @@ The folder's revision is `SyncManifest.ProfileRevision`. It changes only when th
 applies a profile. The profile's head revision is irrelevant to it — other users may move the
 head any number of times with no local effect.
 
-The manifest is per instance. `ActiveProfile` and the manifest are still two different facts —
-the active profile is intent and is recorded even when the sync failed
-([InstancePageViewModel.cs:201](../ModsDude.Client/ModsDude.Client.Wpf/ViewModel/Pages/InstancePageViewModel.cs):
-*"The intent is recorded even where the folder could not be touched"*), while the manifest is
-what a sync actually installed. They diverge on a failed or partial apply.
+**The manifest is per folder, and the active profile is per game.** That is the whole of the two
+verbs: activating is intent and is recorded before a single file moves — so it stands even where a
+folder could not be touched — while a manifest is what a sync actually installed in one folder,
+written only on success. They diverge on a failed or partial apply, and that divergence has a name:
+`DriftStatus.NotApplied`, an intent recorded with the work not done. See
+[07](07-mod-sync-design.md#it-has-to-be-unmissable-everywhere).
+
+An apply attributes play using **the manifest of the folder it is about to rewrite**, which is why
+this stayed per folder when the hold limit went per game: a save in the MP client's savegame folder
+was played against the MP client's mods, whatever the dedicated server happens to be on.
 
 Refusing to switch profile while a savegame is held keeps them from diverging for the life of a
 binding, and Check out being disabled until the profile is applied means a binding is only ever
@@ -462,11 +478,11 @@ answers with the existing head.
 savegame and its first version, so a publish always leaves the new savegame held.
 
 Publishing **to a profile** therefore requires that no savegame with a profile is already checked
-out on the instance — the same limit as check-out, reached from the other side, rather than a rule
+out on the game — the same limit as check-out, reached from the other side, rather than a rule
 of its own. Publishing without a profile has no such precondition.
 
 The publish dialog offers every profile in the repo, and **no profile** as an explicit choice.
-`PublishSavegameRequest.ProfileId` becomes nullable. The profile need not be the instance's active
+`PublishSavegameRequest.ProfileId` becomes nullable. The profile need not be the game's active
 one.
 
 **A first version's revision is declared, not observed**, and this is the only version in the
@@ -491,6 +507,34 @@ A savegame published with no profile records no revision, and `ProfileRevision` 
 Publishing to a profile that already has a current savegame supersedes it, which is stated in the
 same dialog.
 
+## Which folder a slot is in
+
+A slot is addressed by `SavegameSlotRef(TargetKey, SavegameSlotId)` — which of the game's savegame
+folders, and which slot in it. That is what a binding and a slot hint record, and it renders as
+`{target}:{slot}` when persisted, exactly as a game identity renders as `_farming_simulator#fs25`.
+
+**Uniqueness across the game is a construction rather than a contract.** An adapter mints slot ids
+unique within the folder it was asked about, which it cannot get wrong, and the engine pairs each
+answer with the key it asked for. Requiring global uniqueness instead would put two folders' slots
+on one binding the first time somebody numbered from one twice, and the one-binding-per-slot rule
+would enforce the collision rather than catch it.
+
+The pairing is what makes attribution honest: a save in target T's savegame folder was played
+against target T's mod folder, so an apply to one folder attributes only the play that happened in
+it. See [04 — Game adapters](04-game-adapters.md#targets).
+
+### A hold survives a folder the settings no longer name
+
+Emptying a folder field in the local settings takes a target away, and an adapter author renaming a
+key does exactly the same thing from here — the two are indistinguishable, so nothing tries to tell
+them apart. A stale sync manifest is dropped for it: losing one costs a rescan.
+
+**A binding is not.** It is a savegame on this disk and a claim somebody else is waiting on, so it
+outlives the folder it can no longer address. The game's own slot list shows it last, after the
+slots, saying the folder is gone and offering **Disconnect** and nothing else — check-in and
+discard both need a folder to pack or recycle, and the engine refuses them before the server is
+told anything. Putting the setting back is the other way out.
+
 ## Slots ModsDude did not write
 
 A slot occupied by a savegame this machine never checked out is `SavegameSlotAvailability.Unrecognised`.
@@ -498,7 +542,8 @@ Writing to one is a confirmation naming the save, and the folder goes to the Rec
 than being deleted.
 
 Such savegames are not held by ModsDude at all, so they do not count towards the limit, and they
-do not affect which profile may be active or whether a profile may be applied.
+do not affect which profile may be active or whether a profile may be applied. They are, however,
+exactly what a publish is made of — see the [publish dialog](#publish-dialog).
 
 ## Interface
 
@@ -533,19 +578,21 @@ Two buttons, `Apply profile` and `Check out`, with the disabled reason carrying 
 | Situation | Check out reads |
 | --- | --- |
 | Past savegame, folder elsewhere | *Apply Old-school rev 4 first* |
-| Current savegame, instance on another profile | *Apply Old-school first* |
-| Another savegame **with a profile** held here | *Riverbend is checked out on this instance* |
-| No instance for this game | *No instance for this game* |
+| Current savegame, game on another profile | *Apply Old-school first* |
+| Another savegame **with a profile** held here | *'Riverbend' is checked out here* |
+| The game is not connected on this machine | *This game is not connected here* |
 
 **Apply profile** is refused by only two of those. A held savegame blocks it as well, since no apply
 clears that one; the folder being elsewhere is the thing it is *for*. Its own case is a savegame with no
 mod list: *This save follows no mod list*. It names the revision it would install, so the apply a past
-savegame needs is the apply that runs — letting the instance decide resolves to head, which is correct
+savegame needs is the apply that runs — letting the game decide resolves to head, which is correct
 for a current savegame and wrong for the one this button exists to prepare for.
 
-Which instance the pair acts on is the one that could host the savegame now, failing that the one already
-following its profile, failing that the first. A row that answers about a folder its buttons do not
-act on is a puzzle rather than an answer, so the check-out dialog opens on that same instance.
+**There is nothing to choose between.** A game is keyed by its identity and a repo is about one
+game, so both buttons act on the one this repo offers, and the last row is the absence of it rather
+than a fact about the savegame — which is why `SavegameRowRules` is never asked in that case and
+the page says so itself. The ranking that used to pick between installations — the one that would
+accept, else the one already following this profile, else the first — had nothing left to rank.
 
 A **past** row carries a third: `Make current`. It is the other end of the swap a publish performs,
 so it is stated before it runs the same way — a confirmation naming the savegame it displaces, what
@@ -556,29 +603,35 @@ current again follows its profile and a number left behind would hold that folde
 forever. That is not the hold moving under its holder — the argument against that is about
 somebody else's publish, which nobody states to whoever is playing.
 
-### Instance page
+### Where activation is refused
 
-The profile dropdown is **disabled** while a savegame with a profile is checked out. Profile-less
-savegames leave it alone. The profile's own activation control is the same switch seen from the other
-end and is refused the same way, since a control that offers the move and then reports a refusal is
-the thing this section exists to remove.
+**On the profile's page, which is the only place a profile is activated.** The game's own page used
+to carry a second copy of the control — a profile dropdown, greyed out while a savegame with a
+profile was held — and two places to set one thing is how they come to disagree. The refusal is
+asked once, before the click: a control that offers the move and then reports a refusal is the
+thing this section exists to remove.
 
-The apply button's meaning changes while a **past** savegame is held. It normally applies the
-profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job is repairing
-folder drift back to that revision. Underneath: *"Check Riverbend 2023 in to move this instance
-forward."*
+Profile-less savegames leave it alone.
 
-A status line while a past savegame is held, Neutral: *"Holding Old-school rev 4 for **Riverbend
-2023**."*
+A held past savegame changes what the button means rather than whether it works. It normally
+applies the profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job
+is repairing folder drift back to that revision.
+
+The game's page keeps the sentence, Neutral, because what a game is holding is a fact about it
+rather than a control on it: *"Holding Old-school rev 4 for **Riverbend 2023**. Check **Riverbend
+2023** in to move this game forward."*
 
 ### Drift notice
 
 Two rules, both about not crying wolf:
 
-- Never "behind the profile" for an instance holding a past savegame. Nothing is suppressed to
-  achieve this — the targeted revision is passed into `InstanceDriftService.Check` instead of head,
+- Never "behind the profile" for a game holding a past savegame. Nothing is suppressed to
+  achieve this — the targeted revision is passed into `DriftService.Check` instead of head,
   so the comparison simply comes out equal.
-- Folder drift still reports, and its action reads `Re-apply rev 4`, never "apply latest".
+- Folder drift still reports, and its action reads `Re-apply rev 4`, never "apply latest". The
+  button does not name a folder even where the game reaches several, because it applies the whole
+  game — every folder, the ones already right included — and a button claiming to act on one of
+  them would be lying about its scope. The **sentences** name the folder instead.
 
 `SavegameDriftKind.PlayedOnAnotherModList` gets **two sentences for the one kind**, because the rule
 reaches it two ways and only one of them is about numbers. A past savegame on the wrong revision names
@@ -589,7 +642,16 @@ against, it belongs to play attribution, and it is not what the comparison used.
 
 ### Check-out dialog
 
-One added line naming the revision the folder will be on: *"Will run on Old-school rev 1004."*
+Three sections — mods, slot, revision — each absent when it has nothing to say. **There is no
+step asking where**: a machine has one installation of the game a repo is about, so the question
+had a single answer.
+
+The slot picker is one flat list across every savegame folder the game reaches, under a folder
+heading only where there is more than one to tell apart. Which folder a save goes into is a fact
+about the slot rather than a step of its own, and the grouping is the same `SlotGrouping.Apply`
+the game's own slot list uses, so the two cannot decide differently about the same slots.
+
+One line naming the revision the folder will be on: *"Will run on Old-school rev 1004."*
 
 Worth showing even for a current savegame, since that number can differ from the one the savegame was
 last played on whenever the profile has moved since.
@@ -602,6 +664,14 @@ For a past savegame: *"This savegame stays on rev 4. Playing it does not move it
 becomes visible, at the moment it is recorded and while a wrong one can still be noticed.
 
 ### Publish dialog
+
+**Reached from the repo's Saves list**, not from a game page. Publishing is how a repo's first
+savegame comes into existence, so it has to be reachable from the list that is empty and saying
+so — and under one game per machine there is no sidebar of installations to go looking through
+for it. It is still inherently about a slot, so the slot is asked for first, out of the same flat
+list the check-out dialog shows, filtered to the ones ModsDude has no copy of: an empty slot has
+nothing to publish, and a checked-out one is checked in rather than published again under a new
+name.
 
 - Profile picker: every profile in the repo, plus an explicit **No mod list**.
 - The revision that will be recorded, shown as a number, since it is a declaration.
@@ -638,7 +708,7 @@ It compares against the savegame's **target** instead:
 | --- | --- |
 | Applied profile differs from the savegame's | Yes. Two profiles' revision numbers are not comparable |
 | **Past** savegame, applied revision differs from its pinned revision | Yes. The apply table forbids moving it, so a mismatch is an interrupted sync or discarded local state |
-| **Current** savegame, applied revision differs from the profile's head | No — not here. That is `profileHasMoved` at the instance level, which already reports it |
+| **Current** savegame, applied revision differs from the profile's head | No — not here. That is `profileHasMoved` at the folder level, which already reports it |
 | Savegame with no profile | No. There is no mod list it claims to match |
 
 The binding's `ProfileRevision` is then read for play attribution only, and by nothing that

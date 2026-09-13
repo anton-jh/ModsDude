@@ -11,8 +11,8 @@ until there are two thousand of them.
 
 ModsDude gives the group a **repo**: a shared, server-hosted collection of mod files. Inside
 the repo they define **profiles** — named, pinned mod lists ("Season 4 map", "vanilla+
-lite"). Each member connects their own game installation as an **instance**, picks a
-profile, and the client makes the installation match it.
+lite"). Each member **connects the game** on their own machine, picks a profile, and the client
+makes every mod folder that game reaches match it.
 
 A profile's mod list is **versioned**. Every save records a new revision, so what the group was
 running last week is still readable, an old revision can be put back, and one can be branched off
@@ -34,29 +34,32 @@ User ──member of──▶ Repo ──has──▶ Profile ──has──▶
                      └──configured by──▶ Game adapter (base settings)
 
                                               ▲
-Machine ──has──▶ Instance ────configured by───┘  (local settings)
-                     │
-                     └──active profile──▶ Profile   (from one repo at a time)
+Machine ──has──▶ Game ────────configured by───┘  (local settings)
+                  │
+                  ├──active profile──▶ Profile   (from one repo at a time)
+                  └──reaches──▶ Target ──▶ a mod folder and a savegame folder
 ```
 
-The split that matters: **a repo is shared and lives on the server; an instance is
+The split that matters: **a repo is shared and lives on the server; a game is
 personal and never leaves the machine.** The repo says "this profile needs these mods at
-these versions". The instance says "and the mods go in this folder". Neither knows about
+these versions". The game says "and the mods go in these folders". Neither knows about
 the other's half until the client puts them together.
 
-An **instance is one mod folder** — a sync target. It is scoped to a *game*, not to a repo, so
-one Farming Simulator 25 installation is configured once and appears under every FS25 repo you
-belong to. The scope is the adapter plus whatever its base settings say about which game it was
-configured for, because one adapter can serve several — FS22 and FS25 share one, and a scripted
-adapter could serve a dozen. See [04 — Game adapters](04-game-adapters.md#game-identity).
-Games that keep mods in more than one place get one
-instance per folder: BeamNG.drive with BeamMP needs three, since singleplayer, the MP
-client, and a dedicated server each read from a different directory. The model deliberately
-does not care whether those folders belong to the same installation, or whether a game is
-installed at all — only where the mods go.
+A **game is the policy holder**: one active profile, at most one savegame held. It is keyed by
+which game it is, not by a repo, so a machine configures Farming Simulator 25 once and it appears
+under every FS25 repo you belong to. That key is the adapter plus whatever its base settings say
+about which game it was configured for, because one adapter can serve several — FS22 and FS25
+share one, and a scripted adapter could serve a dozen. See
+[04 — Game adapters](04-game-adapters.md#game-identity).
 
-Because sync makes a folder match a profile exactly, an instance has **one active profile
-at a time, from one repo**.
+Its **targets** are how many folders it reaches. Farming Simulator has one and never mentions it;
+BeamNG.drive with BeamMP has three, since singleplayer, the MP client and a dedicated server each
+read from a different directory — and the client that matches the server is the entire point of
+that arrangement. So every target follows the game's one profile: two of them cannot disagree.
+
+Note what "configured once" is not. Three targets are usually three *installations* — three
+separate downloads — and this system has never modelled installations at all. What a machine has
+one of is the policy.
 
 ## Components
 
@@ -99,7 +102,7 @@ sent up as a result.
 | Comparing version strings, computing order | | ● |
 | Deciding a mod is version-sensitive | | ● |
 | Hashing files, generating image derivatives | | ● |
-| Instances, sources, content store, sync, drift | | ● |
+| Connected games, sources, content store, sync, drift | | ● |
 
 ### What the server does and does not validate
 
@@ -151,7 +154,7 @@ decisions should assume:
 - **1,000–2,000 mods in a single profile.** Farming Simulator installs of this size are
   routine.
 - **Thousands of mod versions registered in a repo overall.**
-- **Multiple instances per machine** sharing the same repo.
+- **A game reaching several mod folders**, each synced separately.
 
 This is why mod imagery is decoded lazily and cached to disk, why folder scanning is
 parallelised, and why the sync design in [07](07-mod-sync-design.md) avoids copying file

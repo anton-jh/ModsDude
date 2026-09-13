@@ -22,7 +22,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <remarks>
 /// <para>
 /// The activation control sits here rather than on Overview so that it is present on every sub-page,
-/// and it takes no target: a repo is about one game and a machine has one installation of it, so
+/// and it takes no target: a repo is about one game and a machine configures that game once, so
 /// there is nothing to pick. The picker it used to have was the answer to "which folder does this
 /// act on" while policy lived on folders; a game reaching three of them applies to all three, which
 /// is the apply's own loop rather than a question for the user.
@@ -30,7 +30,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// <para>
 /// It is <b>labelled for what it will do</b>: a game already on this profile is being re-applied,
 /// one on another profile or none is being moved, and moving it uninstalls whatever the previous
-/// profile put in the folder. See docs/07-mod-sync-design.md#activating-a-profile-on-an-game.
+/// profile put in the folder. See docs/07-mod-sync-design.md#activating-is-intent-applying-is-work.
 /// </para>
 /// <para>
 /// <b>And refused before the click where a held savegame forbids it.</b> The apply table refuses it
@@ -392,7 +392,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Which game this control acts on, which is not a choice: a repo is about one game and a
-    /// machine has one installation of it.
+    /// machine configures that game once.
     /// </summary>
     private void RefreshConnectedGame()
     {

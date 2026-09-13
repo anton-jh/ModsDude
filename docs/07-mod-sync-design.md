@@ -7,19 +7,19 @@ rewriting them in place, and
 of read-only store blobs is closed too, and the answer was no:
 [a rewritten blob is caught rather than prevented](#detecting-a-rewritten-blob).
 
-Applying a profile to a game installation is the reason ModsDude exists. This document is the
+Applying a profile to a game is the reason ModsDude exists. This document is the
 design the implementation was built against, and it is kept as the reasoning rather than
 rewritten into a description of the code — everything here is a decision, not a survey, and
 where a decision has a real cost, the cost is stated.
 
 ## Goal
 
-Given an instance and a `Profile`, make the instance's mod folder contain exactly the mods
+Given a game and a `Profile`, make every mod folder that game reaches contain exactly the mods
 the profile pins, at exactly the pinned versions — quickly, repeatably, and without ever
 destroying a file the user cannot get back.
 
 The scale that shapes everything below: **1,000–2,000 mods in a profile, thousands of
-versions registered per repo, several instances per machine.** A design that copies file
+versions registered per repo, and a game that may reach several mod folders.** A design that copies file
 bytes on every profile switch is not viable; at ~40 MB average that is 40–80 GB per switch.
 
 ## Where each piece lives
@@ -32,10 +32,10 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | Reconciliation engine | `ModSyncPlanner` plans, `ModSyncService` executes |
 | `ILocalModAdapter` write side | `ModTargets`, `GetModFilePath`, `GetInstalledModPath` — paths only |
 | Upload half of import | `ModImportService` |
-| Drift | `InstanceDriftService`, `SyncManifest`, `SyncManifestStore` |
+| Drift | `DriftService`, `DriftMonitor`, `SyncManifest`, `SyncManifestStore` |
 | Rewritten-blob detection | `StoreIntegrityService` off the drift check, `ContentStore.VerifyAllAsync` on demand |
 | Store housekeeping | `ContentStoreMaintenance` — sweep, verify, and what a store is costing |
-| The UI | `SyncPage`, under the instance's own `InstancePage` |
+| The UI | `SyncPage`, under the game's own `GamePage`; the activation control on `ProfilePage`; the app-level drift notice |
 
 ## Content hashing
 
@@ -154,7 +154,7 @@ special handling. Different bytes are a different address; there is nothing to s
 
 ### Where the store lives
 
-Stores live **per volume**, not per repo, per instance, or per adapter. A store is addressed
+Stores live **per volume**, not per repo, per game, or per adapter. A store is addressed
 by hash and holds no notion of what a file is for — a Farming Simulator archive and a BeamNG
 archive are both just bytes at an address — so there is nothing a repo or an adapter would
 contribute to the scoping.
@@ -183,7 +183,7 @@ user makes with the trade-off in front of them.
 
 **Store configuration is machine-wide**, in a new global settings bag on `LocalState` — not on
 local settings, not on repo settings. Keeping it in one place is what stops the "same thing
-configured in several places, then drifting" problem that scoping instances to repos created.
+configured in several places, then drifting" problem that scoping mod folders to repos created.
 It holds, per volume that hosts mod folders:
 
 | Setting | Default |
@@ -192,7 +192,7 @@ It holds, per volume that hosts mod folders:
 | Store path | `{volume}/ModsDude/store` |
 | Maximum size | User-set |
 
-Volumes appear in the settings as instances are configured on them; there is no reason to
+Volumes appear in the settings as mod folders are configured on them; there is no reason to
 create a store on a drive with no mod folders. A store on `D:` may serve `D:` by hardlink and
 `C:` by copy at the same time.
 
@@ -213,7 +213,7 @@ A hardlink is a second directory entry pointing at the same file data:
   operations, not tens of gigabytes of I/O.
 - Deleting the mod folder's name leaves the store's name, and the data, untouched. Uninstalling
   becomes free and safe.
-- N instances on that disk sharing a mod cost 1× disk.
+- N mod folders on that disk sharing a mod cost 1× disk.
 
 There is no "force move" option. Its only purpose was reclaiming space on the same volume,
 and hardlinks already make same-volume duplication cost nothing.
@@ -310,7 +310,7 @@ Automatic eviction is not enough on its own, for two reasons that are not about 
 The cap is a number somebody accepted once, and a hundred gigabytes agreed to in the abstract
 is a different thing from a hundred gigabytes on a disk that is now full. And **eviction only
 ever runs on the store a sync is using** — so a disk that used to hold a game keeps its whole
-cache indefinitely once the instance pointing at it is gone or repointed. Nothing sweeps it,
+cache indefinitely once the folder pointing at it is gone or repointed. Nothing sweeps it,
 because nothing syncs through it.
 
 So settings reports what every store on this machine is holding — the ones serving a mod folder
@@ -428,7 +428,7 @@ one failure that would make the tool untrustworthy.
 
 1. Populate the serving store with everything this profile needs that it lacks — from another
    disk's store where possible, by download otherwise. Nothing in the mod folder is touched
-   yet, so a failure or cancellation here leaves the instance exactly as it was.
+   yet, so a failure or cancellation here leaves the folder exactly as it was.
 2. Uninstall, quarantining as classified above.
 3. Install.
 
@@ -444,12 +444,12 @@ if one of the bumped mods is a locked map, hosting that save can corrupt it.
 The user's remedy is to come back to ModsDude, import the new versions, add whatever they want
 to the profile, and re-apply so the locked mods revert. The re-apply is the step that actually
 protects the save, and it is the easiest one to forget, because **nothing anywhere told the
-user their instance had drifted.** It was a manual remedy for an invisible problem.
+user their mod folder had drifted.** It was a manual remedy for an invisible problem.
 
 Reminding people harder is not the fix. Making the drift visible is.
 
-> **What is built, and what is not.** All of this is implemented: `InstanceDriftService` answers
-> from a directory listing against the manifest, `InstanceDriftMonitor` runs that check at startup
+> **What is built, and what is not.** All of this is implemented: `DriftService` answers
+> from a directory listing against the manifest, `DriftMonitor` runs that check at startup
 > and on window activation, and the surfacing described from [Surfacing it](#surfacing-it) through
 > [When to check](#when-to-check) — the app-level notification, save-and-apply, activation from
 > either end — is in the shell.
@@ -468,11 +468,11 @@ Two things are stored, and they are not the same kind of thing:
 
 | | What it is | If it is lost |
 | --- | --- | --- |
-| `ActiveProfile` on the instance | The standing intent: *this folder follows that profile* | The intent is gone. Nothing can recover which profile it was |
+| `ActiveProfile` on the game | The standing intent: *this folder follows that profile* | The intent is gone. Nothing can recover which profile it was |
 | The sync manifest | A snapshot: what the last sync actually installed | Costs a full folder scan. Nothing is wrong |
 
 `ActiveProfile` is a **source of truth** — underivable, so it must be persisted, which is why it
-sits on the persisted instance in `LocalState` rather than being inferred at runtime.
+sits on the persisted game in `LocalState` rather than being inferred at runtime.
 
 The manifest is an **optimisation only**. Reconciliation never needs it: it works from the actual
 folder contents against the profile's dependencies, which is what a first sync does. The manifest
@@ -481,7 +481,7 @@ else, so it never needs to be authoritative, backed up, or repaired.
 
 Worth noting the manifest also catches drift from the other direction. It records the mod set
 that was applied, so comparing it against the profile's current dependencies detects **someone
-else having edited the shared profile** since this instance last synced.
+else having edited the shared profile** since this folder last synced.
 
 The manifest also records **which revision of the profile was applied**, read out of the same
 response the dependencies came from. It is nullable and did **not** bump
@@ -492,7 +492,7 @@ manifest costs a full rescan for nothing.
 
 ### A profile that moved on is drift too
 
-`InstanceDriftReport.ProfileHasMoved` compares the revision the manifest records against the one
+`DriftReport.ProfileHasMoved` compares the revision the manifest records against the one
 the profile is on now, and a difference is **drift in its own right** — even when the folder holds
 exactly what was installed. That is the one kind of drift no directory listing could ever find:
 the folder matches a list nobody is using any more. A save that changes nothing mints no revision,
@@ -504,7 +504,7 @@ at revision 8"* — rather than as a bare "something differs".
 **Where the head comes from, and where it does not.** `IProfileRevisions` is answered by
 `ProfileService` out of the profile list it has loaded, which is one repo at a time; for every
 other repo it answers `null`, and null means "not asked" rather than "unchanged". That is
-deliberate. Fetching it would put a network round trip per instance into a check that runs on
+deliberate. Fetching it would put a network round trip per game into a check that runs on
 every window activation and whose whole point is that it works offline and costs a directory
 listing. The consequence is worth stating plainly: **this half of drift is reported for the repo
 the user is standing in, and silently skipped for the rest.**
@@ -516,17 +516,25 @@ noticing that there are some needs nothing but the number.
 Two states to handle rather than assume away:
 
 - **A dangling `ActiveProfile`** — the profile was deleted, or the user was removed from the
-  repo. The instance should say so and offer to pick another, not fail silently or keep
+  repo. The game should say so and offer to pick another, not fail silently or keep
   reporting drift against something unreachable.
 - **`ActiveProfile` set but no manifest** — a fresh install, or discarded local state. Drift is
   simply unknown; fall back to a full reconcile, which produces the right answer anyway.
 
 ### Where the manifest lives
 
-A **separate file per instance**, alongside `state.json` — `manifests/{instanceId}.json` — not
-inline in `LocalState` and not in the game's own folder.
+A **separate file per folder**, alongside `state.json` —
+`manifests/{game-identity}_{target-key}.json` — not inline in `LocalState` and not in the game's
+own folder.
 
-Not inline, because `state.json` is loaded eagerly and rewritten whenever an instance changes; a
+Per folder rather than per game, because syncing the dedicated server must not rewrite what the
+MP client is running, and because atomic-write-per-folder is what keeps a half-finished apply
+safe. A manifest for a target the settings no longer produce is stale and is dropped — losing one
+costs a rescan — and the sweep works from *what is still expected* rather than from what has
+gone, which is what makes one pass collect a renamed key, an emptied field and the `.tmp` an
+interrupted write left behind.
+
+Not inline, because `state.json` is loaded eagerly and rewritten whenever a game changes; a
 manifest for 2,000 mods with a hash each is a few hundred kilobytes that has no business being
 re-serialised every time someone renames something.
 
@@ -536,9 +544,10 @@ loss of `LocalState`, which is the one argument for it — but per the table abo
 manifest costs a scan, so that is not worth buying.
 
 The name goes through `StoreFileName`, which is where a store encodes what it puts in a filename.
-An instance id needs none of it — a Guid is hex and dashes — but the key is on its way to being
-adapter-authored strings, and a rule adapter authors had to obey would fail as a manifest that
-cannot be written, found at sync time on somebody else's machine. Ordinary parts pass through and
+**Two adapter-authored strings land in it** — the identity's discriminator, which a scripted
+adapter declares from inside its script, and the target key — and a rule adapter authors had to
+obey would fail as a manifest that cannot be written, found at sync time on somebody else's
+machine. Ordinary parts pass through and
 pathological ones are percent-escaped, with a length cap that truncates and stamps rather than
 collides. See [04 — Game adapters](04-game-adapters.md#targets).
 
@@ -601,7 +610,7 @@ actually differ. The recorded hashes are not read at all on this path — they e
 uninstall knows which store blob a file corresponds to, and so a suspicious file can be
 confirmed.
 
-A `FileSystemWatcher` on instance folders can catch changes as they happen, so the app already
+A `FileSystemWatcher` per mod folder can catch changes as they happen, so the app already
 knows at next launch. Useful as an optimisation on top of the manifest, not as a replacement —
 watchers miss events across sleep, and on network paths.
 
@@ -612,14 +621,14 @@ watchers miss events across sleep, and on network paths.
 > Drift is checked at startup and on window activation — throttled, since `Window.Activated`
 > fires on every alt-tab — and surfaced in the shell rather than on one page.
 
-Drift status belongs wherever the instance appears: the instance row in the sidebar, and the
+Drift status belongs wherever the game appears: the app-level notice, the game's own page, and the
 repo and profile overview pages. *"3 mods differ from Season 4"* with a Re-apply action.
 
 **Drift on a locked mod is the dangerous case and deserves different treatment.** An unlocked mod
 sitting at the wrong version is untidy; a locked map at the wrong version is a corrupted save
 waiting to happen. Say so specifically — *"Your map is at 1.4, the profile pins 1.2. Hosting
 this save may damage it."* — rather than folding it into a count.
-`InstanceDriftReport.LockedMods` and `ModSyncItem.Locked` both carry the fact already; nothing
+`DriftReport.LockedMods` and `ModSyncItem.Locked` both carry the fact already; nothing
 renders it, so the user currently gets the count.
 
 ### Turning the chore into something useful
@@ -630,7 +639,7 @@ them to the repo?"* The same interruption that warns about a problem also offers
 of the flow the user was going to perform anyway.
 
 **Never revert silently.** Auto-syncing on detection would undo updates the user deliberately
-made in-game, which is its own bad surprise. Detect and offer. A per-instance *keep this instance
+made in-game, which is its own bad surprise. Detect and offer. A per-game *keep this game
 in sync* opt-in is reasonable for people who want it, but it cannot be the default.
 
 ### It has to be unmissable, everywhere
@@ -652,8 +661,8 @@ So the requirement is about what they see on returning:
   nothing to change and the user just wants their locked versions back.
 - **The editor opens already scanning the drifted folder.** Mod sources are off by default so
   that navigating never reads a disk, but this navigation is the user asking about one specific
-  folder — the versions the game downloaded are in it. The instance id rides through
-  `GoToProfileModsAsync` to `ScanInstance`. It is the only pre-enabled source anywhere; see
+  folder — the versions the game downloaded are in it. The folder's `ModTargetRef` rides through
+  `GoToProfileModsAsync` to `ScanTarget`. It is the only pre-enabled source anywhere; see
   [09 — Mod catalog](09-mod-catalog.md#the-source-list).
 
 Dismissal should last until the drift set changes or the app restarts — not forever. A dismissed
@@ -676,7 +685,7 @@ rather than remembered at each call site:
 | Event | Raised by | Because |
 | --- | --- | --- |
 | A profile's head revision moved | `ProfileService.ProfileUpdated` | Every folder built against the previous one is drifted from that moment — whether this client saved it or a refresh brought back a teammate's save |
-| An instance was repointed | `LocalInstanceRepository.InstanceChanged` | A new mod folder, or a new active profile, makes every previous answer about it meaningless. `CollectionChanged` covers adds and removes; this covers the edits, which used to be silent |
+| A game was repointed | `GameRepository.GameChanged` | A new mod folder, or a new active profile, makes every previous answer about it meaningless. `CollectionChanged` covers adds and removes; this covers the edits, which used to be silent |
 | A savegame was taken, handed back or forgotten | `SavegameBindingStore.BindingsChanged` | What this machine holds is the other half of what the notice reports, and it changes without anything touching a mod folder |
 | The mod list editor stopped suppressing | `DriftNotificationViewModel.Release` | It is the one page that can change the answer while being told not to say it, so the last computed result is precisely what must not be trusted there |
 
@@ -686,14 +695,14 @@ is a notice that arrives one alt-tab too late.
 
 #### The notice says both halves
 
-`InstanceDrift.IsDrifted` is true for a held savegame that has moved even when the mod folder is
+`TargetDrift.IsDrifted` is true for a held savegame that has moved even when the mod folder is
 exactly what was installed — `SavegameDriftRules` decides which of the three ways it has, and
-`InstanceDriftReport.SavegameDrift` carries them — so the notice can be raised entirely by the
+`DriftReport.SavegameDrift` carries them — so the notice can be raised entirely by the
 savegame half. It therefore has to be able to *say* so: `SavegameWarning` is
 its own line, in the same caution colour as the locked-mod one because it is the same class of
 problem, and the headline names which of the two situations this is.
 
-Without it, an instance whose mod folder and profile were both empty produced a notice headlined
+Without it, a game whose mod folder and profile were both empty produced a notice headlined
 "no longer matches the applied profile" with no detail underneath at all — every sentence the
 detail line could build was about file counts and revisions, and there were none.
 
@@ -705,90 +714,82 @@ profile afterwards.**
 
 This is the step that matters. The user came back to ModsDude to update their profile; the
 re-apply is what actually reverts the auto-updated locked map, and separating it into a second
-deliberate action is precisely how it gets forgotten. Apply to whichever instances have this
-profile active — usually one, occasionally more.
+deliberate action is precisely how it gets forgotten. Apply to the game that has this profile
+active — and to every folder it reaches.
 
-#### Which instances does apply target?
+#### Which game does apply target?
 
-**Derive the set; do not ask.** An instance already carries its `ActiveProfile`, so the targets
-of a re-apply are exactly the instances whose active profile is the one being saved. There is
-nothing for the user to select.
+**Derive it; do not ask.** A profile belongs to a repo, a repo is about one game, and a game is
+keyed by which game it is — so the target of a re-apply is a lookup with a yes or a no in it, not
+a set to select from. `ProfileApplyTarget.Find` is that lookup.
 
 This matters because two different operations are easy to conflate:
 
 | | Means | Target |
 | --- | --- | --- |
-| **Re-apply** | Make instances already on this profile match it again | Derived |
-| **Activate** | Move an instance onto a different profile | Chosen — and it belongs on the instance |
+| **Apply** | Make a game already on this profile match it again | Derived |
+| **Activate** | Move a game onto a different profile | Derived too, now — and it is a decision rather than a target |
 
-Every awkward option — a checklist beside the button, a dropdown of instances, a pre-selected
-one — comes from treating re-apply as though it needed a target chosen. It does not. Activation
-is the operation that involves a choice, and putting it on a profile's save button is what makes
-the button feel like it needs a picker.
+Every awkward option — a checklist beside the button, a dropdown, a pre-selected one — came from
+treating either verb as though it needed a target chosen. Neither does. What *is* chosen is the
+profile, which is why activation lives on a profile's page and asks nothing about where.
 
-The drift case falls out for free: a drifted instance is *by definition* one whose folder no
-longer matches its own active profile, so it is already in the derived set. There is nothing to
-pre-select.
+The drift case falls out for free: a drifted folder is *by definition* one that no
+longer matches its own game's active profile, so it is already the derived answer.
 
-What the UI shows scales with the count, and shows nothing at all in the common case:
+What the save button says scales with that, and says nothing about a game in the common case:
 
-| Instances on this profile | Button | Extra UI |
+| Games on this profile | Button | Extra UI |
 | --- | --- | --- |
-| 1 | *Save and apply* | **None.** The word "instance" does not appear |
-| 2+ | *Save and apply to 3 instances* | A disclosure listing them — read-only, not a selector |
-| 0 | *Save* | None, and no second action to shape |
+| 1 | *Save and apply* | **None.** The word "game" does not appear |
+| 0 | *Save changes* | None, and no second action to shape |
 
 That last row is the onboarding case: a profile just created that nothing is using yet. After
 saving, offer activation as a **follow-up** rather than folding it into the save —
-*"No instance is using this profile. Use it on Farming Simulator?"* — dismissible, and naming
-the instance because here that genuinely is a choice.
+*"No game is using this profile. Use it on Farming Simulator?"* — dismissible. A button promising
+an apply that would reach nowhere is a worse lie than a plain one.
 
-Activation itself belongs on the instance's own page. `InstancePage` is that page — active
-profile, drift status and Re-apply — and the profile picker was removed from
-`EditLocalInstancePage`, which now carries name, settings and disconnect only. Two pickers for
-one fact is one too many.
-
-**Instances that cannot be applied to right now** — a dedicated server mid-session, a folder
+**Folders that cannot be applied to right now** — a dedicated server mid-session, a folder
 locked by a running game — are reported and left drifted rather than being something the user
-pre-deselects. The drift notification then covers them, which is the machinery that already
-exists for precisely this state. A per-save checklist would be a worse answer to a problem that
-is really "not now" rather than "not this one".
+pre-deselects. Failure is **per folder** by design: the dedicated server being locked must not
+stop the client being put right. The drift notification then covers what did not get there, which
+is the machinery that already exists for precisely this state.
 
-#### Activating a profile on an instance
+#### Activating is intent; applying is work
 
-Activation pairs one profile with one instance. It is reachable from both ends, and which end
-you start from decides what you pick:
+They were one word and one button, and splitting them is what makes a failure safe.
 
-| From | Fixed | Chosen |
+| | Activate | Apply |
 | --- | --- | --- |
-| The instance's page | The instance | A profile, from the repos this instance's scope serves |
-| Any of the profile's pages | The profile | An instance, from those matching the repo's scope |
+| What it is | Intent | Work |
+| Scope | The game — one profile | Each folder, independently |
+| Sets | `Game.ActiveProfile` | Files on disk; that folder's manifest |
+| Can fail | Only by **refusal** | Yes, per folder |
+| On failure | Nothing is recorded | The intent stands, and the folder is drifted |
 
-Both are dropdowns, and both disappear when there is nothing to choose. With one instance in the
-scope — the common case for most games — the profile-side control is a plain button with no
-dropdown at all.
+**Activating implies applying; applying never implies activating.** Activation runs the apply
+immediately after, as one gesture. *Save and apply* in the mod list editor is pure apply: the
+profile is already active on whatever game follows it.
 
-The two sets are **not** symmetrical, which follows from instances being scoped to a game rather
-than a repo (see [04](04-game-adapters.md#game-identity)):
+**The order is the guarantee**, and it is four statements in one method: answer the refusals, ask
+the one confirmation, record the intent, then do the work. So a failed apply does not retract the
+activation — the game still means to follow that profile, the folder that did not get there is
+drifted, and the app-level notice carries it. Two things stop an activation happening at all: a
+held savegame refusing it, and the user declining the plan.
 
-- **From a profile**, the candidates are simply the repo's own instance list — the same one the
-  sidebar shows under that repo. `RepoPageViewModel` builds both lists, so a profile and an
-  instance visible together are compatible by construction. Nothing needs filtering or
-  re-checking; a drag between two entries of that menu is always a valid pairing.
-- **From an instance**, the candidates span **every repo sharing the instance's scope**, grouped
-  by repo. An instance is shared across those repos and holds one active profile that may have
-  come from any of them, so a dropdown limited to the repo you happened to navigate in through
-  would be unable to display the instance's own current state — it would show a blank for a
-  profile that is plainly active.
+**One confirmation per gesture, across every folder.** A game reaching three of them is one
+decision about one profile; asking three times would let somebody accept the client's plan and
+decline the server's, which is an activation half-consented-to and a state nothing downstream
+could describe.
 
-**Label it for what it will do.** Where the instance is already on this profile, the operation is
+**Label it for what it will do.** Where the game is already on this profile, the operation is
 *Re-apply*. Where it is on a different profile, or none, it is *Activate* — and activation
-re-syncs the mod folder, which means uninstalling whatever the previous profile put there. That
+re-syncs every mod folder, which means uninstalling whatever the previous profile put there. That
 deserves the plan preview as its confirmation rather than a bare "are you sure": the reconciler
-already computes exactly what would change, so show it.
+already computes exactly what would change, so show it, with a block per folder.
 
-Put the profile-side control on the **profile shell** rather than one page, so it is present on
-Overview, Mods and Manage alike — `ProfilePageViewModel` already owns that sub-navigation.
+Put the control on the **profile shell** rather than one page, so it is present on
+Overview, Mods, History and Manage alike — `ProfilePageViewModel` already owns that sub-navigation.
 
 One interaction to get right: the mod list editor has its own *Save and apply*. While it holds
 unsaved changes, the shell-level control must not quietly apply the last-saved version behind
@@ -836,7 +837,7 @@ must not depend on having been running.
 
 An in-game update rewriting a mod file is precisely what a shared content store is exposed to.
 If the file in the mod folder is a hardlink to a store blob and the updater **rewrites it in
-place**, it corrupts the blob — which is now shared with every other instance and repo on that
+place**, it corrupts the blob — which is now shared with every other mod folder and repo on that
 volume. If the updater writes a new file and renames over the old one, the directory entry is
 replaced, the link breaks harmlessly, and the store is untouched.
 
@@ -926,7 +927,7 @@ the address goes back to being re-downloadable. Leaving it would go on serving t
 every repo on the volume under an address they all trust.
 
 `StoreIntegrityService` runs this off whatever the folder comparison found changed, and
-`InstanceDriftMonitor` **accumulates** what it finds rather than recomputing it. That is deliberate
+`DriftMonitor` **accumulates** what it finds rather than recomputing it. That is deliberate
 and is the one piece of state here that outlives the check that produced it: finding a corrupt blob
 destroys the evidence, so a notice rebuilt from the latest check alone would drop the warning on the
 next alt-tab. It is also the warning least worth dropping — it means the game's updater writes
@@ -962,7 +963,7 @@ removing the store's copy fixes what would be *served next*, not what is install
 re-applying that profile replaces the file. A store cannot work out which folders those are — it
 deliberately knows nothing about what a blob *is* — so `ContentStore.VerifyAllAsync` reports bare
 addresses and `ContentStoreMaintenance.VerifyAsync` turns them into mod folders and profile names off
-the manifests. Every served instance is consulted, not only the drifted ones: a folder whose file
+the manifests. Every served folder is consulted, not only the drifted ones: a folder whose file
 still matches its manifest exactly is the *worst* case here, because it means nothing has noticed.
 
 ## Server support required
@@ -1014,7 +1015,7 @@ I/O beyond hashing the few files whose stat no longer matches the manifest and c
 the service executes and reports per-mod progress. Cancellable, because 2,000 files is minutes
 of work even on the fast path and a frozen progress bar is indistinguishable from a hang.
 
-**`SyncPage`**, under the instance's own `InstancePage`, shows the plan (install / replace /
+**`SyncPage`**, under the game's own `GamePage`, shows the plan (install / replace /
 uninstall / quarantine counts), the confirmation naming anything unrecognised, drift status, and
 live progress.
 

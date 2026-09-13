@@ -146,7 +146,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     }
 
     /// <summary>
-    /// Connects this machine's installation of the game the adapter is configured for.
+    /// Connects the game the adapter is configured for, as this machine has it.
     /// </summary>
     /// <remarks>
     /// <b>No name is asked for.</b> A game is called what its adapter calls it - Farming Simulator
@@ -168,7 +168,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         {
             throw new UserFriendlyException(
                 "This game is already connected",
-                "One installation of a game is configured once on a machine, and this one already is. Open its settings to change where its folders are.");
+                "A machine configures a game once - one active profile, one savegame hold, however many folders its adapter reaches - and this one already is. Open its settings to change where those folders are.");
         }
 
         var targets = GetTargets(baseAdapter, localSettings);
