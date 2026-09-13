@@ -43,7 +43,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     private readonly Game _game;
     private readonly RepoRepository _repoRepository;
     private readonly IProfilesClient _profilesClient;
-    private readonly GameRepository _gameRepository;
     private readonly DriftService _driftService;
     private readonly DriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
@@ -64,7 +63,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         NavigationManager navigationManager,
         RepoRepository repoRepository,
         IProfilesClient profilesClient,
-        GameRepository gameRepository,
         DriftService driftService,
         DriftMonitor driftMonitor,
         ProfileApplyService applyService,
@@ -79,7 +77,6 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         _game = game;
         _repoRepository = repoRepository;
         _profilesClient = profilesClient;
-        _gameRepository = gameRepository;
         _driftService = driftService;
         _driftMonitor = driftMonitor;
         _applyService = applyService;
@@ -258,7 +255,10 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var outcome = await _applyService.ApplyAsync(
+            // The intent is recorded by the service, before any file moves and even where the folder
+            // could not be touched: the game is still meant to follow this profile, and being left
+            // drifted is what the notice is for.
+            var outcome = await _applyService.ActivateAsync(
                 owner,
                 _game,
                 option.Value.ProfileId,
@@ -267,11 +267,8 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
                 progress: null,
                 cancellationToken);
 
-            // The intent is recorded even where the folder could not be touched: the game is still
-            // meant to follow this profile, and being left drifted is what the notice is for.
-            if (outcome.RecordsIntent)
+            if (outcome.Activated)
             {
-                _gameRepository.SetActiveProfile(_game, option.Value);
                 HasDanglingActiveProfile = false;
             }
 

@@ -164,12 +164,10 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
 
         // Asked once for the game rather than once per folder: it is one disclosure about what is
         // going to the Recycle Bin, and splitting it would be two dialogs saying the same thing.
-        foreach (var plan in _plans.Where(x => x.Unrecognised.Count > 0))
+        if (_plans.Any(x => x.Unrecognised.Count > 0)
+            && await _applyService.ConfirmUnrecognisedAsync(_plans) is false)
         {
-            if (await _applyService.ConfirmUnrecognisedAsync(plan) is false)
-            {
-                return;
-            }
+            return;
         }
 
         IsRunning = true;

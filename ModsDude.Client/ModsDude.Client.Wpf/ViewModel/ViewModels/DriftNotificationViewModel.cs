@@ -328,23 +328,19 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         try
         {
-            var messages = new List<string>();
-
-            foreach (var game in _instanceRepository.GetGamesUsing(active))
-            {
-                var outcome = await _applyService.ApplyAsync(
+            // The game this notice is about, not every game on the profile: the entry names one, and
+            // with one installation per game there is nothing else the profile could reach. Pure
+            // apply - the game already follows this profile, which is why it is drifted from it.
+            Status = _instanceRepository.Find(_subject.Game.Identity) is Game game
+                ? (await _applyService.ApplyAsync(
                     repo,
                     game,
                     active.ProfileId,
                     _subject.ProfileName,
                     confirmPlan: false,
                     progress: null,
-                    cancellationToken);
-
-                messages.Add(outcome.Message);
-            }
-
-            Status = messages.Count > 0 ? string.Join(" ", messages) : null;
+                    cancellationToken)).Message
+                : null;
         }
         finally
         {

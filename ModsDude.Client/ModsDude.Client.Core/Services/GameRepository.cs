@@ -127,12 +127,13 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     }
 
     /// <summary>
-    /// The games a save on this profile re-applies to. See <see cref="ProfileApplyTargets"/> for
-    /// why this is derived rather than chosen.
+    /// The game a save on this profile re-applies to, or null where none follows it. See
+    /// <see cref="ProfileApplyTarget"/> for why this is derived rather than chosen, and why it is one
+    /// game rather than a list.
     /// </summary>
-    public IReadOnlyList<Game> GetGamesUsing(ActiveProfile profile)
+    public Game? GetGameFollowing(GameIdentity scope, ActiveProfile profile)
     {
-        return ProfileApplyTargets.Derive(Games, profile);
+        return ProfileApplyTarget.Find(Games, scope, profile);
     }
 
     /// <exception cref="UserFriendlyException">

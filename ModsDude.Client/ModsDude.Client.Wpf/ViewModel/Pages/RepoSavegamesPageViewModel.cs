@@ -1122,7 +1122,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var outcome = await _applyService.ApplyAsync(
+            // An activation: this savegame follows a mod list and the game is being put on it, so
+            // the intent is what the service records before it touches a file.
+            var outcome = await _applyService.ActivateAsync(
                 _repo,
                 game,
                 profile.Id,
@@ -1131,8 +1133,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 progress: null,
                 _lifetime,
                 revision: row.PinnedRevision ?? profile.HeadRevision);
-
-            RecordActiveProfile(game, profile, outcome.RecordsIntent);
 
             Status = outcome.Message;
 
@@ -1368,10 +1368,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // night stays one click.
         if (unrecognised.Count == 0)
         {
-            var outcome = await _applyService.ApplyAsync(
+            var outcome = await _applyService.ActivateAsync(
                 _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
-
-            RecordActiveProfile(game, profile, outcome.RecordsIntent);
 
             Status += $" {outcome.Message}";
 
@@ -1399,7 +1397,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             // Review leaves the game drifted, and the persistent notification takes it from there -
             // the same answer this design gives for a game that cannot be applied to right now.
-            RecordActiveProfile(game, profile, true);
+            RecordActiveProfile(game, profile);
 
             Status += " The mod folder was left as it is until you decide what to keep.";
 
@@ -1415,6 +1413,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
+        // Before the work, the way an activation records it: the user has consented to the plan, so
+        // the game means to follow this profile from here whether or not every folder gets there.
+        RecordActiveProfile(game, profile);
+
         var failures = 0;
         var completed = true;
 
@@ -1425,8 +1427,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             completed &= result.Completed;
             failures += result.Failures.Count;
         }
-
-        RecordActiveProfile(game, profile, true);
 
         Status += completed
             ? $" '{game.Name}' now matches '{profile.Name}'."
@@ -1439,12 +1439,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// The standing intent is recorded even where the folder could not be put right: the game is
     /// still meant to follow this profile, and being left drifted is what the notice is for.
     /// </summary>
-    private void RecordActiveProfile(Game game, ProfileDto profile, bool record)
+    private void RecordActiveProfile(Game game, ProfileDto profile)
     {
-        if (record)
-        {
-            _gameRepository.SetActiveProfile(game, new ActiveProfile(_repo.Id, profile.Id));
-        }
+        _gameRepository.SetActiveProfile(game, new ActiveProfile(_repo.Id, profile.Id));
     }
 
     /// <summary>

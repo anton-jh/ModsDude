@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.IO;
@@ -40,16 +41,23 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched;
 
     /// <summary>
-    /// Whether the game should now be recorded as following this profile.
+    /// Whether this game now follows the profile - <b>what happened, not a rule to apply</b>.
     /// </summary>
     /// <remarks>
-    /// <b>True even where the folder could not be touched</b>, which is the long-standing rule: the
-    /// game is still meant to follow this profile and being left drifted is what the notice is
-    /// for. False for the two answers that are not "not now" - the user backing out, and a savegame
-    /// held here that refuses the switch outright. Recording the intent for that second one would
-    /// leave a game whose standing profile is one its own held savegame forbids applying.
+    /// <para>
+    /// The intent is recorded by <see cref="ProfileApplyService.ActivateAsync"/> itself, before a
+    /// single file moves, so nothing downstream has to know when it is right to record one. This is
+    /// here for the callers that have their own bookkeeping to do about it - a page refreshing its
+    /// activation label, an editor recomputing which games its save applies to.
+    /// </para>
+    /// <para>
+    /// False for a pure apply, which never records anything, and for the two answers that stop an
+    /// activation happening at all: a held savegame refusing it, and the user declining the plan.
+    /// <b>True even where the folder could not be touched</b> - the game is still meant to follow
+    /// this profile, and being left drifted is what the notice is for.
+    /// </para>
     /// </remarks>
-    public bool RecordsIntent => Status is not (ProfileApplyStatus.Declined or ProfileApplyStatus.Refused);
+    public bool Activated { get; init; }
 
     /// <summary>
     /// The savegame whose hold refused this, so a caller that has the list can name it. Null for
@@ -60,10 +68,29 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
 
 
 /// <summary>
-/// Applying a profile to a game from anywhere that is not the sync page: the drift notice's
-/// one-click re-apply, the mod list editor's save, and the shell-level activation control.
+/// The two verbs, for everywhere that is not the sync page: the drift notice's one-click re-apply,
+/// the mod list editor's save, and the activation controls.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>Activating is intent; applying is work.</b>
+/// <see cref="ActivateAsync"/> records which profile a game follows and then applies it, as one
+/// gesture; <see cref="ApplyAsync"/> only does the work, because whatever it is applying is already
+/// the game's standing intent. Activating implies applying and applying never implies activating.
+/// </para>
+/// <para>
+/// <b>The split is structural, which is the whole of what makes a failure safe.</b> Everything that
+/// can stop an activation from happening at all - a held savegame refusing it, the user declining
+/// the plan - is answered before the intent is recorded, and everything after it is work. So a
+/// failure leaves the game still meaning to follow the profile, with the folder that did not get
+/// there reported as drifted, rather than quietly retracting a decision the user made.
+/// </para>
+/// <para>
+/// <b>One confirmation per gesture, across every folder.</b> A game reaching three of them is one
+/// decision about one profile; asking three times would let somebody accept the client's plan and
+/// decline the server's, which is an activation half-consented-to and a state nothing downstream
+/// could describe.
+/// </para>
 /// <para>
 /// The sync page stays as it is - it exists to show the plan and let the user read it before
 /// deciding. This is the other shape, where the decision has already been made and the plan is only
@@ -78,6 +105,7 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
 /// </remarks>
 public sealed class ProfileApplyService(
     ModSyncService syncService,
+    GameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
     IBackgroundTaskReporter backgroundTasks)
@@ -158,24 +186,17 @@ public sealed class ProfileApplyService(
     }
 
     /// <summary>
-    /// Plans, confirms anything unrecoverable, and executes. One call, because the caller has already
-    /// decided - the whole point of the drift notice's second action is that it costs one click.
+    /// Records that this game follows the profile, then applies it to every folder it reaches. One
+    /// gesture.
     /// </summary>
-    /// <param name="confirmPlan">
-    /// Whether to show the plan before executing. Activation moves a game onto a different
-    /// profile, which uninstalls whatever the previous one put there; the reconciler already knows
-    /// exactly what that is, so it is shown rather than a bare "are you sure". A re-apply of the
-    /// profile the game is already on has nothing to disclose beyond the destructive part, which
-    /// is confirmed either way.
-    /// </param>
-    /// <param name="revision">
-    /// Which revision to install, or null - nearly always - to let the game decide, per
-    /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
-    /// preparing the folder for a savegame nothing is holding yet: a past one runs on its own revision,
-    /// and letting the game decide would install head and leave the check-out that follows
-    /// immediately drifted.
-    /// </param>
-    public async Task<ProfileApplyOutcome> ApplyAsync(
+    /// <remarks>
+    /// <b>The intent is recorded here and nowhere else</b>, after the refusals and the confirmation
+    /// and before any file moves - so a folder that could not be applied to leaves a game that still
+    /// means to follow the profile, which is what the drift notice then carries. A caller that
+    /// wanted the work without the decision wants <see cref="ApplyAsync"/>.
+    /// </remarks>
+    /// <inheritdoc cref="ApplyAsync" path="/param"/>
+    public Task<ProfileApplyOutcome> ActivateAsync(
         Repo repo,
         Game game,
         Guid profileId,
@@ -184,6 +205,50 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken,
         int? revision = null)
+        => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: true);
+
+    /// <summary>
+    /// Makes every folder this game reaches match the profile. Records nothing: whatever is being
+    /// applied is already what the game follows.
+    /// </summary>
+    /// <param name="confirmPlan">
+    /// Whether to show the plan before executing, once for the whole game. Moving a game onto a
+    /// different profile uninstalls whatever the previous one put there and the reconciler knows
+    /// exactly what that is, so it is shown rather than a bare "are you sure"; a re-apply of the
+    /// profile the game is already on has nothing to disclose beyond the destructive part, which is
+    /// confirmed either way. A caller whose own dialog has already shown the plan passes false.
+    /// </param>
+    /// <param name="revision">
+    /// Which revision to install, or null - nearly always - to let the game decide, per
+    /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
+    /// preparing the folder for a savegame nothing is holding yet: a past one runs on its own revision,
+    /// and letting the game decide would install head and leave the check-out that follows
+    /// immediately drifted.
+    /// </param>
+    public Task<ProfileApplyOutcome> ApplyAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string? profileName,
+        bool confirmPlan,
+        IProgress<ModSyncProgress>? progress,
+        CancellationToken cancellationToken,
+        int? revision = null)
+        => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: false);
+
+    /// <summary>
+    /// Both verbs, in the order the split defines: refuse, plan, ask, <em>then</em> record, then work.
+    /// </summary>
+    private async Task<ProfileApplyOutcome> RunAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string? profileName,
+        bool confirmPlan,
+        IProgress<ModSyncProgress>? progress,
+        CancellationToken cancellationToken,
+        int? revision,
+        bool activate)
     {
         // Asked before anything is planned, because this refusal is not about the folder and reading
         // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
@@ -216,11 +281,26 @@ public sealed class ProfileApplyService(
 
         if (plans.Count == 0)
         {
-            return new ProfileApplyOutcome(
+            // Nothing to plan against and nothing to ask about - but an activation still happened:
+            // the game means to follow this profile and the notice says so until a folder can be
+            // reached. This is the whole of "a failed apply does not retract the activation",
+            // reached before any work was possible at all.
+            return Record(activate, repo, game, profileId, new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be.");
+                $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be."));
         }
+
+        // Once, across every folder. Declining is one answer about one gesture, which is what stops
+        // an activation being half-consented-to.
+        if (await ConsentedAsync(game, plans, confirmPlan) is false)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+        }
+
+        // Before the work, and only after every way of saying no has been offered. Everything below
+        // is work, and work failing leaves this standing.
+        RecordIntent(activate, repo, game, profileId);
 
         // One folder at a time, each with its own answer. A failure here is per folder by design -
         // the dedicated server being locked mid-session must not stop the client being put right -
@@ -229,10 +309,61 @@ public sealed class ProfileApplyService(
 
         foreach (var plan in plans)
         {
-            outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision));
+            outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, progress, cancellationToken, revision));
         }
 
-        return Combine(game, outcomes);
+        return Combine(game, outcomes) with { Activated = activate };
+    }
+
+    /// <summary>
+    /// The one confirmation, covering every folder the gesture touches.
+    /// </summary>
+    /// <remarks>
+    /// Two questions rather than one, as before: what the apply would change, and - separately, and
+    /// always - the files nothing else on the machine has a copy of. The second is asked even where
+    /// the caller waived the first, because it is the only interruption a re-apply is ever worth.
+    /// </remarks>
+    private async Task<bool> ConsentedAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool confirmPlan)
+    {
+        var work = plans.Where(x => x.HasWork).ToList();
+
+        if (work.Count == 0)
+        {
+            return true;
+        }
+
+        if (confirmPlan && await ConfirmPlanAsync(game, work) is false)
+        {
+            return false;
+        }
+
+        return work.Any(x => x.Unrecognised.Count > 0) is false || await ConfirmUnrecognisedAsync(work);
+    }
+
+    /// <summary>
+    /// Writes down which profile this game follows, where the gesture was an activation.
+    /// </summary>
+    /// <remarks>
+    /// Skipped where it would write what is already there: <c>SetActiveProfile</c> saves the whole of
+    /// local state and wakes the drift check, and re-applying the profile a game already follows is
+    /// the commonest gesture in the app.
+    /// </remarks>
+    private void RecordIntent(bool activate, Repo repo, Game game, Guid profileId)
+    {
+        var intent = new ActiveProfile(repo.Id, profileId);
+
+        if (activate && game.ActiveProfile != intent)
+        {
+            games.SetActiveProfile(game, intent);
+        }
+    }
+
+    /// <inheritdoc cref="RecordIntent"/>
+    private ProfileApplyOutcome Record(bool activate, Repo repo, Game game, Guid profileId, ProfileApplyOutcome outcome)
+    {
+        RecordIntent(activate, repo, game, profileId);
+
+        return outcome with { Activated = activate };
     }
 
     /// <summary>
@@ -242,16 +373,14 @@ public sealed class ProfileApplyService(
     /// <para>
     /// <b>The status is the one that most needs saying</b>, and every sentence is kept: a game that
     /// applied to its server folder and could not reach its client folder says both, because the
-    /// half that worked is not the news. <see cref="ProfileApplyStatus.Declined"/> ranks last on
-    /// purpose - it only speaks for the game where <em>every</em> folder was declined, since
-    /// <see cref="ProfileApplyOutcome.RecordsIntent"/> hangs off this and a game with one folder
-    /// already put right plainly means to follow the profile.
+    /// half that worked is not the news.
     /// </para>
     /// <para>
-    /// Scaffolding, and the shape slice 4 of Phase 10 replaces: activation becomes one gesture with
-    /// one confirmation across every folder, which is what makes a partly-declined activation
-    /// unrepresentable rather than something to fold. <see cref="ProfileApplyStatus.Refused"/> is
-    /// never folded - it is decided once for the game, before the loop.
+    /// <b>Two statuses never reach here.</b> A refusal is decided once for the game before anything
+    /// is planned, and declining is one answer to one confirmation covering every folder - so the
+    /// only way a fold can see <see cref="ProfileApplyStatus.Declined"/> now is a cancellation part
+    /// way through the work, which is genuinely per folder. A partly-declined activation stopped
+    /// being representable when the confirmation moved.
     /// </para>
     /// </remarks>
     private static ProfileApplyOutcome Combine(Game game, IReadOnlyList<ProfileApplyOutcome> perTarget)
@@ -279,13 +408,19 @@ public sealed class ProfileApplyService(
         };
     }
 
-    /// <summary>One folder: confirm what it would destroy, then make it match.</summary>
+    /// <summary>
+    /// One folder, already consented to: make it match.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nothing is asked in here.</b> The confirmation is one question about the whole gesture and
+    /// is answered before this runs - see <see cref="ConsentedAsync"/> - so what is left per folder
+    /// is the work and the sentence describing how it went.
+    /// </remarks>
     private async Task<ProfileApplyOutcome> ApplyTargetAsync(
         ModSyncPlan plan,
         Game game,
         Guid profileId,
         string? profileName,
-        bool confirmPlan,
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken,
         int? revision)
@@ -302,16 +437,6 @@ public sealed class ProfileApplyService(
 
             return new ProfileApplyOutcome(
                 game, ProfileApplyStatus.AlreadyMatched, $"{where} already matches{Pinned(game, profileId, revision)}.");
-        }
-
-        if (confirmPlan && await ConfirmPlanAsync(game, plan) is false)
-        {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was left as it is.");
-        }
-
-        if (plan.Unrecognised.Count > 0 && await ConfirmUnrecognisedAsync(plan) is false)
-        {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was left as it is.");
         }
 
         // Only from here: everything above is planning and asking, which is quick or is a dialog the
@@ -364,22 +489,17 @@ public sealed class ProfileApplyService(
     /// The reconciler's own plan as the confirmation. It already computes exactly what would change,
     /// so showing it beats asking "are you sure" about something the user cannot see.
     /// </summary>
-    public async Task<bool> ConfirmPlanAsync(Game game, ModSyncPlan plan)
+    /// <param name="plans">
+    /// Every folder the gesture would change, in one dialog. A game reaching three of them is still
+    /// one decision about one profile, so each folder gets a block of its own and the question is
+    /// asked once - see the remarks on this class for why the alternative is unrepresentable.
+    /// </param>
+    public async Task<bool> ConfirmPlanAsync(Game game, IReadOnlyList<ModSyncPlan> plans)
     {
-        var lines = new List<string>();
-
-        if (plan.InstallCount > 0) lines.Add($"{plan.InstallCount} to install");
-        if (plan.ReplaceCount > 0) lines.Add($"{plan.ReplaceCount} to replace");
-        if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
-        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin");
-        if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
-
         var modal = new ConfirmationDialogViewModel(
             $"Apply to '{game.Name}'?",
-            $"{plan.ModFolder}\n\n" +
-            $"{string.Join('\n', lines)}\n" +
-            $"{plan.KeepCount} already correct.\n\n" +
-            "Anything the profile does not pin is taken out of the folder.",
+            string.Join("\n\n", plans.Select(Describe)) +
+            "\n\nAnything the profile does not pin is taken out of the folder.",
             IconKind.Question,
             "Apply",
             "Cancel");
@@ -389,18 +509,39 @@ public sealed class ProfileApplyService(
         return modal.Result;
     }
 
+    /// <summary>One folder's block of the plan dialog: where it is, and what would happen there.</summary>
+    private static string Describe(ModSyncPlan plan)
+    {
+        var lines = new List<string>();
+
+        if (plan.InstallCount > 0) lines.Add($"{plan.InstallCount} to install");
+        if (plan.ReplaceCount > 0) lines.Add($"{plan.ReplaceCount} to replace");
+        if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
+        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin");
+        if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
+
+        return $"{plan.ModFolder}\n\n{string.Join('\n', lines)}\n{plan.KeepCount} already correct.";
+    }
+
     /// <summary>
     /// The one interruption a re-apply is always worth: files nothing else on the machine has a copy
     /// of, named, with where they are going.
     /// </summary>
-    public async Task<bool> ConfirmUnrecognisedAsync(ModSyncPlan plan)
+    /// <param name="plans">
+    /// Every folder being applied to, because this is one question about one gesture and a file is
+    /// no less unrecoverable for being in the second folder. Named across all of them; the counts
+    /// are the sum.
+    /// </param>
+    public async Task<bool> ConfirmUnrecognisedAsync(IReadOnlyList<ModSyncPlan> plans)
     {
-        var names = plan.Unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
-        var more = plan.Unrecognised.Count > 10 ? $"\n  ...and {plan.Unrecognised.Count - 10} more" : "";
+        var unrecognised = plans.SelectMany(x => x.Unrecognised).ToList();
+
+        var names = unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
+        var more = unrecognised.Count > 10 ? $"\n  ...and {unrecognised.Count - 10} more" : "";
 
         var modal = new ConfirmationDialogViewModel(
             "These are not in the repo",
-            $"{plan.Unrecognised.Count} installed files are not registered in this repo, so nothing else has a copy of them:\n\n" +
+            $"{unrecognised.Count} installed files are not registered in this repo, so nothing else has a copy of them:\n\n" +
             $"{string.Join('\n', names)}{more}\n\n" +
             "They will be moved to the Windows Recycle Bin, where you can restore them. Nothing is deleted.",
             IconKind.Warning,

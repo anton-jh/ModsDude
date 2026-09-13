@@ -384,17 +384,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// The games this save re-applies to: read-only, and only rendered from two upwards. With one
-    /// the word "game" never appears at all, which is the common case for most games.
+    /// The game this save re-applies to, or null where none follows this profile.
     /// </summary>
-    public ObservableCollection<Game> ApplyTargets { get; } = [];
-
+    /// <remarks>
+    /// <b>One or none, never a list.</b> A profile belongs to a repo, a repo is about one game, and a
+    /// machine has one installation of it - so the read-only disclosure of "these are the games this
+    /// applies to" had nothing left to disclose, and the word "game" never appears on this page at
+    /// all now.
+    /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveActionText))]
     [NotifyPropertyChangedFor(nameof(HasApplyTargets))]
-    [NotifyPropertyChangedFor(nameof(ShowApplyTargetList))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
-    private int _applyTargetCount;
+    private Game? _applyTarget;
 
     /// <summary>What the last save's apply did, per game.</summary>
     [ObservableProperty]
@@ -419,11 +421,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public bool HasActivationOffer => ActivationOffer is not null;
     public bool HasActivationChoice => ActivationCandidates.Count > 1;
 
-    public bool HasApplyTargets => ApplyTargetCount > 0;
-    public bool ShowApplyTargetList => ApplyTargetCount > 1;
+    public bool HasApplyTargets => ApplyTarget is not null;
     public bool HasApplyStatus => ApplyStatus is not null;
 
-    public string SaveActionText => ProfileApplyTargets.DescribeSaveAction(ApplyTargetCount);
+    public string SaveActionText => ProfileApplyTarget.DescribeSaveAction(HasApplyTargets);
 
     /// <summary>
     /// Worded with the consequence rather than as a caution. Someone reading only the label has to be
@@ -1121,38 +1122,35 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool CanSaveOnly() => CanSave() && HasApplyTargets;
 
     /// <summary>
-    /// Re-applies to the derived targets. A game that cannot be applied to right now - a
-    /// dedicated server mid-session, a folder a running game holds - is reported and left drifted,
-    /// which the app-level notice already covers. That is a "not now", not a "not this one".
+    /// Re-applies to the game that follows this profile.
     /// </summary>
+    /// <remarks>
+    /// <b>Pure apply, never an activation.</b> The profile is already what that game follows, so
+    /// there is no intent to record - saving a mod list is not a decision about which list a game is
+    /// on. A folder that cannot be applied to right now - a dedicated server mid-session, one a
+    /// running game holds - is reported and left drifted, which the app-level notice already covers.
+    /// </remarks>
     private async Task ApplyToTargetsAsync(CancellationToken cancellationToken)
     {
-        if (ApplyTargets.Count == 0)
+        if (ApplyTarget is not Game game)
         {
             OfferActivation();
 
             return;
         }
 
-        var messages = new List<string>();
+        ApplyStatus = $"Applying to '{game.Name}'...";
 
-        foreach (var game in ApplyTargets.ToList())
-        {
-            ApplyStatus = $"Applying to '{game.Name}'...";
+        var outcome = await _applyService.ApplyAsync(
+            _repo,
+            game,
+            _profile.Id,
+            _profile.Name,
+            confirmPlan: false,
+            progress: null,
+            cancellationToken);
 
-            var outcome = await _applyService.ApplyAsync(
-                _repo,
-                game,
-                _profile.Id,
-                _profile.Name,
-                confirmPlan: false,
-                progress: null,
-                cancellationToken);
-
-            messages.Add(outcome.Message);
-        }
-
-        ApplyStatus = string.Join(" ", messages);
+        ApplyStatus = outcome.Message;
 
         await _driftMonitor.CheckAsync();
     }
@@ -1191,7 +1189,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         ActivationOffer = null;
 
-        var outcome = await _applyService.ApplyAsync(
+        var outcome = await _applyService.ActivateAsync(
             _repo,
             game,
             _profile.Id,
@@ -1202,9 +1200,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             progress: null,
             cancellationToken);
 
-        if (outcome.RecordsIntent)
+        if (outcome.Activated)
         {
-            _gameRepository.SetActiveProfile(game, _activeProfile);
             RefreshApplyTargets();
         }
 
@@ -1839,14 +1836,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _watchedGames.Add(game);
         }
 
-        ApplyTargets.Clear();
-
-        foreach (var game in _gameRepository.GetGamesUsing(_activeProfile))
-        {
-            ApplyTargets.Add(game);
-        }
-
-        ApplyTargetCount = ApplyTargets.Count;
+        ApplyTarget = _gameRepository.GetGameFollowing(_repo.Scope, _activeProfile);
     }
 
     /// <summary>

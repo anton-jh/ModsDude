@@ -41,7 +41,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly DriftMonitor _driftMonitor;
@@ -65,7 +64,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         Repo repo,
         ProfileDto profile,
         NavigationManager navigationManager,
-        GameRepository gameRepository,
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
         DriftMonitor driftMonitor,
@@ -77,7 +75,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     {
         _repo = repo;
         _profile = profile;
-        _gameRepository = gameRepository;
         _applyService = applyService;
         _heldSavegames = heldSavegames;
         _driftMonitor = driftMonitor;
@@ -237,14 +234,18 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         }
 
         var kind = ActivationKind;
-        var target = new ActiveProfile(_repo.Id, _profile.Id);
 
         IsApplying = true;
         ActivationStatus = kind is ProfileActivationKind.Apply ? "Re-applying..." : "Activating...";
 
         try
         {
-            var outcome = await _applyService.ApplyAsync(
+            // Always the activation verb, even where the game already follows this profile: that is
+            // a decision being made again rather than a different act, and the service is what
+            // notices there is nothing new to record. Whatever the folders end up doing, the intent
+            // stands - a game that could not be reached is still meant to follow this profile, and
+            // the drift notice covers the rest.
+            var outcome = await _applyService.ActivateAsync(
                 _repo,
                 game,
                 _profile.Id,
@@ -254,13 +255,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 confirmPlan: kind is ProfileActivationKind.Activate,
                 progress: null,
                 cancellationToken);
-
-            // The intent is recorded whatever the folder ended up doing: a game that could not be
-            // reached is still meant to follow this profile, and the drift notice covers the rest.
-            if (outcome.RecordsIntent)
-            {
-                _gameRepository.SetActiveProfile(game, target);
-            }
 
             ActivationStatus = outcome.Message;
 
