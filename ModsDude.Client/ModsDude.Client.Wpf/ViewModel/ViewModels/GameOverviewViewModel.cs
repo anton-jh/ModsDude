@@ -36,7 +36,7 @@ public sealed record GameFolderLine(string Text, string? Drift)
 /// happened to produce, with nothing saying which folder it was about - which is exactly the silence
 /// this phase exists to remove.
 /// </remarks>
-public class InstanceOverviewViewModel
+public class GameOverviewViewModel
 {
     /// <param name="drift">
     /// Every entry the monitor has for this game, placed onto the folders below by key. Entries
@@ -44,7 +44,7 @@ public class InstanceOverviewViewModel
     /// carry no mod drift and land nowhere here, which is right: this row is about mod folders, and
     /// the app-level notice is what says the savegame half.
     /// </param>
-    public InstanceOverviewViewModel(
+    public GameOverviewViewModel(
         Game game,
         string activeProfileSummary,
         IReadOnlyList<TargetDrift> drift)

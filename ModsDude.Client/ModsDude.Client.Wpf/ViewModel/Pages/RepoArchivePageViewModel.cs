@@ -51,14 +51,14 @@ public partial class RepoArchivePageViewModel : PageViewModel
     public RepoArchivePageViewModel(
         Repo repo,
         ProfileService profileService,
-        GameRepository localInstances,
+        GameRepository games,
         ISavegamesClient savegamesClient,
         IModalService modalService,
         IErrorReporter errorReporter)
     {
         _repo = repo;
         _profileService = profileService;
-        _games = localInstances;
+        _games = games;
         _savegamesClient = savegamesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;

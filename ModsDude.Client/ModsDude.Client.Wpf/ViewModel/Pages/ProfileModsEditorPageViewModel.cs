@@ -218,7 +218,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _undoTimer.Tick += (_, _) => BulkUndo = null;
 
-        _repo.Games.CollectionChanged += OnLocalInstancesChanged;
+        _repo.Games.CollectionChanged += OnGamesChanged;
         RefreshApplyTargets();
 
         // The one place the app-level drift notice is suppressed: somebody already looking at the
@@ -1789,11 +1789,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             row.PropertyChanged -= OnPinnedRowChanged;
         }
 
-        _repo.Games.CollectionChanged -= OnLocalInstancesChanged;
+        _repo.Games.CollectionChanged -= OnGamesChanged;
 
         foreach (var game in _watchedGames)
         {
-            game.PropertyChanged -= OnInstanceChanged;
+            game.PropertyChanged -= OnGameChanged;
         }
 
         _watchedGames.Clear();
@@ -1805,12 +1805,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
 
-    private void OnLocalInstancesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshApplyTargets();
     }
 
-    private void OnInstanceChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnGameChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(Game.ActiveProfile))
         {
@@ -1826,14 +1826,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         foreach (var game in _watchedGames)
         {
-            game.PropertyChanged -= OnInstanceChanged;
+            game.PropertyChanged -= OnGameChanged;
         }
 
         _watchedGames.Clear();
 
         foreach (var game in _repo.Games)
         {
-            game.PropertyChanged += OnInstanceChanged;
+            game.PropertyChanged += OnGameChanged;
             _watchedGames.Add(game);
         }
 

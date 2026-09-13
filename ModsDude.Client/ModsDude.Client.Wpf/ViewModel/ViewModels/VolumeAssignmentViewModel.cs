@@ -12,12 +12,12 @@ public partial class VolumeAssignmentViewModel : ObservableObject
 {
     public VolumeAssignmentViewModel(
         string volumeRoot,
-        int instanceCount,
+        int modFolderCount,
         string servingVolume,
         IReadOnlyList<string> candidateVolumes)
     {
         VolumeRoot = volumeRoot;
-        InstanceCount = instanceCount;
+        ModFolderCount = modFolderCount;
         Options = candidateVolumes
             .Select(x => new ServingVolumeOption(x, DescribeOption(volumeRoot, x)))
             .ToList();
@@ -30,7 +30,7 @@ public partial class VolumeAssignmentViewModel : ObservableObject
     public event EventHandler? ServingVolumeChanged;
 
     public string VolumeRoot { get; }
-    public int InstanceCount { get; }
+    public int ModFolderCount { get; }
     public IReadOnlyList<ServingVolumeOption> Options { get; }
 
     [ObservableProperty]
@@ -38,9 +38,9 @@ public partial class VolumeAssignmentViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsServedByOwnStore))]
     private string _servingVolume;
 
-    public string InstanceSummary => InstanceCount == 1
+    public string ModFolderSummary => ModFolderCount == 1
         ? "1 mod folder here"
-        : $"{InstanceCount} mod folders here";
+        : $"{ModFolderCount} mod folders here";
 
     /// <summary>
     /// Both sides of the choice, in the same words either way. A store on another disk is a

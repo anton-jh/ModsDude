@@ -60,15 +60,15 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _repo.Games.CollectionChanged += OnGamesChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
-        RefreshInstances();
+        RefreshGames();
     }
 
 
     public string ProfileName => _profile.Name;
     public string RepoName => _repo.Name;
-    public ObservableCollection<InstanceOverviewViewModel> Games { get; }
+    public ObservableCollection<GameOverviewViewModel> Games { get; }
 
-    public bool HasInstances => Games.Count > 0;
+    public bool HasGames => Games.Count > 0;
     public bool HasNoGames => Games.Count == 0;
 
     /// <summary>Whether this repo has savegames at all. The whole section is absent where it does not.</summary>
@@ -259,20 +259,20 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        RefreshInstances();
+        RefreshGames();
     }
 
     private void OnDriftChanged(object? sender, EventArgs e)
     {
         // The monitor checks off the UI thread, and these rows are bound.
-        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshInstances);
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
     }
 
     /// <summary>
     /// Only the games actually set to this profile. A game the repo offers but that points
     /// somewhere else is the repo overview's business, not this page's.
     /// </summary>
-    private void RefreshInstances()
+    private void RefreshGames()
     {
         // Every entry per game rather than the first of them: a game reaching three folders has an
         // entry each, and the row places them onto the folders they are about.
@@ -286,13 +286,13 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         foreach (var game in _repo.Games.Where(x => x.ActiveProfile == active))
         {
-            Games.Add(new InstanceOverviewViewModel(
+            Games.Add(new GameOverviewViewModel(
                 game,
                 "Set to this profile",
                 drifted.GetValueOrDefault(game.Identity, [])));
         }
 
-        OnPropertyChanged(nameof(HasInstances));
+        OnPropertyChanged(nameof(HasGames));
         OnPropertyChanged(nameof(HasNoGames));
     }
 

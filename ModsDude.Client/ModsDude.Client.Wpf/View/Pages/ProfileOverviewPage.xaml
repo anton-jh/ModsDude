@@ -47,9 +47,9 @@
                                        Text="No game on this machine is set to this profile. Pick it on a game to make that game's mod folder match this profile." />
 
                             <ItemsControl ItemsSource="{Binding Games}"
-                                          Visibility="{Binding HasInstances, Converter={StaticResource BoolToVisibilityConverter}}">
+                                          Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:InstanceOverviewViewModel}">
+                                    <DataTemplate DataType="{x:Type vm:GameOverviewViewModel}">
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
                                             <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                        Text="{Binding Name}" />

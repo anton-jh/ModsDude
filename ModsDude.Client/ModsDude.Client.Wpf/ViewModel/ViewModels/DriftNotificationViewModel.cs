@@ -50,7 +50,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 {
     private readonly DriftMonitor _monitor;
     private readonly RepoRepository _repoRepository;
-    private readonly GameRepository _instanceRepository;
+    private readonly GameRepository _gameRepository;
     private readonly ProfileService _profileService;
     private readonly SavegameBindingStore _bindingStore;
     private readonly IHeldSavegames _heldSavegames;
@@ -66,7 +66,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     public DriftNotificationViewModel(
         DriftMonitor monitor,
         RepoRepository repoRepository,
-        GameRepository instanceRepository,
+        GameRepository gameRepository,
         ProfileService profileService,
         SavegameBindingStore bindingStore,
         IHeldSavegames heldSavegames,
@@ -75,7 +75,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     {
         _monitor = monitor;
         _repoRepository = repoRepository;
-        _instanceRepository = instanceRepository;
+        _gameRepository = gameRepository;
         _profileService = profileService;
         _bindingStore = bindingStore;
         _heldSavegames = heldSavegames;
@@ -83,7 +83,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         _navigation = navigation;
 
         _monitor.Changed += OnDriftChanged;
-        _instanceRepository.Games.CollectionChanged += OnGamesChanged;
+        _gameRepository.Games.CollectionChanged += OnGamesChanged;
 
         // Drift is detected from the manifest and the folder, so this notice can be up before the
         // repo list has been fetched - it is raised from the window's constructor, and the repos are
@@ -95,7 +95,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         // site. A user who edits a profile, repoints a game or checks a save out and then tabs
         // back to the game must not be the first to find out that they are out of sync - so the check
         // is driven by the facts changing, not by anybody remembering to ask.
-        _instanceRepository.GameChanged += OnFactsChanged;
+        _gameRepository.GameChanged += OnFactsChanged;
         _profileService.ProfileUpdated += OnProfileUpdated;
         _bindingStore.BindingsChanged += OnFactsChanged;
     }
@@ -271,9 +271,9 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _monitor.Changed -= OnDriftChanged;
-        _instanceRepository.Games.CollectionChanged -= OnGamesChanged;
+        _gameRepository.Games.CollectionChanged -= OnGamesChanged;
         _repoRepository.Repos.CollectionChanged -= OnReposChanged;
-        _instanceRepository.GameChanged -= OnFactsChanged;
+        _gameRepository.GameChanged -= OnFactsChanged;
         _profileService.ProfileUpdated -= OnProfileUpdated;
         _bindingStore.BindingsChanged -= OnFactsChanged;
     }
@@ -332,7 +332,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             // a game is configured once, so there is nothing else the profile could reach. It does
             // reach every folder that game has, which is the apply's own loop. Pure apply - the game
             // already follows this profile, which is why it is drifted from it.
-            Status = _instanceRepository.Find(_subject.Game.Identity) is Game game
+            Status = _gameRepository.Find(_subject.Game.Identity) is Game game
                 ? (await _applyService.ApplyAsync(
                     repo,
                     game,
@@ -515,7 +515,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// not whether the entry being shown carries it, which with several targets is a different
     /// question.
     /// </param>
-    private static string DescribeHeadline(int count, string instanceName, string profile, DriftReport report, bool hasSavegameDrift)
+    private static string DescribeHeadline(int count, string gameName, string profile, DriftReport report, bool hasSavegameDrift)
     {
         if (count > 1)
         {
@@ -526,17 +526,17 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         // did not land says where the folder still is rather than what failed.
         var mods = report.Status switch
         {
-            DriftStatus.Drifted => $"'{instanceName}' no longer matches {profile}",
+            DriftStatus.Drifted => $"'{gameName}' no longer matches {profile}",
 
             DriftStatus.NotApplied => report.AppliedProfileName is string applied
-                ? $"'{instanceName}' is still on '{applied}'"
-                : $"'{instanceName}' is still on the mod list it was last applied to",
+                ? $"'{gameName}' is still on '{applied}'"
+                : $"'{gameName}' is still on the mod list it was last applied to",
 
-            DriftStatus.FolderRepointed => $"'{instanceName}' has a mod folder nothing has been applied to",
+            DriftStatus.FolderRepointed => $"'{gameName}' has a mod folder nothing has been applied to",
 
             // Deliberately not naming the profile: the name the notice has is the one the manifest
             // recorded, and the whole of this status is that there is no manifest.
-            DriftStatus.NeverSynced => $"Nothing has been applied to '{instanceName}'",
+            DriftStatus.NeverSynced => $"Nothing has been applied to '{gameName}'",
 
             // Every remaining status is one the notice does not fire for on its own, so reaching
             // here means the savegame half is why this is on screen at all.
@@ -545,7 +545,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         if (mods is null)
         {
-            return $"'{instanceName}' is holding a savegame that no longer agrees with the repo";
+            return $"'{gameName}' is holding a savegame that no longer agrees with the repo";
         }
 
         return hasSavegameDrift ? $"{mods}, and its savegame has moved too" : mods;

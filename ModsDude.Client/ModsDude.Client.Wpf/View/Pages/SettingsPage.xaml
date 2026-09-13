@@ -45,7 +45,7 @@
                                                 <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                            Text="{Binding VolumeRoot}" />
                                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding InstanceSummary}" />
+                                                           Text="{Binding ModFolderSummary}" />
 
                                                 <ComboBox Width="420" HorizontalAlignment="Left" Margin="0 12 0 0"
                                                           ItemsSource="{Binding Options}"

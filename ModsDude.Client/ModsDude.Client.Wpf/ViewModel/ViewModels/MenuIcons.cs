@@ -44,7 +44,7 @@ internal static class MenuIcons
     // Game
     public const string Sync = "\xE895";
 
-    // The three kinds of entity a sidebar lists.
+    // The three kinds of entity a sidebar names.
     public const string Repo = "\xE8B7";
     public const string Profile = "\xE8FD";
     public const string Game = "\xE7FC";

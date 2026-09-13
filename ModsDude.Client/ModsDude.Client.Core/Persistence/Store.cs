@@ -52,7 +52,7 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
                     }
                     catch (JsonException exception)
                     {
-                        // The user's instance list, store assignments and savegame bindings, gone.
+                        // The user's connected games, store assignments and savegame bindings, gone.
                         // Recoverable - the file is moved aside rather than deleted - but only by
                         // somebody who knows it happened, which is what this line is for.
                         Log.LogError(exception, "{File} could not be read and was moved aside; starting from empty state.", _filepath);

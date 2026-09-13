@@ -44,13 +44,13 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
-        RefreshInstances();
+        RefreshGames();
     }
 
 
     public string RepoName => _repo.Name;
     public string Game => _repo.Adapter.DisplayName;
-    public ObservableCollection<InstanceOverviewViewModel> Games { get; }
+    public ObservableCollection<GameOverviewViewModel> Games { get; }
 
     public string MembershipSummary => _repo.MembershipLevel switch
     {
@@ -66,7 +66,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         var count => $"{count} profiles."
     };
 
-    public bool HasInstances => Games.Count > 0;
+    public bool HasGames => Games.Count > 0;
     public bool HasNoGames => Games.Count == 0;
 
     [ObservableProperty]
@@ -116,7 +116,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     private void OnSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        RefreshInstances();
+        RefreshGames();
 
         OnPropertyChanged(nameof(ProfileSummary));
     }
@@ -124,10 +124,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private void OnDriftChanged(object? sender, EventArgs e)
     {
         // The monitor checks off the UI thread, and these rows are bound.
-        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshInstances);
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
     }
 
-    private void RefreshInstances()
+    private void RefreshGames()
     {
         // Every entry per game rather than the first of them: a game reaching three folders has an
         // entry each, and the row places them onto the folders they are about. Picking one was the
@@ -140,13 +140,13 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
         foreach (var game in _repo.Games)
         {
-            Games.Add(new InstanceOverviewViewModel(
+            Games.Add(new GameOverviewViewModel(
                 game,
                 DescribeActiveProfile(game),
                 drifted.GetValueOrDefault(game.Identity, [])));
         }
 
-        OnPropertyChanged(nameof(HasInstances));
+        OnPropertyChanged(nameof(HasGames));
         OnPropertyChanged(nameof(HasNoGames));
     }
 

@@ -21,9 +21,9 @@ public partial class RepoPageViewModel
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly ProfileService _profileService;
     private readonly LastSelectionRepository _lastSelectionRepository;
-    private readonly ConnectGamePageViewModel.Factory _createLocalInstancePageViewModelFactory;
+    private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
-    private readonly GamePageViewModel.Factory _instancePageViewModelFactory;
+    private readonly GamePageViewModel.Factory _gamePageViewModelFactory;
     /// <summary>
     /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
     /// versions holding a revision, and a link that could not open the list would be no link at all.
@@ -86,11 +86,11 @@ public partial class RepoPageViewModel
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileService = profileService;
         _lastSelectionRepository = lastSelectionRepository;
-        _createLocalInstancePageViewModelFactory = connectGamePageViewModelFactory;
+        _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
-        _instancePageViewModelFactory = gamePageViewModelFactory;
+        _gamePageViewModelFactory = gamePageViewModelFactory;
 
-        _connectGameMenuItem = new MenuItemViewModel("Connect game", () => _createLocalInstancePageViewModelFactory.Create(repo))
+        _connectGameMenuItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.ConnectGame);
 
         // Built once and re-titled whenever the game arrives, because the game it leads to is
@@ -99,8 +99,8 @@ public partial class RepoPageViewModel
         // the entry is only in the menu while there is a game, but nothing stops a deep link setting
         // the selection to it, and the shell must not fall over on a race with a disconnect.
         _gameMenuItem = new MenuItemViewModel("Game", () => ConnectedGame() is Game game
-            ? _instancePageViewModelFactory.Create(_repo, game)
-            : _createLocalInstancePageViewModelFactory.Create(_repo))
+            ? _gamePageViewModelFactory.Create(_repo, game)
+            : _connectGamePageViewModelFactory.Create(_repo))
             .WithIcon(MenuIcons.Game);
 
         // Every entry whose page is gated end to end is closed here rather than left to fail at the
