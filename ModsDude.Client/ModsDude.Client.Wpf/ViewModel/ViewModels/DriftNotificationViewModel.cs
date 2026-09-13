@@ -329,8 +329,9 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         try
         {
             // The game this notice is about, not every game on the profile: the entry names one, and
-            // with one installation per game there is nothing else the profile could reach. Pure
-            // apply - the game already follows this profile, which is why it is drifted from it.
+            // a game is configured once, so there is nothing else the profile could reach. It does
+            // reach every folder that game has, which is the apply's own loop. Pure apply - the game
+            // already follows this profile, which is why it is drifted from it.
             Status = _instanceRepository.Find(_subject.Game.Identity) is Game game
                 ? (await _applyService.ApplyAsync(
                     repo,
@@ -531,6 +532,10 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
             DriftStatus.FolderRepointed => $"'{instanceName}' has a mod folder nothing has been applied to",
 
+            // Deliberately not naming the profile: the name the notice has is the one the manifest
+            // recorded, and the whole of this status is that there is no manifest.
+            DriftStatus.NeverSynced => $"Nothing has been applied to '{instanceName}'",
+
             // Every remaining status is one the notice does not fire for on its own, so reaching
             // here means the savegame half is why this is on screen at all.
             _ => null
@@ -552,6 +557,13 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// </param>
     private static string Describe(TargetDrift subject, DriftReport report, int files)
     {
+        if (report.Status is DriftStatus.NeverSynced)
+        {
+            return $"This game follows a profile and there is no record of it ever being applied{In(subject)} - " +
+                   "either it never was, or the record was lost. Applying it is what makes the two agree, " +
+                   "and until then nothing here can tell you whether the mods are right.";
+        }
+
         if (report.Status is DriftStatus.NotApplied)
         {
             return $"Nothing was installed or removed{In(subject)}: it is exactly as its last apply left it. " +

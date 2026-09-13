@@ -408,16 +408,34 @@ public class DriftMonitorTests
     }
 
     /// <summary>
-    /// And no manifest at all stays quiet, which is the other half of the split. Absent covers more
-    /// than never-applied - a manifest that cannot be read, or one an older format wrote, arrives
-    /// here the same way - so reporting it would fire on every game at once for a reason that is not
-    /// about any of them.
+    /// <b>And so does an intent with no record of any work at all.</b> The active profile and the
+    /// manifest are both written by this client, so a game that means to follow a profile with no
+    /// manifest behind it is saying something about this machine: either nothing was ever applied
+    /// here - a first activation whose apply failed, a folder field filled in afterwards - or the
+    /// record was lost, and drift detection is blind for that folder until something rewrites it.
     /// </summary>
     [Fact]
-    public void A_folder_with_no_manifest_at_all_stays_quiet()
+    public void A_folder_with_no_manifest_at_all_is_drift_too()
     {
         using var fixture = new MonitorFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
+
+        fixture.Monitor.Check();
+
+        Assert.Equal(DriftStatus.NeverSynced, Assert.Single(fixture.Monitor.Drifted).Report.Status);
+        Assert.True(fixture.Monitor.ShouldNotify);
+    }
+
+    /// <summary>
+    /// A game following nothing is the state that stays quiet, and it is the only one: there is no
+    /// intent to have failed, so an unapplied folder promises nothing and claims nothing.
+    /// </summary>
+    [Fact]
+    public void A_game_following_no_profile_stays_quiet()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Folder.WriteFile("fs25_a.zip", "one");
+        fixture.Candidates.ActiveProfile = null;
 
         fixture.Monitor.Check();
 

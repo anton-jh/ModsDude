@@ -388,9 +388,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     /// <remarks>
     /// <b>One or none, never a list.</b> A profile belongs to a repo, a repo is about one game, and a
-    /// machine has one installation of it - so the read-only disclosure of "these are the games this
+    /// machine configures that game once - so the read-only disclosure of "these are the games this
     /// applies to" had nothing left to disclose, and the word "game" never appears on this page at
-    /// all now.
+    /// all now. The <em>folders</em> it reaches may well be several, which is the apply's business
+    /// and not this button's.
     /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveActionText))]

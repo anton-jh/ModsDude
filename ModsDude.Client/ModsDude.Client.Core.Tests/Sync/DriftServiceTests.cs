@@ -80,13 +80,24 @@ public class DriftServiceTests
         Assert.Equal(DriftStatus.DanglingProfile, report.Status);
     }
 
+    /// <summary>
+    /// An intent standing with no record of any work behind it. The comparison cannot be made -
+    /// there is nothing to compare against - and that is itself the answer rather than a reason to
+    /// say nothing: see <c>TargetDrift.IsDrifted</c>, which counts this.
+    /// </summary>
     [Fact]
-    public void An_active_profile_with_no_manifest_is_unknown_rather_than_drifted()
+    public void An_active_profile_with_no_manifest_is_a_folder_nothing_was_applied_to()
     {
         using var fixture = new DriftFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
 
-        Assert.Equal(DriftStatus.NeverSynced, fixture.Check().Status);
+        var report = fixture.Check();
+
+        Assert.Equal(DriftStatus.NeverSynced, report.Status);
+
+        // And nothing is claimed about the contents: the file in there is neither an addition nor a
+        // difference, because there is no record saying what should have been.
+        Assert.Equal(0, report.DifferenceCount);
     }
 
     /// <summary>

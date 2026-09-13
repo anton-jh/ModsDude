@@ -1597,6 +1597,15 @@ Two failure shapes reach it, and the second is the one the word is wrong for:
       different profile* is, under the two verbs above, **definitionally intent recorded and work not
       done**, which is the cleanest description there is of a target needing an apply. It becomes
       `NotApplied` and `IsDrifted` includes it. Nothing has to be invented: the split names the state.
+
+      **The quiet half was wrong, and it was reversed on the way in.** *No manifest at all* is not
+      the absence of information while a profile is active — the active profile and the manifest are
+      both local state written by the same client, so an intent standing with no record of any work
+      behind it is a statement about this machine. Either nothing was ever applied here, which is a
+      first activation whose apply failed or a folder field filled in afterwards, or the record was
+      lost and drift detection is blind for that folder until something rewrites it. Both want the
+      same apply, and neither is served by silence. The split stands - three statuses, three
+      sentences - and all three are drift.
 - [x] **The third case in that guard gets its own sentence.** A manifest describing a different
       *folder* is the settings having been repointed, not an apply that did not happen, and it should
       not inherit the wording of one.

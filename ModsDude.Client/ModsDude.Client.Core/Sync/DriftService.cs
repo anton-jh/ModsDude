@@ -21,15 +21,30 @@ public enum DriftStatus
     DanglingProfile,
 
     /// <summary>
-    /// An active profile with no manifest at all - a fresh install, or discarded local state. Drift
-    /// is simply not known, and a full reconcile produces the right answer anyway.
+    /// An active profile with no manifest at all. Nothing has been applied to this folder, as far as
+    /// anything on this machine can tell.
     /// </summary>
     /// <remarks>
-    /// <b>Quiet, and it has to stay quiet.</b> Absent covers more than never-applied: a manifest that
-    /// cannot be read, one an interrupted write left half-there, and one written by an older format
-    /// all arrive here as null - see <c>SyncManifestStore.TryRead</c>, which swallows all three. A
-    /// manifest format bump would otherwise report every game on the machine as needing an apply at
-    /// once, which is the loudest possible way to say "nothing is known".
+    /// <para>
+    /// <b>An intent with no record of any work is the loudest of the three, not the quietest.</b> The
+    /// active profile and the manifest are both local state written by the same client: if this game
+    /// means to follow a profile and no manifest exists, then either an apply has never run here - a
+    /// first activation whose apply failed, a folder field filled in after the fact - or the record of
+    /// one has been lost. Both leave the same folder in the same state, which is <em>unknown while
+    /// something is intended</em>, and both are cleared by applying.
+    /// </para>
+    /// <para>
+    /// <b>Losing the record counts too, and that is the point.</b> A manifest that cannot be read,
+    /// one an interrupted write left half-there, and one written by an older format all arrive here
+    /// as null - see <c>SyncManifestStore.TryRead</c>, which swallows all three. Drift detection is
+    /// blind for that folder until something rewrites it, so a bumped manifest format saying "apply
+    /// your profiles again" on every game at once is the honest outcome rather than the noisy one:
+    /// the alternative is every folder silently unchecked and nobody told.
+    /// </para>
+    /// <para>
+    /// Nothing is corrupt and nothing needs repairing - see <see cref="NotApplied"/>, which is the
+    /// same remedy for a state this one only differs from in what can be said about it.
+    /// </para>
     /// </remarks>
     NeverSynced,
 
@@ -275,9 +290,9 @@ public sealed class DriftService(
         var manifest = manifestStore.TryRead(target);
 
         // Three states that all mean "this folder's contents cannot be compared against this
-        // profile", told apart because they are three different things to say. None of them is
-        // repairable and all three are cleared by an apply; what differs is whether anything is
-        // wrong. See each value on DriftStatus.
+        // profile", told apart because they are three different things to say. All three are drift -
+        // there is an intent here and no evidence it was carried out - and all three are cleared by
+        // an apply; none of them is repairable. See each value on DriftStatus.
         if (manifest is null)
         {
             return DriftReport.For(DriftStatus.NeverSynced) with { SavegameDrift = saves };

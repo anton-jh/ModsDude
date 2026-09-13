@@ -92,17 +92,24 @@ public sealed record TargetDrift(
     /// that enum's.
     /// </para>
     /// <para>
-    /// <b>So does an intent that was not carried out.</b> A folder still on the profile it was on
-    /// while the game means to follow another is an apply that did not land - the ordinary end of a
-    /// BeamMP evening where the dedicated server was locked and the client applied fine - and it was
-    /// silent for as long as it was folded into "nothing known". A repointed folder is the same
-    /// shape: nothing has been applied to where the settings point now.
+    /// <b>So does an intent with no evidence it was carried out</b>, in all three of its shapes: a
+    /// folder still on the profile it was on while the game means to follow another, a folder the
+    /// settings were repointed at, and a folder with no manifest at all. The first is the ordinary
+    /// end of a BeamMP evening where the dedicated server was locked and the client applied fine; the
+    /// last is that same evening on a folder that had never been applied to before. All three were
+    /// silent for as long as they were folded into "nothing known", and <em>silent</em> is the one
+    /// thing an intent nobody carried out must not be.
+    /// </para>
+    /// <para>
+    /// The active profile and the manifest are both written by this client, so an intent standing
+    /// with no record of any work is a statement about this machine rather than an absence of one.
     /// </para>
     /// </remarks>
     public bool IsDrifted => Report.Status
         is DriftStatus.Drifted
         or DriftStatus.NotApplied
         or DriftStatus.FolderRepointed
+        or DriftStatus.NeverSynced
         || Report.HasSavegameDrift;
 }
 

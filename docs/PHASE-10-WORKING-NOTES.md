@@ -258,11 +258,18 @@ matters more than usual here, because the rename table touches most of the 78 fi
   and `IBackgroundTaskReporter` to go with it, which is a bigger move than this slice wanted; worth
   considering when slice 5 has finished moving the surfaces around.
 
-- **`NeverSynced` stayed quiet for a reason the plan did not give.** The plan's argument was that no
-  manifest promises nothing; the stronger one is that `SyncManifestStore.TryRead` answers null for a
-  locked file, a half-written one and an older format too, so making absence drift would fire on
-  every game on the machine at once the first time the manifest format is bumped. Both arguments
-  point the same way, and the second is the one written into `DriftStatus`.
+- **`NeverSynced` was meant to stay quiet and does not, and the argument for the reversal is the one
+  the whole slice rests on.** The plan said no manifest promises nothing; I first added a second
+  argument for the same conclusion - `SyncManifestStore.TryRead` answers null for a locked file, a
+  half-written one and an older format too, so making absence drift would fire on every game at once
+  after a manifest format bump. Both were wrong, for the same reason: **the active profile and the
+  manifest are both local state written by the same client**, so an intent standing with no record of
+  any work behind it is a statement about this machine rather than an absence of one. Either nothing
+  was ever applied here - a first activation whose apply failed, which is precisely the BeamMP evening
+  on a folder nobody had applied to yet - or the record was lost, in which case drift detection is
+  blind for that folder and nobody is told. The format-bump case turns out to argue the same way: "your
+  profiles need applying again" on every game is the honest outcome, and the alternative is every
+  folder silently unchecked. All three of the pre-comparison states are drift now.
 
 - **The re-apply button does not name the folder; the sentence does.** The plan's bullet reads as
   though the button should, but the action applies the whole game - every folder, the ones already
@@ -270,6 +277,15 @@ matters more than usual here, because the rename table touches most of the 78 fi
   `NotApplied` and `FolderRepointed` sentences carry *"in the 'server' folder"* instead, by key,
   because the notice is up before the repo list loads and a display name needs a hydrated adapter.
   **Slice 5 is where every folder name in the app gets one answer**, and this is one of the sites.
+
+- **"One installation" is the conflation wearing a different word, and it got into three comments
+  before anybody caught it.** A game reaching three targets is *usually three installations* - a
+  dedicated server, an MP client and a singleplayer copy are separate downloads in separate folders -
+  and this system has never modelled installations at all; the superseded decision in PLAN says so
+  outright. What a machine has one of is the **policy holder**: one active profile, one savegame
+  hold, for however many folders the adapter reaches. "A machine configures that game once" is the
+  sentence that means that. **Slice 5's documentation pass wants this on its list**: 02 and 06 still
+  say "one installation is configured once", which was true of an instance and is not true of a game.
 
 - **"Save and apply, always" is not what landed.** With the target collapsed to a lookup the plural
   wording died, which is what that bullet was about, but the zero case is still *Save changes*: a
@@ -291,8 +307,9 @@ is where it comes back, because a savegame folder without a mod folder is a shap
 
 **4 had almost nothing new to cover, which is itself the measurement.** Its rules are pure and were
 already under test - what changed is where they are called from and in what order. The drift split
-got four tests (two statuses in `DriftServiceTests`, and in `DriftMonitorTests` that an activation
-which did not land now reaches the notice while no manifest at all still does not), and
+got five tests (three statuses in `DriftServiceTests`, and in `DriftMonitorTests` that an activation
+which did not land reaches the notice, that a folder with no manifest does too, and that a game
+following no profile is the one state that stays quiet), and
 `ProfileApplyTarget` was rewritten around the lookup. The order the verbs run in is untested and
 cannot be tested from here; see the trap about `ProfileApplyService` living in the WPF project.
 
