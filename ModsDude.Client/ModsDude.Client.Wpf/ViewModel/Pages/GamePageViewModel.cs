@@ -422,6 +422,13 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             DriftStatus.Drifted =>
                 $"{report.DifferenceCount} differences from what was last applied here. Updating mods from inside the game looks like this.",
             DriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            // Told apart because only one of them is something that went wrong: an apply that did not
+            // land leaves the folder on the list it was on, and a repointed folder is a settings edit
+            // somebody made a moment ago.
+            DriftStatus.NotApplied => report.AppliedProfileName is string applied
+                ? $"The mod folder is still on '{applied}'. This profile has not been applied here yet."
+                : "The mod folder is still on the profile it was last applied to, not this one.",
+            DriftStatus.FolderRepointed => "The mod folder has been pointed somewhere else, and nothing has been applied there yet.",
             DriftStatus.NoActiveProfile => "No profile is set on this game yet.",
             DriftStatus.DanglingProfile => "The profile this game followed is gone. Pick another one.",
             // Unknown, not drifted: warning about mods that may be perfectly fine is worse than

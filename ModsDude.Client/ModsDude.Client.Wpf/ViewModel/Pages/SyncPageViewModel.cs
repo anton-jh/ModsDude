@@ -443,6 +443,10 @@ public partial class SyncPageViewModel : PageViewModel, IDisposable
             DriftStatus.Drifted =>
                 $"{report.DifferenceCount} files differ from what was last applied here. Mods updated inside the game look like this.",
             DriftStatus.NeverSynced => "This profile has not been applied to this game yet.",
+            DriftStatus.NotApplied => report.AppliedProfileName is string applied
+                ? $"The mod folder is still on '{applied}'. This profile has not been applied here yet."
+                : "The mod folder is still on the profile it was last applied to, not this one.",
+            DriftStatus.FolderRepointed => "The mod folder has been pointed somewhere else, and nothing has been applied there yet.",
             DriftStatus.DanglingProfile => "The profile this game follows is gone.",
             DriftStatus.FolderUnreachable => "The mod folder cannot be reached right now, so nothing is known about it.",
             DriftStatus.InSync => "The mod folder still matches what was last applied here.",

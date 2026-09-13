@@ -85,12 +85,25 @@ public sealed record TargetDrift(
     /// Whether this is worth telling somebody about.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A held savegame that has moved counts, even where the mod folder is exactly what was
     /// installed. <see cref="DriftStatus"/> is a statement about the mod folder and stays
     /// one; that the notice fires for two different kinds of problem is this line's business, not
     /// that enum's.
+    /// </para>
+    /// <para>
+    /// <b>So does an intent that was not carried out.</b> A folder still on the profile it was on
+    /// while the game means to follow another is an apply that did not land - the ordinary end of a
+    /// BeamMP evening where the dedicated server was locked and the client applied fine - and it was
+    /// silent for as long as it was folded into "nothing known". A repointed folder is the same
+    /// shape: nothing has been applied to where the settings point now.
+    /// </para>
     /// </remarks>
-    public bool IsDrifted => Report.Status is DriftStatus.Drifted || Report.HasSavegameDrift;
+    public bool IsDrifted => Report.Status
+        is DriftStatus.Drifted
+        or DriftStatus.NotApplied
+        or DriftStatus.FolderRepointed
+        || Report.HasSavegameDrift;
 }
 
 /// <param name="Reason">Only for the throttle: a check the user asked for is never dropped.</param>

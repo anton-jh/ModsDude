@@ -89,18 +89,69 @@ public class DriftServiceTests
         Assert.Equal(DriftStatus.NeverSynced, fixture.Check().Status);
     }
 
+    /// <summary>
+    /// <b>An intent recorded and work not done</b>, which is what an activation whose apply failed
+    /// leaves behind: the manifest is written only on success, so the folder is still describing the
+    /// list it was on while the game means to follow another. Folded into "nothing known" this was
+    /// silent, and silent is the one thing it must not be - it is the normal end of an evening where
+    /// the dedicated server was locked and the client applied fine.
+    /// </summary>
     [Fact]
-    public void A_manifest_for_a_different_profile_says_nothing_about_this_one()
+    public void A_manifest_for_a_different_profile_is_an_apply_that_did_not_land()
     {
         using var fixture = new DriftFixture();
-        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.Sync("Old-school", ("fs25_a.zip", "one"));
 
         var report = fixture.Service.Check(
             fixture.Target,
             new ActiveProfile(_repoId, Guid.NewGuid()),
             fixture.Folder.Path);
 
-        Assert.Equal(DriftStatus.NeverSynced, report.Status);
+        Assert.Equal(DriftStatus.NotApplied, report.Status);
+
+        // Which list it is still on, so the notice can say it. The revision beside it is that
+        // profile's and is deliberately not carried: two profiles' revisions are not comparable.
+        Assert.Equal("Old-school", report.AppliedProfileName);
+    }
+
+    /// <summary>
+    /// The settings having been repointed, which is not an apply that did not happen: the user did it
+    /// a moment ago, and the remedy being the same does not make it the same sentence.
+    /// </summary>
+    [Fact]
+    public void A_manifest_for_a_different_folder_is_the_settings_having_been_repointed()
+    {
+        using var fixture = new DriftFixture();
+        using var elsewhere = new TempDirectory("drift-repointed");
+
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        var report = fixture.Service.Check(
+            fixture.Target,
+            new ActiveProfile(_repoId, _profileId),
+            elsewhere.Path);
+
+        Assert.Equal(DriftStatus.FolderRepointed, report.Status);
+    }
+
+    /// <summary>
+    /// And the repoint wins over the profile comparison, because it is the reason the other one
+    /// cannot be made: the manifest is describing somewhere else entirely.
+    /// </summary>
+    [Fact]
+    public void A_repointed_folder_is_not_reported_as_an_apply_that_did_not_land()
+    {
+        using var fixture = new DriftFixture();
+        using var elsewhere = new TempDirectory("drift-repointed-other-profile");
+
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        var report = fixture.Service.Check(
+            fixture.Target,
+            new ActiveProfile(_repoId, Guid.NewGuid()),
+            elsewhere.Path);
+
+        Assert.Equal(DriftStatus.FolderRepointed, report.Status);
     }
 
     [Fact]
@@ -296,7 +347,14 @@ public class DriftServiceTests
         public void Sync(params (string Name, string Content)[] files)
             => Sync([.. files.Select(x => (x.Name, x.Content, false, (string?)null))]);
 
+        /// <summary>The same, recording what the profile applied here was called.</summary>
+        public void Sync(string profileName, params (string Name, string Content)[] files)
+            => Sync([.. files.Select(x => (x.Name, x.Content, false, (string?)null))], profileName);
+
         public void Sync(params (string Name, string Content, bool Locked, string? DisplayName)[] files)
+            => Sync(files, null);
+
+        private void Sync((string Name, string Content, bool Locked, string? DisplayName)[] files, string? profileName)
         {
             var entries = new List<SyncManifestEntry>();
 
@@ -323,6 +381,7 @@ public class DriftServiceTests
                 Target = Target,
                 RepoId = _repoId,
                 ProfileId = _profileId,
+                ProfileName = profileName,
                 SyncedAt = DateTimeOffset.UtcNow,
                 ModFolder = Folder.Path,
                 Entries = entries

@@ -384,6 +384,48 @@ public class DriftMonitorTests
 
 
     /// <summary>
+    /// <b>The silence this slice exists to remove.</b> An activation whose apply failed leaves the
+    /// manifest describing the profile the folder is still on - the manifest is written only on
+    /// success - and that used to fold into "nothing known" and never reach the notice. One intent
+    /// and several folders makes it ordinary: the dedicated server locked while the client applied
+    /// fine is the normal BeamMP evening.
+    /// </summary>
+    [Fact]
+    public void An_activation_that_did_not_land_reaches_the_notice()
+    {
+        using var fixture = new MonitorFixture();
+
+        // Applied on Old-school, and then somebody activated Season 4 and the apply failed.
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.Candidates.ActiveProfile = new ActiveProfile(_repoId, Guid.NewGuid());
+
+        fixture.Monitor.Check();
+
+        var drifted = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(DriftStatus.NotApplied, drifted.Report.Status);
+        Assert.True(fixture.Monitor.ShouldNotify);
+    }
+
+    /// <summary>
+    /// And no manifest at all stays quiet, which is the other half of the split. Absent covers more
+    /// than never-applied - a manifest that cannot be read, or one an older format wrote, arrives
+    /// here the same way - so reporting it would fire on every game at once for a reason that is not
+    /// about any of them.
+    /// </summary>
+    [Fact]
+    public void A_folder_with_no_manifest_at_all_stays_quiet()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Folder.WriteFile("fs25_a.zip", "one");
+
+        fixture.Monitor.Check();
+
+        Assert.Empty(fixture.Monitor.Drifted);
+        Assert.False(fixture.Monitor.ShouldNotify);
+    }
+
+    /// <summary>
     /// <b>A held save belongs to the folder it is in.</b> A game reaching two of them holds its saves
     /// in particular ones, and an entry about the dedicated server saying "your savegame has moved"
     /// about an evening played on the MP client is the same conflation this phase exists to remove.

@@ -21,10 +21,42 @@ public enum DriftStatus
     DanglingProfile,
 
     /// <summary>
-    /// An active profile with no manifest - a fresh install, or discarded local state. Drift is
-    /// simply not known, and a full reconcile produces the right answer anyway.
+    /// An active profile with no manifest at all - a fresh install, or discarded local state. Drift
+    /// is simply not known, and a full reconcile produces the right answer anyway.
     /// </summary>
+    /// <remarks>
+    /// <b>Quiet, and it has to stay quiet.</b> Absent covers more than never-applied: a manifest that
+    /// cannot be read, one an interrupted write left half-there, and one written by an older format
+    /// all arrive here as null - see <c>SyncManifestStore.TryRead</c>, which swallows all three. A
+    /// manifest format bump would otherwise report every game on the machine as needing an apply at
+    /// once, which is the loudest possible way to say "nothing is known".
+    /// </remarks>
     NeverSynced,
+
+    /// <summary>
+    /// A manifest describing a <em>different profile</em>. The game means to follow this one and
+    /// these folders were last made to match another, which is intent recorded and work not done.
+    /// </summary>
+    /// <remarks>
+    /// <b>What a failed apply looks like afterwards.</b> The manifest is written only on success, so
+    /// an activation whose apply failed leaves one describing the profile the folder is still on -
+    /// and under two verbs that is not "nothing known", it is the cleanest description there is of a
+    /// folder needing an apply. Nothing is broken and nothing needs repairing: a later apply
+    /// reconciles from the folder's contents, and the planner reads a manifest only as a
+    /// filename-size-time cache, which is profile-independent.
+    /// </remarks>
+    NotApplied,
+
+    /// <summary>
+    /// A manifest describing a <em>different folder</em>. The settings were repointed at somewhere
+    /// else, and nothing has been applied to where they point now.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="NotApplied"/> for the sentence rather than for the remedy - both
+    /// are cleared by applying - because an apply that did not happen and a folder somebody moved are
+    /// different things to be told, and only one of them is something the user just did.
+    /// </remarks>
+    FolderRepointed,
 
     /// <summary>
     /// An unplugged drive or an offline network path. Unknown, <b>not</b> drifted: warning about mods
@@ -79,6 +111,19 @@ public sealed record DriftReport(
     /// "unchanged".
     /// </summary>
     public int? CurrentRevision { get; init; }
+
+    /// <summary>
+    /// What the folder was last made to match, by name, for <see cref="DriftStatus.NotApplied"/>
+    /// alone.
+    /// </summary>
+    /// <remarks>
+    /// <b>A different profile from the one the game follows</b>, which is the whole of that status -
+    /// so it is a separate field rather than the name a drifted folder's manifest carries, which is
+    /// the active profile's. One field meaning "this profile" on one status and "the other one" on
+    /// another is how a notice comes to name the wrong mod list. Null wherever the question does not
+    /// arise, and for a manifest written before profile names were recorded.
+    /// </remarks>
+    public string? AppliedProfileName { get; init; }
 
     /// <summary>
     /// Somebody has saved the profile since this folder was made to match it. Two integers rather
@@ -229,14 +274,33 @@ public sealed class DriftService(
 
         var manifest = manifestStore.TryRead(target);
 
-        // A manifest describing another profile, or another folder, says nothing about this one -
-        // the same position as having none, which is a full reconcile rather than a false alarm.
-        if (manifest is null ||
-            manifest.ProfileId != active.ProfileId ||
-            manifest.RepoId != active.RepoId ||
-            FileSystemHelper.ArePathsEqual(manifest.ModFolder, modFolder) is false)
+        // Three states that all mean "this folder's contents cannot be compared against this
+        // profile", told apart because they are three different things to say. None of them is
+        // repairable and all three are cleared by an apply; what differs is whether anything is
+        // wrong. See each value on DriftStatus.
+        if (manifest is null)
         {
             return DriftReport.For(DriftStatus.NeverSynced) with { SavegameDrift = saves };
+        }
+
+        if (FileSystemHelper.ArePathsEqual(manifest.ModFolder, modFolder) is false)
+        {
+            // Before the profile comparison, because a repointed folder is what the user did rather
+            // than what an apply failed to do - and the manifest describing another profile as well
+            // is beside the point when it is describing another folder.
+            return DriftReport.For(DriftStatus.FolderRepointed) with { SavegameDrift = saves };
+        }
+
+        if (manifest.ProfileId != active.ProfileId || manifest.RepoId != active.RepoId)
+        {
+            return DriftReport.For(DriftStatus.NotApplied) with
+            {
+                SavegameDrift = saves,
+                // What the folder is still on, so a notice can say which mod list it did not move
+                // off. The revision beside it belongs to that profile, so it is deliberately not
+                // carried: two profiles' revisions are not comparable.
+                AppliedProfileName = manifest.ProfileName
+            };
         }
 
         List<string> listing;

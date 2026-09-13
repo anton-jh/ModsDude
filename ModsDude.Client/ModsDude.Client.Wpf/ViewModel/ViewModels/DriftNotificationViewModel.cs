@@ -460,7 +460,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         ReapplyLabel = DescribeReapply(_subject.Game);
 
-        Detail = Describe(report, files);
+        Detail = Describe(_subject, report, files);
         LockedWarning = DescribeLocked(report);
         SavegameWarning = DescribeSavegames(savegames);
         StoreWarning = DescribeStoreCorruption(_monitor.StoreCorruption);
@@ -523,16 +523,51 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             return $"{count} games have drifted";
         }
 
-        return (report.Status is DriftStatus.Drifted, hasSavegameDrift) switch
+        // Named for the consequence rather than for the condition, which is why an activation that
+        // did not land says where the folder still is rather than what failed.
+        var mods = report.Status switch
         {
-            (true, true) => $"'{instanceName}' no longer matches {profile}, and its savegame has moved too",
-            (false, true) => $"'{instanceName}' is holding a savegame that no longer agrees with the repo",
-            _ => $"'{instanceName}' no longer matches {profile}"
+            DriftStatus.Drifted => $"'{instanceName}' no longer matches {profile}",
+
+            DriftStatus.NotApplied => report.AppliedProfileName is string applied
+                ? $"'{instanceName}' is still on '{applied}'"
+                : $"'{instanceName}' is still on the mod list it was last applied to",
+
+            DriftStatus.FolderRepointed => $"'{instanceName}' has a mod folder nothing has been applied to",
+
+            // Every remaining status is one the notice does not fire for on its own, so reaching
+            // here means the savegame half is why this is on screen at all.
+            _ => null
         };
+
+        if (mods is null)
+        {
+            return $"'{instanceName}' is holding a savegame that no longer agrees with the repo";
+        }
+
+        return hasSavegameDrift ? $"{mods}, and its savegame has moved too" : mods;
     }
 
-    private static string Describe(DriftReport report, int files)
+    /// <param name="subject">
+    /// The entry being shown, so the two statuses that are about a folder rather than about its
+    /// contents can say <em>which</em> folder - with several targets, which one did not get the apply
+    /// is the interesting half. Named by key and only where the game reaches more than one, the same
+    /// rule every other folder name in the app follows.
+    /// </param>
+    private static string Describe(TargetDrift subject, DriftReport report, int files)
     {
+        if (report.Status is DriftStatus.NotApplied)
+        {
+            return $"Nothing was installed or removed{In(subject)}: it is exactly as its last apply left it. " +
+                   "Re-applying is what moves it - nothing here needs repairing first.";
+        }
+
+        if (report.Status is DriftStatus.FolderRepointed)
+        {
+            return $"The settings now point{In(subject)} at {subject.Target?.ModFolder ?? "another folder"}, " +
+                   "which nothing has been applied to. Re-applying is what fills it in.";
+        }
+
         var parts = new List<string>();
 
         if (report.Changed.Count > 0) parts.Add($"{report.Changed.Count} replaced");
@@ -549,6 +584,20 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         return string.Join(' ', new[] { folder, DescribeRevision(report), pins }.Where(x => x.Length > 0));
     }
+
+    /// <summary>
+    /// " in the 'server' folder", or nothing at all for a game with one - which is nearly every game,
+    /// and which is why these sentences read exactly as they did before targets existed.
+    /// </summary>
+    /// <remarks>
+    /// The adapter's own key, because the display name it would rather be called needs an adapter
+    /// hydrated from a repo, and this notice is up before the repo list has loaded. Slice 5 of Phase
+    /// 10 is where every folder name in the app gets the same answer.
+    /// </remarks>
+    private static string In(TargetDrift subject)
+        => subject.Target is GameModFolder target && subject.Game.Targets.Count > 1
+            ? $" in the '{target.Target.Key}' folder"
+            : "";
 
     /// <summary>
     /// The half of drift no directory listing can find: the folder is exactly what was installed,
