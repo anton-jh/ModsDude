@@ -531,18 +531,23 @@ public partial class RepoPageViewModel
         var wanted = game is null ? _connectGameMenuItem : _gameMenuItem;
         var unwanted = game is null ? _gameMenuItem : _connectGameMenuItem;
 
-        if (MenuItems.Remove(unwanted) && ReferenceEquals(NavManager.Selected, unwanted))
-        {
-            // Whatever was on screen is about a game that has just gone, or about connecting one
-            // that has just arrived. Either way the entry behind it is not in the list any more, and
-            // a selection pointing outside it leaves the sidebar with nothing highlighted.
-            NavManager.Selected = wanted;
-        }
-
+        // In before out, and the selection moved between them: a selection naming an entry the
+        // bound list does not hold is one the ListView pushes straight back to null, so the entry
+        // being selected has to be in the menu before it is selected and the one being dropped has
+        // to be off the selection before it leaves.
         if (MenuItems.Contains(wanted) is false)
         {
             MenuItems.Add(wanted);
         }
+
+        if (ReferenceEquals(NavManager.Selected, unwanted))
+        {
+            // Whatever was on screen is about a game that has just gone, or about connecting one
+            // that has just arrived. Either way the page under it is about to stop making sense.
+            NavManager.Selected = wanted;
+        }
+
+        MenuItems.Remove(unwanted);
     }
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
