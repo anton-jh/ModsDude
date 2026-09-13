@@ -124,6 +124,12 @@ version orphans both on every member's machine — and nothing downstream can te
 user having emptied the field, because the two events look identical from here. A stale manifest
 is droppable; a binding is a savegame that machine is still holding. Pick a key once.
 
+Farming Simulator's key spells `game` rather than `mods` for that reason read forwards: a target is
+the mod folder **and** the savegame folder beside it, so a key naming only the first was wrong
+everywhere a slot was addressed — `SavegameSlotRef` renders as `{target}:{slot}`, and
+`mods:savegame1` in front of somebody choosing where a save goes describes the wrong thing. It was
+renamed once, while there were no users to orphan; it does not get renamed again.
+
 Keys are **not** subject to filename rules, even though one ends up in a manifest's name. The
 store encodes what it puts in a filename, with a length cap, so an awkward key is escaped rather
 than refused — see [Two rules for the discriminator](#two-rules-for-the-discriminator), which

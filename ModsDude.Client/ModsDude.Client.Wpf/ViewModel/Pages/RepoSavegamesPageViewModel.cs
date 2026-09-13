@@ -398,10 +398,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Status = $"'{published.Name}' is in {_repo.Name}, and checked out to you. " +
-                     "The save has not moved - check it in when you want somebody else to be able to take it.";
+            // Two endings, because the slot is in a different state in each and the sentence is the
+            // only thing that says which. A publish that handed the save back emptied the folder.
+            Status = published.KeptPlaying
+                ? $"'{published.Savegame.Name}' is in {_repo.Name}, and checked out to you. " +
+                  "The save has not moved - check it in when you want somebody else to be able to take it."
+                : $"'{published.Savegame.Name}' is in {_repo.Name} and is anybody's to take. The local copy went to the " +
+                  "Recycle Bin - check it out again once the game is on that mod list.";
 
-            await ReloadAsync(published.Id);
+            await ReloadAsync(published.Savegame.Id);
         }
         catch (OperationCanceledException)
         {
@@ -1669,7 +1674,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     {
         // The first folder with something unrecognised in it, since that is the one whose contents
         // the user is about to read. A decline for any other reason finds none and asks nothing.
-        var plans = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
+        // On the strip because planning reads and hashes the mod folder - see ModSyncService.PlanAsync -
+        // and this one runs between two dialogs, where a still window reads as the app having stopped.
+        using var task = _backgroundTasks.Begin($"Checking what '{profile.Name}' would change");
+
+        var plans = await _applyService.TryPlanAsync(
+            _repo, game, profile.Id, profile.Name, revision: null, _lifetime, ProfileApplyService.Report(task, null));
 
         if (plans.FirstOrDefault(x => x.Unrecognised.Count > 0) is not ModSyncPlan plan)
         {
@@ -1803,8 +1813,18 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         // Named rather than resolved from the game: nothing is holding this savegame yet, so the
         // game has no opinion about it - and the plan shown here has to be the plan that runs.
+        // On the strip for the same reason the apply's own planning is: this reads and hashes the mod
+        // folder, and it runs while somebody is waiting for the check-out dialog to open.
+        using var task = _backgroundTasks.Begin($"Checking what '{row.Name}' would need");
+
         var plans = await _applyService.TryPlanAsync(
-            _repo, game, profile.Id, profile.Name, SavegameService.TargetRevisionOf(row.Savegame), cancellationToken);
+            _repo,
+            game,
+            profile.Id,
+            profile.Name,
+            SavegameService.TargetRevisionOf(row.Savegame),
+            cancellationToken,
+            ProfileApplyService.Report(task, null));
 
         if (plans.Count == 0)
         {

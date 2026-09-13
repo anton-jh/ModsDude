@@ -48,4 +48,9 @@ public partial class ProfileSaveAsModalViewModel : ModalViewModel
         Result = null;
         Done = true;
     }
+
+
+    public override bool TryCancel() => Press(CancelCommand);
+
+    public override bool TryAccept() => Press(ConfirmCommand);
 }

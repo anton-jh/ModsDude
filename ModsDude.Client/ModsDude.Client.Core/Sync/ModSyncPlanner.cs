@@ -19,13 +19,20 @@ public static class ModSyncPlanner
     /// How to read a file's content hash. Injected so the planner stays testable, and so the fallback
     /// can be exercised for real rather than mocked.
     /// </param>
+    /// <param name="progress">
+    /// Where to say which mod is being looked at, for the strip. Optional, and the count is of mods
+    /// examined rather than of files hashed: most of them answer from the manifest without being
+    /// opened, and a bar that only moved for the slow ones would stand still through the slowest
+    /// stretch there is.
+    /// </param>
     public static async Task<IReadOnlyList<ModSyncItem>> PlanAsync(
         IReadOnlyCollection<DesiredMod> desired,
         IReadOnlyCollection<InstalledMod> installed,
         RegisteredContent registered,
         SyncManifest? manifest,
         Func<string, CancellationToken, Task<string>>? hashFile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<ModSyncProgress>? progress = null)
     {
         hashFile ??= ContentStore.HashFileAsync;
 
@@ -45,11 +52,26 @@ public static class ModSyncPlanner
             }
         }
 
+        // What the two loops below examine between them, counted exactly rather than as an upper
+        // bound: a mod that is both wanted and installed is looked at once, by the first loop, and a
+        // bar that stopped short of its own total on every ordinary re-apply would be the wrong kind
+        // of honest.
+        var matched = desired.Count(x => installedByMod.ContainsKey(x.ModId));
+        var total = desired.Count + installed.Count - matched;
+        var examined = 0;
+
+        // Reported before the work rather than after, because the point of the name is to say what is
+        // taking the time while it is taking it. The count is therefore how many are already done.
+        void Examining(string what)
+            => progress?.Report(new ModSyncProgress(ModSyncPhase.Planning, examined++, total) { Detail = what });
+
         var items = new List<ModSyncItem>();
 
         foreach (var want in desired)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            Examining(want.DisplayName ?? want.ModId.Value);
 
             if (installedByMod.Remove(want.ModId, out var have) is false)
             {
@@ -98,6 +120,8 @@ public static class ModSyncPlanner
         foreach (var have in installedByMod.Values.Concat(duplicates))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            Examining(have.DisplayName);
 
             var hash = await ResolveHashAsync(have, recorded, hashFile, cancellationToken);
             var recoverable = registered.Holds(hash);

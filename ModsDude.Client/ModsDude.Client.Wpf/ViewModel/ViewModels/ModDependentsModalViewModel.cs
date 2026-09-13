@@ -79,6 +79,12 @@ public partial class ModDependentsModalViewModel : ModalViewModel
     private void Close() => Done = true;
 
 
+    /// <summary>Nothing to decide here, so both keys close it.</summary>
+    public override bool TryCancel() => Press(CloseCommand);
+
+    public override bool TryAccept() => Press(CloseCommand);
+
+
     private async void OnGoTo(Guid profileId, int revision)
     {
         // The dialog has to be out of the way before the page it navigates to is on screen, and it

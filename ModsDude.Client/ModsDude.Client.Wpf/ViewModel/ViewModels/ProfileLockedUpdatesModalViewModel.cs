@@ -67,6 +67,11 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
     }
 
 
+    public override bool TryCancel() => Press(CancelCommand);
+
+    public override bool TryAccept() => Press(ConfirmCommand);
+
+
     private void OnItemChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not nameof(ProfileLockedUpdateViewModel.IsSelected))

@@ -69,6 +69,12 @@ public partial class ModDetailsModalViewModel : ModalViewModel
     }
 
 
+    /// <summary>Nothing to decide here, so both keys close it.</summary>
+    public override bool TryCancel() => Press(CloseCommand);
+
+    public override bool TryAccept() => Press(CloseCommand);
+
+
     partial void OnSelectedImageChanged(ModImageViewModel? value)
     {
         _ = LoadFullImage(value);

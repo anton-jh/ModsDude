@@ -82,4 +82,10 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
     {
         Done = true;
     }
+
+
+    public override bool TryCancel() => Press(CancelCommand);
+
+    /// <summary>Enter copies, where something has been picked to copy. Refused otherwise, as the button is.</summary>
+    public override bool TryAccept() => Press(ConfirmCommand);
 }

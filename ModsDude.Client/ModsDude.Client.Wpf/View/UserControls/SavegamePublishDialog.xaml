@@ -83,6 +83,28 @@
 
                 <TextBox Text="{Binding Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          FontSize="14" />
+
+                <!-- The same choice check-in offers, refused on the one answer that would leave a save
+                     checked out into a mod folder running a different list. Disabled rather than
+                     hidden: a control that vanishes reads as a feature that is missing, and the
+                     sentence below it is the whole explanation. -->
+                <CheckBox Margin="0 16 0 0"
+                          Content="Keep playing - keep the save and the claim"
+                          IsEnabled="{Binding CanKeepPlaying}"
+                          IsChecked="{Binding KeepPlaying, Mode=TwoWay}" />
+
+                <!-- Caution rather than secondary: this one is a folder about to be emptied. -->
+                <TextBlock Text="{Binding HandOverNotice}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           Visibility="{Binding HasHandOverNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <TextBlock Text="{Binding Consequence}"
+                           Margin="0 8 0 0"
+                           TextWrapping="Wrap"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
             <Border Grid.Row="1"
@@ -91,7 +113,7 @@
                     <Button Grid.Column="0"
                             Margin="0 0 4 0"
                             Style="{DynamicResource AccentButtonStyle}"
-                            Content="Publish it"
+                            Content="{Binding ConfirmLabel}"
                             HorizontalAlignment="Stretch"
                             IsDefault="True"
                             Command="{Binding ConfirmCommand}" />
@@ -106,8 +128,5 @@
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Esc" Command="{Binding CancelCommand}" />
-    </UserControl.InputBindings>
 
 </UserControl>

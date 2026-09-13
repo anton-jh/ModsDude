@@ -124,13 +124,19 @@ public sealed class ProfileApplyService(
     /// there pins the folder to its own revision, and everything else follows head. Named only by the
     /// check-out dialog, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
+    /// <param name="progress">
+    /// Where to say which mod is being examined. Planning is not the quick half it was assumed to be -
+    /// see <see cref="ModSyncService.PlanAsync"/> - so every caller that has somewhere to put a
+    /// sentence passes one.
+    /// </param>
     public async Task<IReadOnlyList<ModSyncPlan>> TryPlanAsync(
         Repo repo,
         Game game,
         Guid profileId,
         string? profileName,
         int? revision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<ModSyncProgress>? progress = null)
     {
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
@@ -144,7 +150,7 @@ public sealed class ProfileApplyService(
             // Per folder, and one that cannot be planned does not cost the others theirs: a
             // dedicated server mid-session is exactly the folder somebody wants left out while the
             // client is put right.
-            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken)
+            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken, progress)
                 is ModSyncPlan plan)
             {
                 plans.Add(plan);
@@ -163,7 +169,8 @@ public sealed class ProfileApplyService(
         Guid profileId,
         string? profileName,
         int? revision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<ModSyncProgress>? progress)
     {
         try
         {
@@ -173,7 +180,8 @@ public sealed class ProfileApplyService(
                     ProfileName = profileName,
                     Revision = revision
                 },
-                cancellationToken);
+                cancellationToken,
+                progress);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -272,7 +280,16 @@ public sealed class ProfileApplyService(
 
         try
         {
-            plans = await TryPlanAsync(repo, game, profileId, profileName, revision, cancellationToken);
+            // On the strip from the first click, because this is not the quick half it was taken for:
+            // a folder whose files no longer match the manifest is read and hashed in full here, which
+            // on a real mod folder is minutes of a still window with the confirmation appearing at the
+            // end of it. Its own task rather than the execute one below - planning may end in a
+            // dialog the user declines, and a strip entry that outlived that would describe work
+            // nobody agreed to.
+            using var planning = backgroundTasks.Begin($"Working out what would change in '{game.Name}'");
+
+            plans = await TryPlanAsync(
+                repo, game, profileId, profileName, revision, cancellationToken, Report(planning, progress));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -439,9 +456,9 @@ public sealed class ProfileApplyService(
                 game, ProfileApplyStatus.AlreadyMatched, $"{where} already matches{Pinned(game, profileId, revision)}.");
         }
 
-        // Only from here: everything above is planning and asking, which is quick or is a dialog the
-        // user is already looking at. The strip is for the part that takes minutes and that they are
-        // entitled to walk away from.
+        // The second of the gesture's two strip entries. Planning had its own - see RunAsync - because
+        // it is minutes of work in its own right; this one is the part that moves files, and both are
+        // things the user is entitled to walk away from.
         using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to {where}");
 
         try

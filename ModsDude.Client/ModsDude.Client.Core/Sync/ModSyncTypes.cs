@@ -205,6 +205,17 @@ public sealed record ModSyncPlan
 
 public enum ModSyncPhase
 {
+    /// <summary>
+    /// Working out what would change. Nothing has been decided yet, let alone touched.
+    /// </summary>
+    /// <remarks>
+    /// <b>Reported because it is not fast.</b> A folder whose files no longer match the manifest -
+    /// a first apply, or one the user populated by hand - is read in full to be hashed, which on a
+    /// Farming Simulator mod folder is minutes. It used to happen behind a still window with the
+    /// confirmation appearing at the end of it, which reads as a hang rather than as work.
+    /// </remarks>
+    Planning,
+
     /// <summary>Filling the serving store. Nothing in the mod folder has been touched yet.</summary>
     Fetching,
 

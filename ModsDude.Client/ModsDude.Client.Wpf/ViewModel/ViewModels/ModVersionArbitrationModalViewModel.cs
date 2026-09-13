@@ -64,6 +64,12 @@ public partial class ModVersionArbitrationModalViewModel : ModalViewModel
         Result = null;
         Done = true;
     }
+
+
+    /// <summary>Escape skips, which is this dialog's own way of declining to answer.</summary>
+    public override bool TryCancel() => Press(SkipCommand);
+
+    public override bool TryAccept() => Press(ConfirmCommand);
 }
 
 

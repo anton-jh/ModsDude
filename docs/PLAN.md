@@ -1952,6 +1952,79 @@ Client-only, interface-only. No model, no server, no local state changed.
   between are "nothing is lost" and "an evening goes to the Recycle Bin". One slot hash at the moment
   somebody is about to be asked anyway is the right price.
 
+## Phase 12 — Seven things found by using it
+
+A pass over what a real evening with the app turned up. One of them is a correctness bug with a
+design cause; the rest are the interface failing to keep a promise it had already made.
+
+Breaking changes are allowed: there are no users, and one item below orphans local state on purpose.
+
+- [x] **Publishing to a profile the game is not on hands the save straight back.** Publishing set a
+      binding following profile B into a folder on profile A, and left it there. That is
+      `PlayedOnAnotherModList` — the state the whole feature exists to prevent — reached in one
+      gesture by somebody who did nothing wrong, and **no apply could clear it**: the apply table
+      refuses B under a held savegame following B's own profile only when the folder disagrees, and
+      refuses A because the held savegame follows B. The drift notice's *Re-apply now* aimed at the
+      game's active profile and was refused by its own rules, telling the user to check in a savegame
+      whose row offered no such thing.
+
+      So the cause is fixed rather than the symptom. `PublishAsync` takes `keepPlaying`, the dialog
+      offers it the way check-in's does — ticked, and the same words — and the one answer that
+      produces the unreachable state is not on offer at all: publishing elsewhere disables the tick,
+      says where the copy goes, and calls `DiscardAsync` once the publish has committed. The binding
+      is written either way, so a release that fails leaves a row offering Check in and Discard
+      rather than a claim nothing on this machine remembers taking.
+- [x] **Farming Simulator's target key spells `game`.** It spelled `mods`, from when the game had
+      nothing but a mod folder — but a target is the mod folder *and* the savegame folder beside it,
+      and `SavegameSlotRef` renders as `{target}:{slot}`, so the slot picker's tooltip read
+      `mods:savegame1`. That tooltip now shows the slot the game's own way — `savegame1` — with the
+      folder's name in front of it only where the game reaches more than one folder to tell apart.
+      **This orphans every manifest and every savegame binding on every machine**, which is why it
+      happens now and not later.
+- [x] **Planning is on the background strip.** `ProfileApplyService` asserted that everything before
+      the confirmation was "quick or is a dialog" and started the strip afterwards. It is not quick:
+      planning reads and hashes every file whose stat no longer matches the manifest, which on a
+      first apply is all of them. So the click produced a still window for minutes and then a
+      confirmation. Planning now has a strip entry of its own — its own, because it can end in a
+      dialog the user declines — and `ModSyncPlanner` reports the mod it is examining, before
+      examining it, against an exact total. The check-out preview and the decline-and-review plan get
+      the same treatment; both run between two dialogs.
+- [x] **The invite row is a Grid.** The expiry is a formatted local date and time in a column pinned
+      at 150px with `CharacterEllipsis`, so it was trimmed for every invite that had one. Widening
+      the number only moves which locale breaks it, so the code and the two counts keep a width and
+      the expiry takes the rest.
+- [x] **The search boxes have one clear button.** They had two, exactly on top of each other: the
+      Fluent theme's `TextBox` template draws a `DeleteButton`, and both pages drew their own over
+      it. Ours did nothing theirs does not — `ClearSearch` was `SearchText = string.Empty`, which is
+      what emptying the box does through the binding — so ours went, and the commands with them.
+- [x] **Escape and Enter are handled by the shell, once.** Every dialog carried its own `KeyBinding`
+      pair, and an `InputBinding` fires only when focus is inside the element carrying it — so for
+      the nine dialogs that never called `Focus()`, Escape did nothing at all, and which of the
+      seventeen worked was decided by a line of constructor code nothing connected to the binding.
+      `MainWindow` now asks the modal itself, through `ModalViewModel.TryCancel`/`TryAccept`, and
+      leaves the key alone where the focused control is already using it — an open drop-down, a
+      focused button, a box that takes newlines. Each dialog answers by pressing its **own command**,
+      so a publish with no name refuses Enter exactly as its button does.
+- [x] **A dialog that says "Ok" twice has one button.** `Refusal` and `Notice` both pass the same
+      word for both answers, and two identical buttons imply a choice that is not on offer — somebody
+      reads them looking for the difference. Derived from the two words being equal rather than from
+      a flag, so anything else that ends up there is treated the same way for the same reason.
+
+### Settled
+
+- **Escape declines the destructive confirmations too.** Delete and Archive are exactly where a
+  reflexive Escape is most likely, and "no" is what it means and what changes nothing. The key that
+  would need withholding is Enter, and Enter is already the affirmative everywhere else.
+- **The drift notice does not retarget itself.** Aiming its *Re-apply* at a held savegame's own
+  profile would have made the refusal recoverable, and it is the wrong fix: the state stops being
+  reachable, so the recovery would be code exercised by nothing.
+- **Planning is not made faster here.** Hashing on size and modification time is already how the
+  manifest is consulted; caching it for a folder with no manifest is a piece of work, and a strip
+  entry is what the complaint actually was.
+- **`Disconnect`'s "that savegame" fallback stays.** The case that showed it — a hold whose savegame
+  the repo deleted — is dropped on sight by `ForgetDeletedHoldsAsync`, so the string is defensive
+  rather than reachable.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint

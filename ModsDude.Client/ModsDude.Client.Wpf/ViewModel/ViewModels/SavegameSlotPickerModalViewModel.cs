@@ -71,4 +71,9 @@ public partial class SavegameSlotPickerModalViewModel : ModalViewModel
         Result = null;
         Done = true;
     }
+
+
+    public override bool TryCancel() => Press(CancelCommand);
+
+    public override bool TryAccept() => Press(ConfirmCommand);
 }

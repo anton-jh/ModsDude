@@ -166,6 +166,16 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
     }
 
 
+    /// <summary>Closes without saving, which is what the button beside Save does.</summary>
+    public override bool TryCancel() => Press(CloseCommand);
+
+    /// <summary>
+    /// Enter saves, and only where there is a reorder to save - the same gate the Save button is
+    /// behind, so a dialog nobody has changed anything in does not close on a stray keypress.
+    /// </summary>
+    public override bool TryAccept() => Press(SaveCommand);
+
+
     private async Task ReloadAsync(string notice, CancellationToken cancellationToken)
     {
         var response = await _modsClient.GetModVersionsV1Async(_repoId, _modId.Value, cancellationToken);

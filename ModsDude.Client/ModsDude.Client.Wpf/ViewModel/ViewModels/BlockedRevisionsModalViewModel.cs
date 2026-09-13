@@ -59,6 +59,12 @@ public partial class BlockedRevisionsModalViewModel : ModalViewModel
     private void Close() => Done = true;
 
 
+    /// <summary>Nothing to decide here, so both keys close it.</summary>
+    public override bool TryCancel() => Press(CloseCommand);
+
+    public override bool TryAccept() => Press(CloseCommand);
+
+
     private async void OnGoTo(Guid savegameId)
     {
         // Closed first, and regardless of what navigation says: a refused one leaves the user on this

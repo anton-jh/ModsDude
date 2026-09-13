@@ -1741,10 +1741,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         await ReloadAsync();
     }
 
-    [RelayCommand]
-    private void ClearSearch()
-        => SearchText = string.Empty;
-
     #endregion
 
 

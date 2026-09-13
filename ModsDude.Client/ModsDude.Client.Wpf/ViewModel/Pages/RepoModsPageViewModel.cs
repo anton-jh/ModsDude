@@ -423,10 +423,6 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
 
     [RelayCommand]
-    private void ClearSearch()
-        => SearchText = string.Empty;
-
-    [RelayCommand]
     private async Task Refresh()
     {
         await ReloadAsync();

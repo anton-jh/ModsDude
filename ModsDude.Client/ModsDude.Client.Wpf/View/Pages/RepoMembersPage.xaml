@@ -148,37 +148,52 @@
                                         <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                                                 CornerRadius="4" Padding="12" Margin="0 0 0 8">
                                             <StackPanel Orientation="Vertical">
-                                                <StackPanel Orientation="Horizontal">
 
-                                                    <TextBlock VerticalAlignment="Center" Width="180"
+                                                <!-- A Grid rather than a StackPanel of fixed widths.
+                                                     The expiry is a formatted local date and time,
+                                                     which is as long as the locale makes it: pinned
+                                                     at 150px it was ellipsed for every invite that
+                                                     had one, and widening the number only moves the
+                                                     locale that breaks it. The code and the two
+                                                     counts are what have a knowable width, so they
+                                                     keep one and the expiry takes the rest. -->
+                                                <Grid ColumnDefinitions="auto auto auto auto * auto">
+
+                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
                                                                FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                                Text="{Binding Code}" />
 
-                                                    <Button Content="Copy" Margin="8 0 0 0"
+                                                    <Button Grid.Column="1" Content="Copy" Margin="12 0 0 0"
                                                             Command="{Binding CopyCommand}" />
 
-                                                    <TextBlock VerticalAlignment="Center" Width="80" Margin="16 0 0 0"
+                                                    <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                                               MinWidth="70" Margin="16 0 0 0"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Level}" />
 
-                                                    <TextBlock VerticalAlignment="Center" Width="110"
+                                                    <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                                               MinWidth="70" Margin="12 0 0 0"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Uses}" />
 
-                                                    <TextBlock VerticalAlignment="Center" Width="150"
-                                                               TextTrimming="CharacterEllipsis"
+                                                    <!-- The star column, and no trimming: this is the
+                                                         one field whose length nothing here controls. -->
+                                                    <TextBlock Grid.Column="4" VerticalAlignment="Center"
+                                                               Margin="12 0 8 0"
+                                                               TextWrapping="Wrap"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Limit}" />
 
                                                     <!-- One button, two tenses: an active code is
                                                          revoked, a spent one is only taken off the
                                                          list. Which is which is the row's to say. -->
-                                                    <Button Content="{Binding ActionText}" Margin="8 0 0 0"
+                                                    <Button Grid.Column="5" Content="{Binding ActionText}"
+                                                            VerticalAlignment="Center"
                                                             ToolTip="{Binding ActionToolTip}"
                                                             Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding RequestRemovalCommand}" />
-                                                </StackPanel>
+                                                </Grid>
 
                                                 <TextBlock Margin="0 6 0 0"
                                                            Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"

@@ -239,12 +239,14 @@
 
                 <Grid>
 
-                    <!-- Right padding keeps the text from running under the clear button. The rest
-                         matches the theme's own TextBox padding. -->
+                    <!-- No clear button of its own. The Fluent theme's TextBox template draws one,
+                         and a second hand-rolled one sat exactly on top of it - two buttons, the
+                         upper one hiding the lower. Theirs empties the box, which is the whole of
+                         what ours did, so it is the one that stays. Escape still empties it too;
+                         see SearchBoxKeyDown. -->
                     <TextBox x:Name="SearchBox"
                              PreviewKeyDown="SearchBoxKeyDown"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
-                             Padding="10 5 32 6"
                              VerticalAlignment="Center" />
 
                     <!-- Watches the box rather than the view model: the binding above delays pushing
@@ -267,25 +269,6 @@
                         </TextBlock.Style>
                     </TextBlock>
 
-                    <Button Width="24" Height="24"
-                            FontSize="12"
-                            Margin="0 0 4 0"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Content="&#xE10A;"
-                            ToolTip="Clear search"
-                            Command="{Binding ClearSearchCommand}">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
-                                <Setter Property="Visibility" Value="Visible" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
                 </Grid>
 
                     <!-- What a paste or a copy found. Sits under the search box because that is

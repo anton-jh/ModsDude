@@ -338,6 +338,16 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     }
 
 
+    public override bool TryCancel() => Press(CancelCommand);
+
+    /// <summary>
+    /// Enter takes the selected slot, and does nothing at all on a refused one - which is the point:
+    /// the way out of a refused slot is <see cref="CheckInBlockingSavegame"/>, a decision nobody
+    /// should arrive at by pressing Enter.
+    /// </summary>
+    public override bool TryAccept() => Press(ConfirmCommand);
+
+
     partial void OnSelectedSlotChanged(SavegameSlotOptionViewModel? value)
     {
         OnPropertyChanged(nameof(ConfirmLabel));

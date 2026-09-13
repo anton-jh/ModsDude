@@ -164,8 +164,8 @@ public sealed class SavegameFlowService(
     /// <see cref="SavegamePublishModalViewModel"/> - so this is also where the repo's profiles, the
     /// savegame each is currently following and what the mod folder is on are gathered.
     /// </remarks>
-    /// <returns>The savegame that was created, or null where the dialog was dismissed.</returns>
-    public async Task<SavegameDto?> PublishAsync(
+    /// <returns>What was created and whether it is still held, or null where the dialog was dismissed.</returns>
+    public async Task<SavegamePublishOutcome?> PublishAsync(
         Game game,
         Repo repo,
         SavegameSlotRef slot,
@@ -178,16 +178,20 @@ public sealed class SavegameFlowService(
         var manifest = manifestStore.TryRead(new ModTargetRef(game.Identity, slot.Target));
         var options = await BuildPublishOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
 
-        var active = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
-            ? options.FirstOrDefault(x => x.ProfileId == profile.ProfileId)
-            : null;
+        // Which profile this game follows, which is what decides whether the save can be kept - a
+        // publish to any other one hands it straight back. Null where the game follows nothing here,
+        // and then only the no-mod-list answer may be kept.
+        var activeProfileId = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
+            ? profile.ProfileId
+            : (Guid?)null;
 
         var modal = new SavegamePublishModalViewModel(
             slotLabel,
             repo.Name,
             slotLabel,
             options,
-            active,
+            options.FirstOrDefault(x => x.ProfileId == activeProfileId && x.ProfileId is not null),
+            activeProfileId,
             options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name);
 
         await modalService.Value.Show(modal);
@@ -197,12 +201,20 @@ public sealed class SavegameFlowService(
             return null;
         }
 
+        var keepPlaying = modal.KeepPlaying;
+
         // Packing and uploading a save is minutes rather than seconds, and the page it was started
         // from is not where the user has to stay while it happens.
-        using var task = backgroundTasks.Begin($"Publishing '{name}' to {repo.Name}", $"Packing and uploading '{slotLabel}'");
+        using var task = backgroundTasks.Begin(
+            $"Publishing '{name}' to {repo.Name}",
+            keepPlaying
+                ? $"Packing and uploading '{slotLabel}'"
+                : $"Packing and uploading '{slotLabel}', then handing it back");
 
-        return await savegames.PublishAsync(
-            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), cancellationToken);
+        var savegame = await savegames.PublishAsync(
+            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken);
+
+        return new SavegamePublishOutcome(savegame, keepPlaying);
     }
 
     /// <summary>
@@ -358,6 +370,17 @@ public sealed class SavegameFlowService(
         }
     }
 }
+
+
+/// <summary>
+/// What a publish ended up doing: the savegame it made, and whether this machine still holds it.
+/// </summary>
+/// <remarks>
+/// The second half is not decoration. A publish that handed the save back left an empty slot and a
+/// savegame anybody can take, and a caller that said "checked out to you" over it would be describing
+/// the state this dialog just took away.
+/// </remarks>
+public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlaying);
 
 
 /// <summary>

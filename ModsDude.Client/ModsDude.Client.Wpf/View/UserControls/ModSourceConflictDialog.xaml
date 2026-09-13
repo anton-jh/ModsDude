@@ -145,9 +145,4 @@
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Return" Command="{Binding ConfirmCommand}" />
-        <KeyBinding Key="Esc" Command="{Binding SkipCommand}" />
-    </UserControl.InputBindings>
-
 </UserControl>

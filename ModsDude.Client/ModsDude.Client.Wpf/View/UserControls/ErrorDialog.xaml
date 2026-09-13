@@ -107,9 +107,4 @@
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Return" Command="{Binding DismissCommand}" />
-        <KeyBinding Key="Esc" Command="{Binding DismissCommand}" />
-    </UserControl.InputBindings>
-
 </UserControl>

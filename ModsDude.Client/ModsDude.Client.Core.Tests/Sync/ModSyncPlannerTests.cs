@@ -284,6 +284,45 @@ public class ModSyncPlannerTests
     }
 
 
+    /// <summary>
+    /// Planning reads and hashes every file whose stat no longer matches the manifest, which on a
+    /// first apply is all of them - minutes, with nothing on screen until this was reported. The
+    /// total counts mods rather than files and counts a mod that is both wanted and installed once,
+    /// so a bar built on it reaches its own end.
+    /// </summary>
+    [Fact]
+    public async Task Planning_reports_every_mod_it_examines_exactly_once()
+    {
+        using var folder = new TempDirectory("plan-progress");
+
+        // One in both lists, one only installed, one only wanted: four rows across two loops, three
+        // mods examined.
+        var both = Install(folder, "fs25_a", "1.0.0", "the bytes");
+        var onlyInstalled = Install(folder, "fs25_b", "1.0.0", "other bytes");
+
+        var reports = new List<ModSyncProgress>();
+
+        await ModSyncPlanner.PlanAsync(
+            [Want("fs25_a", "1.0.0", "the bytes"), Want("fs25_c", "1.0.0", "new bytes")],
+            [both, onlyInstalled],
+            RegisteredContent.None,
+            null,
+            null,
+            CancellationToken.None,
+            // Not Progress<T>, which posts to a synchronization context and would make the order and
+            // the count of what has arrived by the assertions a matter of timing.
+            new CollectingProgress(reports));
+
+        Assert.All(reports, x => Assert.Equal(ModSyncPhase.Planning, x.Phase));
+        Assert.All(reports, x => Assert.Equal(3, x.Total));
+
+        // Reported before the work, so the name on screen is the one taking the time - which makes
+        // the counts the number already done.
+        Assert.Equal([0, 1, 2], reports.Select(x => x.Completed));
+        Assert.Equal(3, reports.Count);
+    }
+
+
     private static Task<IReadOnlyList<ModSyncItem>> Plan(
         IReadOnlyCollection<DesiredMod> desired,
         IReadOnlyCollection<InstalledMod> installed,
@@ -329,4 +368,14 @@ public class ModSyncPlannerTests
 
     private static string HashOf(string content)
         => ModContentHasher.Format(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+}
+
+
+/// <summary>
+/// Records reports on the calling thread. <see cref="Progress{T}"/> posts to a synchronization
+/// context, so what has arrived by the time a test asserts would be a matter of timing.
+/// </summary>
+file sealed class CollectingProgress(List<ModSyncProgress> reports) : IProgress<ModSyncProgress>
+{
+    public void Report(ModSyncProgress value) => reports.Add(value);
 }

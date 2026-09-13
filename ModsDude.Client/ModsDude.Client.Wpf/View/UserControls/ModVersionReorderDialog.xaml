@@ -75,8 +75,4 @@
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Esc" Command="{Binding CloseCommand}" />
-    </UserControl.InputBindings>
-
 </UserControl>

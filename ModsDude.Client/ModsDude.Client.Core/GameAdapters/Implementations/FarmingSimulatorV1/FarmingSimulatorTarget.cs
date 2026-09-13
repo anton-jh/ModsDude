@@ -12,13 +12,14 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 /// attribute nobody's evening to anything.
 /// </para>
 /// <para>
-/// <b>Stable, and it has to stay that way.</b> Renaming this would orphan every manifest and every
-/// savegame binding on every member's machine, and nothing could tell that from the folders having
-/// been taken away. It spells <c>mods</c> because that is what it was named when this game had
-/// nothing but a mod folder, and a key is not a description.
+/// <b>Stable, and it has to stay that way.</b> Renaming this orphans every manifest and every
+/// savegame binding on every member's machine, and nothing can tell that from the folders having been
+/// taken away. It was spelled <c>mods</c> until it was renamed once, before there were any users to
+/// orphan: a target is the mod folder <em>and</em> the savegame folder beside it, so a key naming
+/// only the first read as a mistake everywhere a slot was addressed.
 /// </para>
 /// </remarks>
 public static class FarmingSimulatorTarget
 {
-    public static TargetKey Key { get; } = new("mods");
+    public static TargetKey Key { get; } = new("game");
 }

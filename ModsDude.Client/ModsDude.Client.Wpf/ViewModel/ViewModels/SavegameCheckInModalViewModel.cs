@@ -97,4 +97,9 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
         Result = false;
         Done = true;
     }
+
+
+    public override bool TryCancel() => Press(CancelCommand);
+
+    public override bool TryAccept() => Press(ConfirmCommand);
 }

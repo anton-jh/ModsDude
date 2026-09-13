@@ -101,7 +101,15 @@ public sealed class ModSyncService(
     private const int _registeredPageSize = 500;
 
 
-    public async Task<ModSyncPlan> PlanAsync(ModSyncRequest request, CancellationToken cancellationToken)
+    /// <param name="progress">
+    /// Where to report which mod is being examined. Optional, and worth passing: on a folder whose
+    /// files no longer match the manifest this reads and hashes every one of them, which is the
+    /// slowest thing an apply does and used to happen with nothing at all on screen.
+    /// </param>
+    public async Task<ModSyncPlan> PlanAsync(
+        ModSyncRequest request,
+        CancellationToken cancellationToken,
+        IProgress<ModSyncProgress>? progress = null)
     {
         var target = request.Target;
         var modFolder = target.Path;
@@ -124,7 +132,8 @@ public sealed class ModSyncService(
             ? await GetRegisteredContentAsync(request.RepoId, cancellationToken)
             : RegisteredContent.None;
 
-        var items = await ModSyncPlanner.PlanAsync(desired, installed.Mods, registered, manifest, null, cancellationToken);
+        var items = await ModSyncPlanner.PlanAsync(
+            desired, installed.Mods, registered, manifest, null, cancellationToken, progress);
 
         var servingStore = storeProvider.GetStoreServing(modFolder);
         var allStores = storeProvider.GetAllStores();

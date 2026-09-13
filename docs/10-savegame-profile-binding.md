@@ -484,6 +484,29 @@ The publish dialog offers every profile in the repo, and **no profile** as an ex
 `PublishSavegameRequest.ProfileId` becomes nullable. The profile need not be the game's active
 one.
 
+### Whether the publish leaves you holding it
+
+**Publishing to the profile the game is on** offers the choice check-in offers, ticked by default:
+keep the save and the claim, or hand both straight back. Publishing with **no profile** offers the
+same, since such a savegame claims no mod folder.
+
+**Publishing to any other profile takes the choice away** and hands the save back — the version is
+minted, the claim is released and the local copy goes to the Recycle Bin, which is exactly
+`DiscardAsync`, called by `PublishAsync` once the publish has committed. The dialog says so before
+the button is pressed and the button says it too.
+
+The reason is that the alternative is unreachable ground. A savegame following profile B, checked
+out into a folder on profile A, is `PlayedOnAnotherModList` — the state that damages saves
+— and it is reached in one gesture by somebody who did nothing wrong. Worse, **no apply clears it**:
+the [apply table](#applying-to-a-game-that-holds-a-savegame) refuses B because the folder is on A's
+list under a held savegame, and refuses A because the held savegame follows B. The only ways out
+were to check the savegame in or to give it back, so the publish gives it back at the moment the
+choice is legible rather than leaving somebody to discover it from a drift notice whose one action
+is refused.
+
+Nothing is lost by it: the savegame is in the repo, the claim is free, and checking it out again
+after applying its profile is the ordinary flow.
+
 **A first version's revision is declared, not observed**, and this is the only version in the
 system of which that is true. The bytes predate ModsDude: there is no binding, no
 `LastObservedHash` and no prior state, so nothing knows which mods were in the folder while that

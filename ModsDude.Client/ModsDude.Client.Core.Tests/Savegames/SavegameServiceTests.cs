@@ -158,7 +158,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         var savegame = await harness.Service.PublishAsync(
-            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), CancellationToken.None);
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None);
 
         Assert.Equal(4, Assert.Single(harness.Server.Publishes).ProfileRevision);
         Assert.Null(harness.Binding(savegame.Id).TargetRevision);
@@ -207,7 +207,7 @@ public class SavegameServiceTests
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.Service.PublishAsync(
-                harness.Game, harness.Server.RepoId, _slot2, "Season 5", null, harness.Target(), CancellationToken.None));
+                harness.Game, harness.Server.RepoId, _slot2, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
 
         Assert.Contains("already holding a savegame", exception.UserMessage);
 
@@ -505,7 +505,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         var savegame = await harness.Service.PublishAsync(
-            harness.Game, harness.Server.RepoId, _slot1, "Season 5", "the beginning", harness.Target(), CancellationToken.None);
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", "the beginning", harness.Target(), keepPlaying: true, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal("Season 5", savegame.Name);
@@ -531,6 +531,37 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// The other ending, which is what publishing to a mod list this game is not on always takes: the
+    /// version is minted, the claim goes straight back, and the local copy goes to the Recycle Bin.
+    /// Without it, one publish leaves a savegame following one profile checked out into a folder on
+    /// another - drift no apply can clear, because the apply table refuses every profile the folder
+    /// could move to.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_without_keeping_it_hands_the_savegame_straight_back()
+    {
+        using var harness = new Harness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+
+        var savegame = await harness.Service.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        // The savegame is real and the version was minted: this is a publish, not a cancelled one.
+        Assert.Equal(1, harness.Uploader.Uploads);
+        Assert.Single(harness.Server.Publishes);
+
+        // And nothing on this machine claims it any more.
+        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        Assert.Null(harness.Service.GetBinding(harness.Game, savegame.Id));
+        Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
+
+        // Which is what leaves the mod folder free for the next savegame, rather than spoken for by
+        // one that is no longer here.
+        Assert.True(harness.Service.DecideApply(harness.Game.Identity, Guid.NewGuid(), null).IsAllowed);
+    }
+
+    /// <summary>
     /// A first version's revision is declared rather than observed, so a folder that has never been
     /// synced is not an obstacle: nothing knows which mods were in it while that savegame was played
     /// either way, and requiring a sync first would observe the folder at the moment of publishing -
@@ -544,7 +575,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
         await harness.Service.PublishAsync(
-            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(headRevision: 7), CancellationToken.None);
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(headRevision: 7), keepPlaying: true, CancellationToken.None);
 
         var request = Assert.Single(harness.Server.Publishes);
 
@@ -570,7 +601,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot2, "an unmanaged savegame");
 
         var savegame = await harness.Service.PublishAsync(
-            harness.Game, harness.Server.RepoId, _slot2, "Scratch", null, target: null, CancellationToken.None);
+            harness.Game, harness.Server.RepoId, _slot2, "Scratch", null, target: null, keepPlaying: true, CancellationToken.None);
 
         var request = Assert.Single(harness.Server.Publishes);
 

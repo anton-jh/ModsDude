@@ -250,6 +250,10 @@ public interface ISavegameService : IHeldSavegames
     /// half-set one, and because there is no third state - see
     /// docs/10-savegame-profile-binding.md#savegames-without-a-profile.
     /// </param>
+    /// <param name="keepPlaying">
+    /// Whether to stay holding the save afterwards. False hands it straight back, which is what
+    /// publishing to a mod list this game is not on has to do - see <see cref="SavegameService.PublishAsync"/>.
+    /// </param>
     Task<SavegameDto> PublishAsync(
         Game game,
         Guid repoId,
@@ -257,6 +261,7 @@ public interface ISavegameService : IHeldSavegames
         string name,
         string? label,
         SavegamePublishTarget? target,
+        bool keepPlaying,
         CancellationToken ct);
 
     /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
@@ -827,6 +832,15 @@ public sealed class SavegameService(
     /// actually played, and no arrangement of this flow recovers it. Every version after the first is
     /// observed.
     /// </para>
+    /// <para>
+    /// <b>Holding it afterwards is a choice, and one answer is not available.</b> Publishing to a mod
+    /// list this game is not on would leave a savegame following one profile checked out into a folder
+    /// on another - the exact state <see cref="SavegameDriftKind.PlayedOnAnotherModList"/> exists to
+    /// report, arrived at in one gesture by somebody who did nothing wrong, and one no apply can clear
+    /// because the apply table refuses every profile the folder could move to. The caller is what
+    /// decides that; <c>SavegamePublishModalViewModel</c> is where the choice is offered and where it
+    /// is not.
+    /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">
     /// The game already holds a savegame that claims its mod folder.
@@ -838,6 +852,7 @@ public sealed class SavegameService(
         string name,
         string? label,
         SavegamePublishTarget? target,
+        bool keepPlaying,
         CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
@@ -877,9 +892,11 @@ public sealed class SavegameService(
             TryDeleteFile(packed.FilePath);
         }
 
-        // Publishing leaves you holding it: the server opens a claim beside the version, and this is
-        // the local half of the same fact. Without it the slot the save is sitting in would read as
-        // unrecognised the moment it was published.
+        // Written even where the save is about to be handed straight back, because until the claim is
+        // released this machine genuinely is holding it: the server opened one beside the version.
+        // Writing it unconditionally is what makes the hand-back below retryable - a release that
+        // fails leaves a row offering Check in and Discard rather than a claim nothing on this machine
+        // remembers taking.
         bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             repoId,
             savegameId,
@@ -900,6 +917,15 @@ public sealed class SavegameService(
             LastObservedHash = packed.ContentHash,
             LastPlayedRevision = null
         });
+
+        if (keepPlaying is false)
+        {
+            // The same three steps a discard takes, in the same order and by the same route: release
+            // the claim somebody else is waiting on, forget the binding, recycle the copy. Reused
+            // rather than repeated - "publish and hand back" is a publish followed by exactly the
+            // give-it-back verb, and two copies of that order would eventually disagree about it.
+            await DiscardAsync(game, savegameId, ct);
+        }
 
         return savegame;
     }

@@ -18,6 +18,18 @@ public partial class ConfirmationDialogViewModel(
 
     public bool Result { get; private set; }
 
+    /// <summary>
+    /// Whether this dialog is telling rather than asking, and so has one button instead of two.
+    /// </summary>
+    /// <remarks>
+    /// <b>Decided from the two answers being the same word, not from a flag the callers set.</b>
+    /// <see cref="Refusal"/> and <see cref="Notice"/> are the two that reach here saying "Ok" twice,
+    /// and two identical buttons imply a choice that is not on offer - somebody reads them looking
+    /// for the difference. Anything else that ends up with one word for both answers wants the same
+    /// treatment for the same reason, which is why this is derived rather than declared.
+    /// </remarks>
+    public bool HasOneAnswer => string.Equals(YesText, NoText, StringComparison.Ordinal);
+
 
     [RelayCommand]
     public void SetYes()
@@ -31,6 +43,25 @@ public partial class ConfirmationDialogViewModel(
     {
         Result = false;
         Done = true;
+    }
+
+    /// <summary>
+    /// Escape declines, which is the safe answer in every one of these - including the two
+    /// destructive ones, where "no" is what somebody hitting Escape means and is the answer that
+    /// changes nothing.
+    /// </summary>
+    public override bool TryCancel()
+    {
+        SetNo();
+
+        return true;
+    }
+
+    public override bool TryAccept()
+    {
+        SetYes();
+
+        return true;
     }
 
 

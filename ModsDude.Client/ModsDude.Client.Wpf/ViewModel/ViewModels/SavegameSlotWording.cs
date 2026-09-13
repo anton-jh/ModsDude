@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using System.Text;
 
@@ -18,10 +19,21 @@ internal static class SavegameSlotWording
 
     /// <summary>
     /// Everything about a slot, for the tooltip: what the save is called, every detail the adapter
-    /// recorded, and - last, and only here - the slot's address, folder key and all, which is for
-    /// somebody debugging rather than somebody playing.
+    /// recorded, and - last - where on this machine it is.
     /// </summary>
-    public static string DescribeFully(string label, SavegameSlotRef id, IReadOnlyList<SavegameDetail> details)
+    /// <param name="targetName">
+    /// What the game calls the folder this slot is in, from <see cref="TargetNames.Distinguishing"/>:
+    /// null for a game with one, which is nearly every game.
+    /// </param>
+    /// <remarks>
+    /// <b>The last line is the adapter's slot id and, where there is something to tell apart, the
+    /// folder's name.</b> Never the target <em>key</em>: that is an adapter-authored identity that
+    /// ends up in filenames, it is not chosen to be read, and "game:savegame1" in front of somebody
+    /// choosing where a save goes is a worse answer than "savegame1" - which is what the game itself
+    /// calls that folder, and is the one thing here they can go and look at.
+    /// </remarks>
+    public static string DescribeFully(
+        string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetail> details)
     {
         var text = new StringBuilder(label);
 
@@ -30,6 +42,10 @@ internal static class SavegameSlotWording
             text.Append('\n').Append(detail.Label).Append(": ").Append(detail.Value);
         }
 
-        return text.Append('\n').Append(id.ToString()).ToString();
+        var where = targetName is { Length: > 0 } folder
+            ? $"{folder} · {id.Slot.Value}"
+            : id.Slot.Value;
+
+        return text.Append('\n').Append(where).ToString();
     }
 }

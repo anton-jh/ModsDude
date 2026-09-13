@@ -54,27 +54,51 @@
 
                 <Grid Grid.Row="1" ColumnDefinitions="* *">
 
+                    <!-- The affirmative, stretched across both columns where there is nothing to
+                         choose between: a dialog that says "Ok" on both buttons is reporting rather
+                         than asking, and the second button exists only to be read twice. -->
                     <Button Grid.Column="0"
-                            Margin="24 24 4 24"
-                            Style="{DynamicResource AccentButtonStyle}"
                             Content="{Binding YesText}"
                             HorizontalAlignment="Stretch"
-                            Command="{Binding SetYesCommand}" />
+                            Command="{Binding SetYesCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                                <Setter Property="Margin" Value="24 24 4 24" />
+                                <Setter Property="Grid.ColumnSpan" Value="1" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOneAnswer}" Value="True">
+                                        <Setter Property="Margin" Value="24 24 24 24" />
+                                        <Setter Property="Grid.ColumnSpan" Value="2" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
                     <Button Grid.Column="1"
                             Margin="4 24 24 24"
                             Content="{Binding NoText}"
                             HorizontalAlignment="Stretch"
-                            Command="{Binding SetNoCommand}" />
+                            Command="{Binding SetNoCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOneAnswer}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
                 </Grid>
             </Border>
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Return" Command="{Binding SetYesCommand}" />
-        <KeyBinding Key="Esc" Command="{Binding SetNoCommand}" />
-    </UserControl.InputBindings>
-    
+    <!-- Escape and Enter are the shell's, handled once for whatever modal is up rather than by a
+         KeyBinding here that only fires when focus is already inside this control. See
+         MainWindow.OnPreviewKeyDown. -->
+
 </UserControl>

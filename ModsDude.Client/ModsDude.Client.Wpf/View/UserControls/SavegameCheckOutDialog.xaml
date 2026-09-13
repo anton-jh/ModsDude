@@ -231,8 +231,4 @@
         </Grid>
     </Border>
 
-    <UserControl.InputBindings>
-        <KeyBinding Key="Esc" Command="{Binding CancelCommand}" />
-    </UserControl.InputBindings>
-
 </UserControl>

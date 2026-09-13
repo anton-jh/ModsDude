@@ -65,4 +65,15 @@ public partial class PasteModListModalViewModel : ModalViewModel
     {
         Done = true;
     }
+
+
+    public override bool TryCancel() => Press(CancelCommand);
+
+    /// <summary>
+    /// Enter does not confirm here, and the box is why: a pasted mod list is many lines, so Enter in
+    /// it is a newline the user is typing. The shell leaves the key alone for a box that takes
+    /// returns - see <c>MainWindow.BelongsToFocus</c> - and this says the same thing from the other
+    /// end, for when focus is somewhere else in the dialog.
+    /// </summary>
+    public override bool TryAccept() => false;
 }

@@ -113,4 +113,13 @@ public partial class ErrorDialogViewModel(
 
     [RelayCommand]
     private void Dismiss() => Done = true;
+
+
+    /// <summary>
+    /// Both keys dismiss. There is nothing to decide - the failure has already happened, and the
+    /// only thing this dialog does is say so.
+    /// </summary>
+    public override bool TryCancel() => Press(DismissCommand);
+
+    public override bool TryAccept() => Press(DismissCommand);
 }

@@ -10,8 +10,8 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// <b>Never the folder number.</b> A picker that offers "savegame3" is the memory test this whole
 /// feature exists to remove, so an occupied slot is labelled with what the <em>game</em> calls the
-/// save in it and how long it has been played. The adapter's own id is on the tooltip and nowhere
-/// else, for the one person who is debugging rather than playing.
+/// save in it and how long it has been played. The slot's own id is on the tooltip and nowhere else,
+/// as the last line, for somebody who wants to go and look at the folder.
 /// </para>
 /// <para>
 /// <b>The three safety states are told apart here, not at the moment of writing.</b> A refused row is
@@ -41,7 +41,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
             : "Empty slot";
 
         Detail = BuildDetail();
-        ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, Details);
+        ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, TargetName, Details);
 
         IsRefused = SavegameSlotStates.IsRefused(availability);
         NeedsConfirmation = SavegameSlotStates.RequiresConfirmation(availability);
