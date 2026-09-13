@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -61,6 +62,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
+    private readonly ILogger<GamePageViewModel> _logger;
 
     /// <summary>
     /// What the game's active profile is called, and whether anything could find out.
@@ -87,6 +89,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         ISavegamesClient savegamesClient,
+        ILogger<GamePageViewModel> logger,
         SyncPageViewModel.Factory syncPageViewModelFactory,
         GameSavegamesPageViewModel.Factory gameSavegamesPageViewModelFactory,
         GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory)
@@ -100,6 +103,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         _bindingStore = bindingStore;
         _profileService = profileService;
         _savegamesClient = savegamesClient;
+        _logger = logger;
 
         // This page outlives a check-in, unlike every other surface that asks the hold question: the
         // slot list is its own sub-page, so checking a savegame in there leaves this shell standing
@@ -282,6 +286,11 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
 
         NoTargetsNote = null;
 
+        // Asked of the adapter, which this page always has: it is reached through a repo, so the
+        // base settings that name the folders are right there. Only the drift notice is ever
+        // without one.
+        var names = TargetNames.Read(_game, _repo.Adapter, _logger);
+
         foreach (var target in _game.Targets)
         {
             var report = _driftService.Check(
@@ -293,7 +302,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
             Targets.Add(new GameTargetRow(
                 // Named by the one rule every folder name in the app follows, which answers null for
                 // a game with a single folder.
-                TargetNames.Distinguishing(target.Key, target.DisplayName, _game.Targets.Count),
+                TargetNames.Distinguishing(target.Key, names.GetValueOrDefault(target.Key), _game.Targets.Count),
                 target.ModFolder,
                 Describe(report),
                 DescribeLocked(report)));

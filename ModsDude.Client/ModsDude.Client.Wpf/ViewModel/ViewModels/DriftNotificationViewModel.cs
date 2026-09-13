@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -431,6 +432,11 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         var profile = _subject.ProfileName is string name ? $"'{name}'" : "the applied profile";
         var files = report.Added.Count + report.Removed.Count + report.Changed.Count;
 
+        // The repo that knows this game: the one whose profile it follows, or failing that any repo
+        // about the same game. Both actions need it, and so does knowing what its folders are
+        // called - the drift check itself never has one, which is what the two branches below are.
+        var owner = FindOwningRepo(_subject.Game);
+
         // Across every entry of the game being shown, because a held save belongs to the folder it
         // sits in and the entry on top is whichever folder came first. One notice says both halves
         // about one game; two notices racing to say one each is how a warning becomes noise.
@@ -438,6 +444,24 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             .Where(x => x.Game.Identity == _subject.Game.Identity)
             .SelectMany(x => x.Report.SavegameDrift)
             .ToList();
+
+        if (owner is null)
+        {
+            DescribeUnreachable(_subject.Game.Name);
+
+            IsVisible = true;
+
+            ReapplyCommand.NotifyCanExecuteChanged();
+            OpenModListCommand.NotifyCanExecuteChanged();
+
+            return;
+        }
+
+        // Asked of the adapter, which is the whole reason this branch needed a repo. A game with
+        // one folder names nothing and every sentence reads as it always did.
+        var folders = _gameRepository.Find(_subject.Game.Identity) is Game game
+            ? TargetNames.Read(game, owner.Adapter)
+            : new Dictionary<TargetKey, string>();
 
         Headline = DescribeHeadline(
             drifted.DistinctBy(x => x.Game.Identity).Count(),
@@ -451,13 +475,12 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
         // it is pressed is worse than no button.
         CanReapply = _subject.Game.ActiveProfile is not null;
 
-        CanReview = _subject.Game.ActiveProfile is ActiveProfile active
-            && FindRepo(active.RepoId) is Repo repo
-            && repo.MembershipLevel >= RepoMembershipLevel.Member;
+        CanReview = _subject.Game.ActiveProfile is not null
+            && owner.MembershipLevel >= RepoMembershipLevel.Member;
 
         ReapplyLabel = DescribeReapply(_subject.Game);
 
-        Detail = Describe(_subject, report, files);
+        Detail = Describe(_subject, report, files, folders);
         LockedWarning = DescribeLocked(report);
         SavegameWarning = DescribeSavegames(savegames);
         StoreWarning = DescribeStoreCorruption(_monitor.StoreCorruption);
@@ -469,6 +492,73 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         ReapplyCommand.NotifyCanExecuteChanged();
         OpenModListCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// The repo this notice can act through, or null where this account has none for the game.
+    /// </summary>
+    /// <remarks>
+    /// The profile's own repo first, because that is the one both actions address. Failing that any
+    /// repo about the same game, which is enough to name the folders and enough to tell a game this
+    /// account can reach from one it cannot - a game reported purely for a savegame it is holding
+    /// has no profile and therefore no repo of its own to name.
+    /// </remarks>
+    private Repo? FindOwningRepo(DriftCandidate game)
+    {
+        if (game.ActiveProfile is ActiveProfile active && FindRepo(active.RepoId) is Repo owner)
+        {
+            return owner;
+        }
+
+        return _repoRepository.Repos.FirstOrDefault(x => x.Scope == game.Identity);
+    }
+
+    /// <summary>
+    /// What the notice says about a game whose repo this account cannot see.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The drift is real and the account cannot act on it</b>, so the notice reports that rather
+    /// than the folder-by-folder detail. Every action it has goes through the repo: re-applying
+    /// needs the profile's mod list, and reviewing needs a page under a repo in the sidebar. Naming
+    /// counts of changed files under two dead buttons was the shape this replaces.
+    /// </para>
+    /// <para>
+    /// <b>Two causes, and only one of them is worth alarming anybody about.</b> Before the repo list
+    /// has been read this is a shell that started a moment ago, and the notice says so and waits -
+    /// <c>OnReposChanged</c> re-renders it. After a successful read it is a game connected to a repo
+    /// this account was removed from, left, or archived, and that is a standing state somebody has
+    /// to be told about because nothing else in the app mentions it.
+    /// </para>
+    /// <para>
+    /// <b>It cannot offer the way out, and does not pretend to.</b> Disconnecting a game is on its
+    /// settings page, which is reached through the repo's sidebar - so a game whose repo is gone
+    /// cannot be reached at all. See <c>docs/08-known-issues.md</c>.
+    /// </para>
+    /// </remarks>
+    private void DescribeUnreachable(string gameName)
+    {
+        var loaded = _repoRepository.HasLoaded;
+
+        Headline = loaded
+            ? $"'{gameName}' has drifted, and it belongs to a repo you are not in"
+            : $"'{gameName}' has drifted";
+
+        Detail = loaded
+            ? "Its mod folders still follow a profile in a repo this account cannot see - it was left, "
+                + "or the membership was removed, or the repo was archived. Nothing here can put them right or "
+                + "say what changed, because everything that would is behind that repo. Sign in as somebody who "
+                + "is in it, or ask to be let back in."
+            : "Checking which repo it belongs to...";
+
+        // Every one of them goes through the repo.
+        CanReapply = false;
+        CanReview = false;
+
+        LockedWarning = null;
+        SavegameWarning = null;
+        ImportPrompt = null;
+        StoreWarning = DescribeStoreCorruption(_monitor.StoreCorruption);
     }
 
     /// <summary>
@@ -554,27 +644,32 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
     /// <param name="subject">
     /// The entry being shown, so every sentence here can say <em>which</em> folder it is about - with
     /// several targets, which one did not get the apply is the interesting half, and so is which one
-    /// somebody's update-all rewrote. Named by <see cref="TargetNames"/> and only where the game
-    /// reaches more than one, the same rule every other folder name in the app follows.
+    /// somebody's update-all rewrote.
     /// </param>
-    private static string Describe(TargetDrift subject, DriftReport report, int files)
+    /// <param name="folderNames">
+    /// What the adapter calls this game's folders, from the repo the caller found. Empty is an
+    /// ordinary answer - a game with one folder names none of them, and settings this adapter
+    /// version cannot read fall back to the keys.
+    /// </param>
+    private static string Describe(
+        TargetDrift subject, DriftReport report, int files, IReadOnlyDictionary<TargetKey, string> folderNames)
     {
         if (report.Status is DriftStatus.NeverSynced)
         {
-            return $"This game follows a profile and there is no record of it ever being applied{In(subject)} - " +
+            return $"This game follows a profile and there is no record of it ever being applied{In(subject, folderNames)} - " +
                    "either it never was, or the record was lost. Applying it is what makes the two agree, " +
                    "and until then nothing here can tell you whether the mods are right.";
         }
 
         if (report.Status is DriftStatus.NotApplied)
         {
-            return $"Nothing was installed or removed{In(subject)}: it is exactly as its last apply left it. " +
+            return $"Nothing was installed or removed{In(subject, folderNames)}: it is exactly as its last apply left it. " +
                    "Re-applying is what moves it - nothing here needs repairing first.";
         }
 
         if (report.Status is DriftStatus.FolderRepointed)
         {
-            return $"The settings now point{In(subject)} at {subject.Target?.ModFolder ?? "another folder"}, " +
+            return $"The settings now point{In(subject, folderNames)} at {subject.Target?.ModFolder ?? "another folder"}, " +
                    "which nothing has been applied to. Re-applying is what fills it in.";
         }
 
@@ -586,7 +681,7 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
 
         // Named where the game reaches more than one, because "3 replaced" says nothing useful about
         // a machine running a dedicated server and an MP client until it says which of them.
-        var where = Folder(subject) is string named ? $"the '{named}' folder" : "the mod folder";
+        var where = Folder(subject, folderNames) is string named ? $"the '{named}' folder" : "the mod folder";
 
         var folder = files > 0
             ? $"{string.Join(", ", parts)} in {where} since it was last applied. Updating mods from inside the game looks like this."
@@ -596,43 +691,48 @@ public partial class DriftNotificationViewModel : ObservableObject, IDisposable
             ? $"{report.ProfileChangedMods.Count} mods in {where} are pinned differently than what is installed - somebody has edited the profile since."
             : "";
 
-        return string.Join(' ', new[] { folder, DescribeRevision(subject, report), pins }.Where(x => x.Length > 0));
+        return string.Join(
+            ' ',
+            new[] { folder, DescribeRevision(subject, report, folderNames), pins }.Where(x => x.Length > 0));
     }
 
     /// <summary>
     /// " in the 'MP client' folder", or nothing at all for a game with one - which is nearly every
     /// game, and which is why these sentences read exactly as they did before targets existed.
     /// </summary>
-    /// <remarks>
-    /// <see cref="TargetNames"/>' answer, which is the same one every other folder name in the app
-    /// gets. The adapter's own name for the folder is available here without an adapter because it
-    /// is written down beside the path - this notice is up before the repo list has loaded, and that
-    /// is precisely why it is persisted; a list written before names were recorded falls back to the
-    /// key.
-    /// </remarks>
-    private static string In(TargetDrift subject)
-        => Folder(subject) is string folder ? $" in the '{folder}' folder" : "";
+    private static string In(TargetDrift subject, IReadOnlyDictionary<TargetKey, string> folderNames)
+        => Folder(subject, folderNames) is string folder ? $" in the '{folder}' folder" : "";
 
     /// <summary>
     /// Which of the game's folders this entry is about, or null where there is nothing to tell apart
     /// - one folder, or an entry that is about the game rather than a folder of it.
     /// </summary>
-    private static string? Folder(TargetDrift subject)
-        => subject.Target?.NameAmong(subject.Game.Targets.Count);
+    /// <remarks>
+    /// <see cref="TargetNames"/>' answer, which is the same one every other folder name in the app
+    /// gets: the adapter's own name, and the key where the adapter had none for it.
+    /// </remarks>
+    private static string? Folder(TargetDrift subject, IReadOnlyDictionary<TargetKey, string> folderNames)
+        => subject.Target is GameModFolder target
+            ? TargetNames.Distinguishing(
+                target.Target.Key,
+                folderNames.GetValueOrDefault(target.Target.Key),
+                subject.Game.Targets.Count)
+            : null;
 
     /// <summary>
     /// The half of drift no directory listing can find: the folder is exactly what was installed,
     /// and what was installed is no longer what the profile says. Two numbers, because that is all
     /// the cheap check has - and two numbers is enough to say something specific.
     /// </summary>
-    private static string DescribeRevision(TargetDrift subject, DriftReport report)
+    private static string DescribeRevision(
+        TargetDrift subject, DriftReport report, IReadOnlyDictionary<TargetKey, string> folderNames)
     {
         if (report.ProfileHasMoved is false)
         {
             return "";
         }
 
-        var folder = Folder(subject) is string named ? $"The '{named}' folder" : "This folder";
+        var folder = Folder(subject, folderNames) is string named ? $"The '{named}' folder" : "This folder";
 
         return $"{folder} was made to match revision {report.AppliedRevision}; the profile is now at revision {report.CurrentRevision}.";
     }

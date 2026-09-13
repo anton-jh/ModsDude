@@ -142,6 +142,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         {
             Games.Add(new GameOverviewViewModel(
                 game,
+                _repo.Adapter,
                 DescribeActiveProfile(game),
                 drifted.GetValueOrDefault(game.Identity, [])));
         }

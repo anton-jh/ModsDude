@@ -74,12 +74,6 @@ public class PersistedGame
 /// One of a game's targets as it is written down: the adapter's key for it, and the folder it
 /// reached when the settings were last saved.
 /// </summary>
-/// <param name="DisplayName">
-/// What the adapter called this folder when the settings were last saved, or null where it named it
-/// nothing - which is every game with one folder. Read through
-/// <see cref="GameAdapters.TargetNames"/>, never directly, so a list written before names were
-/// recorded falls back to the key rather than to a blank.
-/// </param>
 /// <remarks>
 /// <para>
 /// <b>The key is the half that earns this being a record rather than a string.</b> A manifest and an
@@ -88,10 +82,11 @@ public class PersistedGame
 /// are described by.
 /// </para>
 /// <para>
-/// <b>The name is persisted on the same argument as the path</b>, and it did not used to be: the
-/// drift check runs off this list without hydrating an adapter, and slice 5's notice says <em>in the
-/// 'MP client' folder</em> rather than <em>in the 'mp' folder</em>. Re-derived on every settings
-/// save, so an adapter release that renames a folder catches up the next time anything is edited.
+/// <b>What the adapter calls the folder is deliberately not here.</b> Both fields above are
+/// persisted because a folder read without an adapter has to be <em>addressable</em> - eviction has
+/// to spare it and the drift check has to compare it. A display name is a label, and persisting one
+/// would be a copy of derived data going stale the moment an adapter release renames it. It is asked
+/// for where there is an adapter to ask; see <see cref="GameAdapters.TargetNames"/>.
 /// </para>
 /// </remarks>
-public sealed record PersistedModTarget(TargetKey Key, string ModFolder, string? DisplayName = null);
+public sealed record PersistedModTarget(TargetKey Key, string ModFolder);

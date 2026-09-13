@@ -323,7 +323,7 @@ LocalState
 │   └─ ImageCache: { Path, MaxSizeBytes }   one per machine, not per volume
 └─ Games: { gameIdentity → { GameAdapterId, Name,
                              AdapterLocalSettings,
-                             Targets: [ { Key, ModFolder, DisplayName } ],
+                             Targets: [ { Key, ModFolder } ],
                              ActiveProfile: (RepoId, ProfileId)?,
                              SavegameCheckouts, SavegameSlotHints } }
 
@@ -346,10 +346,16 @@ something to check for. There is no id on a game and nothing mints one.
 without being able to hydrate an adapter — store eviction, the drift candidate list, and the
 no-two-games-own-one-folder check — and a game no loaded repo serves still owns its folders and
 still has a standing intent. The key travels with the path because a path on its own names no
-manifest, and the adapter's `DisplayName` travels with both because the app-level drift notice is
-on screen before the repo list has loaded and still has to be able to say *in the 'MP client'
-folder*. All three are re-derived whenever the settings are saved. `Name` is the same trick: it is
+manifest. Both are re-derived whenever the settings are saved. `Name` is the same trick: it is
 `Adapter.GameDisplayName`, written down rather than typed.
+
+**What the adapter *calls* a folder is deliberately not here.** The two fields above are persisted
+because a folder read without an adapter has to be **addressable** — spared by a sweep, compared
+against a manifest, refused to a second game. A display name is a label, and a persisted label is a
+copy of derived data that goes stale the moment an adapter release renames it. Every surface that
+shows one has a repo in hand and asks: `TargetNames.Read`. The one that does not is the app-level
+drift notice, and its answer is not a worse word — see
+[07](07-mod-sync-design.md#the-notice-needs-a-repo-and-says-so-when-it-has-none).
 
 `ActiveProfile` has to be persisted: a mod folder cannot tell you which profile it was meant to
 match, so nothing can reconstruct it once the contents change. It is one per game rather than one

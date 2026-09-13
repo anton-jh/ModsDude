@@ -64,15 +64,23 @@ from inside the app; the consequence is that the refusal says only that it was r
 
 ## Unbuilt, and known to be
 
-### A drift notice can outlive the account that could act on it
+### A game whose repo this account cannot see cannot be reached at all
 
 Connected games and their active profiles are machine state and survive a **Switch user** — correctly,
 since the mod folders on disk did not change. But `TargetDrift` names a repo and a profile, and
-the new user may be in neither. `DriftNotificationViewModel` degrades rather than breaks: **Review
-and import** reports that the profile could not be opened, and **Re-apply now** finds no matching
-`Repo` and quietly does nothing. So the notice is still shown, still correct about the drift, and
-both of its buttons are dead. Nothing narrows the drift set to repos the signed-in user can
-actually reach. See [05](05-client.md#authentication) for what a switch does clear.
+the new user may be in neither. The same state arrives without a switch: leaving a repo, being
+removed from one, or archiving it.
+
+**The notice no longer pretends otherwise.** It used to show the drift with two dead buttons —
+Review reporting that the profile could not be opened, Re-apply finding no `Repo` and quietly doing
+nothing. It now says the game belongs to a repo this account is not in, and offers nothing; see
+[07](07-mod-sync-design.md#the-notice-needs-a-repo-and-says-so-when-it-has-none).
+
+**What is still missing is a way out.** The one thing that would resolve it — disconnecting the
+game — lives on its settings page, which is reached through a repo's sidebar, so a game whose repo
+is gone is unreachable. The state is now visible and still not actionable, and the fix is a
+machine-level list of connected games that does not hang off a repo. Nothing narrows the drift set
+either. See [05](05-client.md#authentication) for what a switch does clear.
 
 ### The Farming Simulator slot reader has never been run against the real game
 

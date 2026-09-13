@@ -120,19 +120,10 @@ public class GameRepository : IModFolders, IDriftCandidateSource
             game.ActiveProfile))];
     }
 
-    /// <summary>
-    /// Every folder one game reaches, each addressed by the key its manifest is under and carrying
-    /// what to call it.
-    /// </summary>
-    /// <remarks>
-    /// The name comes off the persisted list rather than off an adapter, which is the whole point of
-    /// it being persisted: this feeds the drift check, which runs for a game whose identity no loaded
-    /// repo serves.
-    /// </remarks>
+    /// <summary>Every folder one game reaches, each addressed by the key its manifest is under.</summary>
     private static IEnumerable<GameModFolder> TargetsOf(Game game)
     {
-        return game.Targets.Select(x => new GameModFolder(
-            new ModTargetRef(game.Identity, x.Key), x.ModFolder, x.DisplayName));
+        return game.Targets.Select(x => new GameModFolder(new ModTargetRef(game.Identity, x.Key), x.ModFolder));
     }
 
     /// <summary>
@@ -296,10 +287,9 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// <remarks>
     /// Every target, not the one: this is the list that gets persisted, and it is the only thing that
     /// has to be complete for eviction to spare a folder nothing else can name. The key travels with
-    /// the path because a path on its own names no manifest, and the adapter's name for the folder
-    /// travels with both because the drift notice reads this list and has no adapter to ask. A game
-    /// reaching no folder claims none, which is the same empty list this returns for an adapter with
-    /// no mod capability at all - both mean "nothing here can collide with anybody".
+    /// the path because a path on its own names no manifest. A game reaching no folder claims none,
+    /// which is the same empty list this returns for an adapter with no mod capability at all - both
+    /// mean "nothing here can collide with anybody".
     /// </remarks>
     public static IReadOnlyList<PersistedModTarget> GetTargets(IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
@@ -308,7 +298,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
             .GetLocalCapabilityAdapterFactory<ILocalModAdapter>()
             ?.Invoke()
             .ModTargets
-            .Select(x => new PersistedModTarget(x.Key, x.Path, x.DisplayName)) ?? []];
+            .Select(x => new PersistedModTarget(x.Key, x.Path)) ?? []];
     }
 
 

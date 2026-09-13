@@ -44,16 +44,24 @@ public class GameOverviewViewModel
     /// carry no mod drift and land nowhere here, which is right: this row is about mod folders, and
     /// the app-level notice is what says the savegame half.
     /// </param>
+    /// <param name="adapter">
+    /// The repo's adapter, which is what knows the folders' names. An overview is always under a
+    /// repo, so there is always one to ask - unlike the app-level drift notice, which is why the
+    /// names are asked for rather than written down.
+    /// </param>
     public GameOverviewViewModel(
         Game game,
+        IBaseGameAdapter adapter,
         string activeProfileSummary,
         IReadOnlyList<TargetDrift> drift)
     {
         Name = game.Name;
         ActiveProfileSummary = activeProfileSummary;
 
+        var names = TargetNames.Read(game, adapter);
+
         Folders = [.. game.Targets.Select(target => new GameFolderLine(
-            Describe(target, game.Targets.Count),
+            Describe(target, names.GetValueOrDefault(target.Key), game.Targets.Count),
             Describe(drift.FirstOrDefault(x => x.Target?.Target.Key == target.Key)?.Report)))];
     }
 
@@ -71,8 +79,8 @@ public class GameOverviewViewModel
     public string ActiveProfileSummary { get; }
 
 
-    private static string Describe(PersistedModTarget target, int targetCount)
-        => TargetNames.Distinguishing(target.Key, target.DisplayName, targetCount) is string name
+    private static string Describe(PersistedModTarget target, string? displayName, int targetCount)
+        => TargetNames.Distinguishing(target.Key, displayName, targetCount) is string name
             ? $"{name}: {target.ModFolder}"
             : target.ModFolder;
 

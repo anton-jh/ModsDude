@@ -64,16 +64,7 @@ public interface IModFolders
 /// One entry per folder, so a game with three targets appears three times: eviction has to spare
 /// every folder, and the target is how each one's manifest is found.
 /// </remarks>
-/// <param name="DisplayName">
-/// What the adapter called this folder when the settings were last saved, read through
-/// <see cref="TargetNames"/> - which falls back to the key. Null for the games that never name a
-/// folder, which is nearly all of them.
-/// </param>
-public sealed record GameModFolder(ModTargetRef Target, string ModFolder, string? DisplayName = null)
-{
-    /// <summary>What to call this folder on screen, or null where the game reaches only this one.</summary>
-    public string? NameAmong(int targetCount) => TargetNames.Distinguishing(Target.Key, DisplayName, targetCount);
-}
+public sealed record GameModFolder(ModTargetRef Target, string ModFolder);
 
 
 /// <summary>

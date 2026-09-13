@@ -11,14 +11,12 @@ public class LocalState
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Bumped to 7 because a <see cref="PersistedGame.Name"/> stopped being something somebody typed
-    /// and became what the adapter calls the game, and because
-    /// <see cref="PersistedModTarget.DisplayName"/> is written down beside each folder now. Neither
-    /// is a parse error on the way in - a version 6 state reads with the name the user gave and no
-    /// folder names at all - and that is exactly why it is a bump rather than a shrug: a game left
-    /// calling itself 'Game' until its settings are next saved, and folders the drift notice can
-    /// only name by key, are both this machine quietly disagreeing with what the code now means.
-    /// Everything is rewritten the moment the game is connected again, which is the whole cost.
+    /// Bumped to 7 because <see cref="PersistedGame.Name"/> stopped being something somebody typed
+    /// and became what the adapter calls the game. It is not a parse error on the way in - a version
+    /// 6 state reads back with whatever the user called it - and that is exactly why it is a bump
+    /// rather than a shrug: a game left calling itself 'Game' forever, because the field is derived
+    /// now and nothing routine rewrites it, is this machine quietly disagreeing with what the code
+    /// means. Reconnecting the game is the whole cost.
     /// </para>
     /// <para>
     /// Bumped to 6 because a savegame checkout and its slot hint carry a

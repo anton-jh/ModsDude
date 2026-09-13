@@ -1764,10 +1764,23 @@ per-game looks simpler and is not.
 
 - [x] **Folder naming got one answer**, which the four slices before this one kept deferring.
       `TargetNames`: the adapter's own name where anything can still ask for it, the key where
-      nothing can, and nothing at all where the game reaches one folder. The half that makes it
-      possible is that the name is **written down** beside the path — the app-level notice is on
-      screen before the repo list has loaded, and *"in the 'MP client' folder"* cannot go and ask.
-      `LocalState.CurrentVersion` is 7 for that and for the derived game name.
+      nothing can, and nothing at all where the game reaches one folder.
+      `LocalState.CurrentVersion` is 7, for the game name becoming derived.
+
+      **The first answer was to persist the name beside the path, and it was wrong.** The argument
+      was that the app-level notice has no adapter, so *"in the 'MP client' folder"* could not be
+      said without one — but the path and the key are persisted because a folder read without an
+      adapter has to be *addressable*, and a label is not that. A persisted label is a copy of
+      derived data that goes stale the moment an adapter release renames a folder, and nothing
+      routine rewrites it.
+
+      **The notice's real answer is that it should not be describing folders at all in that
+      state.** Everything it can do goes through the repo — re-applying, reviewing, and naming a
+      folder — so a game whose repo this account cannot see is one it can do nothing about, and it
+      says *that* instead of two dead buttons over a count of changed files. `RepoRepository`
+      grew `HasLoaded` to keep the second-long startup case from reading as a lost membership.
+      The remaining hole — such a game cannot be reached to disconnect it — is
+      [in 08](08-known-issues.md#a-game-whose-repo-this-account-cannot-see-cannot-be-reached-at-all).
 
 ### Naming
 

@@ -21,6 +21,18 @@ public class RepoRepository(
 
     public ObservableCollection<Repo> Repos { get; } = [];
 
+    /// <summary>
+    /// Whether this account's repos have been read at least once.
+    /// </summary>
+    /// <remarks>
+    /// <b>An empty list means two different things and something has to tell them apart.</b> Before
+    /// the first read it means "not asked yet"; after one it means this account is in no repos. The
+    /// drift notice is the caller that cares: a game whose repo it cannot find is either a shell
+    /// that started three seconds ago or a game this account can do nothing about, and those get
+    /// opposite sentences. Set on success only - a failed read has established nothing.
+    /// </remarks>
+    public bool HasLoaded { get; private set; }
+
 
     public async Task RefreshRepos(CancellationToken cancellationToken)
     {
@@ -50,6 +62,10 @@ public class RepoRepository(
                 Repos.Add(MapRepoModel(dto));
             }
         }
+
+        // Last, so that a listener woken by the collection changing above sees the list before it
+        // sees the flag saying the list is complete.
+        HasLoaded = true;
     }
 
     public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
@@ -114,6 +130,11 @@ public class RepoRepository(
         {
             Remove(Repos[i]);
         }
+
+        // Back to "not asked yet", which is what this now is: the new account's repos are unknown
+        // rather than known to be none, and a notice reading the difference must not answer for the
+        // account that just left.
+        HasLoaded = false;
     }
 
     /// <summary>

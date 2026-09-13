@@ -693,6 +693,37 @@ All of them run as `DriftCheckReason.Explicit`, so the five-second activation th
 swallows one: they are consequences of something the user just did, and the complaint they answer
 is a notice that arrives one alt-tab too late.
 
+#### The notice needs a repo, and says so when it has none
+
+**The check deliberately runs without one.** `IDriftCandidateSource` is the persisted folders and
+the persisted intent and nothing else, which is what lets it work offline and answer for a game no
+loaded repo serves. So the drift is *found* with no adapter and no membership in hand.
+
+Every action it leads to is the opposite. Re-applying needs the profile's mod list; reviewing needs
+a page under a repo in the sidebar; even naming a folder needs the adapter, which is hydrated from
+a repo's base settings. So the notice resolves a repo for the game before it words anything — the
+one the active profile belongs to, or failing that any repo about the same game — and it has two
+branches:
+
+- **With a repo**, everything reads as it always has, and the folder names come from
+  `TargetNames.Read`.
+- **Without one**, the drift is real and this account can do nothing whatever about it. The notice
+  says *that* instead: no buttons, and a sentence naming the cause. Two dead buttons over a count
+  of changed files is what this replaces — see
+  [08](08-known-issues.md#a-drift-notice-can-outlive-the-account-that-could-act-on-it).
+
+**Two causes, one of them not worth alarming anybody about**, which is why `RepoRepository`
+exposes `HasLoaded`. An empty repo list means "not asked yet" for the second or two between the
+shell appearing and the first fetch landing, and "this account is in no repos" ever after; the
+notice would otherwise accuse a perfectly healthy startup of having lost a membership. Before the
+first read it says it is still checking and waits — `OnReposChanged` re-renders it. After one, it
+says the game belongs to a repo this account is not in.
+
+This is also the whole reason a folder's display name is **not** persisted beside its path. It was,
+for one slice, so that this notice could say *in the 'MP client' folder* without an adapter — a
+stale copy of derived data bought to improve a sentence in the one state where the sentence should
+not have been about folders at all.
+
 #### The notice says both halves
 
 `TargetDrift.IsDrifted` is true for a held savegame that has moved even when the mod folder is

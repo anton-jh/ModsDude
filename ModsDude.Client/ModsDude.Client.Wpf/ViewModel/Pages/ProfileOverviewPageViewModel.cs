@@ -288,6 +288,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         {
             Games.Add(new GameOverviewViewModel(
                 game,
+                _repo.Adapter,
                 "Set to this profile",
                 drifted.GetValueOrDefault(game.Identity, [])));
         }
