@@ -45,9 +45,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly CurrentUserService _currentUserService;
-    private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
-    private readonly ModSyncService _syncService;
     private readonly DriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
     private readonly SyncManifestStore _manifestStore;
@@ -77,9 +75,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         CurrentUserService currentUserService,
-        GameRepository gameRepository,
         ProfileApplyService applyService,
-        ModSyncService syncService,
         DriftMonitor driftMonitor,
         SavegameFlowService flowService,
         SyncManifestStore manifestStore,
@@ -99,9 +95,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _bindingStore = bindingStore;
         _profileService = profileService;
         _currentUserService = currentUserService;
-        _gameRepository = gameRepository;
         _applyService = applyService;
-        _syncService = syncService;
         _driftMonitor = driftMonitor;
         _flowService = flowService;
         _shellNavigation = shellNavigation;
@@ -1402,10 +1396,21 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// after the claim still holds the save and has it on disk.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>Which revision is not decided here.</b> The binding was written a moment ago and carries what
     /// this savegame runs on - head for the profile's current savegame, its own pinned revision for a past
     /// one - and every apply resolves it from there. Working it out a second time in this method is how
     /// the check-out comes to install a different list from the one the drift check then expects.
+    /// </para>
+    /// <para>
+    /// <b>And it is the ordinary activation, which it did not use to be.</b> This method planned,
+    /// asked about unrecognised mods itself and executed the plans in its own loop - so it was the
+    /// last place in the app that applied without going through the two verbs, and its <em>Review</em>
+    /// answer was a third way of saying "left drifted deliberately": it declined the apply and wrote
+    /// the intent down anyway. Declining is declining. What keeps the state visible is the savegame
+    /// half of the drift check, which is exactly the thing that fires here - the save this machine now
+    /// holds follows a mod list the folder is not on.
+    /// </para>
     /// </remarks>
     private async Task ApplyProfileAsync(Game game, SavegameDto savegame)
     {
@@ -1419,97 +1424,66 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var plans = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
+        // An activation: the game is being put on the mod list the save this machine just took
+        // follows. The service refuses, discloses, records and works, in that order - including its
+        // own naming of any files nothing else has a copy of.
+        var outcome = await _applyService.ActivateAsync(
+            _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
 
-        if (plans.Count == 0)
-        {
-            Status += $" '{game.Name}' could not be reached, so its mod folder was left as it is.";
-
-            return;
-        }
-
-        // Across every folder, because the disclosure is about the game the user is checking a save
-        // out on and one question per folder is one dialog too many.
-        var unrecognised = plans.SelectMany(x => x.Unrecognised).ToList();
-
-        // Nothing unrecognised in the folders means there is nothing to disclose, and the ordinary
-        // night stays one click.
-        if (unrecognised.Count == 0)
-        {
-            var outcome = await _applyService.ActivateAsync(
-                _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
-
-            Status += $" {outcome.Message}";
-
-            await _driftMonitor.CheckAsync();
-
-            return;
-        }
-
-        // Otherwise the drift notice's own two verbs, because this is that problem found at a different
-        // moment. Importing is deliberately not on offer here: it would commit files nobody decided to
-        // keep, which is the argument that already put import behind Save in the editor.
-        var names = unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
-        var more = unrecognised.Count > 10 ? $"\n  ...and {unrecognised.Count - 10} more" : "";
-
-        var choice = new ConfirmationDialogViewModel(
-            $"The mod folder has {unrecognised.Count} mods that are not in the repo",
-            $"{string.Join('\n', names)}{more}",
-            IconKind.Warning,
-            $"Apply - puts the folder on '{profile.Name}'. The {unrecognised.Count} mods go to the Recycle Bin",
-            $"Review - opens '{profile.Name}'s mod list with this folder scanned");
-
-        await _modalService.Show(choice);
-
-        if (choice.Result is false)
-        {
-            // Review leaves the game drifted, and the persistent notification takes it from there -
-            // the same answer this design gives for a game that cannot be applied to right now.
-            RecordActiveProfile(game, profile);
-
-            Status += " The mod folder was left as it is until you decide what to keep.";
-
-            await _driftMonitor.CheckAsync();
-
-            // The first folder with something unrecognised in it, since that is the one the list the
-            // user is about to read was built from.
-            await _shellNavigation.GoToProfileModsAsync(
-                _repo.Id,
-                profile.Id,
-                plans.First(x => x.Unrecognised.Count > 0).TargetRef);
-
-            return;
-        }
-
-        // Before the work, the way an activation records it: the user has consented to the plan, so
-        // the game means to follow this profile from here whether or not every folder gets there.
-        RecordActiveProfile(game, profile);
-
-        var failures = 0;
-        var completed = true;
-
-        foreach (var plan in plans)
-        {
-            var result = await _syncService.ExecuteAsync(plan, null, _lifetime);
-
-            completed &= result.Completed;
-            failures += result.Failures.Count;
-        }
-
-        Status += completed
-            ? $" '{game.Name}' now matches '{profile.Name}'."
-            : $" {failures} mods could not be applied to '{game.Name}'.";
+        Status += $" {outcome.Message}";
 
         await _driftMonitor.CheckAsync();
+
+        if (outcome.Status is ProfileApplyStatus.Declined)
+        {
+            await OfferModListReviewAsync(game, profile);
+        }
     }
 
     /// <summary>
-    /// The standing intent is recorded even where the folder could not be put right: the game is
-    /// still meant to follow this profile, and being left drifted is what the notice is for.
+    /// The way out of a declined apply: open the profile's mod list with the folder that stopped it
+    /// already scanned.
     /// </summary>
-    private void RecordActiveProfile(Game game, ProfileDto profile)
+    /// <remarks>
+    /// <para>
+    /// The reason somebody declines here is nearly always the same one - the folder holds mods the
+    /// repo has never seen, and they would rather import them than have them recycled. That is the
+    /// editor's job and this is the page it is on, so the offer is worth making rather than leaving
+    /// them to find it.
+    /// </para>
+    /// <para>
+    /// <b>A second, small question rather than a third button on the first.</b> Folding it into the
+    /// service's own disclosure would mean either a three-way dialog or this page listing the same
+    /// files a second time - and the plan is only re-read on this path, which is the uncommon one.
+    /// Nothing is recorded either way: the user said no to the apply.
+    /// </para>
+    /// </remarks>
+    private async Task OfferModListReviewAsync(Game game, ProfileDto profile)
     {
-        _gameRepository.SetActiveProfile(game, new ActiveProfile(_repo.Id, profile.Id));
+        // The first folder with something unrecognised in it, since that is the one whose contents
+        // the user is about to read. A decline for any other reason finds none and asks nothing.
+        var plans = await _applyService.TryPlanAsync(_repo, game, profile.Id, profile.Name, revision: null, _lifetime);
+
+        if (plans.FirstOrDefault(x => x.Unrecognised.Count > 0) is not ModSyncPlan plan)
+        {
+            return;
+        }
+
+        var choice = new ConfirmationDialogViewModel(
+            $"Open '{profile.Name}'s mod list?",
+            $"{plan.Unrecognised.Count} mods in the mod folder are not in this repo, and applying is what moves them to "
+                + "the Recycle Bin. The mod list is where they get imported instead - and until something is applied, "
+                + "the save you just took is on a mod list the folder is not on.",
+            IconKind.Question,
+            "Review - opens the mod list with this folder scanned",
+            "Not now");
+
+        await _modalService.Show(choice);
+
+        if (choice.Result)
+        {
+            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, plan.TargetRef);
+        }
     }
 
     /// <summary>
