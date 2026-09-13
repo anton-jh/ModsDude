@@ -3,7 +3,7 @@ using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Tests.Sync;
 
-public class InstanceActivationTests
+public class ProfileActivationTests
 {
     private readonly static Guid _repoId = Guid.NewGuid();
     private readonly static Guid _profileId = Guid.NewGuid();
@@ -14,8 +14,8 @@ public class InstanceActivationTests
     {
         var target = new ActiveProfile(_repoId, _profileId);
 
-        Assert.Equal(InstanceActivationKind.Reapply, InstanceActivation.Describe(target, target));
-        Assert.Equal("Re-apply", InstanceActivation.Label(InstanceActivation.Describe(target, target)));
+        Assert.Equal(ProfileActivationKind.Apply, ProfileActivation.Describe(target, target));
+        Assert.Equal("Re-apply", ProfileActivation.Label(ProfileActivation.Describe(target, target)));
     }
 
     [Fact]
@@ -24,16 +24,16 @@ public class InstanceActivationTests
         var current = new ActiveProfile(_repoId, Guid.NewGuid());
         var target = new ActiveProfile(_repoId, _profileId);
 
-        Assert.Equal(InstanceActivationKind.Activate, InstanceActivation.Describe(current, target));
-        Assert.Equal("Activate", InstanceActivation.Label(InstanceActivation.Describe(current, target)));
+        Assert.Equal(ProfileActivationKind.Activate, ProfileActivation.Describe(current, target));
+        Assert.Equal("Activate", ProfileActivation.Label(ProfileActivation.Describe(current, target)));
     }
 
     [Fact]
     public void A_game_on_nothing_is_being_moved_too()
     {
         Assert.Equal(
-            InstanceActivationKind.Activate,
-            InstanceActivation.Describe(null, new ActiveProfile(_repoId, _profileId)));
+            ProfileActivationKind.Activate,
+            ProfileActivation.Describe(null, new ActiveProfile(_repoId, _profileId)));
     }
 
     /// <summary>
@@ -45,10 +45,10 @@ public class InstanceActivationTests
     public void A_pinned_revision_puts_its_number_on_the_re_apply()
     {
         var target = new ActiveProfile(_repoId, _profileId);
-        var kind = InstanceActivation.Describe(target, target);
+        var kind = ProfileActivation.Describe(target, target);
 
-        Assert.Equal("Re-apply rev 4", InstanceActivation.Label(kind, 4));
-        Assert.Equal("Re-apply", InstanceActivation.Label(kind, null));
+        Assert.Equal("Re-apply rev 4", ProfileActivation.Label(kind, 4));
+        Assert.Equal("Re-apply", ProfileActivation.Label(kind, null));
     }
 
     /// <summary>
@@ -59,9 +59,9 @@ public class InstanceActivationTests
     public void Moving_an_game_never_names_a_revision()
     {
         var current = new ActiveProfile(_repoId, Guid.NewGuid());
-        var kind = InstanceActivation.Describe(current, new ActiveProfile(_repoId, _profileId));
+        var kind = ProfileActivation.Describe(current, new ActiveProfile(_repoId, _profileId));
 
-        Assert.Equal("Activate", InstanceActivation.Label(kind, 4));
+        Assert.Equal("Activate", ProfileActivation.Label(kind, 4));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class InstanceActivationTests
         var current = new ActiveProfile(Guid.NewGuid(), _profileId);
 
         Assert.Equal(
-            InstanceActivationKind.Activate,
-            InstanceActivation.Describe(current, new ActiveProfile(_repoId, _profileId)));
+            ProfileActivationKind.Activate,
+            ProfileActivation.Describe(current, new ActiveProfile(_repoId, _profileId)));
     }
 }

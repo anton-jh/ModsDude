@@ -201,11 +201,11 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
     /// </summary>
     public bool CanChooseProfile => ProfileLock is null;
 
-    public InstanceActivationKind ActivationKind => SelectedProfile is InstanceProfileOptionViewModel option
-        ? InstanceActivation.Describe(_game.ActiveProfile, option.Value)
-        : InstanceActivationKind.Activate;
+    public ProfileActivationKind ActivationKind => SelectedProfile is InstanceProfileOptionViewModel option
+        ? ProfileActivation.Describe(_game.ActiveProfile, option.Value)
+        : ProfileActivationKind.Activate;
 
-    public string ActivationLabel => InstanceActivation.Label(ActivationKind, PinnedRevision);
+    public string ActivationLabel => ProfileActivation.Label(ActivationKind, PinnedRevision);
 
 
     protected override async Task InitAsync()
@@ -254,7 +254,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
         var kind = ActivationKind;
 
         IsApplying = true;
-        ApplyStatus = kind is InstanceActivationKind.Reapply ? "Re-applying..." : "Activating...";
+        ApplyStatus = kind is ProfileActivationKind.Apply ? "Re-applying..." : "Activating...";
 
         try
         {
@@ -263,7 +263,7 @@ public partial class GamePageViewModel : PageViewModel, IDisposable
                 _game,
                 option.Value.ProfileId,
                 option.ProfileName,
-                confirmPlan: kind is InstanceActivationKind.Activate,
+                confirmPlan: kind is ProfileActivationKind.Activate,
                 progress: null,
                 cancellationToken);
 

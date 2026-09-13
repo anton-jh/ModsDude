@@ -147,7 +147,7 @@ public static class SavegameRowRules
     /// The disabled button's own explanation, which is the only place the refusal is ever said.
     /// </summary>
     /// <remarks>
-    /// Separate from <see cref="Describe"/> the way <see cref="Sync.InstanceActivation.Label"/> is
+    /// Separate from <see cref="Describe"/> the way <see cref="Sync.ProfileActivation.Label"/> is
     /// separate from its <c>Describe</c>: the rule works on ids, and the names a sentence needs belong
     /// to whoever loaded the list.
     /// </remarks>

@@ -196,11 +196,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public bool HasActivationStatus => ActivationStatus is not null;
 
-    public InstanceActivationKind ActivationKind => InstanceActivation.Describe(
+    public ProfileActivationKind ActivationKind => ProfileActivation.Describe(
         SelectedGame?.ActiveProfile,
         new ActiveProfile(_repo.Id, _profile.Id));
 
-    public string ActivationLabel => InstanceActivation.Label(ActivationKind);
+    public string ActivationLabel => ProfileActivation.Label(ActivationKind);
 
     public string ActivationDescription
     {
@@ -221,7 +221,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return "";
             }
 
-            return ActivationKind is InstanceActivationKind.Reapply
+            return ActivationKind is ProfileActivationKind.Apply
                 ? $"'{game.Name}' already follows this profile. Applying it again makes the mod folder match."
                 : $"'{game.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
         }
@@ -240,7 +240,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         var target = new ActiveProfile(_repo.Id, _profile.Id);
 
         IsApplying = true;
-        ActivationStatus = kind is InstanceActivationKind.Reapply ? "Re-applying..." : "Activating...";
+        ActivationStatus = kind is ProfileActivationKind.Apply ? "Re-applying..." : "Activating...";
 
         try
         {
@@ -251,7 +251,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 _profile.Name,
                 // Moving a game onto a different profile takes the previous one's mods back out,
                 // so the plan is shown first. A re-apply has nothing extra to disclose.
-                confirmPlan: kind is InstanceActivationKind.Activate,
+                confirmPlan: kind is ProfileActivationKind.Activate,
                 progress: null,
                 cancellationToken);
 
