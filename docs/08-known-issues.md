@@ -16,6 +16,39 @@ one does not renumber the rest and break every link into this page.
 
 ## Correctness
 
+### A source toggle throws the mod list editor's draft away
+
+`ProfileModsEditorPageViewModel.OnSourceEnabledChanged` reloads, and `Publish` clears `Pinned` and
+rebuilds it from the server's dependency list. So ticking a source chip, adding or removing a
+folder, or pressing *Rescan* discards the **whole** draft — not only the mods that came from that
+source — along with both selections, the bulk undo and the paste report. `HasUnsavedChanges` then
+falls to false, so nothing warns, nothing offers an undo, and the navigation lock releases. It is
+also a needless round trip: the catalog recomposes from scans already in memory.
+
+Fixed by [Phase 14](PLAN.md#phase-14--the-draft-outlives-the-catalog), which splits the server read
+away from the catalog recompose.
+
+### Nothing guards the editor while it is saving
+
+`IsSaving` gates the command bar only. The per-row **+** and **−**, the version selectors, the lock
+toggles, drag-and-drop, the selection, the source chips, *Add a folder*, *Rescan* and a `ScanTarget`
+arriving from a drift notice all stay live, and `SaveChanges` builds `desired` from `Pinned` *after*
+awaiting the import. A row added mid-upload is therefore saved without having been imported, and a
+source toggled mid-upload replaces the draft with the server's own list, which the save then writes
+back as a revision that changed nothing. Leaving the page is caught by the navigation lock, but it
+reads as unsaved changes rather than as a running save: confirming disposes the page, the files
+finish registering on the background strip, and the revision is never written.
+
+### An unregistered version is never detected as an update
+
+`ProfileModUpdates.Registered` keeps only versions with `IsOnServer` and a `SequenceNumber`, and
+`FindUpdate` compares sequence numbers — so a newer version sitting in a watched folder, which is
+exactly what somebody who has just downloaded a mod is looking for, is not counted in "N updates
+available", raises no per-row affordance and does not match the **Updates** filter. It appears in
+one place only: the pinned row's own version dropdown, as "1.2.0 — imports on save". The editor
+already derives a full order over registered and unregistered versions together in `OrderVersions`,
+so the ordering needed to fix this exists; the planner simply does not read it.
+
 ### Nothing checks that the generated client matches the server
 
 `openapi/v1.json` is checked in and CI diffs it against the running API, which fails when the
