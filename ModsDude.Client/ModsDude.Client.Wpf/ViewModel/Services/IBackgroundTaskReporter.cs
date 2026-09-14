@@ -17,6 +17,12 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 /// the user has other things to look at while they do. A modal would also have to be dismissed by
 /// whatever finished last, which is exactly the bookkeeping this is meant to remove from the views.
 /// </para>
+/// <para>
+/// <b>And not the guard either.</b> What stops two applies landing in one mod folder is a lease on the
+/// folder - see <see cref="Core.Concurrency.IResourceLeases"/> - not anything on screen. This strip
+/// reports; it does not protect. The two are easy to confuse, because a modal would appear to do both
+/// and in fact does neither: an apply reached from the drift notice goes through no page at all.
+/// </para>
 /// </remarks>
 public interface IBackgroundTaskReporter
 {
@@ -29,7 +35,17 @@ public interface IBackgroundTaskReporter
     /// What is happening, named for the person watching: "Importing 42 mods into Vanilla", not
     /// "ImportRun".
     /// </param>
-    IBackgroundTask Begin(string title, string? detail = null);
+    /// <param name="cancel">
+    /// How to stop it, where it can be stopped. Given, the strip draws a Cancel button.
+    /// </param>
+    /// <remarks>
+    /// <b>The cancel hook is the only reason the strip is more than a label.</b> The button that
+    /// started a long job lives on a page, and a page is rebuilt from scratch on every navigation - so
+    /// the moment somebody uses the very freedom this strip exists to give them, the Cancel they had
+    /// is gone and the work is unstoppable. The strip outlives the page, which makes it the only
+    /// honest place to put it.
+    /// </remarks>
+    IBackgroundTask Begin(string title, string? detail = null, Action? cancel = null);
 }
 
 

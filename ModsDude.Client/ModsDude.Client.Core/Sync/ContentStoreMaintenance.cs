@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Helpers;
 
 namespace ModsDude.Client.Core.Sync;
@@ -17,15 +18,19 @@ public sealed record StoreVerificationReport(
     IReadOnlyList<AffectedModFolder> Affected);
 
 /// <summary>
-/// The store housekeeping a settings page offers: what is on this machine, how much of it there is,
-/// whether it is still what it claims to be, and the two ways to make it smaller.
+/// Everything done to a content store that is not a sync: keeping it inside its limit, checking it is
+/// still what it claims to be, and giving its space back.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Everything here is deliberately available to the user rather than only to a sync. A store fills a
-/// disk quietly - it is capped, but the cap is a number somebody accepted once and may since have
-/// regretted - and a mod folder that has been repointed leaves a store behind that nothing sweeps,
-/// because eviction only ever runs on the store a sync is using.
+/// <b>The split here is who asked.</b> <see cref="SweepAllAsync"/> is the app keeping the promise the
+/// size limit makes, so it runs on its own and skips anything busy; the rest are things a person
+/// pressed, so they wait, they report, and they ask first where the answer is not obvious.
+/// </para>
+/// <para>
+/// The user-facing half exists because a store fills a disk quietly, and because the automatic half
+/// cannot reach everything on its own - a store nothing serves any more is the one somebody is most
+/// likely to want gone, and no sync will ever visit it.
 /// See docs/07-mod-sync-design.md#store-eviction-and-the-size-limit.
 /// </para>
 /// <para>
@@ -38,6 +43,7 @@ public sealed class ContentStoreMaintenance(
     IContentStoreProvider storeProvider,
     IModFolders modFolders,
     SyncManifestStore manifestStore,
+    IResourceLeases leases,
     ILogger<ContentStoreMaintenance> logger)
 {
     /// <summary>
@@ -64,16 +70,127 @@ public sealed class ContentStoreMaintenance(
     }
 
     /// <summary>
-    /// Trims a store back inside its size limit, sparing what the mod folders it serves are running.
+    /// Trims every store on this machine back inside its size limit. Nobody asks for this.
     /// </summary>
     /// <remarks>
-    /// The same sweep a sync ends with, minus the profile being applied - which there is not one of
-    /// here. What each served game is running comes off its sync manifest, so this asks the
-    /// network nothing and works offline.
+    /// <para>
+    /// <b>Keeping a store inside the size limit is the app's job, not the user's.</b> A limit somebody
+    /// typed once is a promise the app makes, and a button labelled "trim" is that promise handed back
+    /// to them to keep - which also means it is only kept by the users who noticed the button.
+    /// </para>
+    /// <para>
+    /// The sweep at the end of every apply does most of it, but it only ever touches the store that
+    /// apply was using, so three gaps were left standing: a store that no longer serves any mod folder
+    /// is never swept at all, an import seeds bytes into a store without any sync following it, and a
+    /// limit lowered in settings does nothing until the next apply happens to that disk. This is what
+    /// closes them, and it runs on the events that open them - startup, a finished import, a saved
+    /// settings page.
+    /// </para>
+    /// <para>
+    /// <b>Skips a busy store rather than waiting for it</b>, exactly as the sync's own sweep does and
+    /// for the same reason: nobody is watching this, so blocking an apply to reclaim space a moment
+    /// sooner is the wrong trade. Everything in a store is registered in a repo and re-downloadable,
+    /// so a store missed here is swept by the next trigger.
+    /// </para>
+    /// <para>
+    /// What each served game is running comes off its sync manifest, so this asks the network nothing
+    /// and works offline.
+    /// </para>
     /// </remarks>
-    public ContentStoreEvictionResult Sweep(ContentStore store, CancellationToken cancellationToken)
+    /// <returns>How many bytes were given back, across every store that needed it.</returns>
+    public async Task<long> SweepAllAsync(CancellationToken cancellationToken)
     {
-        return store.Evict(GetPinnedHashes(store), cancellationToken);
+        long reclaimed = 0;
+
+        foreach (var store in GetStores())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            reclaimed += SweepIfIdle(store, cancellationToken);
+        }
+
+        // Nothing awaits inside the loop - the claim is a try and the evict is synchronous - but the
+        // signature stays asynchronous because every caller is firing this off the UI thread and
+        // would otherwise have to remember to.
+        return await Task.FromResult(reclaimed);
+    }
+
+    /// <summary>One store, if nothing else is using it. Returns the bytes it gave back.</summary>
+    private long SweepIfIdle(ContentStore store, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var lease = leases.TryAcquireExclusive(
+                ResourceKeys.Store(store), $"Tidying the store on {store.VolumeRoot}");
+
+            if (lease is null)
+            {
+                logger.LogDebug("Skipped tidying the store on {Volume}: it is busy.", store.VolumeRoot);
+
+                return 0;
+            }
+
+            var result = store.Evict(GetPinnedHashes(store), cancellationToken);
+
+            if (result.EntriesEvicted > 0)
+            {
+                logger.LogInformation(
+                    "Tidied the store on {Volume}: dropped {Entries} files and freed {Bytes} bytes.",
+                    store.VolumeRoot, result.EntriesEvicted, result.BytesReclaimed);
+            }
+
+            return result.BytesReclaimed;
+        }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
+        {
+            // A store that could not be tidied is a store that is too big, which is not worth failing
+            // whatever triggered this. The next trigger tries again.
+            logger.LogWarning(exception, "Could not tidy the store on {Volume}.", store.VolumeRoot);
+
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Gives back everything a store is costing, keeping what the mod folders it serves are running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Not the same as emptying it</b> - see <see cref="ContentStore.Reclaim"/>. What a mod folder
+    /// on this disk already holds costs the store no bytes of its own, so dropping it would free
+    /// nothing and only guarantee a re-download.
+    /// </para>
+    /// <para>
+    /// <b>Waits for the store, where <see cref="SweepAllAsync"/> skips it.</b> The difference is who
+    /// asked: tidying is housekeeping nobody requested and the next trigger will do it anyway, whereas
+    /// somebody pressing this is waiting for an answer, and refusing them on the grounds that a sync
+    /// is running would only send them back to press it again. <paramref name="onWaiting"/> is how
+    /// that wait gets said out loud.
+    /// </para>
+    /// </remarks>
+    public async Task<ContentStoreClearResult> ReclaimAsync(
+        ContentStore store,
+        CancellationToken cancellationToken,
+        Action? onWaiting = null)
+    {
+        using var lease = await Claim(store, "Reclaiming space from", onWaiting, cancellationToken);
+
+        return store.Reclaim(cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes the files sync rescued into the store's quarantine folder because it could not recycle
+    /// them.
+    /// </summary>
+    /// <inheritdoc cref="ReclaimAsync" path="/remarks/para[2]"/>
+    public async Task<long> ClearQuarantineAsync(
+        ContentStore store,
+        CancellationToken cancellationToken,
+        Action? onWaiting = null)
+    {
+        using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, cancellationToken);
+
+        return store.ClearQuarantine();
     }
 
     /// <summary>
@@ -91,17 +208,60 @@ public sealed class ContentStoreMaintenance(
     /// </para>
     /// <para>
     /// Answered from the manifests, so it asks the network nothing and works offline - the same
-    /// bargain <see cref="Sweep"/> makes.
+    /// bargain <see cref="SweepAllAsync"/> makes.
     /// </para>
     /// </remarks>
+    /// <inheritdoc cref="ReclaimAsync" path="/remarks/para[2]"/>
     public async Task<StoreVerificationReport> VerifyAsync(
         ContentStore store,
         IProgress<ContentStoreVerificationProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? onWaiting = null)
     {
+        // Exclusive because the pass *repairs*: an address that no longer matches its contents is
+        // dropped, and dropping it out from under a sync that is linking it into a mod folder is the
+        // one way this could make things worse than it found them.
+        using var lease = await Claim(store, "Checking", onWaiting, cancellationToken);
+
         var result = await store.VerifyAllAsync(progress, cancellationToken);
 
         return new StoreVerificationReport(result, FindAffectedFolders(store, result.Corrupt));
+    }
+
+    /// <summary>
+    /// Takes the store to itself, for as long as the housekeeping runs.
+    /// </summary>
+    /// <param name="verb">
+    /// What is being done, so a sync that ends up waiting for this can say what it is waiting for.
+    /// </param>
+    /// <param name="onWaiting">
+    /// Called only where the claim could <em>not</em> be had at once, so a caller can say it is
+    /// queueing behind an apply.
+    /// </param>
+    /// <remarks>
+    /// <b>Tried first, then awaited</b>, purely so the waiting message is true when it is shown. A
+    /// caller that announced the wait unconditionally would tell somebody watching a verification pass
+    /// that it is waiting for an apply throughout the six minutes it is actually reading their disk,
+    /// which is worse than saying nothing. The gap between the two calls can cost us the claim, which
+    /// only means the message appears and the claim is then granted immediately - harmless, and rare.
+    /// </remarks>
+    private async Task<IResourceLease> Claim(
+        ContentStore store,
+        string verb,
+        Action? onWaiting,
+        CancellationToken cancellationToken)
+    {
+        var key = ResourceKeys.Store(store);
+        var holder = $"{verb} the store on {store.VolumeRoot}";
+
+        if (leases.TryAcquireExclusive(key, holder) is IResourceLease immediate)
+        {
+            return immediate;
+        }
+
+        onWaiting?.Invoke();
+
+        return await leases.AcquireExclusiveAsync(key, holder, cancellationToken);
     }
 
     /// <summary>

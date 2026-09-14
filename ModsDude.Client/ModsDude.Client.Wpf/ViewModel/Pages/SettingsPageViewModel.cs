@@ -19,10 +19,16 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Housekeeping acts on what is saved, not on what is typed</b>, so the buttons that sweep and
-/// empty are disabled while there are unsaved edits. Otherwise "empty this store" would mean the
+/// <b>Housekeeping acts on what is saved, not on what is typed</b>, so the buttons that verify and
+/// reclaim are disabled while there are unsaved edits. Otherwise "reclaim this store" would mean the
 /// folder in the text box on a page where that folder has not been written down anywhere yet, which
 /// is a good way to clear the wrong directory.
+/// </para>
+/// <para>
+/// <b>Staying inside the size limit is not on this page</b>, because it is not the user's job - see
+/// <see cref="ContentStoreMaintenance.SweepAllAsync"/>, which this page triggers on save and which
+/// startup and every import trigger too. What is left here is the two things automation cannot
+/// decide: whether the bytes are still good, and whether you want the space back now.
 /// </para>
 /// <para>
 /// Measuring walks a store's whole blob tree and reads a link count per file, so it happens off the
@@ -40,13 +46,8 @@ public partial class SettingsPageViewModel
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IDialogService _dialogService;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
-
-    /// <summary>
-    /// The running verification pass, so Stop has something to cancel. Only ever one: the buttons are
-    /// held down while it runs, and two passes over one disk would only make each other slower.
-    /// </summary>
-    private CancellationTokenSource? _verification;
 
     /// <summary>
     /// The stores as they are actually configured on disk, keyed by volume, refreshed whenever they
@@ -64,7 +65,8 @@ public partial class SettingsPageViewModel
         ModImageCache imageCache,
         IDialogService dialogService,
         IModalService modalService,
-        NavigationLockService navigationLockService)
+        NavigationLockService navigationLockService,
+        IBackgroundTaskReporter backgroundTasks)
     {
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
@@ -72,6 +74,7 @@ public partial class SettingsPageViewModel
         _dialogService = dialogService;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
+        _backgroundTasks = backgroundTasks;
 
         var settings = settingsRepository.Settings;
 
@@ -126,18 +129,16 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanManage))]
     [NotifyPropertyChangedFor(nameof(ManagementBlockedReason))]
-    [NotifyCanExecuteChangedFor(nameof(SweepStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(VerifyStoreCommand))]
-    [NotifyCanExecuteChangedFor(nameof(EmptyStoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReclaimStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyQuarantineCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyImageCacheCommand))]
     private bool _hasUnsavedChanges;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanManage))]
-    [NotifyCanExecuteChangedFor(nameof(SweepStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(VerifyStoreCommand))]
-    [NotifyCanExecuteChangedFor(nameof(EmptyStoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReclaimStoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyQuarantineCommand))]
     [NotifyCanExecuteChangedFor(nameof(EmptyImageCacheCommand))]
     private bool _isBusy;
@@ -145,7 +146,7 @@ public partial class SettingsPageViewModel
     public bool CanManage => HasUnsavedChanges is false && IsBusy is false;
 
     public string ManagementBlockedReason => HasUnsavedChanges
-        ? "Save your changes to sweep, verify or empty a store - these act on the folders as they are saved."
+        ? "Save your changes to verify or reclaim a store - these act on the folders as they are saved."
         : string.Empty;
 
 
@@ -188,38 +189,21 @@ public partial class SettingsPageViewModel
 
         HasUnsavedChanges = false;
 
+        // A limit that has just come down is the third way a store ends up over it, and the only one
+        // with a person watching. Before the measure, so what the rows then report is the size after
+        // the trim rather than a number that shrinks a second later on its own.
+        await _maintenance.SweepAllAsync(CancellationToken.None);
+
         // The stores may now be somewhere else or allowed to be a different size, so what was
         // measured a moment ago is about a different set of folders.
         await RefreshUsageAsync();
     }
 
-    /// <summary>
-    /// Trims a store back inside its size limit, leaving what the mod folders it serves are running.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanManage))]
-    public async Task SweepStore(ContentStoreViewModel row)
-    {
-        if (FindStore(row) is not ContentStore store)
-        {
-            return;
-        }
-
-        var result = await RunAsync(() => _maintenance.Sweep(store, CancellationToken.None));
-
-        if (result is null)
-        {
-            return;
-        }
-
-        await ReportAsync(
-            "Swept",
-            result.EntriesEvicted == 0
-                ? $"The store on {row.VolumeRoot} was already inside its limit. Nothing was removed."
-                : $"Dropped {result.EntriesEvicted} files and freed {ByteSize.Describe(result.BytesReclaimed)}. "
-                  + "Everything removed is registered in a repo, so it comes back on demand.");
-
-        await RefreshUsageAsync();
-    }
+    // There was a "Sweep to limit" button here. Keeping a store inside a limit the user typed is the
+    // app's promise to keep, not a chore to hand back to them - and a button is only pressed by the
+    // people who notice it. ContentStoreMaintenance.SweepAllAsync does it now, on the three events
+    // that can put a store over: startup, a finished import, and this page being saved with a smaller
+    // number in it.
 
     /// <summary>
     /// Reads every file in a store and drops the ones that are no longer what their name says.
@@ -250,12 +234,13 @@ public partial class SettingsPageViewModel
             : "every file in it";
 
         var confirmation = new ConfirmationDialogViewModel(
-            $"Verify the store on {row.VolumeRoot}?",
+            $"Check the store on {row.VolumeRoot} for damage?",
             $"Every mod file is read back and checked against what it is filed as - {size}, so this takes a "
-                + "while and works the disk. You can stop it part way; what it has already checked still counts."
+                + "while and works the disk. Progress shows at the top of the window, and you can stop it "
+                + "there; what it has already checked still counts."
                 + "\n\nAnything that fails is dropped and downloads again when a profile needs it.",
             IconKind.Question,
-            "Verify it",
+            "Check it",
             "Not now");
 
         await _modalService.Show(confirmation);
@@ -267,26 +252,22 @@ public partial class SettingsPageViewModel
 
         using var cancellation = new CancellationTokenSource();
 
-        _verification = cancellation;
-        row.VerifyProgress = "Starting...";
-        CancelVerifyCommand.NotifyCanExecuteChanged();
+        // The pass that most needs the strip: it reads every byte in the store, holding the store to
+        // itself while it does. Its Stop is the strip's Cancel, so stopping a six-minute pass does not
+        // depend on staying on the page that started it.
+        using var task = Announce($"Checking the store on {row.VolumeRoot}", cancellation.Cancel);
 
-        // Marshalled back by the progress callback's capture of the UI context, which is where this
-        // method was entered from. The posts are asynchronous, so one can land after the pass has
-        // already finished or been stopped - and a stale line would keep the Stop button under it on
-        // screen with nothing left to stop. Only the run that is still current may write.
-        var progress = new Progress<ContentStoreVerificationProgress>(x =>
-        {
-            if (ReferenceEquals(_verification, cancellation))
-            {
-                row.VerifyProgress = $"Checked {x.Checked} of {x.Total} files, "
-                    + $"{ByteSize.Describe(x.BytesRead)} of {ByteSize.Describe(x.TotalBytes)}";
-            }
-        });
+        // No staleness guard needed any more: the handle is this run's, and a report arriving after it
+        // is disposed is written to a task the strip no longer lists.
+        var progress = new Progress<ContentStoreVerificationProgress>(x => task.Report(
+            $"{x.Checked} of {x.Total} files, {ByteSize.Describe(x.BytesRead)} of {ByteSize.Describe(x.TotalBytes)}",
+            x.Checked,
+            x.Total));
 
         try
         {
-            var report = await RunCancellableAsync(() => _maintenance.VerifyAsync(store, progress, cancellation.Token));
+            var report = await RunCancellableAsync(
+                () => _maintenance.VerifyAsync(store, progress, cancellation.Token, Waiting(task)));
 
             await ReportVerificationAsync(row, report);
         }
@@ -299,24 +280,9 @@ public partial class SettingsPageViewModel
                 "The check was stopped part way. Anything it found before that was already dealt with, "
                     + "and running it again starts from the top.");
         }
-        finally
-        {
-            _verification = null;
-            row.VerifyProgress = null;
-            CancelVerifyCommand.NotifyCanExecuteChanged();
-        }
 
         await RefreshUsageAsync();
     }
-
-    /// <summary>Stops the running pass. Live only while one is running, unlike every other button here.</summary>
-    [RelayCommand(CanExecute = nameof(CanCancelVerify))]
-    public void CancelVerify()
-    {
-        _verification?.Cancel();
-    }
-
-    public bool CanCancelVerify() => _verification is not null;
 
     /// <summary>
     /// What a finished pass found, and - the part that matters - where to go next.
@@ -366,24 +332,34 @@ public partial class SettingsPageViewModel
     }
 
     /// <summary>
-    /// Empties a store completely. Safe to offer, because everything in it is registered somewhere
-    /// and therefore re-downloadable - the cost is bandwidth, never data.
+    /// Gives back the space a store is costing, keeping what the mod folders it serves are running.
     /// </summary>
+    /// <remarks>
+    /// Safe to offer, because everything it drops is registered somewhere and therefore
+    /// re-downloadable - the cost is bandwidth, never data. And it is not "empty the store": a file
+    /// the mod folder on this disk already holds costs the store nothing, so dropping it would free
+    /// nothing and buy a re-download. See <see cref="ContentStore.Reclaim"/>.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanManage))]
-    public async Task EmptyStore(ContentStoreViewModel row)
+    public async Task ReclaimStore(ContentStoreViewModel row)
     {
         if (FindStore(row) is not ContentStore store)
         {
             return;
         }
 
+        var amount = row.Usage is { ReclaimableBytes: > 0 } usage
+            ? ByteSize.Describe(usage.ReclaimableBytes)
+            : "the space this store is using";
+
         var confirmation = new ConfirmationDialogViewModel(
-            $"Empty the store on {row.VolumeRoot}?",
-            "Every mod file kept here is dropped. Nothing is lost - each one is registered in a repo and "
-                + "downloads again when a profile needs it - but the next sync to a disk this store serves "
-                + "will have to fetch what it needs.\n\nInstalled mod folders are not touched.",
+            $"Reclaim {amount} from {row.VolumeRoot}?",
+            "Every mod file kept here that is not already installed in a mod folder is dropped. Nothing is "
+                + "lost - each one is registered in a repo and downloads again when a profile needs it - but "
+                + "the next sync to a disk this store serves will have to fetch what it needs."
+                + "\n\nWhat your installed profiles are running stays where it is, here and in the mod folder.",
             IconKind.Question,
-            "Empty it",
+            "Reclaim it",
             "Leave it");
 
         await _modalService.Show(confirmation);
@@ -393,7 +369,9 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        var result = await RunAsync(() => store.Clear(CancellationToken.None));
+        using var task = Announce($"Reclaiming space from the store on {row.VolumeRoot}");
+
+        var result = await RunAsync(() => _maintenance.ReclaimAsync(store, CancellationToken.None, Waiting(task)));
 
         if (result is null)
         {
@@ -401,10 +379,10 @@ public partial class SettingsPageViewModel
         }
 
         await ReportAsync(
-            "Emptied",
+            "Reclaimed",
             $"Dropped {result.EntriesDeleted} files and freed {ByteSize.Describe(result.BytesReclaimed)}."
                 + (result.Failed > 0
-                    ? $"\n\n{result.Failed} could not be removed because something else is holding them open. They go on the next sweep."
+                    ? $"\n\n{result.Failed} could not be removed because something else is holding them open. They go on the next tidy-up."
                     : string.Empty));
 
         await RefreshUsageAsync();
@@ -440,7 +418,9 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        var reclaimed = await RunAsync(store.ClearQuarantine);
+        using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}");
+
+        var reclaimed = await RunAsync(() => _maintenance.ClearQuarantineAsync(store, CancellationToken.None, Waiting(task)));
 
         if (reclaimed is null)
         {
@@ -587,6 +567,54 @@ public partial class SettingsPageViewModel
     }
 
     /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
+    /// <remarks>
+    /// For the store housekeeping, which is asynchronous now that it waits for the store to itself
+    /// before touching it - a sweep that deletes blobs out from under a sync that is linking them is
+    /// the one way this page could make things worse than it found them.
+    /// </remarks>
+    private async Task<T?> RunAsync<T>(Func<Task<T>> work)
+        where T : class
+    {
+        IsBusy = true;
+
+        try
+        {
+            return await Task.Run(work);
+        }
+        catch (Exception exception)
+        {
+            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
+
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <inheritdoc cref="RunAsync{T}(Func{Task{T}})"/>
+    private async Task<long?> RunAsync(Func<Task<long>> work)
+    {
+        IsBusy = true;
+
+        try
+        {
+            return await Task.Run(work);
+        }
+        catch (Exception exception)
+        {
+            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
+
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
     private async Task<long?> RunAsync(Func<long> work)
     {
         IsBusy = true;
@@ -605,6 +633,40 @@ public partial class SettingsPageViewModel
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Puts one store operation on the shell strip for as long as it runs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The strip is where all progress on this page goes</b>, rather than beside the buttons that
+    /// started it. Verifying used to draw its own line and its own Stop under the store's row, which
+    /// meant this page reported long work one way and the rest of the app another - and the row's
+    /// version vanished the moment somebody navigated away from a pass that runs for minutes.
+    /// </para>
+    /// <para>
+    /// It also covers the wait. Each of these claims the store exclusively - they all delete - so an
+    /// apply wanting the same store queues behind them and, less obviously, they queue behind an apply.
+    /// <see cref="Waiting"/> is what says so, and only when it is true.
+    /// </para>
+    /// </remarks>
+    private IBackgroundTask Announce(string title, Action? cancel = null)
+    {
+        return _backgroundTasks.Begin(title, cancel: cancel);
+    }
+
+    /// <summary>
+    /// The detail to show while this operation is queued behind something using the same store.
+    /// </summary>
+    /// <remarks>
+    /// Handed to the maintenance call, which invokes it only where the claim could not be had at once
+    /// - so the sentence appears exactly when it is the truth. Whatever the operation reports next
+    /// replaces it, which for a verification pass is its first file.
+    /// </remarks>
+    private static Action Waiting(IBackgroundTask task)
+    {
+        return () => task.Report("Waiting for an apply to finish with this store");
     }
 
     private Task ReportAsync(string title, string message)

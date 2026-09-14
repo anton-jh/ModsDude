@@ -57,11 +57,12 @@
 
             <StackPanel Orientation="Vertical">
 
-                <Grid ColumnDefinitions="* auto">
+                <Grid ColumnDefinitions="* auto auto">
                     <TextBlock Grid.Column="0"
                                Text="{Binding Title}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                     <!-- A count rather than a second bar: two bars racing each other is less legible
@@ -69,9 +70,25 @@
                     <TextBlock Grid.Column="1"
                                Text="{Binding Others}"
                                Margin="12 0 0 0"
+                               VerticalAlignment="Center"
                                Style="{DynamicResource CaptionTextBlockStyle}"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                Visibility="{Binding HasOthers, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- The only control on the strip, and only for work that handed over a way to
+                         stop it. It has to live here rather than on the page that started the job:
+                         a page is rebuilt from scratch on every navigation, so the Cancel somebody
+                         had disappears the moment they use the freedom this strip exists to give
+                         them. It asks rather than kills - a sync stops at the next file - so the
+                         entry stays up until the work unwinds, which is why the button goes away on
+                         the first press rather than inviting a second. -->
+                    <Button Grid.Column="2"
+                            Content="Cancel"
+                            Margin="12 0 0 0"
+                            Padding="10 2"
+                            VerticalAlignment="Center"
+                            Command="{Binding CancelCommand}"
+                            Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
 
                 <TextBlock Text="{Binding Detail}"

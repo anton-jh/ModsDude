@@ -86,6 +86,11 @@ public partial class ContentStoreViewModel(
     [ObservableProperty]
     private string _path = path;
 
+    /// <summary>
+    /// The cap, in the units somebody types. Nothing on the row derives from it any more: the size
+    /// limit is kept by the app rather than by a button the user has to find, so there is no label to
+    /// keep in step with the box.
+    /// </summary>
     [ObservableProperty]
     private double _maxSizeGigabytes = maxSizeGigabytes;
 
@@ -115,39 +120,68 @@ public partial class ContentStoreViewModel(
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UsageSummary))]
+    [NotifyPropertyChangedFor(nameof(ReclaimLabel))]
+    [NotifyPropertyChangedFor(nameof(ReclaimSummary))]
+    [NotifyPropertyChangedFor(nameof(HasReclaimSummary))]
     [NotifyPropertyChangedFor(nameof(QuarantineSummary))]
     [NotifyPropertyChangedFor(nameof(HasQuarantine))]
     private ContentStoreUsage? _usage;
 
-    /// <summary>
-    /// Both numbers, because they differ for a reason worth showing: what the store holds, and what
-    /// emptying it would actually give back. On a hardlink-served disk the second is the smaller,
-    /// since an entry the mod folder also names costs no bytes of its own.
-    /// </summary>
+    /// <summary>What is on disk, in one line.</summary>
     public string UsageSummary => Usage switch
     {
         null => "Measuring...",
         { Entries: 0 } => "Empty",
-        { TotalBytes: var total, ReclaimableBytes: var free } when total == free
-            => $"{ByteSize.Describe(total)} in {Usage.Entries} files",
-        _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} files, {ByteSize.Describe(Usage.ReclaimableBytes)} of it reclaimable"
+        _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} files"
     };
+
+    /// <summary>
+    /// Why the store's size and the space it would give back are two different numbers.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only the part the button cannot say.</b> The amount lives on the button now - see
+    /// <see cref="ReclaimLabel"/> - so all that is left to explain is the gap between it and the size
+    /// above, and that gap only exists on a hardlink-served disk. On a copy-served one the two numbers
+    /// are equal and this says nothing at all.
+    /// </remarks>
+    public string ReclaimSummary => Usage is { Entries: > 0 } usage && usage.TotalBytes > usage.ReclaimableBytes
+        ? $"{ByteSize.Describe(usage.TotalBytes - usage.ReclaimableBytes)} of that is shared with an "
+          + "installed mod folder and already costs nothing extra."
+        : "";
+
+    public bool HasReclaimSummary => ReclaimSummary.Length > 0;
+
+    /// <summary>
+    /// The emptying button's label, carrying the space it would actually give back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It read "Empty store", beside a line ending "7.6 GB of it reclaimable" - a number with no route
+    /// to it, next to a button with no number. Putting the one on the other answers "how do I get that
+    /// space back?" without a sentence in between.
+    /// </para>
+    /// <para>
+    /// <b>And the figure is now the truth about what the button does</b>, not just about what it
+    /// frees. It used to read "Empty store", which dropped every blob including the ones hardlinked
+    /// into a mod folder - those cost the store nothing, so emptying them freed nothing and only made
+    /// the next sync re-fetch them. The operation drops what the store uniquely holds and stops there,
+    /// so this figure is both what comes back and what goes.
+    /// </para>
+    /// <para>
+    /// Falls back to the bare verb in the tidy state where the store holds exactly what is installed
+    /// and nothing more, since "Reclaim 0 bytes" is a button that argues against itself.
+    /// </para>
+    /// </remarks>
+    public string ReclaimLabel => Usage is { ReclaimableBytes: > 0 } usage
+        ? $"Reclaim {ByteSize.Describe(usage.ReclaimableBytes)}"
+        : "Reclaim space";
 
     public bool HasQuarantine => Usage?.QuarantineBytes > 0;
 
-    /// <summary>
-    /// How far a verification pass has got, or null when none is running.
-    /// </summary>
-    /// <remarks>
-    /// On the row rather than on the page because verifying is the one piece of housekeeping here
-    /// slow enough to need saying out loud - it reads every byte of the store - and because the row
-    /// is where somebody started it. It doubles as the flag for the Stop button.
-    /// </remarks>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsVerifying))]
-    private string? _verifyProgress;
-
-    public bool IsVerifying => VerifyProgress is not null;
+    // Verification used to report itself here, as a line and a Stop button under the row. It reports
+    // to the shell strip now: every other long job in the app already did, the strip has a Cancel of
+    // its own, and a pass that runs for minutes should not lose its progress and its only way to stop
+    // the moment somebody navigates off this page.
 
     /// <summary>
     /// Said in full, because this is the one part of a store that is not re-downloadable: these are

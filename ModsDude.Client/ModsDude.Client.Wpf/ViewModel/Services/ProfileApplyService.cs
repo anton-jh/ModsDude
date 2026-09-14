@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
@@ -32,6 +33,17 @@ public enum ProfileApplyStatus
     /// and left drifted - which is a "not now", and which the drift notice already covers.
     /// </summary>
     Unavailable,
+
+    /// <summary>
+    /// Something else is already applying to one of these folders.
+    /// </summary>
+    /// <remarks>
+    /// A "not now" like <see cref="Unavailable"/>, but about this app rather than about the machine,
+    /// and therefore one that clears itself: the message names what is running, and the buttons that
+    /// lead here are greyed while it is. Reaching this at all means a race - the notice clicked in the
+    /// same second as the button - because every entry point asks the lease before offering the gesture.
+    /// </remarks>
+    Busy,
 
     Failed
 }
@@ -108,7 +120,8 @@ public sealed class ProfileApplyService(
     GameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
-    IBackgroundTaskReporter backgroundTasks)
+    IBackgroundTaskReporter backgroundTasks,
+    IResourceLeases leases)
 {
     /// <summary>
     /// Works out what would change, one plan per folder the game reaches.
@@ -245,8 +258,28 @@ public sealed class ProfileApplyService(
         => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: false);
 
     /// <summary>
-    /// Both verbs, in the order the split defines: refuse, plan, ask, <em>then</em> record, then work.
+    /// Both verbs, in the order the split defines: claim, refuse, plan, ask, <em>then</em> record,
+    /// then work.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The gesture's folders are claimed here, before anything else, and held to the end.</b> This
+    /// is the one chokepoint every route into an apply comes through - the profile page, the mod list
+    /// editor's save, its activation offer, two places in the savegame list, and the drift notice,
+    /// which is reachable from every view and belongs to no page at all - so it is the only place a
+    /// claim cannot be forgotten by a route added later.
+    /// </para>
+    /// <para>
+    /// <b>Held across the confirmation, deliberately.</b> A dialog asking whether to take the previous
+    /// profile's mods back out is part of this gesture, and another apply starting on that folder while
+    /// the question is on screen is exactly what wants preventing - the answer would be about a plan
+    /// that no longer describes the folder.
+    /// </para>
+    /// <para>
+    /// <b>Refused rather than queued</b>, because a person is holding the mouse. See
+    /// <see cref="ProfileApplyStatus.Busy"/>.
+    /// </para>
+    /// </remarks>
     private async Task<ProfileApplyOutcome> RunAsync(
         Repo repo,
         Game game,
@@ -258,6 +291,15 @@ public sealed class ProfileApplyService(
         int? revision,
         bool activate)
     {
+        using var lease = leases.TryAcquireExclusive(
+            TargetRefs(repo, game).Select(ResourceKeys.Target),
+            $"{(activate ? "Activating" : "Applying")} '{profileName ?? "a profile"}' on '{game.Name}'");
+
+        if (lease is null)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Busy, Busy(repo, game));
+        }
+
         // Asked before anything is planned, because this refusal is not about the folder and reading
         // it costs a list lookup. The sync engine refuses it too - that one is the backstop nothing
         // can get past; this one is the sentence somebody can act on.
@@ -276,6 +318,11 @@ public sealed class ProfileApplyService(
             };
         }
 
+        // Joined with whatever the caller passed, so the strip's Cancel and a page's own Cancel are the
+        // same act - and so a gesture whose page has since been navigated away from is still
+        // stoppable, which is the whole reason the strip outlives the page.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         IReadOnlyList<ModSyncPlan> plans;
 
         try
@@ -286,12 +333,13 @@ public sealed class ProfileApplyService(
             // end of it. Its own task rather than the execute one below - planning may end in a
             // dialog the user declines, and a strip entry that outlived that would describe work
             // nobody agreed to.
-            using var planning = backgroundTasks.Begin($"Working out what would change in '{game.Name}'");
+            using var planning = backgroundTasks.Begin(
+                $"Working out what would change in '{game.Name}'", cancel: stop.Cancel);
 
             plans = await TryPlanAsync(
-                repo, game, profileId, profileName, revision, cancellationToken, Report(planning, progress));
+                repo, game, profileId, profileName, revision, stop.Token, Report(planning, progress));
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
         }
@@ -326,7 +374,7 @@ public sealed class ProfileApplyService(
 
         foreach (var plan in plans)
         {
-            outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, progress, cancellationToken, revision));
+            outcomes.Add(await ApplyTargetAsync(plan, game, profileId, profileName, progress, stop, revision));
         }
 
         return Combine(game, outcomes) with { Activated = activate };
@@ -393,11 +441,12 @@ public sealed class ProfileApplyService(
     /// half that worked is not the news.
     /// </para>
     /// <para>
-    /// <b>Two statuses never reach here.</b> A refusal is decided once for the game before anything
-    /// is planned, and declining is one answer to one confirmation covering every folder - so the
-    /// only way a fold can see <see cref="ProfileApplyStatus.Declined"/> now is a cancellation part
-    /// way through the work, which is genuinely per folder. A partly-declined activation stopped
-    /// being representable when the confirmation moved.
+    /// <b>Three statuses never reach here.</b> The lease is claimed for the whole gesture before
+    /// anything is planned, a savegame's refusal is decided once for the game, and declining is one
+    /// answer to one confirmation covering every folder - so the only way a fold can see
+    /// <see cref="ProfileApplyStatus.Declined"/> now is a cancellation part way through the work, which
+    /// is genuinely per folder. A partly-declined activation stopped being representable when the
+    /// confirmation moved, and a partly-busy one when the claim did.
     /// </para>
     /// </remarks>
     private static ProfileApplyOutcome Combine(Game game, IReadOnlyList<ProfileApplyOutcome> perTarget)
@@ -433,13 +482,18 @@ public sealed class ProfileApplyService(
     /// is answered before this runs - see <see cref="ConsentedAsync"/> - so what is left per folder
     /// is the work and the sentence describing how it went.
     /// </remarks>
+    /// <param name="stop">
+    /// The gesture's cancellation, handed in whole rather than as a token so this can offer it to the
+    /// strip. One source across every folder: stopping an apply is a decision about the gesture, and
+    /// a Cancel that only abandoned the folder currently being written would leave the rest to run.
+    /// </param>
     private async Task<ProfileApplyOutcome> ApplyTargetAsync(
         ModSyncPlan plan,
         Game game,
         Guid profileId,
         string? profileName,
         IProgress<ModSyncProgress>? progress,
-        CancellationToken cancellationToken,
+        CancellationTokenSource stop,
         int? revision)
     {
         var where = Where(game, plan);
@@ -459,11 +513,12 @@ public sealed class ProfileApplyService(
         // The second of the gesture's two strip entries. Planning had its own - see RunAsync - because
         // it is minutes of work in its own right; this one is the part that moves files, and both are
         // things the user is entitled to walk away from.
-        using var task = backgroundTasks.Begin($"Applying '{profileName ?? "a profile"}' to {where}");
+        using var task = backgroundTasks.Begin(
+            $"Applying '{profileName ?? "a profile"}' to {where}", cancel: stop.Cancel);
 
         try
         {
-            var result = await syncService.ExecuteAsync(plan, Report(task, progress), cancellationToken);
+            var result = await syncService.ExecuteAsync(plan, Report(task, progress), stop.Token);
 
             return result.Completed
                 ? new ProfileApplyOutcome(game, ProfileApplyStatus.Applied, $"{where} now matches{Pinned(game, profileId, revision)}.")
@@ -605,6 +660,66 @@ public sealed class ProfileApplyService(
         return heldSavegames.GetRequiredRevision(game.Identity, profileId) is int held
             ? $" revision {held}, which is what the savegame checked out there runs on"
             : "";
+    }
+
+    /// <summary>
+    /// Whether an apply to this game would be refused right now because something else is mid-apply
+    /// on one of its folders.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a <c>CanExecute</c>, which is what turns the refusal from a message into a greyed button.
+    /// Pages re-ask it whenever <see cref="IResourceLeases.Changed"/> fires.
+    /// </para>
+    /// <para>
+    /// <b>A hint, not the guard.</b> It reads the leases without taking one, so it is already out of
+    /// date by the time a button is redrawn from it - which is fine, because
+    /// <see cref="RunAsync"/> asks properly and refuses properly. Treating this as the guard is how a
+    /// second apply gets in.
+    /// </para>
+    /// </remarks>
+    public bool IsBusy(Repo repo, Game game)
+    {
+        return TargetRefs(repo, game).Any(x => leases.IsHeld(ResourceKeys.Target(x)));
+    }
+
+    /// <summary>
+    /// What to say to somebody whose apply was refused: the work that is already running, named.
+    /// </summary>
+    /// <remarks>
+    /// The first holder found rather than all of them. A game with three folders blocked by one other
+    /// gesture would otherwise say the same sentence three times, and the useful half of the message is
+    /// what to wait for, not how many ways it overlaps.
+    /// </remarks>
+    public string Busy(Repo repo, Game game)
+    {
+        var holder = TargetRefs(repo, game)
+            .Select(x => leases.DescribeHolder(ResourceKeys.Target(x)))
+            .OfType<string>()
+            .FirstOrDefault();
+
+        return holder is null
+            ? $"'{game.Name}' is busy. It was left as it is; try again in a moment."
+            : $"{holder} is still running, so '{game.Name}' was left as it is. It will be free when that finishes.";
+    }
+
+    /// <summary>
+    /// Every folder this game reaches, as the identities a lease is keyed by.
+    /// </summary>
+    /// <remarks>
+    /// <b>Off the adapter rather than off a plan</b>, because the claim has to be made before planning
+    /// - planning reads and hashes the folder, which is the slowest thing an apply does and exactly the
+    /// part that must not run twice at once. A game with no mod capability reaches nothing and claims
+    /// nothing, which is the same answer <see cref="TryPlanAsync"/> gives it.
+    /// </remarks>
+    private static IEnumerable<ModTargetRef> TargetRefs(Repo repo, Game game)
+    {
+        if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
+        {
+            return [];
+        }
+
+        return adapter.ModTargets.Select(x => new ModTargetRef(game.Identity, x.Key));
     }
 
     private static ILocalModAdapter? GetAdapter(Repo repo, Game game)

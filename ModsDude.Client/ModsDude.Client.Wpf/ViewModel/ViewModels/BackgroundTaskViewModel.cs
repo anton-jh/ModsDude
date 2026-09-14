@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Windows;
 
@@ -21,9 +22,16 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// rather than the oldest: what somebody just clicked is what they are waiting on.
 /// </para>
 /// <para>
-/// <b>Not dismissible, and not a modal.</b> There is nothing to decide and nothing to acknowledge - it
-/// goes away when the work does. Which is also why every handle is disposable: a <c>using</c> at the
-/// call site is what guarantees the strip disappears on the cancellation and failure paths too.
+/// <b>Not dismissible, and not a modal.</b> There is nothing to acknowledge - it goes away when the
+/// work does. Which is also why every handle is disposable: a <c>using</c> at the call site is what
+/// guarantees the strip disappears on the cancellation and failure paths too.
+/// </para>
+/// <para>
+/// <b>Cancel is the one thing it does offer</b>, and only for work that gave it something to call.
+/// Not a contradiction of the above: dismissing would hide a job that is still running, whereas this
+/// stops the job - and it has to live here rather than on the page that started it, because the page
+/// is rebuilt on every navigation and the whole point of the strip is that the user is free to
+/// navigate. See <see cref="IBackgroundTaskReporter.Begin"/>.
 /// </para>
 /// </remarks>
 public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTaskReporter
@@ -54,13 +62,56 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     [NotifyPropertyChangedFor(nameof(HasOthers))]
     private string? _others;
 
+    /// <summary>
+    /// Whether the named task can be stopped, which is what draws the Cancel button.
+    /// </summary>
+    /// <remarks>
+    /// Of the <em>named</em> task only - the one the strip is describing. Offering a Cancel while a
+    /// count of others sits beside it would be a button whose target the user cannot see, and the
+    /// named one is the most recently started, which is what somebody has just been waiting on.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _canCancel;
+
     public bool HasDetail => string.IsNullOrWhiteSpace(Detail) is false;
     public bool HasOthers => Others is not null;
 
 
-    public IBackgroundTask Begin(string title, string? detail = null)
+    /// <summary>
+    /// Stops the named task, once.
+    /// </summary>
+    /// <remarks>
+    /// <b>Asks rather than ends.</b> Cancelling a sync means "stop at the next file", not "stop now" -
+    /// the work between two files is what keeps a mod folder describable - so this signals and the
+    /// strip stays up, with the entry disappearing when the work actually unwinds. A second press does
+    /// nothing, which is why the button goes away with the first.
+    /// </remarks>
+    [RelayCommand]
+    private void Cancel()
     {
-        var task = new RunningTask(this, title, detail);
+        Action? cancel;
+
+        lock (_lock)
+        {
+            cancel = _running.Count > 0 ? _running[^1].TakeCancel() : null;
+        }
+
+        if (cancel is null)
+        {
+            return;
+        }
+
+        // Outside the lock: cancellation runs registered callbacks synchronously, and those belong to
+        // whatever is doing the work rather than to the strip that is drawing it.
+        cancel.Invoke();
+
+        Publish();
+    }
+
+
+    public IBackgroundTask Begin(string title, string? detail = null, Action? cancel = null)
+    {
+        var task = new RunningTask(this, title, detail, cancel);
 
         lock (_lock)
         {
@@ -120,6 +171,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         string? detail;
         int completed;
         int total;
+        bool cancellable;
 
         // Copied out under the same lock the reports are written under, so the strip can never draw
         // one task's title beside another's count. Nothing is bound inside the lock: a property
@@ -134,6 +186,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
                 detail = null;
                 completed = 0;
                 total = 0;
+                cancellable = false;
             }
             else
             {
@@ -143,6 +196,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
                 detail = current.Detail;
                 completed = current.Completed;
                 total = current.Total;
+                cancellable = current.CanCancel;
             }
         }
 
@@ -150,10 +204,12 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         {
             IsVisible = false;
             Others = null;
+            CanCancel = false;
 
             return;
         }
 
+        CanCancel = cancellable;
         Title = title;
         Detail = detail;
         IsIndeterminate = total <= 0;
@@ -171,13 +227,36 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     /// One announced piece of work. Its fields are written from whichever thread is doing the work and
     /// read under the same lock the list is, so the strip never renders half of an update.
     /// </summary>
-    private sealed class RunningTask(BackgroundTaskViewModel owner, string title, string? detail)
+    private sealed class RunningTask(BackgroundTaskViewModel owner, string title, string? detail, Action? cancel)
         : IBackgroundTask
     {
+        private Action? _cancel = cancel;
+
+
         public string Title { get; private set; } = title;
         public string? Detail { get; private set; } = detail;
         public int Completed { get; private set; }
         public int Total { get; private set; }
+
+        public bool CanCancel => _cancel is not null;
+
+
+        /// <summary>
+        /// Hands over the cancellation, leaving none behind.
+        /// </summary>
+        /// <remarks>
+        /// Taken rather than read, so the button can only fire once: a sync unwinds between files and
+        /// the entry stays on the strip until it does, which is exactly long enough for somebody to
+        /// press Cancel three more times and wonder why nothing is happening.
+        /// </remarks>
+        public Action? TakeCancel()
+        {
+            var cancel = _cancel;
+
+            _cancel = null;
+
+            return cancel;
+        }
 
 
         public void Report(string? detail) => Report(detail, 0, 0);

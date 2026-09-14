@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Concurrency;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
@@ -324,6 +325,83 @@ public class ModSyncServiceTests
 
         Assert.True(result.Completed);
         Assert.True(fixture.ServingStore.Contains(SyncTestContent.HashOf(Mod("1.0.0", "a"))));
+    }
+
+    /// <summary>
+    /// The one exclusive claim in the app that refuses to wait.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The blocker here is another <em>sync</em> - a second apply installing from the same store -
+    /// which is what makes the case realistic and what makes the two lease modes earn their keep: two
+    /// installs coexist happily, so this apply runs to completion beside it, and only the sweep it
+    /// ends with finds the store busy and gives up.
+    /// </para>
+    /// <para>
+    /// Deliberately not written with an <em>exclusive</em> holder. That is somebody emptying the store
+    /// from the settings page, and it would correctly block this apply's execute for the whole test
+    /// rather than just its sweep - which is the designed behaviour, and untestable from out here
+    /// without a second thread to release it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Store_eviction_is_skipped_while_another_sync_is_using_the_store()
+    {
+        using var fixture = new SyncFixture(storeMaxSizeBytes: 1);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        using var otherSync = await fixture.Leases.AcquireSharedAsync(
+            [ResourceKeys.Store(fixture.ServingStore)], "another apply", CancellationToken.None);
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        // The apply still lands - the mod folder is what the user asked about - and only the
+        // housekeeping is given up on. Null rather than a result with nothing evicted: the store was
+        // never even measured.
+        Assert.True(result.Completed);
+        Assert.Null(result.Eviction);
+    }
+
+    /// <summary>
+    /// The other half of the same claim: the sweep is skipped rather than deadlocked. Execute holds a
+    /// <em>shared</em> lease on the store it is installing from, and the sweep it ends with wants that
+    /// same store exclusively - so releasing before sweeping is what stops the sync waiting on itself.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_does_not_wait_on_its_own_store_claim_to_sweep()
+    {
+        using var fixture = new SyncFixture(storeMaxSizeBytes: 1);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.NotNull(result.Eviction);
+
+        // And nothing was left claimed behind it.
+        Assert.False(fixture.Leases.IsHeld(ResourceKeys.Store(fixture.ServingStore)));
+    }
+
+    /// <summary>
+    /// A sweep that somebody asked for waits instead, and therefore has to see the store go free the
+    /// moment the apply finishes with it.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_releases_the_store_for_housekeeping_that_is_waiting()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync();
+
+        var result = await fixture.ExecuteAsync(plan);
+
+        Assert.True(result.Completed);
+
+        using var housekeeping = fixture.Leases.TryAcquireExclusive(
+            ResourceKeys.Store(fixture.ServingStore), "emptying");
+
+        Assert.NotNull(housekeeping);
     }
 
     /// <summary>
@@ -748,6 +826,7 @@ public class ModSyncServiceTests
                 RecycleBin,
                 new FakeModFolders(folders),
                 Held,
+                Leases,
                 NullLogger<ModSyncService>.Instance);
         }
 
@@ -760,6 +839,13 @@ public class ModSyncServiceTests
         public SyncManifestStore Manifests { get; }
         public DriftService Drift { get; }
         public FakeHeldSavegames Held { get; }
+
+        /// <summary>
+        /// The real thing rather than a fake: what the sync does about a busy store is the behaviour
+        /// under test, and half of it is the primitive's own queueing.
+        /// </summary>
+        public ResourceLeases Leases { get; } = new();
+
         public ModSyncService Service { get; }
         public ContentStore ServingStore { get; }
         public ContentStore OtherStore { get; }

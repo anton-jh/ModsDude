@@ -59,7 +59,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileDto _profile;
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
-    private readonly ModImportService _importService;
+    private readonly ModImportCoordinator _imports;
     private readonly IModDependenciesClient _dependenciesClient;
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
@@ -70,7 +70,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly DriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
-    private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly ActiveProfile _activeProfile;
 
     /// <summary>
@@ -161,7 +160,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ProfileDto profile,
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
-        ModImportService importService,
+        ModImportCoordinator imports,
         IModDependenciesClient dependenciesClient,
         IProfilesClient profilesClient,
         IModalService modalService,
@@ -171,14 +170,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         DriftMonitor driftMonitor,
-        NoticeCenterViewModel notices,
-        IBackgroundTaskReporter backgroundTasks)
+        NoticeCenterViewModel notices)
     {
-        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _profile = profile;
         _itemFactory = itemFactory;
-        _importService = importService;
+        _imports = imports;
         _dependenciesClient = dependenciesClient;
         _profilesClient = profilesClient;
         _modalService = modalService;
@@ -1044,7 +1041,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // the user chose against can go. Not one line earlier: everything above this can still
             // return without saving, and a file removed for a revision that never existed is gone
             // for nothing.
-            _importService.RecycleSuperseded(import.Superseded);
+            _imports.RecycleSuperseded(import.Superseded);
 
             await ReloadAsync();
 
@@ -1243,30 +1240,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             item.ResetImportState();
         }
 
-        using var task = _backgroundTasks.Begin(
-            rows.Count == 1
-                ? $"Importing 1 mod into '{_repo.Name}'"
-                : $"Importing {rows.Count} mods into '{_repo.Name}'");
-
-        var request = new ModImportRequest(
-            _repo.Id,
+        var outcome = await _imports.RunAsync(
+            _repo,
             [.. pending.Select(x => x.SelectedVersion.Version)],
-            _repo.Adapter.VersionComparer)
+            rows,
+            _catalog,
+            cancellationToken);
+
+        if (outcome is { Refusal: string refusal })
         {
-            Progress = new ModImportRowProgress(rows, task),
-            ResolveArbitration = ResolveArbitrationAsync,
-            ResolveSourceConflicts = ResolveSourceConflictsAsync,
+            // Nothing registered, so nothing is pinnable and the save must not proceed on a draft
+            // whose mods are still only on disk. Reported as a problem rather than a status line,
+            // because the save the user asked for did not happen - and the draft is left exactly
+            // where it is, so pressing Save again once the other import finishes is the whole
+            // recovery path.
+            return new PendingImport(
+                [],
+                _errorReporter.Record(refusal, context: "importing the mods a profile save pins"),
+                []);
+        }
 
-            // So the import leaves the store warm: what is uploaded from a folder the game does not
-            // read is copied into the store these folders are served by, and the apply that follows
-            // this save finds it there instead of downloading it back.
-            ModFolders = [.. _repo.Games.SelectMany(x => x.Targets).Select(x => x.ModFolder)]
-        };
-
-        // The overload that invalidates the catalog afterwards: a partly failed import still
-        // registered something, and a catalog that kept claiming otherwise would offer those versions
-        // for import all over again.
-        var result = await _importService.ImportAsync(_catalog, request, cancellationToken);
+        var result = outcome.Result ?? ModImportResult.Empty;
 
         foreach (var item in result.Items)
         {
@@ -1298,44 +1292,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         HashSet<ModVersionIdentity> Imported,
         ErrorDialogViewModel? Problems,
         IReadOnlyList<ModSupersededFile> Superseded);
-
-    /// <summary>
-    /// One dialog for the whole save, and only for the mods whose version ordering the comparer could
-    /// not settle. Everything it settled is already registering by the time this is asked.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<ModVersionIdentity, string>?> ResolveSourceConflictsAsync(
-        IReadOnlyList<ModSourceConflict> conflicts,
-        CancellationToken cancellationToken)
-    {
-        return await Application.Current.Dispatcher.InvokeAsync(async () =>
-        {
-            var modal = new ModSourceConflictModalViewModel(conflicts);
-
-            await _modalService.Show(modal);
-
-            return modal.Result;
-        }).Task.Unwrap();
-    }
-
-    /// <summary>
-    /// Asked once per import, and only where two sources hold genuinely different files under one
-    /// mod and version. Identical copies never reach here - there is nothing to choose between them.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>?> ResolveArbitrationAsync(
-        IReadOnlyList<ModVersionArbitrationItem> items,
-        CancellationToken cancellationToken)
-    {
-        // The import runs off the UI thread, and everything from here down is view models a
-        // dispatcher-bound modal is about to render.
-        return await Application.Current.Dispatcher.InvokeAsync(async () =>
-        {
-            var modal = new ModVersionArbitrationModalViewModel(items);
-
-            await _modalService.Show(modal);
-
-            return modal.Result;
-        }).Task.Unwrap();
-    }
 
     /// <summary>
     /// Writes the whole mod list as a new revision. Returns false when nothing was saved, having

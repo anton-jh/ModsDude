@@ -738,6 +738,13 @@ public sealed class ModImportService(
         /// not a failed import, so everything here is logged and swallowed - a cancellation included,
         /// since by this point the version's outcome is settled either way.
         /// </para>
+        /// <para>
+        /// <b>And for the same reason it takes no lease on the store</b>, where a sync's install does -
+        /// see <see cref="Concurrency.IResourceLeases"/>. The worst a sweep or a clear racing this can
+        /// do is delete what was just seeded, which costs exactly the download this was saving and is
+        /// already the outcome every other failure here has. Waiting for housekeeping to finish before
+        /// warming a cache would be the more expensive half of the bargain.
+        /// </para>
         /// </remarks>
         private async Task SeedStoreAsync(CatalogModVersion version, string contentHash, CancellationToken cancellationToken)
         {

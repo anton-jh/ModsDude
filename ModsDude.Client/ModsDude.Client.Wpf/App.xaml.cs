@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
@@ -60,7 +61,44 @@ public partial class App : Application
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
         window.Show();
 
+        TidyStoresInBackground();
+
         await _serviceProvider.GetRequiredService<AuthenticationService>().Get(default);
+    }
+
+
+    /// <summary>
+    /// Puts every content store back inside its size limit, once, on the way up.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The safety net under the limit.</b> Every apply sweeps the store it used, which covers the
+    /// ordinary case - but a store that no longer serves any mod folder is never visited by a sync at
+    /// all, and that is precisely the store quietly holding tens of gigabytes of a game somebody
+    /// uninstalled. Startup is the one moment guaranteed to come round for it.
+    /// </para>
+    /// <para>
+    /// <b>Off the UI thread and never awaited.</b> It walks each store's blob tree, which is thousands
+    /// of files, and nothing about showing a window depends on the answer. It logs; it has no other
+    /// way to fail, because a store that could not be tidied is only a store that is still too big.
+    /// </para>
+    /// </remarks>
+    private void TidyStoresInBackground()
+    {
+        var maintenance = _serviceProvider.GetRequiredService<ContentStoreMaintenance>();
+        var log = _serviceProvider.GetRequiredService<ILogger<App>>();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await maintenance.SweepAllAsync(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                log.LogWarning(exception, "Could not tidy the content stores at startup.");
+            }
+        });
     }
 
 
@@ -146,9 +184,18 @@ public partial class App : Application
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
 
+        // One table of who is touching what, for the whole process. A singleton is not a convenience
+        // here - it is the entire mechanism, since two of these would be two sets of claims that
+        // cannot see each other and therefore no claims at all.
+        services.AddSingleton<IResourceLeases, ResourceLeases>();
+
         // One notice for the whole app, and one way in to it from outside the sidebar.
         services.AddSingleton<ShellNavigationService>();
         services.AddSingleton<ProfileApplyService>();
+
+        // The other half of that pair: one way into an import, so the repo claim and the two
+        // questions an import cannot answer for itself live somewhere a new page cannot forget them.
+        services.AddSingleton<ModImportCoordinator>();
 
         // Check-in is reached from a slot row and from the check-out dialog's way out of a refused
         // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.

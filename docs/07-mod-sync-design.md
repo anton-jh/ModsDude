@@ -303,26 +303,57 @@ not. Exempt entries serving an active profile on any disk **this** store serves;
 would not break the installation, since a hardlinked file survives losing its store name and a
 copied one holds its own bytes, but it would guarantee a re-download on the next sync.
 
-### The user has to be able to see it and take it back
+### Staying inside the limit is the app's job
 
-Automatic eviction is not enough on its own, for two reasons that are not about the algorithm.
+**Eviction at the end of a sync only ever runs on the store that sync was using**, which leaves
+three ways for a store to sit over its limit indefinitely:
 
-The cap is a number somebody accepted once, and a hundred gigabytes agreed to in the abstract
-is a different thing from a hundred gigabytes on a disk that is now full. And **eviction only
-ever runs on the store a sync is using** — so a disk that used to hold a game keeps its whole
-cache indefinitely once the folder pointing at it is gone or repointed. Nothing sweeps it,
-because nothing syncs through it.
+- A disk that used to hold a game keeps its whole cache once the folder pointing at it is gone or
+  repointed. Nothing sweeps it, because nothing syncs through it — and it is the store most likely
+  to be holding tens of gigabytes nobody wants.
+- An import seeds what it registered into the serving store. That is the other thing in the app
+  that makes a store bigger, and unlike a sync there is nothing behind it to sweep.
+- A limit lowered in settings does nothing until the next apply happens to that disk.
 
-So settings reports what every store on this machine is holding — the ones serving a mod folder
-now and the ones only the settings still name — and offers two actions per store: **sweep**,
-which is the eviction a sync would do, sparing what the folders it serves are running according
-to their manifests; and **empty**, which drops the lot. Both are safe to hand to the user for the
-same reason eviction is: the cost is bandwidth, never data. The image cache gets the same
-treatment for the same reason.
+A limit somebody typed is a promise the app makes, so `ContentStoreMaintenance.SweepAllAsync` keeps
+it, running on the three events that open those gaps: **startup**, **a finished import**, and
+**settings being saved**. It skips a store something else is using, for the same reason the
+end-of-sync sweep does — nobody is watching it, and the next trigger comes round.
 
-Two numbers are reported per store, not one — what it holds and what emptying it would actually
-reclaim — because on a hardlink-served disk those differ, and a store that says it holds 40 GB
-while freeing 3 GB would otherwise look broken.
+There was a **Sweep to limit** button here, and it was the same work offered as a chore. A button
+is a promise handed back to the user to keep, and one only kept by the users who notice the button.
+It is gone.
+
+### The user has to be able to take the space back
+
+What automatic eviction cannot decide is that you want the space *now*, below the cap you set — a
+hundred gigabytes agreed to in the abstract is a different thing from a hundred gigabytes on a disk
+that is now full.
+
+So settings reports what every store on this machine is holding — the ones serving a mod folder now
+and the ones only the settings still name — and offers two actions per store: **verify integrity**,
+which reads every blob back and drops what no longer matches its address; and **reclaim**, which
+drops everything the store uniquely holds. Both are safe to hand to the user for the same reason
+eviction is: the cost is bandwidth, never data. The image cache gets the same treatment.
+
+**Reclaim is not "empty the store", and the difference is the whole point.** An entry hardlinked into
+a live mod folder is one file under two names, so deleting the store's name frees not one byte — the
+folder still holds the data. Dropping it buys a guaranteed re-download for nothing at all. So
+reclaiming drops the uniquely-held entries and stops, which leaves behind exactly what the mod
+folders on that disk are running. On a copy-served disk nothing is hardlinked, so every entry is
+uniquely held and it does empty the store — correctly, because there every entry genuinely costs its
+own bytes.
+
+This used to be `Clear`, which deleted every blob and counted only the part that helped. A button
+offering 7.6 GB back was quietly making the other 18.7 GB cold as well.
+
+The button **carries the figure it frees** — "Reclaim 7.6 GB" — and because the operation stops at
+the uniquely-held entries, that figure is now both what comes back and what goes. The row used to say
+"26.3 GB in 942 files, 7.6 GB of it reclaimable" beside a button called "Empty store": a number with
+no route to it, next to a button with no number, describing an action that did more than either said.
+What is left beside the button is the only part it cannot say — why the two figures differ, which on
+a hardlink-served disk is that the remainder is shared with an installed mod folder and already costs
+nothing. On a copy-served disk they are equal and nothing is said.
 
 The **quarantine folder is the exception and is handled as one**: it is the only part of a store
 that nothing can fetch back, since a quarantined file is precisely a mod no repo registers. It is
@@ -1113,6 +1144,88 @@ otherwise had reason to open.
 What was genuinely lost with it is the browsable preview: the plan as mod rows with icons, rather
 than as counts. If that turns out to be wanted, the answer is a richer confirmation dialog — not a
 page nobody navigates to.
+
+### Leases
+
+Applying is minutes long, reachable from six places, and **must not happen twice at once to one mod
+folder**. Two applies interleaving their installs and uninstalls leaves that folder holding a mixture
+of two profiles — a state neither of them describes, and one the user can launch the game in — and the
+two runs also read the manifest minutes before writing it, so the second one's write silently
+discards the first's.
+
+The obvious fix is a modal over the page that started it, and the obvious fix is wrong. It guards the
+user's attention, and what needs guarding is the folder: the drift notice's *Re-apply* goes through no
+page at all, so a dialog over the page it did not come from protects nothing — while a mod folder
+somebody is merely browsing is perfectly safe to browse. A modal would also have to be dismissed by
+whatever finished last, which is the bookkeeping the background-task strip exists to remove.
+
+So the lock is on the resource. `IResourceLeases` is one process-wide table of who is touching what,
+and three kinds of thing are claimable:
+
+| Resource | Key | Mode | Claimed by |
+| --- | --- | --- | --- |
+| One mod folder | `ModTargetRef` | Exclusive | `ProfileApplyService.RunAsync`, for the whole gesture |
+| One repo's mod set | repo id | Exclusive | `ModImportCoordinator.RunAsync` |
+| One content store | normalised root path | **Shared** to install and ingest, exclusive to delete | `ModSyncService.ExecuteAsync`; `ContentStoreMaintenance` |
+
+Four things about the shape are load-bearing:
+
+- **Keyed by name, not by object.** `ContentStoreProvider` builds a fresh `ContentStore` on every
+  call — it is a handle over a directory, not a singleton — so a lock field inside it would guard a
+  different instance each time. Store keys are normalised, because the same store is reached from
+  settings on one route and off a mod folder's volume on the other. Every key is spelled in
+  `ResourceKeys` and nowhere else.
+- **The store is shared/exclusive, not a mutex.** Its additive half is already safe beside any number
+  of syncs: content-addressed paths, hash verified before placement, temp-file-then-place. Only
+  deletion racing installation is not, so only `Evict` and the clears take the exclusive side.
+  Serialising the installs too would be a real cost for no gain.
+- **Applies and imports refuse rather than queue**, because a person is holding the mouse. The
+  buttons are greyed from `IsBusy`, the refusal names what is running, and the refusal is the guard —
+  `IsBusy` is only a hint, already stale by the time a button is redrawn from it.
+- **The end-of-sync store sweep is the one claim that skips rather than waits.** It runs after every
+  apply, on a store other applies are likely reading; waiting would serialise every sync on the disk
+  to avoid a race that costs one re-download. Everything in a store is re-downloadable, so a skipped
+  sweep is just the next apply's sweep.
+
+The settings page's store operations are the mirror image: they **do** wait, because somebody asked
+for them and refusing on the grounds that a sync is running only sends them back to press the same
+button. The cost is that they hold the store exclusively — they all delete, verify included, which
+repairs as it reads — so an apply wanting that store queues behind them, and a verify pass is minutes.
+That ordering is right, but it must not be silent, so all four announce themselves on the strip for
+the whole of it, wait included. It is the only thing on screen that can be read from another page.
+
+The claim is taken for the whole gesture, **including across the confirmation dialog**. A dialog
+asking whether to take the previous profile's mods back out is part of the gesture, and another apply
+starting on that folder while the question is on screen is exactly what wants preventing: the answer
+would be about a plan that no longer describes the folder.
+
+Three things deliberately go unclaimed:
+
+- **The savegame list's *what would this change?* previews**, which call `TryPlanAsync` without a
+  lease. They are previews; the apply that follows re-plans under the claim, and a folder being
+  written underneath them surfaces as the `IOException` that path already treats as "not plannable
+  right now".
+- **The import's store seeding.** The worst a sweep racing it can do is delete what was just seeded,
+  which costs exactly the download the seeding was saving — the same outcome every other failure on
+  that path already has, since it is best-effort cache warming that never fails a version. Waiting for
+  housekeeping before warming a cache is the more expensive half of the bargain.
+- **The sync manifest store**, which needs no lease of its own: it locks internally and writes
+  temp-then-move, so a torn manifest is not reachable, and one-apply-per-target is what serialises the
+  read-modify-write around it.
+
+### Interrupting the work
+
+Two consequences of the strip outliving the page, both of which were missing:
+
+- **Cancel lives on the strip.** The button that started a long job is on a page, and pages are
+  rebuilt from scratch on every navigation — so the moment somebody uses the freedom the strip exists
+  to give them, their Cancel is gone and the work is unstoppable. Work that can be stopped now hands
+  `Begin` a way to stop it, and page-level Cancel buttons and the strip's are the same act on the same
+  linked token source.
+- **Closing the window asks.** Not a refusal: an interrupted apply leaves the previous manifest
+  standing and the folder reported as drifted, which re-applying repairs, so it is the user's call —
+  and their reason may be that something has hung. The question is asked of the leases rather than of
+  the strip, because the leases are what is actually being written to.
 
 ## Things this design deliberately does not do
 

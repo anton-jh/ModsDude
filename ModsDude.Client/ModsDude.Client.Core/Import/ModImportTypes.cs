@@ -195,6 +195,16 @@ public sealed record ModSupersededFile(ModVersionIdentity Identity, string FileP
 public sealed record ModImportResult(IReadOnlyList<ModImportItemResult> Items)
 {
     /// <summary>
+    /// A run that had nothing to do, which is a success with no items rather than a run that failed.
+    /// </summary>
+    /// <remarks>
+    /// Saves every caller inventing its own empty answer for the ordinary case of a save whose draft
+    /// pins nothing that is only on disk.
+    /// </remarks>
+    public static ModImportResult Empty { get; } = new([]);
+
+
+    /// <summary>
     /// Files the user chose against, for versions that then imported successfully. Empty in every
     /// ordinary run - it takes two sources holding different builds under one version to fill it.
     /// </summary>

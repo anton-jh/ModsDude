@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
@@ -13,6 +14,7 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -53,6 +55,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly DriftMonitor _driftMonitor;
+    private readonly IResourceLeases _leases;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
 
@@ -76,6 +79,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
         DriftMonitor driftMonitor,
+        IResourceLeases leases,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
@@ -87,6 +91,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         _applyService = applyService;
         _heldSavegames = heldSavegames;
         _driftMonitor = driftMonitor;
+        _leases = leases;
+
+        // The activation button is greyed by a claim anything in the app can take - the drift notice
+        // most of all, which belongs to no page - so the only way it can be right is to re-ask when
+        // that changes.
+        _leases.Changed += OnLeasesChanged;
 
         // One entry, two pages. Editing a profile's mod list needs Member, but *seeing* it needs
         // only Guest - and a guest is precisely the person who syncs this profile without curating
@@ -228,6 +238,14 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return "";
             }
 
+            // Before the two ordinary sentences, because a greyed button with "this will start
+            // following the profile" under it explains the wrong thing. What is running is the answer
+            // to why nothing can be pressed.
+            if (IsApplying is false && _applyService.IsBusy(_repo, game))
+            {
+                return _applyService.Busy(_repo, game);
+            }
+
             return ActivationKind is ProfileActivationKind.Apply
                 ? $"'{game.Name}' already follows this profile. Applying it again makes the mod folder match."
                 : $"'{game.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
@@ -280,11 +298,39 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// <see cref="IsApplying"/> covers this page's own click. The lease covers everything else, which
+    /// is most of it: the drift notice's one-click re-apply, the mod list editor's save, the savegame
+    /// list's two routes - and this page's own click after somebody navigated away and back, which
+    /// builds a fresh page whose flag is false while the apply it started is still moving files.
+    /// </summary>
     private bool CanActivate()
         => ConnectedGame is not null
         && IsApplying is false
+        && IsGameBusy is false
         && BlockedByUnsavedChanges is false
         && HasHoldRefusal is false;
+
+    /// <summary>Whether something is already applying to one of this game's folders.</summary>
+    private bool IsGameBusy => ConnectedGame is Game game && _applyService.IsBusy(_repo, game);
+
+    /// <summary>
+    /// Something somewhere claimed or released a resource, so the button and the sentence under it
+    /// are now possibly wrong.
+    /// </summary>
+    /// <remarks>
+    /// Marshalled, because a claim is released by whichever thread finished the work - see
+    /// <see cref="IResourceLeases.Changed"/>.
+    /// </remarks>
+    private void OnLeasesChanged(object? sender, EventArgs e)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            ActivateCommand.NotifyCanExecuteChanged();
+
+            OnPropertyChanged(nameof(ActivationDescription));
+        });
+    }
 
     /// <summary>
     /// Whether a savegame checked out on the selected game forbids putting it on this profile.
@@ -374,6 +420,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
         NavManager.PropertyChanged -= OnNavigationChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
+        _leases.Changed -= OnLeasesChanged;
 
         NavManager.Dispose();
     }

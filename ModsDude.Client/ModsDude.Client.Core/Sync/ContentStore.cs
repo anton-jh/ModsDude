@@ -425,9 +425,21 @@ public sealed class ContentStore
     }
 
     /// <summary>
-    /// Drops every blob, and every temporary file a failed write left behind.
+    /// Gives back every byte this store is actually costing: the blobs it uniquely holds, and the
+    /// temporary files a failed write left behind.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>Only what the store uniquely holds, which is the whole point of it.</b> A blob hardlinked
+    /// into a live mod folder is one file under two names - deleting the store's name frees not one
+    /// byte, because the folder still holds the data - so dropping it buys a guaranteed re-download
+    /// for nothing at all. This used to empty the store outright and count only the part that helped,
+    /// which meant a button offering 7 GB back quietly made the other 19 GB cold as well.
+    /// </para>
+    /// <para>
+    /// So what is left behind afterwards is exactly what the mod folders on this disk are running,
+    /// and the bytes given back are exactly the figure the button offered.
+    /// </para>
     /// <para>
     /// Safe to offer as a button because everything in a store is registered in some repo and
     /// therefore re-downloadable - the same property that lets eviction run without asking anybody.
@@ -439,12 +451,16 @@ public sealed class ContentStore
     /// that <em>nothing</em> holds. See <see cref="ClearQuarantine"/>.
     /// </para>
     /// <para>
-    /// A file that will not delete - one open in the game through a hardlink, say - is counted and
-    /// skipped rather than throwing. Clearing a store is housekeeping, and a store that is emptied
-    /// except for the two files something is reading is the outcome that was wanted.
+    /// A file that will not delete - one open in the game, say - is counted and skipped rather than
+    /// throwing. This is housekeeping, and a store reclaimed except for the two files something is
+    /// reading is the outcome that was wanted.
+    /// </para>
+    /// <para>
+    /// On a copy-served disk nothing is hardlinked, so every entry is uniquely held and this does
+    /// empty the store - correctly, because there every entry genuinely is costing its own bytes.
     /// </para>
     /// </remarks>
-    public ContentStoreClearResult Clear(CancellationToken cancellationToken)
+    public ContentStoreClearResult Reclaim(CancellationToken cancellationToken)
     {
         var deleted = 0;
         var failed = 0;
@@ -454,19 +470,17 @@ public sealed class ContentStore
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (entry.IsUniquelyHeld is false)
+            {
+                continue;
+            }
+
             try
             {
                 File.Delete(entry.Path);
 
                 deleted++;
-
-                // Only what deleting it actually gave back. A blob hardlinked into a live mod folder
-                // loses a name and no bytes, and reporting those would be a number the disk
-                // disagrees with.
-                if (entry.IsUniquelyHeld)
-                {
-                    reclaimed += entry.Length;
-                }
+                reclaimed += entry.Length;
             }
             catch (Exception exception)
             {

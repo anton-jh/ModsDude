@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Concurrency;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Sync;
@@ -178,6 +179,7 @@ public class ContentStoreVerificationTests
             new FakeStoreProvider(store),
             new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
+            new ResourceLeases(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));
@@ -207,6 +209,7 @@ public class ContentStoreVerificationTests
             new FakeStoreProvider(store),
             new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
+            new ResourceLeases(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));

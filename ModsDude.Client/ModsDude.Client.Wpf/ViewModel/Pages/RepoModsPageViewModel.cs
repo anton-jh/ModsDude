@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -43,13 +44,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
-    private readonly ModImportService _importService;
+    private readonly ModImportCoordinator _imports;
+    private readonly IResourceLeases _leases;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IDialogService _dialogService;
     private readonly IModsClient _modsClient;
-    private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private readonly CancellationTokenSource _cancellation = new();
     private readonly ModRowActions _rowActions;
@@ -85,18 +86,18 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         Repo repo,
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
-        ModImportService importService,
+        ModImportCoordinator imports,
         IModalService modalService,
         IErrorReporter errorReporter,
         ShellNavigationService shellNavigation,
         IDialogService dialogService,
         IModsClient modsClient,
-        IBackgroundTaskReporter backgroundTasks)
+        IResourceLeases leases)
     {
-        _backgroundTasks = backgroundTasks;
         _repo = repo;
         _itemFactory = itemFactory;
-        _importService = importService;
+        _imports = imports;
+        _leases = leases;
         _modalService = modalService;
         _errorReporter = errorReporter;
         _shellNavigation = shellNavigation;
@@ -118,6 +119,10 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             ReorderVersionsCommand, DeleteVersionCommand, DeleteModCommand, ModifyRestriction);
 
         RepoName = repo.Name;
+
+        // The Import button is greyed by a claim that anything anywhere in the app can take or give
+        // back, so the only way it can be right is to re-ask when that changes.
+        _leases.Changed += OnLeasesChanged;
     }
 
 
@@ -469,6 +474,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     #region Import
 
+    /// <remarks>
+    /// The strip's Cancel and this command's are the same act on the same run - see
+    /// <see cref="ModImportCoordinator.RunAsync"/> - so the button here keeps working and stops being
+    /// the only way to stop an import the moment somebody navigates away from this page.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanImport), IncludeCancelCommand = true)]
     private async Task Import(CancellationToken cancellationToken)
     {
@@ -490,29 +500,21 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         ImportSummary = null;
         IsImporting = true;
 
-        using var task = _backgroundTasks.Begin(
-            rows.Count == 1
-                ? $"Importing 1 mod into '{RepoName}'"
-                : $"Importing {rows.Count} mods into '{RepoName}'");
-
         try
         {
-            var request = new ModImportRequest(_repo.Id, [.. pending.Select(x => x.Mod)], _repo.Adapter.VersionComparer)
+            var outcome = await _imports.RunAsync(
+                _repo, [.. pending.Select(x => x.Mod)], rows, _catalog, cancellationToken);
+
+            if (outcome is { Refusal: string refusal })
             {
-                Progress = new ModImportRowProgress(rows, task),
-                ResolveArbitration = ResolveArbitrationAsync,
-                ResolveSourceConflicts = ResolveSourceConflictsAsync,
+                // Only reachable as a race - the button is greyed while the repo is claimed - so the
+                // rows keep their pending state and the sentence names what to wait for.
+                ImportSummary = refusal;
 
-                // So the import leaves the store warm: what is uploaded from a folder the game does
-                // not read is copied into the store these folders are served by, and the first sync
-                // after the import finds it there instead of downloading it back.
-                ModFolders = [.. _repo.Games.SelectMany(x => x.Targets).Select(x => x.ModFolder)]
-            };
+                return;
+            }
 
-            // The overload that invalidates the catalog when it is over: a cancelled or partly failed
-            // import still registered something, and a catalog that kept claiming otherwise would
-            // offer those versions for import all over again.
-            var result = await _importService.ImportAsync(_catalog, request, cancellationToken);
+            var result = outcome.Result ?? ModImportResult.Empty;
 
             foreach (var item in result.Items)
             {
@@ -552,8 +554,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// <see cref="IsImporting"/> covers this page's own run; the coordinator covers the mod list
+    /// editor's, and this page's own run after somebody has navigated away and back - which builds a
+    /// fresh page whose flag is false while the import it started is still going.
+    /// </summary>
     private bool CanImport()
-        => CanModify && IsImporting is false && QueuedCount > 0;
+        => CanModify && IsImporting is false && _imports.IsBusy(_repo.Id) is false && QueuedCount > 0;
 
     /// <summary>
     /// The row's own name, falling back to the mod's id for a version that is somehow no longer in
@@ -592,26 +599,6 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// One dialog for the whole import, and only for the mods the comparer could not settle.
-    /// Everything it settled is already registering by the time this is asked.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>?> ResolveArbitrationAsync(
-        IReadOnlyList<ModVersionArbitrationItem> items,
-        CancellationToken cancellationToken)
-    {
-        // The import runs off the UI thread, and everything from here down is view models a
-        // dispatcher-bound modal is about to render.
-        return await Application.Current.Dispatcher.InvokeAsync(async () =>
-        {
-            var modal = new ModVersionArbitrationModalViewModel(items);
-
-            await _modalService.Show(modal);
-
-            return modal.Result;
-        }).Task.Unwrap();
-    }
-
-    /// <summary>
     /// Sends the copies the user chose against to the Recycle Bin, and says so in the summary line.
     /// </summary>
     /// <remarks>
@@ -626,31 +613,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var recycled = _importService.RecycleSuperseded(result.Superseded);
+        var recycled = _imports.RecycleSuperseded(result.Superseded);
 
         ImportSummary += recycled == result.Superseded.Count
             ? recycled == 1
                 ? " One superseded copy went to the Recycle Bin."
                 : $" {recycled} superseded copies went to the Recycle Bin."
             : $" {recycled} of {result.Superseded.Count} superseded copies went to the Recycle Bin; the rest are still on disk.";
-    }
-
-    /// <summary>
-    /// Asked once per import, and only where two sources hold genuinely different files under one
-    /// mod and version. Identical copies never reach here - there is nothing to choose between them.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<ModVersionIdentity, string>?> ResolveSourceConflictsAsync(
-        IReadOnlyList<ModSourceConflict> conflicts,
-        CancellationToken cancellationToken)
-    {
-        return await Application.Current.Dispatcher.InvokeAsync(async () =>
-        {
-            var modal = new ModSourceConflictModalViewModel(conflicts);
-
-            await _modalService.Show(modal);
-
-            return modal.Result;
-        }).Task.Unwrap();
     }
 
     #endregion
@@ -849,11 +818,32 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// </summary>
     public void Dispose()
     {
+        _leases.Changed -= OnLeasesChanged;
+
         // Deliberately not disposed: the wait may still be inside the token's registration, and
         // disposing a source out from under that is not safe. Nothing here holds a wait handle,
         // so letting it be collected costs nothing.
         _cancellation.Cancel();
+
+        // An import this page started may still be running - which is the point of it being on the
+        // strip - and it does not read the catalog, only invalidates it when it ends. Invalidating a
+        // disposed catalog restarts scans on an already-cancelled token and settles for nothing,
+        // which is the correct amount of work for a page nobody is looking at.
         _catalog.Dispose();
+    }
+
+    /// <summary>
+    /// Something somewhere claimed or released a resource, so every button gated on one is now
+    /// possibly wrong.
+    /// </summary>
+    /// <remarks>
+    /// Marshalled, because a claim is released by whichever thread finished the work - see
+    /// <see cref="IResourceLeases.Changed"/> - and <c>NotifyCanExecuteChanged</c> raises handlers the
+    /// bindings are sitting on.
+    /// </remarks>
+    private void OnLeasesChanged(object? sender, EventArgs e)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(ImportCommand.NotifyCanExecuteChanged);
     }
 
     /// <summary>

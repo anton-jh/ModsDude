@@ -91,6 +91,16 @@
                                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                            Text="{Binding UsageSummary}" />
 
+                                                <!-- What could be freed, said against the button that
+                                                     frees it. The size line above used to end with
+                                                     "7.6 GB of it reclaimable", which named a number
+                                                     with no route to it - and the nearest button was
+                                                     the one that would not free that number. -->
+                                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                           Text="{Binding ReclaimSummary}"
+                                                           Visibility="{Binding HasReclaimSummary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                                 <Label Content="Folder" Margin="0 12 0 8" />
                                                 <StackPanel Orientation="Horizontal">
                                                     <Button Content="Pick folder" Command="{Binding PickPathCommand}" />
@@ -100,31 +110,34 @@
                                                 <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
                                                 <TextBox Width="120" HorizontalAlignment="Left"
                                                          Text="{Binding MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                <TextBlock Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                           Margin="0 6 0 0"
+                                                           Text="Kept inside this on its own - oldest first, never touching what an installed profile is running." />
 
                                                 <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
-                                                    <Button Content="Sweep to limit"
-                                                            Command="{Binding DataContext.SweepStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-                                                    <Button Content="Verify store" Margin="8 0 0 0"
+                                                    <!-- Two buttons, not three. "Sweep to limit" used
+                                                         to sit here, which asked the user to keep a
+                                                         promise the app makes - and was only ever
+                                                         pressed by the ones who noticed it. Staying
+                                                         inside the limit is automatic now. -->
+                                                    <Button Content="Verify integrity"
                                                             Command="{Binding DataContext.VerifyStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
-                                                    <Button Content="Empty store" Margin="8 0 0 0"
-                                                            Command="{Binding DataContext.EmptyStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    <!-- The amount is on the button, because the
+                                                         question it answers is "how do I get that
+                                                         space back?" -->
+                                                    <Button Content="{Binding ReclaimLabel}" Margin="8 0 0 0"
+                                                            Command="{Binding DataContext.ReclaimStoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
                                                 </StackPanel>
 
-                                                <!-- Only up while a pass is running. Stop is the one
-                                                     button on this page that is live *because*
-                                                     something is busy rather than despite it. -->
-                                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0"
-                                                            Visibility="{Binding IsVerifying, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                    <TextBlock Text="{Binding VerifyProgress}"
-                                                               VerticalAlignment="Center"
-                                                               TextWrapping="Wrap" MaxWidth="520"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    <Button Content="Stop" Margin="12 0 0 0"
-                                                            Command="{Binding DataContext.CancelVerifyCommand, RelativeSource={RelativeSource AncestorType=Page}}" />
-                                                </StackPanel>
+                                                <!-- The check used to draw its own progress line and
+                                                     its own Stop here. Both are the shell strip's
+                                                     now: it is where every other long job in the app
+                                                     reports, it has a Cancel of its own, and a pass
+                                                     that runs for minutes should not lose its
+                                                     progress the moment somebody navigates away. -->
 
                                                 <StackPanel Orientation="Vertical" Margin="0 12 0 0"
                                                             Visibility="{Binding HasQuarantine, Converter={StaticResource BoolToVisibilityConverter}}">

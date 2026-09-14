@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Navigation;
@@ -8,6 +9,13 @@ namespace ModsDude.Client.Wpf;
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// Whether the user has already answered the "something is still running" question with yes. See
+    /// <see cref="OnClosing"/> for why this is a field rather than a local.
+    /// </summary>
+    private bool _closeConfirmed;
+
+
     public MainWindow()
     {
         InitializeComponent();
@@ -21,6 +29,56 @@ public partial class MainWindow : Window
         // Preview, so the keys reach the dialog wherever focus happens to be - including the page
         // behind it, which is where focus still is for a dialog that never asked for it.
         PreviewKeyDown += OnPreviewKeyDown;
+
+        Closing += OnClosing;
+    }
+
+
+    /// <summary>
+    /// Asks before tearing the process down on top of work that is still running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Cancelled and re-raised rather than answered in place.</b> The question is a modal in the
+    /// shell's own slot, which means awaiting it - and <c>Closing</c> cannot be awaited: returning
+    /// from the handler is what lets the close proceed. So the first pass always stops the close, and
+    /// the answer closes the window itself.
+    /// </para>
+    /// <para>
+    /// <b>Queued rather than run here, which is not a nicety.</b> <c>Close</c> called while a
+    /// <c>Closing</c> dispatch is still on the stack is re-entrancy WPF answers by silently doing
+    /// nothing - so a first version of this, with nothing running and nothing to ask, made the window
+    /// unclosable. Posting it means the handler has returned and the close is a fresh one by the time
+    /// anything decides.
+    /// </para>
+    /// <para>
+    /// <b><see cref="_closeConfirmed"/> is what stops that being a loop.</b> It is set only by an
+    /// answer, so a user who said "keep working" is asked again next time rather than having quietly
+    /// spent their one refusal.
+    /// </para>
+    /// </remarks>
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_closeConfirmed || DataContext is not ViewModel.Windows.MainWindowViewModel shell)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+
+        _ = Dispatcher.InvokeAsync(() => ConfirmThenCloseAsync(shell)).Task.Unwrap();
+    }
+
+    private async Task ConfirmThenCloseAsync(ViewModel.Windows.MainWindowViewModel shell)
+    {
+        if (await shell.ConfirmCloseAsync() is false)
+        {
+            return;
+        }
+
+        _closeConfirmed = true;
+
+        Close();
     }
 
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -95,6 +96,7 @@ public sealed class ModSyncService(
     IRecycleBin recycleBin,
     IModFolders modFolders,
     IHeldSavegames heldSavegames,
+    IResourceLeases leases,
     ILogger<ModSyncService> logger)
 {
     /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
@@ -165,34 +167,56 @@ public sealed class ModSyncService(
         };
     }
 
+    /// <remarks>
+    /// <para>
+    /// <b>Runs under a shared lease on every store it reads.</b> The additive half of a store is
+    /// already safe beside any number of other syncs - see
+    /// <see cref="IResourceLeases.AcquireSharedAsync"/> - so this claims the readers' side and
+    /// conflicts with nothing except the three things that delete: the settings page's sweep, its two
+    /// clears, and a verify pass. Waiting for one of those is bounded, and the alternative is a
+    /// fetched blob deleted between being placed and being linked.
+    /// </para>
+    /// <para>
+    /// <b>The folder itself is not claimed here.</b> That lease belongs to the gesture rather than to
+    /// one folder's execution - it has to cover the plan, the confirmation and the work as one thing -
+    /// so it is taken by <c>ProfileApplyService</c> and every route into this method comes through it.
+    /// </para>
+    /// </remarks>
     public async Task<ModSyncResult> ExecuteAsync(
         ModSyncPlan plan,
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken)
     {
         var failures = new List<ModSyncFailure>();
-
-        await FetchAsync(plan, progress, failures, cancellationToken);
-
-        if (failures.Count > 0)
-        {
-            // Nothing in the mod folder has been touched, so stopping here leaves the game
-            // exactly as it was rather than half-applied.
-            return new ModSyncResult(false, failures);
-        }
-
         var quarantined = new List<QuarantinedFile>();
+        var completed = false;
 
-        await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
-        await InstallAsync(plan, progress, failures, cancellationToken);
-
-        var completed = failures.Count == 0;
-
-        progress?.Report(new ModSyncProgress(ModSyncPhase.Finishing, 0, 1));
-
-        if (completed)
+        // Scoped tightly, because the sweep below wants the other side of this very lease.
+        using (await leases.AcquireSharedAsync(
+            plan.AllStores.Select(ResourceKeys.Store),
+            $"Applying to {plan.ModFolder}",
+            cancellationToken))
         {
-            await WriteManifestAsync(plan);
+            await FetchAsync(plan, progress, failures, cancellationToken);
+
+            if (failures.Count > 0)
+            {
+                // Nothing in the mod folder has been touched, so stopping here leaves the game
+                // exactly as it was rather than half-applied.
+                return new ModSyncResult(false, failures);
+            }
+
+            await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
+            await InstallAsync(plan, progress, failures, cancellationToken);
+
+            completed = failures.Count == 0;
+
+            progress?.Report(new ModSyncProgress(ModSyncPhase.Finishing, 0, 1));
+
+            if (completed)
+            {
+                await WriteManifestAsync(plan);
+            }
         }
 
         var eviction = Evict(plan, cancellationToken);
@@ -655,10 +679,28 @@ public sealed class ModSyncService(
     /// Trims the serving store back inside its size limit, never dropping what an active profile on
     /// a disk it serves is relying on.
     /// </summary>
+    /// <remarks>
+    /// <b>Skipped rather than queued when the store is busy.</b> This is the one exclusive claim in
+    /// the app that refuses to wait: it runs at the end of every apply, on a store other applies are
+    /// very likely reading, and waiting for them would serialise every sync on the disk - a real cost
+    /// to avoid a race that costs one re-download. Everything in a store is registered in a repo and
+    /// re-downloadable, so the sweep skipped here is simply the next apply's sweep.
+    /// </remarks>
     private ContentStoreEvictionResult? Evict(ModSyncPlan plan, CancellationToken cancellationToken)
     {
         try
         {
+            using var lease = leases.TryAcquireExclusive(
+                ResourceKeys.Store(plan.ServingStore), $"Tidying the store on {plan.ServingStore.VolumeRoot}");
+
+            if (lease is null)
+            {
+                logger.LogDebug(
+                    "Skipped the post-sync sweep: the store on {Volume} is busy.", plan.ServingStore.VolumeRoot);
+
+                return null;
+            }
+
             return plan.ServingStore.Evict(GetPinnedHashes(plan), CancellationToken.None);
         }
         catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)

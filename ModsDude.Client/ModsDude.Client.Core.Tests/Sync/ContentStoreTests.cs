@@ -254,9 +254,9 @@ public class ContentStoreTests
     }
 
     [Fact]
-    public async Task Clearing_drops_every_blob_and_leaves_the_rescued_files_alone()
+    public async Task Reclaiming_drops_the_unheld_blobs_and_leaves_the_rescued_files_alone()
     {
-        using var root = new TempDirectory("store-clear");
+        using var root = new TempDirectory("store-reclaim");
         var store = new ContentStore("C:\\", root.Path, _oneGigabyte);
 
         var first = await Store(store, "one mod");
@@ -266,21 +266,61 @@ public class ContentStoreTests
         Directory.CreateDirectory(quarantine);
         File.WriteAllText(Path.Combine(quarantine, "something-nobody-registered.zip"), "rescued");
 
-        var result = store.Clear(CancellationToken.None);
+        var result = store.Reclaim(CancellationToken.None);
 
         Assert.Equal(2, result.EntriesDeleted);
         Assert.Equal(0, result.Failed);
         Assert.False(store.Contains(first));
         Assert.False(store.Contains(second));
 
-        // The one part of a store that nothing can fetch back, so emptying the store never touches
-        // it - deleting it is a separate act with its own question.
+        // The one part of a store that nothing can fetch back, so reclaiming never touches it -
+        // deleting it is a separate act with its own question.
         Assert.True(File.Exists(Path.Combine(quarantine, "something-nobody-registered.zip")));
         Assert.True(store.Measure().QuarantineBytes > 0);
 
         store.ClearQuarantine();
 
         Assert.False(Directory.Exists(store.QuarantinePath));
+    }
+
+    /// <summary>
+    /// The whole of what separates reclaiming from emptying.
+    /// </summary>
+    /// <remarks>
+    /// An entry hardlinked into a mod folder is one file under two names, so deleting the store's name
+    /// frees not a single byte - the folder still holds the data. Dropping it would buy a guaranteed
+    /// re-download for nothing, which is exactly what the old "Empty store" did to everything a
+    /// profile was running while offering only the reclaimable figure back.
+    /// </remarks>
+    [Fact]
+    public async Task Reclaiming_keeps_what_a_mod_folder_is_running()
+    {
+        using var root = new TempDirectory("store-reclaim-installed");
+        var modFolder = root.CreateSubdirectory("mods");
+        var store = new ContentStore("C:\\", root.Path, _oneGigabyte);
+
+        var installed = await Store(store, "this one is installed and hardlinked");
+        var spare = await Store(store, "this one is only in the store");
+
+        Assert.True(
+            FileLinks.TryCreateHardLink(Path.Combine(modFolder, "fs25_a.zip"), store.GetBlobPath(installed)),
+            $"Could not create a hardlink under '{root.Path}'; the distinction cannot be verified here.");
+
+        var reclaimable = store.Measure().ReclaimableBytes;
+
+        var result = store.Reclaim(CancellationToken.None);
+
+        // Only the spare one goes, and what came back is exactly what was offered.
+        Assert.Equal(1, result.EntriesDeleted);
+        Assert.Equal(reclaimable, result.BytesReclaimed);
+        Assert.Equal(Bytes("this one is only in the store").Length, result.BytesReclaimed);
+
+        Assert.True(store.Contains(installed));
+        Assert.False(store.Contains(spare));
+
+        // And the mod folder is untouched either way - which was true of emptying too, but emptying
+        // left the next sync to fetch this back for no gain at all.
+        Assert.True(File.Exists(Path.Combine(modFolder, "fs25_a.zip")));
     }
 
     private static async Task<string> Store(ContentStore store, string content)
