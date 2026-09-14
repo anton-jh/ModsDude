@@ -2107,114 +2107,153 @@ page that started it, so navigating away leaves the import running with nothing 
 revision. The seventh is that the page is unguarded while it saves, so a source toggle can reload
 the lists out from under an upload that is already in flight.
 
-- [ ] **A source toggle recomposes; it does not reload.** `LoadAsync` splits in two. The server half
-      — the dependency list, the revision number, `_original` — is read on init, on *Discard* and
-      after a save has committed, and nowhere else. A source chip, a rescan, a folder added or
-      removed run a `RecomposeAsync` that rebuilds only what the catalog decides: the left list, the
-      version selectors, the update plan. The draft, `_original`, `_basedOn`, the search, both
-      selections and the pending removals survive it untouched. This is also the round trip that
-      should never have been there — the catalog recomposes from scans already in memory, which is
-      the whole reason it caches per source.
-- [ ] **What the draft holds is part of the merged set.** `_versionsByMod` becomes the union of the
-      catalog's versions and the versions the draft is pinning. A pending row whose source has just
-      been switched off keeps its pin, keeps its `FoundIn` occurrence — which is what names the file
-      on disk — stays reported as pending, and still imports on save. Disabling a source is a
-      statement about what is *looked at*, never about what exists. Without this the row degrades to
-      `Placeholder`, which reports `IsOnServer: true` and would have the save write a dependency on a
-      version the repo does not hold.
-- [ ] **The sources are a row of chips, not a pane.** Toggle chips with a count each —
-      `[This repo 1,204] [FS25 mods 540] [Downloads 12] [+ folder] [+ profile] [⟳]` — in their own
+- [x] **A source toggle recomposes; it does not reload.** `LoadAsync` split in two. The server half
+      — the dependency list, the revision number, `_original` — is read by `ReloadAsync` on init, on
+      *Discard* and after a save has committed, and nowhere else. A source chip, a rescan, a folder
+      added or removed and a `ScanTarget` from a drift notice all run `RecomposeAsync`, which
+      rebuilds only what the catalog decides: the chips, the left list, the version selectors and
+      the update plan. The draft, `_original`, `_basedOn`, the search, both selections and the
+      pending removals survive it untouched, and the round trip that should never have been there is
+      gone with it — a recompose reads the catalog and nothing else, which is the whole reason it
+      caches per source. The pinned rows are re-offered their versions through
+      `ProfileModRowViewModel.Rebase` rather than rebuilt, and the left rows are reused where the
+      version record still draws the same thing, so a chip being ticked does not reload a thousand
+      icons or put down a selection somebody was assembling.
+- [x] **What the draft holds is part of the merged set.** `_versionsByMod` is now built by
+      `ModVersionIndex.Build` over the union of the catalog's versions and the versions the draft is
+      pinning. A pending row whose source has just been switched off keeps its pin, keeps its
+      `FoundIn` occurrence — which is what names the file on disk — stays reported as pending, and
+      still imports on save. Disabling a source is a statement about what is *looked at*, never
+      about what exists. Without this the row degraded to `Placeholder`, which reports
+      `IsOnServer: true` and would have had the save write a dependency on a version the repo does
+      not hold.
+- [x] **The sources are a row of chips, not a pane.** Toggle chips with a count each, in their own
       row directly above the left list's filter chips, replacing roughly 270px of pane with roughly
-      32px of chip. Failure colours the chip rather than adding a second line; the path is the
-      tooltip; session-scoped chips carry their own ⨯. Nothing is hidden behind a click, which is
-      what an empty left list needs from the one control that explains it.
-- [ ] **A profile is a source, and it costs no scan.** `ModSourceKind.Profile`, view-scoped like an
-      ad-hoc folder, picked from the same list *Copy from a profile…* offers. A profile's pins are
-      registered versions by foreign key, so the catalog already holds every one of them: the source
-      contributes a membership set and a version per mod, not a scan. Switch the repo chip off and a
-      profile chip on and the left list is exactly what that profile has and this one does not, which
-      is a diff no part of the app can show today. A row that is there because a profile put it there
-      is added at *that profile's* version and lock — turning a profile on is asking for what it
-      holds, not for what is newest.
-- [ ] **The right list can show what the sources do not have.** `PinnedModFilter.NotInSources`: the
+      32px of chip — plus `[+ folder] [+ profile] [⟳]` as neutral action chips beside them. Failure
+      colours the chip and the reason joins the path in its tooltip, rather than costing every chip
+      in the row the height of the worst one; session-scoped chips carry their own ⨯. Nothing is
+      hidden behind a click, which is what an empty left list needs from the one control that
+      explains it.
+- [x] **A profile is a source, and it costs no scan.** `ModSourceKind.Profile`, view-scoped like an
+      ad-hoc folder, picked from `PickProfileSourceModalViewModel` — its own dialog rather than the
+      copy one, because a source only ever offers and a copy writes. A profile's pins are registered
+      versions by foreign key, so the catalog already holds every one of them: the source contributes
+      a membership set and a version per mod, and `ModCatalog` never sees it. Switch the repo chip
+      off and a profile chip on and the left list is exactly what that profile has and this one does
+      not, which is a diff no part of the app could show. A row that is there because a profile put
+      it there is added at *that profile's* version and lock.
+
+      **This made every chip a contributor to one union rather than a filter subtracting from the
+      others**, which is the part that was not obvious from the outside. The repo chip used to mean
+      "and drop the registered rows", so with it off, a profile source — whose versions are all
+      registered by construction — would have had nothing left to show. It now means "the repo is
+      one of the places rows come from", and the left list is the union of what the enabled chips
+      offer. The visible consequence is that repo-off-plus-folder-on now shows what that folder
+      holds including what the repo already has, where it used to show only the unregistered half;
+      the *New to the repo* filter chip is what narrows it back.
+- [x] **The right list can show what the sources do not have.** `PinnedModFilter.NotInSources`: the
       mods this profile pins that no enabled source offers any version of. With another profile as
       the only enabled source it lists exactly what this list holds and that one does not, and with
       *Take out everything shown* under it, "make this profile match that one" is two clicks — the
       mirror of the left list's diff view, and the half of it that was missing. Mod-level rather than
       version-level: a mod the other profile holds at a different version is an update, not a
       removal, and the left list already says so. Disabled while nothing is enabled, where it would
-      select the whole profile and mean nothing.
-- [ ] **The left list is about versions, not mods.** A new version of a pinned mod is not in this
-      profile, whatever else is, so the hide rule stops being "this mod is pinned" and becomes "this
-      version is what the profile pins". The row's action is then one verb applied to the profile:
-      `Pin` where the mod is absent, `SetVersion` — through the existing locked-mod confirmation —
-      where it is already there, with ⬆ in place of + and the sort reading taken out, then updates,
-      then alphabetical. The header keeps its wording; it was already true of a version.
-- [ ] **An update is an update whether or not the repo has it yet.** `ProfileModUpdates` plans
-      against the derived order rather than only the registered one. The rule that the repo settles
-      ordering is untouched — registered versions keep their `SequenceNumber` and are never
-      re-derived — and an unregistered version counts only where `ModVersionPartialOrder` places it
-      unambiguously *after* the pin. A version the comparer abstains on is not an update: offering a
-      possible downgrade as one is worse than saying nothing. This is the same rule
+      select the whole profile and mean nothing — and put back to *All* rather than left checked on a
+      chip that has just gone dead.
+- [x] **The left list is about versions, not mods.** The hide rule stopped being "this mod is pinned"
+      and became "this version is what the profile pins", so a new version of a pinned mod is on the
+      left where it belongs. The row still stands for one mod, at the newest version an enabled
+      source actually *offers* — not the newest known, or a mod reached only through a profile chip
+      would point at a version nothing enabled holds and vanish behind its own filter. The row's
+      action is one verb applied to the profile: `Pin` where the mod is absent, `SetVersion` —
+      through the existing locked-mod confirmation — where it is already there, with ⬆ in place of +,
+      and the sort reads taken out, then updates, then alphabetical.
+- [x] **An update is an update whether or not the repo has it yet.** The derivation moved into
+      `ModVersionIndex`/`ModVersionSet` in Core, which keeps the pairs the comparer abstained on
+      beside the order rather than discarding them, and `ProfileModUpdates` plans against that. The
+      rule that the repo settles ordering is untouched — registered versions keep their
+      `SequenceNumber`, which is handed to `ModVersionPartialOrder` as fact — and an unregistered
+      version counts only where `ModVersionSet.IsAfter` places it unambiguously after the pin. A
+      version the comparer abstains on is not an update, and is stepped over rather than ending the
+      search, because an abstention says nothing about the versions behind it. This is the same rule
       `RepoModsPageViewModel.IsUpdate` already applies against the repo's newest, arrived at from the
-      other end. It closes the bug where a freshly downloaded version of a mod the profile already
-      pins appeared nowhere but that row's own dropdown.
-- [ ] **The updates band counts both kinds and says the split.** "7 updates available · 2 will be
-      imported when you save", above the right list where it already is, still on screen at zero, and
-      honest there: an on-disk update only exists while its folder's chip is on, so with no folder
-      enabled it reads "No updates in this repo. No folders are being read." rather than claiming to
-      have looked. *Update all* becomes a split button carrying the same split. The existing
-      **Updates** filter chip is the way into the list of them; no new region, no third copy of the
-      rows.
-- [ ] **Four states, two colours, three words.** A chip's fill says what the version means for the
+      other end. Thirteen tests in `ProfileModUpdatesTests`, three of them the ones the old rule got
+      wrong.
+- [x] **The updates band counts both kinds and says the split.** "7 updates available · 2 will be
+      imported when you save", above the right list where it already was, still on screen at zero,
+      and honest there: with no folder enabled it reads "No updates in this repo. No folders are
+      being read." rather than claiming to have looked. *Update all* is a split button — the primary
+      takes everything that is newer wherever the file is, and behind the caret is "Update the N
+      already in the repo", for somebody who does not want to spend an upload right now. The caret
+      carries its own condition and appears only where the two counts differ. The existing
+      **Updates** filter chip is still the way into the list of them; no new region, no third copy of
+      the rows.
+- [x] **Four states, two colours, three words.** A chip's fill says what the version means for the
       repo and its text says what it means for this profile. Accent **Update** — the repo holds it,
-      the move is free. Green **Update** — an update to a pinned mod that is only on disk, so saving
-      imports it. Green **New version** — newer than anything the repo holds of a mod this profile
-      does not pin: an import candidate, which is what the repo mods page already calls an *Update*
-      from its own point of view, and which is not one from here. Green **New** — a mod the repo has
-      never held at all. One chip per row, as the template was built for.
-- [ ] **The wording is about mods, not profiles.** `UpdateTooltip`, its locked variant and
-      `ConfirmLockedVersionChangeAsync` all say some form of "move this profile to version X". A
-      profile is not the thing that moves; a mod's version is. *"Update to 1.2.0."*, *"Update to
-      1.2.0. Saving imports it."*, and — for a selector change, which may be a downgrade —
-      *"Change 'X' to 1.0.9 in this profile?"*
-- [ ] **The bulk moves keep adding and upgrading apart.** `NewCount` and *Add all shown new* exclude
-      update rows — a bulk add that silently moved pins would be a different act under the same
-      label — and a mixed selection says what it will do to each part: "Add 12 and update 3".
-- [ ] **A save is a gesture, not a page.** The whole of it — import, revision, re-apply, drift check
-      — moves into a `ProfileSaveService`, sibling to `ProfileApplyService` and
-      `ModImportCoordinator` and shaped like them: it claims the profile exclusively, with the repo
-      lease the import already takes underneath it, owns the strip entry and its Cancel, shows the
-      stale-revision and import-problem dialogs through the shell's modal host, and reports progress
-      per version rather than writing into row view models it does not own. The page hands it a
-      snapshot and subscribes. Nothing about the run depends on the page still existing: today
-      navigating away disposes the page and the catalog mid-flight, and the files finish registering
-      while the revision is never written and nothing says so.
-- [ ] **Coming back rejoins the save in progress.** An editor built for a profile that is being saved
-      asks the service before it asks the server: it draws the draft the service is holding, marks
-      the rows from the run's own progress, and stays read-only until it finishes — at which point it
-      does the post-save reload it would have done anyway. What is retained is the draft, not the
-      page instance; see below.
-- [ ] **A save that finished while you were elsewhere says so.** The strip is enough while it runs.
-      Once it is over with no editor there to show the summary, the outcome goes to the notice column
-      — a failed import above all, which today is a modal raised by a page that no longer exists.
-- [ ] **Another profile in the same repo stays editable, and only its save waits.** The refusal is
-      exactly as wide as the lease: a draft with nothing pending is a revision write and is safe
-      beside any import, so it saves; a draft with mods to import is greyed with the reason named —
-      "3 mods here need importing, and 'Co-op' is already importing into this repo". Being unable to
-      write for a few minutes is not a reason to be unable to think for a few minutes.
-- [ ] **The editor is read-only while its own profile is being saved, per control rather than per
-      list.** `IsEnabled` on a `ListBox` stops the mouse wheel along with everything else, so the
-      flag binds to what can change the draft: the row buttons, the selection checkboxes, the version
-      selectors, the lock toggles, drag-and-drop, and the source chips. The list, its scrolling and
-      the mod name that opens the details dialog stay live — reading is not writing. Search and the
-      filter chips stay live too; they change the view and nothing else.
-- [ ] **A save writes what was on screen when Save was pressed.** The snapshot is taken before the
-      import rather than re-read from `Pinned` after it, and a `ScanTarget` arriving from a drift
-      notice defers its recompose rather than rebuilding the lists mid-save. Today a row added during
-      an upload is saved without having been imported, and a source toggled during one replaces the
-      draft with the server's own list, which the save then writes back as a revision that changed
-      nothing.
+      the move is free. Green **Update** (`ModDisplayStatus.UpdatePending`) — an update to a pinned
+      mod that is only on disk, so saving imports it. Green **New version** — newer than anything the
+      repo holds of a mod this profile does not pin: an import candidate, which is what the repo mods
+      page calls an *Update* from its own point of view and which is not one from here. Green
+      **New** — a version the repo does not hold, with nothing else to say. One chip per row, as the
+      template was built for, and `ModListItemViewModel.IsUpdateRow` is what the glyph and the sort
+      both read so they cannot disagree with it.
+- [x] **The wording is about mods, not profiles.** `UpdateTooltip` is *"Update to 1.2.0."*, gaining
+      *"Saving imports it."* where the target is only on disk — which needed `UpdateImportsOnSave`
+      beside `UpdateTo`, since the cost is the half a row could not previously say. The locked
+      variant keeps its explanation on the end of the same sentence, and
+      `ConfirmLockedVersionChangeAsync` asks *"Change 'X' to 1.0.9 in this profile?"*, which is a verb
+      that covers a downgrade — the selector reaches it in both directions.
+- [x] **The bulk moves keep adding and upgrading apart.** `NewCount` and *Add all shown new* exclude
+      update rows through one `IsShownAndNew`, so the count and the button cannot drift apart. A
+      mixed selection says what it will do to each part — "Add 12 and update 3" — which
+      `ModListSelection` grew an optional `describe` for, since one verb and a count could not
+      express it; the bar re-asks on every recount, because pinning one of the picked mods turns an
+      add into an update without the count moving. `AddRows` leaves locked pins alone and counts
+      them, exactly as the batch update does.
+- [x] **A save is a gesture, not a page.** The whole of it — import, revision, re-apply, drift check
+      — is `ProfileSaveService`, sibling to `ProfileApplyService` and `ModImportCoordinator` and
+      shaped like them: it claims the profile exclusively through `ResourceKeys.Profile`, with the
+      repo lease the import takes underneath it, owns the gesture's strip entry and its Cancel, shows
+      the stale-revision and import-problem dialogs through the shell's modal host, and reports
+      progress per version rather than writing into row view models it does not own. The page hands
+      it a `ProfileSaveRequest` and watches the `ProfileSaveRun`. Making that true meant
+      `ModImportCoordinator` taking names and an optional progress sink rather than a dictionary of
+      rows — the strip line moved into the coordinator, where the strip entry already was, so a
+      caller with no view at all still gets one.
+- [x] **Coming back rejoins the save in progress.** `InitAsync` asks `ProfileSaveService.Find` before
+      it asks the server: it draws the draft the service is holding, marks the rows from the run's
+      own progress and results, subscribes to `Advanced` for the rest, and stays read-only until it
+      finishes — at which point it does the post-save reload it would have done anyway. Starting a
+      save and rejoining one are the same code path from there on, which is what keeps the two from
+      disagreeing about what an outcome means.
+- [x] **A save that finished while you were elsewhere says so.** `ProfileSaveRun.Watch` is how a page
+      says it is there to show the outcome; a run that finishes unwatched files it instead, and
+      `ProfileSaveService.Build` turns it into a notice — Critical for anything that did not save,
+      Info for one that did. The next editor for that profile takes it back through `TakeUnreported`
+      and shows it as its own summary rather than leaving it in the column, so it is said once.
+      Dismissing forgets it rather than filing a signature, because it is a report about something
+      that has already finished and has nothing to come back for.
+- [x] **Another profile in the same repo stays editable, and only its save waits.** The refusal is
+      exactly as wide as the lease: `CanSave` is `HasUnsavedChanges && IsReadOnly is false &&
+      CanImportHere`, and `CanImportHere` is true whenever the draft has nothing pending — a revision
+      write is safe beside any import. A draft with mods to import is greyed with the reason named,
+      off `ModImportCoordinator.DescribeBusy`, and re-asks itself on every lease change rather than
+      only when the draft moves.
+- [x] **The editor is read-only while its own profile is being saved, per control rather than per
+      list.** `IsReadOnly` — distinct from `IsSaving`, because the save may have been started by a
+      page that no longer exists — with `CanEdit` as the inverse the view binds. It reaches the row
+      buttons, the version selectors, the lock toggles and the take-out button through one
+      `IsEnabled` on the pinned row's action panel, the source chips and the header select-all boxes
+      directly, and the per-row selection checkbox through `ModListItemViewModel.IsPickable`.
+      Drag-and-drop was already covered, since a drop runs the target list's command and that command
+      asks `CanExecute`. The lists, their scrolling, the mod name that opens the details dialog, the
+      search and the filter chips all stay live — reading is not writing.
+- [x] **A save writes what was on screen when Save was pressed.** `ProfileSaveRequest` carries the
+      desired pins, the baseline, the revision, the label and the pending versions, all taken before
+      the import starts rather than read back out of the draft after it. A `ScanTarget` arriving from
+      a drift notice mid-save sets `_recomposeWhenSaved` and runs when the save is over. A row added
+      during an upload is therefore no longer saved without having been imported, and a source
+      toggled during one can no longer replace what is being written.
 
 ### Settled
 

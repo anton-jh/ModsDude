@@ -109,7 +109,7 @@ that is per-version at both ends.
 profile editor's version selector, and working out whether a newer version exists. Both are a
 `ToLookup(x => x.ModId)` built where needed, which is cheaper than maintaining a parallel nested
 model that has to be rebuilt every time the flat set changes — and it changes often, since
-`ModCatalog` recomposes whenever a source checkbox is toggled.
+`ModCatalog` recomposes whenever a source chip is toggled.
 
 The lazy-image design generalized for free. `LocalModImage` was
 `(Name, CacheKey, Func<CancellationToken, Task<byte[]>>)` and said nothing about zip archives —
@@ -452,11 +452,43 @@ exists — and it appears alongside the standing ones. Ad-hoc sources are **view
 live as long as the page does and are not persisted. Someone importing from a USB stick or an
 extracted archive should not have that folder haunting the UI for months.
 
+### Another profile is a source too, in the profile editor
+
+A profile's pins are registered versions by foreign key, so the catalog already holds every one of
+them. Reading another profile as a source therefore **costs no scan at all**: what it contributes is
+a membership set and a version per mod, composed by the editor and consumed by the editor's own
+filter, exactly as the repo is. `ModCatalog` never sees one.
+
+It is view-scoped like an ad-hoc folder, and added by picking a profile from a dialog of its own
+rather than from *Copy from a profile…*. The two are different acts: a source only ever **offers**,
+putting that profile's versions on the left where each of them is still a row somebody has to move,
+while a copy writes into the draft and its *Replace* mode takes things out. A statement about the
+whole list is not something a chip could express, which is why *Copy from a profile…* stays.
+
+It does read the network, which no other source does. The rule it must not break is that
+*navigating* touches nothing — and enabling a chip is not navigating.
+
+**It carries the lock as well as the version.** A row that is there because a profile put it there
+is added at that profile's version *and* lock. Copying a list already brings `Locked` across, and a
+chip that brought one and not the other would disagree with the button next to it about what "what
+that profile holds" means.
+
 ### The source list
 
-Every currently available source is listed, each with an enable/disable checkbox. Disabling one
-removes its mods from the merged list without removing the source, so a user can narrow to "just
-what is in Downloads" without losing their game's own folders.
+Every currently available source is offered, each as a toggle chip. Disabling one removes its mods
+from the merged list without removing the source, so a user can narrow to "just what is in
+Downloads" without losing their game's own folders.
+
+**Every enabled chip contributes to one union.** The left list is what the enabled sources offer
+between them: every registered version while the repo's chip is on, whatever the enabled folders
+hold, and whatever the enabled profiles pin. The repo chip used to mean something subtly different —
+"and drop the registered rows" — which reads the same in the common case and is not the same thing
+at all: a profile source's versions are all registered by construction, so under the subtractive
+reading, switching the repo off would have left a profile chip with nothing to show. The visible
+consequence of the change is that the repo off plus a folder on now lists what that folder holds
+*including* what the repo already has, where it used to list only the unregistered half. The **New
+to the repo** filter chip is what narrows it back, and it composes with everything else the way the
+other chips do.
 
 **Every source starts switched off, every time.** The enabled set lives in the `ModCatalog`
 itself and **nothing about it is persisted**: opening a page must never read a disk, and a folder
@@ -480,28 +512,52 @@ Two things switch a source on, and both are the user asking for that folder spec
   would be answering a question with a chore. Nothing else pre-enables anything — navigating to
   Repo → Mods or opening the editor from the sidebar scans nothing.
 
-Because the list otherwise starts empty, the profile editor's **Sources** pane is expanded by
-default: a collapsed pane would hide the one control that explains why the left-hand list has
-nothing in it.
+Because the list otherwise starts empty, nothing about the profile editor's sources is behind a
+click: they are a **row of chips** directly above the left list's filter chips, which is the one
+shape that is both always visible and nearly free.
 
 Disabling a mod folder as a *source* has no effect on syncing to it. The two roles are
 independent; see below.
 
+#### The source chips
+
+Three shapes were tried. An expander, whose collapsed state hid the one control that explains an
+empty list. A fixed pane, which cost a quarter of the left column permanently — about 270px, under
+the bulk moves, where it was furthest from the list it feeds. And a chip row, which is what there is:
+roughly 32px, and honest about what these things are, because every source *is* a filter over one
+list and chips all looking alike say so.
+
+`[This repo 1,204] [FS25 mods 540] [Downloads 12] [Co-op 87] [+ folder] [+ profile] [⟳]`
+
+- **Above the filter chips, not among them.** Sources are independent toggles and the filters are
+  mutually exclusive; one row of both would read as one control with two kinds of behaviour in it.
+  Above rather than below, because a source decides what the list is *of* and a filter narrows what
+  it then shows.
+- **A count and nothing else on the chip.** The units are what the chip's own name is for, and at
+  four chips wide there is no room to spell them twice.
+- **Failure colours the chip.** A second line under one chip costs every chip in the row the height
+  of the worst of them, so an unreadable folder turns red and says why in its tooltip, alongside the
+  path.
+- **Session-scoped chips carry their own ⨯.** A folder off a USB stick and a profile being diffed
+  against both stop existing when the page does, and switching one off is not the same as being done
+  with it.
+
+The management page keeps its pane. It has the room, it is not the page where an empty left list
+needs explaining, and nothing about that pane was the complaint.
+
 #### The repo is a source too, in the profile editor
 
-The profile editor's left list is the **union** of what the repo has registered and what the
-enabled folders hold, so the repo is the one contributor to it that had no checkbox — and turning
-it off is the only way to ask "what is on this computer that this repo does not have", which is
-exactly the question somebody adding new mods to a profile is asking. It heads the source list,
-starts on, and is `ModSourceKind.Repo`.
+The profile editor's left list is the **union** of what the enabled sources offer, so the repo is
+the one contributor to it that had no control — and turning it off is how to ask "what is on this
+computer, or in that profile, that this repo does not have". It heads the chip row, starts on, and
+is `ModSourceKind.Repo`.
 
 **It is a filter, not a scan.** Nothing about it reaches `ModCatalog`: the catalog still merges the
-registered half, and it is the left list's `ICollectionView` that drops rows whose
-`CatalogModVersion.IsOnServer` is true. That is not an implementation detail worth hiding, because
-it is load-bearing — the pinned rows and every row's version selector are built from the same
-snapshot, and a profile pins registered versions, so dropping them from the catalog would turn
-every pinned row into an unresolvable placeholder. Filtering the view instead is also why unticking
-it is instant and costs no round trip.
+registered half, and it is the editor's own composition of the left list that leaves those rows out.
+That is not an implementation detail worth hiding, because it is load-bearing — the pinned rows and
+every row's version selector are built from the same snapshot, and a profile pins registered
+versions, so dropping them from the catalog would turn every pinned row into an unresolvable
+placeholder. Composing the list instead is also why unticking it is instant and costs no round trip.
 
 The catalog page has no such checkbox and needs none: its two lists already split on exactly this
 line, and unregistered-and-local is what the left-hand one *is*.
@@ -603,7 +659,7 @@ registered versions per repo.
 
 - **Cache per source, and compose on demand.** Not one cached catalog: a
   `Task<SourceScan>` per source, with the merged view built from the enabled ones. This is what
-  makes the checkbox usable — toggling a source recomposes from memory and is instant, and
+  makes a source chip usable — toggling a source recomposes from memory and is instant, and
   adding one scans only the new folder rather than every folder again.
 - **Cache the `Task`, not the result.** A second caller arriving during an in-flight scan joins
   it rather than starting a second `Parallel.For` over a thousand archives.
@@ -630,10 +686,14 @@ confused. Same rows, same templates, one service.
 
 **It is laid out like the profile mod editor**, and for the same reason: both pages are one act —
 deciding what a collection should hold, then writing it. Two lists. On the left, what the enabled
-sources hold and the repo does not; under it, the source pane described above — the game's own folders,
+sources hold and the repo does not; under it, the source **pane** — the game's own folders,
 Downloads, anything the user adds for the session — each with its checkbox, so the set of local
 candidates is adjustable in place rather than being a fixed consequence of where the game is. On
 the right, what the repo holds, plus whatever has been lined up to join it.
+
+The pane is the one thing this page does not share with the editor any more, which moved its sources
+to a chip row. This page has the room, an empty left list here means "nothing new on this computer"
+rather than "you have not told it where to look", and nothing about the pane was the complaint.
 
 A mod is **never on both sides at once**, and the row that moves rightwards is the same row object,
 so its icon and its per-row import marks come with it. Presence is therefore which list a row is in
@@ -695,11 +755,29 @@ Two things this needed, and both now exist:
 
 ### Profile mod list editor
 
-Two lists: available on the left, in-profile on the right. The left is the union of registered
-mods and local candidates, so a mod can be added to a profile *and imported* in one action
-without a detour to another page. It carries the same source list and checkboxes as Manage —
-adding a mod straight from Downloads while building a profile is the point of having sources at
-all.
+Two lists: available on the left, in-profile on the right. The left is the union of what the enabled
+sources offer, so a mod can be added to a profile *and imported* in one action without a detour to
+another page. Its sources are the chip row described above — adding a mod straight from Downloads
+while building a profile is the point of having sources at all.
+
+**A change to the catalog is never a reason to re-read the profile.** The load is split in two. The
+server half — the dependency list, the revision the page is based on, and the baseline a save diffs
+against — is read on init, on *Discard*, and after a save has committed. Everything that changes
+what is merely *known* — a source chip, a rescan, a folder added or removed, a drift notice's scan
+target — runs a **recompose**, which rebuilds the chips, the left list, the version selectors and
+the update plan and leaves the draft, both selections, the pending removals, the search and the bulk
+undo exactly where they were. The two used to be one method, which meant ticking a chip silently
+discarded everything the user had built, dropped the unsaved-changes flag to false and released the
+navigation lock. It was also a needless round trip: a recompose reads the catalog, which composes
+from scans already in memory.
+
+**What the draft holds is part of the merged set.** The version index is the union of the catalog's
+versions and the versions the draft is pinning. So a pending row whose folder has just been switched
+off keeps its pin, keeps the `FoundIn` occurrence that names the file on disk, stays reported as
+pending, and still imports on save. Disabling a source is a statement about what is *looked at*,
+never about what exists — and without this the row degraded to the unknown-version placeholder,
+which reports `IsOnServer: true` and would have had the save write a dependency on a version the
+repo does not hold.
 
 **One search box, over both lists.** It sits above the two columns rather than in the left one's
 header, because a mod is only ever on one side: a box that reached only the left list answered
@@ -713,15 +791,63 @@ said "412 mods" could not distinguish a search that found nothing from an empty 
 list gains a second empty-state message for the same reason: with the search reaching it, "nothing
 in this profile yet" would be a lie for a two-thousand-mod profile with no match.
 
-**Updates belong on the right, not the left.** If a mod is already in the profile, also showing
-it on the left as "update available" puts the same mod on both sides at once. Render it as an
-update affordance on the right-hand row, plus a "N updates available" batch action in the
-header. The left list stays a clean "not in the profile" set.
+#### The left list is about versions, not mods
 
-**That section stays on screen at zero**, reading "No updates available". "Are there updates?" is a
-question people come to this page to answer, and a section that is absent when the answer is no
-never answers it — it just leaves them looking. It also stops the list below moving as the count
-changes.
+The hide rule is **"this version is what the profile pins"**, not "this mod is pinned". A new
+version of a pinned mod is not in this profile, whatever else is — so it belongs on the left, and
+under the old rule it had nowhere at all to be except that row's own version dropdown.
+
+The row still stands for one mod, at the newest version an enabled source actually **offers** —
+which is not the same as the newest known. A mod reached only through a profile chip has to show at
+that profile's version, or switching the repo chip off would leave the row pointing at a version
+nothing enabled holds, and it would then fail its own filter and disappear.
+
+Its action is one verb applied to the profile: **Pin** where the mod is absent, **SetVersion** where
+it is already there, with ⬆ in place of + and the same locked-mod confirmation the version selector
+raises — it is the same act, so it asks the same question. The sort reads taken out, then updates,
+then alphabetical.
+
+That does not put a mod on both sides at once, which was the original objection to updates on the
+left: what is on the left is a version the profile does *not* pin, and what is on the right is the
+one it does.
+
+#### Four states, two colours, three words
+
+A chip's fill says what the version means for the **repo** and its text says what it means for
+**this profile**.
+
+| Chip | Fill | Means |
+| --- | --- | --- |
+| **Update** | accent | A newer version of a mod this profile pins, and the repo holds it. The move is free. |
+| **Update** | green | The same, for a version only on disk. Saving imports it. |
+| **New version** | green | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
+| **New** | green | A version the repo does not hold, with nothing else to say. |
+
+Green is "saving uploads a file", which is what the three of them have in common; the accent is the
+one that costs nothing. One chip per row, as the template was built for, and the glyph on the row's
+button and the row's position in the sort both read the same derived flag, so they cannot disagree
+with the chip.
+
+#### The updates band
+
+**"7 updates available · 2 will be imported when you save"**, above the right list, counting both
+kinds and saying the split — because the two cost differently: one is a pin moving and the other is
+a file going up first.
+
+**It stays on screen at zero**, and is honest there. "Are there updates?" is a question people come
+to this page to answer, and a section that is absent when the answer is no never answers it — it
+just leaves them looking. But an on-disk update only exists while its folder's chip is on, so with
+no folder being read it says "No updates in this repo. No folders are being read." rather than
+claiming to have looked.
+
+***Update all* is a split button** carrying the same split: the primary takes everything that is
+newer wherever the file is, and behind the caret is *Update the N already in the repo*, for somebody
+who does not want to spend an upload right now. The caret carries its own enabled condition and
+appears only where the two counts differ, unlike the save split's — a menu offering the same thing
+as the button beside it is an invitation to nothing.
+
+The existing **Updates** filter chip is the way into the list of them. No new region, and no third
+copy of the rows.
 
 The right list is keyed by `ModId` — the domain enforces one `ModDependency` per mod — so
 moving a mod rightward also means choosing a version. That row needs a version selector and a
@@ -732,6 +858,13 @@ on screen the profile has never held; *Restore removed* is an undo, so it puts b
 took out at the version and lock the profile still holds rather than picking a default. One button
 doing both would silently re-add a removal at the newest version — which is a different pin from the
 one that was there.
+
+**Adding and upgrading stay apart.** Now that an update row is on the left, *Add all shown new* and
+the count on it exclude those rows: a bulk add that silently moved pins would be a different act
+under the same label. A mixed *selection* does both, and says so — **"Add 12 and update 3"** — since
+the set somebody assembled across several searches is theirs and splitting it would be worse than
+labelling it honestly. Locked pins are left alone and counted, exactly as the batch update leaves
+them.
 
 **Both lists lead with what the draft has done to them.** On the right, the same ranking as Manage:
 what could not be imported, then what is still pending, then the rest. On the left, mods this draft
@@ -781,6 +914,17 @@ and the right-hand selection bar carries Update, Lock and Unlock beside it. A pa
 mods is one click and removing forty is forty clicks has not solved the problem, it has picked a
 side.
 
+**The right list's *Not in the sources* chip is the mirror of the left list's diff view**, and the
+half of it that was missing: the mods this profile pins that no enabled source offers any version
+of. With another profile as the only enabled source, that is exactly what this list holds and that
+one does not — and with *Take out everything shown* under it, "make this profile match that one" is
+two clicks.
+
+It is **mod-level rather than version-level**, deliberately: a mod the other profile holds at a
+different version is an update, not a removal, and the left list already says so. It is disabled
+while nothing at all is enabled, where it would select the whole profile and mean nothing, and the
+filter falls back to *All* rather than staying checked on a chip that has just gone dead.
+
 **Every bulk move is undoable, and the undo is the whole draft.** `RunBulk` snapshots the pins,
 runs the change, and offers what it turned out to do — "Added 47 mods", counted after the fact,
 because how many were skipped as already-present is only known once it has run. A snapshot rather
@@ -828,6 +972,57 @@ The batch upgrade endpoint went with the per-dependency writes, and nothing was 
 What an update *is* is a question this page already answers from the mod list it has in hand, and
 a whole-list save expresses "and these are now the newer versions" without a second endpoint that
 can only express one shape of change.
+
+#### A save is a gesture, not a page
+
+The whole of it — the import, the revision, the re-apply, the drift check — is `ProfileSaveService`,
+sibling to `ProfileApplyService` and `ModImportCoordinator` and shaped like them. It claims the
+**profile** exclusively, with the repo lease the import already takes underneath it; it owns the
+gesture's strip entry and its Cancel; it raises the stale-revision and import-problem dialogs through
+the shell's modal host rather than through a page that may be gone by the time they are needed; and
+it reports progress **per version** rather than writing into row view models it does not own.
+
+It had to move. A save belonged to the page that started it, so navigating away disposed the editor
+and its catalog mid-flight: the files finished registering on the background strip, the revision was
+never written, and nothing said so. Phase 13's rule is what settles where the claim goes — a save
+writes a revision of one profile and imports into one repo, and both of those outlive whatever
+started them.
+
+**A save writes what was on screen when Save was pressed.** The request carries the desired pins,
+the baseline, the revision, the label and the pending versions, all taken before the import starts
+rather than read back out of the draft after it. Before that, a row added during an upload was saved
+without having been imported, and a source toggled during one replaced the draft with the server's
+own list — which the save then wrote back as a revision that changed nothing. A scan target arriving
+from a drift notice mid-save now defers its recompose until the save is over.
+
+**Coming back rejoins the save in progress.** An editor built for a profile that is being saved asks
+the service before it asks the server: it draws the draft the service is holding — the server has
+not been told about it yet — marks its rows from the run's own progress, and stays read-only until
+it finishes, at which point it does the post-save reload it would have done anyway. What is retained
+is the draft, not the page instance: keeping the view model alive would need a show/hide lifecycle
+the page has never had, since the notice suppression, the catalog, the games subscription and the
+navigation lock are all acquired on construction and released on dispose, and a retained page holds
+every one of them while somebody is three screens away. The price is the scroll position, the
+selection, the undo bar and the version description.
+
+**A save that finished while you were elsewhere says so.** The strip is enough while it runs. Once
+it is over with no editor there to show the summary, the outcome goes to the notice column — a
+failed import above all, which was previously a modal raised by a page that no longer existed and
+therefore a modal nobody ever saw. The next editor for that profile takes the outcome back and shows
+it as its own summary, so it is said once.
+
+**The editor is read-only while its own profile is being saved, per control rather than per list.**
+`IsEnabled` on a `ListBox` stops the mouse wheel along with everything else, so the flag binds to
+what can change the draft: the row buttons, the selection checkboxes, the version selectors, the
+lock toggles, drag-and-drop and the source chips. The lists, their scrolling and the mod name that
+opens the details dialog stay live — reading is not writing — and so do the search and the filter
+chips, which change the view and nothing else.
+
+**Another profile in the same repo stays editable, and only its save waits.** The refusal is exactly
+as wide as the lease. A draft with nothing pending is a revision write and is safe beside any
+import, so it saves; a draft with mods to import is greyed with the reason named — "3 mods here need
+importing, and 'Co-op' is already importing into this repo". Being unable to write for a few minutes
+is not a reason to be unable to think for a few minutes.
 
 ## Version locking
 
@@ -1059,10 +1254,34 @@ On the management page, "this local version is not registered yet" is the right
 definition, and it needs no version-string parsing at all — a local version either has a server
 counterpart or it does not.
 
-That is separate from the profile editor's question — whether a profile pins an older
-*registered* version than the newest one — which depends on how the server orders versions. See [02 — Domain model](02-domain-model.md#version-ordering): ordering derives from the
-version string, via a comparer the adapter supplies, and is stored in `SequenceNumber` rather
-than recomputed on read.
+That is separate from the profile editor's question — whether anything the enabled sources hold of a
+pinned mod comes *after* what the profile pins — which depends on how versions are ordered. See
+[02 — Domain model](02-domain-model.md#version-ordering): ordering derives from the version string,
+via a comparer the adapter supplies, and once the repo has settled it, it is stored in
+`SequenceNumber` rather than recomputed on read.
+
+**An update is an update whether or not the repo has it yet.** The editor plans against the derived
+partial order over registered and unregistered versions together, not against the registered half
+alone. The version somebody who has just downloaded a mod came here to find is precisely the one the
+repo has not registered, and it used to appear in exactly one place: that row's own version
+dropdown, as "1.2.0 — imports on save". It was in no count, raised no affordance, and did not match
+the **Updates** filter.
+
+Two rules keep that from becoming a guess:
+
+- **The repo still settles ordering.** Registered versions keep their `SequenceNumber`, which is
+  handed to the derivation as fact and never re-derived. Clients on different adapter versions
+  recomputing it would disagree about what an update is, which is the one thing a batch action must
+  not do.
+- **An abstention is not an update.** An unregistered version counts only where the partial order
+  places it unambiguously after the pin. A topological sort has to put every version *somewhere*, so
+  two versions the comparer could not place still come out one after the other — and treating that
+  accidental adjacency as "newer" is how a possible downgrade gets offered as an update. Offering
+  one is worse than saying nothing. The pairs the comparer abstained on are therefore kept beside
+  the order rather than discarded, which is what makes the question answerable at all.
+
+This is the same rule the management page's `IsUpdate` applies against the repo's own newest,
+arrived at from the other end.
 
 The two positions reconcile: an earlier design pass argued against parsing version strings at
 all, because `modDesc/version` is free-form. The settled design parses **best-effort and

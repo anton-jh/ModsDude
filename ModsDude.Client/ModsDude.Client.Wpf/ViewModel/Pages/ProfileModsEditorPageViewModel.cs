@@ -1363,7 +1363,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var run = _saveService.Start(request);
 
-        _watch = run.Watch();
+        // Held in a local as well as in the field, because disposing the page part way through
+        // releases the field - and a finally that then read it would be dropping a handle it no
+        // longer owns rather than its own.
+        var watch = _watch = run.Watch();
 
         run.Advanced += OnRunAdvanced;
 
@@ -1375,7 +1378,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             run.Advanced -= OnRunAdvanced;
 
-            _watch.Dispose();
+            watch.Dispose();
             _watch = null;
         }
     }
@@ -1459,7 +1462,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private async Task RejoinAsync(ProfileSaveRun run)
     {
-        _watch = run.Watch();
+        // A local as well as the field, for the reason SaveChanges keeps one: the page can be
+        // disposed part way through, and the finally must release its own handle rather than
+        // whatever the field is holding by then.
+        var watch = _watch = run.Watch();
 
         run.Advanced += OnRunAdvanced;
 
@@ -1472,7 +1478,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             run.Advanced -= OnRunAdvanced;
 
-            _watch.Dispose();
+            watch.Dispose();
             _watch = null;
         }
     }
