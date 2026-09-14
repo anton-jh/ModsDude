@@ -2226,6 +2226,14 @@ the lists out from under an upload that is already in flight.
       finishes — at which point it does the post-save reload it would have done anyway. Starting a
       save and rejoining one are the same code path from there on, which is what keeps the two from
       disagreeing about what an outcome means.
+
+      **The rejoining page has to be given the versions the save is importing**, which was not
+      obvious until it was built. A rebuilt page starts with every source switched off, so its
+      catalog has never heard of the files going up — and every pending row in the adopted draft
+      would have resolved to the unknown-version placeholder, which reports `IsOnServer: true` and
+      would have had the list claim the repo already holds what is still uploading. The request
+      already carries them, so they are merged into the index alongside the draft's own for exactly
+      the reason the draft's own are.
 - [x] **A save that finished while you were elsewhere says so.** `ProfileSaveRun.Watch` is how a page
       says it is there to show the outcome; a run that finishes unwatched files it instead, and
       `ProfileSaveService.Build` turns it into a notice — Critical for anything that did not save,

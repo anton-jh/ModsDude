@@ -78,6 +78,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private IDisposable? _watch;
 
     /// <summary>
+    /// The versions a save this page rejoined is importing.
+    /// </summary>
+    /// <remarks>
+    /// Merged into the index like the draft's own, because they <em>are</em> the draft's own - and a
+    /// page rebuilt while a save runs has its sources switched off, so nothing else here has any
+    /// record of the files that save is uploading. Without them every pending row in the adopted
+    /// draft would resolve to the unknown-version placeholder, which reports <c>IsOnServer: true</c>
+    /// and would have the list claim the repo already holds what is still going up.
+    /// </remarks>
+    private IReadOnlyList<CatalogModVersion> _adopted = [];
+
+    /// <summary>
     /// Whether the repo's own registered versions are one of the sources the left list is composed
     /// from. On, like a source that is always available, and switched off from the same chip row the
     /// folders use.
@@ -1425,6 +1437,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _basedOn = outcome.Revision;
             _profile.HeadRevision = outcome.Revision;
 
+            // The repo holds them now, and the import invalidated the catalog on its way out - so
+            // the reload below reads them from the registered half, where they belong.
+            _adopted = [];
+
             // It described the save that just happened, not the next one. Left in place it would be
             // carried onto an unrelated edit ten minutes later, which is how a history fills with
             // labels that are quietly wrong.
@@ -1469,10 +1485,28 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         run.Advanced += OnRunAdvanced;
 
+        // Before the catalog is composed, so the pending rows the draft is about to bring in resolve
+        // against the files the save is uploading rather than against a catalog that has never heard
+        // of them.
+        _adopted = run.Request.Pending;
+
+        IsLoading = true;
+
         try
         {
-            await OnUiThreadAsync(() => AdoptDraft(run));
+            var snapshot = await _catalog.GetAsync(_cancellation.Token);
+
+            await OnUiThreadAsync(() =>
+            {
+                Compose(snapshot);
+                AdoptDraft(run);
+            });
+
             await WatchAsync(run.Completion, run.Request);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away while the catalog was still being read.
         }
         finally
         {
@@ -2309,8 +2343,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             }
 
             // Emptied before the index is built rather than after, so a version the outgoing draft
-            // was the only holder of does not survive into the list it is being replaced by.
+            // was the only holder of does not survive into the list it is being replaced by. The
+            // versions a rejoined save contributed go with them: the server's list is the truth
+            // again, and nothing in it is waiting to be uploaded.
             Pinned.Clear();
+
+            _adopted = [];
 
             RebuildSources(snapshot);
             BuildIndex(snapshot);
@@ -2458,8 +2496,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <inheritdoc cref="_versionsByMod" path="/remarks"/>
     private void BuildIndex(ModCatalogSnapshot snapshot)
     {
+        // The catalog first, because it is the fresher record of anything all three know about.
         _versionsByMod = ModVersionIndex.Build(
-            snapshot.Versions.Concat(Pinned.Select(x => x.SelectedVersion.Version)),
+            snapshot.Versions
+                .Concat(_adopted)
+                .Concat(Pinned.Select(x => x.SelectedVersion.Version)),
             _repo.Adapter.VersionComparer);
     }
 
