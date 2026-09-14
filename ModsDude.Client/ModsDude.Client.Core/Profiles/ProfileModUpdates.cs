@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModVersions;
 
 namespace ModsDude.Client.Core.Profiles;
 
@@ -8,11 +9,19 @@ namespace ModsDude.Client.Core.Profiles;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>"Newer" is whatever the repo says it is.</b> Ordering is settled server-side, from the
-/// adapter's comparer and the user's arbitration, and arrives as
-/// <see cref="CatalogModVersion.SequenceNumber"/>. Re-deriving it here would make clients on
-/// different adapter versions disagree about what an update is, which is the one thing a batch
-/// action must not do. See docs/09-mod-catalog.md#a-note-on-update-available.
+/// <b>An update is an update whether or not the repo has it yet.</b> Planning is against the derived
+/// order - <see cref="ModVersionSet"/> - rather than against the registered half alone, because the
+/// version somebody who has just downloaded a mod came here to find is precisely the one the repo has
+/// not registered. Without this it appeared in one place only: the pinned row's own dropdown.
+/// </para>
+/// <para>
+/// <b>The rule that the repo settles ordering is untouched.</b> Registered versions keep their
+/// <see cref="CatalogModVersion.SequenceNumber"/> and are handed to the derivation as fact, so an
+/// ordering the repo has already arbitrated cannot come back as a guess. What the comparer adds is
+/// where the unregistered versions sit, and only where it is sure: a pair it abstained on is not an
+/// update, because offering a possible downgrade as one is worse than saying nothing. That is the
+/// same rule <c>RepoModsPageViewModel.IsUpdate</c> applies against the repo's own newest, arrived at
+/// from the other end. See docs/09-mod-catalog.md#a-note-on-update-available.
 /// </para>
 /// <para>
 /// <b>Locked pins are not candidates at all</b>, rather than candidates the save prompts about.
@@ -26,26 +35,26 @@ public static class ProfileModUpdates
 {
     public static ProfileModUpdatePlan Plan(
         IEnumerable<ProfileModPin> pins,
-        IEnumerable<CatalogModVersion> catalog)
+        IEnumerable<CatalogModVersion> catalog,
+        IModVersionComparer comparer)
     {
-        return Plan(pins, Registered(catalog));
+        return Plan(pins, ModVersionIndex.Build(catalog, comparer));
     }
 
     /// <summary>
-    /// The same, against a set already grouped by <see cref="Registered"/>. An editor replans on
-    /// every toggle, and regrouping a repo's several thousand versions each time would be work the
-    /// catalog has already done.
+    /// The same, against an index the caller already holds. An editor replans on every toggle, and
+    /// re-deriving a repo's several thousand orderings each time would be work it has already done.
     /// </summary>
     public static ProfileModUpdatePlan Plan(
         IEnumerable<ProfileModPin> pins,
-        IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> registered)
+        IReadOnlyDictionary<ModKey, ModVersionSet> versions)
     {
         var available = new List<ProfileModUpdate>();
         var skipped = new List<ProfileModUpdate>();
 
         foreach (var pin in pins)
         {
-            if (FindUpdate(pin, registered) is not ProfileModUpdate update)
+            if (FindUpdate(pin, versions) is not ProfileModUpdate update)
             {
                 continue;
             }
@@ -57,55 +66,55 @@ public static class ProfileModUpdates
     }
 
     /// <summary>
-    /// The newest registered version of one pinned mod, when it is newer than what the pin holds.
+    /// The newest version of one pinned mod that the order places unambiguously after the pin.
     /// </summary>
     /// <remarks>
-    /// A pin whose own version the repo does not hold - one still waiting to be imported - is left
-    /// alone: without a sequence number for it there is nothing to be newer than, and offering an
-    /// "update" from a version that does not exist yet would be a guess.
+    /// Walked from the newest end, so a version the comparer could not place is stepped over rather
+    /// than ending the search: an abstention says nothing about the versions behind it, and the one
+    /// below it may well be settled. The walk stops at the pin, because nothing at or before it can
+    /// be after it.
     /// </remarks>
     public static ProfileModUpdate? FindUpdate(
         ProfileModPin pin,
-        IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> registered)
+        IReadOnlyDictionary<ModKey, ModVersionSet> versions)
     {
-        if (registered.TryGetValue(pin.ModId, out var versions) is false)
+        if (versions.TryGetValue(pin.ModId, out var set) is false)
         {
             return null;
         }
 
-        var current = versions.FirstOrDefault(x => x.VersionId == pin.VersionId);
-
-        if (current is null)
+        for (var index = set.Order.Count - 1; index >= 0; index--)
         {
-            return null;
+            var candidate = set.Order[index];
+
+            if (candidate.VersionId == pin.VersionId)
+            {
+                return null;
+            }
+
+            if (set.IsAfter(candidate.VersionId, pin.VersionId))
+            {
+                return new ProfileModUpdate(pin.ModId, pin.VersionId, candidate.VersionId, pin.Lock)
+                {
+                    ImportsOnSave = candidate.IsOnServer is false
+                };
+            }
         }
 
-        var newest = versions[^1];
-
-        return newest.SequenceNumber > current.SequenceNumber
-            ? new ProfileModUpdate(pin.ModId, pin.VersionId, newest.VersionId, pin.Lock)
-            : null;
-    }
-
-    /// <summary>
-    /// The repo's own versions, oldest first. Unregistered rows are dropped rather than ordered:
-    /// they carry no sequence number, so the repo has not placed them and nothing here may.
-    /// </summary>
-    public static IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> Registered(
-        IEnumerable<CatalogModVersion> catalog)
-    {
-        return catalog
-            .Where(x => x is { IsOnServer: true, SequenceNumber: not null })
-            .GroupBy(x => x.ModId)
-            .ToDictionary(
-                x => x.Key,
-                IReadOnlyList<CatalogModVersion> (x) => [.. x.OrderBy(version => version.SequenceNumber)]);
+        return null;
     }
 }
 
 /// <param name="From">What the profile pins today.</param>
-/// <param name="To">The repo's newest version of the same mod.</param>
-public sealed record ProfileModUpdate(ModKey ModId, ModVersionKey From, ModVersionKey To, ProfileModLock Lock);
+/// <param name="To">The newest version the order places after it.</param>
+public sealed record ProfileModUpdate(ModKey ModId, ModVersionKey From, ModVersionKey To, ProfileModLock Lock)
+{
+    /// <summary>
+    /// Whether taking this update also means uploading a file. Nothing is imported until Save, so
+    /// the two kinds cost differently and the band says the split rather than one total.
+    /// </summary>
+    public bool ImportsOnSave { get; init; }
+}
 
 /// <param name="Available">Unlocked, so "apply all updates" moves them.</param>
 /// <param name="Skipped">
@@ -120,6 +129,12 @@ public sealed record ProfileModUpdatePlan(
 
     /// <summary>Every pin with a newer version, locked or not - what the header counts.</summary>
     public int Count => Available.Count + Skipped.Count;
+
+    /// <summary>Of those, how many a save would have to import first.</summary>
+    public int PendingCount => Available.Count(x => x.ImportsOnSave) + Skipped.Count(x => x.ImportsOnSave);
+
+    /// <summary>What <em>Update all</em> would move without uploading anything.</summary>
+    public int FreeCount => Available.Count(x => x.ImportsOnSave is false);
 
     public bool HasAny => Count > 0;
 }

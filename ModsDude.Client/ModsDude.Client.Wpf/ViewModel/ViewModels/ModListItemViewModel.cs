@@ -106,6 +106,15 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     private bool _isSelectable = true;
 
     /// <summary>
+    /// Whether the checkbox may be clicked. Distinct from <see cref="IsSelectable"/>, which decides
+    /// whether there is a checkbox at all: this one is for a list that still shows what is picked
+    /// while something is being written from it, where the box has to be visible and inert. See
+    /// <c>ProfileModsEditorPageViewModel.IsReadOnly</c>.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPickable = true;
+
+    /// <summary>
     /// The sources the version was found in - the same mod is usually installed in several. Left
     /// unset where naming them would say nothing, such as a single enabled source.
     /// </summary>
@@ -117,6 +126,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
+    [NotifyPropertyChangedFor(nameof(IsUpdateRow))]
     private ModDisplayStatus _status = ModDisplayStatus.None;
 
     /// <summary>
@@ -131,6 +141,13 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
     public bool HasStatus => Status is not ModDisplayStatus.None;
 
+    /// <summary>
+    /// Whether this row would move a pin the profile already has rather than add a new one - which
+    /// is what decides the glyph on its button and where it sorts. Derived from the status so the
+    /// chip and the button cannot disagree about what pressing it does.
+    /// </summary>
+    public bool IsUpdateRow => Status is ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending;
+
     public bool HasSources => string.IsNullOrWhiteSpace(Sources) is false;
 
     public bool HasActions => Actions is not null;
@@ -138,7 +155,10 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public string StatusText => Status switch
     {
         ModDisplayStatus.New => "New",
-        ModDisplayStatus.UpdateAvailable => "Update",
+        // Two fills, one word: what the row says about this profile is the same either way, and
+        // which of the two it is is what the colour carries.
+        ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
+        ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
         ModDisplayStatus.PendingRemoval => "Taken out",
         _ => string.Empty
@@ -301,6 +321,26 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </remarks>
     public bool Matches(string? searchTerm)
         => FuzzySearch.Matches(searchTerm, Name, Id, Author);
+
+    /// <summary>
+    /// Whether two records of one version would draw the same row.
+    /// </summary>
+    /// <remarks>
+    /// Everything this row renders, and nothing else - a differing description is invisible here, a
+    /// second occurrence or a newly published image is not. It is what lets a list rebuilt from a
+    /// freshly composed catalog keep the rows it already has, which is worth having because building
+    /// a new one throws away a loaded thumbnail and the flag saying the user had picked it.
+    /// </remarks>
+    public static bool RendersTheSame(CatalogModVersion left, CatalogModVersion right)
+        => ReferenceEquals(left, right)
+        || (left.Identity == right.Identity
+            && left.Name == right.Name
+            && left.IsOnServer == right.IsOnServer
+            && left.IsLocal == right.IsLocal
+            && left.Locked == right.Locked
+            && left.SequenceNumber == right.SequenceNumber
+            && left.FoundIn.Count == right.FoundIn.Count
+            && left.ServerImages.Count == right.ServerImages.Count);
 
     /// <summary>
     /// Reads the icon the first time the row is shown. Everything here stays cold until then - with

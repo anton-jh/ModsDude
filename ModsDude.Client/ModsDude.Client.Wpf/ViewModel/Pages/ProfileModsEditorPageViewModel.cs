@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Helpers;
@@ -59,7 +60,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileDto _profile;
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
-    private readonly ModImportCoordinator _imports;
+    private readonly ProfileSaveService _saveService;
     private readonly IModDependenciesClient _dependenciesClient;
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
@@ -70,28 +71,57 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly DriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
+    private readonly IResourceLeases _leases;
     private readonly ActiveProfile _activeProfile;
 
+    /// <summary>Held for as long as this page is drawing a save. See <see cref="ProfileSaveRun.Watch"/>.</summary>
+    private IDisposable? _watch;
+
     /// <summary>
-    /// Whether the repo's own registered versions are in the left list. On, like a source that is
-    /// always available, and switched off from the same checkbox list the folders use.
+    /// Whether the repo's own registered versions are one of the sources the left list is composed
+    /// from. On, like a source that is always available, and switched off from the same chip row the
+    /// folders use.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>A filter over the catalog, never a change to it.</b> The pinned rows and every row's version
     /// selector are built from the same snapshot, and a profile pins registered versions - so dropping
     /// them from the catalog would turn every pinned row into an unresolvable placeholder. It is the
-    /// left list's <em>view</em> that hides them, which is why unticking this is instant and costs no
-    /// round trip.
+    /// left list's own composition that leaves them out, which is why unticking this is instant and
+    /// costs no round trip.
     /// </para>
     /// <para>
-    /// <b>What it is for</b> is the question the left list could not answer: with the repo off and a
-    /// folder on, what is left is exactly the mods on this computer that this repo has never
-    /// registered - which is the set somebody adding new things to a profile is looking for, and which
-    /// was previously buried among a few thousand rows the repo already had.
+    /// <b>What it is for</b> is the question the left list could not answer: with the repo off, what
+    /// is left is exactly what the other enabled sources hold - the folders on this computer, or
+    /// another profile's list - which is the set somebody adding new things to a profile is looking
+    /// for, and which was previously buried among a few thousand rows the repo already had.
     /// </para>
     /// </remarks>
     private bool _includeRegistered = true;
+
+    /// <summary>
+    /// The other profiles in this repo that are being read as sources, in the order they were added.
+    /// </summary>
+    /// <remarks>
+    /// View-scoped like an ad-hoc folder, and composed here rather than by
+    /// <see cref="ModCatalog"/> - a profile's pins are registered versions by foreign key, so the
+    /// catalog already holds every one of them and there is nothing to scan.
+    /// </remarks>
+    private readonly List<ProfileModSource> _profileSources = [];
+
+    /// <summary>
+    /// Every version the enabled sources offer between them: what the repo has registered while its
+    /// chip is on, whatever the enabled folders hold, and whatever the enabled profiles pin. This is
+    /// what the left list is composed from, one row per mod.
+    /// </summary>
+    private HashSet<ModVersionIdentity> _offered = [];
+
+    /// <summary>
+    /// The same, by mod. What <see cref="PinnedModFilter.NotInSources"/> reads, which is a question
+    /// about the mod rather than the version: a mod the other profile holds at a different version is
+    /// an update, not a removal, and the left list already says so.
+    /// </summary>
+    private HashSet<ModKey> _offeredMods = [];
 
     private readonly CancellationTokenSource _cancellation = new();
 
@@ -102,13 +132,31 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private bool _skipApplyOnce;
 
-    /// <summary>Every known version of every known mod, oldest first, per mod.</summary>
-    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> _versionsByMod =
-        new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+    /// <summary>
+    /// A recompose that arrived while a save was running, held until it is over.
+    /// </summary>
+    /// <remarks>
+    /// A save writes what was on screen when Save was pressed, and the rows the import reports into
+    /// are the ones that were there then - so rebuilding the lists under it would both replace those
+    /// rows and change what the page would be read back as. The one caller that can do this without
+    /// the user touching anything is a drift notice clicked while the save runs.
+    /// </remarks>
+    private bool _recomposeWhenSaved;
 
-    /// <summary>The same set, restricted to what the repo holds - the only thing "newer" may read.</summary>
-    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> _registered =
-        new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+    /// <summary>
+    /// Every known version of every known mod, ordered per mod, with the pairs nothing settled kept
+    /// beside them.
+    /// </summary>
+    /// <remarks>
+    /// <b>The union of the catalog and what the draft is pinning.</b> A pending row whose source has
+    /// just been switched off keeps its pin, keeps the occurrence that names the file on disk, stays
+    /// reported as pending and still imports on save - because its version is still in here.
+    /// Disabling a source is a statement about what is <em>looked at</em>, never about what exists.
+    /// Without this the row degraded to a placeholder, which reports <c>IsOnServer: true</c> and
+    /// would have the save write a dependency on a version the repo does not hold.
+    /// </remarks>
+    private IReadOnlyDictionary<ModKey, ModVersionSet> _versionsByMod =
+        new Dictionary<ModKey, ModVersionSet>();
 
     /// <summary>What the profile held when it was last read from the server. Save diffs against it.</summary>
     private IReadOnlyList<ProfileModPin> _original = [];
@@ -123,8 +171,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private IReadOnlyList<ModListItemViewModel> _available = [];
     private ProfileModUpdatePlan _updates = ProfileModUpdatePlan.Empty;
 
-    /// <summary>What the left list has to hide, kept as a set because it is asked once per row.</summary>
+    /// <summary>What mods the profile holds, kept as a set because it is asked once per row.</summary>
     private HashSet<ModKey> _pinnedIds = [];
+
+    /// <summary>
+    /// Which version of each of them, which is what the left list actually hides.
+    /// </summary>
+    /// <remarks>
+    /// <b>The hide rule is about versions, not mods.</b> A new version of a pinned mod is not in this
+    /// profile, whatever else is - so it belongs on the left, where its row's verb is a version
+    /// change rather than an add.
+    /// </remarks>
+    private Dictionary<ModKey, ModVersionKey> _pinnedVersions = [];
 
     /// <summary>
     /// Mods the profile still holds on the server and this draft does not - taken out, and waiting
@@ -160,7 +218,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ProfileDto profile,
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
-        ModImportCoordinator imports,
+        ProfileSaveService saveService,
         IModDependenciesClient dependenciesClient,
         IProfilesClient profilesClient,
         IModalService modalService,
@@ -170,12 +228,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         DriftMonitor driftMonitor,
-        NoticeCenterViewModel notices)
+        NoticeCenterViewModel notices,
+        IResourceLeases leases)
     {
+        _leases = leases;
         _repo = repo;
         _profile = profile;
         _itemFactory = itemFactory;
-        _imports = imports;
+        _saveService = saveService;
         _dependenciesClient = dependenciesClient;
         _profilesClient = profilesClient;
         _modalService = modalService;
@@ -207,7 +267,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // Both lists get the same selection, because taking mods out of a profile has to be as
         // cheap as putting them in - the two are the same job seen from opposite sides, and a page
         // that made one of them a per-row click would just move the tedium rather than remove it.
-        AvailableSelection = new ModListSelection(() => AvailableView, () => _available, AddRows, "Add");
+        AvailableSelection = new ModListSelection(() => AvailableView, () => _available, AddRows, "Add", DescribeAdd);
         PinnedSelection = new ModListSelection(() => PinnedView, PinnedRows, RemoveRows, "Take out");
 
         AvailableSelection.Changed += OnSelectionChanged;
@@ -221,6 +281,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // The one place the app-level drift notice is suppressed: somebody already looking at the
         // drifted profile's mod list does not need to be told about it.
         _notices.SuppressFor(_activeProfile);
+
+        // A save into this repo blocking this page's own is a fact about the world, so the button
+        // re-asks whenever a lease moves rather than only when the draft does.
+        _leases.Changed += OnLeasesChanged;
+
+        // A save that finished while nobody was looking left its outcome behind. Shown here rather
+        // than in the notice column, which is where it went precisely because there was no editor.
+        if (_saveService.TakeUnreported(profile.Id) is ProfileSaveOutcome unreported)
+        {
+            SaveSummary = unreported.Message;
+            ApplyStatus = unreported.ApplyMessage;
+        }
     }
 
 
@@ -317,12 +389,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PendingText))]
     [NotifyPropertyChangedFor(nameof(HasPending))]
+    [NotifyPropertyChangedFor(nameof(CanImportHere))]
+    [NotifyPropertyChangedFor(nameof(SaveBlockedReason))]
+    [NotifyPropertyChangedFor(nameof(HasSaveBlockedReason))]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     private int _pendingCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpdateCountText))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     private int _updateCount;
+
+    /// <summary>
+    /// How many of those a save would have to import first, which is the other half of the band's
+    /// sentence. Counted apart because the two cost differently: one is a pin moving and the other is
+    /// a file going up.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    private int _pendingUpdateCount;
+
+    /// <summary>What <em>Update all</em> would move without uploading anything.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateRepoOnlyText))]
+    [NotifyPropertyChangedFor(nameof(HasRepoOnlyUpdates))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyRepoUpdatesCommand))]
+    private int _freeUpdateCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SkippedText))]
@@ -333,8 +426,26 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ApplyUpdatesText))]
+    [NotifyPropertyChangedFor(nameof(HasRepoOnlyUpdates))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     private int _applicableUpdateCount;
+
+    /// <summary>
+    /// Whether any source at all is being read. The left list is composed from them, so with none
+    /// enabled it is empty by construction - and the chip row above it is the one control that
+    /// explains that, which is why nothing hides it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasEnabledSources = true;
+
+    /// <summary>
+    /// Whether any <em>folder</em> is being read, which is a different question and the one the
+    /// updates band has to answer at zero: an on-disk update only exists while its folder's chip is
+    /// on, so "no updates" with nothing being scanned would be claiming to have looked.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    private bool _hasEnabledFolders;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
@@ -361,7 +472,31 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopSavingCommand))]
+    private bool _isSaving;
+
+    /// <summary>
+    /// Whether nothing on this page may change the draft, because this profile is being saved.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Per control rather than per list.</b> <c>IsEnabled</c> on a <see cref="System.Windows.Controls.ListBox"/>
+    /// stops the mouse wheel along with everything else, so this binds to what can actually change
+    /// the draft: the row buttons, the selection checkboxes, the version selectors, the lock toggles,
+    /// drag-and-drop and the source chips. The lists, their scrolling and the mod name that opens the
+    /// details dialog stay live - reading is not writing - and so do the search and the filter chips,
+    /// which change the view and nothing else.
+    /// </para>
+    /// <para>
+    /// <b>Not the same as <see cref="IsSaving"/>.</b> The save belongs to the profile rather than to
+    /// this page, so an editor built for a profile a save is already running on comes up read-only
+    /// without having started anything.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanEdit))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyRepoUpdatesCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAllShownNewCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestoreRemovedCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveAllShownCommand))]
@@ -372,7 +507,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(UpdateSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyFromProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(PasteListCommand))]
-    private bool _isSaving;
+    [NotifyCanExecuteChangedFor(nameof(RescanAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddProfileSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
+    private bool _isReadOnly;
 
     /// <summary>What the last save did, kept until something changes again.</summary>
     [ObservableProperty]
@@ -432,6 +574,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         "Saves the profile but leaves your installed mods untouched. Your locked mods stay at the versions " +
         "the game updated them to. Only if you know exactly what you are doing.";
 
+    /// <summary>
+    /// What every control that can change the draft binds its <c>IsEnabled</c> to. The inverse of
+    /// <see cref="IsReadOnly"/>, said the way a view has to say it.
+    /// </summary>
+    public bool CanEdit => IsReadOnly is false;
+
     public bool HasPinnedMods => PinnedCount > 0;
 
     /// <summary>
@@ -472,16 +620,38 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         : $"{PendingCount} mods will be imported when you save";
 
     /// <summary>
-    /// Reads at zero as well as above it. The section it heads is always on screen, so "none" is an
-    /// answer it has to be able to give - and it is the answer someone who came here to check for
-    /// updates was looking for.
+    /// Both kinds of update, and the split between them.
     /// </summary>
-    public string UpdateCountText => UpdateCount switch
+    /// <remarks>
+    /// <para>
+    /// <b>Reads at zero as well as above it.</b> The section it heads is always on screen, so "none"
+    /// is an answer it has to be able to give - and it is the answer someone who came here to check
+    /// for updates was looking for.
+    /// </para>
+    /// <para>
+    /// <b>And is honest there.</b> An on-disk update only exists while its folder's chip is on, so
+    /// with no folder being read "no updates available" would be claiming to have looked. It says
+    /// what it actually checked instead.
+    /// </para>
+    /// </remarks>
+    public string UpdateCountText
     {
-        0 => "No updates available",
-        1 => "1 update available",
-        _ => $"{UpdateCount} updates available"
-    };
+        get
+        {
+            if (UpdateCount == 0)
+            {
+                return HasEnabledFolders
+                    ? "No updates available"
+                    : "No updates in this repo. No folders are being read.";
+            }
+
+            var text = UpdateCount == 1 ? "1 update available" : $"{UpdateCount} updates available";
+
+            return PendingUpdateCount > 0
+                ? $"{text} · {PendingUpdateCount} will be imported when you save"
+                : text;
+        }
+    }
 
     public string ApplyUpdatesText => ApplicableUpdateCount switch
     {
@@ -489,6 +659,22 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         1 => "Update 1 mod",
         _ => $"Update {ApplicableUpdateCount} mods"
     };
+
+    /// <inheritdoc cref="ApplyRepoUpdates"/>
+    public string UpdateRepoOnlyText => FreeUpdateCount == 1
+        ? "Update the 1 already in the repo"
+        : $"Update the {FreeUpdateCount} already in the repo";
+
+    public string UpdateRepoOnlyDescription =>
+        "Moves only the pins whose newer version this repo already holds, so nothing is uploaded.";
+
+    /// <summary>
+    /// Whether the caret has anything to offer that the button beside it does not. Its own condition
+    /// rather than the primary's, unlike the save split: there can be a free half of a mixed set and
+    /// there can equally be none, and a caret over a menu that says the same thing as the button is
+    /// an invitation to nothing.
+    /// </summary>
+    public bool HasRepoOnlyUpdates => FreeUpdateCount > 0 && FreeUpdateCount < ApplicableUpdateCount;
 
     /// <summary>
     /// A link rather than a footnote: it opens the same dialog the per-row change opens, reached
@@ -499,15 +685,42 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     #region Moving mods between the lists
 
+    /// <summary>
+    /// One row's verb, which depends on what the profile already has of that mod: a mod it does not
+    /// hold is pinned, and a mod it holds at another version is moved to this one.
+    /// </summary>
+    /// <remarks>
+    /// The move goes through the same confirmation the version selector does, because it is the same
+    /// act - a locked pin has to be asked about before it moves, whichever control moved it.
+    /// </remarks>
     [RelayCommand]
-    private void Add(ModListItemViewModel? row)
+    private async Task Add(ModListItemViewModel? row)
     {
-        if (row is null || Pinned.Any(x => x.ModId == row.Mod.ModId))
+        if (row is null)
         {
             return;
         }
 
-        Pin(row);
+        if (FindPinned(row.Mod.ModId) is not ProfileModRowViewModel existing)
+        {
+            Pin(row);
+
+            return;
+        }
+
+        if (existing.Versions.FirstOrDefault(x => x.Version.VersionId == row.Mod.VersionId)
+            is not ProfileModVersionOption option
+            || option.Version.VersionId == existing.SelectedVersion.Version.VersionId)
+        {
+            return;
+        }
+
+        if (existing.IsLocked && await ConfirmLockedVersionChangeAsync(existing, option) is false)
+        {
+            return;
+        }
+
+        existing.SetVersion(option.Version.VersionId);
     }
 
     /// <summary>
@@ -517,30 +730,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private void Pin(ModListItemViewModel row)
     {
-        var versions = _versionsByMod.TryGetValue(row.Mod.ModId, out var known) ? known : [row.Mod];
-
         // Moving a mod across always drops it from the selection it was moved out of - including
         // when it was moved by its own button - so the left list is never left holding a picked row
         // that is no longer in it.
         row.IsSelected = false;
 
-        Pinned.Add(CreatePinnedRow(versions, row.Mod, lockedByProfile: false));
+        Pinned.Add(CreatePinnedRow(VersionsFor(row.Mod), row.Mod, LockedByProfileSource(row.Mod.Identity)));
     }
 
     /// <summary>
-    /// Every mod the left list is showing that this draft has not just taken out, so the search and
-    /// the filter together are how a subset is picked. Putting a removal back is
-    /// <see cref="RestoreRemoved"/>: it is an undo, and it has a version and a lock to restore rather
-    /// than a default to pick.
+    /// Every mod the left list is showing that this profile has never held, so the search and the
+    /// filter together are how a subset is picked.
     /// </summary>
+    /// <remarks>
+    /// <b>Adding and upgrading are kept apart.</b> The rows that would move a pin this profile
+    /// already has are excluded here and counted out of <see cref="NewCount"/> with them: a bulk add
+    /// that silently moved pins would be a different act under the same label. Putting a removal back
+    /// is <see cref="RestoreRemoved"/>, which is an undo with a version and a lock to restore rather
+    /// than a default to pick.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanAddAllShownNew))]
     private void AddAllShownNew()
     {
         RunBulk(() =>
         {
-            // Passes already excludes what is pinned, and the left list holds one row per mod, so
-            // nothing here can collide and none of it needs re-checking.
-            var rows = _available.Where(x => Passes(x) && IsPendingRemoval(x) is false).ToList();
+            // The left list holds one row per mod, so nothing here can collide and none of it needs
+            // re-checking.
+            var rows = _available.Where(IsShownAndNew).ToList();
 
             foreach (var row in rows)
             {
@@ -551,7 +767,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         });
     }
 
-    private bool CanAddAllShownNew() => NewCount > 0 && IsSaving is false;
+    /// <summary>
+    /// What a bulk add would take: shown, never held by this profile, and not one of its own
+    /// removals waiting to be written.
+    /// </summary>
+    private bool IsShownAndNew(ModListItemViewModel row)
+        => Passes(row)
+        && IsPendingRemoval(row) is false
+        && _pinnedIds.Contains(row.Mod.ModId) is false;
+
+    private bool CanAddAllShownNew() => NewCount > 0 && IsReadOnly is false;
 
     /// <summary>
     /// Takes out everything the right list is showing. The counterpart of <see cref="AddAllShownNew"/>
@@ -564,7 +789,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         RunBulk(() => Describe("Took out", RemoveMany(Pinned.Where(PassesPinned))));
     }
 
-    private bool CanRemoveAllShown() => PinnedVisibleCount > 0 && IsSaving is false;
+    private bool CanRemoveAllShown() => PinnedVisibleCount > 0 && IsReadOnly is false;
 
     /// <summary>
     /// Puts back everything this draft has taken out, at the version and lock the profile still holds
@@ -588,13 +813,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         });
     }
 
-    private bool CanRestoreRemoved() => RemovalCount > 0 && IsSaving is false;
+    private bool CanRestoreRemoved() => RemovalCount > 0 && IsReadOnly is false;
 
 
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void AddSelected() => AddRows(AvailableSelection.Picked());
 
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void RemoveSelected() => RemoveRows(PinnedSelection.Picked());
 
     /// <summary>
@@ -606,29 +831,104 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// is the whole point of a selection that outlives the search, and why the bar above says how
     /// many of them are off screen and offers to put those down.
     /// </remarks>
+    /// <remarks>
+    /// <b>Two moves under one button.</b> Since the left list is about versions, a picked row can be
+    /// a mod the profile has never held or a newer version of one it holds - so this adds the first
+    /// kind and moves the pin for the second, and says which it did how many of. Locked pins are left
+    /// alone and counted, exactly as the batch update leaves them: a lock is not a question a
+    /// selection gets to answer.
+    /// </remarks>
     private void AddRows(IReadOnlyList<ISelectableRow> rows)
     {
         RunBulk(() =>
         {
-            // A picked row may have been added by its own button in the meantime, so this does have
-            // to be checked - once, against a set, rather than by re-scanning the draft per row.
-            var pinned = new HashSet<ModKey>(Pinned.Select(x => x.ModId));
+            // A picked row may have been moved by its own button in the meantime, so the draft is
+            // read once into a lookup rather than re-scanned per row.
+            var pinned = Pinned.ToDictionary(x => x.ModId);
             var added = 0;
+            var updated = 0;
+            var locked = 0;
 
             foreach (var row in rows.OfType<ModListItemViewModel>())
             {
-                if (pinned.Add(row.Mod.ModId))
+                if (pinned.TryGetValue(row.Mod.ModId, out var existing) is false)
                 {
                     Pin(row);
 
+                    pinned[row.Mod.ModId] = Pinned[^1];
                     added++;
+                }
+                else if (existing.SelectedVersion.Version.VersionId == row.Mod.VersionId)
+                {
+                    // Nothing to do - the row is showing the very version the profile is on.
+                }
+                else if (existing.IsLocked)
+                {
+                    locked++;
+                }
+                else
+                {
+                    existing.SetVersion(row.Mod.VersionId);
+
+                    updated++;
                 }
 
                 row.IsSelected = false;
             }
 
-            return Describe("Added", added);
+            return DescribeMoves(added, updated, locked);
         });
+    }
+
+    /// <summary>What a mixed bulk move turned out to do, or null for one that did nothing.</summary>
+    private static string? DescribeMoves(int added, int updated, int locked)
+    {
+        var text = (Describe("Added", added), Describe("Updated", updated)) switch
+        {
+            (null, null) => null,
+            (string adds, null) => adds,
+            (null, string updates) => updates,
+            (string adds, string updates) => $"{adds} and updated {updated}"
+        };
+
+        return (text, locked) switch
+        {
+            (null, 0) => null,
+            (null, var left) => $"Nothing moved - {Locked(left)}",
+            (var moved, 0) => moved,
+            (var moved, var left) => $"{moved}, {Locked(left)}"
+        };
+    }
+
+    /// <summary>
+    /// What the left list's selection bar says its button will do. Two verbs rather than one,
+    /// because a selection spanning both kinds of row does both - and "Add 15 mods" over a set that
+    /// would move three pins is a label that lies about what pressing it does.
+    /// </summary>
+    private string DescribeAdd(IReadOnlyList<ISelectableRow> picked)
+    {
+        var adds = 0;
+        var updates = 0;
+
+        foreach (var row in picked.OfType<ModListItemViewModel>())
+        {
+            if (_pinnedIds.Contains(row.Mod.ModId))
+            {
+                updates++;
+            }
+            else
+            {
+                adds++;
+            }
+        }
+
+        return (adds, updates) switch
+        {
+            (0, 0) => "Add",
+            (_, 0) => adds == 1 ? "Add 1 mod" : $"Add {adds} mods",
+            (0, _) => updates == 1 ? "Update 1 mod" : $"Update {updates} mods",
+            _ => $"Add {adds} and update {updates}"
+        };
     }
 
     private void RemoveRows(IReadOnlyList<ISelectableRow> rows)
@@ -784,7 +1084,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _ => $"{verb} {count} mods"
     };
 
-    private bool NotSaving() => IsSaving is false;
+    /// <summary>
+    /// What everything that can change the draft asks. Read-only rather than "not saving", because
+    /// the save that locks this page may have been started by a page that no longer exists - see
+    /// <see cref="IsReadOnly"/>.
+    /// </summary>
+    private bool NotReadOnly() => IsReadOnly is false;
 
     #endregion
 
@@ -797,13 +1102,32 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// contain an unintended version change and needs no prompt at all.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanApplyAllUpdates))]
-    private void ApplyAllUpdates()
+    private void ApplyAllUpdates() => ApplyUpdates(_updates.Available);
+
+    private bool CanApplyAllUpdates() => ApplicableUpdateCount > 0 && IsReadOnly is false;
+
+    /// <summary>
+    /// The half of the same move that costs no upload, one click further in than the primary.
+    /// </summary>
+    /// <remarks>
+    /// Behind the caret rather than beside it because the common errand is catching up to everything
+    /// that is newer, wherever the file happens to be; this is for somebody who does not want to
+    /// spend an upload right now. The caret carries its own enabled condition and appears only where
+    /// the two counts genuinely differ - a menu offering the same thing as the button beside it is a
+    /// menu nobody needs to open.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanApplyRepoUpdates))]
+    private void ApplyRepoUpdates() => ApplyUpdates([.. _updates.Available.Where(x => x.ImportsOnSave is false)]);
+
+    private bool CanApplyRepoUpdates() => FreeUpdateCount > 0 && IsReadOnly is false;
+
+    private void ApplyUpdates(IReadOnlyList<ProfileModUpdate> updates)
     {
         RunBulk(() =>
         {
             var moved = 0;
 
-            foreach (var update in _updates.Available)
+            foreach (var update in updates)
             {
                 if (FindPinned(update.ModId) is ProfileModRowViewModel row)
                 {
@@ -817,14 +1141,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         });
     }
 
-    private bool CanApplyAllUpdates() => ApplicableUpdateCount > 0 && IsSaving is false;
-
     /// <summary>
     /// The same move, over the picked rows instead of over all of them. Locked mods are left alone
     /// here as they are in the batch action - a lock is not a question the selection gets to answer -
     /// and the count of what was skipped goes into what the undo bar says happened.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void UpdateSelected()
     {
         RunBulk(() =>
@@ -861,10 +1183,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         });
     }
 
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void LockSelected() => SetLockOnSelected(true);
 
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void UnlockSelected() => SetLockOnSelected(false);
 
     /// <summary>
@@ -951,6 +1273,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// Carries why the mod is locked, because that is the part that decides the answer - and words
     /// the profile lock as being about this profile, which is the only scope it has.
     /// </summary>
+    /// <remarks>
+    /// <b>The question is about the mod, not about the profile.</b> It used to ask whether to "move
+    /// this profile to version X", which names the wrong subject - a profile is not the thing that
+    /// moves - and reads as a change to the whole list. It is also reached from the version selector,
+    /// where the target may well be older than the pin, so the verb has to be one that covers both
+    /// directions.
+    /// </remarks>
     private async Task<bool> ConfirmLockedVersionChangeAsync(ProfileModRowViewModel row, ProfileModVersionOption target)
     {
         var reason = row.Lock.Source switch
@@ -969,7 +1298,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             "This mod is locked",
             $"'{row.Name}' is pinned at {row.SelectedVersion.Version.VersionId} and locked.\n\n"
                 + $"{reason}\n\n"
-                + $"Move this profile to {target.Version.VersionId}?",
+                + $"Change '{row.Name}' to {target.Version.VersionId} in this profile?",
             IconKind.Warning,
             "Change the version",
             "Leave it alone");
@@ -985,122 +1314,235 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #region Saving
 
     /// <summary>
-    /// Imports whatever is pending, then writes the dependencies, then re-applies - in that order,
-    /// because a mod is never registered before its file is in storage and a dependency can only
-    /// name a registered version.
+    /// Hands the save to <see cref="ProfileSaveService"/> and watches it.
     /// </summary>
     /// <remarks>
-    /// <b>An import that does not fully succeed stops the save.</b> The steps after it are written
-    /// against the mods the repo now holds, so carrying on with a short list quietly turns "these
-    /// files failed to upload" into a profile that never mentions them and an apply that treats them
-    /// as unrecognised - which sends the very files the user was importing to the Recycle Bin, one
-    /// confirmation click away. Nothing downstream can tell that apart from a folder full of junk,
-    /// so the only place it can be caught is here, before anything is written.
+    /// <para>
+    /// <b>The whole of the save moved out.</b> Import, revision, re-apply and drift check belong to
+    /// the profile rather than to this page: navigating away used to dispose the page and its catalog
+    /// mid-flight, and the files finished registering while the revision was never written and
+    /// nothing said so. What is left here is the snapshot, the marks on the rows and the sentence
+    /// afterwards.
+    /// </para>
+    /// <para>
+    /// <b>The snapshot is taken before the import rather than re-read from the draft after it</b>, so
+    /// a row added during an upload is not saved without having been imported and a source toggled
+    /// during one cannot replace what is being written.
+    /// </para>
     /// </remarks>
-    [RelayCommand(CanExecute = nameof(CanSave), IncludeCancelCommand = true)]
-    private async Task SaveChanges(CancellationToken cancellationToken)
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private async Task SaveChanges()
     {
         // Read and cleared here, so the decision cannot outlive the save that carried it.
         var apply = _skipApplyOnce is false;
         _skipApplyOnce = false;
 
-        IsSaving = true;
+        var pending = Pinned.Where(x => x.IsPending).ToList();
+
+        foreach (var row in pending)
+        {
+            row.Item.ResetImportState();
+        }
+
+        var request = new ProfileSaveRequest(
+            _repo,
+            _profile.Id,
+            _profile.Name,
+            _basedOn,
+            VersionDescription,
+            _original,
+            [.. Pinned.Select(x => x.Pin)],
+            [.. pending.Select(x => x.SelectedVersion.Version)],
+            pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Name),
+            _catalog,
+            apply);
+
         SaveSummary = null;
         ApplyStatus = null;
         ActivationOffer = null;
 
+        var run = _saveService.Start(request);
+
+        _watch = run.Watch();
+
+        run.Advanced += OnRunAdvanced;
+
         try
         {
-            var import = await ImportPendingAsync(cancellationToken);
+            await WatchAsync(run.Completion, request);
+        }
+        finally
+        {
+            run.Advanced -= OnRunAdvanced;
 
-            var unfinished = Pinned
-                .Count(x => x.IsPending && import.Imported.Contains(x.SelectedVersion.Version.Identity) is false);
+            _watch.Dispose();
+            _watch = null;
+        }
+    }
 
-            if (unfinished > 0)
+    private bool CanSave() => HasUnsavedChanges && IsReadOnly is false && CanImportHere;
+
+    /// <summary>
+    /// Follows one save to its end and reports it, whether this page started it or found it already
+    /// running.
+    /// </summary>
+    /// <remarks>
+    /// The page is read-only for the whole of it, and what it does afterwards depends only on the
+    /// outcome - which is what makes rejoining a save in progress the same code path as starting one.
+    /// </remarks>
+    private async Task WatchAsync(Task<ProfileSaveOutcome> completion, ProfileSaveRequest request)
+    {
+        IsSaving = true;
+        IsReadOnly = true;
+
+        try
+        {
+            var outcome = await completion;
+
+            SaveSummary = outcome.Message;
+            ApplyStatus = outcome.ApplyMessage;
+
+            if (outcome.Succeeded is false)
             {
-                await StopAtFailedImportAsync(unfinished, import.Problems);
+                // Deliberately not reloaded, and the baseline deliberately not moved on. A reload
+                // rebuilds both lists from the server, and the rows that could not be imported are
+                // not on the server - they would vanish from the profile without the user being told
+                // which ones, having just been told that something went wrong. Leaving the draft
+                // where it is also keeps it unsaved, so Save stays enabled and pressing it again once
+                // the cause is fixed is the whole recovery path.
+                Recount();
+
+                // Now that every row carries its outcome, and only now: what could not be imported
+                // comes to the top, where the dialog's list can be matched against it.
+                PinnedView.Refresh();
 
                 return;
             }
 
-            var desired = Pinned
-                .Select(x => x.Pin)
-                .ToList();
+            _basedOn = outcome.Revision;
+            _profile.HeadRevision = outcome.Revision;
 
-            var changes = ProfileModListDiff.Compute(_original, desired);
-
-            if (await SaveRevisionAsync(desired, cancellationToken) is false)
-            {
-                return;
-            }
-
-            // What the profile holds now, so that anything left over is the only thing still unsaved.
-            _original = desired;
-
-            // The revision is written, so the import that fed it is finally paid for and the copies
-            // the user chose against can go. Not one line earlier: everything above this can still
-            // return without saving, and a file removed for a revision that never existed is gone
-            // for nothing.
-            _imports.RecycleSuperseded(import.Superseded);
+            // It described the save that just happened, not the next one. Left in place it would be
+            // carried onto an unrelated edit ten minutes later, which is how a history fills with
+            // labels that are quietly wrong.
+            VersionDescription = "";
 
             await ReloadAsync();
 
-            SaveSummary = Describe(changes);
-
-            if (apply)
+            if (request.Apply && outcome.ApplyMessage is null)
             {
-                await ApplyToTargetsAsync(cancellationToken);
+                OfferActivation();
             }
-            else
-            {
-                ApplyStatus = "Saved without applying. Your installed mods are untouched.";
-            }
-
-            // Unconditionally, and after both branches. A save mints a revision, and every folder
-            // built against the previous one is drifted from this moment - including when the save
-            // did not apply, which is precisely the case where the drift is real and nothing else
-            // would have looked. Without this the notice waited for the next window activation, so
-            // somebody who saved and went straight back to the game never saw it.
-            await _driftMonitor.CheckAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            SaveSummary = "Save stopped. Anything already registered stayed registered.";
         }
         finally
         {
             IsSaving = false;
+            IsReadOnly = false;
+
+            if (_recomposeWhenSaved)
+            {
+                _recomposeWhenSaved = false;
+
+                await RecomposeAsync();
+            }
         }
     }
 
-    private bool CanSave() => HasUnsavedChanges && IsSaving is false;
-
     /// <summary>
-    /// Leaves the save where the import stopped it: nothing written to the profile, nothing applied,
-    /// every row that did not make it still pending and marked, and the dialog that says why.
+    /// Rejoins a save that was already running when this page was built, and does the post-save
+    /// reload it would have done anyway once it finishes.
     /// </summary>
     /// <remarks>
-    /// Deliberately not reloaded, and the original list deliberately not moved on. A reload rebuilds
-    /// both lists from the server, and the rows that could not be imported are not on the server -
-    /// they would vanish from the profile without the user being told which ones, having just been
-    /// told that something went wrong. Leaving the draft where it is also keeps it unsaved, so Save
-    /// stays enabled and pressing it again once the cause is fixed is the whole recovery path.
+    /// The draft is the service's snapshot rather than the server's list, because the server has not
+    /// been told about it yet. The marks come from the run's own progress, so an editor that opens
+    /// half way through an upload shows where the upload has got to rather than a blank list.
     /// </remarks>
-    private async Task StopAtFailedImportAsync(int unfinished, ErrorDialogViewModel? problems)
+    private async Task RejoinAsync(ProfileSaveRun run)
     {
-        Recount();
+        _watch = run.Watch();
 
-        // Now that every row carries its outcome, and only now: what could not be imported comes to
-        // the top, where the dialog's list can be matched against it.
-        PinnedView.Refresh();
+        run.Advanced += OnRunAdvanced;
 
-        // One line, because the dialog carries the reasons and this is only what is left on the page
-        // once it has been dismissed.
-        SaveSummary = $"{unfinished} could not be imported, so nothing was saved.";
-
-        if (problems is not null)
+        try
         {
-            await _modalService.Show(problems);
+            await OnUiThreadAsync(() => AdoptDraft(run));
+            await WatchAsync(run.Completion, run.Request);
+        }
+        finally
+        {
+            run.Advanced -= OnRunAdvanced;
+
+            _watch.Dispose();
+            _watch = null;
+        }
+    }
+
+    /// <summary>Draws the list the save is writing, with whatever it has already reported on it.</summary>
+    private void AdoptDraft(ProfileSaveRun run)
+    {
+        _publishing = true;
+
+        try
+        {
+            _basedOn = run.Request.BasedOn;
+            _original = run.Request.Original;
+
+            foreach (var row in Pinned)
+            {
+                row.PropertyChanged -= OnPinnedRowChanged;
+            }
+
+            Pinned.Clear();
+
+            foreach (var pin in run.Request.Desired)
+            {
+                Pinned.Add(CreatePinnedRow(pin));
+            }
+        }
+        finally
+        {
+            _publishing = false;
+        }
+
+        Recount();
+        MarkFromRun(run);
+    }
+
+    private void OnRunAdvanced()
+    {
+        // The import runs off the UI thread and these are bound rows.
+        _ = OnUiThreadAsync(() =>
+        {
+            if (_saveService.Find(_profile.Id) is ProfileSaveRun run)
+            {
+                MarkFromRun(run);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Copies the run's per-version reports onto this page's own rows. The run reports per version
+    /// rather than writing into row view models it does not own, which is what lets a second page be
+    /// built for the same save without the first one's rows being written into from two places.
+    /// </summary>
+    private void MarkFromRun(ProfileSaveRun run)
+    {
+        var rows = Pinned.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
+
+        foreach (var progress in run.Progress)
+        {
+            if (rows.TryGetValue(progress.Identity, out var row))
+            {
+                row.Apply(progress);
+            }
+        }
+
+        foreach (var result in run.Results)
+        {
+            if (rows.TryGetValue(result.Identity, out var row))
+            {
+                row.Apply(result);
+            }
         }
     }
 
@@ -1120,38 +1562,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool CanSaveOnly() => CanSave() && HasApplyTargets;
 
     /// <summary>
-    /// Re-applies to the game that follows this profile.
+    /// Stops the save this page is watching. The same act as the strip's own Cancel, because it is
+    /// the same cancellation source - and it works from either side of a navigation.
     /// </summary>
-    /// <remarks>
-    /// <b>Pure apply, never an activation.</b> The profile is already what that game follows, so
-    /// there is no intent to record - saving a mod list is not a decision about which list a game is
-    /// on. A folder that cannot be applied to right now - a dedicated server mid-session, one a
-    /// running game holds - is reported and left drifted, which the app-level notice already covers.
-    /// </remarks>
-    private async Task ApplyToTargetsAsync(CancellationToken cancellationToken)
+    [RelayCommand(CanExecute = nameof(CanStopSaving))]
+    private void StopSaving()
     {
-        if (ApplyTarget is not Game game)
-        {
-            OfferActivation();
-
-            return;
-        }
-
-        ApplyStatus = $"Applying to '{game.Name}'...";
-
-        var outcome = await _applyService.ApplyAsync(
-            _repo,
-            game,
-            _profile.Id,
-            _profile.Name,
-            confirmPlan: false,
-            progress: null,
-            cancellationToken);
-
-        ApplyStatus = outcome.Message;
-
-        await _driftMonitor.CheckAsync();
+        _saveService.Find(_profile.Id)?.Cancel?.Invoke();
     }
+
+    private bool CanStopSaving() => IsSaving;
 
     /// <summary>
     /// The onboarding case: a profile nothing is using yet. Naming the game because here that
@@ -1217,194 +1637,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Uploads and registers the rows that are still only on disk, and reports which of them the repo
-    /// now holds - and, where some did not make it, the one dialog that says so.
-    /// </summary>
-    /// <remarks>
-    /// The dialog is built here and shown by the caller: this is where the rows and their names are,
-    /// and the caller is where what the failures cost the save is known.
-    /// </remarks>
-    private async Task<PendingImport> ImportPendingAsync(CancellationToken cancellationToken)
-    {
-        var pending = Pinned.Where(x => x.IsPending).ToList();
-
-        if (pending.Count == 0)
-        {
-            return new PendingImport([], null, []);
-        }
-
-        var rows = pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
-
-        foreach (var item in rows.Values)
-        {
-            item.ResetImportState();
-        }
-
-        var outcome = await _imports.RunAsync(
-            _repo,
-            [.. pending.Select(x => x.SelectedVersion.Version)],
-            rows,
-            _catalog,
-            cancellationToken);
-
-        if (outcome is { Refusal: string refusal })
-        {
-            // Nothing registered, so nothing is pinnable and the save must not proceed on a draft
-            // whose mods are still only on disk. Reported as a problem rather than a status line,
-            // because the save the user asked for did not happen - and the draft is left exactly
-            // where it is, so pressing Save again once the other import finishes is the whole
-            // recovery path.
-            return new PendingImport(
-                [],
-                _errorReporter.Record(refusal, context: "importing the mods a profile save pins"),
-                []);
-        }
-
-        var result = outcome.Result ?? ModImportResult.Empty;
-
-        foreach (var item in result.Items)
-        {
-            if (rows.TryGetValue(item.Identity, out var row))
-            {
-                row.Apply(item);
-            }
-        }
-
-        // The profile keeps its draft when an import falls short, so the mods it names are still in
-        // the list the user is looking at.
-        var problems = ModImportProblems.Build(
-            _errorReporter,
-            result,
-            id => rows.TryGetValue(id, out var row) ? row.Name : id.ModId.Value,
-            "Nothing was saved.");
-
-        return new PendingImport([.. result.Succeeded.Select(x => x.Identity)], problems, result.Superseded);
-    }
-
-    /// <param name="Imported">What the repo holds now, which is what the save is allowed to pin.</param>
-    /// <param name="Problems">The dialog for what did not make it, or null when everything did.</param>
-    /// <param name="Superseded">
-    /// Copies the user chose against where two sources disagreed. Held until the save commits: here
-    /// the import is only the first half of the action, and a file removed for a revision that was
-    /// never written is a file removed for nothing.
-    /// </param>
-    private sealed record PendingImport(
-        HashSet<ModVersionIdentity> Imported,
-        ErrorDialogViewModel? Problems,
-        IReadOnlyList<ModSupersededFile> Superseded);
-
-    /// <summary>
-    /// Writes the whole mod list as a new revision. Returns false when nothing was saved, having
-    /// already said why.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// One request, carrying every pin. The profile's writes are last and on their own, after the
-    /// import - a dependency can only name a version the repo already holds.
-    /// </para>
-    /// <para>
-    /// This used to be a delete, an upgrade batch and an add or update per changed mod, and it was
-    /// the diff that made that bearable. The diff is still computed, but only to describe the save
-    /// afterwards: what goes over the wire is the list itself, because a revision is a snapshot and
-    /// the server has to record exactly what the page shows.
-    /// </para>
-    /// </remarks>
-    private async Task<bool> SaveRevisionAsync(IReadOnlyList<ProfileModPin> desired, CancellationToken cancellationToken)
-    {
-        var request = new SaveProfileRevisionRequest
-        {
-            BasedOn = _basedOn,
-            Label = string.IsNullOrWhiteSpace(VersionDescription) ? null : VersionDescription.Trim(),
-            Mods = [.. desired.Select(x => new ProfileModPinRequest
-            {
-                ModId = x.ModId.Value,
-                VersionId = x.VersionId.Value,
-                Locked = x.Lock.ByProfile
-            })]
-        };
-
-        try
-        {
-            var saved = await _profilesClient.SaveProfileRevisionV1Async(_repo.Id, _profile.Id, request, cancellationToken);
-
-            _basedOn = saved.Number;
-            _profile.HeadRevision = saved.Number;
-
-            // It described the save that just happened, not the next one. Left in place it would be
-            // carried onto an unrelated edit ten minutes later, which is how a history fills with
-            // labels that are quietly wrong.
-            VersionDescription = "";
-
-            return true;
-        }
-        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileRevisionStale)
-        {
-            return await ResolveStaleSaveAsync(desired, cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// Somebody else saved this profile while this list was open. The choice is theirs, and both
-    /// answers are safe: what is on the server is a revision either way, so saving over it does not
-    /// destroy it - it can be restored from the history.
-    /// </summary>
-    private async Task<bool> ResolveStaleSaveAsync(IReadOnlyList<ProfileModPin> desired, CancellationToken cancellationToken)
-    {
-        var confirmation = new ConfirmationDialogViewModel(
-            "Somebody else saved this profile",
-            "Your list was built from an older revision. Saving anyway records yours as the newest one - theirs stays in the history and can be restored. Loading theirs discards what you have here.",
-            IconKind.Warning,
-            "Save mine anyway",
-            "Load theirs");
-
-        await _modalService.Show(confirmation);
-
-        if (confirmation.Result is false)
-        {
-            SaveSummary = "Loaded the newer list. Nothing of yours was saved.";
-
-            await ReloadAsync();
-
-            return false;
-        }
-
-        // Re-read only the number, so the retry is based on what the server is actually on rather
-        // than on what the refusal happened to mention.
-        var current = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, null, cancellationToken);
-
-        _basedOn = current.Revision;
-
-        return await SaveRevisionAsync(desired, cancellationToken);
-    }
-
-    private static string Describe(ProfileModListChanges changes)
-    {
-        if (changes.IsEmpty)
-        {
-            return "Nothing to save.";
-        }
-
-        var parts = new List<string>();
-
-        if (changes.Added.Count > 0)
-        {
-            parts.Add($"{changes.Added.Count} added");
-        }
-
-        if (changes.Changed.Count > 0)
-        {
-            parts.Add($"{changes.Changed.Count} changed");
-        }
-
-        if (changes.Removed.Count > 0)
-        {
-            parts.Add($"{changes.Removed.Count} removed");
-        }
-
-        return string.Join(" · ", parts);
-    }
-
-    /// <summary>
     /// Throws the draft away. This is what makes importing on save rather than on drag worth doing:
     /// nothing pending has been uploaded, so there is nothing in the repo to clean up.
     /// </summary>
@@ -1428,7 +1660,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         await ReloadAsync();
     }
 
-    private bool CanDiscard() => HasUnsavedChanges && IsSaving is false;
+    private bool CanDiscard() => HasUnsavedChanges && IsReadOnly is false;
 
     #endregion
 
@@ -1440,7 +1672,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// never to pick its mods one at a time - it is to take the profile next to it and change what
     /// differs.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private async Task CopyFromProfile()
     {
         try
@@ -1538,7 +1770,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// Turns a pasted list into a selection on the left. It picks and reports; it never adds - see
     /// <see cref="PasteModListModalViewModel"/> for why the step in between is the point.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(NotSaving))]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private async Task PasteList()
     {
         var modal = new PasteModListModalViewModel();
@@ -1655,23 +1887,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     #region Sources
 
-    [RelayCommand]
-    private async Task Refresh()
-        => await ReloadAsync();
-
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private async Task RescanAll()
     {
         _catalog.RescanAll();
 
-        await ReloadAsync();
+        await RecomposeAsync();
     }
 
     /// <summary>
     /// Adds a folder for this session only. Someone building a profile out of a USB stick should not
     /// have that folder haunting the list for months, so nothing about it is written to disk.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private async Task AddSource()
     {
         if (_dialogService.PickFolder(null) is not string path)
@@ -1681,20 +1909,120 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _catalog.AddAdHocSource(path);
 
-        await ReloadAsync();
+        await RecomposeAsync();
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Reads another profile in this repo as a source.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A membership set and a version per mod, not a scan.</b> A profile's pins are registered
+    /// versions by foreign key, so the catalog already holds every one of them - what this adds is
+    /// which of them that profile names. Switch the repo chip off and a profile chip on and the left
+    /// list is exactly what that profile has and this one does not, which is a diff no other part of
+    /// the app can show.
+    /// </para>
+    /// <para>
+    /// <b><em>Copy from a profile…</em> stays</b>, and this does not replace it. A source can only
+    /// add; <em>Replace</em> and the removals it implies are a statement about the whole list, which
+    /// no per-row action expresses.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
+    private async Task AddProfileSource()
+    {
+        try
+        {
+            var profiles = await _profilesClient.GetProfilesV1Async(_repo.Id, _cancellation.Token);
+
+            var others = profiles
+                .Where(x => x.Id != _profile.Id)
+                .Where(x => _profileSources.Any(source => source.ProfileId == x.Id) is false)
+                .OrderBy(x => x.Name, NaturalOrder.Comparer)
+                .ToList();
+
+            var modal = new PickProfileSourceModalViewModel(others);
+
+            await _modalService.Show(modal);
+
+            if (modal.Result is not ProfileDto picked)
+            {
+                return;
+            }
+
+            var list = await _dependenciesClient.GetModDependenciesV1Async(
+                _repo.Id, picked.Id, null, _cancellation.Token);
+
+            // Read at that profile's head, like the copy action. This is what it holds now, not a
+            // link to it.
+            _profileSources.Add(new ProfileModSource(
+                picked.Id,
+                new ModSource(
+                    ModSourceId.ForProfile(picked.Id),
+                    picked.Name,
+                    "Another profile in this repo.",
+                    ModSourceKind.Profile),
+                [.. list.Dependencies.Select(x => new ProfileModPin(
+                    ModKey.From(x.ModId),
+                    ModVersionKey.From(x.ModVersionId),
+                    new ProfileModLock(false, x.Locked)))]));
+
+            await RecomposeAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away mid-request.
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "reading another profile's mod list as a source");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private async Task RemoveSource(ModSourceViewModel? source)
     {
-        if (source is null || source.IsAdHoc is false)
+        if (source is null || source.CanRemove is false)
         {
             return;
         }
 
-        _catalog.RemoveAdHocSource(source.Source.Id);
+        if (source.IsProfile)
+        {
+            _profileSources.RemoveAll(x => x.Source.Id == source.Source.Id);
+        }
+        else
+        {
+            _catalog.RemoveAdHocSource(source.Source.Id);
+        }
 
-        await ReloadAsync();
+        await RecomposeAsync();
+    }
+
+    private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
+    {
+        if (source.IsRepo)
+        {
+            _includeRegistered = enabled;
+        }
+        else if (source.IsProfile)
+        {
+            if (_profileSources.FirstOrDefault(x => x.Source.Id == source.Source.Id) is ProfileModSource profile)
+            {
+                profile.IsEnabled = enabled;
+            }
+        }
+        else
+        {
+            _catalog.SetEnabled(source.Source, enabled);
+        }
+
+        // Recomposes from the scans already in memory, so this is instant for a source that has been
+        // read once - which is the whole reason the catalog caches per source. It rebuilds what the
+        // catalog decides and nothing the user has: the draft, the selections and the removals all
+        // survive it.
+        _ = RecomposeAsync();
     }
 
     #endregion
@@ -1716,11 +2044,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         _catalog.SetEnabled(ModSourceId.ForTarget(target), true);
 
-        // Only reloads where the page is already up; during construction there is nothing to reload
-        // and the initial load reads the flag on its way through.
+        // Only recomposes where the page is already up; during construction there is nothing to
+        // recompose and the initial load reads the flag on its way through. A recompose rather than a
+        // reload, because arriving here a second time must not throw away whatever the user has been
+        // building since the first - and a recompose that lands mid-save defers itself.
         if (IsLoading is false)
         {
-            _ = ReloadAsync();
+            _ = RecomposeAsync();
         }
     }
 
@@ -1728,6 +2058,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         _navigationLock.ReleaseLock(this);
         _notices.Release(_activeProfile);
+        _leases.Changed -= OnLeasesChanged;
+
+        // The save itself is not stopped: it belongs to the profile, not to this page, and the strip
+        // keeps its Cancel. What this gives up is being the one that reports the outcome, which then
+        // goes to the notice column instead.
+        _watch?.Dispose();
+        _watch = null;
 
         _undoTimer.Stop();
 
@@ -1806,17 +2143,92 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         base.OnInitFailed(ex);
     }
 
+    /// <summary>
+    /// Asks the service before it asks the server.
+    /// </summary>
+    /// <remarks>
+    /// A page built for a profile that is being saved has to draw the draft the save is holding, not
+    /// the list the server still has - the save has not told it yet. It stays read-only until the run
+    /// finishes, at which point it does the post-save reload it would have done anyway.
+    /// </remarks>
     protected override Task InitAsync()
-        => LoadAsync();
+    {
+        return _saveService.Find(_profile.Id) is ProfileSaveRun run
+            ? RejoinAsync(run)
+            : ReloadAsync();
+    }
+
+    /// <summary>
+    /// Whether a save started from this page could import what the draft is holding.
+    /// </summary>
+    /// <remarks>
+    /// <b>The refusal is exactly as wide as the lease.</b> A draft with nothing pending is a revision
+    /// write and is safe beside any import, so it saves; only a draft with mods to import has to wait
+    /// for whatever is already importing into this repo. Being unable to write for a few minutes is
+    /// not a reason to be unable to think for a few minutes.
+    /// </remarks>
+    public bool CanImportHere => PendingCount == 0 || _saveService.DescribeImportBusy(_repo.Id) is null;
+
+    /// <summary>
+    /// Why Save is greyed, or null where it is not. Names what is running rather than saying that
+    /// something is, because the answer is "wait for that one" and only the name says which.
+    /// </summary>
+    public string? SaveBlockedReason
+    {
+        get
+        {
+            if (PendingCount == 0 || _saveService.DescribeImportBusy(_repo.Id) is not string holder)
+            {
+                return null;
+            }
+
+            var mods = PendingCount == 1 ? "1 mod here needs importing" : $"{PendingCount} mods here need importing";
+
+            return $"{mods}, and {holder.ToLowerInvariant()}.";
+        }
+    }
+
+    public bool HasSaveBlockedReason => SaveBlockedReason is not null;
+
+    private void OnLeasesChanged(object? sender, EventArgs e)
+    {
+        // Released from whichever thread finished the work, which is nearly never the UI one.
+        _ = OnUiThreadAsync(() =>
+        {
+            SaveChangesCommand.NotifyCanExecuteChanged();
+            SaveOnlyCommand.NotifyCanExecuteChanged();
+
+            OnPropertyChanged(nameof(CanImportHere));
+            OnPropertyChanged(nameof(SaveBlockedReason));
+            OnPropertyChanged(nameof(HasSaveBlockedReason));
+        });
+    }
 
 
+    /// <summary>
+    /// Re-reads the profile from the server and rebuilds the draft from it.
+    /// </summary>
+    /// <remarks>
+    /// <b>This throws the draft away</b>, so it is only the three moments at which the server's list
+    /// is the truth again: opening the page, discarding, and a save that has committed. Everything
+    /// else that changes what is <em>known</em> - a source chip, a rescan, a folder added or removed,
+    /// a drift notice's scan target - runs <see cref="RecomposeAsync"/> instead. The two used to be
+    /// one method, which is why ticking a chip discarded the whole draft.
+    /// </remarks>
     private async Task ReloadAsync()
     {
         IsLoading = true;
 
         try
         {
-            await LoadAsync();
+            var modList = await _dependenciesClient.GetModDependenciesV1Async(
+                _repo.Id, _profile.Id, null, _cancellation.Token);
+
+            var snapshot = await _catalog.GetAsync(_cancellation.Token);
+
+            // Everything from here down is WPF-facing, and this may well have arrived on a
+            // thread-pool thread.
+            await OnUiThreadAsync(() => Load(snapshot, modList));
         }
         catch (OperationCanceledException)
         {
@@ -1824,23 +2236,58 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
         finally
         {
-            // Publish clears this on the way through; the finally is for the paths that never reach
-            // it, so a failed reload does not leave the list claiming to still be reading.
+            // Load clears this on the way through; the finally is for the paths that never reach it,
+            // so a failed reload does not leave the list claiming to still be reading.
             IsLoading = false;
         }
     }
 
-    private async Task LoadAsync()
+    /// <summary>
+    /// Rebuilds what the catalog decides and nothing else: the source chips, the left list, the
+    /// version selectors and the update plan.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The draft survives it untouched</b>, and so do <see cref="_original"/>, the revision this
+    /// page is based on, the search, both selections, the pending removals and the bulk undo. A
+    /// change to the catalog is not a reason to re-read the profile.
+    /// </para>
+    /// <para>
+    /// It is also the round trip that should never have been there: the catalog recomposes from
+    /// scans already in memory, which is the whole reason it caches per source.
+    /// </para>
+    /// </remarks>
+    private async Task RecomposeAsync()
     {
-        var modList = await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, null, _cancellation.Token);
-        var snapshot = await _catalog.GetAsync(_cancellation.Token);
+        // A save is written from a snapshot taken before it started, and rebuilding the lists under
+        // it would replace the rows whose import is being reported into. The one that arrives is
+        // held and run when the save is over - see SaveChanges.
+        if (IsSaving)
+        {
+            _recomposeWhenSaved = true;
 
-        // Everything from here down is WPF-facing, and this may well have arrived on a thread-pool
-        // thread.
-        await Application.Current.Dispatcher.InvokeAsync(() => Publish(snapshot, modList));
+            return;
+        }
+
+        IsLoading = true;
+
+        try
+        {
+            var snapshot = await _catalog.GetAsync(_cancellation.Token);
+
+            await OnUiThreadAsync(() => Compose(snapshot));
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away mid-scan.
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
-    private void Publish(ModCatalogSnapshot snapshot, GetModDependenciesResponse modList)
+    private void Load(ModCatalogSnapshot snapshot, GetModDependenciesResponse modList)
     {
         _publishing = true;
 
@@ -1850,35 +2297,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // revision this page is editing.
             _basedOn = modList.Revision;
 
-            var dependencies = modList.Dependencies;
-            Sources.Clear();
-
-            // The repo leads the list because it is the one that is on to begin with, and because the
-            // folders below it are the things it is being contrasted against.
-            Sources.Add(new ModSourceViewModel(
-                new ModSourceStatus(
-                    new ModSource(ModSourceId.Repo, _repo.Name, "Everything this repo has registered", ModSourceKind.Repo),
-                    _includeRegistered,
-                    snapshot.Versions.Count(x => x.IsOnServer),
-                    null),
-                OnSourceEnabledChanged));
-
-            foreach (var status in snapshot.Sources)
-            {
-                Sources.Add(new ModSourceViewModel(status, OnSourceEnabledChanged));
-            }
-
-            _versionsByMod = OrderVersions(snapshot.Versions);
-            _registered = ProfileModUpdates.Registered(snapshot.Versions);
-
             foreach (var row in Pinned)
             {
                 row.PropertyChanged -= OnPinnedRowChanged;
             }
 
+            // Emptied before the index is built rather than after, so a version the outgoing draft
+            // was the only holder of does not survive into the list it is being replaced by.
             Pinned.Clear();
 
-            foreach (var dependency in dependencies)
+            RebuildSources(snapshot);
+            BuildIndex(snapshot);
+
+            foreach (var dependency in modList.Dependencies)
             {
                 Pinned.Add(CreatePinnedRow(new ProfileModPin(
                     ModKey.From(dependency.ModId),
@@ -1888,33 +2319,39 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             _original = [.. Pinned.Select(x => x.Pin)];
 
-            // With a single source every row would name the same one, which is just noise.
-            var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
-
-            foreach (var row in _available)
-            {
-                row.PropertyChanged -= OnAvailableRowChanged;
-            }
-
-            // A reload is a new catalog and new rows, so nothing that was picked survives it - and a
-            // report about a selection that no longer exists would outlive what it described.
+            // A reload is a new draft, so nothing that was picked survives it - and a report about a
+            // selection that no longer exists would outlive what it described.
             SelectionStatus = null;
 
-            _available = [.. _versionsByMod.Values
-                // The newest known version stands for the mod on the left. Picking a different one
-                // is a decision that belongs to the row it becomes on the right.
-                .Select(x => x[^1])
-                .OrderBy(x => x.Name, NaturalOrder.Comparer)
-                .Select(x => CreateAvailableRow(x, showSources))];
+            RebuildAvailable(snapshot);
 
-            // Rebuilt rather than refreshed, because the list behind it is replaced wholesale -
-            // adding a couple of thousand rows to a bound collection one at a time is a couple of
-            // thousand layout passes.
-            var view = (ListCollectionView)CollectionViewSource.GetDefaultView(_available);
-            view.Filter = x => x is ModListItemViewModel mod && Passes(mod);
-            view.CustomSort = Comparer<ModListItemViewModel>.Create(CompareAvailable);
+            IsLoading = false;
+        }
+        finally
+        {
+            _publishing = false;
+        }
 
-            AvailableView = view;
+        Recount();
+    }
+
+    /// <inheritdoc cref="RecomposeAsync"/>
+    private void Compose(ModCatalogSnapshot snapshot)
+    {
+        _publishing = true;
+
+        try
+        {
+            RebuildSources(snapshot);
+            BuildIndex(snapshot);
+
+            foreach (var row in Pinned)
+            {
+                row.Rebase(VersionsFor(row.ModId));
+            }
+
+            RebuildAvailable(snapshot);
+
             IsLoading = false;
         }
         finally
@@ -1926,59 +2363,220 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Every version of a mod in one order, so the selector can offer what is on disk alongside what
-    /// the repo holds.
+    /// The chip row: the repo, then the folders, then the profiles - and what each of them
+    /// contributes to the merged set.
     /// </summary>
     /// <remarks>
-    /// The repo's own order is handed in as settled and never re-derived: it was arbitrated once and
-    /// stored server-side, and clients on different adapter versions recomputing it would disagree
-    /// about what an update is. Only the unregistered versions are placed here, which is the one part
-    /// the repo has no answer for yet.
+    /// The repo leads because it is the one that is on to begin with, and because everything after it
+    /// is what it is being contrasted against. Each of the three is a genuine contributor to one
+    /// union rather than a filter subtracting from the others, which is what makes "what does that
+    /// profile have that this one does not" expressible at all: a profile's versions are registered,
+    /// so under a subtractive repo chip they would vanish the moment it was switched off.
     /// </remarks>
-    private IReadOnlyDictionary<ModKey, IReadOnlyList<CatalogModVersion>> OrderVersions(
-        IReadOnlyList<CatalogModVersion> versions)
+    private void RebuildSources(ModCatalogSnapshot snapshot)
     {
-        var result = new Dictionary<ModKey, IReadOnlyList<CatalogModVersion>>();
+        Sources.Clear();
 
-        foreach (var group in versions.GroupBy(x => x.ModId))
+        Sources.Add(new ModSourceViewModel(
+            new ModSourceStatus(
+                new ModSource(ModSourceId.Repo, _repo.Name, "Everything this repo has registered", ModSourceKind.Repo),
+                _includeRegistered,
+                snapshot.Versions.Count(x => x.IsOnServer),
+                null),
+            OnSourceEnabledChanged));
+
+        foreach (var status in snapshot.Sources)
         {
-            // The catalog deduplicates on (ModId, VersionId), so this cannot collide.
-            var byVersion = group.ToDictionary(x => x.VersionId);
-
-            var settled = group
-                .Where(x => x.SequenceNumber is not null)
-                .OrderBy(x => x.SequenceNumber)
-                .Select(x => x.VersionId)
-                .ToList();
-
-            var ordering = ModVersionPartialOrder.Derive(
-                [.. byVersion.Keys],
-                _repo.Adapter.VersionComparer,
-                settled);
-
-            result[group.Key] = [.. ordering.Order.Select(x => byVersion[x])];
+            Sources.Add(new ModSourceViewModel(status, OnSourceEnabledChanged));
         }
 
-        return result;
+        foreach (var profile in _profileSources)
+        {
+            Sources.Add(new ModSourceViewModel(
+                new ModSourceStatus(profile.Source, profile.IsEnabled, profile.Pins.Count, null),
+                OnSourceEnabledChanged));
+        }
+
+        HasEnabledFolders = snapshot.Sources.Any(x => x.IsEnabled);
+        HasEnabledSources = _includeRegistered || HasEnabledFolders || _profileSources.Any(x => x.IsEnabled);
+
+        IndexOffered(snapshot);
+
+        if (HasEnabledSources is false && PinnedFilter is PinnedModFilter.NotInSources)
+        {
+            // With nothing enabled the filter would select the whole profile and mean nothing, so the
+            // chip is disabled - and a disabled chip must not be the one that is still checked.
+            PinnedFilter = PinnedModFilter.All;
+        }
     }
 
-    private ModListItemViewModel CreateAvailableRow(CatalogModVersion version, bool showSources)
+    /// <summary>
+    /// What the enabled sources offer between them, which is what the left list is composed from.
+    /// </summary>
+    /// <remarks>
+    /// A version reaches the catalog's merged set only from an enabled folder or from the repo, so
+    /// the two flags on the record are the whole of what those two chips contribute. The profile
+    /// chips are added here because the catalog never sees them.
+    /// </remarks>
+    private void IndexOffered(ModCatalogSnapshot snapshot)
     {
-        var item = _itemFactory.Create(_repo.Id, version);
+        var offered = new HashSet<ModVersionIdentity>();
+        var mods = new HashSet<ModKey>();
 
-        item.Status = version.GetImportStatus();
+        foreach (var version in snapshot.Versions)
+        {
+            if (version.IsLocal || (_includeRegistered && version.IsOnServer))
+            {
+                offered.Add(version.Identity);
+                mods.Add(version.ModId);
+            }
+        }
+
+        foreach (var profile in _profileSources.Where(x => x.IsEnabled))
+        {
+            foreach (var pin in profile.Pins)
+            {
+                offered.Add(new ModVersionIdentity(pin.ModId, pin.VersionId));
+                mods.Add(pin.ModId);
+            }
+        }
+
+        _offered = offered;
+        _offeredMods = mods;
+    }
+
+    /// <summary>
+    /// Every known version of every known mod, ordered - the catalog's, plus whatever the draft is
+    /// pinning that the catalog no longer holds.
+    /// </summary>
+    /// <inheritdoc cref="_versionsByMod" path="/remarks"/>
+    private void BuildIndex(ModCatalogSnapshot snapshot)
+    {
+        _versionsByMod = ModVersionIndex.Build(
+            snapshot.Versions.Concat(Pinned.Select(x => x.SelectedVersion.Version)),
+            _repo.Adapter.VersionComparer);
+    }
+
+    /// <summary>
+    /// The left list: one row per mod, at the newest version an enabled source actually offers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The version is the newest <em>offered</em> one, not the newest known.</b> A mod whose only
+    /// enabled source is another profile has to show at that profile's version, or switching the repo
+    /// chip off would leave the row pointing at a version nothing enabled holds - which is a row that
+    /// then fails its own filter and disappears.
+    /// </para>
+    /// <para>
+    /// Rows are reused where the version record still draws the same thing, because a chip being
+    /// ticked is not a reason for a thousand icons to reload - and because reuse is what carries a
+    /// selection through a recompose.
+    /// </para>
+    /// </remarks>
+    private void RebuildAvailable(ModCatalogSnapshot snapshot)
+    {
+        // With a single source every row would name the same one, which is just noise.
+        var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
+
+        var existing = new Dictionary<ModVersionIdentity, ModListItemViewModel>();
+
+        foreach (var row in _available)
+        {
+            row.PropertyChanged -= OnAvailableRowChanged;
+
+            existing[row.Mod.Identity] = row;
+        }
+
+        _available = [.. _versionsByMod.Values
+            .Select(Offered)
+            .OfType<CatalogModVersion>()
+            .OrderBy(x => x.Name, NaturalOrder.Comparer)
+            .Select(x => AvailableRow(existing, x, showSources))];
+
+        // Rebuilt rather than refreshed, because the list behind it is replaced wholesale - adding a
+        // couple of thousand rows to a bound collection one at a time is a couple of thousand layout
+        // passes.
+        var view = (ListCollectionView)CollectionViewSource.GetDefaultView(_available);
+        view.Filter = x => x is ModListItemViewModel mod && Passes(mod);
+        view.CustomSort = Comparer<ModListItemViewModel>.Create(CompareAvailable);
+
+        AvailableView = view;
+    }
+
+    /// <summary>
+    /// The newest version of one mod that any enabled source holds, or null where none does. Picking
+    /// a different one is a decision that belongs to the row it becomes on the right.
+    /// </summary>
+    private CatalogModVersion? Offered(ModVersionSet set)
+    {
+        for (var index = set.Order.Count - 1; index >= 0; index--)
+        {
+            if (_offered.Contains(set.Order[index].Identity))
+            {
+                return set.Order[index];
+            }
+        }
+
+        return null;
+    }
+
+    private ModListItemViewModel AvailableRow(
+        IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> existing,
+        CatalogModVersion version,
+        bool showSources)
+    {
+        var item = existing.TryGetValue(version.Identity, out var reused)
+            && ModListItemViewModel.RendersTheSame(reused.Mod, version)
+                ? reused
+                : Create();
 
         // Unlike the management page, this list is for picking rather than for browsing.
         item.IsSelectable = true;
         item.PropertyChanged += OnAvailableRowChanged;
 
-        if (showSources && version.FoundIn.Count > 0)
-        {
-            item.Sources = string.Join(", ", version.FoundIn.Select(source => source.Source.Name));
-        }
+        item.Sources = showSources && version.FoundIn.Count > 0
+            ? string.Join(", ", version.FoundIn.Select(source => source.Source.Name))
+            : null;
 
         return item;
+
+
+        ModListItemViewModel Create()
+        {
+            var created = _itemFactory.Create(_repo.Id, version);
+
+            // Replaced by Recount, which is the thing that knows what this draft has decided about
+            // the mod. Set here so a row is never blank between being built and being counted.
+            created.Status = version.GetImportStatus();
+
+            return created;
+        }
     }
+
+    /// <summary>Every known version of one mod, oldest first. Empty for a mod nothing knows about.</summary>
+    private IReadOnlyList<CatalogModVersion> VersionsFor(ModKey modId)
+        => _versionsByMod.TryGetValue(modId, out var set) ? set.Order : [];
+
+    /// <inheritdoc cref="VersionsFor(ModKey)"/>
+    private IReadOnlyList<CatalogModVersion> VersionsFor(CatalogModVersion version)
+        => VersionsFor(version.ModId) is { Count: > 0 } known ? known : [version];
+
+    /// <summary>
+    /// Whether an enabled profile source is why this version is on the left, and whether that profile
+    /// locks it.
+    /// </summary>
+    /// <remarks>
+    /// <b>A profile chip carries the lock as well as the version.</b> Turning one on is asking for
+    /// what that profile holds, and a row that brought the version but not the lock would disagree
+    /// with <em>Copy from a profile…</em> - which already brings <c>Locked</c> across - about what
+    /// "what that profile holds" means.
+    /// </remarks>
+    private bool LockedByProfileSource(ModVersionIdentity identity)
+        => _profileSources.Any(x => x.IsEnabled && x.Locks(identity));
+
+    /// <summary>The dispatcher hop every catalog read comes back through.</summary>
+    private static Task OnUiThreadAsync(Action work)
+        => Application.Current.Dispatcher.InvokeAsync(work).Task;
 
     /// <summary>
     /// A pinned row from a pin, tolerating a version this client's catalog has never heard of. Used
@@ -1987,7 +2585,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private ProfileModRowViewModel CreatePinnedRow(ProfileModPin pin)
     {
-        var versions = _versionsByMod.GetValueOrDefault(pin.ModId, []);
+        var versions = VersionsFor(pin.ModId);
         var selected = versions.FirstOrDefault(x => x.VersionId == pin.VersionId);
 
         if (selected is null)
@@ -2044,11 +2642,24 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private ProfileModRowViewModel? FindPinned(ModKey modId)
         => Pinned.FirstOrDefault(x => x.ModId == modId);
 
+    /// <summary>
+    /// Everything the left list is showing.
+    /// </summary>
+    /// <remarks>
+    /// <b>The hide rule is about versions, not mods.</b> It used to be "this mod is pinned", which
+    /// put a newer version of a pinned mod nowhere at all - and a new version of a pinned mod is not
+    /// in this profile, whatever else is. Which sources contributed the row is decided when the list
+    /// is composed rather than here, because a chip changes what the list is <em>of</em> and a search
+    /// only narrows what it then shows.
+    /// </remarks>
     private bool Passes(ModListItemViewModel mod)
         => mod.Matches(SearchText)
-        && _pinnedIds.Contains(mod.Mod.ModId) is false
-        && (_includeRegistered || mod.Mod.IsOnServer is false)
+        && IsPinnedAt(mod.Mod) is false
         && PassesFilter(mod);
+
+    /// <summary>Whether the profile pins this mod at exactly this version.</summary>
+    private bool IsPinnedAt(CatalogModVersion version)
+        => _pinnedVersions.TryGetValue(version.ModId, out var pinned) && pinned == version.VersionId;
 
     /// <summary>
     /// The left list's filter chip. Composes with the search rather than replacing it, which is what
@@ -2071,6 +2682,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             PinnedModFilter.Updates => row.HasUpdate,
             PinnedModFilter.Locked => row.IsLocked,
             PinnedModFilter.Pending => row.IsPending,
+            PinnedModFilter.NotInSources => _offeredMods.Contains(row.ModId) is false,
             _ => true
         };
 
@@ -2082,21 +2694,87 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private IReadOnlyList<ISelectableRow> PinnedRows() => [.. Pinned];
 
     /// <summary>
-    /// The left list's order: what this draft has taken out of the profile first, then alphabetical.
-    /// A removed mod looks exactly like one that was never in the profile, and the only thing that
-    /// can say otherwise is where it sits.
+    /// The left list's order: what this draft has taken out of the profile, then what is an update to
+    /// something it holds, then alphabetical.
     /// </summary>
+    /// <remarks>
+    /// A removed mod looks exactly like one that was never in the profile, and an update looks
+    /// exactly like an addition - the only thing that can say otherwise is a chip and where the row
+    /// sits. Read from the status the recount has just written rather than re-derived, so the sort
+    /// and the chip cannot disagree.
+    /// </remarks>
     private int CompareAvailable(ModListItemViewModel left, ModListItemViewModel right)
     {
         var byRemoval = IsPendingRemoval(right).CompareTo(IsPendingRemoval(left));
 
-        return byRemoval != 0
-            ? byRemoval
+        if (byRemoval != 0)
+        {
+            return byRemoval;
+        }
+
+        var byUpdate = IsUpdateRow(right).CompareTo(IsUpdateRow(left));
+
+        return byUpdate != 0
+            ? byUpdate
             : NaturalOrder.Compare(left.Name, right.Name);
     }
 
+    private static bool IsUpdateRow(ModListItemViewModel row) => row.IsUpdateRow;
+
     private bool IsPendingRemoval(ModListItemViewModel row)
         => _pendingRemovals.Contains(row.Mod.ModId);
+
+    /// <summary>
+    /// What one left-hand row's chip says. <b>Four states, two colours, three words:</b> the fill
+    /// says what the version means for the repo and the text says what it means for this profile.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>
+    /// <b>Accent <em>Update</em></b> - a newer version of a mod this profile pins, and the repo holds
+    /// it, so the move is free.
+    /// </item>
+    /// <item>
+    /// <b>Green <em>Update</em></b> - the same, for a version only on disk, so saving imports it.
+    /// </item>
+    /// <item>
+    /// <b>Green <em>New version</em></b> - newer than anything the repo holds, of a mod this profile
+    /// does not pin. An import candidate, which is what the repo mods page already calls an
+    /// <em>Update</em> from its own point of view and which is not one from here: nothing in this
+    /// profile moves by taking it.
+    /// </item>
+    /// <item><b>Green <em>New</em></b> - a version the repo does not hold, with nothing else to say.</item>
+    /// </list>
+    /// A version the ordering will not place is none of the update states: the walk is the same
+    /// abstention rule the update planner applies, and for the same reason.
+    /// </remarks>
+    private ModDisplayStatus DescribeRow(CatalogModVersion version)
+    {
+        // The counterpart of the pending-import chip on the right, and it outranks everything below:
+        // a row that has moved but has not been saved looks exactly like one that was always there.
+        if (_pendingRemovals.Contains(version.ModId))
+        {
+            return ModDisplayStatus.PendingRemoval;
+        }
+
+        var set = _versionsByMod.GetValueOrDefault(version.ModId);
+
+        if (_pinnedVersions.TryGetValue(version.ModId, out var pinned))
+        {
+            return set?.IsAfter(version.VersionId, pinned) is true
+                ? version.IsOnServer ? ModDisplayStatus.UpdateAvailable : ModDisplayStatus.UpdatePending
+                : version.GetImportStatus();
+        }
+
+        if (version.IsOnServer)
+        {
+            return ModDisplayStatus.AlreadyInRepo;
+        }
+
+        return set?.NewestRegistered is CatalogModVersion newest && set.IsAfter(version.VersionId, newest.VersionId)
+            ? ModDisplayStatus.NewVersion
+            : ModDisplayStatus.New;
+    }
 
     /// <summary>
     /// The right list's order: whatever wants an answer first, then alphabetical. The top of the list
@@ -2126,27 +2804,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _ => row.IsPending ? 3 : 5
     };
 
-
-    private void OnSourceEnabledChanged(ModSourceViewModel source, bool enabled)
-    {
-        // The repo is a filter over what the catalog already holds rather than somewhere to look, so
-        // it never reaches the catalog and never costs a reload - see _includeRegistered.
-        if (source.IsRepo)
-        {
-            _includeRegistered = enabled;
-
-            AvailableView?.Refresh();
-            RecountAvailable();
-
-            return;
-        }
-
-        _catalog.SetEnabled(source.Source, enabled);
-
-        // Recomposes from the scans already in memory, so this is instant for a source that has been
-        // read once - which is the whole reason the catalog caches per source.
-        RefreshCommand.Execute(null);
-    }
 
     private void OnPinnedRowChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -2211,6 +2868,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// Freezes or releases the one control the shared row template owns: its checkbox.
+    /// </summary>
+    /// <remarks>
+    /// Written per row rather than by disabling the list, because the list has to stay scrollable
+    /// and the mod name has to stay clickable - see <see cref="IsReadOnly"/>. Everything else the
+    /// page owns is bound to <see cref="CanEdit"/> where it is declared.
+    /// </remarks>
+    partial void OnIsReadOnlyChanged(bool value)
+    {
+        foreach (var row in _available)
+        {
+            row.IsPickable = value is false;
+        }
+
+        foreach (var row in Pinned)
+        {
+            row.Item.IsPickable = value is false;
+        }
+    }
+
     partial void OnAvailableFilterChanged(AvailableModFilter value)
     {
         RefreshViews();
@@ -2244,6 +2922,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private void RefreshViews()
     {
+        // A rebuild sets the filter chips back where they are no longer offered, and refreshing a
+        // view over a list that is halfway through being replaced is work thrown away - every
+        // publishing block ends in a recount, which refreshes both views itself.
+        if (_publishing)
+        {
+            return;
+        }
+
         AvailableView?.Refresh();
         PinnedView.Refresh();
 
@@ -2261,17 +2947,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <remarks>
     /// The total counts what the <em>sources</em> hold and the search does not: "42 of 900" is how
     /// much a search is hiding, and switching a source off is not a search - it changes what the list
-    /// is of. The repo counts as a source here for exactly that reason, which is why unticking it
-    /// moves both numbers rather than only the first.
+    /// is of, which is why the list itself is rebuilt rather than filtered when a chip moves.
     /// </remarks>
     private void RecountAvailable()
     {
-        AvailableTotal = _available.Count(x =>
-            _pinnedIds.Contains(x.Mod.ModId) is false
-            && (_includeRegistered || x.Mod.IsOnServer is false));
+        AvailableTotal = _available.Count(x => IsPinnedAt(x.Mod) is false);
 
         AvailableCount = _available.Count(Passes);
-        NewCount = _available.Count(x => Passes(x) && IsPendingRemoval(x) is false);
+        NewCount = _available.Count(IsShownAndNew);
     }
 
     /// <summary>How many of the profile's mods the search is showing. The total is PinnedCount.</summary>
@@ -2288,16 +2971,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         BulkUndo = null;
 
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
+        _pinnedVersions = Pinned.ToDictionary(x => x.ModId, x => x.SelectedVersion.Version.VersionId);
         _pendingRemovals = [.. _original.Select(x => x.ModId).Where(x => _pinnedIds.Contains(x) is false)];
 
-        // The chip that says why a row is at the top of the left list, and the counterpart of the
-        // pending-import chip on the right. Marked here rather than when the row is built, because
+        // The chip that says what a row is. Marked here rather than when the row is built, because
         // it is the draft that decides it and the draft changes under the same rows.
         foreach (var row in _available)
         {
-            row.Status = _pendingRemovals.Contains(row.Mod.ModId)
-                ? ModDisplayStatus.PendingRemoval
-                : row.Mod.GetImportStatus();
+            row.Status = DescribeRow(row.Mod);
         }
 
         PinnedCount = Pinned.Count;
@@ -2310,18 +2991,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         AvailableView?.Refresh();
         RecountAvailable();
 
-        _updates = ProfileModUpdates.Plan(Pinned.Select(x => x.Pin), _registered);
+        _updates = ProfileModUpdates.Plan(Pinned.Select(x => x.Pin), _versionsByMod);
 
         var byMod = _updates.Available.Concat(_updates.Skipped).ToDictionary(x => x.ModId);
 
         foreach (var row in Pinned)
         {
-            row.UpdateTo = byMod.TryGetValue(row.ModId, out var update) ? update.To : null;
+            var update = byMod.GetValueOrDefault(row.ModId);
+
+            row.UpdateTo = update?.To;
+            row.UpdateImportsOnSave = update?.ImportsOnSave ?? false;
         }
 
         UpdateCount = _updates.Count;
         ApplicableUpdateCount = _updates.Available.Count;
         SkippedUpdateCount = _updates.Skipped.Count;
+        PendingUpdateCount = _updates.PendingCount;
+        FreeUpdateCount = _updates.FreeCount;
 
         // Last, because both of them count against the views this method has just re-filtered.
         AvailableSelection.Recount();
@@ -2403,11 +3089,61 @@ public enum PinnedModFilter
 {
     All,
 
-    /// <summary>A newer version is registered, whether or not the pin is free to move.</summary>
+    /// <summary>A newer version exists, whether or not the repo holds it and whether or not the pin is free to move.</summary>
     Updates,
 
     Locked,
 
     /// <summary>Pinned at a version the repo does not hold yet, so a save has to import it.</summary>
-    Pending
+    Pending,
+
+    /// <summary>
+    /// The mods this profile pins that no enabled source offers any version of.
+    /// </summary>
+    /// <remarks>
+    /// <b>The mirror of the left list's diff view, and the half of it that was missing.</b> With
+    /// another profile as the only enabled source this lists exactly what this profile holds and that
+    /// one does not, so with <em>Take out everything shown</em> under it, "make this profile match
+    /// that one" is two clicks. Mod-level rather than version-level, deliberately: a mod the other
+    /// profile holds at a different version is an update, not a removal, and the left list already
+    /// says so.
+    /// </remarks>
+    NotInSources
+}
+
+
+/// <summary>
+/// Another profile in this repo, read as a source.
+/// </summary>
+/// <remarks>
+/// A membership set and a version per mod rather than a scan - see
+/// <see cref="ModSourceKind.Profile"/>. The lock travels with the version, which is what makes
+/// turning a chip on agree with <em>Copy from a profile…</em> about what "what that profile holds"
+/// means.
+/// </remarks>
+internal sealed class ProfileModSource
+{
+    private readonly HashSet<ModVersionIdentity> _locked;
+
+
+    public ProfileModSource(Guid profileId, ModSource source, IReadOnlyList<ProfileModPin> pins)
+    {
+        ProfileId = profileId;
+        Source = source;
+        Pins = pins;
+
+        _locked = [.. pins
+            .Where(x => x.Lock.ByProfile)
+            .Select(x => new ModVersionIdentity(x.ModId, x.VersionId))];
+    }
+
+
+    public Guid ProfileId { get; }
+    public ModSource Source { get; }
+    public IReadOnlyList<ProfileModPin> Pins { get; }
+
+    /// <summary>Whether this chip is being read. Switched off rather than removed, like a folder.</summary>
+    public bool IsEnabled { get; set; } = true;
+
+    public bool Locks(ModVersionIdentity identity) => _locked.Contains(identity);
 }

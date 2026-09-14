@@ -36,6 +36,19 @@ public static class ResourceKeys
     public static string Repo(Guid repoId) => $"repo:{repoId:N}";
 
     /// <summary>
+    /// One profile's mod list, which is what a save writes a revision of.
+    /// </summary>
+    /// <remarks>
+    /// <b>The claim is on the profile, not on the page that started the save.</b> A save writes a
+    /// revision of one profile and imports into one repo, and both of those outlive whatever started
+    /// them - so an editor rebuilt for a profile that is already being saved has to be able to find
+    /// that out, and a second save of the same list has to be refused rather than raced. The repo
+    /// lease the import takes sits underneath this one; they are different resources, which is why a
+    /// draft with nothing to import can still be saved beside an import into the same repo.
+    /// </remarks>
+    public static string Profile(Guid profileId) => $"profile:{profileId:N}";
+
+    /// <summary>
     /// One content store, by the folder it lives in.
     /// </summary>
     /// <remarks>

@@ -23,6 +23,12 @@ public partial class ProfileModsEditorPage : Page
         SaveVariantButton.IsChecked = false;
     }
 
+    /// <inheritdoc cref="CloseSaveVariants"/>
+    private void CloseUpdateVariants(object sender, RoutedEventArgs e)
+    {
+        UpdateVariantButton.IsChecked = false;
+    }
+
     /// <summary>
     /// Ctrl+F puts the caret in the search box from anywhere on the page. The narrow-then-act loop -
     /// type a few letters, take everything shown, type a few more - is the fastest way to work here,

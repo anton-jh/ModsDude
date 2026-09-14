@@ -68,6 +68,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     private readonly Func<IReadOnlyList<ISelectableRow>> _all;
     private readonly Action<IReadOnlyList<ISelectableRow>> _activate;
     private readonly string _verb;
+    private readonly Func<IReadOnlyList<ISelectableRow>, string>? _describe;
 
     /// <summary>Where a shift-click measures from. Set by every gesture that is not a shift-click.</summary>
     private ISelectableRow? _anchor;
@@ -85,16 +86,24 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     /// <param name="all">Every row, shown or not.</param>
     /// <param name="activate">What Enter and a double click do to the picked rows.</param>
     /// <param name="verb">What the primary button says it will do, e.g. "Add".</param>
+    /// <param name="describe">
+    /// The whole label, for a list where one verb is not enough. The editor's left-hand list moves
+    /// two different things now - a mod the profile has never held is an add, and a newer version of
+    /// one it holds is an update - and a button reading "Add 15 mods" over a selection that would
+    /// move three pins is a label that lies about what pressing it does.
+    /// </param>
     public ModListSelection(
         Func<IEnumerable?> shown,
         Func<IReadOnlyList<ISelectableRow>> all,
         Action<IReadOnlyList<ISelectableRow>> activate,
-        string verb)
+        string verb,
+        Func<IReadOnlyList<ISelectableRow>, string>? describe = null)
     {
         _shown = shown;
         _all = all;
         _activate = activate;
         _verb = verb;
+        _describe = describe;
     }
 
 
@@ -150,7 +159,9 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
 
     public string SelectedText => SelectedCount == 1 ? "1 selected" : $"{SelectedCount} selected";
 
-    public string ActionText => SelectedCount == 1 ? $"{_verb} 1 mod" : $"{_verb} {SelectedCount} mods";
+    public string ActionText => _describe is not null
+        ? _describe(Picked())
+        : SelectedCount == 1 ? $"{_verb} 1 mod" : $"{_verb} {SelectedCount} mods";
 
     /// <summary>
     /// Worded as a fact about the list rather than as a warning. These rows are selected on purpose -
@@ -355,6 +366,10 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
         {
             _syncing = false;
         }
+
+        // Unconditionally, unlike the counts: a label that names two kinds of move can change
+        // without the count doing - pinning one of the picked mods turns an add into an update.
+        OnPropertyChanged(nameof(ActionText));
 
         Changed?.Invoke();
     }

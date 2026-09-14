@@ -30,22 +30,20 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// anything finer than a whole percent is redraw nobody can see. WPF marshals the property changes
 /// themselves, which is why this does not dispatch.
 /// </para>
+/// <para>
+/// <b>Rows only.</b> The shell line belongs to whoever owns the strip entry, which is
+/// <see cref="Services.ModImportCoordinator"/> - so a caller with no rows at all, such as a save
+/// running on behalf of a page that has been navigated away from, still gets one.
+/// </para>
 /// </remarks>
-public sealed class ModImportRowProgress(
-    IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows,
-    IBackgroundTask? task = null)
+public sealed class ModImportRowProgress(IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows)
     : IProgress<ModImportProgress>
 {
     private readonly ConcurrentDictionary<ModVersionIdentity, int> _lastPercent = new();
 
-    /// <summary>Which versions have reached an outcome, so the shell's count is of mods and not of events.</summary>
-    private readonly ConcurrentDictionary<ModVersionIdentity, byte> _finished = new();
-
 
     public void Report(ModImportProgress value)
     {
-        ReportToShell(value);
-
         if (rows.TryGetValue(value.Identity, out var row) is false)
         {
             return;
@@ -66,31 +64,5 @@ public sealed class ModImportRowProgress(
         }
 
         row.Apply(value);
-    }
-
-
-    /// <summary>
-    /// One line for the whole run: how many mods are done, and the name of one that is moving.
-    /// </summary>
-    /// <remarks>
-    /// The three terminal phases all count, failures included. The strip says how far through the
-    /// <em>run</em> is; what became of each mod is the dialog's and the rows' business, and a bar that
-    /// stalled short because two mods failed would be reporting the wrong thing.
-    /// </remarks>
-    private void ReportToShell(ModImportProgress value)
-    {
-        if (task is null)
-        {
-            return;
-        }
-
-        if (value.Phase is ModImportPhase.Completed or ModImportPhase.Failed or ModImportPhase.Skipped)
-        {
-            _finished[value.Identity] = 0;
-        }
-
-        var name = rows.TryGetValue(value.Identity, out var row) ? row.Name : value.Identity.ModId.Value;
-
-        task.Report($"{value.Phase}: {name}", _finished.Count, rows.Count);
     }
 }

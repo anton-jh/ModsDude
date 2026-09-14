@@ -503,7 +503,12 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         try
         {
             var outcome = await _imports.RunAsync(
-                _repo, [.. pending.Select(x => x.Mod)], rows, _catalog, cancellationToken);
+                _repo,
+                [.. pending.Select(x => x.Mod)],
+                rows.ToDictionary(x => x.Key, x => x.Value.Name),
+                _catalog,
+                new ModImportRowProgress(rows),
+                cancellationToken);
 
             if (outcome is { Refusal: string refusal })
             {

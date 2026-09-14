@@ -43,7 +43,26 @@ public enum ModSourceKind
     Downloads,
 
     /// <summary>A folder the user added for this session. Never persisted.</summary>
-    AdHoc
+    AdHoc,
+
+    /// <summary>
+    /// Another profile in this repo, as somewhere versions come from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>It costs no scan.</b> A profile's pins are registered versions by foreign key, so the
+    /// catalog already holds every one of them - what this source contributes is a membership set
+    /// and a version per mod, not a walk over a folder. Like <see cref="Repo"/> it is composed by
+    /// the surface that offers it and consumed by that surface's filter, and
+    /// <see cref="Services.ModCatalog"/> never sees it.
+    /// </para>
+    /// <para>
+    /// It does read the network, which no other source does. The rule it must not break is that
+    /// <em>navigating</em> touches nothing, and enabling a chip is not navigating - so it is
+    /// view-scoped like an ad-hoc folder, added by picking a profile and gone when the page is.
+    /// </para>
+    /// </remarks>
+    Profile
 }
 
 /// <summary>
@@ -91,6 +110,12 @@ public readonly record struct ModSourceId
     /// disabled folder stays disabled however the user reaches it.
     /// </summary>
     public static ModSourceId ForFolder(string path) => new($"folder:{FileSystemHelper.NormalizePathForComparison(path)}");
+
+    /// <summary>
+    /// Another profile in the same repo. One surface is scoped to one repo, so the profile's own id
+    /// is discriminator enough.
+    /// </summary>
+    public static ModSourceId ForProfile(Guid profileId) => new($"profile:{profileId:N}");
 
     public static ModSourceId Parse(string s) => string.IsNullOrWhiteSpace(s)
         ? throw new FormatException("A mod source id cannot be empty.")

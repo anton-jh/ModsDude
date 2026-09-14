@@ -5,6 +5,7 @@ using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
+using System.Collections.Concurrent;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Services;
@@ -73,10 +74,13 @@ public sealed class ModImportCoordinator(
     /// <summary>
     /// Registers <paramref name="versions"/> in the repo, reporting per row and on the strip.
     /// </summary>
-    /// <param name="rows">
-    /// The list rows these versions came from, keyed by identity - the only thing that knows what a
-    /// mod is called, which is what a per-row bar and a failure dialog both need. Both callers hold
-    /// the same kind of row, which is why this is one method rather than a generic one.
+    /// <param name="names">
+    /// What each of these versions is called, keyed by identity - what the strip line and the failure
+    /// dialog both need, and the only thing about a caller's rows this has ever used.
+    /// </param>
+    /// <param name="progress">
+    /// The caller's own sink, where it has rows to draw into. Null for a caller that owns no view -
+    /// a save whose page has been navigated away from is still a run worth watching on the strip.
     /// </param>
     /// <param name="catalog">
     /// The caller's catalog, invalidated when the run ends however it ends. Passed rather than owned:
@@ -90,8 +94,9 @@ public sealed class ModImportCoordinator(
     public async Task<ModImportOutcome> RunAsync(
         Repo repo,
         IReadOnlyList<CatalogModVersion> versions,
-        IReadOnlyDictionary<ModVersionIdentity, ModListItemViewModel> rows,
+        IReadOnlyDictionary<ModVersionIdentity, string> names,
         ModCatalog catalog,
+        IProgress<ModImportProgress>? progress,
         CancellationToken cancellationToken)
     {
         if (versions.Count == 0)
@@ -121,7 +126,7 @@ public sealed class ModImportCoordinator(
 
         var request = new ModImportRequest(repo.Id, versions, repo.Adapter.VersionComparer)
         {
-            Progress = new ModImportRowProgress(rows, task),
+            Progress = new StripProgress(task, names, versions.Count, progress),
             ResolveArbitration = ResolveArbitrationAsync,
             ResolveSourceConflicts = ResolveSourceConflictsAsync,
 
@@ -234,5 +239,42 @@ public sealed class ModImportCoordinator(
     private static Task<T> OnUiThreadAsync<T>(Func<Task<T>> work)
     {
         return Application.Current.Dispatcher.InvokeAsync(work).Task.Unwrap();
+    }
+
+
+    /// <summary>
+    /// One line for the whole run - how many mods are done, and the name of one that is moving -
+    /// with the caller's own sink behind it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Here rather than in the caller's progress</b>, because the strip entry is this class's and
+    /// the run has to stay legible for a caller that owns no rows at all. The three terminal phases
+    /// all count, failures included: the strip says how far through the <em>run</em> is, and a bar
+    /// that stalled short because two mods failed would be reporting the wrong thing.
+    /// </remarks>
+    private sealed class StripProgress(
+        IBackgroundTask task,
+        IReadOnlyDictionary<ModVersionIdentity, string> names,
+        int total,
+        IProgress<ModImportProgress>? inner)
+        : IProgress<ModImportProgress>
+    {
+        /// <summary>Which versions have reached an outcome, so the count is of mods and not of events.</summary>
+        private readonly ConcurrentDictionary<ModVersionIdentity, byte> _finished = new();
+
+
+        public void Report(ModImportProgress value)
+        {
+            if (value.Phase is ModImportPhase.Completed or ModImportPhase.Failed or ModImportPhase.Skipped)
+            {
+                _finished[value.Identity] = 0;
+            }
+
+            var name = names.GetValueOrDefault(value.Identity, value.Identity.ModId.Value);
+
+            task.Report($"{value.Phase}: {name}", _finished.Count, total);
+
+            inner?.Report(value);
+        }
     }
 }

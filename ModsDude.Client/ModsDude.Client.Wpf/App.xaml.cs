@@ -197,6 +197,11 @@ public partial class App : Application
         // questions an import cannot answer for itself live somewhere a new page cannot forget them.
         services.AddSingleton<ModImportCoordinator>();
 
+        // And the third of the set: a profile save claims the profile, runs the import under it, and
+        // outlives the editor that started it - which is what stopped a navigation mid-upload from
+        // registering the files and never writing the revision.
+        services.AddSingleton<ProfileSaveService>();
+
         // Check-in is reached from a slot row and from the check-out dialog's way out of a refused
         // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
         services.AddSingleton<SavegameFlowService>();

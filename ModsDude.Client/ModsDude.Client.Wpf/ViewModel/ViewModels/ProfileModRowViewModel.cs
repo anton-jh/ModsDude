@@ -24,6 +24,7 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     private readonly Func<ProfileModRowViewModel, ProfileModVersionOption, Task<bool>> _confirmLockedChange;
 
     private ProfileModVersionOption _selectedVersion;
+    private IReadOnlyList<ProfileModVersionOption> _versions;
 
 
     public ProfileModRowViewModel(
@@ -42,9 +43,9 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         Name = selected.Name;
 
         // Newest first: a version selector is opened to move forward far more often than back.
-        Versions = [.. versions.Reverse().Select(x => new ProfileModVersionOption(x))];
+        _versions = [.. versions.Reverse().Select(x => new ProfileModVersionOption(x))];
 
-        _selectedVersion = Versions.FirstOrDefault(x => x.Version.VersionId == selected.VersionId)
+        _selectedVersion = _versions.FirstOrDefault(x => x.Version.VersionId == selected.VersionId)
             ?? new ProfileModVersionOption(selected);
         _lockedByProfile = lockedByProfile;
         _item = CreateItem(_selectedVersion, selected: false);
@@ -54,7 +55,21 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     public ModKey ModId { get; }
     public string Name { get; }
 
-    public IReadOnlyList<ProfileModVersionOption> Versions { get; }
+    /// <summary>
+    /// What the selector offers, newest first. Replaced rather than fixed at construction, because a
+    /// source chip changes what is known about this mod and the draft it belongs to outlives that.
+    /// </summary>
+    public IReadOnlyList<ProfileModVersionOption> Versions
+    {
+        get => _versions;
+        private set
+        {
+            _versions = value;
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSeveralVersions));
+        }
+    }
 
 
     /// <summary>
@@ -97,13 +112,21 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     private bool _lockedByProfile;
 
     /// <summary>
-    /// Where the repo's newest version of this mod would take the pin, or null when it is already
-    /// there. Set by the page, which is the thing that knows the repo's ordering.
+    /// Where the newest version of this mod would take the pin, or null when it is already there.
+    /// Set by the page, which is the thing that holds the ordering.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUpdate))]
     [NotifyPropertyChangedFor(nameof(UpdateTooltip))]
     private ModVersionKey? _updateTo;
+
+    /// <summary>
+    /// Whether taking that update also means uploading a file. Set alongside
+    /// <see cref="UpdateTo"/>, because the tooltip is the only place a row says what the move costs.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateTooltip))]
+    private bool _updateImportsOnSave;
 
 
     /// <remarks>
@@ -155,11 +178,36 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 
     public bool HasUpdate => UpdateTo is not null;
 
-    public string UpdateTooltip => UpdateTo is ModVersionKey version
-        ? IsLocked
-            ? $"Version {version} is available. This mod is locked, so batch updates leave it alone - moving it is a decision on this row."
-            : $"Move this profile to version {version}."
-        : string.Empty;
+    /// <summary>
+    /// What the ⬆ on this row would do, in the mod's terms.
+    /// </summary>
+    /// <remarks>
+    /// <b>A profile is not the thing that moves; a mod's version is.</b> This used to say "move this
+    /// profile to version X", which names the wrong subject and reads as a change to the whole list.
+    /// The second sentence is the cost, and it is only there when there is one: an update to a
+    /// version only on disk is an upload as well as a pin.
+    /// </remarks>
+    public string UpdateTooltip
+    {
+        get
+        {
+            if (UpdateTo is not ModVersionKey version)
+            {
+                return string.Empty;
+            }
+
+            var move = $"Update to {version}.";
+
+            if (UpdateImportsOnSave)
+            {
+                move += " Saving imports it.";
+            }
+
+            return IsLocked
+                ? $"{move} This mod is locked, so batch updates leave it alone - moving it is a decision on this row."
+                : move;
+        }
+    }
 
     /// <summary>
     /// Says which level the lock came from, because the two have different fixes - and never implies
@@ -199,6 +247,50 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         {
             Apply(option);
         }
+    }
+
+    /// <summary>
+    /// Re-offers this row's versions from a freshly composed catalog, keeping the pin where it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What a source toggle is allowed to do to a draft.</b> A chip changes what is <em>known</em>
+    /// about a mod, never what this profile has decided about it - so the selector is rebuilt and the
+    /// pin, the lock and the selection are not. A row whose pinned version the new set does not hold
+    /// keeps its own copy of it at the front of the selector, which is what lets a pending row
+    /// survive its folder being switched off with the occurrence that names the file on disk intact.
+    /// </para>
+    /// <para>
+    /// The inner list row is replaced only where the version record actually says something
+    /// different, because replacing it drops a loaded thumbnail - and a chip being ticked is not a
+    /// reason for two hundred icons to blink.
+    /// </para>
+    /// </remarks>
+    public void Rebase(IReadOnlyList<CatalogModVersion> versions)
+    {
+        var known = versions.FirstOrDefault(x => x.VersionId == SelectedVersion.Version.VersionId);
+
+        if (known is null)
+        {
+            versions = [SelectedVersion.Version, .. versions];
+        }
+
+        Versions = [.. versions.Reverse().Select(x => new ProfileModVersionOption(x))];
+
+        var option = Versions.First(x => x.Version.VersionId == SelectedVersion.Version.VersionId);
+
+        if (ModListItemViewModel.RendersTheSame(option.Version, SelectedVersion.Version))
+        {
+            // The selector is a new list of new options, so the one it is showing has to be the one
+            // this row holds or the combo box reads as unset.
+            _selectedVersion = option;
+
+            OnPropertyChanged(nameof(SelectedVersion));
+
+            return;
+        }
+
+        Apply(option);
     }
 
 

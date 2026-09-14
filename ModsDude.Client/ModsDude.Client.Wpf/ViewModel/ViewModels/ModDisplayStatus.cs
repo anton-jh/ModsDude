@@ -12,11 +12,41 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// "New" means different things on the import list and in the profile editor, which is why the
 /// derivation belongs to the page that has a context rather than to the model.
 /// </remarks>
+/// <remarks>
+/// <para>
+/// <b>Four states, two colours, three words</b> in the profile editor, where the left list is now
+/// about versions rather than mods and a row can be an update to something the profile already
+/// holds. A chip's fill says what the version means for the <em>repo</em> and its text says what it
+/// means for <em>this profile</em>: accent where the move is free because the repo holds it, green
+/// where saving would have to upload the file first.
+/// </para>
+/// </remarks>
 public enum ModDisplayStatus
 {
     None,
+
+    /// <summary>Not in the repo. Saving imports it.</summary>
     New,
+
+    /// <summary>
+    /// A newer version of a mod this profile pins, and the repo holds it - so the move costs
+    /// nothing. The accent, because it is the one of the four that is free.
+    /// </summary>
     UpdateAvailable,
+
+    /// <summary>
+    /// The same, for a version that is only on disk: an update to a pinned mod that saving imports.
+    /// Green, because it is an import like the other two green ones.
+    /// </summary>
+    UpdatePending,
+
+    /// <summary>
+    /// Newer than anything the repo holds, of a mod this profile does <em>not</em> pin. An import
+    /// candidate - which is what the repo mods page calls an <em>Update</em> from its own point of
+    /// view, and which is not one from here: nothing in this profile moves by taking it.
+    /// </summary>
+    NewVersion,
+
     AlreadyInRepo,
 
     /// <summary>

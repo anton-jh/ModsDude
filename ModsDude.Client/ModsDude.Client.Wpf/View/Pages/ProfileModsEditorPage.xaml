@@ -195,6 +195,87 @@
             <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
         </Style>
 
+        <!-- A source chip. The same shape as the filter chips below it and deliberately not in the
+             same row: these are independent toggles and those are mutually exclusive, so one row of
+             both would read as one control with two kinds of behaviour in it. Above rather than
+             below, because a source decides what the list is *of* and a filter narrows what it then
+             shows.
+             Failure colours the chip rather than adding a second line - a line under one chip costs
+             every chip in the row the height of the worst of them - and the reason is the tooltip,
+             along with the path. -->
+        <Style x:Key="SourceChip" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0 0 6 0" />
+            <Setter Property="Padding" Value="10 4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Background"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <!-- After the checked trigger, so a source that is switched on and
+                                 unreadable reads as unreadable. -->
+                            <DataTrigger Binding="{Binding HasFailed}" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                <Setter TargetName="Background" Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                            </DataTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                                <Setter TargetName="Background" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The two "add a source" chips and the rescan, which are actions rather than toggles and
+             so keep the neutral chrome whatever is switched on. -->
+        <Style x:Key="SourceActionChip" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0 0 6 0" />
+            <Setter Property="Padding" Value="10 4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Background"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                                <Setter TargetName="Background" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- The strip under a list while something is picked. Absent at zero, so the lists keep
              their height until there is something to say. -->
         <Style x:Key="SelectionBar" TargetType="Border">
@@ -290,7 +371,7 @@
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
-                    <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto auto">
+                    <Grid Grid.Column="0" RowDefinitions="auto auto auto * auto auto">
 
                         <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
 
@@ -302,6 +383,7 @@
                                       Margin="12 0 10 0"
                                       VerticalAlignment="Center"
                                       IsChecked="{Binding AvailableSelection.AllShownSelected, Mode=TwoWay}"
+                                      IsEnabled="{Binding CanEdit}"
                                       ToolTip="Select everything this list is showing" />
 
                             <TextBlock Grid.Column="1"
@@ -329,10 +411,85 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
+                        <!-- The sources, as a row of chips directly above the filter chips. This
+                             used to be a 270px pane under the bulk moves; it is now about 32px, and
+                             nothing about it is behind a click - which is what an empty left list
+                             needs from the one control that explains it.
+                             Every source, the repo included, is a filter over one list, and the
+                             chips say so by all looking the same. -->
+                        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+
+                            <ItemsControl ItemsSource="{Binding Sources}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ModSourceViewModel}">
+                                        <ToggleButton Style="{StaticResource SourceChip}"
+                                                      Margin="0 0 6 6"
+                                                      ToolTip="{Binding Tooltip}"
+                                                      ToolTipService.ShowDuration="20000"
+                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                      IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}"
+                                                           MaxWidth="160"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding ChipCountText}"
+                                                           Margin="6 0 0 0"
+                                                           Opacity="0.7"
+                                                           VerticalAlignment="Center" />
+
+                                                <!-- Session-scoped chips carry their own ⨯: a folder
+                                                     off a USB stick and a profile being diffed
+                                                     against both stop existing when the page does,
+                                                     and switching one off is not the same as being
+                                                     done with it. -->
+                                                <Button Margin="6 0 -2 0"
+                                                        Padding="2 0"
+                                                        VerticalAlignment="Center"
+                                                        Style="{DynamicResource SubtleIconButton}"
+                                                        Width="18" Height="18"
+                                                        FontSize="10"
+                                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                                        Content="&#xE711;"
+                                                        ToolTip="{Binding RemoveTooltip}"
+                                                        Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Style="{StaticResource SourceActionChip}"
+                                    Margin="0 0 6 6"
+                                    Content="+ folder"
+                                    ToolTip="Scanned for this session only, and never written to disk"
+                                    Command="{Binding AddSourceCommand}" />
+
+                            <Button Style="{StaticResource SourceActionChip}"
+                                    Margin="0 0 6 6"
+                                    Content="+ profile"
+                                    ToolTip="Read another profile's list as a source, to see what it holds and this one does not"
+                                    Command="{Binding AddProfileSourceCommand}" />
+
+                            <Button Style="{StaticResource SourceActionChip}"
+                                    Margin="0 0 6 6"
+                                    Content="&#xE72C;"
+                                    FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                    ToolTip="Rescan every folder"
+                                    Command="{Binding RescanAllCommand}" />
+                        </WrapPanel>
+
                         <!-- Chips rather than a dropdown: they compose with the search into one
                              well-defined set, and every bulk action and count on this side is
                              stated against that set. -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0 0 0 8">
                             <RadioButton GroupName="AvailableFilter"
                                          Style="{StaticResource FilterChip}"
                                          Content="All"
@@ -354,7 +511,7 @@
                                          IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Conflicts}" />
                         </StackPanel>
 
-                        <Border Grid.Row="2">
+                        <Border Grid.Row="3">
 
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource ListFrame}">
@@ -394,12 +551,34 @@
                                             <Grid ColumnDefinitions="* auto">
                                                 <ContentPresenter Grid.Column="0" Content="{Binding}" />
 
+                                                <!-- One verb applied to the profile, and which one
+                                                     depends on what it already has of that mod: +
+                                                     where it is absent, ⬆ where this row is a newer
+                                                     version of something already in it. Two buttons
+                                                     rather than a retemplated one, because the chip
+                                                     beside them is what says which case this is and
+                                                     the glyph only has to agree with it.
+                                                     Both run the same command; the page decides
+                                                     which of the two moves it turns out to be. -->
                                                 <Button Grid.Column="1"
                                                         Margin="0 0 8 0"
                                                         VerticalAlignment="Center"
                                                         Style="{DynamicResource SubtleIconButton}"
                                                         Content="&#xE710;"
                                                         ToolTip="Add to this profile"
+                                                        Visibility="{Binding IsUpdateRow, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}" />
+
+                                                <Button Grid.Column="1"
+                                                        Margin="0 0 8 0"
+                                                        VerticalAlignment="Center"
+                                                        Style="{DynamicResource SubtleIconButton}"
+                                                        Content="&#xE74A;"
+                                                        ToolTip="Move this profile's pin to this version"
+                                                        Visibility="{Binding IsUpdateRow, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}"
                                                         Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                         CommandParameter="{Binding}" />
                                             </Grid>
@@ -418,7 +597,7 @@
                              selected, including rows the search is hiding - so it says how many
                              those are and offers to put them down, rather than acting on mods
                              nobody can see. -->
-                        <Border Grid.Row="3"
+                        <Border Grid.Row="4"
                                 Style="{StaticResource SelectionBar}"
                                 Visibility="{Binding AvailableSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid RowDefinitions="auto auto">
@@ -455,7 +634,7 @@
                         <!-- The bulk moves, against the list they read rather than in the save bar:
                              what they take is what is on screen above them, and the search and the
                              chips are how a subset of it is picked. -->
-                        <Grid Grid.Row="4" Margin="0 8 0 0" RowDefinitions="auto auto" ColumnDefinitions="* *">
+                        <Grid Grid.Row="5" Margin="0 8 0 0" RowDefinitions="auto auto" ColumnDefinitions="* *">
                             <Button Grid.Row="0" Grid.Column="0"
                                     Margin="0 0 4 0"
                                     HorizontalAlignment="Stretch"
@@ -485,92 +664,6 @@
                                     ToolTip="Paste mod names or ids and select everything that matches"
                                     Command="{Binding PasteListCommand}" />
                         </Grid>
-
-                        <!-- The sources feed this list and nothing else, so they sit under it.
-                             Disabling a game here says nothing about syncing to it. -->
-                        <!-- Not collapsible. Sources start switched off, so the one control that
-                             explains why the left list is empty is exactly the one a collapsed pane
-                             would hide. -->
-                        <Grid Grid.Row="5" Margin="0 16 0 0" RowDefinitions="auto auto auto">
-
-                            <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="* auto">
-                                <TextBlock Grid.Column="0"
-                                           Text="Sources"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
-                                <Button Grid.Column="1"
-                                        Style="{DynamicResource SubtleIconButton}"
-                                        Content="&#xE72C;"
-                                        ToolTip="Rescan every source"
-                                        Command="{Binding RescanAllCommand}" />
-                            </Grid>
-
-                            <Border Grid.Row="1"
-                                    MaxHeight="200"
-                                    CornerRadius="6"
-                                    BorderThickness="1"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
-                                    <ItemsControl ItemsSource="{Binding Sources}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type vm:ModSourceViewModel}">
-                                                <Grid Margin="6 6" ColumnDefinitions="auto * auto">
-
-                                                    <CheckBox Grid.Column="0"
-                                                              VerticalAlignment="Top"
-                                                              Margin="0 2 0 0"
-                                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
-
-                                                    <StackPanel Grid.Column="1" ToolTip="{Binding Path}">
-                                                        <TextBlock Text="{Binding Name}"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   TextWrapping="NoWrap"
-                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                                                        <!-- One unreadable folder marks one
-                                                             source bad rather than failing the
-                                                             whole list. -->
-                                                        <TextBlock Text="{Binding CountText}"
-                                                                   ToolTip="{Binding Error}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="FontSize" Value="12" />
-                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding HasFailed}" Value="True">
-                                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
-                                                    </StackPanel>
-
-                                                    <Button Grid.Column="2"
-                                                            VerticalAlignment="Top"
-                                                            Style="{DynamicResource SubtleIconButton}"
-                                                            Width="28"
-                                                            Content="&#xE711;"
-                                                            ToolTip="Remove this folder"
-                                                            Visibility="{Binding IsAdHoc, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                            Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </Border>
-
-                            <Button Grid.Row="2"
-                                    Margin="0 8 0 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Add a folder…"
-                                    ToolTip="Scanned for this session only, and never written to disk"
-                                    Command="{Binding AddSourceCommand}" />
-                        </Grid>
                     </Grid>
 
                     <!-- The profile itself. Updates live here rather than on the left, so a mod with
@@ -583,6 +676,7 @@
                                       Margin="12 0 10 0"
                                       VerticalAlignment="Center"
                                       IsChecked="{Binding PinnedSelection.AllShownSelected, Mode=TwoWay}"
+                                      IsEnabled="{Binding CanEdit}"
                                       ToolTip="Select everything this list is showing" />
 
                             <TextBlock Grid.Column="1"
@@ -616,6 +710,18 @@
                                          Content="Pending"
                                          ToolTip="Pinned at a version the repo does not hold yet. Saving imports these."
                                          IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Pending}" />
+
+                            <!-- The mirror of the left list's diff view. With another profile as the
+                                 only enabled source this is exactly what this profile holds and that
+                                 one does not, and "Take out everything shown" is under the list.
+                                 Disabled while nothing is enabled, where it would select the whole
+                                 profile and mean nothing. -->
+                            <RadioButton GroupName="PinnedFilter"
+                                         Style="{StaticResource FilterChip}"
+                                         Content="Not in the sources"
+                                         ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
+                                         IsEnabled="{Binding HasEnabledSources}"
+                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
                         </StackPanel>
 
                         <!-- The batch action applies to unlocked mods only, and says how many it
@@ -647,9 +753,55 @@
                                         Visibility="{Binding HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
                                         Command="{Binding ShowSkippedUpdatesCommand}" />
 
-                                <Button Grid.Column="2"
-                                        Content="{Binding ApplyUpdatesText}"
-                                        Command="{Binding ApplyAllUpdatesCommand}" />
+                                <!-- A split button carrying the same split the sentence on the left
+                                     does: the primary takes everything that is newer, wherever the
+                                     file is, and the caret takes only the half that costs no
+                                     upload. -->
+                                <StackPanel x:Name="UpdateSplitButton"
+                                            Grid.Column="2" Orientation="Horizontal">
+
+                                    <Button x:Name="UpdateAllButton"
+                                            Content="{Binding ApplyUpdatesText}"
+                                            Command="{Binding ApplyAllUpdatesCommand}" />
+
+                                    <!-- Its own enabled condition rather than the primary's: there
+                                         can be a free half of a mixed set and there can equally be
+                                         none, which is exactly when the menu is worth opening. -->
+                                    <ToggleButton x:Name="UpdateVariantButton"
+                                                  Margin="2 0 0 0"
+                                                  Padding="8 0"
+                                                  ToolTip="Other ways to update"
+                                                  Content="&#xE70D;"
+                                                  FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                  FontSize="10"
+                                                  Visibility="{Binding HasRepoOnlyUpdates, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <Popup IsOpen="{Binding IsChecked, ElementName=UpdateVariantButton, Mode=TwoWay}"
+                                           PlacementTarget="{Binding ElementName=UpdateSplitButton}"
+                                           Placement="Bottom"
+                                           StaysOpen="False"
+                                           AllowsTransparency="True">
+
+                                        <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                                Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                Padding="4">
+                                            <Button Width="300"
+                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                    Command="{Binding ApplyRepoUpdatesCommand}"
+                                                    Click="CloseUpdateVariants">
+                                                <StackPanel Orientation="Vertical">
+                                                    <TextBlock Text="{Binding UpdateRepoOnlyText}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding UpdateRepoOnlyDescription}"
+                                                               Margin="0 2 0 0"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Border>
+                                    </Popup>
+                                </StackPanel>
                             </Grid>
                         </Border>
 
@@ -693,7 +845,13 @@
 
                                                 <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
 
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <!-- Everything on this row that can change the draft,
+                                                     under one IsEnabled. The list itself stays live -
+                                                     IsEnabled on a ListBox stops the mouse wheel
+                                                     along with everything else, and reading is not
+                                                     writing. -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                            IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
 
                                                     <!-- Nothing has been uploaded for this row yet;
                                                          Save is what imports it, and Cancel is what
@@ -992,16 +1150,25 @@
                 <Button Grid.Column="1" Margin="4 24 4 24"
                         Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
 
-                <TextBlock Grid.Column="2"
-                           Margin="16 0"
-                           VerticalAlignment="Center"
-                           Text="{Binding PendingText}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <StackPanel Grid.Column="2" Margin="16 0" VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding PendingText}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- Why Save is greyed, named rather than merely stated: the answer is "wait for
+                         that one", and only the name says which. A draft with nothing to import is
+                         a revision write and saves perfectly well beside an import into the same
+                         repo, so this is only ever about the half that has to upload. -->
+                    <TextBlock Text="{Binding SaveBlockedReason}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
 
                 <Button Grid.Column="3" Margin="4 24 32 24"
                         Content="Stop saving"
-                        Command="{Binding SaveChangesCancelCommand}"
+                        Command="{Binding StopSavingCommand}"
                         Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />
             </Grid>
 

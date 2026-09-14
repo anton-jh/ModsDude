@@ -124,6 +124,9 @@
             <DataTemplate DataType="{x:Type vm:CopyProfileModsModalViewModel}">
                 <uc:CopyProfileModsDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:PickProfileSourceModalViewModel}">
+                <uc:PickProfileSourceDialog />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:PasteModListModalViewModel}">
                 <uc:PasteModListDialog />
             </DataTemplate>
@@ -173,6 +176,7 @@
 
             <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
             <vc:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+            <vc:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
 
             <!-- A heading inside a sidebar list, for a list that is grouped. Deliberately quieter than
                  SidebarHeader, which names a whole list and carries an action: this one only says
