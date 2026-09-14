@@ -629,9 +629,13 @@ it says every status the monitor reports and not only `Drifted`.) *"3 mods diffe
 **Drift on a locked mod is the dangerous case and deserves different treatment.** An unlocked mod
 sitting at the wrong version is untidy; a locked map at the wrong version is a corrupted save
 waiting to happen. Say so specifically — *"Your map is at 1.4, the profile pins 1.2. Hosting
-this save may damage it."* — rather than folding it into a count.
-`DriftReport.LockedMods` and `ModSyncItem.Locked` both carry the fact already; nothing
-renders it, so the user currently gets the count.
+this save may damage it."* — rather than folding it into a count. `DriftReport.LockedDrift` carries
+the mods and the reason each is named, and it gets **its own card** in the column, at Critical where
+the folder's is at Warning: it is a different severity from the drift it arrived with, and stacking
+it as a coloured line inside that card was the closest a single box could get to saying so.
+
+One card per folder however many mods are in it, though — twenty locked mods are one update-all with
+one remedy, and the names belong in the body rather than in twenty cards.
 
 ### Turning the chore into something useful
 
@@ -674,6 +678,34 @@ The notification lives in the shell, next to the modal slot `MainWindowViewModel
 but it is **not** a modal: it must not block the app, and the user has to be able to keep working
 while it is up.
 
+#### One card became a column
+
+Everything above is still the requirement. What changed is that it is no longer *one* notification:
+the shell draws a [column of them](05-client.md#the-notice-column), and drift contributes a card per
+folder, a card per folder with locked mods in it, and a card per drifted savegame.
+
+**The single card was doing list-rendering in prose.** It showed the first drifted game and
+summarised the rest as *3 games have drifted*, with no way to reach the other two; it said the
+locked half and the savegame half as lines inside the mod half's box; and it ended those lines with
+*2 more locked mods are affected as well* and *2 more savegame problems here as well* — counts
+standing in for items each of which had its own remedy.
+
+**The arguments it made against being split are on the record and were overruled deliberately.** It
+said that *two notices racing to say one each is how a warning becomes noise*, and that *a person
+acts on one problem at a time, and a list of three would be read as a wall rather than as three
+things*. Both are true of a corner with room for one card in it. They stop being true of a list that
+sorts by what is at stake, keeps a game's folders together under one heading, opens only the first
+two and the critical ones, and holds the tail behind a count. If the column ever reads as a wall,
+the corner was right and this should go back.
+
+**Dismissal became per notice**, which is the change that needed the split to be worth anything.
+It used to be one signature over every drifted folder and every corrupt blob at once — because one
+card has one button, and one button can only mean everything — so waving away a folder that gained
+two stray mods also silenced a locked map in another game. `DriftMonitor` no longer holds it at all;
+`DismissalLedger` does, keyed per notice and signed with what that notice says. What the monitor
+kept is the same signature's other job: deciding whether a re-check changed anything, so an alt-tab
+that re-listed the same folders does not redraw the column.
+
 #### Everything that can change the answer re-asks it
 
 Startup, the folder watcher and window activation are the three mechanisms that cover drift the
@@ -681,7 +713,7 @@ app did not cause. They are no use at all for drift it *did*: somebody who takes
 active profile, saves without applying and alt-tabs straight back to the game has changed what the
 notice would say, and nothing was watching. The check has to be driven by the facts changing.
 
-So the four that are not a folder listing are events, wired once in `DriftNotificationViewModel`
+So the four that are not a folder listing are events, wired once in `NoticeCenterViewModel`
 rather than remembered at each call site:
 
 | Event | Raised by | Because |
@@ -689,7 +721,7 @@ rather than remembered at each call site:
 | A profile's head revision moved | `ProfileService.ProfileUpdated` | Every folder built against the previous one is drifted from that moment — whether this client saved it or a refresh brought back a teammate's save |
 | A game was repointed | `GameRepository.GameChanged` | A new mod folder, or a new active profile, makes every previous answer about it meaningless. `CollectionChanged` covers adds and removes; this covers the edits, which used to be silent |
 | A savegame was taken, handed back or forgotten | `SavegameBindingStore.BindingsChanged` | What this machine holds is the other half of what the notice reports, and it changes without anything touching a mod folder |
-| The mod list editor stopped suppressing | `DriftNotificationViewModel.Release` | It is the one page that can change the answer while being told not to say it, so the last computed result is precisely what must not be trusted there |
+| The mod list editor stopped suppressing | `NoticeCenterViewModel.Release` | It is the one page that can change the answer while being told not to say it, so the last computed result is precisely what must not be trusted there |
 
 All of them run as `DriftCheckReason.Explicit`, so the five-second activation throttle never
 swallows one: they are consequences of something the user just did, and the complaint they answer
@@ -726,18 +758,33 @@ for one slice, so that this notice could say *in the 'MP client' folder* without
 stale copy of derived data bought to improve a sentence in the one state where the sentence should
 not have been about folders at all.
 
-#### The notice says both halves
+#### The savegame half is its own notice
 
 `TargetDrift.IsDrifted` is true for a held savegame that has moved even when the mod folder is
 exactly what was installed — `SavegameDriftRules` decides which of the three ways it has, and
-`DriftReport.SavegameDrift` carries them — so the notice can be raised entirely by the
-savegame half. It therefore has to be able to *say* so: `SavegameWarning` is
-its own line, in the same caution colour as the locked-mod one because it is the same class of
-problem, and the headline names which of the two situations this is.
+`DriftReport.SavegameDrift` carries them — so the column can be raised entirely by the savegame
+half, with nothing at all to say about mods.
 
-Without it, a game whose mod folder and profile were both empty produced a notice headlined
-"no longer matches the applied profile" with no detail underneath at all — every sentence the
-detail line could build was about file counts and revisions, and there were none.
+It used to have to say so inside the mod half's card, as a caution-coloured line under a headline
+about mod files; a game whose mod folder and profile were both empty produced *"no longer matches
+the applied profile"* with no detail underneath, because every sentence the detail line could build
+was about file counts and revisions and there were none. A savegame is now its own card, so that
+problem cannot recur: there is no mod half to be empty.
+
+**One card per savegame, not per kind.** The kinds are not exclusive — a save can have been played
+here *and* taken over by somebody who checked in, which is the worst case and the one where saying
+only half would be actively misleading — so every kind that applies is said on the one card, and the
+headline is the first, which `SavegameDriftRules` makes unchecked-in play.
+
+**Gathered across the game's folders.** A held save sits in one target's savegame folder, so the
+entry carrying it need not be the entry whose mods drifted; the builder reads every entry of a game
+before deciding what savegame cards it has.
+
+**Its action is the saves list.** Check in, discard and stop tracking all live on the repo's saves
+list beside the row the card names, so the card navigates there rather than growing its own copy of
+a flow that has confirmations in it. The one exception is a past savegame whose folder has moved off
+the revision it pins: that is the single savegame problem a re-apply actually fixes, and the card
+offers it with the number it will install on the button.
 
 ### Saving changes re-applies by default
 

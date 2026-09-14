@@ -173,14 +173,65 @@ They stay out of the notice deliberately, and a mod that simply ships no picture
 distinguishable in the log from one whose upload failed — which is the whole reason it is logged
 at all.
 
-**`BackgroundProblemViewModel`** is the notice, and `IBackgroundProblemReporter` is what the
-absorbing sites talk to; the container registers one object under both. It counts reports by kind
-and draws one card in the shell, under the drift notice and deliberately quieter than it — drift
-risks a savegame and offers to fix it, this one has nothing to offer but the truth and a button
-that opens the log folder. Aggregated rather than raised per failure: a storage container that
-does not exist is one problem seen 2,000 times, not 2,000 problems. Dismissal starts a
-ten-minute cooldown rather than silencing the session; counting continues underneath, so a
-problem that is still happening comes back with the full total.
+**`BackgroundProblemSource`** counts them, and `IBackgroundProblemReporter` is what the absorbing
+sites talk to; the container registers one object under both. It contributes one notice per kind to
+the [notice column](#the-notice-column), at the quiet end of it — drift risks a savegame and offers
+to fix it, these have nothing to offer but the truth and a button that opens the log folder.
+Aggregated within a kind rather than raised per failure: a storage container that does not exist is
+one problem seen 2,000 times, not 2,000 problems.
+
+**Dismissal here is a cooldown rather than a signature**, and it is the one place in the column
+where that is true. Every other notice is dismissed against what it says, so a changed sentence
+brings it back; that rule applied to a count which ticks upward during an import would bring the
+card back on the very next failure, which is not a dismissal at all. Ten minutes, with counting
+continuing underneath, so a problem that is still happening comes back with the full total.
+
+## The notice column
+
+Everything the app has to say that no page owns is drawn as a card in a column down the right-hand
+side of the shell, owned by `NoticeCenterViewModel`. It replaces the single drift card that used to
+sit in the bottom-right corner.
+
+**One notice is one problem with one remedy.** The old card multiplexed the mod half, the locked
+half, the savegame half and the shared mod cache into one bordered box, showed the first drifted
+game and summarised the rest as *3 games have drifted*, and closed the lists it could not fit with
+*2 more savegame problems here as well*. Those tails were list items flattened into sentences
+because there was one card to put them in.
+
+| Notice | Subject | Severity | Leading action |
+| --- | --- | --- | --- |
+| Folder drift | one target | Warning | Review |
+| Not applied / repointed / never synced | one target | Pending | Re-apply |
+| Locked mods | one target, however many mods | Critical | Review |
+| Savegame drift | one savegame, however many kinds | Critical | Open the save |
+| Rewritten store blob | one volume | Critical | Open log folder |
+| Repo this account cannot see | one game | Warning | — (and not dismissible) |
+| Absorbed background failure | one kind | Info | Open log folder |
+
+**What decomposes and what does not** is decided by whether the items share a remedy. Savegames get
+a card each because each is a different slot with a different next step. Locked mods stay one card
+per folder because twenty of them are one update-all with one remedy, and twenty cards would be the
+wall the single card was right to fear — they are named in the body, which is where a list belongs.
+
+**`NoticeBuilder` is pure**, for the reason `SavegameDriftRules` is: listing folders, hashing slots
+and reading a membership level happen around it, so the rule deciding what the user is told — and
+in which order, and with which button on it — is one function that can be exercised exhaustively.
+The sentences were the half of the old card no test ever reached. What it needs from the running app
+is three lookups behind `INoticeEnvironment`.
+
+**Order is by what is at stake, by game.** Games sort by their worst card and stay together under
+one heading, so a machine running a dedicated server and an MP client reads as one game in trouble
+rather than as three. Six cards are drawn before the rest go behind a count, and only the first two
+and the critical ones start expanded.
+
+**Dismissal is per notice** — `DismissalLedger`, keyed by notice and signed with what that notice
+says. It is still deliberately weak: nothing is persisted, there is no permanent form of it, and an
+entry is forgotten once its notice stops being raised, so a problem that was waved away and then
+actually fixed does not silence the same problem next week.
+
+**The background-task strip stays along the top edge** rather than joining the column. It is about
+the present and offers nothing to do, and a progress bar among actionable warnings would make the
+column mean two things.
 
 `LazyLoad` is the one service-locator seam in the app: an attached behaviour is constructed by
 XAML and has no constructor for the container to reach, so `App.OnStartup` hands it a logger and

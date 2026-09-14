@@ -27,7 +27,7 @@ public class DriftMonitorTests
         fixture.Monitor.Check();
 
         Assert.True(fixture.Monitor.HasDrift);
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.True(fixture.Monitor.HasAnything);
     }
 
     /// <summary>
@@ -140,22 +140,25 @@ public class DriftMonitorTests
         Assert.False(fixture.Monitor.HasDrift);
     }
 
+    /// <summary>
+    /// The profile moving a second time is a different answer from the first, which is what lets the
+    /// column bring a notice back that was waved away at revision 7.
+    /// </summary>
     [Fact]
-    public void A_dismissed_notice_comes_back_when_the_profile_moves_again()
+    public void A_profile_that_moves_again_reports_the_revision_it_moved_to()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(6, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 7;
         fixture.Monitor.Check();
-        fixture.Monitor.Dismiss();
 
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.Equal(7, fixture.Monitor.Drifted.Single().Report.CurrentRevision);
 
         fixture.Revisions.Head = 8;
         fixture.Monitor.Check();
 
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.Equal(8, fixture.Monitor.Drifted.Single().Report.CurrentRevision);
     }
 
     [Fact]
@@ -197,60 +200,56 @@ public class DriftMonitorTests
     }
 
     [Fact]
-    public void Dismissal_lasts_while_the_drift_set_is_the_same()
+    public void Re_checking_the_same_problem_goes_on_reporting_it()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
         fixture.Monitor.Check();
-        fixture.Monitor.Dismiss();
-
-        Assert.True(fixture.Monitor.IsDismissed);
-        Assert.False(fixture.Monitor.ShouldNotify);
-
-        // Re-checking the same problem does not resurrect the notice.
         fixture.Monitor.Check();
 
-        Assert.False(fixture.Monitor.ShouldNotify);
+        // The monitor has no opinion about what the user has read - see DismissalLedger, which does.
         Assert.True(fixture.Monitor.HasDrift);
+        Assert.Equal(["fs25_a.zip"], fixture.Monitor.Drifted.Single().Report.Changed);
     }
 
+    /// <summary>
+    /// A second mod going wrong is a different answer from the first, which is what brings a notice
+    /// back that was waved away while only one had.
+    /// </summary>
     [Fact]
-    public void Dismissal_ends_the_moment_the_drift_set_changes()
+    public void A_second_mod_going_wrong_joins_the_report()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
         fixture.Monitor.Check();
-        fixture.Monitor.Dismiss();
 
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.Equal(["fs25_a.zip"], fixture.Monitor.Drifted.Single().Report.Changed);
 
-        // A second mod going wrong is a different problem from the one that was waved away.
         fixture.Folder.WriteFile("fs25_b.zip", "and this");
         fixture.Monitor.Check();
 
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.Equal(2, fixture.Monitor.Drifted.Single().Report.Changed.Count);
     }
 
     [Fact]
-    public void Dismissal_does_not_survive_a_restart()
+    public void Drift_survives_a_restart()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
         fixture.Monitor.Check();
-        fixture.Monitor.Dismiss();
 
-        // Nothing about dismissal is persisted: a dismissed warning that never comes back is a
-        // savegame silently at risk.
+        // It is read off the manifest and the folder, so nothing about it depends on having been
+        // running when the game changed them.
         using var restarted = fixture.Restart();
         restarted.Check();
 
-        Assert.True(restarted.ShouldNotify);
+        Assert.True(restarted.HasAnything);
     }
 
     [Fact]
@@ -262,14 +261,14 @@ public class DriftMonitorTests
 
         fixture.Monitor.Check();
 
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.True(fixture.Monitor.HasAnything);
 
         // What a re-apply leaves behind.
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Monitor.Check();
 
         Assert.False(fixture.Monitor.HasDrift);
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.False(fixture.Monitor.HasAnything);
     }
 
     [Fact]
@@ -347,11 +346,11 @@ public class DriftMonitorTests
     }
 
     /// <summary>
-    /// Dismissal is per drift set, and the second folder going wrong under a notice waved away about
-    /// the first is a different problem - which the signature has to be keyed finely enough to see.
+    /// Reported per folder, so the second one going wrong is its own entry rather than a change to
+    /// the first's - which is what lets the column draw them as two cards and dismiss them apart.
     /// </summary>
     [Fact]
-    public void A_dismissed_notice_comes_back_when_the_other_folder_goes_wrong()
+    public void The_other_folder_going_wrong_is_its_own_entry()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -359,14 +358,14 @@ public class DriftMonitorTests
 
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
         fixture.Monitor.Check();
-        fixture.Monitor.Dismiss();
 
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.Single(fixture.Monitor.Drifted);
 
         fixture.SecondFolder.WriteFile("fs25_a.zip", "and this");
         fixture.Monitor.Check();
 
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.Equal(2, fixture.Monitor.Drifted.Count);
+        Assert.Equal(2, fixture.Monitor.Drifted.Select(x => x.Target!.Target.Key).Distinct().Count());
     }
 
     [Fact]
@@ -404,7 +403,7 @@ public class DriftMonitorTests
         var drifted = Assert.Single(fixture.Monitor.Drifted);
 
         Assert.Equal(DriftStatus.NotApplied, drifted.Report.Status);
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.True(fixture.Monitor.HasAnything);
     }
 
     /// <summary>
@@ -423,7 +422,7 @@ public class DriftMonitorTests
         fixture.Monitor.Check();
 
         Assert.Equal(DriftStatus.NeverSynced, Assert.Single(fixture.Monitor.Drifted).Report.Status);
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.True(fixture.Monitor.HasAnything);
     }
 
     /// <summary>
@@ -440,7 +439,7 @@ public class DriftMonitorTests
         fixture.Monitor.Check();
 
         Assert.Empty(fixture.Monitor.Drifted);
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.False(fixture.Monitor.HasAnything);
     }
 
     /// <summary>
@@ -600,10 +599,11 @@ public class DriftMonitorTests
     }
 
     /// <summary>
-    /// Dismissing waves away what is on screen. A second blob going wrong is not that.
+    /// A second blob going wrong joins the accumulated set rather than replacing it, which is what
+    /// changes what the volume's notice says and so brings a dismissed one back.
     /// </summary>
     [Fact]
-    public void A_second_rewritten_blob_brings_a_dismissed_notice_back()
+    public void A_second_rewritten_blob_joins_the_first()
     {
         using var fixture = new MonitorFixture(withStore: true);
         fixture.SyncLinked("fs25_a.zip", "one");
@@ -611,10 +611,7 @@ public class DriftMonitorTests
         fixture.Folder.WriteFile("fs25_a.zip", "written through");
         fixture.Monitor.Check();
 
-        fixture.Monitor.Dismiss();
-
-        Assert.True(fixture.Monitor.IsDismissed);
-        Assert.False(fixture.Monitor.ShouldNotify);
+        Assert.Single(fixture.Monitor.StoreCorruption);
 
         // A different mod, going the same way.
         fixture.SyncLinked("fs25_b.zip", "two");
@@ -622,8 +619,7 @@ public class DriftMonitorTests
         fixture.Monitor.Check();
 
         Assert.Equal(2, fixture.Monitor.StoreCorruption.Count);
-        Assert.False(fixture.Monitor.IsDismissed);
-        Assert.True(fixture.Monitor.ShouldNotify);
+        Assert.True(fixture.Monitor.HasAnything);
     }
 
 

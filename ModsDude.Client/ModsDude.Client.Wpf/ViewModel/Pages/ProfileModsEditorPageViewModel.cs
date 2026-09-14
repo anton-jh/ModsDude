@@ -69,7 +69,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly DriftMonitor _driftMonitor;
-    private readonly DriftNotificationViewModel _driftNotification;
+    private readonly NoticeCenterViewModel _notices;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly ActiveProfile _activeProfile;
 
@@ -171,7 +171,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         DriftMonitor driftMonitor,
-        DriftNotificationViewModel driftNotification,
+        NoticeCenterViewModel notices,
         IBackgroundTaskReporter backgroundTasks)
     {
         _backgroundTasks = backgroundTasks;
@@ -188,7 +188,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _gameRepository = gameRepository;
         _applyService = applyService;
         _driftMonitor = driftMonitor;
-        _driftNotification = driftNotification;
+        _notices = notices;
         _activeProfile = new ActiveProfile(repo.Id, profile.Id);
 
         // The page owns the catalog and disposes it, so the per-source scan cache lives exactly as
@@ -223,7 +223,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         // The one place the app-level drift notice is suppressed: somebody already looking at the
         // drifted profile's mod list does not need to be told about it.
-        _driftNotification.SuppressFor(_activeProfile);
+        _notices.SuppressFor(_activeProfile);
     }
 
 
@@ -1771,7 +1771,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _navigationLock.ReleaseLock(this);
-        _driftNotification.Release(_activeProfile);
+        _notices.Release(_activeProfile);
 
         _undoTimer.Stop();
 

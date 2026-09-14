@@ -73,144 +73,199 @@
             </StackPanel>
         </Border>
 
-        <!-- Beside the modal slot, not in it. Both notices have to be visible from every view and
-             must not stop the user working: the drift already happened while they were in the game,
-             and the background failures are things the app chose to absorb. They stack rather than
-             share the corner, with drift on top - it is the one that can cost a savegame. -->
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                    Margin="0 0 24 24"
-                    MaxWidth="460">
+        <!-- Beside the modal slot, not in it. Everything in this column has to be visible from every
+             view and must not stop the user working: the drift already happened while they were in
+             the game, and the background failures are things the app chose to absorb.
 
-            <Border DataContext="{Binding DriftNotification}"
-                    Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                    Margin="0 0 0 12"
-                    Padding="20"
-                    CornerRadius="6"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource SystemFillColorCautionBrush}">
+             A column rather than the single card that used to sit in this corner. That card
+             multiplexed the mod half, the locked half, the savegame half and the shared mod cache
+             into one box, showed the first drifted game and summarised the rest as "3 games have
+             drifted", and closed the lists it could not fit with "2 more savegame problems here as
+             well" - list items flattened into sentences because there was one card to put them in.
 
-                <StackPanel Orientation="Vertical">
+             Overlaid rather than given a gutter, and zero-width when empty: a fixed column would
+             cost horizontal space permanently in an app that is already three sidebars deep, and
+             it is empty most of the time. -->
+        <Grid HorizontalAlignment="Right" VerticalAlignment="Stretch"
+              Width="420"
+              Margin="0 56 16 16"
+              DataContext="{Binding Notices}"
+              Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                    <TextBlock Text="{Binding Headline}"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-                    <TextBlock Text="{Binding Detail}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <!-- Bottom-anchored inside its own scroller, so one notice sits in the corner where the
+                 single card used to and a full column grows upward into space the page was not
+                 using. -->
+            <ScrollViewer Grid.Row="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalAlignment="Bottom">
 
-                    <!-- Its own line, in its own colour: a locked map at the wrong version is not a
-                         tidiness problem. -->
-                    <TextBlock Text="{Binding LockedWarning}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                               Visibility="{Binding HasLockedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <ItemsControl ItemsSource="{Binding Notices}"
+                              VerticalAlignment="Bottom">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:NoticeViewModel}">
+                            <StackPanel Margin="0 0 0 8">
 
-                    <!-- The savegame half, and it can be the whole reason this notice is up: a folder
-                         that matches its profile exactly is still worth warning about while it holds
-                         an evening nobody else can see. Same colour as the locked warning, because it
-                         is the same class of problem - something on this disk only. -->
-                    <TextBlock Text="{Binding SavegameWarning}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                               Visibility="{Binding HasSavegameWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <!-- Only above the first card of a run, and only where a game
+                                     contributed more than one: three folders of one game reading as
+                                     three games in trouble is the one real objection to a column. -->
+                                <TextBlock Text="{Binding GroupLabel}"
+                                           Margin="4 8 0 4"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Visibility="{Binding HasGroupHeading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <!-- The shared cache was written through, which is the one problem here that is
-                         not about this game at all - every repo on that drive was being served
-                         those bytes. Critical rather than caution for exactly that reason. -->
-                    <TextBlock Text="{Binding StoreWarning}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                               Visibility="{Binding HasStoreWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <Border Padding="16"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#40000000" BlurRadius="10" ShadowDepth="1" />
+                                    </Border.Effect>
 
-                    <TextBlock Text="{Binding ImportPrompt}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Visibility="{Binding HasImportPrompt, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <!-- The border says what is at stake, because the column is read
+                                         top down and the colour is what survives a glance. Critical
+                                         is the one that can cost an evening. -->
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
 
-                    <TextBlock Text="{Binding Status}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                               Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Orientation="Vertical">
 
-                    <WrapPanel Orientation="Horizontal" Margin="0 16 0 0">
+                                        <Grid ColumnDefinitions="* auto">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Headline}"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                        <!-- Review leads: what is in the folder now is usually what the user meant to
-                             end up with, and re-applying before looking throws it away. -->
-                        <Button Content="Review"
-                                Margin="0 0 8 0"
-                                Style="{DynamicResource AccentButtonStyle}"
-                                Command="{Binding OpenModListCommand}"
-                                Visibility="{Binding CanReview, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <!-- The whole card is the hit target for expanding, so a
+                                                 collapsed one does not need aiming at. -->
+                                            <Button Grid.Column="1"
+                                                    Margin="8 -4 -4 0"
+                                                    Padding="6 2"
+                                                    VerticalAlignment="Top"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Command="{Binding ToggleExpandedCommand}">
+                                                <TextBlock Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="&#xE70D;" />
+                                                            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+                                                            <Setter Property="FontSize" Value="10" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                    <Setter Property="Text" Value="&#xE70E;" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Button>
+                                        </Grid>
 
-                        <!-- Declared twice because a WPF style cannot set the Style property, so the
-                             accent cannot be moved by a trigger. Exactly one is ever visible: the
-                             plain one beside Review, and the accent one for a guest, whose notice
-                             would otherwise have nothing on it that looks like the thing to do. -->
-                        <Button Content="{Binding ReapplyLabel}"
-                                Margin="0 0 8 0"
-                                Command="{Binding ReapplyCommand}"
-                                Visibility="{Binding CanReapplyBesideReview, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                        <Button Content="{Binding ReapplyLabel}"
-                                Margin="0 0 8 0"
-                                Style="{DynamicResource AccentButtonStyle}"
-                                Command="{Binding ReapplyCommand}"
-                                Visibility="{Binding ReapplyIsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <TextBlock Text="{Binding Body}"
+                                                       Margin="0 8 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{Binding HasBody, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <Button Content="Dismiss"
-                                Command="{Binding DismissCommand}" />
-                    </WrapPanel>
+                                            <TextBlock Text="{Binding Footnote}"
+                                                       Margin="0 8 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       Visibility="{Binding HasFootnote, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </StackPanel>
 
-                </StackPanel>
-            </Border>
+                                        <!-- Outside the collapsible half: what the last press did is
+                                             the one thing a collapsed card must not swallow. -->
+                                        <TextBlock Text="{Binding Status}"
+                                                   Margin="0 8 0 0"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                                   Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-            <!-- The quiet one. No accent button and no fix to offer: it reports that something the app
-                 absorbed did in fact happen, and points at the log. -->
-            <Border DataContext="{Binding BackgroundProblems}"
-                    Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                    Padding="16"
-                    CornerRadius="6"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                        <WrapPanel Orientation="Horizontal" Margin="0 12 0 0"
+                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                <StackPanel Orientation="Vertical">
+                                            <ItemsControl ItemsSource="{Binding Actions}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:NoticeActionViewModel}">
+                                                        <!-- Declared twice because a WPF style cannot set the
+                                                             Style property, so the accent cannot be moved by a
+                                                             trigger. Exactly one is ever visible. -->
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Button Content="{Binding Label}"
+                                                                    Margin="0 0 8 0"
+                                                                    Style="{DynamicResource AccentButtonStyle}"
+                                                                    Command="{Binding InvokeCommand}"
+                                                                    Visibility="{Binding IsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <TextBlock Text="{Binding Headline}"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                            <Button Content="{Binding Label}"
+                                                                    Margin="0 0 8 0"
+                                                                    Command="{Binding InvokeCommand}"
+                                                                    Visibility="{Binding IsSecondary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
 
-                    <TextBlock Text="{Binding Detail}"
-                               Margin="0 8 0 0"
-                               TextWrapping="Wrap"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <Button Content="Dismiss"
+                                                    Command="{Binding DismissCommand}"
+                                                    Visibility="{Binding CanDismiss, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </WrapPanel>
 
-                    <WrapPanel Orientation="Horizontal" Margin="0 12 0 0">
-                        <Button Content="Open log folder"
-                                Margin="0 0 8 0"
-                                Command="{Binding OpenLogCommand}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
 
-                        <Button Content="Dismiss"
-                                Command="{Binding DismissCommand}" />
-                    </WrapPanel>
+            <!-- The column's own footer: the tail it is holding back, and the one gesture for the
+                 morning after an update-all that touched every game on the machine. -->
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0 8 0 0">
 
-                </StackPanel>
-            </Border>
+                <Button Content="{Binding Overflow}"
+                        Margin="0 0 8 0"
+                        Command="{Binding ToggleShowAllCommand}"
+                        Visibility="{Binding HasOverflow, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-        </StackPanel>
+                <Button Content="Dismiss all"
+                        Command="{Binding DismissAllCommand}"
+                        Visibility="{Binding CanDismissAll, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
+
+        </Grid>
 
         <Grid Background="{DynamicResource SmokeFillColorDefaultBrush}"
               Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"

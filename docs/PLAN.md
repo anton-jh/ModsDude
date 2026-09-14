@@ -2025,6 +2025,58 @@ Breaking changes are allowed: there are no users, and one item below orphans loc
   the repo deleted — is dropped on sight by `ForgetDeletedHoldsAsync`, so the string is defensive
   rather than reachable.
 
+## Phase 13 — The notice becomes a column
+
+One card in the bottom-right corner became a list down the right-hand side. The card was not wrong
+about anything it said; it had run out of room to say it, and had started rendering lists as prose.
+
+- [x] **One notice is one problem with one remedy.** `NoticeBuilder` turns the drift results and the
+      accumulated store corruption into `Notice` records, and `NoticeCenterViewModel` draws them.
+      What the old card carried as one box is now a card per drifted folder, a card per folder with
+      locked mods in it, a card per drifted savegame, a card per volume whose cache was written
+      through, and a card per kind of absorbed background failure.
+- [x] **The trailing counts go away by having somewhere to be drawn.** *"3 games have drifted"* hid
+      two games behind a headline with no way to reach them; *"2 more savegame problems here as
+      well"* hid two slots each with a different next step. Locked mods keep a count deliberately —
+      twenty of them are one update-all with one remedy, and twenty cards is the wall the single
+      card was right to fear — but they name the first four rather than only the first.
+- [x] **Dismissal is per notice.** `DismissalLedger`, keyed per notice and signed with what that
+      notice says. It used to be one signature over every drifted folder and every corrupt blob at
+      once, because one card has one button and one button can only mean everything — so waving away
+      two stray mods also silenced a locked map in another game. `DriftMonitor` sheds `Dismiss`,
+      `IsDismissed` and `ShouldNotify`; it keeps the signature for the job it was also doing, which
+      is deciding whether a re-check changed anything.
+- [x] **A dismissal is forgotten once its notice stops being raised.** `Retain`, called with the
+      keys of each fresh build. A problem waved away and then actually fixed must not leave an entry
+      behind to silence the same problem next week.
+- [x] **The rule that decides what the user is told is testable.** `NoticeBuilder` is pure, for the
+      reason `SavegameDriftRules` is, with the three lookups needing a live app behind
+      `INoticeEnvironment`. The sentences were the half of the drift notice no test ever reached;
+      there are now 18 over them and the ledger.
+- [x] **Severity, ordering and a cap, because a column can become a wall.** Critical, Warning,
+      Pending, Info. Games sort by their worst card and stay together under one heading, so a machine
+      running a dedicated server and an MP client reads as one game in trouble rather than three.
+      Six cards before the rest go behind a count; only the first two and the critical ones start
+      expanded.
+- [x] **The background-task strip stays where it is.** It is about the present and offers nothing to
+      do, and a progress bar among actionable warnings would make the column mean two things.
+
+### Settled
+
+- **The old card's arguments against this were overruled, not forgotten.** It said that "two notices
+  racing to say one each is how a warning becomes noise" and that "a person acts on one problem at a
+  time". Both are true of a corner with room for one card. If the column reads as a wall in use, the
+  corner was right and this goes back.
+- **The savegame cards navigate rather than acting.** Check in, discard and stop tracking live on the
+  repo's saves list beside the row a card names, and a card growing its own copy of one would be a
+  second door to a flow with confirmations in it. The exception is the past savegame whose folder
+  moved off its pinned revision, which is the one savegame problem a re-apply fixes.
+- **The absorbed-failure notices keep a cooldown rather than a signature.** Every other notice is
+  dismissed against what it says, so a changed sentence brings it back. Applied to a count that ticks
+  upward during an import, that would bring the card back on the very next failure.
+- **The column is overlaid, not a gutter.** A reserved column would cost horizontal space permanently
+  in an app already three sidebars deep, and it is empty most of the time.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint

@@ -18,8 +18,7 @@ public partial class MainWindowViewModel
         AuthenticationService authService,
         IFactory<MainPageViewModel> mainPageViewModelFactory,
         IEnumerable<IUserScopedState> userScopedState,
-        DriftNotificationViewModel driftNotification,
-        BackgroundProblemViewModel backgroundProblems,
+        NoticeCenterViewModel notices,
         BackgroundTaskViewModel backgroundTasks)
     {
         BackgroundTasks = backgroundTasks;
@@ -29,24 +28,16 @@ public partial class MainWindowViewModel
 
         authService.AccountChanged += OnAccountChanged;
 
-        DriftNotification = driftNotification;
-        DriftNotification.Start();
-
-        BackgroundProblems = backgroundProblems;
+        Notices = notices;
+        Notices.Start();
     }
 
 
     /// <summary>
-    /// Beside the modal slot below and pointedly not in it: the drift notice has to be visible from
-    /// every view without stopping the user working.
+    /// The column down the right-hand side. Beside the modal slot below and pointedly not in it:
+    /// every one of these has to be visible from every view without stopping the user working.
     /// </summary>
-    public DriftNotificationViewModel DriftNotification { get; }
-
-    /// <summary>
-    /// Under the drift notice, and quieter: what it reports never risks anything, but it did happen
-    /// and the user is entitled to know it did.
-    /// </summary>
-    public BackgroundProblemViewModel BackgroundProblems { get; }
+    public NoticeCenterViewModel Notices { get; }
 
     /// <summary>
     /// Along the top edge, and about the present rather than the past: what is running right now. It
@@ -72,7 +63,7 @@ public partial class MainWindowViewModel
     /// </summary>
     public void NotifyWindowActivated()
     {
-        DriftNotification.NotifyWindowActivated();
+        Notices.NotifyWindowActivated();
     }
 
 

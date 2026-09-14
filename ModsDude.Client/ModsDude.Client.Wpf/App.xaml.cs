@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
+using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
@@ -152,12 +153,17 @@ public partial class App : Application
         // Check-in is reached from a slot row and from the check-out dialog's way out of a refused
         // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
         services.AddSingleton<SavegameFlowService>();
-        services.AddSingleton<DriftNotificationViewModel>();
+
+        // The column on the right and the two things it is built from: what the notices are allowed
+        // to ask the running app, and what the user has waved away.
+        services.AddSingleton<NoticeCenterViewModel>();
+        services.AddSingleton<INoticeEnvironment, NoticeEnvironment>();
+        services.AddSingleton<DismissalLedger>();
 
         // Both faces of one object again: everything that absorbs a failure reports it through the
-        // interface, and the shell draws the notice those reports add up to.
-        services.AddSingleton<BackgroundProblemViewModel>();
-        services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<BackgroundProblemViewModel>());
+        // interface, and the column draws a notice per kind out of what those reports add up to.
+        services.AddSingleton<BackgroundProblemSource>();
+        services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<BackgroundProblemSource>());
 
         // And once more for work in progress: everything long-running announces itself through the
         // interface, and the shell draws the strip along the top out of whatever is still running.

@@ -171,7 +171,6 @@ public sealed class DriftMonitor : IDisposable
     private readonly List<FileSystemWatcher> _watchers = [];
 
     private DateTimeOffset? _lastCheck;
-    private string? _dismissedSignature;
     private IReadOnlyList<TargetDrift> _results = [];
     private readonly List<CorruptedBlob> _corruption = [];
 
@@ -221,21 +220,6 @@ public sealed class DriftMonitor : IDisposable
         }
     }
 
-    /// <summary>
-    /// Whether the user waved the current drift away. Goes back to false the moment the drift set
-    /// changes, because that is a different problem than the one they dismissed.
-    /// </summary>
-    public bool IsDismissed
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _dismissedSignature is not null && _dismissedSignature == Signature(_results, _corruption);
-            }
-        }
-    }
-
     public bool HasDrift => Drifted.Count > 0;
 
     /// <summary>
@@ -269,7 +253,15 @@ public sealed class DriftMonitor : IDisposable
 
     public bool HasStoreCorruption => StoreCorruption.Count > 0;
 
-    public bool ShouldNotify => IsDismissed is false && (HasDrift || HasStoreCorruption);
+    /// <summary>Whether the check found anything at all worth building a notice out of.</summary>
+    /// <remarks>
+    /// <b>It says nothing about whether anything is on screen.</b> Dismissal used to live here as one
+    /// signature over every drifted folder and every corrupt blob at once, because there was one card
+    /// with one button on it. It is now per notice and belongs to the shell -
+    /// <see cref="Notices.DismissalLedger"/> - so this monitor reports facts and has no opinion about
+    /// what the user has read.
+    /// </remarks>
+    public bool HasAnything => HasDrift || HasStoreCorruption;
 
 
     /// <summary>
@@ -541,20 +533,6 @@ public sealed class DriftMonitor : IDisposable
     }
 
     /// <summary>
-    /// Silences the notice for the drift that is on screen right now, and nothing else. There is no
-    /// permanent form of this on purpose.
-    /// </summary>
-    public void Dismiss()
-    {
-        lock (_lock)
-        {
-            _dismissedSignature = Signature(_results, _corruption);
-        }
-
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
     /// A latency optimisation on top of the manifest comparison, for the narrower case where ModsDude
     /// happens to be open while the mods change. It decides nothing on its own - watchers miss events
     /// across sleep and on network paths, and the design must not depend on having been running.
@@ -633,23 +611,34 @@ public sealed class DriftMonitor : IDisposable
         return _timeProvider.GetUtcNow() - last >= ThrottleWindow;
     }
 
+
     /// <summary>
-    /// What the notice would say, reduced to a string. Dismissal is against this rather than against
-    /// a timestamp so that the same drift stays dismissed across re-checks while a new mod going
-    /// wrong brings the notice straight back.
+    /// Everything the check found, reduced to a string, so that a re-check which changed nothing does
+    /// not raise <see cref="Changed"/>.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Change detection only.</b> This used to double as what a dismissal was recorded against -
+    /// one signature over the whole world, because the shell had one card with one button. Dismissal
+    /// is per notice now and signs what that notice says; see
+    /// <see cref="Notices.DismissalLedger"/>. What is left here is the narrower job it was always
+    /// also doing: an alt-tab that re-listed the same folders must not redraw the column.
+    /// </para>
+    /// <para>
+    /// It stays deliberately detailed for that. A second mod going wrong, a profile moving again and
+    /// a savegame drifting under an unchanged mod folder are all changes the shell has to hear about,
+    /// and a coarser signature would swallow them.
+    /// </para>
+    /// </remarks>
     /// <param name="corruption">
     /// The <em>accumulated</em> set, never the per-check one. A corrupt blob is deleted as it is
-    /// found, so the reports empty out on the next pass; signing against them would un-dismiss the
-    /// notice every time a finding aged out, which is the exact opposite of what dismissal means.
+    /// found, so the reports empty out on the next pass.
     /// </param>
     private static string Signature(IReadOnlyList<TargetDrift> results, IReadOnlyList<CorruptedBlob> corruption)
     {
         return string.Join(
             "//",
             SignatureOfDrift(results),
-            // So that a second blob going wrong under a dismissed notice brings it straight back.
-            // This is the one thing here that outlives the check that found it.
             string.Join(',', corruption.Select(x => x.Hash).Order(StringComparer.OrdinalIgnoreCase)));
     }
 
@@ -660,8 +649,8 @@ public sealed class DriftMonitor : IDisposable
             results
                 .Where(x => x.IsDrifted)
                 // A ModTargetRef is not comparable, and the signature only needs a stable order. By
-                // target rather than by game, so that the server folder going wrong under a notice
-                // dismissed about the client folder brings it straight back.
+                // target rather than by game, so that the server folder going wrong while the client
+                // folder is unchanged still counts as news.
                 .OrderBy(x => x.Target?.Target.ToString() ?? x.Game.Identity.ToString(), StringComparer.Ordinal)
                 .Select(x => string.Join(
                     ';',
@@ -672,12 +661,8 @@ public sealed class DriftMonitor : IDisposable
                     string.Join(',', x.Report.Removed),
                     string.Join(',', x.Report.Changed),
                     string.Join(',', x.Report.ProfileChangedMods.Select(m => m.Value)),
-                    // So that a dismissed notice comes straight back when the profile moves again,
-                    // which is a different problem than the one that was waved away.
                     x.Report.AppliedRevision,
                     x.Report.CurrentRevision,
-                    // And when a savegame goes wrong under a dismissed mod warning: an evening that
-                    // exists only on this disk is not covered by having waved away two stray mods.
                     string.Join(',', x.Report.SavegameDrift.Select(s => $"{s.SavegameId}:{s.Kind}")))));
     }
 }
