@@ -168,6 +168,31 @@ public partial class NoticeViewModel : ObservableObject
 
 
 /// <summary>
+/// How many notices of one severity there are, for the collapsed rail to say without being opened.
+/// </summary>
+/// <remarks>
+/// <b>A count per severity rather than one total.</b> "4 notices" tells somebody nothing about
+/// whether to look now; "1 critical, 3 info" is the whole decision. The rail is the only thing on
+/// screen while it is collapsed, so it has to carry enough for that decision to be made without
+/// expanding it - otherwise collapsing is just hiding.
+/// </remarks>
+public sealed class NoticeSeverityCountViewModel(NoticeSeverity severity, int count)
+{
+    public NoticeSeverity Severity { get; } = severity;
+    public int Count { get; } = count;
+
+    /// <summary>"2 critical". Lower case, because it reads down the rail as a phrase, not a heading.</summary>
+    public string Label { get; } = $"{count} {severity switch
+    {
+        NoticeSeverity.Critical => "critical",
+        NoticeSeverity.Warning => "warning",
+        NoticeSeverity.Pending => "pending",
+        _ => "info"
+    }}";
+}
+
+
+/// <summary>
 /// One button on one card.
 /// </summary>
 /// <remarks>

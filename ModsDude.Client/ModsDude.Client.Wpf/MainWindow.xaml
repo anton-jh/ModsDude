@@ -16,7 +16,22 @@
         FontSize="14">
 
     <Grid>
-        <Frame Content="{Binding Path=CurrentPage}"
+        <!-- The rail is a real column of the window, so the content area genuinely ends where it
+             begins and nothing is ever drawn underneath it. It is Auto and collapses to nothing
+             while there is nothing to say, which is most of the time.
+
+             The expanded panel is an overlay inside column 0 instead, and that asymmetry is
+             deliberate: it opens uninvited - a notice the user has not seen re-opens it - and taking
+             420px out of a mod list mid-scroll would recompute every column width and re-wrap every
+             row under somebody's hands. A rail appearing is 32px and stable; a panel appearing is
+             sudden and temporary, so it floats and casts a shadow. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Frame Grid.Column="0"
+               Content="{Binding Path=CurrentPage}"
                NavigationUIVisibility="Hidden"
                Margin="0 12 0 0"/>
 
@@ -25,7 +40,8 @@
              deal with it, so this one is somewhere else on purpose. It survives navigation - an
              import queued on one page is still visible from another - which is the half a page's own
              progress cannot do. Nothing to dismiss: it goes when the work does. -->
-        <Border DataContext="{Binding BackgroundTasks}"
+        <Border Grid.Column="0"
+                DataContext="{Binding BackgroundTasks}"
                 Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
                 HorizontalAlignment="Center" VerticalAlignment="Top"
                 MinWidth="360" MaxWidth="560"
@@ -83,30 +99,81 @@
              drifted", and closed the lists it could not fit with "2 more savegame problems here as
              well" - list items flattened into sentences because there was one card to put them in.
 
-             Overlaid rather than given a gutter, and zero-width when empty: a fixed column would
-             cost horizontal space permanently in an app that is already three sidebars deep, and
-             it is empty most of the time. -->
-        <Grid HorizontalAlignment="Right" VerticalAlignment="Stretch"
-              Width="420"
-              Margin="0 56 16 16"
-              DataContext="{Binding Notices}"
-              Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+             It is a surface rather than cards floating on the page: with several of them the
+             floating version read as debris scattered over whatever was underneath, and there was
+             nowhere to put the things that belong to the column rather than to any one card. -->
+        <Border Grid.Column="0"
+                HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                Width="420"
+                Margin="0 12 0 0"
+                Padding="12"
+                Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                BorderThickness="1 0 0 0"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                DataContext="{Binding Notices}">
+
+            <Border.Effect>
+                <DropShadowEffect Color="#50000000" BlurRadius="16" ShadowDepth="0" Direction="180" />
+            </Border.Effect>
+
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsVisible}" Value="True" />
+                                <Condition Binding="{Binding IsCollapsed}" Value="False" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <Grid>
 
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Bottom-anchored inside its own scroller, so one notice sits in the corner where the
-                 single card used to and a full column grows upward into space the page was not
-                 using. -->
-            <ScrollViewer Grid.Row="0"
+            <!-- The column's own header: what belongs to the list rather than to any card in it.
+                 Collapsing lives here rather than on the rail's far side so that the button which
+                 closes it is where the user is already looking. -->
+            <Grid Grid.Row="0" ColumnDefinitions="* auto" Margin="4 0 0 8">
+                <TextBlock Grid.Column="0"
+                           Text="Notices"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                <Button Grid.Column="1"
+                        Padding="8 4"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        ToolTip="Collapse. A notice you have not seen opens it again."
+                        Command="{Binding ToggleCollapsedCommand}">
+                    <TextBlock Text="&#xE76C;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Button>
+            </Grid>
+
+            <!-- Top-anchored, under the header. It hung from the bottom while the cards floated on
+                 the page with nothing behind them, which put one notice in the corner the single
+                 card used to occupy; on a filled surface the same trick leaves a panel that is
+                 mostly empty above its own contents, which reads as something that failed to
+                 load. -->
+            <ScrollViewer Grid.Row="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
-                          VerticalAlignment="Bottom">
+                          VerticalAlignment="Top">
 
                 <ItemsControl ItemsSource="{Binding Notices}"
-                              VerticalAlignment="Bottom">
+                              VerticalAlignment="Top">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:NoticeViewModel}">
                             <StackPanel Margin="0 0 0 8">
@@ -123,24 +190,36 @@
 
                                 <Border Padding="16"
                                         CornerRadius="6"
-                                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                                        BorderThickness="1"
-                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
                                     <Border.Effect>
                                         <DropShadowEffect Color="#40000000" BlurRadius="10" ShadowDepth="1" />
                                     </Border.Effect>
 
-                                    <!-- The border says what is at stake, because the column is read
-                                         top down and the colour is what survives a glance. Critical
-                                         is the one that can cost an evening. -->
+                                    <!-- The left edge says what is at stake, because the column is
+                                         read top down and the colour is what survives a glance.
+                                         Critical is the one that can cost an evening.
+
+                                         Thickness and brush are both set by the style and neither is
+                                         set on the element: a local value outranks a trigger's
+                                         setter in WPF, so a BorderBrush written as an attribute here
+                                         would silently win and every card would draw the same
+                                         colour. -->
                                     <Border.Style>
                                         <Style TargetType="Border">
+                                            <Setter Property="BorderThickness" Value="1" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                                                    <Setter Property="BorderThickness" Value="4 1 1 1" />
                                                     <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                    <Setter Property="BorderThickness" Value="4 1 1 1" />
                                                     <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Pending">
+                                                    <Setter Property="BorderThickness" Value="4 1 1 1" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -250,7 +329,7 @@
 
             <!-- The column's own footer: the tail it is holding back, and the one gesture for the
                  morning after an update-all that touched every game on the machine. -->
-            <StackPanel Grid.Row="1"
+            <StackPanel Grid.Row="2"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right"
                         Margin="0 8 0 0">
@@ -265,9 +344,143 @@
                         Visibility="{Binding CanDismissAll, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
 
-        </Grid>
+            </Grid>
+        </Border>
 
-        <Grid Background="{DynamicResource SmokeFillColorDefaultBrush}"
+        <!-- The rail. It is what is on screen while the column is closed, so it has to carry enough
+             to decide whether to open it - which is why it says a count per severity rather than a
+             total. "4 notices" answers nothing; "1 critical, 3 info" is the whole decision.
+
+             Eye-catching by a stripe and coloured counts rather than by a tinted rail: a rail that
+             goes solid red for a critical is solid grey for everything else, which spends the
+             loudest thing on screen on the difference between "look now" and "look". -->
+        <Button Grid.Column="1"
+                Width="34"
+                ToolTip="Show notices"
+                Command="{Binding Notices.ToggleCollapsedCommand}">
+
+            <!-- Its own template rather than the theme's. A Fluent Button lays its content out in a
+                 padded, centred, corner-rounded box, which leaves the stripe floating in the middle
+                 of the rail at the height of the text beside it and clips the rotated words. What
+                 this needs is the whole column to paint in. -->
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Surface"
+                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                            BorderThickness="1 0 0 0"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Surface" Property="Background"
+                                    Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Notices.IsVisible}" Value="True" />
+                                <Condition Binding="{Binding Notices.IsCollapsed}" Value="True" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+
+            <Grid DataContext="{Binding Notices}" ColumnDefinitions="4 *">
+
+                <!-- Full height, in the worst severity's colour. The one thing visible from across
+                     the room. -->
+                <Rectangle Grid.Column="0"
+                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HighestSeverity}" Value="Critical">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HighestSeverity}" Value="Warning">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HighestSeverity}" Value="Pending">
+                                    <Setter Property="Fill" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+
+                <StackPanel Grid.Column="1"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Center"
+                            Margin="0 12 0 0">
+
+                    <TextBlock Text="&#xE76B;"
+                               HorizontalAlignment="Center"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <!-- Rotated rather than one glyph per line: the counts are words, and a column
+                         of single letters is a puzzle. Top-to-bottom, which is the direction a rail
+                         on the right edge is read in.
+
+                         The width is explicit and is the pre-rotation one, so it is the height this
+                         ends up occupying. Without it the text is measured against the rail's own
+                         34px - LayoutTransform constrains the child before it turns it - and every
+                         label is clipped to about "2 cri". -->
+                    <ItemsControl ItemsSource="{Binding SeverityCounts}"
+                                  Width="260"
+                                  Margin="0 14 0 0"
+                                  HorizontalAlignment="Center">
+                        <ItemsControl.LayoutTransform>
+                            <RotateTransform Angle="90" />
+                        </ItemsControl.LayoutTransform>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:NoticeSeverityCountViewModel}">
+                                <TextBlock Text="{Binding Label}"
+                                           Margin="0 0 12 0"
+                                           FontWeight="SemiBold">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Pending">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+        </Button>
+
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Background="{DynamicResource SmokeFillColorDefaultBrush}"
               Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"
               Margin="0 12 0 0">
 

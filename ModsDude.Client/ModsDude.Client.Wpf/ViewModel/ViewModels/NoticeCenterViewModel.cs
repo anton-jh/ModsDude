@@ -67,6 +67,17 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
     private readonly Dictionary<string, NoticeViewModel> _cards = [];
 
+    /// <summary>
+    /// Every notice key this session has already shown the user, so that a build introducing one they
+    /// have not seen can open the column and a rebuild of the same set cannot.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not the same as the cards.</b> Those are only what is currently drawn, which is capped and
+    /// filtered by dismissal; a notice waved away is still one the user has seen, and re-raising it
+    /// under the same signature must not re-open the column they closed.
+    /// </remarks>
+    private readonly HashSet<string> _seen = [];
+
 
     public NoticeCenterViewModel(
         DriftMonitor monitor,
@@ -133,6 +144,41 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// <summary>Whether there is more than one card, which is when waving them all away is worth offering.</summary>
     [ObservableProperty]
     private bool _canDismissAll;
+
+    /// <summary>
+    /// Whether the column is down to its rail.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Temporary by construction.</b> There is no persisted form of it and it is not a dismissal:
+    /// a notice arriving that the user has not seen re-opens the column, because the whole argument
+    /// for the column is that drift has to be unmissable. Collapsing says "not while I am doing
+    /// this", and dismissing says "I have read it" - and only one of those survives new news.
+    /// </para>
+    /// <para>
+    /// The rail it collapses to is a real column of the window rather than an overlay, so content is
+    /// never underneath it. The expanded panel is the overlay, because it opens uninvited and taking
+    /// 420px from a mod list mid-scroll would recompute every column width under somebody's hands.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    private bool _isCollapsed;
+
+    /// <summary>
+    /// What the rail is coloured by: the worst thing waiting behind it.
+    /// </summary>
+    /// <remarks>
+    /// A stripe and the counts rather than the whole rail, so that severity is a scale rather than a
+    /// switch. A rail that turns solid red for a critical is also solid grey for everything else,
+    /// which spends the loudest thing on screen on the difference between "look now" and "look".
+    /// </remarks>
+    [ObservableProperty]
+    private NoticeSeverity _highestSeverity = NoticeSeverity.Info;
+
+    /// <summary>
+    /// How many of each severity, worst first, for the rail to say while it is closed.
+    /// </summary>
+    public ObservableCollection<NoticeSeverityCountViewModel> SeverityCounts { get; } = [];
 
     public bool HasOverflow => Overflow is not null;
 
@@ -214,6 +260,23 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private void ToggleShowAll()
     {
         ShowAll = ShowAll is false;
+
+        Refresh();
+    }
+
+    /// <summary>
+    /// Down to the rail, or back up. Collapsing also drops the show-all, so re-opening starts at the
+    /// cap again rather than at whatever the last look left behind.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleCollapsed()
+    {
+        IsCollapsed = IsCollapsed is false;
+
+        if (IsCollapsed)
+        {
+            ShowAll = false;
+        }
 
         Refresh();
     }
@@ -417,7 +480,27 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             .Where(x => x.CanDismiss is false || _dismissals.IsDismissed(x.Key, x.Signature) is false)
             .ToList();
 
+        // News re-opens the column, and a rebuild of what is already on screen does not. Measured
+        // against everything seen this session rather than against what is drawn: a notice the user
+        // dismissed and which came back under the same signature is not news to them.
+        if (live.Any(x => _seen.Contains(x.Key) is false))
+        {
+            IsCollapsed = false;
+        }
+
+        foreach (var notice in live)
+        {
+            _seen.Add(notice.Key);
+        }
+
         CanDismissAll = live.Count(x => x.CanDismiss) > 1;
+
+        // Off the whole live set, never off the capped one: a rail reporting "1 critical" because the
+        // other two fell below the fold would be the summarising-in-prose problem all over again, in
+        // the one place the user is trusting to tell them whether to look.
+        HighestSeverity = live.Count > 0 ? live.Min(x => x.Severity) : NoticeSeverity.Info;
+
+        SyncCounts(live);
 
         var shown = ShowAll || live.Count <= MaxVisible
             ? live
@@ -434,6 +517,39 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         if (IsVisible is false)
         {
             ShowAll = false;
+
+            // Nothing to come back to, so the next notice that does arrive opens rather than landing
+            // behind a rail somebody closed over an unrelated problem an hour ago.
+            IsCollapsed = false;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the rail's per-severity counts, worst first.
+    /// </summary>
+    /// <remarks>
+    /// In place and only where they differ, because this runs on every drift check - which is every
+    /// alt-tab - and replacing the collection makes the rail's text flicker on a window that came
+    /// forward and found nothing changed.
+    /// </remarks>
+    private void SyncCounts(IReadOnlyList<Notice> live)
+    {
+        var counts = live
+            .GroupBy(x => x.Severity)
+            .OrderBy(x => x.Key)
+            .Select(x => new NoticeSeverityCountViewModel(x.Key, x.Count()))
+            .ToList();
+
+        if (SeverityCounts.Select(x => x.Label).SequenceEqual(counts.Select(x => x.Label)))
+        {
+            return;
+        }
+
+        SeverityCounts.Clear();
+
+        foreach (var count in counts)
+        {
+            SeverityCounts.Add(count);
         }
     }
 

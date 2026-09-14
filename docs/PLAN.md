@@ -2060,6 +2060,18 @@ about anything it said; it had run out of room to say it, and had started render
       expanded.
 - [x] **The background-task strip stays where it is.** It is about the present and offers nothing to
       do, and a progress bar among actionable warnings would make the column mean two things.
+- [x] **The column is a surface, and it collapses to a rail.** Cards floating on the page read as
+      debris scattered over whatever was underneath once there were several, and there was nowhere to
+      put what belongs to the column rather than to any one card. The rail is a real grid column so
+      content is never underneath it; the expanded panel overlays, because it opens uninvited and
+      taking 420px out of a mod list mid-scroll would re-wrap every row under somebody's hands.
+- [x] **Collapsing is temporary, and a notice the user has not seen re-opens it.** It is not a
+      dismissal: collapsing says "not while I am doing this" and dismissing says "I have read it",
+      and only one of those survives new news. Tracked against every key seen this session, so a
+      notice waved away and re-raised unchanged does not re-open a column somebody closed.
+- [x] **The rail carries the decision it stands in for**: a count per severity in each severity's
+      colour, off the whole live set rather than the capped one, with a full-height stripe in the
+      worst one's. "4 notices" answers nothing about whether to look now.
 
 ### Settled
 
@@ -2074,8 +2086,13 @@ about anything it said; it had run out of room to say it, and had started render
 - **The absorbed-failure notices keep a cooldown rather than a signature.** Every other notice is
   dismissed against what it says, so a changed sentence brings it back. Applied to a count that ticks
   upward during an import, that would bring the card back on the very next failure.
-- **The column is overlaid, not a gutter.** A reserved column would cost horizontal space permanently
-  in an app already three sidebars deep, and it is empty most of the time.
+- **The rail is a gutter and the panel is not.** A reserved 420px column would cost that space
+  permanently in an app already three sidebars deep; 34px that appears only when there is something
+  to say is worth it for content never being drawn under the thing pointing at it.
+- **The collapsed rail is a stripe and coloured counts, not a tinted rail.** A rail that goes solid
+  red for a critical is solid grey for everything else, which spends the loudest thing on screen on
+  the difference between "look now" and "look" — and makes an Info-only rail as loud as a savegame
+  at risk.
 
 ## Deliberately not planned
 

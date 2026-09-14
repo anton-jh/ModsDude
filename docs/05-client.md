@@ -224,6 +224,29 @@ one heading, so a machine running a dedicated server and an MP client reads as o
 rather than as three. Six cards are drawn before the rest go behind a count, and only the first two
 and the critical ones start expanded.
 
+**The panel overlays; the rail is a real column.** The rail is a grid column of the window, so the
+content area genuinely ends where it starts and nothing is ever drawn underneath it. The expanded
+panel is an overlay inside the content column instead, and the asymmetry is deliberate: it opens
+uninvited, and taking 420px out of a mod list mid-scroll would recompute every column width and
+re-wrap every row under somebody's hands. A rail appearing is 34px and stable; a panel appearing is
+sudden and temporary, so it floats and casts a shadow.
+
+**Collapsing is temporary and is not dismissal.** The header's button drops the column to its rail;
+a notice arriving that the user has not seen re-opens it, because the whole argument for the column
+is that drift has to be unmissable. Collapsing says *not while I am doing this*, dismissing says *I
+have read it*, and only one of those survives new news. Measured against every key seen this session
+rather than against what is drawn, so a notice that was waved away and came back unchanged does not
+re-open a column somebody closed.
+
+**The rail has to carry the decision it is standing in for.** It says a count per severity —
+*2 critical, 1 warning, 1 info* — rather than a total, because "4 notices" answers nothing about
+whether to look now. The counts are off the whole live set and not the capped one; a rail reporting
+one critical because the other two fell below the fold would be summarising-in-prose again, in the
+one place the user is trusting. A full-height stripe takes the worst severity's colour, and each
+count is drawn in its own. Stripe and text rather than a tinted rail: one that goes solid red for a
+critical is solid grey for everything else, which spends the loudest thing on screen on the
+difference between *look now* and *look*.
+
 **Dismissal is per notice** — `DismissalLedger`, keyed by notice and signed with what that notice
 says. It is still deliberately weak: nothing is persisted, there is no permanent form of it, and an
 entry is forgotten once its notice stops being raised, so a problem that was waved away and then
