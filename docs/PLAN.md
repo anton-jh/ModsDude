@@ -2304,6 +2304,73 @@ the lists out from under an upload that is already in flight.
   of one profile and imports into one repo, and both of those outlive whatever started them. The
   page-level busy flag stays, but only as the hint it is everywhere else — the lease is the guard.
 
+## Phase 15 — One rule for what a chip means
+
+Phase 14 left three different notions of which versions count. `snapshot.Versions` is everything
+registered plus everything in a scanned folder. `_versionsByMod` is that plus the draft's own pins,
+and powers the right-hand version selector and the update planner. `_offered` is what the chips say
+counts, and powers the left list. The repo chip reaches only the third; a folder chip reaches all
+three, because it decides what gets scanned — so unticking *Downloads* silently shrinks every
+right-hand selector and unticking *This repo* does not.
+
+One rule replaces all three: **a chip decides what this page is looking at, and the draft is never
+affected by what you are looking at.** It is the pending-row rule from Phase 14 — disabling a source
+is a statement about what is looked at, never about what exists — applied everywhere instead of once.
+
+- [ ] **`_versionsByMod` stops shrinking.** It becomes a session-wide accumulation that only grows,
+      rather than being rebuilt from the enabled snapshot each compose. `_offered` stays the one
+      chip-aware set. The right-hand selector then offers everything found this session plus the
+      pin, whatever is currently ticked — an editing control is not narrowed by a browsing one, and
+      the failure mode of narrowing it is silent: fewer options, no explanation. Two things fall out
+      of the code: the prepend-the-pin path in `Rebase` exists only because the index shrinks, and
+      `_adopted` narrows to its real job, a page rebuilt with a cold catalog. One wording fix — the
+      updates band's "No folders are being read" becomes true only when no folder has been read at
+      all this session.
+- [ ] **The left row gets a version selector, offering what the chips offer.** Adding a mod at the
+      wrong version and then correcting it on the other side is two steps for one decision, and
+      reads as a mistake being fixed rather than a choice being made. The row needs the wrapper
+      `ProfileModRowViewModel` already is, since `ModListItemViewModel` wraps exactly one version and
+      has to swap itself when the selection moves — which makes the two lists structurally identical,
+      one selector over one shared mod row each.
+- [ ] **A row's default version is the newest offered, except on a removal.** A mod this draft took
+      out defaults to **the version the profile held**, and that version is offered regardless of the
+      chips, because a pending removal is draft state. Without it the per-row **+** on a removal
+      re-adds at the newest — a different pin from the one that was there, which is the hazard
+      *Restore removed* exists to route around. With it, the bulk button goes back to being a
+      shortcut rather than the only correct route.
+- [ ] **One chip per row, following the selection.** The row *is* the selected version, so the chip,
+      the sort rank and the +/⬆ glyph move together, as they already do on the right when `Item` is
+      replaced. Per-version facts go in the selector's labels instead — `"1.2.0 — imports on save"`
+      is already there, `"— taken out"` joins it. Removal keeps precedence: the mod is out whatever
+      version is selected, and the moment it is re-added the row leaves the list. *Taken out* and
+      *Update* cannot co-occur, since a removed mod is not pinned and nothing is an update to it.
+- [ ] **A left row's chosen version survives a recompose.** Left rows become stateful, so ticking a
+      chip must not silently reset three selectors somebody has just set — the same problem as "the
+      draft outlives the catalog", one level down. The row-reuse path in `RebuildAvailable` is where
+      it lands; it already keys by identity, so what it needs is to carry the choice rather than the
+      row.
+- [ ] **The "N taken out" count in the left header is the control that hides them.** It is already
+      there, already caution-coloured, already beside the number it would act on — the same shape as
+      the updates band's skipped-count opening its dialog. Defaults to shown: they are unsaved
+      changes, they sort to the top so they cost one glance to skip, and hiding unsaved work by
+      default is how people lose it. **Enabling the *Taken out* filter chip forces the toggle on**,
+      since a filter that selects a set nothing renders is an empty list with no explanation.
+
+### Settled
+
+- **The left list keeps the removals.** Taking a mod out and leaving it in place struck through was
+  considered: it would remove a chip state, a filter chip, a header count, a sort rank and a bulk
+  button, all of which exist to undo the confusion of moving the row. It is still wrong — "not in
+  this profile" is literally true of a mod this draft removed, and moving it is what these interfaces
+  do.
+- **No new filter chip for hiding removals.** The filter row is a radio group so that "everything
+  shown" is one well-defined set for the counts, the bulk buttons and the header's three-state box.
+  A toggle among them reads as one control with two behaviours, which is the argument that put the
+  source chips in a row of their own.
+- **The right-hand selector is not narrowed by the chips.** Symmetry says it should be; the failure
+  mode says otherwise. The one oddity left — the right dropdown holding more than the left — has a
+  one-line answer, and no failure mode at all.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint
