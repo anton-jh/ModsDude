@@ -112,9 +112,9 @@
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 DataContext="{Binding Notices}">
 
-            <Border.Effect>
+            <!--<Border.Effect>
                 <DropShadowEffect Color="#50000000" BlurRadius="16" ShadowDepth="0" Direction="180" />
-            </Border.Effect>
+            </Border.Effect>-->
 
             <Border.Style>
                 <Style TargetType="Border">
@@ -357,7 +357,8 @@
         <Button Grid.Column="1"
                 Width="34"
                 ToolTip="Show notices"
-                Command="{Binding Notices.ToggleCollapsedCommand}">
+                Command="{Binding Notices.ToggleCollapsedCommand}"
+                Margin="0 12 0 0">
 
             <!-- Its own template rather than the theme's. A Fluent Button lays its content out in a
                  padded, centred, corner-rounded box, which leaves the stripe floating in the middle
