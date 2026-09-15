@@ -113,7 +113,16 @@ public record CatalogModVersion(
     /// <para>
     /// <b>Advisory only, and both approximate directions are accepted.</b> It over-reports nothing
     /// and under-reports plenty - equal sizes are not equal bytes - because it is computed for every
-    /// row of every scan and proving it would mean hashing every archive in every source.
+    /// row of every scan.
+    /// </para>
+    /// <para>
+    /// <b>Proving it exactly would not mean hashing every archive in every source</b>, whatever an
+    /// earlier version of this comment claimed. Only a version found in more than one source can
+    /// conflict at all, and of those only the unregistered ones are a genuine question - a
+    /// registered version already has <see cref="ContentHash"/>, so each local copy can be compared
+    /// against it and decided rather than asked about. The set worth hashing is bounded by
+    /// duplicates, not by scan size; it is affordable, and simply not done here because a full file
+    /// read for a question that may never be asked is its own decision to make.
     /// </para>
     /// <para>
     /// The authority is <see cref="Import.ModOccurrenceResolver"/>, which hashes, and it runs at

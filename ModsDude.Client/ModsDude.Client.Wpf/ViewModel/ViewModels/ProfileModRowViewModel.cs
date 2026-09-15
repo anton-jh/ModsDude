@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Profiles;
 using System.ComponentModel;
 using System.Windows;
@@ -12,10 +13,20 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// still has to be imported before it can be saved.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Keyed by <see cref="ModId"/> and not by version, which is what makes the version selector part of
 /// the row rather than a property of whatever was moved in - a profile depends on a mod at exactly
 /// one version. The mod itself is rendered by the shared list row, so it looks the same here as it
 /// does everywhere else and its icon loads the same way.
+/// </para>
+/// <para>
+/// <b>Also the left list's row, unpinned.</b> The left side needs exactly the same shape - a
+/// selector over one shared mod row that swaps itself when the selection moves - so it is built from
+/// this type too, with <c>lockedByProfile</c> fixed at <see langword="false"/> and a confirm callback
+/// that never asks: nothing is committed by choosing what the row's own + would add, only by
+/// pressing it. The page tells the two apart by which list it reads a row out of, not by anything on
+/// the row itself.
+/// </para>
 /// </remarks>
 public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 {
@@ -26,6 +37,13 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     private ProfileModVersionOption _selectedVersion;
     private IReadOnlyList<ProfileModVersionOption> _versions;
 
+    /// <summary>
+    /// The mod's ordering, kept only to answer "order not settled" for whichever versions the
+    /// selector is currently offering. Null is silently "nothing is unsettled" rather than an error -
+    /// a row built before the set is known yet (the very first frame) should not throw over a label.
+    /// </summary>
+    private ModVersionSet? _set;
+
 
     public ProfileModRowViewModel(
         Guid repoId,
@@ -33,17 +51,18 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         CatalogModVersion selected,
         bool lockedByProfile,
         ModListItemViewModel.Factory itemFactory,
-        Func<ProfileModRowViewModel, ProfileModVersionOption, Task<bool>> confirmLockedChange)
+        Func<ProfileModRowViewModel, ProfileModVersionOption, Task<bool>> confirmLockedChange,
+        ModVersionSet? set = null)
     {
         _repoId = repoId;
         _itemFactory = itemFactory;
         _confirmLockedChange = confirmLockedChange;
+        _set = set;
 
         ModId = selected.ModId;
         Name = selected.Name;
 
-        // Newest first: a version selector is opened to move forward far more often than back.
-        _versions = [.. versions.Reverse().Select(x => new ProfileModVersionOption(x))];
+        _versions = BuildOptions(versions);
 
         _selectedVersion = _versions.FirstOrDefault(x => x.Version.VersionId == selected.VersionId)
             ?? new ProfileModVersionOption(selected);
@@ -256,9 +275,9 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     /// <para>
     /// <b>What a source toggle is allowed to do to a draft.</b> A chip changes what is <em>known</em>
     /// about a mod, never what this profile has decided about it - so the selector is rebuilt and the
-    /// pin, the lock and the selection are not. A row whose pinned version the new set does not hold
-    /// keeps its own copy of it at the front of the selector, which is what lets a pending row
-    /// survive its folder being switched off with the occurrence that names the file on disk intact.
+    /// pin, the lock and the selection are not. <paramref name="versions"/> comes from the session's
+    /// ever-growing accumulation rather than the current snapshot alone, so it is guaranteed to
+    /// already contain this row's own pin - there is nothing left here to prepend.
     /// </para>
     /// <para>
     /// The inner list row is replaced only where the version record actually says something
@@ -266,16 +285,10 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     /// reason for two hundred icons to blink.
     /// </para>
     /// </remarks>
-    public void Rebase(IReadOnlyList<CatalogModVersion> versions)
+    public void Rebase(IReadOnlyList<CatalogModVersion> versions, ModVersionSet? set)
     {
-        var known = versions.FirstOrDefault(x => x.VersionId == SelectedVersion.Version.VersionId);
-
-        if (known is null)
-        {
-            versions = [SelectedVersion.Version, .. versions];
-        }
-
-        Versions = [.. versions.Reverse().Select(x => new ProfileModVersionOption(x))];
+        _set = set;
+        Versions = BuildOptions(versions);
 
         var option = Versions.First(x => x.Version.VersionId == SelectedVersion.Version.VersionId);
 
@@ -292,6 +305,36 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 
         Apply(option);
     }
+
+    /// <summary>
+    /// The left list's counterpart of <see cref="Rebase"/>. Unlike a pin, nothing here is sacred -
+    /// there is no draft decision to protect - so the page is free to hand back whichever version
+    /// <paramref name="chosen"/> should be: the one this row already had selected where that survives
+    /// the recompose, or its own default where the page has decided this row must snap to a
+    /// particular version regardless, which is what a pending removal does.
+    /// </summary>
+    public void SetAvailableOptions(IReadOnlyList<CatalogModVersion> offered, CatalogModVersion chosen, ModVersionSet? set)
+    {
+        _set = set;
+        Versions = BuildOptions(offered);
+
+        var option = Versions.First(x => x.Version.VersionId == chosen.VersionId);
+
+        if (ModListItemViewModel.RendersTheSame(option.Version, SelectedVersion.Version))
+        {
+            _selectedVersion = option;
+
+            OnPropertyChanged(nameof(SelectedVersion));
+
+            return;
+        }
+
+        Apply(option);
+    }
+
+    /// <summary>Newest first, since a version selector is opened to move forward far more often than back.</summary>
+    private IReadOnlyList<ProfileModVersionOption> BuildOptions(IReadOnlyList<CatalogModVersion> versions)
+        => [.. versions.Reverse().Select(x => new ProfileModVersionOption(x, _set?.CouldNotCompareToNewest(x.VersionId) ?? false))];
 
 
     private async Task ConfirmThenApplyAsync(ProfileModVersionOption value)
@@ -361,9 +404,26 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 }
 
 /// <summary>One entry in a row's version selector.</summary>
-public sealed record ProfileModVersionOption(CatalogModVersion Version)
+/// <param name="CouldNotCompare">
+/// Whether the ordering left this version genuinely uncompared against what the repo holds - see
+/// <c>ModVersionSet.CouldNotCompareToNewest</c>. Only ever true for an unregistered version: two
+/// registered versions are always settled by <c>SequenceNumber</c>, which is taken as fact and never
+/// handed to the comparer.
+/// </param>
+public sealed record ProfileModVersionOption(CatalogModVersion Version, bool CouldNotCompare = false)
 {
-    public string Label => Version.IsOnServer
-        ? Version.VersionId.Value
-        : $"{Version.VersionId.Value} — imports on save";
+    public string Label
+    {
+        get
+        {
+            if (Version.IsOnServer)
+            {
+                return Version.VersionId.Value;
+            }
+
+            return CouldNotCompare
+                ? $"{Version.VersionId.Value} — imports on save, order not settled"
+                : $"{Version.VersionId.Value} — imports on save";
+        }
+    }
 }

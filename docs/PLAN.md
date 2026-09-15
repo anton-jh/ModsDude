@@ -2320,7 +2320,7 @@ is a statement about what is looked at, never about what exists — applied ever
 Two smaller things travel with it, both cases of the editor being silent about something it knows: a
 version nothing could compare, and a filter chip naming a set nobody acts on.
 
-- [ ] **`_versionsByMod` stops shrinking.** It becomes a session-wide accumulation that only grows,
+- [x] **`_versionsByMod` stops shrinking.** It becomes a session-wide accumulation that only grows,
       rather than being rebuilt from the enabled snapshot each compose. `_offered` stays the one
       chip-aware set. The right-hand selector then offers everything found this session plus the
       pin, whatever is currently ticked — an editing control is not narrowed by a browsing one, and
@@ -2329,19 +2329,46 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
       `_adopted` narrows to its real job, a page rebuilt with a cold catalog. One wording fix — the
       updates band's "No folders are being read" becomes true only when no folder has been read at
       all this session.
-- [ ] **The left row gets a version selector, offering what the chips offer.** Adding a mod at the
+
+      Landed as `_knownVersions: Dictionary<ModVersionIdentity, CatalogModVersion>`, folded into on
+      every `BuildIndex` call and never pruned — a source dropping out of the current snapshot simply
+      stops being written to it, which is what makes "grows and never shrinks" true without a second
+      data structure. `_versionsByMod` is then `ModVersionIndex.Build` over
+      `_knownVersions.Values.Concat(Pinned.Select(...))`, exactly as before except the left operand no
+      longer comes from the snapshot directly. `ProfileModRowViewModel.Rebase` lost its
+      `known is null` prepend branch, since the versions it is handed now always already contain the
+      pin. The wording fix landed as a plain `_hasReadAnyFolder` field, set once true in
+      `RebuildSources` and never reset, distinct from `HasEnabledFolders` which stays about right now
+      and still drives the *Not in the sources* chip's enabled state.
+- [x] **The left row gets a version selector, offering what the chips offer.** Adding a mod at the
       wrong version and then correcting it on the other side is two steps for one decision, and
       reads as a mistake being fixed rather than a choice being made. The row needs the wrapper
       `ProfileModRowViewModel` already is, since `ModListItemViewModel` wraps exactly one version and
       has to swap itself when the selection moves — which makes the two lists structurally identical,
       one selector over one shared mod row each.
-- [ ] **A row's default version is the newest offered, except on a removal.** A mod this draft took
+
+      `ProfileModRowViewModel` is now literally shared by both lists rather than merely
+      shaped-the-same: an available row is one built with `lockedByProfile: false` and a confirm
+      callback that always says yes, `AllowWithoutAsking`, because nothing is committed by choosing a
+      version in this row's own selector — only pressing its **+** or **⬆** writes to the profile, and
+      that is where the real lock confirmation still runs, unchanged. `RebuildAvailable` was rewritten
+      around this: it builds one row per mod straight from `_versionsByMod`, and the left list's XAML
+      item template is now structurally the pinned list's — a `ComboBox` bound to `Versions` /
+      `SelectedVersion` plus the same two +/⬆ buttons, both driven by `Item.IsUpdateRow`.
+- [x] **A row's default version is the newest offered, except on a removal.** A mod this draft took
       out defaults to **the version the profile held**, and that version is offered regardless of the
       chips, because a pending removal is draft state. Without it the per-row **+** on a removal
       re-adds at the newest — a different pin from the one that was there, which is the hazard
       *Restore removed* exists to route around. With it, the bulk button goes back to being a
       shortcut rather than the only correct route.
-- [ ] **One status chip per row, following the selection.** The row *is* the selected version, so the
+
+      `RebuildAvailable` folds the removed pin's version into a mod's `offered` list whenever
+      `_pendingRemovals` names it, chip membership or not, and picks it as the row's default instead
+      of the newest. Because a bulk removal runs through `Recount` rather than a full recompose, a
+      second mechanism, `SnapToRemovedVersion`, does the same job there — called for every left row
+      whose mod just became a pending removal, so the row's own **+** is correct on the very next
+      click rather than one recompose later.
+- [x] **One status chip per row, following the selection.** The row *is* the selected version, so the
       chip, the sort rank and the +/⬆ glyph move together, as they already do on the right when
       `Item` is replaced. Per-version facts go in the selector's labels instead —
       `"1.2.0 — imports on save"` is already there, `"— taken out"` joins it. Removal keeps
@@ -2349,18 +2376,37 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
       leaves the list. *Taken out* and *Update* cannot co-occur, since a removed mod is not pinned
       and nothing is an update to it. This is about `ModDisplayStatus` only — the conflict chip has a
       column of its own in the row template and keeps it.
-- [ ] **A left row's chosen version survives a recompose.** Left rows become stateful, so ticking a
+
+      `Recount` now reads `row.SelectedVersion.Version` — the row's live selection — rather than a
+      fixed identity, when it calls `DescribeRow` and writes the result into `row.Item.Status`, and
+      `CompareAvailable` sorts off that same written value. `"— taken out"` did not end up needing its
+      own label text: a pending removal's default *is* the taken-out version, and the row's chip
+      already reads `PendingRemoval` regardless of selection, so the selector never offers a version
+      that would read as removed while showing something else.
+- [x] **A left row's chosen version survives a recompose.** Left rows become stateful, so ticking a
       chip must not silently reset three selectors somebody has just set — the same problem as "the
       draft outlives the catalog", one level down. The row-reuse path in `RebuildAvailable` is where
       it lands; it already keys by identity, so what it needs is to carry the choice rather than the
       row.
-- [ ] **The "N taken out" count in the left header is the control that hides them.** It is already
+
+      Landed as `ReuseAvailableRow`, keyed by `ModId` (not by version identity, since the row can now
+      point at a different one on every recompose): it keeps the row's current selection when that
+      version is still in the freshly computed `offered` list, and only falls back to the default —
+      unconditionally, on a removal — otherwise. `ProfileModRowViewModel.SetAvailableOptions` is the
+      left-side sibling of `Rebase` that applies it.
+- [x] **The "N taken out" count in the left header is the control that hides them.** It is already
       there, already caution-coloured, already beside the number it would act on — the same shape as
       the updates band's skipped-count opening its dialog. Defaults to shown: they are unsaved
       changes, they sort to the top so they cost one glance to skip, and hiding unsaved work by
       default is how people lose it. **Enabling the *Taken out* filter chip forces the toggle on**,
       since a filter that selects a set nothing renders is an empty list with no explanation.
-- [ ] **A version nothing could compare says so.** Phase 14 made an unregistered version count as an
+
+      `ShowRemovals`, defaulting to `true`, with `ToggleRemovalsCommand` behind the count — a `Button`
+      styled like the updates band's skipped-locked link rather than a checkbox, since it is a
+      one-word toggle and not a form field. `Passes` gained `(ShowRemovals || IsPendingRemoval(row) is
+      false)` alongside the existing filter check, and `OnAvailableFilterChanged` forces
+      `ShowRemovals = true` the moment `AvailableFilter` becomes `TakenOut`.
+- [x] **A version nothing could compare says so.** Phase 14 made an unregistered version count as an
       update where the ordering places it after the pin, and left the ones it could not compare
       invisible *as such*: no update, no chip, no count, and an entry in the selector sitting
       wherever the topological sort happened to put it. That is the worst case to be silent about —
@@ -2380,7 +2426,19 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
 
       One definition throughout — *a version an enabled source holds that the ordering could not
       compare against what the repo holds* — so the chip, the count and the filter cannot drift.
-- [ ] **The *Conflicts* filter chip goes; the row chip stays.** The filter names a set nobody bulk
+
+      Landed in Core as `ModVersionSet.CouldNotCompareToNewest(ModVersionKey)`, always measured
+      against `NewestRegistered` — not against whatever this profile happens to pin, which is what
+      makes it one repo-level fact usable identically on a pinned mod's update candidates and on a
+      mod the profile does not hold at all. Tested in `ModVersionIndexTests`. The five uses: the label
+      moved onto `ProfileModVersionOption.CouldNotCompare`, computed once per option whenever a row's
+      `Versions` are (re)built from the `ModVersionSet` it was handed; the row chip landed on
+      `ModListItemViewModel.OrderNotSettled`, sharing `HasSecondaryChip`/`SecondaryChipText`/
+      `SecondaryChipTooltip` with the conflict chip rather than a chip of its own; the filter chip is
+      `AvailableModFilter.Unordered`; the count is `AmbiguousCount`/`AmbiguousText`, opened by
+      `ShowAmbiguousVersionsCommand`; and `CompareAvailable` ranks on `Item.OrderNotSettled` between
+      the update rank and the alphabetical one.
+- [x] **The *Conflicts* filter chip goes; the row chip stays.** The filter names a set nobody bulk
       acts on, which is the test the other three pass: a source conflict is answered at save, in a
       dialog, one version at a time. The row chip is the warning and keeps its column.
 
@@ -2390,6 +2448,12 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
       source can conflict at all, and of those only the unregistered ones need a *question* — a
       registered version has `ContentHash`, so each local copy can be compared against it and
       decided rather than asked about. The set is bounded by duplicates, not by scan size.
+
+      `AvailableModFilter.Conflicts` is gone; `Unordered` sits where it was. The row's own chip moved
+      into the shared secondary-chip slot alongside `OrderNotSettled` above rather than disappearing,
+      since a conflict is exactly as urgent as it always was — it just no longer has a bulk filter
+      pretending there is a batch action for it. Both the doc comment on `HasSourceConflict` and
+      09-mod-catalog.md carry the correction now.
 
 ### Settled
 

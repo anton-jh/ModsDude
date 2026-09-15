@@ -395,14 +395,19 @@
 
                             <!-- Says why the top of this list is not alphabetical: what the draft has
                                  taken out of the profile is back here, and looks exactly like a mod
-                                 that was never in it. -->
-                            <TextBlock Grid.Column="2"
-                                       Margin="12 0 0 0"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding RemovalText}"
-                                       ToolTip="Taken out of the profile, and at the top of this list until you save."
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                 that was never in it. The count is also the control that hides them -
+                                 clicking it is what flips ShowRemovals, the same shape as the updates
+                                 band's skipped-locked count opening its own list. -->
+                            <Button Grid.Column="2"
+                                    Margin="12 0 0 0"
+                                    Padding="0"
+                                    HorizontalAlignment="Left"
+                                    Style="{DynamicResource SubtleMenuButton}"
+                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                    Content="{Binding RemovalText}"
+                                    ToolTip="{Binding RemovalToggleTooltip}"
+                                    Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    Command="{Binding ToggleRemovalsCommand}" />
 
                             <TextBlock Grid.Column="3"
                                        Margin="12 0 0 0"
@@ -506,9 +511,9 @@
                                          IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=TakenOut}" />
                             <RadioButton GroupName="AvailableFilter"
                                          Style="{StaticResource FilterChip}"
-                                         Content="Conflicts"
-                                         ToolTip="Two sources hold different files for this version"
-                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Conflicts}" />
+                                         Content="Not settled"
+                                         ToolTip="The order between this version and what the repo holds is not settled. Importing it will ask which comes first."
+                                         IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unordered}" />
                         </StackPanel>
 
                         <Border Grid.Row="3">
@@ -543,44 +548,56 @@
                                         </ContextMenu>
                                     </ListBox.ContextMenu>
 
-                                    <!-- The shared row, plus the one thing this list adds to it. The
-                                         inner presenter picks up the implicit template, so a mod
-                                         looks the same here as it does everywhere else. -->
+                                    <!-- The shared row, plus a version selector and the one action
+                                         this list adds - structurally identical to the pinned list's
+                                         template now that both sides are a selector over one shared
+                                         mod row. The inner presenter picks up the implicit template,
+                                         so a mod looks the same here as it does everywhere else. -->
                                     <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type vm:ModListItemViewModel}">
+                                        <DataTemplate DataType="{x:Type vm:ProfileModRowViewModel}">
                                             <Grid ColumnDefinitions="* auto">
-                                                <ContentPresenter Grid.Column="0" Content="{Binding}" />
+                                                <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
 
-                                                <!-- One verb applied to the profile, and which one
-                                                     depends on what it already has of that mod: +
-                                                     where it is absent, ⬆ where this row is a newer
-                                                     version of something already in it. Two buttons
-                                                     rather than a retemplated one, because the chip
-                                                     beside them is what says which case this is and
-                                                     the glyph only has to agree with it.
-                                                     Both run the same command; the page decides
-                                                     which of the two moves it turns out to be. -->
-                                                <Button Grid.Column="1"
-                                                        Margin="0 0 8 0"
-                                                        VerticalAlignment="Center"
-                                                        Style="{DynamicResource SubtleIconButton}"
-                                                        Content="&#xE710;"
-                                                        ToolTip="Add to this profile"
-                                                        Visibility="{Binding IsUpdateRow, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                                                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                            IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
 
-                                                <Button Grid.Column="1"
-                                                        Margin="0 0 8 0"
-                                                        VerticalAlignment="Center"
-                                                        Style="{DynamicResource SubtleIconButton}"
-                                                        Content="&#xE74A;"
-                                                        ToolTip="Move this profile's pin to this version"
-                                                        Visibility="{Binding IsUpdateRow, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}" />
+                                                    <!-- The list is keyed by mod, so which version the
+                                                         + or the ⬆ would add is a choice on the row -
+                                                         the same reason the right list carries one. -->
+                                                    <ComboBox Width="150"
+                                                              Margin="4 0"
+                                                              VerticalAlignment="Center"
+                                                              ItemsSource="{Binding Versions}"
+                                                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
+                                                              DisplayMemberPath="Label"
+                                                              IsEnabled="{Binding HasSeveralVersions}"
+                                                              ToolTip="Which version this would add" />
+
+                                                    <!-- One verb applied to the profile, and which one
+                                                         depends on what it already has of that mod: +
+                                                         where it is absent, ⬆ where this row is a newer
+                                                         version of something already in it. Two buttons
+                                                         rather than a retemplated one, because the chip
+                                                         beside them is what says which case this is and
+                                                         the glyph only has to agree with it.
+                                                         Both run the same command; the page decides
+                                                         which of the two moves it turns out to be. -->
+                                                    <Button Style="{DynamicResource SubtleIconButton}"
+                                                            Margin="0 0 8 0"
+                                                            Content="&#xE710;"
+                                                            ToolTip="Add to this profile"
+                                                            Visibility="{Binding Item.IsUpdateRow, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                                            Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+
+                                                    <Button Style="{DynamicResource SubtleIconButton}"
+                                                            Margin="0 0 8 0"
+                                                            Content="&#xE74A;"
+                                                            ToolTip="Move this profile's pin to this version"
+                                                            Visibility="{Binding Item.IsUpdateRow, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
@@ -742,16 +759,26 @@
                                            Text="{Binding UpdateCountText}"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                                <Button Grid.Column="1"
-                                        Margin="12 0 0 0"
-                                        Padding="6 2"
-                                        HorizontalAlignment="Left"
-                                        Style="{DynamicResource SubtleMenuButton}"
-                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                        Content="{Binding SkippedText}"
-                                        ToolTip="Locked mods are skipped. Open the list to move any of them anyway."
-                                        Visibility="{Binding HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
-                                        Command="{Binding ShowSkippedUpdatesCommand}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0">
+                                    <Button Padding="6 2"
+                                            Style="{DynamicResource SubtleMenuButton}"
+                                            Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                            Content="{Binding SkippedText}"
+                                            ToolTip="Locked mods are skipped. Open the list to move any of them anyway."
+                                            Visibility="{Binding HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Command="{Binding ShowSkippedUpdatesCommand}" />
+
+                                    <!-- Not counted as updates, and this is the whole job of saying
+                                         why - a link to the filter that isolates them, exactly as the
+                                         skipped-locked count opens its own list. -->
+                                    <Button Padding="6 2"
+                                            Margin="8 0 0 0"
+                                            Style="{DynamicResource SubtleMenuButton}"
+                                            Content="{Binding AmbiguousText}"
+                                            ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
+                                            Visibility="{Binding HasAmbiguousVersions, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Command="{Binding ShowAmbiguousVersionsCommand}" />
+                                </StackPanel>
 
                                 <!-- A split button carrying the same split the sentence on the left
                                      does: the primary takes everything that is newer, wherever the

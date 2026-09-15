@@ -135,14 +135,28 @@
                                ToolTip="Version-sensitive. Batch updates leave this mod alone."
                                Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                    <!-- Shares one slot between two facts that both mean "this row will ask you
+                         something at save": a source conflict, and a version the ordering could not
+                         place against what the repo holds. A conflict is the more urgent of the two
+                         and wins the slot when a version is somehow both. -->
                     <Border Grid.Column="4"
                             Margin="0 0 8 0"
-                            Style="{StaticResource StatusChip}"
-                            ToolTip="{Binding SourceConflictTooltip}"
-                            Background="{DynamicResource SystemFillColorCautionBrush}"
-                            TextElement.Foreground="{DynamicResource TextFillColorInverseBrush}"
-                            Visibility="{Binding HasSourceConflict, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="Conflict"
+                            ToolTip="{Binding SecondaryChipTooltip}"
+                            Visibility="{Binding HasSecondaryChip, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSourceConflict}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <TextBlock Text="{Binding SecondaryChipText}"
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 

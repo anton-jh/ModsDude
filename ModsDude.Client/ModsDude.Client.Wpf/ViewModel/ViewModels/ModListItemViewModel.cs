@@ -92,6 +92,41 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         + "version. Only one can be registered, and importing will ask which:"
         + string.Concat(Mod.FoundIn.Select(x => $"\n{x.Source.Name} - {x.FilePath} ({x.FileLength:N0} bytes)"));
 
+    /// <summary>
+    /// The order between this version and what the repo holds is not settled - a comparer abstention
+    /// against the repo's own newest, which is exactly the pair the import-time arbitration dialog
+    /// exists for. Set by the page from <c>ModVersionSet.CouldNotCompareToNewest</c>, which is where
+    /// the comparison actually lives: this row only renders the fact.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSecondaryChip))]
+    [NotifyPropertyChangedFor(nameof(SecondaryChipText))]
+    [NotifyPropertyChangedFor(nameof(SecondaryChipTooltip))]
+    private bool _orderNotSettled;
+
+    /// <summary>
+    /// The small chip beside the main status one, which a source conflict already used alone. Both
+    /// mean "this row will ask you something at save", so they share the slot rather than each
+    /// costing the row a column of its own; a conflict is the more urgent of the two and wins when a
+    /// version somehow manages to be both.
+    /// </summary>
+    public bool HasSecondaryChip => HasSourceConflict || OrderNotSettled;
+
+    /// <summary>
+    /// "New?" rather than a word about ordering - the reader does not need to know a comparer
+    /// abstained, they need to know this might be the version they came here to add. The question
+    /// mark is the point: the row is an invitation, not a warning, which is also why it never
+    /// replaces the main chip's plain "New".
+    /// </summary>
+    public string SecondaryChipText => HasSourceConflict ? "Conflict" : OrderNotSettled ? "New?" : string.Empty;
+
+    public string? SecondaryChipTooltip => HasSourceConflict
+        ? SourceConflictTooltip
+        : OrderNotSettled
+            ? "Nothing settled whether this version comes before or after what the repo already holds. "
+                + "Importing it will ask which."
+            : null;
+
     /// <summary>Stands in for the icon while it loads, and for mods that ship without one.</summary>
     public string Initials { get; }
 

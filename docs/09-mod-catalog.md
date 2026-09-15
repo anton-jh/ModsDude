@@ -602,6 +602,14 @@ equal sizes are not equal bytes. That is the wrong way round for a decision that
 file in the Recycle Bin, so it decides nothing. It exists to say "this may need answering" before
 anybody presses Import.
 
+Proving it exactly would *not* mean hashing every archive in every source, which an earlier version
+of this document claimed. Only a version found in more than one source can conflict at all, and of
+those only the unregistered ones are a genuine question — a registered version already has
+`ContentHash`, so each local copy can be compared against it and decided rather than asked about.
+The set worth hashing is bounded by duplicates, not by scan size, and is affordable now that it is
+known to be small; it simply is not done on the row today, because a full file read for a question
+that may never be asked is its own decision to make.
+
 **The answer is `ModOccurrenceResolver`, and it hashes.** It runs at import, over the versions
 actually selected, and after the already-registered pass — so re-importing a folder the repo already
 holds pays nothing, and the cost falls on genuine duplicates alone. It groups a version's
@@ -797,24 +805,46 @@ The hide rule is **"this version is what the profile pins"**, not "this mod is p
 version of a pinned mod is not in this profile, whatever else is — so it belongs on the left, and
 under the old rule it had nowhere at all to be except that row's own version dropdown.
 
-The row still stands for one mod, at the newest version an enabled source actually **offers** —
-which is not the same as the newest known. A mod reached only through a profile chip has to show at
-that profile's version, or switching the repo chip off would leave the row pointing at a version
-nothing enabled holds, and it would then fail its own filter and disappear.
+**The row carries its own version selector**, offering whatever the enabled chips offer of that mod
+— the left side's counterpart of the right list's, and built the same way: `ProfileModRowViewModel`
+wraps the shared list row and swaps it when the selection moves, which is what makes the two lists
+structurally identical down to the template. Picking a version here is not yet a decision the
+profile has made — nothing is committed until the row's own **+** or **⬆** is pressed — so unlike
+the right list's selector, choosing a locked mod's version here never raises the confirmation; the
+button click does.
+
+**The default is the newest offered version, except on a removal.** A mod this draft has just taken
+out defaults to the exact version the profile held, and that version is offered regardless of the
+chips — a pending removal is draft state, not catalog state, so the chips must not be able to hide
+it. Without this the row's own **+** would re-add at the newest offered version instead of undoing
+the removal, which is precisely the hazard *Restore removed* exists to route around. A choice
+already made on this row otherwise survives a recompose — the same "the draft outlives the catalog"
+argument, one level down — so ticking an unrelated chip does not silently reset three selectors
+somebody has just set.
 
 Its action is one verb applied to the profile: **Pin** where the mod is absent, **SetVersion** where
 it is already there, with ⬆ in place of + and the same locked-mod confirmation the version selector
-raises — it is the same act, so it asks the same question. The sort reads taken out, then updates,
-then alphabetical.
+on the right raises — it is the same act, so it asks the same question. The sort reads taken out,
+then updates, then versions the ordering could not settle, then alphabetical.
 
 That does not put a mod on both sides at once, which was the original objection to updates on the
 left: what is on the left is a version the profile does *not* pin, and what is on the right is the
 one it does.
 
+**The "N taken out" count is also the control that hides them.** Defaults to shown — a removal is
+unsaved work, and hiding unsaved work by default is how people lose it — but clicking the count
+toggles it off, the same shape as the updates band's skipped-locked count opening its own list.
+Turning on the *Taken out* filter chip forces the toggle back on, since a filter that selects a set
+the toggle is hiding would be an empty list with no explanation.
+
 #### Four states, two colours, three words
 
 A chip's fill says what the version means for the **repo** and its text says what it means for
-**this profile**.
+**this profile**. This is the *one* status chip a row wears, and it follows the selector: the row
+*is* the selected version, so the chip, the sort rank and the +/⬆ glyph all move together when the
+selection does, exactly as they already do on the right when `Item` is replaced. Per-version facts —
+"imports on save", "order not settled" — go in the selector's own labels instead, since those are
+true of one entry in the dropdown and not of the mod as a whole.
 
 | Chip | Fill | Means |
 | --- | --- | --- |
@@ -822,11 +852,43 @@ A chip's fill says what the version means for the **repo** and its text says wha
 | **Update** | green | The same, for a version only on disk. Saving imports it. |
 | **New version** | green | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
 | **New** | green | A version the repo does not hold, with nothing else to say. |
+| **Taken out** | caution | This draft has removed the mod, whatever version is currently selected — removal outranks everything above, since a removed mod is not pinned and nothing is an update to it. |
 
-Green is "saving uploads a file", which is what the three of them have in common; the accent is the
-one that costs nothing. One chip per row, as the template was built for, and the glyph on the row's
-button and the row's position in the sort both read the same derived flag, so they cannot disagree
-with the chip.
+Green is "saving uploads a file", which is what three of the first four have in common; the accent is
+the one that costs nothing. One chip per row, as the template was built for, and the glyph on the
+row's button and the row's position in the sort both read the same derived flag, so they cannot
+disagree with the chip.
+
+#### A version nothing could compare
+
+Planning an update already steps over a pair the comparer abstained on rather than guessing — see
+[the note below](#a-note-on-update-available) — but stepping over it made the version disappear
+entirely: no update, no chip, no count, just an entry in the selector sitting wherever the
+topological sort happened to put it. That is the worst version to be silent about, because it may be
+exactly the one somebody came here to add, and the only reason it was never offered as an update is
+that the program could not tell.
+
+**The definition is one sentence, used in five places**: a version an enabled source holds that the
+ordering could not compare against what the repo holds — `ModVersionSet.CouldNotCompareToNewest`,
+tested in `Client.Core`. It answers against the repo's own newest specifically, not against
+whichever version this profile happens to pin, which is what makes it a single repo-level fact
+usable identically whether or not the mod is pinned here — and it is exactly the pair the import-time
+arbitration dialog exists to ask about, so a version this is true of is also a preview of "importing
+this will ask a question".
+
+- The selector label carries it: *"2024.03 — imports on save, order not settled"*.
+- A green **New?** chip sits on the row, sharing the source-conflict chip's column — both mean "this
+  row will ask you something at save", and the question mark is deliberate: the reader does not need
+  to know a comparer abstained, they need to know this might be the version they came for.
+- The **Conflicts** filter chip is gone; this took its slot. A source conflict is answered at save,
+  one version at a time, in a dialog — nobody bulk-acts on a set of conflicts, so a filter for it
+  never earned its place, and the row's own chip is the whole of what it needs. An uncompared
+  version is worth isolating precisely because it is silent everywhere else.
+- The updates band names a count beside the skipped-locked link: *"3 versions could not be
+  compared"*, linking to the filter above. They are not counted as updates, and saying why is the
+  whole job.
+- It ranks in the left list's sort, after updates and before alphabetical, so the count is findable
+  without opening the filter.
 
 #### The updates band
 
@@ -1282,6 +1344,15 @@ Two rules keep that from becoming a guess:
 
 This is the same rule the management page's `IsUpdate` applies against the repo's own newest,
 arrived at from the other end.
+
+**An abstention against the repo's newest is not nothing, though — it is a question of its own.**
+Stepping over an uncomparable pair correctly keeps it from being counted as an update, but the first
+version of this left it invisible *as such*: no update, no chip, no count, just an entry in the
+selector wherever the topological sort happened to place it. `ModVersionSet.CouldNotCompareToNewest`
+names that third case directly, and the editor surfaces it as its own thing — a **New?** chip, a
+label suffix, a filter, and a count — precisely because it may be the version somebody came here to
+add, and the only reason it was not offered as one is that the program could not tell. See
+[above](#a-version-nothing-could-compare).
 
 The two positions reconcile: an earlier design pass argued against parsing version strings at
 all, because `modDesc/version` is free-form. The settled design parses **best-effort and

@@ -122,4 +122,27 @@ public sealed class ModVersionSet
         // A pair is recorded with the earlier of the two first, so this is the only spelling of it.
         return _unordered.Contains(new ModVersionPair(pin, candidate)) is false;
     }
+
+    /// <summary>
+    /// Whether the order left <paramref name="candidate"/> genuinely uncompared against
+    /// <see cref="NewestRegistered"/> - the third answer <see cref="IsAfter"/> collapses into "not
+    /// after". A version this is true of may be exactly the one somebody came here to add, and the
+    /// only reason it was not offered as an update is that the program could not tell; it is also
+    /// exactly the version that will raise the arbitration dialog if it is imported, since that
+    /// dialog exists for the same abstentions. False where the repo holds nothing of this mod at
+    /// all - there is nothing to be uncompared against - and false for the newest registered version
+    /// itself.
+    /// </summary>
+    public bool CouldNotCompareToNewest(ModVersionKey candidate)
+    {
+        if (NewestRegistered is not CatalogModVersion newest
+            || candidate == newest.VersionId
+            || _positions.ContainsKey(candidate) is false)
+        {
+            return false;
+        }
+
+        return _unordered.Contains(new ModVersionPair(newest.VersionId, candidate))
+            || _unordered.Contains(new ModVersionPair(candidate, newest.VersionId));
+    }
 }
