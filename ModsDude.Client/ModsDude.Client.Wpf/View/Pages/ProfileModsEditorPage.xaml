@@ -575,28 +575,47 @@
 
                                                     <!-- One verb applied to the profile, and which one
                                                          depends on what it already has of that mod: +
-                                                         where it is absent, ⬆ where this row is a newer
-                                                         version of something already in it. Two buttons
-                                                         rather than a retemplated one, because the chip
-                                                         beside them is what says which case this is and
-                                                         the glyph only has to agree with it.
-                                                         Both run the same command; the page decides
+                                                         where it is absent, and a pin move where it is
+                                                         not. Keyed on MovesPin rather than on
+                                                         IsUpdateRow, because this row's own selector
+                                                         reaches versions that are older than the pin
+                                                         and versions the ordering cannot place against
+                                                         it - neither is an update, and both still move
+                                                         the pin, so a + labelled "Add to this profile"
+                                                         over one of those said the wrong thing about
+                                                         what pressing it does.
+                                                         Two buttons rather than a retemplated one;
+                                                         both run the same command, and the page decides
                                                          which of the two moves it turns out to be. -->
                                                     <Button Style="{DynamicResource SubtleIconButton}"
                                                             Margin="0 0 8 0"
                                                             Content="&#xE710;"
                                                             ToolTip="Add to this profile"
-                                                            Visibility="{Binding Item.IsUpdateRow, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                                            Visibility="{Binding Item.MovesPin, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
 
-                                                    <Button Style="{DynamicResource SubtleIconButton}"
-                                                            Margin="0 0 8 0"
-                                                            Content="&#xE74A;"
+                                                    <!-- ⬆ only where the move genuinely goes up; a pin
+                                                         move in any other direction gets the neutral
+                                                         glyph, since the tooltip is the same sentence
+                                                         either way and an up arrow over a downgrade
+                                                         is not. -->
+                                                    <Button Margin="0 0 8 0"
                                                             ToolTip="Move this profile's pin to this version"
-                                                            Visibility="{Binding Item.IsUpdateRow, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Visibility="{Binding Item.MovesPin, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
+                                                            CommandParameter="{Binding}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                                                <Setter Property="Content" Value="&#xE72C;" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Item.IsUpdateRow}" Value="True">
+                                                                        <Setter Property="Content" Value="&#xE74A;" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
                                                 </StackPanel>
                                             </Grid>
                                         </DataTemplate>

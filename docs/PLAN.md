@@ -2330,16 +2330,29 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
       updates band's "No folders are being read" becomes true only when no folder has been read at
       all this session.
 
-      Landed as `_knownVersions: Dictionary<ModVersionIdentity, CatalogModVersion>`, folded into on
-      every `BuildIndex` call and never pruned — a source dropping out of the current snapshot simply
-      stops being written to it, which is what makes "grows and never shrinks" true without a second
-      data structure. `_versionsByMod` is then `ModVersionIndex.Build` over
-      `_knownVersions.Values.Concat(Pinned.Select(...))`, exactly as before except the left operand no
-      longer comes from the snapshot directly. `ProfileModRowViewModel.Rebase` lost its
-      `known is null` prepend branch, since the versions it is handed now always already contain the
-      pin. The wording fix landed as a plain `_hasReadAnyFolder` field, set once true in
-      `RebuildSources` and never reset, distinct from `HasEnabledFolders` which stays about right now
-      and still drives the *Not in the sources* chip's enabled state.
+      Landed first as `_knownVersions`, a dictionary on the page folded into on every `BuildIndex`
+      call and never pruned. **That was the wrong place for it and has since been replaced.** An
+      accumulation that only grows cannot tell a chip from a rescan: it correctly held a version
+      against its source being unticked, and just as firmly held one against the folder no longer
+      containing the file — so a deleted archive stayed in every version selector, stayed counted as
+      an available update, and *Update all* would move a pin onto a file that was not there, with the
+      save failing afterwards and no way to clear it short of leaving the page.
+
+      The distinction belongs to `ModCatalog`, which is the only thing that knows what it re-read and
+      what it merely stopped merging. **A source switched off goes on standby rather than being
+      forgotten**: `_standbySources` holds every source enabled at least once this session, its scan
+      is still started and still refreshed by a rescan, and `GetAsync` returns two sets —
+      `ModCatalogSnapshot.Versions`, the enabled ones, which is what `_offered` and the left list are
+      built from, and `ModCatalogSnapshot.Known`, widened to standby, which is what `_versionsByMod`
+      is built from alongside the draft's own pins. Both are recomputed from the current scans, so
+      neither can outlive what is on disk, and unticking a chip still takes nothing out of a selector.
+      Removing an ad-hoc folder — the stronger statement — drops it from standby and takes its
+      versions with it.
+
+      `ProfileModRowViewModel.Rebase` lost its `known is null` prepend branch, since the versions it
+      is handed always already contain the pin. The wording fix landed as a plain `_hasReadAnyFolder`
+      field, set once true in `RebuildSources` and never reset, distinct from `HasEnabledFolders`
+      which stays about right now and still drives the *Not in the sources* chip's enabled state.
 - [x] **The left row gets a version selector, offering what the chips offer.** Adding a mod at the
       wrong version and then correcting it on the other side is two steps for one decision, and
       reads as a mistake being fixed rather than a choice being made. The row needs the wrapper

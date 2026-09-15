@@ -268,6 +268,27 @@ public sealed class ProfileSaveService(
     }
 
     /// <summary>
+    /// The same, said to be watched before the lock is let go of.
+    /// </summary>
+    /// <remarks>
+    /// <b>Under one lock, because <see cref="Retire"/> takes the same one.</b> Finding a run and then
+    /// watching it as two acts leaves a gap the run can finish in - and a run that retires unwatched
+    /// files its outcome for the notice column, which the page is about to render off
+    /// <see cref="ProfileSaveRun.Completion"/> anyway. The result was one save reported twice.
+    /// </remarks>
+    public ProfileSaveRun? FindAndWatch(Guid profileId, out IDisposable? watch)
+    {
+        lock (_gate)
+        {
+            var run = _runs.GetValueOrDefault(profileId);
+
+            watch = run?.Watch();
+
+            return run;
+        }
+    }
+
+    /// <summary>
     /// Whether a save of this profile would be refused right now. A hint for a <c>CanExecute</c>, and
     /// not the guard - <see cref="RunAsync"/> is what actually decides.
     /// </summary>
@@ -315,10 +336,18 @@ public sealed class ProfileSaveService(
     /// so the only place it can be caught is here, before anything is written.
     /// </remarks>
     /// <returns>
-    /// The run, so the caller can watch it and mark its own rows. A refusal comes back as a run that
-    /// has already finished, so there is one shape for a caller to handle rather than two.
+    /// The run, so the caller can mark its own rows. A refusal comes back as a run that has already
+    /// finished, so there is one shape for a caller to handle rather than two.
     /// </returns>
-    public ProfileSaveRun Start(ProfileSaveRequest request)
+    /// <param name="watch">
+    /// Already held on the caller's behalf, to be disposed when it stops drawing the run - null for a
+    /// refusal, which never runs and never retires. <b>Taken before the work starts</b>, because a
+    /// caller that watched the run it was handed back would leave a gap the run could finish in, and
+    /// a run that retires unwatched files its outcome for the notice column while the caller is still
+    /// going to render it. See <see cref="FindAndWatch"/>, which closes the same gap from the other
+    /// side.
+    /// </param>
+    public ProfileSaveRun Start(ProfileSaveRequest request, out IDisposable? watch)
     {
         var run = new ProfileSaveRun(request);
 
@@ -328,6 +357,8 @@ public sealed class ProfileSaveService(
 
         if (lease is null)
         {
+            watch = null;
+
             run.Completion = Task.FromResult(new ProfileSaveOutcome(
                 ProfileSaveStatus.Refused,
                 $"'{request.ProfileName}' is already being saved. Nothing was written."));
@@ -338,6 +369,8 @@ public sealed class ProfileSaveService(
         lock (_gate)
         {
             _runs[request.ProfileId] = run;
+
+            watch = run.Watch();
         }
 
         Raise();

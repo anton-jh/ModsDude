@@ -669,6 +669,15 @@ registered versions per repo.
   `Task<SourceScan>` per source, with the merged view built from the enabled ones. This is what
   makes a source chip usable — toggling a source recomposes from memory and is instant, and
   adding one scans only the new folder rather than every folder again.
+- **A source switched off goes on standby.** It leaves the merged view and keeps its scan, which a
+  rescan still refreshes; only *removing* an ad-hoc folder forgets it. So `GetAsync` answers with two
+  sets: `Versions`, what the enabled sources hold, which is what a list of mods is a list *of*, and
+  `Known`, widened to the standby ones, which is what a version selector and an update planner read.
+  A chip and a rescan are different events and a single set cannot serve both — unticking a source
+  must not shrink a draft's selector, and a rescan that no longer finds a file must. The editor used
+  to do this with an append-only dictionary of its own, which got the first right and the second
+  exactly wrong: a deleted archive stayed offered and stayed counted as an update forever. Both sets
+  are recomputed from the current scans, so neither can outlive what is on disk.
 - **Cache the `Task`, not the result.** A second caller arriving during an in-flight scan joins
   it rather than starting a second `Parallel.For` over a thousand archives.
 - **Invalidate explicitly** — on import, and on a change to the game's settings. Never silently. A
@@ -779,13 +788,15 @@ discarded everything the user had built, dropped the unsaved-changes flag to fal
 navigation lock. It was also a needless round trip: a recompose reads the catalog, which composes
 from scans already in memory.
 
-**What the draft holds is part of the merged set.** The version index is the union of the catalog's
-versions and the versions the draft is pinning. So a pending row whose folder has just been switched
-off keeps its pin, keeps the `FoundIn` occurrence that names the file on disk, stays reported as
-pending, and still imports on save. Disabling a source is a statement about what is *looked at*,
-never about what exists — and without this the row degraded to the unknown-version placeholder,
-which reports `IsOnServer: true` and would have had the save write a dependency on a version the
-repo does not hold.
+**What the draft holds is part of the merged set.** The version index is the union of everything the
+catalog has read — `ModCatalogSnapshot.Known`, so the standby sources as well as the enabled ones —
+and the versions the draft is pinning. So a pending row whose folder has just been switched off keeps
+its pin, keeps the `FoundIn` occurrence that names the file on disk, stays reported as pending, and
+still imports on save. Disabling a source is a statement about what is *looked at*, never about what
+exists — and without this the row degraded to the unknown-version placeholder, which reports
+`IsOnServer: true` and would have had the save write a dependency on a version the repo does not
+hold. The index is still rebuilt from the catalog every compose rather than accumulated, which is
+what keeps a rescan able to take a deleted file back out of it.
 
 **One search box, over both lists.** It sits above the two columns rather than in the left one's
 header, because a mod is only ever on one side: a box that reached only the left list answered
@@ -823,8 +834,14 @@ argument, one level down — so ticking an unrelated chip does not silently rese
 somebody has just set.
 
 Its action is one verb applied to the profile: **Pin** where the mod is absent, **SetVersion** where
-it is already there, with ⬆ in place of + and the same locked-mod confirmation the version selector
-on the right raises — it is the same act, so it asks the same question. The sort reads taken out,
+it is already there, with the same locked-mod confirmation the version selector on the right raises —
+it is the same act, so it asks the same question. **Which of the two the button shows is decided by
+whether the profile holds the mod, not by whether this version is newer than the pin.** The row's own
+selector reaches versions older than the pin, and versions the ordering cannot place against it at
+all — the *New?* rows — and neither of those is an update while both still move the pin, so a row
+reading its verb off "is this an update" showed a **+** labelled *Add to this profile* over an action
+that silently changed an existing pin. ⬆ is kept for the move that genuinely goes up and a neutral
+glyph carries the rest; the tooltip is the same sentence either way. The sort still reads taken out,
 then updates, then versions the ordering could not settle, then alphabetical.
 
 That does not put a mod on both sides at once, which was the original objection to updates on the
@@ -836,6 +853,13 @@ unsaved work, and hiding unsaved work by default is how people lose it — but c
 toggles it off, the same shape as the updates band's skipped-locked count opening its own list.
 Turning on the *Taken out* filter chip forces the toggle back on, since a filter that selects a set
 the toggle is hiding would be an empty list with no explanation.
+
+**A removal always has a row, whatever the chips offer.** The left list is composed from the mods the
+enabled sources hold *and* the mods this draft has taken out, so a mod no enabled chip offers any
+version of — take the repo chip off and the rest is whatever a folder happens to hold — still gets a
+row the moment it leaves the profile. Without that the header counted a removal nothing rendered and
+the *Taken out* filter selected an empty list. A bulk removal normally touches mods that already have
+rows and costs only a re-offer; the full rebuild is reached when a row is genuinely missing.
 
 #### Four states, two colours, three words
 

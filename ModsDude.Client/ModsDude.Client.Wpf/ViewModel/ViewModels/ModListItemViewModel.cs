@@ -177,11 +177,27 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public bool HasStatus => Status is not ModDisplayStatus.None;
 
     /// <summary>
-    /// Whether this row would move a pin the profile already has rather than add a new one - which
-    /// is what decides the glyph on its button and where it sorts. Derived from the status so the
-    /// chip and the button cannot disagree about what pressing it does.
+    /// Whether this row's version is newer than what the profile pins - which is what decides where
+    /// it sorts, and which of the two pin-moving glyphs it carries. Derived from the status so the
+    /// chip and the button cannot disagree.
     /// </summary>
     public bool IsUpdateRow => Status is ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending;
+
+    /// <summary>
+    /// Whether pressing this row's button moves a pin the profile already has rather than adding a
+    /// new one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not the same question as <see cref="IsUpdateRow"/>, which is what this used to be read off.</b>
+    /// The left list's own version selector reaches versions that are older than the pin, and ones
+    /// the ordering cannot place against it at all - the <em>New?</em> rows this page exists to
+    /// surface - and neither of those is an update. Both still move the pin, so a row deciding its
+    /// verb by "is this newer" showed a <b>+</b> labelled <em>Add to this profile</em> over an action
+    /// that silently changed an existing pin. Set by the page, which is the thing that knows what the
+    /// draft holds; false everywhere else, where a row cannot move anything.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _movesPin;
 
     public bool HasSources => string.IsNullOrWhiteSpace(Sources) is false;
 

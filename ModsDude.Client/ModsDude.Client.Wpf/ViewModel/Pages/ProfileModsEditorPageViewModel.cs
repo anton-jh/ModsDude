@@ -81,14 +81,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// The versions a save this page rejoined is importing.
     /// </summary>
     /// <remarks>
-    /// Merged into <see cref="_knownVersions"/> like everything else the catalog turns up, because
-    /// they <em>are</em> the draft's own - and a page rebuilt while a save runs has its sources
-    /// switched off, so nothing else here has any record of the files that save is uploading. Without
-    /// them every pending row in the adopted draft would resolve to the unknown-version placeholder,
-    /// which reports <c>IsOnServer: true</c> and would have the list claim the repo already holds
-    /// what is still going up. It matters for exactly one composition - the first one after a rejoin,
-    /// while the catalog is still cold - because once folded in, those versions live on in
-    /// <see cref="_knownVersions"/> like everything else this session has seen.
+    /// Merged into <see cref="_versionsByMod"/> beside what the catalog turns up, because they
+    /// <em>are</em> the draft's own - and a page rebuilt while a save runs has its sources switched
+    /// off, so nothing else here has any record of the files that save is uploading. Without them
+    /// every pending row in the adopted draft would resolve to the unknown-version placeholder, which
+    /// reports <c>IsOnServer: true</c> and would have the list claim the repo already holds what is
+    /// still going up. Held until the save commits rather than folded into anything permanent: once
+    /// it has, the repo holds these and the reload reads them from the registered half, and once it
+    /// has not, the pending rows still need them.
     /// </remarks>
     private IReadOnlyList<CatalogModVersion> _adopted = [];
 
@@ -159,28 +159,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool _recomposeWhenSaved;
 
     /// <summary>
-    /// Every version this session has ever composed, by identity.
-    /// </summary>
-    /// <remarks>
-    /// <b>Grows across the whole session and never shrinks.</b> A chip decides what this page is
-    /// looking at, never what a version selector or the update planner can offer - so unlike
-    /// <see cref="_offered"/>, a source switched back off does not take anything out of here, it
-    /// simply stops adding to it. This is what <see cref="_versionsByMod"/> is built from, alongside
-    /// the draft's own pins, and it is the whole reason the prepend-the-pin path a version selector
-    /// used to need is gone: a pin composed into this once is composed into it forever.
-    /// </remarks>
-    private readonly Dictionary<ModVersionIdentity, CatalogModVersion> _knownVersions = [];
-
-    /// <summary>
     /// Every known version of every known mod, ordered per mod, with the pairs nothing settled kept
     /// beside them.
     /// </summary>
     /// <remarks>
-    /// Built from <see cref="_knownVersions"/> - the session-wide accumulation, not the current
-    /// snapshot - union'd with what the draft is pinning. A pending row whose source has just been
+    /// <para>
+    /// Built from <see cref="ModCatalogSnapshot.Known"/> - the enabled sources <em>and</em> the ones
+    /// on standby - union'd with what the draft is pinning. A pending row whose source has just been
     /// switched off keeps its pin, keeps the occurrence that names the file on disk, stays reported
-    /// as pending and still imports on save - because its version is still in <see cref="_knownVersions"/>.
+    /// as pending and still imports on save, because a source switched off is still being read.
     /// Disabling a source is a statement about what is <em>looked at</em>, never about what exists.
+    /// </para>
+    /// <para>
+    /// <b>It is not an accumulation.</b> This used to be a dictionary on the page that only ever grew,
+    /// which held versions against a chip being unticked and equally held them against a rescan
+    /// finding the file gone - so a deleted archive stayed in every selector and stayed counted as an
+    /// available update, and pressing <em>Update all</em> moved a pin onto a file that was not there.
+    /// Standby sources put that distinction where it can be made: in the catalog, which knows what it
+    /// re-read and what it merely stopped merging.
+    /// </para>
     /// </remarks>
     private IReadOnlyDictionary<ModKey, ModVersionSet> _versionsByMod =
         new Dictionary<ModKey, ModVersionSet>();
@@ -233,6 +230,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// and every row a bulk move touches would recount the selection it is part of.
     /// </summary>
     private bool _publishing;
+
+    /// <summary>
+    /// Set for the length of one recount, so the row writes it makes cannot start another. See
+    /// <see cref="Recount"/>.
+    /// </summary>
+    private bool _recounting;
 
     /// <summary>
     /// How long an undone bulk move stays offered. Long enough to notice a move of two hundred rows
@@ -499,6 +502,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// ever needs to poke <see cref="UpdateCountText"/> on the one transition that matters.
     /// </summary>
     private bool _hasReadAnyFolder;
+
+    /// <summary>
+    /// Whether a left-hand row names the sources its version was found in. With a single source
+    /// enabled every row would name the same one, which is just noise. Held as a field rather than
+    /// passed down, because the left list is rebuilt from <see cref="Recount"/> as well as from a
+    /// composition and only one of the two has a snapshot in its hand.
+    /// </summary>
+    private bool _showSources;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
@@ -1448,12 +1459,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ApplyStatus = null;
         ActivationOffer = null;
 
-        var run = _saveService.Start(request);
-
+        // Watched from inside Start rather than once it has handed the run back, so the run cannot
+        // finish in between and file its outcome for the notice column this page is about to report.
         // Held in a local as well as in the field, because disposing the page part way through
         // releases the field - and a finally that then read it would be dropping a handle it no
         // longer owns rather than its own.
-        var watch = _watch = run.Watch();
+        var run = _saveService.Start(request, out var watch);
+
+        _watch = watch;
 
         run.Advanced += OnRunAdvanced;
 
@@ -1465,7 +1478,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             run.Advanced -= OnRunAdvanced;
 
-            watch.Dispose();
+            watch?.Dispose();
             _watch = null;
         }
     }
@@ -1551,12 +1564,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// been told about it yet. The marks come from the run's own progress, so an editor that opens
     /// half way through an upload shows where the upload has got to rather than a blank list.
     /// </remarks>
-    private async Task RejoinAsync(ProfileSaveRun run)
+    private async Task RejoinAsync(ProfileSaveRun run, IDisposable? watch)
     {
         // A local as well as the field, for the reason SaveChanges keeps one: the page can be
         // disposed part way through, and the finally must release its own handle rather than
-        // whatever the field is holding by then.
-        var watch = _watch = run.Watch();
+        // whatever the field is holding by then. Taken by FindAndWatch, under the lock that would
+        // otherwise let this run retire unwatched between being found and being drawn.
+        _watch = watch;
 
         run.Advanced += OnRunAdvanced;
 
@@ -1587,7 +1601,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             run.Advanced -= OnRunAdvanced;
 
-            watch.Dispose();
+            watch?.Dispose();
             _watch = null;
         }
     }
@@ -2268,8 +2282,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     protected override Task InitAsync()
     {
-        return _saveService.Find(_profile.Id) is ProfileSaveRun run
-            ? RejoinAsync(run)
+        return _saveService.FindAndWatch(_profile.Id, out var watch) is ProfileSaveRun run
+            ? RejoinAsync(run, watch)
             : ReloadAsync();
     }
 
@@ -2438,11 +2452,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             _original = [.. Pinned.Select(x => x.Pin)];
 
+            // The draft is the server's list again, so nothing is taken out of it. Written here
+            // rather than left to the recount below, because the left list is built next and would
+            // otherwise compose against the removals of the draft that has just been thrown away -
+            // offering their versions, defaulting their rows to them, and giving a row to a mod that
+            // is no longer removed at all.
+            _pendingRemovals = [];
+
             // A reload is a new draft, so nothing that was picked survives it - and a report about a
             // selection that no longer exists would outlive what it described.
             SelectionStatus = null;
 
-            RebuildAvailable(snapshot);
+            RebuildAvailable();
 
             IsLoading = false;
         }
@@ -2469,7 +2490,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 row.Rebase(VersionsFor(row.ModId), _versionsByMod.GetValueOrDefault(row.ModId));
             }
 
-            RebuildAvailable(snapshot);
+            RebuildAvailable();
 
             IsLoading = false;
         }
@@ -2518,6 +2539,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         HasEnabledFolders = snapshot.Sources.Any(x => x.IsEnabled);
         HasEnabledSources = _includeRegistered || HasEnabledFolders || _profileSources.Any(x => x.IsEnabled);
+
+        _showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
 
         // Once true, true forever - distinct from HasEnabledFolders, which is only about right now.
         // A folder switched off after finding nothing does not retroactively mean nothing was ever
@@ -2575,28 +2598,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Every known version of every known mod, ordered - the accumulation, plus whatever the draft is
-    /// pinning that the accumulation does not (yet) know about.
+    /// Every known version of every known mod, ordered - what the catalog has read, plus whatever the
+    /// draft is pinning that the catalog does not know about.
     /// </summary>
     /// <inheritdoc cref="_versionsByMod" path="/remarks"/>
     private void BuildIndex(ModCatalogSnapshot snapshot)
     {
-        // Grows and never shrinks - see the remarks on _knownVersions. A chip being switched back off
-        // simply stops adding to this; what it already contributed stays.
-        foreach (var version in snapshot.Versions)
-        {
-            _knownVersions[version.Identity] = version;
-        }
-
-        // Only matters the first time this runs after a rejoin, while the catalog is still cold -
-        // once folded in here these live on with everything else this session has seen.
-        foreach (var version in _adopted)
-        {
-            _knownVersions.TryAdd(version.Identity, version);
-        }
-
+        // In this order because ModVersionIndex.Build keeps the first record of an identity it is
+        // given: the catalog's is the freshest, the save's is next, and a pinned row's own copy only
+        // fills the gap where neither has heard of it.
         _versionsByMod = ModVersionIndex.Build(
-            _knownVersions.Values.Concat(Pinned.Select(x => x.SelectedVersion.Version)),
+            snapshot.Known
+                .Concat(_adopted)
+                .Concat(Pinned.Select(x => x.SelectedVersion.Version)),
             _repo.Adapter.VersionComparer);
     }
 
@@ -2606,15 +2620,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <remarks>
     /// <para>
     /// <b>Offered, not known.</b> The selector's options are <see cref="_offered"/> - what the chips
-    /// currently say counts - not the full accumulation <see cref="_versionsByMod"/> holds, which is
-    /// the opposite rule from the right list's selector and deliberately so: symmetry would say don't
+    /// currently say counts - rather than everything <see cref="_versionsByMod"/> holds, which is the
+    /// opposite rule from the right list's selector and deliberately so: symmetry would say don't
     /// narrow it, but a mod reached only through a profile chip has to show at that profile's version
     /// or switching the repo chip off would point the row at nothing enabled holds.
     /// </para>
     /// <para>
     /// <b>Except a pending removal</b>, whose taken-out version is offered regardless of the chips
-    /// because it is draft state, not catalog state - see <see cref="Recount"/> for the row-level
-    /// enforcement of the same rule between compositions.
+    /// because it is draft state, not catalog state - and which is why the set of mods with a row is
+    /// the offered ones <em>and</em> the removed ones. A mod no enabled chip holds any version of
+    /// still has to have a row the moment this draft takes it out, or the header would count a
+    /// removal nothing renders and the <em>Taken out</em> filter would select an empty list.
     /// </para>
     /// <para>
     /// <b>A chosen version survives the recompose.</b> A row already showing a mod keeps whatever its
@@ -2624,11 +2640,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// different pin from the one that was there.
     /// </para>
     /// </remarks>
-    private void RebuildAvailable(ModCatalogSnapshot snapshot)
+    private void RebuildAvailable()
     {
-        // With a single source every row would name the same one, which is just noise.
-        var showSources = snapshot.Sources.Count(x => x.IsEnabled) > 1;
-
         var existing = new Dictionary<ModKey, ProfileModRowViewModel>();
 
         foreach (var row in _available)
@@ -2640,30 +2653,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var rows = new List<ProfileModRowViewModel>();
 
-        foreach (var (modId, set) in _versionsByMod)
+        foreach (var modId in _versionsByMod.Keys.Union(_pendingRemovals.Keys))
         {
-            var isRemoval = _pendingRemovals.TryGetValue(modId, out var removedPin);
+            var set = _versionsByMod.GetValueOrDefault(modId);
+            var (offered, defaultVersion) = OfferFor(modId);
 
-            var offered = set.Order
-                .Where(x => _offered.Contains(x.Identity) || (isRemoval && x.VersionId == removedPin.VersionId))
-                .ToList();
-
-            if (offered.Count == 0)
+            if (defaultVersion is null)
             {
                 continue;
             }
 
-            var defaultVersion = isRemoval
-                ? offered.First(x => x.VersionId == removedPin.VersionId)
-                : offered[^1];
-
             var row = existing.TryGetValue(modId, out var reused)
-                ? ReuseAvailableRow(reused, offered, defaultVersion, isRemoval, set)
+                ? ReuseAvailableRow(reused, offered, defaultVersion, IsPendingRemoval(modId), set)
                 : new ProfileModRowViewModel(_repo.Id, offered, defaultVersion, false, _itemFactory, AllowWithoutAsking, set);
 
-            row.Item.Sources = showSources && row.SelectedVersion.Version.FoundIn.Count > 0
+            row.Item.Sources = _showSources && row.SelectedVersion.Version.FoundIn.Count > 0
                 ? string.Join(", ", row.SelectedVersion.Version.FoundIn.Select(source => source.Source.Name))
                 : null;
+
+            // A row built while the profile is being saved has to come up inert like the rest of
+            // them - OnIsReadOnlyChanged only reaches the rows that existed when the flag moved.
+            row.Item.IsPickable = IsReadOnly is false;
 
             row.PropertyChanged += OnAvailableRowChanged;
 
@@ -2682,13 +2692,95 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         AvailableView = view;
     }
 
+    /// <summary>
+    /// What one left-hand row offers and which of those it points at by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The one place the two answers are worked out</b>, because a recompose and a bulk removal
+    /// both need them and a row that disagreed with the list it is in about what it is offering is
+    /// exactly the bug this replaced: the two used to be computed separately, and the second one
+    /// appended the taken-out version to the newest end of the list whatever the ordering said.
+    /// </para>
+    /// <para>
+    /// A null default means this mod has no row at all - nothing enabled offers a version of it and
+    /// this draft has not taken it out.
+    /// </para>
+    /// </remarks>
+    private (List<CatalogModVersion> Offered, CatalogModVersion? Default) OfferFor(ModKey modId)
+    {
+        var set = _versionsByMod.GetValueOrDefault(modId);
+
+        var offered = set is null
+            ? []
+            : set.Order.Where(x => _offered.Contains(x.Identity)).ToList();
+
+        return _pendingRemovals.TryGetValue(modId, out var removedPin)
+            ? (offered, OfferRemoved(offered, set, removedPin))
+            : (offered, offered.Count > 0 ? offered[^1] : null);
+    }
+
+    /// <summary>
+    /// Puts the version a mod was taken out at into its row's selector, wherever the ordering says it
+    /// belongs, and answers with it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Offered whatever the chips say</b>, because a pending removal is draft state rather than
+    /// catalog state - without it the row's own <b>+</b> would re-add at the newest offered version,
+    /// which is a different pin from the one that was there. Placed rather than appended: the
+    /// selector reads newest first, so a taken-out version put on the end would read as the newest of
+    /// the mod. A version the ordering has never heard of - a pin this client's catalog cannot
+    /// resolve - goes to the front, which is where <see cref="CreatePinnedRow(ProfileModPin)"/> puts
+    /// the same thing and for the same reason.
+    /// </remarks>
+    private static CatalogModVersion OfferRemoved(
+        List<CatalogModVersion> offered,
+        ModVersionSet? set,
+        ProfileModPin removedPin)
+    {
+        if (offered.FirstOrDefault(x => x.VersionId == removedPin.VersionId) is CatalogModVersion already)
+        {
+            return already;
+        }
+
+        if (set?.Find(removedPin.VersionId) is not CatalogModVersion known)
+        {
+            var placeholder = Placeholder(removedPin.ModId, removedPin.VersionId);
+
+            offered.Insert(0, placeholder);
+
+            return placeholder;
+        }
+
+        // offered is a filter over set.Order and keeps its order, so counting the offered versions
+        // the order puts before this one is the index it belongs at.
+        var position = 0;
+
+        foreach (var candidate in set.Order)
+        {
+            if (candidate.VersionId == removedPin.VersionId)
+            {
+                break;
+            }
+
+            if (offered.Contains(candidate))
+            {
+                position++;
+            }
+        }
+
+        offered.Insert(position, known);
+
+        return known;
+    }
+
     /// <summary>A row that already exists for this mod, kept rather than rebuilt.</summary>
     private static ProfileModRowViewModel ReuseAvailableRow(
         ProfileModRowViewModel row,
         IReadOnlyList<CatalogModVersion> offered,
         CatalogModVersion defaultVersion,
         bool isRemoval,
-        ModVersionSet set)
+        ModVersionSet? set)
     {
         var chosen = isRemoval is false
                 && offered.FirstOrDefault(x => x.VersionId == row.SelectedVersion.Version.VersionId) is CatalogModVersion kept
@@ -2708,39 +2800,47 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         => Task.FromResult(true);
 
     /// <summary>
-    /// Forces a left row back to the version its mod was just taken out at, adding it to the row's
-    /// own selector if the chips do not currently offer it. Called from <see cref="Recount"/>, which
-    /// runs after every bulk move - a full <see cref="RebuildAvailable"/> is not, so this is what
-    /// keeps a removal's row from lagging one recompose behind the removal itself.
+    /// Forces a left row back to the version its mod was just taken out at. Called from
+    /// <see cref="Recount"/>, which runs after every bulk move - a full
+    /// <see cref="RebuildAvailable"/> is not, so this is what keeps a removal's row from lagging one
+    /// recompose behind the removal itself.
     /// </summary>
-    private void SnapToRemovedVersion(ProfileModRowViewModel row, ProfileModPin removedPin)
+    /// <remarks>
+    /// Recomposed through <see cref="OfferFor"/> rather than worked out from what the row is holding,
+    /// so a row snapped here and a row rebuilt by the next recompose cannot end up offering different
+    /// things in a different order.
+    /// </remarks>
+    private void SnapToRemovedVersion(ProfileModRowViewModel row)
     {
-        var set = _versionsByMod.GetValueOrDefault(row.ModId);
-        var removedVersion = set?.Find(removedPin.VersionId)
-            ?? row.Versions.Select(x => x.Version).FirstOrDefault(x => x.VersionId == removedPin.VersionId);
+        var (offered, defaultVersion) = OfferFor(row.ModId);
 
-        if (removedVersion is null)
+        if (defaultVersion is not null)
         {
-            return;
+            row.SetAvailableOptions(offered, defaultVersion, _versionsByMod.GetValueOrDefault(row.ModId));
         }
-
-        var offered = row.Versions.Select(x => x.Version).Reverse().ToList();
-
-        if (offered.Any(x => x.VersionId == removedPin.VersionId) is false)
-        {
-            offered.Add(removedVersion);
-        }
-
-        row.SetAvailableOptions(offered, removedVersion, set);
     }
 
     /// <summary>Every known version of one mod, oldest first. Empty for a mod nothing knows about.</summary>
     private IReadOnlyList<CatalogModVersion> VersionsFor(ModKey modId)
         => _versionsByMod.TryGetValue(modId, out var set) ? set.Order : [];
 
-    /// <inheritdoc cref="VersionsFor(ModKey)"/>
+    /// <summary>
+    /// The same, guaranteed to contain <paramref name="version"/> itself.
+    /// </summary>
+    /// <remarks>
+    /// A row is built around one version and has to be able to show it, so a version the index has no
+    /// record of joins the list rather than being dropped from it - at the front, where
+    /// <see cref="CreatePinnedRow(ProfileModPin)"/> puts the same thing, so it cannot read as the
+    /// newest. The one way in is a left-hand row standing for a taken-out mod whose pinned version
+    /// this client's catalog cannot resolve: that version lives on the row and nowhere else, and
+    /// pressing its <b>+</b> must put it back rather than leave the selector blank.
+    /// </remarks>
     private IReadOnlyList<CatalogModVersion> VersionsFor(CatalogModVersion version)
-        => VersionsFor(version.ModId) is { Count: > 0 } known ? known : [version];
+    {
+        var known = VersionsFor(version.ModId);
+
+        return known.Any(x => x.VersionId == version.VersionId) ? known : [version, .. known];
+    }
 
     /// <summary>
     /// Whether an enabled profile source is why this version is on the left, and whether that profile
@@ -2837,10 +2937,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// being lost work nobody noticed leaving.
     /// </remarks>
     private bool Passes(ProfileModRowViewModel row)
+        => PassesExceptFilter(row) && PassesFilter(row);
+
+    /// <summary>
+    /// Everything the left list is showing but for the filter chip. Split out for the one count that
+    /// is a <em>link</em> to a filter rather than a count within one - it has to say how many rows
+    /// clicking it will show, which is this and not <see cref="Passes"/>.
+    /// </summary>
+    private bool PassesExceptFilter(ProfileModRowViewModel row)
         => row.Matches(SearchText)
         && IsPinnedAt(row.SelectedVersion.Version) is false
-        && (ShowRemovals || IsPendingRemoval(row) is false)
-        && PassesFilter(row);
+        && (ShowRemovals || IsPendingRemoval(row) is false);
 
     /// <summary>Whether the profile pins this mod at exactly this version.</summary>
     private bool IsPinnedAt(CatalogModVersion version)
@@ -2915,7 +3022,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private static bool IsUpdateRow(ProfileModRowViewModel row) => row.Item.IsUpdateRow;
 
     private bool IsPendingRemoval(ProfileModRowViewModel row)
-        => _pendingRemovals.ContainsKey(row.ModId);
+        => IsPendingRemoval(row.ModId);
+
+    /// <inheritdoc cref="IsPendingRemoval(ProfileModRowViewModel)"/>
+    private bool IsPendingRemoval(ModKey modId)
+        => _pendingRemovals.ContainsKey(modId);
 
     /// <summary>
     /// What one left-hand row's chip says. <b>Four states, two colours, three words:</b> the fill
@@ -3173,7 +3284,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         AvailableCount = _available.Count(Passes);
         NewCount = _available.Count(IsShownAndNew);
-        AmbiguousCount = _available.Count(x => x.Item.OrderNotSettled);
+
+        // Counted against every test the list applies except the filter chip this count is a link
+        // to, so clicking it shows exactly this many rows. Counting them against the raw row set
+        // instead was the drift: a row whose selected version is what the profile pins is hidden by
+        // IsPinnedAt, which is the ordinary state of a mod pinned at the newest version there is, so
+        // the band offered three and the filter showed one.
+        AmbiguousCount = _available.Count(x => x.Item.OrderNotSettled && PassesExceptFilter(x));
     }
 
     /// <summary>How many of the profile's mods the search is showing. The total is PinnedCount.</summary>
@@ -3182,7 +3299,37 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         PinnedVisibleCount = Pinned.Count(PassesPinned);
     }
 
+    /// <summary>
+    /// Re-derives everything the draft decides, and is the only place any of it is written.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not re-entrant, deliberately.</b> Snapping a removal's row to its taken-out version moves
+    /// that row's selector, which the row reports and this method listens for - so without the guard
+    /// each snapped row started a nested recount that snapped the next one, recursing once per
+    /// removal and re-planning every update on the way down. The nested call has nothing to add
+    /// either way: what triggered it is a change this pass made, and the rest of this pass reads the
+    /// result of it.
+    /// </remarks>
     private void Recount()
+    {
+        if (_recounting)
+        {
+            return;
+        }
+
+        _recounting = true;
+
+        try
+        {
+            RecountCore();
+        }
+        finally
+        {
+            _recounting = false;
+        }
+    }
+
+    private void RecountCore()
     {
         // Anything at all having changed retires the offer: the draft it holds was an undo for the
         // move that had just happened, and one edit later it is a way of throwing that edit away.
@@ -3195,6 +3342,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             .Where(x => _pinnedIds.Contains(x.ModId) is false)
             .ToDictionary(x => x.ModId);
 
+        // A mod no enabled chip offers any version of has no row on the left at all, so a draft that
+        // takes one out would count a removal nothing renders and offer a Taken out filter that
+        // selects an empty list. Building a row for it needs the whole list rebuilt, which is why
+        // this asks first: the ordinary bulk removal touches mods that already have rows and still
+        // costs nothing but the snap below.
+        var shown = _available.Select(x => x.ModId).ToHashSet();
+
+        if (_pendingRemovals.Keys.Any(x => shown.Contains(x) is false))
+        {
+            RebuildAvailable();
+        }
+
         // A pending removal always shows the version that was taken out, whatever this row was
         // showing a moment ago - a bulk removal does not run RebuildAvailable, so without this the
         // row's own + could re-add at the newest offered instead of undoing the removal. Recomputed
@@ -3205,7 +3364,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             if (_pendingRemovals.TryGetValue(row.ModId, out var removedPin)
                 && row.SelectedVersion.Version.VersionId != removedPin.VersionId)
             {
-                SnapToRemovedVersion(row, removedPin);
+                SnapToRemovedVersion(row);
             }
         }
 
@@ -3215,6 +3374,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             row.Item.Status = DescribeRow(row.SelectedVersion.Version);
             row.Item.OrderNotSettled = _versionsByMod.GetValueOrDefault(row.ModId)?.CouldNotCompareToNewest(row.SelectedVersion.Version.VersionId) ?? false;
+
+            // What pressing this row's button does, which is a question about the draft rather than
+            // about the version: any version of a mod the profile already holds moves its pin, newer
+            // or not. Written beside the status, because Item is replaced whenever the selector moves
+            // and both of these belong to whichever version it landed on.
+            row.Item.MovesPin = _pinnedIds.Contains(row.ModId);
         }
 
         PinnedCount = Pinned.Count;

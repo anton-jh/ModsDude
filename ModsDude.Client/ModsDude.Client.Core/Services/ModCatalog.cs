@@ -59,6 +59,20 @@ public sealed class ModCatalog : IDisposable
     /// </summary>
     private readonly HashSet<ModSourceId> _enabledSources = [];
 
+    /// <summary>
+    /// Every source that has been switched on at least once this session, whether or not it still
+    /// is. Never persisted, for the same reason <see cref="_enabledSources"/> is not.
+    /// </summary>
+    /// <remarks>
+    /// <b>Switching a source off puts it on standby rather than forgetting it.</b> A chip decides
+    /// what a page is <em>looking at</em>, never what this catalog has read - so a source on standby
+    /// is kept out of the merged view, stays in <see cref="ModCatalogSnapshot.Known"/>, and is
+    /// re-read by a rescan along with everything else. That is what lets a page keep offering a
+    /// version whose chip is off without also offering one whose file has since been deleted: the
+    /// first is a standby source still reporting it, the second is a rescan no longer doing so.
+    /// </remarks>
+    private readonly HashSet<ModSourceId> _standbySources = [];
+
     /// <summary>Registered versions accumulated across delta fetches, keyed by their join key.</summary>
     private readonly Dictionary<ModVersionIdentity, ModDto> _registered = [];
 
@@ -165,6 +179,18 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
+    /// Whether this source has been read at least once this session, whether or not its chip is on
+    /// now. <inheritdoc cref="_standbySources" path="/remarks"/>
+    /// </summary>
+    public bool IsStandby(ModSource source)
+    {
+        lock (_lock)
+        {
+            return _standbySources.Contains(source.Id);
+        }
+    }
+
+    /// <summary>
     /// Switches a source in or out of the merged view. Disabling a game says nothing about
     /// syncing to it - a source is somewhere to find mods, a sync target is a folder sync will make
     /// match a profile, and a game's mod folder simply happens to be both.
@@ -185,9 +211,11 @@ public sealed class ModCatalog : IDisposable
             if (enabled)
             {
                 _enabledSources.Add(sourceId);
+                _standbySources.Add(sourceId);
             }
             else
             {
+                // Left on standby - still read, still refreshed by a rescan, simply not merged in.
                 _enabledSources.Remove(sourceId);
             }
         }
@@ -211,6 +239,7 @@ public sealed class ModCatalog : IDisposable
             var source = new ModSource(id, GetFolderDisplayName(path), path, ModSourceKind.AdHoc);
             _adHocSources.Add(source);
             _enabledSources.Add(id);
+            _standbySources.Add(id);
 
             return source;
         }
@@ -220,8 +249,12 @@ public sealed class ModCatalog : IDisposable
     {
         lock (_lock)
         {
+            // Removed rather than switched off, which is the stronger of the two statements: this
+            // folder is not somewhere to look at all, so it leaves standby along with everything
+            // else and what it contributed goes with it.
             _adHocSources.RemoveAll(x => x.Id == sourceId);
             _enabledSources.Remove(sourceId);
+            _standbySources.Remove(sourceId);
             _scans.Remove(sourceId);
         }
     }
@@ -292,19 +325,31 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
-    /// The merged view over the enabled sources. Cheap once the scans are warm, which is what makes
-    /// toggling a source instant.
+    /// The merged view over the enabled sources, and beside it everything this catalog has read.
+    /// Cheap once the scans are warm, which is what makes toggling a source instant.
     /// </summary>
+    /// <remarks>
+    /// <b>The standby sources are read but not merged.</b> They cost nothing extra here - their scans
+    /// are already cached - but they are re-read after a rescan, which is the whole point: a source
+    /// this session has looked in keeps contributing to <see cref="ModCatalogSnapshot.Known"/> while
+    /// its chip is off, and stops the moment the folder itself stops holding the file. See
+    /// <see cref="_standbySources"/>.
+    /// </remarks>
     public async Task<ModCatalogSnapshot> GetAsync(CancellationToken cancellationToken)
     {
         var sources = GetSources();
         var enabled = sources.Where(IsEnabled).ToList();
+        var standby = sources.Where(x => IsEnabled(x) is false && IsStandby(x)).ToList();
 
         var scans = enabled.Select(GetOrStartScan).ToList();
+        var standbyScans = standby.Select(GetOrStartScan).ToList();
         var registered = GetOrStartRegisteredLoad();
         var usage = GetOrStartUsageLoad();
 
-        var pending = new List<Task>(scans) { registered, usage };
+        var pending = new List<Task>(scans);
+        pending.AddRange(standbyScans);
+        pending.Add(registered);
+        pending.Add(usage);
 
         // A failing source is reported rather than thrown, so only a failure to reach the server can
         // fault this.
@@ -319,7 +364,17 @@ public sealed class ModCatalog : IDisposable
                 : new ModSourceStatus(x, false, 0, null))
             .ToList();
 
-        return new ModCatalogSnapshot(Merge(results, registered.Result, usage.Result), statuses);
+        var versions = Merge(results, registered.Result, usage.Result);
+
+        // Merged a second time rather than filtered out of one pass: a version in both an enabled
+        // and a standby source has to carry both occurrences in Known and only the enabled one in
+        // Versions, which is a different record either way. Skipped entirely where there is no
+        // standby source, which is every page that has never switched one off.
+        var known = standbyScans.Count == 0
+            ? versions
+            : Merge([.. results, .. standbyScans.Select(x => x.Result)], registered.Result, usage.Result);
+
+        return new ModCatalogSnapshot(versions, known, statuses);
     }
 
     /// <summary>
@@ -586,8 +641,25 @@ public sealed class ModCatalog : IDisposable
 }
 
 /// <summary>The merged set, plus what every source contributed to it.</summary>
+/// <param name="Versions">
+/// What the <em>enabled</em> sources hold, merged with everything the repo has registered. What a
+/// list of mods is a list <em>of</em>.
+/// </param>
+/// <param name="Known">
+/// The same, widened to the sources on standby - every source this session has switched on at least
+/// once, whether or not it still is.
+/// </param>
+/// <remarks>
+/// <b>Two sets, because a chip and a rescan are different events.</b> Unticking a source must not
+/// take a version out of a draft's version selector or off the update planner - it is a statement
+/// about what is being looked at - while a rescan that no longer finds a file must. A single set
+/// cannot do both, and an append-only accumulation kept by the caller does the first at the cost of
+/// never being able to do the second. <see cref="Known"/> is a superset of <see cref="Versions"/>
+/// and both are recomputed from the current scans, so neither can outlive what is actually on disk.
+/// </remarks>
 public record ModCatalogSnapshot(
     IReadOnlyList<CatalogModVersion> Versions,
+    IReadOnlyList<CatalogModVersion> Known,
     IReadOnlyList<ModSourceStatus> Sources);
 
 /// <param name="Error">
