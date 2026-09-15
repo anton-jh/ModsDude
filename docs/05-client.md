@@ -640,10 +640,10 @@ Reorder versions, Delete version and Delete mod are refused. `CanModify` drives 
 `CanExecute`, and `ModifyRestriction` is the tooltip — carried to the row menu through
 `ModRowActions.Restriction`, since that template is shared.
 
-The **Sources** panel is the exception that is hidden rather than disabled: sources exist to feed
-an import and nothing else, so for a guest it would be a column of controls serving one refused
-action. Its grid column is `Auto` with the width on the panel itself, so collapsing it gives the
-space to the list instead of leaving a 280px hole.
+The **sources** are the exception that is hidden rather than disabled: sources exist to feed an
+import and nothing else, so for a guest they would be controls serving one refused action. Their
+chip row sits in the left column with the list it feeds, and the whole column is collapsed for a
+guest, which gives the space to the repo's own list rather than leaving a hole.
 
 The list itself is filtered to the repo's own mods for a guest — the floor is in `Passes`, not in
 a chip, so "All" means all of the repo's — and the **On disk only** chip is hidden, since it

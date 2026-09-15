@@ -542,8 +542,12 @@ list and chips all looking alike say so.
   against both stop existing when the page does, and switching one off is not the same as being done
   with it.
 
-The management page keeps its pane. It has the room, it is not the page where an empty left list
-needs explaining, and nothing about that pane was the complaint.
+**Repo → Mods draws the same row**, off the same view model and the same two styles, which live in
+`View/Resources/Controls.xaml` rather than in either page. That page kept a pane for a while on the
+grounds that it had the room; room turned out not to be the argument. Its chips are the scan
+locations only — the repo's own registered list is the right-hand column there, not a source — so it
+has no repo chip and no `+ profile`, and its ⨯ is on ad-hoc folders alone. The rescan moved onto the
+row with them, and the pane's heading went with it.
 
 #### The repo is a source too, in the profile editor
 
@@ -703,14 +707,10 @@ confused. Same rows, same templates, one service.
 
 **It is laid out like the profile mod editor**, and for the same reason: both pages are one act —
 deciding what a collection should hold, then writing it. Two lists. On the left, what the enabled
-sources hold and the repo does not; under it, the source **pane** — the game's own folders,
-Downloads, anything the user adds for the session — each with its checkbox, so the set of local
+sources hold and the repo does not; directly above it, the [source chips](#the-source-chips) — the
+game's own folders, Downloads, anything the user adds for the session — so the set of local
 candidates is adjustable in place rather than being a fixed consequence of where the game is. On
 the right, what the repo holds, plus whatever has been lined up to join it.
-
-The pane is the one thing this page does not share with the editor any more, which moved its sources
-to a chip row. This page has the room, an empty left list here means "nothing new on this computer"
-rather than "you have not told it where to look", and nothing about the pane was the complaint.
 
 A mod is **never on both sides at once**, and the row that moves rightwards is the same row object,
 so its icon and its per-row import marks come with it. Presence is therefore which list a row is in

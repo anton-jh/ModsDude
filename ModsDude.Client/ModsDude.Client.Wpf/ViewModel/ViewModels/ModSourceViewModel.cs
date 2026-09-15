@@ -78,23 +78,6 @@ public partial class ModSourceViewModel : ObservableObject
 
     public bool HasFailed => Error is not null;
 
-    /// <summary>What the management page's source pane says under the name. A line, with room for one.</summary>
-    public string CountText => HasFailed
-        ? "Could not be read"
-        : IsRepo
-            ? ModCount == 1 ? "1 registered version" : $"{ModCount} registered versions"
-            : ModCount == 1 ? "1 mod" : $"{ModCount} mods";
-
-    /// <inheritdoc cref="CountText"/>
-    public string KindText => Source.Kind switch
-    {
-        ModSourceKind.Repo => "This repo",
-        ModSourceKind.Game => "Game install",
-        ModSourceKind.Downloads => "Downloads",
-        ModSourceKind.Profile => "Another profile",
-        _ => "Added this session"
-    };
-
     /// <summary>
     /// The number on the chip, and nothing else - the units are what the chip's own name is for, and
     /// at four chips wide there is no room to spell them twice.

@@ -104,8 +104,8 @@ Repo → **Mods**. This is the most performance-sensitive path in the app.
 1. `RepoModsPageViewModel` builds a repo-scoped `ModCatalog`, which resolves `IBaseModAdapter`
    from the repo's adapter and throws a user-friendly error if the game does not support mods.
 2. **Nothing is scanned until a source is switched on.** Sources start off every time — the set is
-   never persisted — so opening the page reads the repo's mod list and no disk at all; tick a
-   source in the Sources panel and that folder is walked. The 150 ms delay before touching the
+   never persisted — so opening the page reads the repo's mod list and no disk at all; switch a
+   source chip on and that folder is walked. The 150 ms delay before touching the
    disk still stands behind that, so a page nobody stopped on never opens a file even once sources
    are enabled.
 3. Its **sources** are every mod folder the game reaches, the system Downloads folder,
