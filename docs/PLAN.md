@@ -2317,6 +2317,9 @@ One rule replaces all three: **a chip decides what this page is looking at, and 
 affected by what you are looking at.** It is the pending-row rule from Phase 14 — disabling a source
 is a statement about what is looked at, never about what exists — applied everywhere instead of once.
 
+Two smaller things travel with it, both cases of the editor being silent about something it knows: a
+version nothing could compare, and a filter chip naming a set nobody acts on.
+
 - [ ] **`_versionsByMod` stops shrinking.** It becomes a session-wide accumulation that only grows,
       rather than being rebuilt from the enabled snapshot each compose. `_offered` stays the one
       chip-aware set. The right-hand selector then offers everything found this session plus the
@@ -2338,12 +2341,14 @@ is a statement about what is looked at, never about what exists — applied ever
       re-adds at the newest — a different pin from the one that was there, which is the hazard
       *Restore removed* exists to route around. With it, the bulk button goes back to being a
       shortcut rather than the only correct route.
-- [ ] **One chip per row, following the selection.** The row *is* the selected version, so the chip,
-      the sort rank and the +/⬆ glyph move together, as they already do on the right when `Item` is
-      replaced. Per-version facts go in the selector's labels instead — `"1.2.0 — imports on save"`
-      is already there, `"— taken out"` joins it. Removal keeps precedence: the mod is out whatever
-      version is selected, and the moment it is re-added the row leaves the list. *Taken out* and
-      *Update* cannot co-occur, since a removed mod is not pinned and nothing is an update to it.
+- [ ] **One status chip per row, following the selection.** The row *is* the selected version, so the
+      chip, the sort rank and the +/⬆ glyph move together, as they already do on the right when
+      `Item` is replaced. Per-version facts go in the selector's labels instead —
+      `"1.2.0 — imports on save"` is already there, `"— taken out"` joins it. Removal keeps
+      precedence: the mod is out whatever version is selected, and the moment it is re-added the row
+      leaves the list. *Taken out* and *Update* cannot co-occur, since a removed mod is not pinned
+      and nothing is an update to it. This is about `ModDisplayStatus` only — the conflict chip has a
+      column of its own in the row template and keeps it.
 - [ ] **A left row's chosen version survives a recompose.** Left rows become stateful, so ticking a
       chip must not silently reset three selectors somebody has just set — the same problem as "the
       draft outlives the catalog", one level down. The row-reuse path in `RebuildAvailable` is where
@@ -2355,6 +2360,36 @@ is a statement about what is looked at, never about what exists — applied ever
       changes, they sort to the top so they cost one glance to skip, and hiding unsaved work by
       default is how people lose it. **Enabling the *Taken out* filter chip forces the toggle on**,
       since a filter that selects a set nothing renders is an empty list with no explanation.
+- [ ] **A version nothing could compare says so.** Phase 14 made an unregistered version count as an
+      update where the ordering places it after the pin, and left the ones it could not compare
+      invisible *as such*: no update, no chip, no count, and an entry in the selector sitting
+      wherever the topological sort happened to put it. That is the worst case to be silent about —
+      an uncomparable version may be exactly the one somebody came here to add, and the only reason
+      it was not offered is that the program could not tell. `ModVersionSet.Unordered` is already on
+      the set the row is built from; it is read in one place, inside `IsAfter`. Five uses of it:
+
+      - the selector label — `"2024.03 — imports on save, order not settled"`;
+      - a green **New?** chip on the row, sharing the conflict chip's column, since both mean "this
+        row will ask you something at save" — the question mark is the point, because the row is an
+        invitation rather than a warning;
+      - a filter chip, taking the slot *Conflicts* vacates;
+      - a count beside the updates band's skipped-locked link, linking to that filter, worded as
+        *"3 versions could not be compared"* — they are not counted as updates, and saying why is
+        the whole job;
+      - a rank in `CompareAvailable`, after updates, so the count is findable without the filter.
+
+      One definition throughout — *a version an enabled source holds that the ordering could not
+      compare against what the repo holds* — so the chip, the count and the filter cannot drift.
+- [ ] **The *Conflicts* filter chip goes; the row chip stays.** The filter names a set nobody bulk
+      acts on, which is the test the other three pass: a source conflict is answered at save, in a
+      dialog, one version at a time. The row chip is the warning and keeps its column.
+
+      **Its documented reasoning is also wrong and should be fixed while this is open.** Both
+      `CatalogModVersion.HasSourceConflict` and `09-mod-catalog.md` say that proving a conflict would
+      mean hashing every archive in every source. It would not: only versions found in more than one
+      source can conflict at all, and of those only the unregistered ones need a *question* — a
+      registered version has `ContentHash`, so each local copy can be compared against it and
+      decided rather than asked about. The set is bounded by duplicates, not by scan size.
 
 ### Settled
 
@@ -2370,6 +2405,14 @@ is a statement about what is looked at, never about what exists — applied ever
 - **The right-hand selector is not narrowed by the chips.** Symmetry says it should be; the failure
   mode says otherwise. The one oddity left — the right dropdown holding more than the left — has a
   one-line answer, and no failure mode at all.
+- **"New?" rather than a word about ordering.** *Unplaced* is not a term anyone uses about versions,
+  and the reader does not need to know that a comparer abstained — they need to know this might be
+  the version they came for. The chip asks the question the user is already asking; the tooltip and
+  the band's count carry the reason.
+- **The conflict chip is not made exact here.** Hashing the duplicates would make it mean what it
+  says, and is affordable now that the set is known to be small — but it is a full file read for a
+  question that may never be asked, so when to do it is its own decision. The correction above is to
+  the claim that it is impossible, not to the behaviour.
 
 ## Deliberately not planned
 
