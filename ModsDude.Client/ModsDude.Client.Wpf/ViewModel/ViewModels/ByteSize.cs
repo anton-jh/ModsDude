@@ -8,6 +8,21 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </summary>
 public static class ByteSize
 {
+    /// <summary>
+    /// Past this, a transfer is taken to outlast the strip's own promotion clock, so it is given a
+    /// row from the start rather than three seconds into one.
+    /// </summary>
+    public const long LargeTransfer = 32L * 1024 * 1024;
+
+
+    /// <summary>"41.2 MB / 68 MB", for a transfer that knows where it is going.</summary>
+    public static string Describe(long transferred, long total)
+    {
+        return total > 0
+            ? $"{Describe(transferred)} / {Describe(total)}"
+            : Describe(transferred);
+    }
+
     public static string Describe(long bytes)
     {
         if (bytes < 1024)

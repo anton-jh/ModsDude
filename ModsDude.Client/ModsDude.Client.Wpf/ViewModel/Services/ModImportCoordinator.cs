@@ -243,14 +243,21 @@ public sealed class ModImportCoordinator(
 
 
     /// <summary>
-    /// One line for the whole run - how many mods are done, and the name of one that is moving -
-    /// with the caller's own sink behind it.
+    /// One line for the whole run - how many mods are done and how many are moving - with a subtask
+    /// per mod behind it, and the caller's own sink behind that.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>Here rather than in the caller's progress</b>, because the strip entry is this class's and
     /// the run has to stay legible for a caller that owns no rows at all. The three terminal phases
     /// all count, failures included: the strip says how far through the <em>run</em> is, and a bar
     /// that stalled short because two mods failed would be reporting the wrong thing.
+    /// </para>
+    /// <para>
+    /// <b>No mod name on the line any more.</b> Five of them run at once, and five names taking turns
+    /// in one string is the string flickering. The names moved into subtasks, which the strip draws
+    /// only for the ones slow enough to read.
+    /// </para>
     /// </remarks>
     private sealed class StripProgress(
         IBackgroundTask task,
@@ -262,19 +269,55 @@ public sealed class ModImportCoordinator(
         /// <summary>Which versions have reached an outcome, so the count is of mods and not of events.</summary>
         private readonly ConcurrentDictionary<ModVersionIdentity, byte> _finished = new();
 
+        /// <summary>
+        /// The live subtask per version. Opened on the first report that is not an outcome and closed
+        /// on the one that is; anything left behind by a path that reports neither goes when the task
+        /// itself does.
+        /// </summary>
+        private readonly ConcurrentDictionary<ModVersionIdentity, IBackgroundSubtask> _subtasks = new();
+
 
         public void Report(ModImportProgress value)
         {
+            var name = names.GetValueOrDefault(value.Identity, value.Identity.ModId.Value);
+
             if (value.Phase is ModImportPhase.Completed or ModImportPhase.Failed or ModImportPhase.Skipped)
             {
                 _finished[value.Identity] = 0;
+
+                if (_subtasks.TryRemove(value.Identity, out var done))
+                {
+                    done.Dispose();
+                }
+            }
+            else
+            {
+                Track(value, name);
             }
 
-            var name = names.GetValueOrDefault(value.Identity, value.Identity.ModId.Value);
-
-            task.Report($"{value.Phase}: {name}", _finished.Count, total);
+            task.Report(null, _finished.Count, total);
 
             inner?.Report(value);
         }
+
+        private void Track(ModImportProgress value, string name)
+        {
+            // GetOrAdd rather than a lock: reports for one version come from that version's own task,
+            // in order, so the factory is never raced for the same key.
+            var subtask = _subtasks.GetOrAdd(
+                value.Identity,
+                // A mod whose archive is already known to be big is given its row at once. The first
+                // Uploading report carries the size, so nothing new had to be plumbed to know it.
+                _ => task.BeginSubtask(Describe(value, name), value.TotalBytes >= ByteSize.LargeTransfer));
+
+            subtask.Rename(Describe(value, name));
+
+            subtask.Report(
+                value.BytesTransferred,
+                value.TotalBytes,
+                value.TotalBytes > 0 ? ByteSize.Describe(value.BytesTransferred, value.TotalBytes) : null);
+        }
+
+        private static string Describe(ModImportProgress value, string name) => $"{value.Phase}: {name}";
     }
 }

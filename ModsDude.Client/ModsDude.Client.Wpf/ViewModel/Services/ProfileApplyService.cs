@@ -735,27 +735,61 @@ public sealed class ProfileApplyService(
     /// the caller wanted it for.
     /// </summary>
     /// <remarks>
-    /// The mod count is the proportion rather than the byte count: a sync is dozens of files of very
-    /// different sizes, and a bar that jumped and stalled per file would be less informative than one
-    /// that walks. Bytes are what the <em>page's</em> per-row bars are for.
+    /// <para>
+    /// The mod count is the task's proportion rather than the byte count: a sync is dozens of files of
+    /// very different sizes, and a bar that jumped and stalled per file would be less informative than
+    /// one that walks.
+    /// </para>
+    /// <para>
+    /// <b>The one file being worked on is a subtask, so the bytes have somewhere to go.</b> A sync
+    /// runs one item at a time, so there is only ever one - which is exactly the case the outer bar
+    /// cannot serve: a 900 MB download, or an archive being hashed during planning, is one tick of a
+    /// count that then stands still for a minute.
+    /// </para>
     /// </remarks>
     private sealed class SyncProgressRelay(IBackgroundTask task, IProgress<ModSyncProgress>? inner)
         : IProgress<ModSyncProgress>
     {
+        private readonly Lock _gate = new();
+
+        private string? _current;
+        private IBackgroundSubtask? _subtask;
+
+
         public void Report(ModSyncProgress value)
         {
-            task.Report(Describe(value), value.Completed, value.Total);
+            Track(value);
+
+            // The phase alone. What used to be named here is the subtask's now, and naming it twice
+            // would put the churn back on the line the subtasks exist to keep still.
+            task.Report(value.Phase.ToString(), value.Completed, value.Total);
 
             inner?.Report(value);
         }
 
-        private static string Describe(ModSyncProgress value)
+        private void Track(ModSyncProgress value)
         {
             var what = value.Detail ?? value.ModId;
+            var name = what is null ? null : $"{value.Phase}: {what}";
 
-            return what is null
-                ? value.Phase.ToString()
-                : $"{value.Phase}: {what}";
+            lock (_gate)
+            {
+                if (name != _current)
+                {
+                    _subtask?.Dispose();
+
+                    _subtask = name is null
+                        ? null
+                        : task.BeginSubtask(name, value.TotalBytes >= ByteSize.LargeTransfer);
+
+                    _current = name;
+                }
+
+                _subtask?.Report(
+                    value.BytesTransferred,
+                    value.TotalBytes,
+                    value.TotalBytes > 0 ? ByteSize.Describe(value.BytesTransferred, value.TotalBytes) : null);
+            }
         }
     }
 }

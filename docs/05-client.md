@@ -256,6 +256,21 @@ actually fixed does not silence the same problem next week.
 the present and offers nothing to do, and a progress bar among actionable warnings would make the
 column mean two things.
 
+**The strip shows one task, paged through with arrows** — `‹ 2 of 3 ›` — rather than stacking a card
+per task. Cancel therefore names what it stops. Nothing pages itself: a task starting takes the strip
+only when it was empty, and otherwise leaves a dot beside the pager, because following the newest
+pulls a five-minute import off screen for a 300ms check and swaps the button under the pointer. When
+the shown task ends, its older neighbour takes over and Cancel is greyed for a second, so a click
+aimed at work that has just finished cannot land on work that has not.
+
+**Inside a task, only the slow parts get a row.** `IBackgroundTask.BeginSubtask` announces one; the
+strip draws it after three seconds, or at once where the caller already knows it is big — the import
+declares an upload long from the size on its first `Uploading` report. Everything faster is the
+`5 running` on the task's line, which is what replaced the mod name that used to flicker there. A row
+once earned is never taken back, rows are ordered by when they were promoted, and three are drawn
+with the rest a count. Reports are coalesced onto a 100ms timer: byte callbacks arrive far faster
+than a 3px bar can say anything, and that timer is also what promotes.
+
 `LazyLoad` is the one service-locator seam in the app: an attached behaviour is constructed by
 XAML and has no constructor for the container to reach, so `App.OnStartup` hands it a logger and
 the reporter through `LazyLoad.UseDiagnostics`. Both are null in a designer, and every use is
