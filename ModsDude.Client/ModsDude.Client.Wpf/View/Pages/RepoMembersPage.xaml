@@ -108,11 +108,7 @@
                     <GroupBox Header="Invites" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="An invite code is the only way into this repo. Send one to somebody and they join with it themselves, under Join repo." />
-
-                            <StackPanel Orientation="Horizontal" Margin="0 16 0 0" VerticalAlignment="Bottom">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
                                 <StackPanel Orientation="Vertical">
                                     <Label Content="Joins as" />
                                     <ComboBox Width="120"

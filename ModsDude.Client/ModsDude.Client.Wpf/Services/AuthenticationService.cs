@@ -74,10 +74,7 @@ public class AuthenticationService : IAccessTokenAccessor
 
         try
         {
-            result = await _client
-                .AcquireTokenInteractive(_scopes)
-                .WithPrompt(Prompt.SelectAccount)
-                .ExecuteAsync(cancellationToken);
+            result = await AcquireTokenInteractive(cancellationToken);
         }
         catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
         {
@@ -107,8 +104,56 @@ public class AuthenticationService : IAccessTokenAccessor
             }
         }
 
-        return await _client.AcquireTokenInteractive(_scopes).ExecuteAsync(cancellationToken);
+        return await AcquireTokenInteractive(cancellationToken);
     }
+
+    private Task<AuthenticationResult> AcquireTokenInteractive(CancellationToken cancellationToken)
+    {
+        return _client
+                    .AcquireTokenInteractive(_scopes)
+                    .WithPrompt(Prompt.SelectAccount)
+                    .WithSystemWebViewOptions(new SystemWebViewOptions
+                    {
+                        HtmlMessageSuccess = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="utf-8">
+                            <meta name="color-scheme" content="dark">
+                            <style>
+                                :root {
+                                    color-scheme: dark;
+                                }
+
+                                html, body {
+                                    margin: 0;
+                                    min-height: 100%;
+                                    background: #1e1e1e;
+                                    color: #d4d4d4;
+                                    font-family: system-ui, sans-serif;
+                                }
+
+                                body {
+                                    display: grid;
+                                    place-items: center;
+                                    min-height: 100vh;
+                                    text-align: center;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div>
+                                <h3>You're signed in.</h3>
+                                <p>You can return to ModsDude and close this tab.</p>
+                            </div>
+                        </body>
+                        </html>
+                        """
+                    })
+                    .ExecuteAsync(cancellationToken);
+    }
+
+
 
     /// <summary>
     /// The signed-in account by identity, rather than whatever the cache happens to list first. A

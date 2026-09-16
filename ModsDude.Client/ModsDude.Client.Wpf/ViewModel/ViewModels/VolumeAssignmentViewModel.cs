@@ -48,7 +48,7 @@ public partial class VolumeAssignmentViewModel : ObservableObject
     /// </summary>
     public string TradeOff => IsServedByOwnStore
         ? "Mods are hardlinked into the mod folder, so installing costs nothing on top of the store " +
-          "and switching profiles takes seconds. This disk holds the whole cache, which is the part that grows."
+          "and switching profiles takes seconds."
         : $"Mods are copied in from the store on {ServingVolume}, so this disk holds only the profile in use " +
           $"while the cache lives on {ServingVolume}. Every install and replace becomes a cross-disk copy, so syncing takes longer.";
 
@@ -156,18 +156,6 @@ public partial class ContentStoreViewModel(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// It read "Empty store", beside a line ending "7.6 GB of it reclaimable" - a number with no route
-    /// to it, next to a button with no number. Putting the one on the other answers "how do I get that
-    /// space back?" without a sentence in between.
-    /// </para>
-    /// <para>
-    /// <b>And the figure is now the truth about what the button does</b>, not just about what it
-    /// frees. It used to read "Empty store", which dropped every blob including the ones hardlinked
-    /// into a mod folder - those cost the store nothing, so emptying them freed nothing and only made
-    /// the next sync re-fetch them. The operation drops what the store uniquely holds and stops there,
-    /// so this figure is both what comes back and what goes.
-    /// </para>
-    /// <para>
     /// Falls back to the bare verb in the tidy state where the store holds exactly what is installed
     /// and nothing more, since "Reclaim 0 bytes" is a button that argues against itself.
     /// </para>
@@ -177,11 +165,6 @@ public partial class ContentStoreViewModel(
         : "Reclaim space";
 
     public bool HasQuarantine => Usage?.QuarantineBytes > 0;
-
-    // Verification used to report itself here, as a line and a Stop button under the row. It reports
-    // to the shell strip now: every other long job in the app already did, the strip has a Cancel of
-    // its own, and a pass that runs for minutes should not lose its progress and its only way to stop
-    // the moment somebody navigates off this page.
 
     /// <summary>
     /// Said in full, because this is the one part of a store that is not re-downloadable: these are

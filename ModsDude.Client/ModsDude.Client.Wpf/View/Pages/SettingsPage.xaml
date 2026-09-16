@@ -107,13 +107,12 @@
                                                     <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="320" Margin="8 0 0 0" />
                                                 </StackPanel>
 
-                                                <Label Content="Maximum size (GB)" Margin="0 12 0 8" />
+                                                <Label Margin="0 12 0 8">
+                                                    Maximum size (GB). Must not be smaller than the largest profile you want to apply, if using hardlinks.
+                                                </Label>
                                                 <TextBox Width="120" HorizontalAlignment="Left"
                                                          Text="{Binding MaxSizeGigabytes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBlock Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                                           Margin="0 6 0 0"
-                                                           Text="Kept inside this on its own - oldest first, never touching what an installed profile is running." />
+
 
                                                 <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
                                                     <!-- Two buttons, not three. "Sweep to limit" used
@@ -161,12 +160,8 @@
                             CornerRadius="4"
                             Padding="16"
                             Margin="0 16 0 0">
-                        <GroupBox Header="Mod images" Padding="0 16 0 16">
+                        <GroupBox Header="Image cache" Padding="0 16 0 16">
                             <StackPanel Orientation="Vertical">
-
-                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                           Text="Mod icons and store images are kept in one cache for the whole machine, shared by every repo and disk. Everything in it can be fetched again, so it is emptied oldest-first once it reaches its limit." />
 
                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Margin="0 8 0 0"

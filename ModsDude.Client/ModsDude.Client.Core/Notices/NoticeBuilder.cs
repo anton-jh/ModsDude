@@ -149,8 +149,7 @@ public static class NoticeBuilder
                 report.AppliedProfileName is string applied
                     ? $"'{game.Name}' is still on '{applied}'{inFolder}"
                     : $"'{game.Name}' is still on the mod list it was last applied to{inFolder}",
-                $"Nothing was installed or removed{inFolder}: it is exactly as its last apply left it. "
-                    + "Re-applying is what moves it - nothing here needs repairing first.",
+                $"Disregard if the profile is currently applying",
                 NoticeSeverity.Pending),
 
             DriftStatus.FolderRepointed => (

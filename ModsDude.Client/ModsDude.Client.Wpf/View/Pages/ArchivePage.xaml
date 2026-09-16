@@ -92,12 +92,6 @@
                        Text="Repos"
                        Margin="0 8 0 16" />
 
-            <TextBlock Grid.Row="2"
-                       Margin="0 0 0 16"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="Repos the group has put away. Archiving a repo takes it out of everybody's sidebar at once - it is not a personal hidden list - and it can be brought back at any time." />
-
             <Border Grid.Row="3"
                     Margin="0 0 0 16"
                     Padding="12 8"

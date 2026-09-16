@@ -18,14 +18,6 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// What the repo looks like from here: the game it offers and how that installation stands, the
 /// profiles it holds, and the caller's standing in it.
 /// </summary>
-/// <remarks>
-/// <b>Where a local installation is read now.</b> It had a page of its own whose sidebar said which
-/// profile it follows, what it is holding and how each of its folders compares; that page is gone,
-/// because a game is a handful of folder paths rather than a place to navigate into. The same three
-/// facts are here, one repo-level list up, and nothing on them is editable: activating is on a
-/// profile's page, handing a savegame back is on the repo's Saves list, and the folders are edited
-/// under <em>Configure game</em>.
-/// </remarks>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
@@ -175,8 +167,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private void RefreshGames()
     {
         // Every entry per game rather than the first of them: a game reaching three folders has an
-        // entry each, and the row places them onto the folders they are about. Picking one was the
-        // silent-first-target-wins failure this phase exists to prevent, wearing a display bug.
+        // entry each, and the row places them onto the folders they are about.
         var drifted = _driftMonitor.Drifted
             .GroupBy(x => x.Game.Identity)
             .ToDictionary(x => x.Key, IReadOnlyList<TargetDrift> (x) => [.. x]);

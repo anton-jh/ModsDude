@@ -107,7 +107,6 @@
                                  drifts, and there is nowhere else left to ask for a fresh look. -->
                             <Button Margin="0 8 0 0"
                                     HorizontalAlignment="Left"
-                                    Style="{DynamicResource SubtleMenuButton}"
                                     Content="Re-check the folders"
                                     Command="{Binding RecheckCommand}"
                                     Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}" />
