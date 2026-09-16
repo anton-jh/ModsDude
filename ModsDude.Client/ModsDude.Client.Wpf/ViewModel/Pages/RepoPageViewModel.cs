@@ -61,7 +61,7 @@ public partial class RepoPageViewModel
     /// name and to open a shell of its own over Sync, Saves and Manage - a proper noun sitting in a
     /// list of nouns-of-function, which is what made a local installation read as a fourth kind of
     /// entity beside repos and profiles. It is settings now, named for what it holds and nothing
-    /// else: <em>Game configuration</em>, the folders this machine points at. Where the game stands -
+    /// else: <em>Configure game</em>, the folders this machine points at. Where the game stands -
     /// which profile it follows, what it is holding, how far each folder has drifted - is on the
     /// repo's Overview, and what to do about it is on a profile's page or the app-level notice.
     /// </para>
@@ -110,7 +110,7 @@ public partial class RepoPageViewModel
         // falls back to Connect game rather than asserting: the entry is only in the menu while
         // there is a game, but nothing stops a deep link setting the selection to it, and the shell
         // must not fall over on a race with a disconnect.
-        _gameMenuItem = new MenuItemViewModel("Game configuration", () => ConnectedGame() is Game game
+        _gameMenuItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
             ? _gameSettingsPageViewModelFactory.Create(_repo, game)
             : _connectGamePageViewModelFactory.Create(_repo))
             .WithIcon(MenuIcons.Game);

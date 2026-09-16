@@ -12,7 +12,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Reached straight from the repo's menu, as <em>Game configuration</em>.</b> It had a shell of
+/// <b>Reached straight from the repo's menu, as <em>Configure game</em>.</b> It had a shell of
 /// its own over Sync, Saves and Manage, under an entry titled with the game's own name; all three
 /// sub-pages are gone and so is the shell, and what is left is this form. That is the whole of the
 /// point: a local installation is not a fourth kind of entity to navigate into beside repos and

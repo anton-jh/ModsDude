@@ -24,7 +24,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// because a game is a handful of folder paths rather than a place to navigate into. The same three
 /// facts are here, one repo-level list up, and nothing on them is editable: activating is on a
 /// profile's page, handing a savegame back is on the repo's Saves list, and the folders are edited
-/// under <em>Game configuration</em>.
+/// under <em>Configure game</em>.
 /// </remarks>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {

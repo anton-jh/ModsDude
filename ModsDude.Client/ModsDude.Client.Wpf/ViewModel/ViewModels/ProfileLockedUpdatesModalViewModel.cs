@@ -114,7 +114,7 @@ public partial class ProfileLockedUpdateViewModel : ObservableObject
     {
         ProfileModLockSource.Adapter =>
             "Version-sensitive, as the game adapter read it from the mod file - a map, typically. Changing the "
-                + "version partway through a save can corrupt that save, and the damage tends to show up long after.",
+                + "version partway through a save can corrupt that save.",
         ProfileModLockSource.Profile =>
             "You locked this mod in this profile. Updating it here undoes that decision for this profile only.",
         _ =>

@@ -45,7 +45,7 @@ public sealed record GameFolderLine(string Text, string? Drift)
 /// </para>
 /// <para>
 /// Read-only throughout. Everything on it is acted on somewhere else: the profile page activates,
-/// the repo's Saves list hands a savegame back, and <em>Game configuration</em> is where the folders
+/// the repo's Saves list hands a savegame back, and <em>Configure game</em> is where the folders
 /// are edited.
 /// </para>
 /// </remarks>

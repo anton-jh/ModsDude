@@ -1384,7 +1384,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             ProfileModLockSource.Adapter =>
                 "The game adapter reads it as version-sensitive - a map, typically - so changing its version "
-                    + "partway through a save can corrupt that save, and the damage tends to show up long after.",
+                    + "partway through a save can corrupt that save.",
             ProfileModLockSource.Profile =>
                 "You locked it in this profile. Other profiles are not affected either way.",
             _ =>
