@@ -271,6 +271,17 @@ once earned is never taken back, rows are ordered by when they were promoted, an
 with the rest a count. Reports are coalesced onto a 100ms timer: byte callbacks arrive far faster
 than a 3px bar can say anything, and that timer is also what promotes.
 
+**What reports bytes, and where they go.** Apply planning hashes an archive whose manifest entry is
+stale as one long read, so the planner hands `hashFile` an `IProgress<long>` and reports the bytes
+under the same name and count as the tick that announced the mod: the strip keeps the one row it
+already opened and only the bar moves. Savegame check-in, publish, check-out and take-a-copy report
+`SavegameProgress` — a stage (`Packing`, `Uploading`, `Recording`, `Downloading`, `Verifying`,
+`Unpacking`) and the bytes through it — and `SavegameStripProgress` puts that on the task's own bar,
+which restarts with each stage rather than pretending packing and uploading share a distance. Packing
+counts the slot's uncompressed bytes, because the archive's size is not known until it is finished.
+Reporting never changes what is packed: `HashSlotAsync` packs with nobody listening, and a drift
+check that disagreed with a check-in about the same folder would report play that did not happen.
+
 `LazyLoad` is the one service-locator seam in the app: an attached behaviour is constructed by
 XAML and has no constructor for the container to reach, so `App.OnStartup` hands it a logger and
 the reporter through `LazyLoad.UseDiagnostics`. Both are null in a designer, and every use is

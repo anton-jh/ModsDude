@@ -331,6 +331,9 @@ internal sealed class FakeSavegameUploader(FakeSavegameServer server) : IModFile
 
         server.PutBlob(upload.Link, bytes);
 
+        // The real uploader reports as blocks go; one report at the end is the same contract.
+        upload.BytesTransferred?.Report(bytes.Length);
+
         return hash;
     }
 }

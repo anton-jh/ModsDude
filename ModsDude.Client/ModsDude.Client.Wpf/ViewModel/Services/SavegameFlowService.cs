@@ -215,7 +215,8 @@ public sealed class SavegameFlowService(
         task.DeclareTransfers(TransferDirection.Upload);
 
         var savegame = await savegames.PublishAsync(
-            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken);
+            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken,
+            new SavegameStripProgress(task));
 
         return new SavegamePublishOutcome(savegame, keepPlaying);
     }
@@ -342,7 +343,8 @@ public sealed class SavegameFlowService(
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
             task.DeclareTransfers(TransferDirection.Upload);
 
-            var version = await savegames.CheckInAsync(game, savegameId, label, keepPlaying, force, cancellationToken);
+            var version = await savegames.CheckInAsync(
+                game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task));
 
             return SavegameCheckInOutcome.CheckedIn(version, keepPlaying);
         }

@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Tests.Sync;
@@ -293,6 +294,79 @@ public class SavegamePackerTests
         // The slot is as it was, and nothing was left staged beside it.
         Assert.Equal("the savegame that was already there", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(adapter.Target, _slot), "careerSavegame.xml")));
         Assert.Empty(Directory.EnumerateDirectories(root.Path, ".modsdude-*"));
+    }
+
+
+    /// <summary>
+    /// Packing a folder that is hundreds of megabytes is minutes, and the strip had nothing to say for
+    /// all of it. What it can say is how much of the slot has been read, out of what the walk found -
+    /// and saying it must not change a single byte of the archive, or the drift check (which packs with
+    /// no one listening) would disagree with the check-in (which packs with the strip listening).
+    /// </summary>
+    [Fact]
+    public async Task Packing_reports_the_slots_bytes_without_changing_the_archive()
+    {
+        using var root = new TempDirectory("savegame-pack-progress");
+        var adapter = new PackerTestAdapter(root.Path);
+
+        // Past one report's worth, so there is a middle to look at and not only a start and an end.
+        WriteSlotFile(root, _slot, "careerSavegame.xml", new string('a', 1_500_000));
+        WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
+
+        var reports = new List<SavegameProgress>();
+
+        using var watched = new OwnedArchive(await new SavegamePacker().PackAsync(
+            adapter, adapter.Target, _slot, CancellationToken.None, new InlineProgress<SavegameProgress>(reports.Add)));
+        using var unwatched = await Pack(adapter, _slot);
+
+        Assert.Equal(unwatched.ContentHash, watched.ContentHash);
+        Assert.Equal(await File.ReadAllBytesAsync(unwatched.FilePath), await File.ReadAllBytesAsync(watched.FilePath));
+
+        var total = 1_500_000L + "a shed".Length;
+
+        Assert.All(reports, x => Assert.Equal(SavegameStage.Packing, x.Stage));
+        Assert.All(reports, x => Assert.Equal(total, x.Total));
+
+        Assert.Equal(0, reports.First().Completed);
+        Assert.Equal(total, reports.Last().Completed);
+        Assert.True(reports.Count > 2, "A file bigger than one report's worth should be reported part way through.");
+        Assert.Equal(reports.Select(x => x.Completed).Order(), reports.Select(x => x.Completed));
+    }
+
+    [Fact]
+    public async Task Unpacking_reports_the_bytes_it_has_written()
+    {
+        using var root = new TempDirectory("savegame-unpack-progress");
+        var adapter = new PackerTestAdapter(root.Path);
+
+        WriteSlotFile(root, _slot, "careerSavegame.xml", new string('a', 1_500_000));
+
+        using var archive = await Pack(adapter, _slot);
+
+        var reports = new List<SavegameProgress>();
+
+        await new SavegamePacker().UnpackAsync(
+            archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None, new InlineProgress<SavegameProgress>(reports.Add));
+
+        Assert.All(reports, x => Assert.Equal(SavegameStage.Unpacking, x.Stage));
+        Assert.Equal(1_500_000L, reports.Last().Total);
+        Assert.Equal(1_500_000L, reports.Last().Completed);
+        Assert.True(reports.Count > 2);
+    }
+
+    /// <summary>The hash a drift check takes is the packer with nobody listening, and must not need a listener.</summary>
+    [Fact]
+    public async Task Hashing_a_slot_agrees_with_packing_it_whatever_is_listening()
+    {
+        using var root = new TempDirectory("savegame-hash-agrees");
+        var adapter = new PackerTestAdapter(root.Path);
+
+        WriteSlotFile(root, _slot, "careerSavegame.xml", new string('a', 1_500_000));
+
+        using var watched = new OwnedArchive(await new SavegamePacker().PackAsync(
+            adapter, adapter.Target, _slot, CancellationToken.None, new InlineProgress<SavegameProgress>(_ => { })));
+
+        Assert.Equal(watched.ContentHash, await new SavegamePacker().HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None));
     }
 
 

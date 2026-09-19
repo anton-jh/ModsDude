@@ -206,13 +206,17 @@ public interface ISavegameService : IHeldSavegames
     Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotRef slot, CancellationToken ct);
 
     /// <summary>Takes the claim on a savegame and writes its head version into a slot.</summary>
-    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct);
+    /// <param name="progress">
+    /// Where to say which stage the bytes are in and how far through it they are. The same
+    /// parameter, with the same meaning, on every verb below that moves a save.
+    /// </param>
+    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Writes a named version into a slot without claiming anything.</summary>
-    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct);
+    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Hands a held savegame back, minting a version from whatever is in its slot now.</summary>
-    Task<SavegameVersionDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct);
+    Task<SavegameVersionDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
     /// Puts a past savegame back in its profile's current slot, and lets go of the revision it was
@@ -262,7 +266,8 @@ public interface ISavegameService : IHeldSavegames
         string? label,
         SavegamePublishTarget? target,
         bool keepPlaying,
-        CancellationToken ct);
+        CancellationToken ct,
+        IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
     Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct);
@@ -592,7 +597,7 @@ public sealed class SavegameService(
     /// The slot holds play nobody has checked in, or this game already holds a savegame that
     /// claims its mod folder.
     /// </exception>
-    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct)
+    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
@@ -610,7 +615,7 @@ public sealed class SavegameService(
 
         await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
 
-        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, ct);
+        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
         // and which version is in it, and writing it before the unpack would claim a slot holding
@@ -647,7 +652,7 @@ public sealed class SavegameService(
     /// there is no version to mint from it and no claim to give back, so it is a copy in the plainest
     /// sense.
     /// </remarks>
-    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct)
+    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
@@ -656,7 +661,7 @@ public sealed class SavegameService(
 
         var contentHash = await ResolveVersionHashAsync(savegame, versionNumber, ct);
 
-        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, ct);
+        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, progress, ct);
 
         // A binding that survived this would name a slot whose contents are now a different savegame
         // entirely, and the safety check would read that slot as unpublished play forever. The claim
@@ -702,7 +707,8 @@ public sealed class SavegameService(
         string? label,
         bool keepPlaying,
         bool force,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var binding = bindings.GetBinding(game.Identity, savegameId)
@@ -712,7 +718,7 @@ public sealed class SavegameService(
 
         var target = RequireTarget(game, adapter, binding.Slot);
         var slot = binding.Slot.Slot;
-        var packed = await packer.PackAsync(adapter, target, slot, ct);
+        var packed = await packer.PackAsync(adapter, target, slot, ct, progress);
 
         // The last observation, and the packed hash is exactly what one would compute - the packer
         // hashes what it writes - so it costs no second pass over the folder. Play since the previous
@@ -727,7 +733,9 @@ public sealed class SavegameService(
 
         try
         {
-            await UploadAsync(binding.RepoId, savegameId, packed, ct);
+            await UploadAsync(binding.RepoId, savegameId, packed, progress, ct);
+
+            progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
             version = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
             {
@@ -853,7 +861,8 @@ public sealed class SavegameService(
         string? label,
         SavegamePublishTarget? target,
         bool keepPlaying,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var savegameTarget = RequireTarget(game, adapter, slot);
@@ -865,7 +874,7 @@ public sealed class SavegameService(
         // such precondition, which is why the id goes in nullable.
         EnsureModFolderIsFree(game, savegameId, target?.ProfileId, name);
 
-        var packed = await packer.PackAsync(adapter, savegameTarget, slot.Slot, ct);
+        var packed = await packer.PackAsync(adapter, savegameTarget, slot.Slot, ct, progress);
 
         var details = await DescribeAsync(adapter, savegameTarget, slot.Slot, ct);
 
@@ -873,7 +882,9 @@ public sealed class SavegameService(
 
         try
         {
-            await UploadAsync(repoId, savegameId, packed, ct);
+            await UploadAsync(repoId, savegameId, packed, progress, ct);
+
+            progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
             savegame = await savegamesClient.PublishSavegameV1Async(repoId, new PublishSavegameRequest
             {
@@ -1297,6 +1308,7 @@ public sealed class SavegameService(
         Guid savegameId,
         string contentHash,
         SavegameSlotId slot,
+        IProgress<SavegameProgress>? progress,
         CancellationToken ct)
     {
         var link = await filesClient.CreateSavegameDownloadLinkV1Async(new CreateSavegameDownloadLinkRequest
@@ -1315,12 +1327,33 @@ public sealed class SavegameService(
             using (var download = await downloader.OpenAsync(link.Link, null, ct))
             await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
             {
-                await download.Content.CopyToAsync(file, ct);
+                // Counted as it is written to disk rather than through the downloader's own progress:
+                // a ranged download reports what has arrived, which runs ahead of what the reader has
+                // been handed, and this is the number the file will actually hold.
+                var length = download.Length ?? 0;
+                var received = 0L;
+
+                progress?.Report(new SavegameProgress(SavegameStage.Downloading, 0, length));
+
+                await ReportingCopy.CopyAsync(
+                    download.Content,
+                    file,
+                    progress is null
+                        ? null
+                        : bytes => progress.Report(new SavegameProgress(SavegameStage.Downloading, received += bytes, length)),
+                    ct);
             }
 
             await using (var written = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                var actual = await ModContentHasher.ComputeAsync(written, ct);
+                var size = written.Length;
+
+                progress?.Report(new SavegameProgress(SavegameStage.Verifying, 0, size));
+
+                var actual = await ModContentHasher.ComputeAsync(
+                    written,
+                    progress is null ? null : new InlineProgress<long>(read => progress.Report(new SavegameProgress(SavegameStage.Verifying, read, size))),
+                    ct);
 
                 if (ModContentHasher.Matches(actual, contentHash) is false)
                 {
@@ -1330,7 +1363,7 @@ public sealed class SavegameService(
                 }
             }
 
-            await packer.UnpackAsync(archivePath, adapter, target, slot, ct);
+            await packer.UnpackAsync(archivePath, adapter, target, slot, ct, progress);
         }
         finally
         {
@@ -1348,7 +1381,7 @@ public sealed class SavegameService(
     /// staged blocks over a SAS with the hash stamped into metadata is the same mechanism whatever is
     /// in the file, and this is the mod upload path pointed at a different container.
     /// </remarks>
-    private async Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, CancellationToken ct)
+    private async Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
     {
         var link = await filesClient.CreateSavegameUploadLinkV1Async(new CreateSavegameUploadLinkRequest
         {
@@ -1369,8 +1402,15 @@ public sealed class SavegameService(
                 $"CreateSavegameUploadLink answered with neither a link nor alreadyStored for '{packed.ContentHash}'.");
         }
 
+        progress?.Report(new SavegameProgress(SavegameStage.Uploading, 0, packed.SizeBytes));
+
         var uploaded = await uploader.UploadAsync(
-            new ModFileUpload(destination, link.ContentHashMetadataKey, () => File.OpenRead(packed.FilePath)),
+            new ModFileUpload(destination, link.ContentHashMetadataKey, () => File.OpenRead(packed.FilePath))
+            {
+                BytesTransferred = progress is null
+                    ? null
+                    : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes)))
+            },
             ct);
 
         // The uploader hashes what it actually sent. Disagreeing with the packer means the archive

@@ -1570,7 +1570,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
-            await _savegameService.TakeCopyAsync(game, row.Savegame, versionNumber, slot.Ref, _lifetime);
+            await _savegameService.TakeCopyAsync(
+                game, row.Savegame, versionNumber, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
             Status = $"Version {versionNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
                      "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
@@ -1594,9 +1595,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             savegame = refreshed.FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
         }
 
-        task.Report("Writing it into the slot");
+        task.Report("Taking the claim");
 
-        await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime);
+        await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
         Status = $"'{row.Name}' is checked out to you, in '{game.Name}'.";
 

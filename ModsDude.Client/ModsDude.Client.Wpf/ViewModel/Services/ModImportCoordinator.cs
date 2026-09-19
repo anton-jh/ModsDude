@@ -320,6 +320,14 @@ public sealed class ModImportCoordinator(
                 value.TotalBytes > 0 ? ByteSize.Describe(value.BytesTransferred, value.TotalBytes) : null);
         }
 
-        private static string Describe(ModImportProgress value, string name) => $"{value.Phase}: {name}";
+        private static string Describe(ModImportProgress value, string name) => $"{Describe(value.Phase)}: {name}";
+
+        // The enum's own name would be read out as "PublishingImagery: Some Mod". Only that one needs
+        // a sentence; the rest are already single words.
+        private static string Describe(ModImportPhase phase) => phase switch
+        {
+            ModImportPhase.PublishingImagery => "Publishing imagery",
+            _ => phase.ToString()
+        };
     }
 }

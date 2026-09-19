@@ -583,11 +583,12 @@ public sealed class ContentStore
 
 
     /// <summary>The SHA-256 of a file on disk, in the encoding the repo records.</summary>
-    public static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
+    /// <param name="bytesRead">How much of the file has been read so far, for a hash that takes long enough to watch.</param>
+    public static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken, IProgress<long>? bytesRead = null)
     {
         await using var content = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
 
-        return await ModContentHasher.ComputeAsync(content, cancellationToken);
+        return await ModContentHasher.ComputeAsync(content, bytesRead, cancellationToken);
     }
 
 

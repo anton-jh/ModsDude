@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
@@ -351,6 +352,62 @@ public class SavegameServiceTests
 
         // And the revision the folder is actually on, from the manifest.
         Assert.Equal(harness.AppliedRevision, harness.Server.CheckIns[0].ProfileRevision);
+    }
+
+    /// <summary>
+    /// The three slow things a check-in does, in the order it does them, each with the bytes it is
+    /// moving - which is what the strip's bar is drawn from. Without them the whole operation is one
+    /// indeterminate bar for as long as a 400 MB save takes to pack and send.
+    /// </summary>
+    [Fact]
+    public async Task Checking_in_reports_packing_then_uploading_then_recording()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+
+        var reports = new List<SavegameProgress>();
+
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            new InlineProgress<SavegameProgress>(reports.Add));
+
+        Assert.Equal(
+            [SavegameStage.Packing, SavegameStage.Uploading, SavegameStage.Recording],
+            reports.Select(x => x.Stage).Distinct());
+
+        var uploading = reports.Where(x => x.Stage is SavegameStage.Uploading).ToList();
+
+        Assert.True(uploading.Last().Total > 0);
+        Assert.Equal(uploading.Last().Total, uploading.Last().Completed);
+    }
+
+    [Fact]
+    public async Task Checking_out_reports_downloading_then_verifying_then_unpacking()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        var reports = new List<SavegameProgress>();
+
+        await harness.Service.CheckOutAsync(
+            harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None,
+            new InlineProgress<SavegameProgress>(reports.Add));
+
+        Assert.Equal(
+            [SavegameStage.Downloading, SavegameStage.Verifying, SavegameStage.Unpacking],
+            reports.Select(x => x.Stage).Distinct());
+
+        // Each stage ends where it said it was going.
+        foreach (var stage in reports.Select(x => x.Stage).Distinct())
+        {
+            var last = reports.Last(x => x.Stage == stage);
+
+            Assert.Equal(last.Total, last.Completed);
+        }
     }
 
     /// <summary>

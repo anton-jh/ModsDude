@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 
@@ -16,21 +17,23 @@ public static class ModSyncPlanner
     /// cannot. Only consulted for files that are about to be removed.
     /// </param>
     /// <param name="hashFile">
-    /// How to read a file's content hash. Injected so the planner stays testable, and so the fallback
-    /// can be exercised for real rather than mocked.
+    /// How to read a file's content hash, and where to say how far through the file it has got.
+    /// Injected so the planner stays testable, and so the fallback can be exercised for real rather
+    /// than mocked.
     /// </param>
     /// <param name="progress">
     /// Where to say which mod is being looked at, for the strip. Optional, and the count is of mods
     /// examined rather than of files hashed: most of them answer from the manifest without being
     /// opened, and a bar that only moved for the slow ones would stand still through the slowest
-    /// stretch there is.
+    /// stretch there is. A file that does have to be opened reports its bytes under its mod's name,
+    /// so the one archive that takes minutes is a row with a bar rather than a tick that stands still.
     /// </param>
     public static async Task<IReadOnlyList<ModSyncItem>> PlanAsync(
         IReadOnlyCollection<DesiredMod> desired,
         IReadOnlyCollection<InstalledMod> installed,
         RegisteredContent registered,
         SyncManifest? manifest,
-        Func<string, CancellationToken, Task<string>>? hashFile,
+        Func<string, CancellationToken, IProgress<long>?, Task<string>>? hashFile,
         CancellationToken cancellationToken,
         IProgress<ModSyncProgress>? progress = null)
     {
@@ -65,13 +68,34 @@ public static class ModSyncPlanner
         void Examining(string what)
             => progress?.Report(new ModSyncProgress(ModSyncPhase.Planning, examined++, total) { Detail = what });
 
+        // The same name and count as the report that announced the mod, so the strip keeps the one row
+        // it already opened for it and only its bytes move.
+        Task<string?> Resolve(InstalledMod have, string what)
+        {
+            var completed = examined - 1;
+
+            IProgress<long>? bytes = progress is null
+                ? null
+                : new InlineProgress<long>(read => progress.Report(
+                    new ModSyncProgress(ModSyncPhase.Planning, completed, total)
+                    {
+                        Detail = what,
+                        BytesTransferred = read,
+                        TotalBytes = have.Size
+                    }));
+
+            return ResolveHashAsync(have, recorded, hashFile, bytes, cancellationToken);
+        }
+
         var items = new List<ModSyncItem>();
 
         foreach (var want in desired)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            Examining(want.DisplayName ?? want.ModId.Value);
+            var wantName = want.DisplayName ?? want.ModId.Value;
+
+            Examining(wantName);
 
             if (installedByMod.Remove(want.ModId, out var have) is false)
             {
@@ -89,7 +113,7 @@ public static class ModSyncPlanner
                 continue;
             }
 
-            var hash = await ResolveHashAsync(have, recorded, hashFile, cancellationToken);
+            var hash = await Resolve(have, wantName);
 
             // Compared on bytes, not on version id. GetInstalledMods reads the version out of the
             // mod's own metadata, so two different builds both calling themselves 1.0.0 are
@@ -123,7 +147,7 @@ public static class ModSyncPlanner
 
             Examining(have.DisplayName);
 
-            var hash = await ResolveHashAsync(have, recorded, hashFile, cancellationToken);
+            var hash = await Resolve(have, have.DisplayName);
             var recoverable = registered.Holds(hash);
 
             items.Add(new ModSyncItem
@@ -170,7 +194,8 @@ public static class ModSyncPlanner
     private static async Task<string?> ResolveHashAsync(
         InstalledMod installed,
         IReadOnlyDictionary<string, SyncManifestEntry> recorded,
-        Func<string, CancellationToken, Task<string>> hashFile,
+        Func<string, CancellationToken, IProgress<long>?, Task<string>> hashFile,
+        IProgress<long>? bytesRead,
         CancellationToken cancellationToken)
     {
         var name = Path.GetFileName(installed.Path);
@@ -184,7 +209,7 @@ public static class ModSyncPlanner
 
         try
         {
-            return await hashFile(installed.Path, cancellationToken);
+            return await hashFile(installed.Path, cancellationToken, bytesRead);
         }
         catch (Exception) when (cancellationToken.IsCancellationRequested is false)
         {

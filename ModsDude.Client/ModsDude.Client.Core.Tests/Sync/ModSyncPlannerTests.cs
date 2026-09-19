@@ -132,11 +132,11 @@ public class ModSyncPlannerTests
             [installed],
             RegisteredContent.None,
             manifest,
-            (path, ct) =>
+            (path, ct, bytes) =>
             {
                 hashed.Add(path);
 
-                return ContentStore.HashFileAsync(path, ct);
+                return ContentStore.HashFileAsync(path, ct, bytes);
             });
 
         Assert.Equal(ModSyncAction.Keep, Assert.Single(items).Action);
@@ -176,11 +176,11 @@ public class ModSyncPlannerTests
             [installed],
             RegisteredContent.None,
             manifest,
-            (path, ct) =>
+            (path, ct, bytes) =>
             {
                 hashed.Add(path);
 
-                return ContentStore.HashFileAsync(path, ct);
+                return ContentStore.HashFileAsync(path, ct, bytes);
             });
 
         Assert.Equal(ModSyncAction.Replace, Assert.Single(items).Action);
@@ -316,10 +316,70 @@ public class ModSyncPlannerTests
         Assert.All(reports, x => Assert.Equal(ModSyncPhase.Planning, x.Phase));
         Assert.All(reports, x => Assert.Equal(3, x.Total));
 
+        // The reports that announce a mod, as opposed to the byte counts of one being hashed - there
+        // is no manifest here, so every file is read and both kinds arrive.
+        var announcements = reports.Where(x => x.TotalBytes == 0).ToList();
+
         // Reported before the work, so the name on screen is the one taking the time - which makes
         // the counts the number already done.
-        Assert.Equal([0, 1, 2], reports.Select(x => x.Completed));
-        Assert.Equal(3, reports.Count);
+        Assert.Equal([0, 1, 2], announcements.Select(x => x.Completed));
+        Assert.Equal(3, announcements.Count);
+    }
+
+    /// <summary>
+    /// The archive that has to be read in full is the one stall planning has, and the tick that
+    /// announced it says nothing until it is over. Its bytes go out under the same name and count, so
+    /// the strip's row for that mod is the one that moves.
+    /// </summary>
+    [Fact]
+    public async Task A_file_that_has_to_be_hashed_reports_its_bytes_under_its_own_name()
+    {
+        using var folder = new TempDirectory("plan-hash-progress");
+        var installed = Install(folder, "fs25_a", "1.0.0", "the game updated this");
+
+        var reports = new List<ModSyncProgress>();
+
+        await ModSyncPlanner.PlanAsync(
+            [Want("fs25_a", "1.0.0", "what sync installed")],
+            [installed],
+            RegisteredContent.None,
+            null,
+            null,
+            CancellationToken.None,
+            new CollectingProgress(reports));
+
+        var announced = reports.First();
+        var last = reports.Last();
+
+        Assert.Equal(0, announced.BytesTransferred);
+        Assert.Contains(reports, x => x.BytesTransferred > 0);
+
+        // Ends at the whole file, under the announcing report's own name and count.
+        Assert.Equal(installed.Size, last.BytesTransferred);
+        Assert.Equal(installed.Size, last.TotalBytes);
+        Assert.Equal(announced.Detail, last.Detail);
+        Assert.Equal(announced.Completed, last.Completed);
+    }
+
+    /// <summary>A mod the manifest answers for is never opened, so it has no bytes to report.</summary>
+    [Fact]
+    public async Task A_file_the_manifest_answers_for_reports_no_bytes()
+    {
+        using var folder = new TempDirectory("plan-no-hash-progress");
+        var installed = Install(folder, "fs25_a", "1.0.0", "the bytes");
+
+        var reports = new List<ModSyncProgress>();
+
+        await ModSyncPlanner.PlanAsync(
+            [Want("fs25_a", "1.0.0", "the bytes")],
+            [installed],
+            RegisteredContent.None,
+            ManifestFor(installed, HashOf("the bytes")),
+            null,
+            CancellationToken.None,
+            new CollectingProgress(reports));
+
+        Assert.All(reports, x => Assert.Equal(0, x.BytesTransferred));
     }
 
 
@@ -328,7 +388,7 @@ public class ModSyncPlannerTests
         IReadOnlyCollection<InstalledMod> installed,
         RegisteredContent registered,
         SyncManifest? manifest,
-        Func<string, CancellationToken, Task<string>>? hashFile = null)
+        Func<string, CancellationToken, IProgress<long>?, Task<string>>? hashFile = null)
     {
         return ModSyncPlanner.PlanAsync(desired, installed, registered, manifest, hashFile, CancellationToken.None);
     }

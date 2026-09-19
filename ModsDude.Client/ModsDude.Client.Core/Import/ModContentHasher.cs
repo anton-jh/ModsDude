@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 
 namespace ModsDude.Client.Core.Import;
@@ -19,6 +20,46 @@ public static class ModContentHasher
 
         return Format(await algorithm.ComputeHashAsync(content, cancellationToken));
     }
+
+    /// <param name="bytesRead">
+    /// How far through the stream the hash has got, cumulatively, at most once per
+    /// <see cref="ReportEvery"/> - a multi-hundred-megabyte archive is minutes of nothing else to
+    /// look at. Null is exactly the overload above.
+    /// </param>
+    public static async Task<string> ComputeAsync(Stream content, IProgress<long>? bytesRead, CancellationToken cancellationToken)
+    {
+        if (bytesRead is null)
+        {
+            return await ComputeAsync(content, cancellationToken);
+        }
+
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+        var buffer = ArrayPool<byte>.Shared.Rent(ReportEvery);
+
+        try
+        {
+            long total = 0;
+            int read;
+
+            while ((read = await content.ReadAsync(buffer.AsMemory(0, ReportEvery), cancellationToken)) > 0)
+            {
+                digest.AppendData(buffer, 0, read);
+                total += read;
+
+                bytesRead.Report(total);
+            }
+
+            return Format(digest.GetHashAndReset());
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>One read per report, so the throttle is the buffer rather than a second piece of bookkeeping.</summary>
+    private const int ReportEvery = 1024 * 1024;
 
     public static string Format(ReadOnlySpan<byte> digest) => Convert.ToHexStringLower(digest);
 

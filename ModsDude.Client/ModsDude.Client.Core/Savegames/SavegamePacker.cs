@@ -56,7 +56,17 @@ public interface ISavegamePacker
     /// useful answer than an exception to the one caller - the drift check - that can legitimately
     /// ask about a slot somebody deleted from under it.
     /// </remarks>
-    Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
+    /// <param name="progress">
+    /// Bytes of the slot's own files read so far, of the total found when the walk began. Uncompressed
+    /// on purpose: the compressed size is not known until the last file is in, and a bar that was
+    /// measured against something that had not been decided yet would be a guess.
+    /// </param>
+    Task<PackedSavegame> PackAsync(
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        CancellationToken cancellationToken,
+        IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
     /// Replaces the slot's contents with the archive's.
@@ -74,8 +84,15 @@ public interface ISavegamePacker
     /// refusing aborts the whole unpack - the slot is left as it was.
     /// </para>
     /// </remarks>
+    /// <param name="progress">Bytes of the archive's files written so far, of what the archive declares.</param>
     /// <exception cref="InvalidDataException">An entry names a path outside the slot folder.</exception>
-    Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
+    Task UnpackAsync(
+        string archivePath,
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        CancellationToken cancellationToken,
+        IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
     /// What <see cref="PackAsync"/> would report as the content hash, without keeping the archive.
@@ -108,7 +125,12 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private const int _bufferSize = 64 * 1024;
 
 
-    public async Task<PackedSavegame> PackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task<PackedSavegame> PackAsync(
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        CancellationToken cancellationToken,
+        IProgress<SavegameProgress>? progress = null)
     {
         var archivePath = GetTemporaryArchivePath();
 
@@ -120,7 +142,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
             await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
             {
-                hash = await WriteArchiveAsync(adapter, target, slot, file, cancellationToken);
+                hash = await WriteArchiveAsync(adapter, target, slot, file, progress, cancellationToken);
             }
 
             return new PackedSavegame(archivePath, hash, new FileInfo(archivePath).Length);
@@ -141,10 +163,16 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         // than hashing the files individually is the whole point: any difference between the two -
         // an exclusion applied in one, an ordering rule in the other - would surface as a slot that
         // reads as played the moment it is checked in.
-        return WriteArchiveAsync(adapter, target, slot, Stream.Null, cancellationToken);
+        return WriteArchiveAsync(adapter, target, slot, Stream.Null, null, cancellationToken);
     }
 
-    public async Task UnpackAsync(string archivePath, ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+    public async Task UnpackAsync(
+        string archivePath,
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        CancellationToken cancellationToken,
+        IProgress<SavegameProgress>? progress = null)
     {
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
         var parent = Path.GetDirectoryName(slotPath)
@@ -161,7 +189,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         {
             Directory.CreateDirectory(staging);
 
-            await ExtractAsync(archivePath, staging, cancellationToken);
+            await ExtractAsync(archivePath, staging, progress, cancellationToken);
 
             if (Directory.Exists(slotPath))
             {
@@ -210,17 +238,30 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         SavegameTarget target,
         SavegameSlotId slot,
         Stream destination,
+        IProgress<SavegameProgress>? progress,
         CancellationToken cancellationToken)
     {
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
 
         await using var hashing = new HashingStream(destination);
 
+        var contents = EnumerateContents(adapter, slotPath);
+        var total = contents.Sum(x => x.Length);
+        var done = 0L;
+
+        // A file the game is still writing may grow past what the walk saw, which is why the count is
+        // the caller's to clamp rather than something to promise here.
+        Action<long>? copied = progress is null
+            ? null
+            : bytes => progress.Report(new SavegameProgress(SavegameStage.Packing, done += bytes, total));
+
+        progress?.Report(new SavegameProgress(SavegameStage.Packing, 0, total));
+
         // leaveOpen, so the archive's central directory has been written and counted before the hash
         // is read - and so disposing the archive does not dispose the caller's destination.
         using (var archive = new ZipArchive(hashing, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var (relativePath, fullPath) in EnumerateContents(adapter, slotPath))
+            foreach (var (relativePath, fullPath, _) in contents)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -232,12 +273,13 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
                 await using var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
                 await using var entryStream = entry.Open();
 
-                await source.CopyToAsync(entryStream, cancellationToken);
+                await ReportingCopy.CopyAsync(source, entryStream, copied, cancellationToken);
             }
         }
 
         return hashing.GetHash();
     }
+
 
     /// <summary>
     /// Every file under the slot that belongs in a packed save, as (archive name, path on disk),
@@ -250,7 +292,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     /// forward-slashed before the adapter is asked about it, so an adapter sees the same string the
     /// archive will store.
     /// </remarks>
-    private static IReadOnlyList<(string RelativePath, string FullPath)> EnumerateContents(ILocalSavegameAdapter adapter, string slotPath)
+    private static IReadOnlyList<(string RelativePath, string FullPath, long Length)> EnumerateContents(ILocalSavegameAdapter adapter, string slotPath)
     {
         if (Directory.Exists(slotPath) is false)
         {
@@ -261,16 +303,29 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         [
             .. new DirectoryInfo(slotPath)
                 .EnumerateFiles("*", SearchOption.AllDirectories)
-                .Select(x => (RelativePath: ToArchivePath(Path.GetRelativePath(slotPath, x.FullName)), x.FullName))
+                .Select(x => (RelativePath: ToArchivePath(Path.GetRelativePath(slotPath, x.FullName)), x.FullName, x.Length))
                 .Where(x => adapter.BelongsInPackedSave(x.RelativePath))
                 .OrderBy(x => x.RelativePath, StringComparer.Ordinal)
         ];
     }
 
-    private static async Task ExtractAsync(string archivePath, string root, CancellationToken cancellationToken)
+    private static async Task ExtractAsync(
+        string archivePath,
+        string root,
+        IProgress<SavegameProgress>? progress,
+        CancellationToken cancellationToken)
     {
         await using var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read);
+
+        var total = archive.Entries.Sum(x => x.Length);
+        var done = 0L;
+
+        Action<long>? copied = progress is null
+            ? null
+            : bytes => progress.Report(new SavegameProgress(SavegameStage.Unpacking, done += bytes, total));
+
+        progress?.Report(new SavegameProgress(SavegameStage.Unpacking, 0, total));
 
         foreach (var entry in archive.Entries)
         {
@@ -299,7 +354,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
             await using var target = new FileStream(destination.Value, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous);
             await using var source = entry.Open();
 
-            await source.CopyToAsync(target, cancellationToken);
+            await ReportingCopy.CopyAsync(source, target, copied, cancellationToken);
         }
     }
 
