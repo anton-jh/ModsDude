@@ -1,4 +1,5 @@
-using System.Net.Http.Headers;
+using ModsDude.Client.Core.Transfers;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -27,7 +28,7 @@ namespace ModsDude.Client.Core.Import;
 /// place the client talks to storage, and the SDK is a large dependency for two requests.
 /// </para>
 /// </remarks>
-public sealed class BlockBlobModFileUploader(HttpClient httpClient) : IModFileUploader
+public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimits limits) : IModFileUploader
 {
     /// <summary>
     /// Well under the 4000 MiB per-block ceiling, and small enough that a failed block is a cheap
@@ -42,6 +43,8 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient) : IModFileUp
     /// </summary>
     private const string _storageApiVersion = "2021-08-06";
 
+    private static readonly TimeSpan _reportInterval = TimeSpan.FromMilliseconds(100);
+
 
     public async Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken)
     {
@@ -51,6 +54,19 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient) : IModFileUp
         var buffer = new byte[_blockSize];
         var blockIds = new List<string>();
         long transferred = 0;
+        var reportedAt = Stopwatch.GetTimestamp();
+
+        // Part way through a block as well as at its end: under a slow limit a 4 MB block is many
+        // seconds, and a bar that moved once per block would look stuck. At most ten times a second,
+        // so an unlimited upload does not flood the page with reports it cannot draw.
+        void ReportSent(long sentInBlock)
+        {
+            if (Stopwatch.GetElapsedTime(reportedAt) >= _reportInterval)
+            {
+                reportedAt = Stopwatch.GetTimestamp();
+                upload.BytesTransferred?.Report(transferred + sentInBlock);
+            }
+        }
 
         while (true)
         {
@@ -66,7 +82,7 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient) : IModFileUp
             var blockId = MakeBlockId(blockIds.Count);
             blockIds.Add(blockId);
 
-            await PutBlockAsync(upload.Link, blockId, buffer.AsMemory(0, read), cancellationToken);
+            await PutBlockAsync(upload.Link, blockId, buffer.AsMemory(0, read), ReportSent, cancellationToken);
 
             transferred += read;
             upload.BytesTransferred?.Report(transferred);
@@ -85,14 +101,14 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient) : IModFileUp
     }
 
 
-    private async Task PutBlockAsync(string link, string blockId, ReadOnlyMemory<byte> block, CancellationToken cancellationToken)
+    private async Task PutBlockAsync(string link, string blockId, ReadOnlyMemory<byte> block, Action<long> sent, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, Append(link, $"comp=block&blockid={Uri.EscapeDataString(blockId)}"))
         {
-            Content = new ReadOnlyMemoryContent(block)
+            // Throttled here rather than around the file, so the limit is paid while the bytes are
+            // actually on the wire and not while a block is being read off disk.
+            Content = new ThrottledContent(block, limits.Upload, sent)
         };
-
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         await SendAsync(request, "stage a block of", cancellationToken);
     }

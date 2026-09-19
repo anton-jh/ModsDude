@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Transfers;
+
 namespace ModsDude.Client.Wpf.ViewModel.Services;
 
 /// <summary>
@@ -68,6 +70,12 @@ public interface IBackgroundTask : IDisposable
 
     /// <summary>Renames the work in flight, for something that only learns its own size part way in.</summary>
     void Retitle(string title);
+
+    /// <summary>
+    /// Says this task moves bytes to or from storage, so the strip can name a speed limit that is
+    /// holding it back - and keep naming it correctly if the limit changes while it runs.
+    /// </summary>
+    void DeclareTransfers(TransferDirection directions);
 
     /// <summary>
     /// Announces one part of this task, which gets a row and a bar of its own once it proves slow.

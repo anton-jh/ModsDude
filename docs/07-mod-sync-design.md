@@ -470,6 +470,18 @@ process-wide connection budget, so a big file and a handful of small ones share 
 than multiplying connections. Disk-to-disk copies from another store stay one at a time, since
 several at once on one spinning disk is slower than one.
 
+**Speed limits are the user's, per direction, and off by default.** Settings → Network takes a
+download and an upload limit in Mbit/s. Each is one token bucket (`TransferLimits`) shared by every
+transfer in that direction — a limit is a promise about the line, so four downloads at once get
+the limit between them, not each. Downloads pay for each socket read and uploads for each slice
+of a block as it is written, 64 KB at a time, so the rate is smooth rather than bursty; a change
+saved in settings applies to transfers already running from their next read. Under a limit a
+download also opens fewer range connections — one per 256 KB/s — because the limit, not a single
+connection's ceiling, is now the bottleneck, and storage gives up on a request that crawls. Tasks
+on the strip that move bytes declare their direction, and the strip appends the limit holding
+them back on a line of its own under the title ("Downloads capped at 50 Mbit/s"), re-read on
+every redraw.
+
 The numbers (chunk size, connections per file, the budget, files at once) are constants on
 `RangedDownloadOptions` and `ModSyncService`, chosen from the two-stream measurement rather than a
 sweep. `RangedDownloadBenchmark` in the test project runs against a real SAS link when

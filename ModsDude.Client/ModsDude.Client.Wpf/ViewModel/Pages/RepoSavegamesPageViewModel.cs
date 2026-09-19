@@ -8,6 +8,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -1564,6 +1565,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 ? $"Copying '{row.Name}' into '{game.Name}'"
                 : $"Checking '{row.Name}' out into '{game.Name}'",
             $"Version {versionNumber}");
+
+        task.DeclareTransfers(TransferDirection.Download);
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {

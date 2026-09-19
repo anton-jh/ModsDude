@@ -22,6 +22,11 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IModFileUploader, BlockBlobModFileUploader>();
         services.AddHttpClient<IModFileDownloader, HttpModFileDownloader>();
 
+        // One per process, so every transfer in a direction shares its limit. Read from settings once;
+        // the settings page applies a change to this same object rather than to a copy.
+        services.AddSingleton(sp => Transfers.TransferLimits.From(
+            sp.GetRequiredService<Services.ClientSettingsRepository>().Settings.Transfers));
+
         // Only if nothing else has: a client that can decode mod archives registers a real
         // publisher, and this is called after the app has composed its own services.
         services.TryAddSingleton<IModImagePublisher, NullModImagePublisher>();

@@ -184,6 +184,29 @@
                         </GroupBox>
                     </Border>
 
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16"
+                            Margin="0 16 0 0">
+                        <GroupBox Header="Network" Padding="0 16 0 16">
+                            <StackPanel Orientation="Vertical">
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="Caps on how fast mods and savegames move to and from storage, shared by everything transferring at once. Leave a box empty for no limit. A change applies to transfers already running as soon as it is saved." />
+
+                                <Label Content="Download limit (Mbit/s)" Margin="0 12 0 8" />
+                                <TextBox Width="120" HorizontalAlignment="Left"
+                                         Text="{Binding DownloadLimit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <Label Content="Upload limit (Mbit/s)" Margin="0 12 0 8" />
+                                <TextBox Width="120" HorizontalAlignment="Left"
+                                         Text="{Binding UploadLimit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            </StackPanel>
+                        </GroupBox>
+                    </Border>
+
                 </StackPanel>
             </ScrollViewer>
         </Border>

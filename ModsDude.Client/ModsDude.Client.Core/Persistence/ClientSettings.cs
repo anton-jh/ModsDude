@@ -21,6 +21,9 @@ public class ClientSettings
     /// </summary>
     public ImageCacheSettings ImageCache { get; init; } = new();
 
+    /// <summary>How fast mods and savegames may move to and from storage. See <see cref="Transfers.TransferLimits"/>.</summary>
+    public TransferLimitSettings Transfers { get; init; } = new();
+
     /// <summary>
     /// Which volume's store serves the mod folders on a volume, keyed by volume root. A volume
     /// served by its own store materialises by hardlink; one served from another disk materialises
@@ -84,4 +87,15 @@ public class ImageCacheSettings
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ModsDude",
         "image-cache");
+}
+
+/// <summary>
+/// Speed limits on the traffic to and from storage, one per direction. Null is no limit, which is
+/// the default: the app is usually the only thing on the line that matters, and a limit nobody asked
+/// for would only make every sync slower than it has to be.
+/// </summary>
+public class TransferLimitSettings
+{
+    public long? DownloadBytesPerSecond { get; set; }
+    public long? UploadBytesPerSecond { get; set; }
 }

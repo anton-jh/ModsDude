@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.Concurrent;
 using System.Windows;
@@ -123,6 +124,7 @@ public sealed class ModImportCoordinator(
         // stop it, which is the half that was missing.
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var task = backgroundTasks.Begin(title, cancel: cancellation.Cancel);
+        task.DeclareTransfers(TransferDirection.Upload);
 
         var request = new ModImportRequest(repo.Id, versions, repo.Adapter.VersionComparer)
         {

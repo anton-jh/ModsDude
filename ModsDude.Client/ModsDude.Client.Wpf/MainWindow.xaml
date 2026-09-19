@@ -126,6 +126,15 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                <!-- Only for work that moves bytes while a speed limit is set, so a slow transfer
+                     explains itself. Quieter than the detail above: it is why, not what. -->
+                <TextBlock Text="{Binding Limit}"
+                           Margin="0 2 0 0"
+                           TextTrimming="CharacterEllipsis"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Visibility="{Binding HasLimit, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                 <ProgressBar Height="3"
                              Margin="0 8 0 0"
                              Minimum="0" Maximum="100"

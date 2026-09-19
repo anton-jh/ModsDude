@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.IO;
 
@@ -515,6 +516,8 @@ public sealed class ProfileApplyService(
         // things the user is entitled to walk away from.
         using var task = backgroundTasks.Begin(
             $"Applying '{profileName ?? "a profile"}' to {where}", cancel: stop.Cancel);
+
+        task.DeclareTransfers(TransferDirection.Download);
 
         try
         {

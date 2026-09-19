@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -74,13 +75,20 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     private readonly List<RunningTask> _running = [];
     private readonly HashSet<RunningTask> _seen = [];
     private readonly DispatcherTimer? _timer;
+    private readonly TransferLimits _transferLimits;
 
     private RunningTask? _shown;
     private long _cancelGuardFrom;
 
 
-    public BackgroundTaskViewModel()
+    public BackgroundTaskViewModel(TransferLimits transferLimits)
     {
+        _transferLimits = transferLimits;
+
+        // A limit changed in settings while a download runs changes what its title should say, and
+        // nothing else would redraw it until the next report.
+        transferLimits.Changed += (_, _) => Publish(immediate: true);
+
         // Null in a designer and in a test host, where there is nothing to draw on anyway. Without a
         // timer the strip still reports; it just never promotes a part to a row of its own.
         if (Application.Current?.Dispatcher is not { } dispatcher)
@@ -102,6 +110,14 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasDetail))]
     private string? _detail;
+
+    /// <summary>
+    /// "Downloads capped at 50 Mbit/s", for a task moving bytes a user limit is holding back. A line
+    /// of its own, because on the title it pushed the name of the work itself off the end.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLimit))]
+    private string? _limit;
 
     /// <summary>0 to 100, and meaningless while <see cref="IsIndeterminate"/> is true.</summary>
     [ObservableProperty]
@@ -154,6 +170,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     public ObservableCollection<BackgroundSubtaskViewModel> Subtasks { get; } = [];
 
     public bool HasDetail => string.IsNullOrWhiteSpace(Detail) is false;
+    public bool HasLimit => Limit is not null;
     public bool HasMoreSubtasks => MoreSubtasks is not null;
 
 
@@ -356,6 +373,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
         Title = snapshot.Title;
         Detail = Compose(snapshot);
+        Limit = snapshot.Limit;
         IsIndeterminate = snapshot.Total <= 0;
         Progress = snapshot.Total > 0 ? Math.Clamp(snapshot.Completed * 100d / snapshot.Total, 0, 100) : 0;
 
@@ -410,6 +428,10 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
             Count = _running.Count,
             Index = _running.IndexOf(shown),
             Title = shown.Title,
+
+            // Read at every redraw rather than fixed when the task began, so a limit set or lifted
+            // part way through is what the strip says from then on.
+            Limit = TransferRate.DescribeLimits(_transferLimits, shown.Transfers),
             Detail = shown.Detail,
             Completed = shown.Completed,
             Total = shown.Total,
@@ -521,6 +543,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public int Count { get; init; }
         public int Index { get; init; }
         public string Title { get; init; }
+        public string? Limit { get; init; }
         public string? Detail { get; init; }
         public long Completed { get; init; }
         public long Total { get; init; }
@@ -551,6 +574,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public long Completed { get; private set; }
         public long Total { get; private set; }
         public string? Amount { get; private set; }
+        public TransferDirection Transfers { get; private set; }
 
         public bool CanCancel => _cancel is not null;
 
@@ -598,6 +622,16 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
             }
 
             owner.Publish();
+        }
+
+        public void DeclareTransfers(TransferDirection directions)
+        {
+            lock (owner._lock)
+            {
+                Transfers |= directions;
+            }
+
+            owner.Publish(immediate: true);
         }
 
         public IBackgroundSubtask BeginSubtask(string name, bool longRunning = false)

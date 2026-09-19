@@ -5,9 +5,11 @@ using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -47,6 +49,7 @@ public partial class SettingsPageViewModel
     private readonly IModalService _modalService;
     private readonly IDialogService _dialogService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
+    private readonly TransferLimits _transferLimits;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -66,7 +69,8 @@ public partial class SettingsPageViewModel
         IDialogService dialogService,
         IModalService modalService,
         NavigationLockService navigationLockService,
-        IBackgroundTaskReporter backgroundTasks)
+        IBackgroundTaskReporter backgroundTasks,
+        TransferLimits transferLimits)
     {
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
@@ -75,6 +79,7 @@ public partial class SettingsPageViewModel
         _modalService = modalService;
         _navigationLockService = navigationLockService;
         _backgroundTasks = backgroundTasks;
+        _transferLimits = transferLimits;
 
         var settings = settingsRepository.Settings;
 
@@ -97,6 +102,10 @@ public partial class SettingsPageViewModel
             settings.ImageCache.MaxSizeBytes / (double)_bytesPerGigabyte,
             dialogService);
         ImageCache.Modified += OnStoreModified;
+
+        // Straight into the fields, so loading the page does not count as an edit.
+        _downloadLimit = DescribeLimit(settings.Transfers.DownloadBytesPerSecond);
+        _uploadLimit = DescribeLimit(settings.Transfers.UploadBytesPerSecond);
 
         foreach (var volume in modFolderVolumes)
         {
@@ -143,6 +152,17 @@ public partial class SettingsPageViewModel
     [NotifyCanExecuteChangedFor(nameof(EmptyImageCacheCommand))]
     private bool _isBusy;
 
+    /// <summary>
+    /// The download limit in Mbit/s, as typed. Text rather than a number, because empty is the
+    /// ordinary value - no limit - and a numeric box has nowhere to put that.
+    /// </summary>
+    [ObservableProperty]
+    private string _downloadLimit;
+
+    /// <inheritdoc cref="DownloadLimit"/>
+    [ObservableProperty]
+    private string _uploadLimit;
+
     public bool CanManage => HasUnsavedChanges is false && IsBusy is false;
 
     public string ManagementBlockedReason => HasUnsavedChanges
@@ -184,7 +204,14 @@ public partial class SettingsPageViewModel
         settings.ImageCache.Path = ImageCache.Path;
         settings.ImageCache.MaxSizeBytes = (long)(ImageCache.MaxSizeGigabytes * _bytesPerGigabyte);
 
+        settings.Transfers.DownloadBytesPerSecond = ParseLimit(DownloadLimit);
+        settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
+
         _settingsRepository.Save();
+
+        // Into the live limiters as well as the file, so a download already running slows down - or
+        // speeds up - from its next read rather than from the next start of the app.
+        _transferLimits.Apply(settings.Transfers);
         _navigationLockService.ReleaseLock(this);
 
         HasUnsavedChanges = false;
@@ -763,8 +790,45 @@ public partial class SettingsPageViewModel
             errors.Add("The image cache needs a maximum size.");
         }
 
+        AddLimitError(errors, "download", DownloadLimit);
+        AddLimitError(errors, "upload", UploadLimit);
+
         return errors;
     }
+
+    private static void AddLimitError(List<string> errors, string direction, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var megabits) is false ||
+            megabits < TransferRate.MinimumMegabits)
+        {
+            errors.Add(
+                $"The {direction} limit has to be a number of Mbit/s, at least {TransferRate.MinimumMegabits} - or empty for no limit.");
+        }
+    }
+
+    /// <summary>Null for empty, which is no limit. Only called once validation has passed.</summary>
+    private static long? ParseLimit(string text)
+    {
+        return string.IsNullOrWhiteSpace(text)
+            ? null
+            : TransferRate.ToBytesPerSecond(double.Parse(text, NumberStyles.Float, CultureInfo.CurrentCulture));
+    }
+
+    private static string DescribeLimit(long? bytesPerSecond)
+    {
+        return bytesPerSecond is long rate
+            ? TransferRate.ToMegabits(rate).ToString("0.#", CultureInfo.CurrentCulture)
+            : string.Empty;
+    }
+
+    partial void OnDownloadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnUploadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
 
     private static IReadOnlyList<string> GetCandidateVolumes(IEnumerable<string> modFolderVolumes, ClientSettings settings)
     {

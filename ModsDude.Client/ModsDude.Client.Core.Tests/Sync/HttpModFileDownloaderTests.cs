@@ -238,6 +238,29 @@ public class HttpModFileDownloaderTests
         Assert.All(values.Zip(values.Skip(1)), x => Assert.True(x.Second > x.First));
     }
 
+    [Fact]
+    public async Task A_ranged_download_is_held_to_the_download_limit()
+    {
+        var options = Options() with { ChunkSize = 256 * 1024 };
+        var storage = new FakeBlobStorage(Bytes(2 * 1024 * 1024));
+        var limiter = new Core.Transfers.TransferRateLimiter { BytesPerSecond = 2 * 1024 * 1024 };
+        var downloader = new HttpModFileDownloader(new HttpClient(storage), options, limiter);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        using (var download = await downloader.OpenAsync("https://storage.example/blob?sas", null, CancellationToken.None))
+        {
+            Assert.Equal(storage.Blob, await ReadAll(download));
+        }
+
+        // 2 MB at 2 MB/s, less the quarter second of burst the bucket may start with.
+        Assert.InRange(stopwatch.Elapsed.TotalSeconds, 0.6, 3);
+
+        // 2 MB/s keeps eight connections at 256 KB/s each, and the opening request is outside them.
+        Assert.InRange(storage.MaxConcurrent, 1, limiter.ConnectionCap + 1);
+    }
+
+
     private static RangedDownloadOptions Options() => new()
     {
         ChunkSize = _chunk,

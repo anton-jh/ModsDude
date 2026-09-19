@@ -6,6 +6,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 namespace ModsDude.Client.Wpf.ViewModel.Services;
@@ -211,6 +212,8 @@ public sealed class SavegameFlowService(
                 ? $"Packing and uploading '{slotLabel}'"
                 : $"Packing and uploading '{slotLabel}', then handing it back");
 
+        task.DeclareTransfers(TransferDirection.Upload);
+
         var savegame = await savegames.PublishAsync(
             game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken);
 
@@ -337,6 +340,7 @@ public sealed class SavegameFlowService(
         try
         {
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
+            task.DeclareTransfers(TransferDirection.Upload);
 
             var version = await savegames.CheckInAsync(game, savegameId, label, keepPlaying, force, cancellationToken);
 

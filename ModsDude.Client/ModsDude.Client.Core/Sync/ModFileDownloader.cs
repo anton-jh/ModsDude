@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Transfers;
 using System.Buffers;
 using System.Net;
 using System.Net.Http.Headers;
@@ -104,17 +105,20 @@ public sealed class HttpModFileDownloader : IModFileDownloader
 {
     private readonly HttpClient _httpClient;
     private readonly RangedDownloadOptions _options;
+    private readonly TransferRateLimiter _limiter;
 
 
-    public HttpModFileDownloader(HttpClient httpClient)
-        : this(httpClient, RangedDownloadOptions.Default)
+    public HttpModFileDownloader(HttpClient httpClient, TransferLimits limits)
+        : this(httpClient, RangedDownloadOptions.Default, limits.Download)
     {
     }
 
-    internal HttpModFileDownloader(HttpClient httpClient, RangedDownloadOptions options)
+    /// <param name="limiter">Null for none, which is what a test that is not about limits wants.</param>
+    internal HttpModFileDownloader(HttpClient httpClient, RangedDownloadOptions options, TransferRateLimiter? limiter = null)
     {
         _httpClient = httpClient;
         _options = options;
+        _limiter = limiter ?? new TransferRateLimiter();
     }
 
 
@@ -138,7 +142,7 @@ public sealed class HttpModFileDownloader : IModFileDownloader
                 to + 1 < total)
             {
                 var stream = new RangedDownloadStream(
-                    _httpClient, link, response, (int)(to + 1), total, _options, bytesReceived, cancellationToken);
+                    _httpClient, link, response, (int)(to + 1), total, _options, _limiter, bytesReceived, cancellationToken);
 
                 return new ModFileDownload(stream, total, stream);
             }
@@ -148,7 +152,7 @@ public sealed class HttpModFileDownloader : IModFileDownloader
             var content = await response.Content.ReadAsStreamAsync(cancellationToken);
             var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength;
 
-            return new ModFileDownload(content, length, response);
+            return new ModFileDownload(new ThrottledReadStream(content, _limiter), length, response);
         }
         catch (Exception)
         {
@@ -203,6 +207,7 @@ internal sealed class RangedDownloadStream : Stream
     private readonly CancellationTokenSource _lifetime;
     private readonly Queue<Task<Chunk>> _pending = new();
     private readonly ReceivedBytes _received;
+    private readonly TransferRateLimiter _limiter;
 
     private long _scheduled;
     private long _position;
@@ -219,6 +224,7 @@ internal sealed class RangedDownloadStream : Stream
         int firstLength,
         long length,
         RangedDownloadOptions options,
+        TransferRateLimiter limiter,
         IProgress<long>? bytesReceived,
         CancellationToken cancellationToken)
     {
@@ -226,6 +232,7 @@ internal sealed class RangedDownloadStream : Stream
         _link = link;
         _length = length;
         _options = options;
+        _limiter = limiter;
         _received = new ReceivedBytes(bytesReceived, length);
 
         // Pinned to the version the first answer came from, so a blob replaced mid-download fails
@@ -273,7 +280,7 @@ internal sealed class RangedDownloadStream : Stream
             // Peeked rather than dequeued, so a read cancelled while waiting leaves the chunk where
             // the next read - or Dispose - will find it.
             _current = await _pending.Peek().WaitAsync(cancellationToken);
-            _pending.Dequeue();
+            _ = _pending.Dequeue();
             _currentOffset = 0;
 
             Schedule();
@@ -406,7 +413,12 @@ internal sealed class RangedDownloadStream : Stream
 
                 try
                 {
-                    return await FetchOnceAsync(offset, length, cancellationToken);
+                    // Last, so a download waiting for the user's limit to free a connection is not
+                    // also sitting on a slot of the budget somebody unlimited could use.
+                    using (await _limiter.AcquireConnectionAsync(cancellationToken))
+                    {
+                        return await FetchOnceAsync(offset, length, cancellationToken);
+                    }
                 }
                 finally
                 {
@@ -476,7 +488,10 @@ internal sealed class RangedDownloadStream : Stream
             {
                 stall.CancelAfter(_options.StallTimeout);
 
-                var read = await body.ReadAsync(buffer.AsMemory(filled, length - filled), stall.Token);
+                // A slice at a time, so a speed limit is paid in small steps rather than one long
+                // silence per chunk.
+                var slice = Math.Min(length - filled, ThrottledReadStream.Slice);
+                var read = await body.ReadAsync(buffer.AsMemory(filled, slice), stall.Token);
 
                 if (read == 0)
                 {
@@ -485,6 +500,10 @@ internal sealed class RangedDownloadStream : Stream
 
                 filled += read;
                 _received.Add(read);
+
+                // Waiting on the limit is not the connection stalling, so the clock stops for it.
+                stall.CancelAfter(Timeout.InfiniteTimeSpan);
+                await _limiter.ConsumeAsync(read, cancellationToken);
             }
 
             return new Chunk(buffer, length);
