@@ -50,6 +50,12 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     private static readonly TimeSpan PromoteAfter = TimeSpan.FromSeconds(3);
 
     /// <summary>
+    /// The share of a part that must still be ahead of it to earn a row by the clock. Below it the part
+    /// is about to finish, and a row that arrives to say so is a flash rather than information.
+    /// </summary>
+    private const double PromoteWhileMoreThan = 0.25;
+
+    /// <summary>
     /// How long a row stays after its part has finished, so one that ends just past the threshold
     /// cannot flash a bar up and take it away again.
     /// </summary>
@@ -777,13 +783,28 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public bool IsExpired => _endedAt is long ended && Stopwatch.GetElapsedTime(ended) >= Dwell;
 
 
-        /// <summary>Under the owner's lock, from the sweep.</summary>
+        /// <summary>
+        /// Under the owner's lock, from the sweep.
+        /// </summary>
+        /// <remarks>
+        /// <b>Not once it is nearly done.</b> A row that turns up at 90% is a bar that appears, fills
+        /// and is gone within the dwell, which is the flash the threshold exists to prevent - the clock
+        /// alone cannot tell a part that is slow from one that merely started long ago. One with no
+        /// total has no way to be nearly done, so it is promoted by the clock as before.
+        /// </remarks>
         public void PromoteIfDue()
         {
-            if (IsPromoted is false && IsLive && Stopwatch.GetElapsedTime(_startedAt) >= PromoteAfter)
+            if (IsPromoted || IsLive is false || Stopwatch.GetElapsedTime(_startedAt) < PromoteAfter)
             {
-                _promotedAt = Stopwatch.GetTimestamp();
+                return;
             }
+
+            if (Total > 0 && Completed >= Total * (1 - PromoteWhileMoreThan))
+            {
+                return;
+            }
+
+            _promotedAt = Stopwatch.GetTimestamp();
         }
 
         /// <summary>Under the owner's lock.</summary>

@@ -264,7 +264,7 @@ the shown task ends, its older neighbour takes over and Cancel is greyed for a s
 aimed at work that has just finished cannot land on work that has not.
 
 **Inside a task, only the slow parts get a row.** `IBackgroundTask.BeginSubtask` announces one; the
-strip draws it after three seconds, or at once where the caller already knows it is big — the import
+strip draws it after three seconds — unless it is already three quarters done, when a row would only flash — or at once where the caller already knows it is big — the import
 declares an upload long from the size on its first `Uploading` report. Everything faster is the
 `5 running` on the task's line, which is what replaced the mod name that used to flicker there. A row
 once earned is never taken back, rows are ordered by when they were promoted, and three are drawn
