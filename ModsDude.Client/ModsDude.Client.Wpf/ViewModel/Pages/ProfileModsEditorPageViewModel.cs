@@ -1306,6 +1306,22 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// here as they are in the batch action - a lock is not a question the selection gets to answer -
     /// and the count of what was skipped goes into what the undo bar says happened.
     /// </summary>
+    /// <summary>
+    /// What the right-hand bar's Update button says. Names the locked pins it will leave where they are - "Update
+    /// (skip 2 locked)" - so the button never promises an update it is not going to make. Only pins that have
+    /// an update to take are counted: a locked mod with nothing newer is not being skipped, it is just not
+    /// part of this.
+    /// </summary>
+    public string UpdateSelectedText
+    {
+        get
+        {
+            var skipped = PinnedSelection.Picked().OfType<ProfileModRowViewModel>().Count(x => x.HasUpdate && x.IsLocked);
+
+            return skipped > 0 ? $"Update (skip {skipped} locked)" : "Update";
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void UpdateSelected()
     {
@@ -3300,6 +3316,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void OnSelectionChanged()
     {
+        OnPropertyChanged(nameof(UpdateSelectedText));
         AddSelectedCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         LockSelectedCommand.NotifyCanExecuteChanged();

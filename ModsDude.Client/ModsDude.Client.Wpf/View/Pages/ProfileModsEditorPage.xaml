@@ -959,21 +959,25 @@
                                 <!-- The three things a picked pin can have done to it that are not
                                      taking it out. Locked rows are skipped by the update rather than
                                      asked about, exactly as the batch action above does it. -->
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* * *">
+                                <!-- The update button takes what the other two leave, because its label grows to name
+                                     the locked pins it skips and the other two are one word each. -->
+                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto auto">
                                     <Button Grid.Column="0"
                                             Margin="0 0 4 0"
                                             HorizontalAlignment="Stretch"
-                                            Content="Update"
+                                            Content="{Binding UpdateSelectedText}"
                                             ToolTip="Move the selected mods to the newest version the repo holds, leaving locked ones alone"
                                             Command="{Binding UpdateSelectedCommand}" />
                                     <Button Grid.Column="1"
                                             Margin="4 0"
+                                            MinWidth="72"
                                             HorizontalAlignment="Stretch"
                                             Content="Lock"
                                             ToolTip="Hold the selected mods at their versions in this profile"
                                             Command="{Binding LockSelectedCommand}" />
                                     <Button Grid.Column="2"
                                             Margin="4 0 0 0"
+                                            MinWidth="72"
                                             HorizontalAlignment="Stretch"
                                             Content="Unlock"
                                             ToolTip="Release this profile's own lock on the selected mods"

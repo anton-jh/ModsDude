@@ -956,6 +956,8 @@ other move (an earlier version, or one the order will not place), locked, or alr
 bar's wording, the glyph and the command all read it. Adding is never blocked by a lock, so a selection
 of adds and locked pins still has something to do and reads **"Add 3 mods (2 locked)"**.
 
+The right-hand selection bar's Update button says what it will skip in the same way - **"Update (skip 2 locked)"**, counting only locked pins that have an update to take.
+
 The row's button is the up arrow for an update and the neutral glyph for any other move. The
 profile-side update button on the right list is the same up arrow, not the refresh glyph it had.
 
