@@ -942,7 +942,7 @@ one that was there.
 
 **Adding and upgrading stay apart.** Now that an update row is on the left, *Add all shown new* and
 the count on it exclude those rows: a bulk add that silently moved pins would be a different act
-under the same label. A mixed *selection* does both, and says so — **"Add 12, update 3 and move 1"** — since
+under the same label. A mixed *selection* does both, and says so — **"Add 12 and update 3"** — since
 the set somebody assembled across several searches is theirs and splitting it would be worse than
 labelling it honestly. Locked pins are left alone and counted, exactly as the batch update leaves
 them.
@@ -952,8 +952,9 @@ selection, so the button names it - **"Update 2 mods (1 locked)"** - and a selec
 locked pins reads **"Nothing to update (2 locked)"** and is *disabled*, with a tooltip saying how
 to move one on purpose. It used to be an enabled "Update 1 mod" that did nothing and reported it
 afterwards. What each row would do is `ProfileVersionMoves.Classify` - add, update, any
-other move (an earlier version, or one the order will not place), locked, or already there - and the
-bar's wording, the glyph and the command all read it. Adding is never blocked by a lock, so a selection
+other move (an earlier version, or one the order will not place - worded as an update, since the left
+list has no move verb of its own), locked, or already there - and the bar's wording and the command
+both read it. Adding is never blocked by a lock, so a selection
 of adds and locked pins still has something to do and reads **"Add 3 mods (2 locked)"**.
 
 The right-hand selection bar's Update button says what it will skip in the same way - **"Update (skip 2 locked)"**, counting only locked pins that have an update to take.

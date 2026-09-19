@@ -1040,7 +1040,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var moved = counts.Movable == 0
             ? null
             : Sentence(
-                [("added", counts.Adds), ("updated", counts.Updates), ("moved", counts.Moves)],
+                [("added", counts.Adds), ("updated", counts.Updates + counts.Moves)],
                 counts.Movable);
 
         return (moved, counts.Locked) switch
@@ -1065,7 +1065,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var text = counts.Movable == 0
             ? counts.Locked > 0 ? "Nothing to update" : "Add"
             : Sentence(
-                [("add", counts.Adds), ("update", counts.Updates), ("move", counts.Moves)],
+                [("add", counts.Adds), ("update", counts.Updates + counts.Moves)],
                 counts.Movable);
 
         return counts.Locked > 0 ? $"{text} ({counts.Locked} locked)" : text;
@@ -1073,7 +1073,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// The verbs that have something to do, in one phrase: <c>Add 3 mods</c> for one of them and
-    /// <c>Add 3, update 2 and move 1</c> for several, its first word capitalised either way.
+    /// <c>Add 3 and update 2</c> for several, its first word capitalised either way.
     /// </summary>
     private static string Sentence(IReadOnlyList<(string Verb, int Count)> verbs, int total)
     {
