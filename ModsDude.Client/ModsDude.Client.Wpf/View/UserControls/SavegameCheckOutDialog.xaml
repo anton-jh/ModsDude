@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              mc:Ignorable="d"
              Width="560"
              d:DataContext="{d:DesignInstance Type=vm:SavegameCheckOutModalViewModel, IsDesignTimeCreatable=False}"
@@ -84,18 +85,28 @@
                           ColumnDefinitions="* auto"
                           Visibility="{Binding ShowPreselection, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                        <StackPanel Grid.Column="0" DataContext="{Binding SelectedSlot}">
-                            <TextBlock Text="{Binding Label}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                        <Grid Grid.Column="0" DataContext="{Binding SelectedSlot}" ColumnDefinitions="auto *">
+                            <!-- The slot's number first and largest: in a game with twenty numbered slots
+                                 it is often how the player picks a save out. Absent for a game whose
+                                 slots are not numbered. -->
+                            <uc:SlotBadge Grid.Column="0"
+                                          Margin="0 0 12 0"
+                                          VerticalAlignment="Top"
+                                          Number="{Binding Number}" />
 
-                            <TextBlock Margin="0 2 0 0"
-                                       TextWrapping="Wrap"
-                                       Style="{DynamicResource CaptionTextBlockStyle}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Text="{Binding Detail}" />
-                        </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding Label}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                <TextBlock Margin="0 2 0 0"
+                                           TextWrapping="Wrap"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding Detail}" />
+                            </StackPanel>
+                        </Grid>
 
                         <Button Grid.Column="1"
                                 VerticalAlignment="Top"
@@ -104,58 +115,74 @@
                                 Command="{Binding ChangeSlotCommand}" />
                     </Grid>
 
-                    <ListBox Margin="0 8 0 0"
-                             MaxHeight="220"
-                             HorizontalContentAlignment="Stretch"
-                             ItemsSource="{Binding Slots}"
-                             SelectedItem="{Binding SelectedSlot, Mode=TwoWay}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             Visibility="{Binding ShowAllSlots, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <!-- Headed by folder only where the game reaches more than one of them: the
-                             view carries no grouping at all otherwise, so a game with one savegame
-                             folder shows exactly the list it always did. -->
-                        <ListBox.GroupStyle>
-                            <GroupStyle>
-                                <GroupStyle.HeaderTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Margin="0 8 0 2"
-                                                   Text="{Binding Name}"
-                                                   Style="{DynamicResource CaptionTextBlockStyle}"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                    </DataTemplate>
-                                </GroupStyle.HeaderTemplate>
-                            </GroupStyle>
-                        </ListBox.GroupStyle>
+                    <!-- Drawn as the mod lists and the savegame log are - a row with a hairline under it,
+                         inside a frame - and taller than it was, so that more of twenty slots is in view
+                         at once. It scrolls by the pixel (see SlotList), which is what stopped a single
+                         notch of the wheel moving it a third of the way down. -->
+                    <Border Margin="0 8 0 0"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                            Visibility="{Binding ShowAllSlots, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ListBox MaxHeight="360"
+                                 Style="{StaticResource SlotList}"
+                                 HorizontalContentAlignment="Stretch"
+                                 ItemsSource="{Binding Slots}"
+                                 SelectedItem="{Binding SelectedSlot, Mode=TwoWay}">
+                            <!-- Headed by folder only where the game reaches more than one of them: the
+                                 view carries no grouping at all otherwise, so a game with one savegame
+                                 folder shows exactly the list it always did. -->
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Margin="0 8 0 2"
+                                                       Text="{Binding Name}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
 
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:SavegameSlotOptionViewModel}">
-                                <StackPanel Margin="0 4" ToolTip="{Binding ToolTip}">
-                                    <TextBlock Text="{Binding Label}"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:SavegameSlotOptionViewModel}">
+                                    <Grid Margin="12 8" ColumnDefinitions="auto *" ToolTip="{Binding ToolTip}">
+                                        <uc:SlotBadge Grid.Column="0"
+                                                      Margin="0 0 12 0"
+                                                      VerticalAlignment="Center"
+                                                      Number="{Binding Number}" />
 
-                                    <TextBlock Margin="0 2 0 0"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding Detail}">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
-                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                <Style.Triggers>
-                                                    <!-- A refused row says so in its own colour rather
-                                                         than looking like every other option and then
-                                                         refusing the button. -->
-                                                    <DataTrigger Binding="{Binding IsRefused}" Value="True">
-                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Label}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                            <TextBlock Margin="0 2 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Detail}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                        <Style.Triggers>
+                                                            <!-- A refused row says so in its own colour rather
+                                                                 than looking like every other option and then
+                                                                 refusing the button. -->
+                                                            <DataTrigger Binding="{Binding IsRefused}" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
 
                     <TextBlock Margin="0 8 0 0"
                                TextWrapping="Wrap"

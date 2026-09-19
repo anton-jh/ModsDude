@@ -386,7 +386,10 @@ something to ask about.
    there is more than one — there is no step above it asking which installation, because a machine
    has one. The remembered slot for this save is pre-selected if it is free, else the first free one
    with a note that the remembered one is taken. Slots are labelled with the game's own name for the
-   save and its playtime, never `savegame3`.
+   save and its playtime, never `savegame3` - and, for a game that numbers its slots, by the number as
+   well: a badge in front of every row, because "slot 4" is often how a player picks a save out. The list is
+   drawn like the mod lists and the savegame log (a row with a hairline, a bar for the chosen one) and
+   scrolls by the pixel, so a notch of the wheel is not a third of the list.
 2. **The claim and the bytes.** `POST .../savegames/{id}/checkouts` takes the claim — closing
    somebody else's open row as `TakenOver` if they had it, with a warning naming them — and the
    packed save is downloaded over a SAS and unpacked into the slot. Neither depends on the mods

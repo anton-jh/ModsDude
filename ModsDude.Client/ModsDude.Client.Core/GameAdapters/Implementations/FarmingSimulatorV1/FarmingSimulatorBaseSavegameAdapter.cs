@@ -102,6 +102,21 @@ public class FarmingSimulatorLocalSavegameAdapter(
     }
 
     /// <summary>
+    /// The folders are <c>savegame1</c> to <c>savegame20</c> and the game's own menu calls them slots 1 to 20,
+    /// so the number is the one thing a player and the folder agree on.
+    /// </summary>
+    public int? GetSlotNumber(SavegameSlotId slot)
+    {
+        const string prefix = "savegame";
+
+        return slot.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(slot.Value.AsSpan(prefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)
+            && number >= 1
+                ? number
+                : null;
+    }
+
+    /// <summary>
     /// Every slot, in the order the game numbers them.
     /// </summary>
     /// <remarks>
@@ -124,7 +139,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
             Parallel.For(0, _slotCount, options, i =>
             {
                 var id = new SavegameSlotId($"savegame{i + 1}");
-                slots[i] = ReadSlot(id, GetSlotPath(target, id), Log, cancellationToken);
+                slots[i] = ReadSlot(id, GetSlotPath(target, id), Log, cancellationToken, GetSlotNumber(id));
             });
 
             return slots;
@@ -147,7 +162,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
     /// because an empty slot is the one the engine writes to without asking. Every detail is likewise
     /// optional - a field this adapter cannot read costs that one line and nothing else.
     /// </remarks>
-    internal static SavegameSlot ReadSlot(SavegameSlotId id, string slotPath, ILogger log, CancellationToken cancellationToken)
+    internal static SavegameSlot ReadSlot(SavegameSlotId id, string slotPath, ILogger log, CancellationToken cancellationToken, int? number = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -155,7 +170,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
 
         if (!File.Exists(careerFile))
         {
-            return new SavegameSlot(id, null, false, []);
+            return new SavegameSlot(id, null, false, [], number);
         }
 
         var maybeCareer = ReadCareer(careerFile, log);
@@ -166,7 +181,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
             // the reason this is not louder still.
             log.LogWarning("Slot {Slot} has a career file that could not be read; it will show as unnamed.", id.Value);
 
-            return new SavegameSlot(id, null, true, []);
+            return new SavegameSlot(id, null, true, [], number);
         }
 
         var career = maybeCareer.Value;
@@ -183,7 +198,8 @@ public class FarmingSimulatorLocalSavegameAdapter(
             id,
             name.HasValue ? name.Value : null,
             true,
-            ReadDetails(career, settings, slotPath, careerFile, log));
+            ReadDetails(career, settings, slotPath, careerFile, log),
+            number);
     }
 
 

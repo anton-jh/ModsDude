@@ -101,9 +101,11 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
         IReadOnlyList<SavegamePublishOption> profiles,
         SavegamePublishOption? preselected,
         Guid? activeProfileId,
-        string? folderProfileName)
+        string? folderProfileName,
+        int? slotNumber = null)
     {
         SlotLabel = slotLabel;
+        SlotNumber = slotNumber;
         RepoName = repoName;
         ActiveProfileId = activeProfileId;
         FolderProfileName = folderProfileName;
@@ -116,12 +118,13 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
 
     public string SlotLabel { get; }
+    public int? SlotNumber { get; }
     public string RepoName { get; }
 
-    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?)"/>
+    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?, int?)"/>
     public Guid? ActiveProfileId { get; }
 
-    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?)"/>
+    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?, int?)"/>
     public string? FolderProfileName { get; }
 
     /// <summary>Every profile in the repo, plus <see cref="SavegamePublishOption.NoModList"/> last.</summary>
@@ -129,8 +132,10 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
     public string Title => "Publish this save";
 
+    private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
+
     public string Message =>
-        $"'{SlotLabel}' is uploaded to {RepoName} as a savegame of its own.";
+        $"{Capitalised(SavegameSlotWording.Named(SlotNumber, SlotLabel))} is uploaded to {RepoName} as a savegame of its own.";
 
 
     [ObservableProperty]

@@ -1,0 +1,34 @@
+<UserControl x:Class="ModsDude.Client.Wpf.View.UserControls.SlotBadge"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False"
+             IsHitTestVisible="False">
+
+    <!-- The number a player knows a slot by, drawn as the loudest thing on the row it is on: in a
+         game with twenty numbered slots it is often the first way somebody picks a save out. The
+         accent fill, because it is an identity rather than a state - it never changes colour to
+         say something is wrong. -->
+    <Border x:Name="Frame"
+            Width="44" Height="44"
+            CornerRadius="6"
+            Background="{DynamicResource AccentFillColorDefaultBrush}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock x:Name="Caption"
+                       Text="SLOT"
+                       FontSize="9"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Opacity="0.85"
+                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <TextBlock x:Name="Digits"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       LineHeight="22"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+        </StackPanel>
+    </Border>
+</UserControl>

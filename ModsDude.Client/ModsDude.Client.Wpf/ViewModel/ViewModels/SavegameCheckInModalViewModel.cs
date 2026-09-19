@@ -35,18 +35,21 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     /// Which mod list and revision the snapshot being minted will record, or null where it records
     /// none - a savegame following no mod list, and one whose revision nothing on this machine knows.
     /// </param>
-    public SavegameCheckInModalViewModel(string savegameName, string slotLabel, string? playedOn = null)
+    /// <param name="slotNumber">The number the player knows the slot by, for a game that numbers them.</param>
+    public SavegameCheckInModalViewModel(string savegameName, string slotLabel, string? playedOn = null, int? slotNumber = null)
     {
         SavegameName = savegameName;
         SlotLabel = slotLabel;
+        SlotNumber = slotNumber;
         PlayedOn = playedOn;
     }
 
 
     public string SavegameName { get; }
     public string SlotLabel { get; }
+    public int? SlotNumber { get; }
 
-    /// <inheritdoc cref="SavegameCheckInModalViewModel(string, string, string?)"/>
+    /// <inheritdoc cref="SavegameCheckInModalViewModel(string, string, string?, int?)"/>
     public string? PlayedOn { get; }
 
     public bool HasPlayedOn => PlayedOn is { Length: > 0 };
@@ -54,7 +57,7 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     public string Title => $"Check '{SavegameName}' in";
 
     public string Message =>
-        $"Everything in '{SlotLabel}' is uploaded as a new snapshot, and the others can take it from there. " +
+        $"Everything in {SavegameSlotWording.Named(SlotNumber, SlotLabel)} is uploaded as a new snapshot, and the others can take it from there. " +
         "A save that changed nothing mints nothing.";
 
     [ObservableProperty]

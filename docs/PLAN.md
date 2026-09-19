@@ -1029,7 +1029,9 @@ database error.
 - [x] **Check-in recycles the local copy only after the upload is verified.**
 - [x] Slots are labelled with the game's own name for the save and its playtime — never
       `savegame3`. The folder number is an implementation detail the player has never thought in,
-      and a picker that shows it is the memory test again.
+      and a picker that shows it is the memory test again. *Revised: the folder id is still never
+      shown, but where the game numbers its slots - Farming Simulator's twenty - the number is, as a badge on
+      every row and dialog that names a slot, because it is often how a player refers to the save.*
 
 ### The adapter
 

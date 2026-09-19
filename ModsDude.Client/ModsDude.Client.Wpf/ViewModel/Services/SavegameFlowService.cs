@@ -37,6 +37,17 @@ public sealed class SavegameFlowService(
     IBackgroundTaskReporter backgroundTasks)
 {
     /// <summary>
+    /// The number the player knows a held savegame's slot by, for a game that numbers them - what the
+    /// dialogs say instead of leaving the player to work out which folder is meant.
+    /// </summary>
+    private int? HeldSlotNumber(Game game, Guid savegameId)
+        => savegames.GetBinding(game, savegameId) is SavegameCheckoutBinding binding
+            ? savegames.DescribeSlotNumber(game, binding.Slot)
+            : null;
+
+    private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
+
+    /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
     /// </summary>
     /// <returns>
@@ -50,7 +61,8 @@ public sealed class SavegameFlowService(
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        var modal = new SavegameCheckInModalViewModel(savegameName, slotLabel, DescribePlayedOn(game, savegameId));
+        var modal = new SavegameCheckInModalViewModel(
+            savegameName, slotLabel, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId));
 
         await modalService.Value.Show(modal);
 
@@ -77,10 +89,11 @@ public sealed class SavegameFlowService(
         bool hasUnpublishedPlay,
         CancellationToken cancellationToken)
     {
+        var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), slotLabel);
         var consequence = hasUnpublishedPlay
-            ? $"'{slotLabel}' has been played since it was downloaded, and none of that has been checked in. " +
+            ? $"{Capitalised(slot)} has been played since it was downloaded, and none of that has been checked in. " +
               "It goes to the Recycle Bin and no snapshot is minted, so the only copy of that play is one you restore by hand."
-            : $"'{slotLabel}' goes to the Recycle Bin and no snapshot is minted. The savegame goes back to being anybody's to take.";
+            : $"{Capitalised(slot)} goes to the Recycle Bin and no snapshot is minted. The savegame goes back to being anybody's to take.";
 
         var modal = new ConfirmationDialogViewModel(
             $"Give '{savegameName}' back without checking it in?",
@@ -193,7 +206,8 @@ public sealed class SavegameFlowService(
             options,
             options.FirstOrDefault(x => x.ProfileId == activeProfileId && x.ProfileId is not null),
             activeProfileId,
-            options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name);
+            options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name,
+            savegames.DescribeSlotNumber(game, slot));
 
         await modalService.Value.Show(modal);
 

@@ -544,10 +544,14 @@ Several details in this code are load-bearing and worth preserving if you touch 
 Set `CanSupportSavegames = false` unless you implement it — the flag is what the UI checks
 before offering the feature. Implementing it means `SavegameTargets` and `GetSlots(target, ct)`
 above all: a slot list rather than a slot *count*, so that a game with twenty numbered folders and
-one with freely named saves are the same model, and nothing above the adapter ever learns a number.
+one with freely named saves are the same model. Where the game numbers its slots - the ones players
+count in, like Farming Simulator's twenty - also answer `GetSlotNumber(id)` and fill
+`SavegameSlot.Number`: it is what the UI draws as a badge on every row and dialog that names the
+slot, and answering it is the only way it learns the number, since a slot id is an opaque address.
 Key each savegame folder the same way its mod folder is keyed, or nothing can say which mods a save
 was played against. Read each occupied slot far enough to name it the way the game does; a picker
-that shows `savegame3` is the memory test the feature exists to remove. A slot you cannot read is
+that shows only `savegame3` is the memory test the feature exists to remove - but do give it the number
+as well, where the game has them, because that is often what players say first. A slot you cannot read is
 **occupied and unnamed**, never empty — empty is the one the engine overwrites without asking.
 
 Leave `SupportsHardlinks` alone unless somebody has actually tested what the game's updater does

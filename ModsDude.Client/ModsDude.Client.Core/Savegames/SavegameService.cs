@@ -368,6 +368,12 @@ public interface ISavegameService : IHeldSavegames
     /// </remarks>
     /// <param name="target">The folder a hold is in, which need not be one the settings still name.</param>
     string? DescribeFolder(Game game, TargetKey target);
+
+    /// <summary>
+    /// The number the player knows a slot by, for a game that numbers them - or null. See
+    /// <see cref="ILocalSavegameAdapter.GetSlotNumber"/>.
+    /// </summary>
+    int? DescribeSlotNumber(Game game, SavegameSlotRef slot);
 }
 
 
@@ -446,6 +452,14 @@ public sealed class SavegameService(
             ? TargetNames.Distinguishing(target, named.DisplayName, targets.Count)
             : TargetNames.Of(target, null);
     }
+
+    /// <summary>
+    /// The number a player knows a slot by, for a game that numbers them - see
+    /// <see cref="ILocalSavegameAdapter.GetSlotNumber"/>. Null for one that does not, and for a game with
+    /// no adapter to ask.
+    /// </summary>
+    public int? DescribeSlotNumber(Game game, SavegameSlotRef slot)
+        => adapters.TryGet(game) is ILocalSavegameAdapter adapter ? adapter.GetSlotNumber(slot.Slot) : null;
 
     public int? GetPlayedRevision(Game game, Guid savegameId)
         => bindings.GetBinding(game.Identity, savegameId) is SavegameCheckoutBinding binding
@@ -1278,7 +1292,7 @@ public sealed class SavegameService(
             // A slot the adapter does not list, for a game that can mint them. Nothing is there, so
             // there is nothing to lose - and a game that cannot mint them will refuse the write when
             // it comes to it, which is its call to make and not this one's.
-            ?? new SavegameSlot(slotRef.Slot, null, false, []);
+            ?? new SavegameSlot(slotRef.Slot, null, false, [], adapter.GetSlotNumber(slotRef.Slot));
 
         var addressed = new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), target.DisplayName, slot);
         var binding = bindings.GetBindingForSlot(game.Identity, addressed.Ref);

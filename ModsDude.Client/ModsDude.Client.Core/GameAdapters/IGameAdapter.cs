@@ -198,6 +198,17 @@ public interface ILocalSavegameAdapter : IBaseSavegameAdapter
     string GetSlotPath(SavegameTarget target, SavegameSlotId slot);
 
     /// <summary>
+    /// The number a player knows this slot by, for a game whose slots are a fixed, numbered set - or null.
+    /// </summary>
+    /// <remarks>
+    /// Answerable from the id alone, which is why it is not only a field of <see cref="SavegameSlot"/>: a
+    /// hold recorded on this machine keeps the slot's address and nothing else, and the list of saves
+    /// has to name the slot it is in without reading twenty folders to find out. Whatever this returns
+    /// for an id is what <see cref="GetSlots"/> puts in <see cref="SavegameSlot.Number"/> for it.
+    /// </remarks>
+    int? GetSlotNumber(SavegameSlotId slot) => null;
+
+    /// <summary>
     /// The slot a save called <paramref name="name"/> would occupy, for a game where
     /// <see cref="IBaseSavegameAdapter.CanCreateSlots"/> is true. Mints an address, not a folder -
     /// creating it is the engine's business.

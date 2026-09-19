@@ -33,11 +33,19 @@ namespace ModsDude.Client.Core.Models;
 /// can tell two savegames apart, and <b>never depended on</b>: see <see cref="SavegameDetail"/>. Empty
 /// for a slot that is free, or whose contents could not be read.
 /// </param>
+/// <param name="Number">
+/// Which numbered slot this is, for a game whose slots are a small fixed set that players count in -
+/// Farming Simulator's twenty. Null for a game that names its saves freely, where a number would be
+/// invented. <b>When it is there it is how a player refers to the slot</b>, often before the name of the
+/// save in it, so every surface that names a slot says it and none of them is left to work it out from
+/// <see cref="Id"/>: that is an adapter's own address, and only the adapter knows what it means.
+/// </param>
 public record SavegameSlot(
     SavegameSlotId Id,
     string? DisplayName,
     bool IsOccupied,
-    IReadOnlyList<SavegameDetail> Details);
+    IReadOnlyList<SavegameDetail> Details,
+    int? Number = null);
 
 
 /// <summary>
@@ -174,4 +182,7 @@ public sealed record GameSavegameSlot(SavegameSlotRef Ref, string? TargetName, S
     public bool IsOccupied => Slot.IsOccupied;
     public string? DisplayName => Slot.DisplayName;
     public IReadOnlyList<SavegameDetail> Details => Slot.Details;
+
+    /// <inheritdoc cref="SavegameSlot.Number"/>
+    public int? Number => Slot.Number;
 }

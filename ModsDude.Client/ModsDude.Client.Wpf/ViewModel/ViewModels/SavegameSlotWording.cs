@@ -26,14 +26,21 @@ internal static class SavegameSlotWording
     /// null for a game with one, which is nearly every game.
     /// </param>
     /// <remarks>
-    /// <b>The last line is the adapter's slot id and, where there is something to tell apart, the
-    /// folder's name.</b> Never the target <em>key</em>: that is an adapter-authored identity that
+    /// <b>The last line is the slot's number, where the game has them, and then the adapter's slot id and,
+    /// where there is something to tell apart, the folder's name.</b> Never the target <em>key</em>: that is an adapter-authored identity that
     /// ends up in filenames, it is not chosen to be read, and "game:savegame1" in front of somebody
     /// choosing where a save goes is a worse answer than "savegame1" - which is what the game itself
     /// calls that folder, and is the one thing here they can go and look at.
     /// </remarks>
+    /// <summary>
+    /// How a slot is named in a sentence: by its number where the game has them, and always by the save it
+    /// holds. <c>slot 4 ('Zielonka')</c>, or just <c>'Zielonka'</c> for a game whose slots are not numbered.
+    /// </summary>
+    public static string Named(int? number, string label)
+        => number is int slot ? $"slot {slot} ('{label}')" : $"'{label}'";
+
     public static string DescribeFully(
-        string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetail> details)
+        string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetail> details, int? number = null)
     {
         var text = new StringBuilder(label);
 

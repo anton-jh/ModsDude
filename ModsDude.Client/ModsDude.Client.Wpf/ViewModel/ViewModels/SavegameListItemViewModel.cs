@@ -27,7 +27,12 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// disk and still claimed; nothing can read, pack or recycle it until the settings point back at that
 /// folder. See <see cref="ModsDude.Client.Core.Savegames.ISavegameService.GetUnreachableHolds"/>.
 /// </param>
-public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? FolderName, bool IsUnreachable);
+/// <param name="SlotNumber">
+/// The number the player knows the slot by, for a game that numbers them. It is drawn on the row as a
+/// badge, as prominently as anything on it: where a game has twenty slots, "slot 4" is often how the
+/// player picks this save out of the list. Null for a game whose slots are not numbered.
+/// </param>
+public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? FolderName, bool IsUnreachable, int? SlotNumber = null);
 
 
 /// <summary>
@@ -188,6 +193,12 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// row's only offer is to stop tracking it.
     /// </summary>
     public bool IsHoldUnreachable => Hold?.IsUnreachable is true;
+
+    /// <summary>
+    /// The slot this savegame is in on this machine, by the number the game gives it - or null where it
+    /// is not held here, or the game does not number its slots.
+    /// </summary>
+    public int? HoldSlotNumber => Hold?.SlotNumber;
 
     /// <summary>
     /// Whether handing the save back is what this row offers - which needs the claim to be yours
@@ -496,6 +507,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(HeldHere));
         OnPropertyChanged(nameof(IsHeldHere));
         OnPropertyChanged(nameof(IsHoldUnreachable));
+        OnPropertyChanged(nameof(HoldSlotNumber));
         OnPropertyChanged(nameof(CanCheckIn));
         OnPropertyChanged(nameof(CanDiscard));
         OnPropertyChanged(nameof(CanDisconnect));

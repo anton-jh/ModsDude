@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              mc:Ignorable="d"
              Width="520"
              d:DataContext="{d:DesignInstance Type=vm:SavegameSlotPickerModalViewModel, IsDesignTimeCreatable=False}"
@@ -32,45 +33,59 @@
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                <ListBox Margin="0 16 0 0"
-                         MaxHeight="260"
-                         HorizontalContentAlignment="Stretch"
-                         ItemsSource="{Binding Slots}"
-                         SelectedItem="{Binding SelectedSlot, Mode=TwoWay}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <!-- Headed by folder only where the game reaches more than one of them: the view
-                         carries no grouping at all otherwise, so a game with one savegame folder
-                         shows a plain list. -->
-                    <ListBox.GroupStyle>
-                        <GroupStyle>
-                            <GroupStyle.HeaderTemplate>
-                                <DataTemplate>
-                                    <TextBlock Margin="0 8 0 2"
-                                               Text="{Binding Name}"
-                                               Style="{DynamicResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                </DataTemplate>
-                            </GroupStyle.HeaderTemplate>
-                        </GroupStyle>
-                    </ListBox.GroupStyle>
+                <!-- The same list, drawn the same way, as the check-out dialog's: rows with a hairline
+                     under them inside a frame, scrolling by the pixel. -->
+                <Border Margin="0 16 0 0"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    <ListBox MaxHeight="400"
+                             Style="{StaticResource SlotList}"
+                             HorizontalContentAlignment="Stretch"
+                             ItemsSource="{Binding Slots}"
+                             SelectedItem="{Binding SelectedSlot, Mode=TwoWay}">
+                        <!-- Headed by folder only where the game reaches more than one of them: the view
+                             carries no grouping at all otherwise, so a game with one savegame folder
+                             shows a plain list. -->
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="0 8 0 2"
+                                                   Text="{Binding Name}"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
 
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:SavegameSlotOptionViewModel}">
-                            <StackPanel Margin="0 4" ToolTip="{Binding ToolTip}">
-                                <TextBlock Text="{Binding Label}"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SavegameSlotOptionViewModel}">
+                                <Grid Margin="12 8" ColumnDefinitions="auto *" ToolTip="{Binding ToolTip}">
+                                    <uc:SlotBadge Grid.Column="0"
+                                                  Margin="0 0 12 0"
+                                                  VerticalAlignment="Center"
+                                                  Number="{Binding Number}" />
 
-                                <TextBlock Margin="0 2 0 0"
-                                           TextWrapping="Wrap"
-                                           Style="{DynamicResource CaptionTextBlockStyle}"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Text="{Binding Detail}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Label}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                        <TextBlock Margin="0 2 0 0"
+                                                   TextWrapping="Wrap"
+                                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
             </StackPanel>
 
             <Border Grid.Row="1"

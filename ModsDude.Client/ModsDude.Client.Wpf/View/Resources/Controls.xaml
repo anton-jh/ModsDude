@@ -268,4 +268,71 @@
         </Setter>
     </Style>
 
+
+    <!-- The row of a list somebody is choosing from - a slot, in the dialogs that pick one - drawn the way
+         the mod lists and the savegame log draw theirs: a full-width row with a hairline under it, the
+         accent at low opacity and a bar down the left for the chosen one, and a lighter fill under the
+         pointer. The default ListBoxItem is a padded box with the theme's own highlight, which is what
+         made these read as a settings control rather than as a list of things. -->
+    <Style x:Key="SlotRow" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Row"
+                            BorderThickness="0 0 0 1"
+                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                            Background="Transparent">
+                        <Grid>
+                            <Border x:Name="Fill"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Opacity="0" />
+
+                            <Rectangle x:Name="Bar"
+                                       Width="3"
+                                       Margin="0 6"
+                                       RadiusX="1.5" RadiusY="1.5"
+                                       HorizontalAlignment="Left"
+                                       Visibility="Collapsed"
+                                       Fill="{DynamicResource AccentFillColorDefaultBrush}" />
+
+                            <ContentPresenter />
+
+                            <Border x:Name="Focus"
+                                    BorderThickness="0"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Fill" Property="Opacity" Value="0.16" />
+                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A list to choose one thing from, in a dialog. Scrolls by the pixel rather than by the row:
+         a slot is two or three lines tall, so scrolling by the item moved the list a third of its
+         height with every notch of the wheel and made it jump rather than glide. That costs
+         virtualization, which is the right trade for a list of a couple of dozen. -->
+    <Style x:Key="SlotList" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource SlotRow}" />
+        <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
 </ResourceDictionary>

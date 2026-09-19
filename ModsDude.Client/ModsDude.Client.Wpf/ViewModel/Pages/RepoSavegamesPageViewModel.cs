@@ -918,7 +918,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 host.Game,
                 binding.Slot,
                 _savegameService.DescribeFolder(host.Game, binding.Slot.Target),
-                host.UnreachableHolds.Contains(savegameId));
+                host.UnreachableHolds.Contains(savegameId),
+                _savegameService.DescribeSlotNumber(host.Game, binding.Slot));
         }
 
         return null;

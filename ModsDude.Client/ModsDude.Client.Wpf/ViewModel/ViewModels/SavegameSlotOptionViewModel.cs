@@ -8,10 +8,13 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Never the folder number.</b> A picker that offers "savegame3" is the memory test this whole
-/// feature exists to remove, so an occupied slot is labelled with what the <em>game</em> calls the
-/// save in it and how long it has been played. The slot's own id is on the tooltip and nowhere else,
-/// as the last line, for somebody who wants to go and look at the folder.
+/// <b>The save's name leads, and the slot's number stands beside it.</b> A picker that offers only
+/// "savegame3" is the memory test this whole feature exists to remove, so an occupied slot is labelled with
+/// what the <em>game</em> calls the save in it and how long it has been played - but a game with twenty
+/// numbered slots is a game whose players say "slot 3", often before they say what is in it, so where the
+/// adapter numbers its slots the number is drawn as a badge in front of the row and is never left to be
+/// worked out. The adapter's own id - the folder name - stays on the tooltip, as the last line, for
+/// somebody who wants to go and look at the folder.
 /// </para>
 /// <para>
 /// <b>The three safety states are told apart here, not at the moment of writing.</b> A refused row is
@@ -35,13 +38,14 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
 
         SaveName = slot.DisplayName;
         Details = slot.Details;
+        Number = slot.Number;
 
         Label = slot.IsOccupied
             ? slot.DisplayName is { Length: > 0 } name ? name : "A save this game will not name"
             : "Empty slot";
 
         Detail = BuildDetail();
-        ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, TargetName, Details);
+        ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, TargetName, Details, Number);
 
         IsRefused = SavegameSlotStates.IsRefused(availability);
         NeedsConfirmation = SavegameSlotStates.RequiresConfirmation(availability);
@@ -78,6 +82,14 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     public IReadOnlyList<SavegameDetail> Details { get; }
 
     public bool HasDetails => Details.Count > 0;
+
+    /// <summary>
+    /// The number the player knows this slot by, for a game that numbers them - the badge on the row.
+    /// Null for one that does not.
+    /// </summary>
+    public int? Number { get; }
+
+    public bool HasNumber => Number is not null;
 
     public string ToolTip { get; }
 
