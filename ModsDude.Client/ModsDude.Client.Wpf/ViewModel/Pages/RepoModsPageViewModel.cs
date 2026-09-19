@@ -119,12 +119,16 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     public bool HasRepoMods => RepoTotal > 0;
     public bool HasVisibleRepoMods => RepoCount > 0;
 
+    public string RepoCountText => Describe(RepoCount, RepoTotal);
+
     /// <summary>
-    /// How much the repo holds, in the three numbers somebody managing it asks for: versions, mods and
-    /// bytes. The versions narrow with the search; the mods and the bytes are the whole repo's, because
-    /// what a repo costs to keep does not depend on what is being looked at.
+    /// What the whole repo holds, in the numbers somebody managing it asks for: versions, mods and bytes.
+    /// Its own line rather than part of the count beside the search, because the count narrows with the
+    /// search and this does not - what a repo costs to keep is not a fact about what is being looked at.
     /// </summary>
-    public string RepoCountText => string.Join(" · ", [Describe(RepoCount, RepoTotal), .. _statistics]);
+    public string StatisticsText => _statistics.Count == 0 ? "" : string.Join(" · ", _statistics);
+
+    public bool HasStatistics => _statistics.Count > 0;
 
     private IReadOnlyList<string> _statistics = [];
 
@@ -405,7 +409,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         RepoView = view;
 
         _statistics = DescribeRepo(_registered);
-        OnPropertyChanged(nameof(RepoCountText));
+        OnPropertyChanged(nameof(StatisticsText));
+        OnPropertyChanged(nameof(HasStatistics));
 
         Recount();
 
@@ -430,10 +435,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         return
         [
+            rows.Count == 1 ? "1 version" : $"{rows.Count:N0} versions",
             mods == 1 ? "1 mod" : $"{mods:N0} mods",
             unknown == 0
-                ? ByteSize.Describe(known)
-                : $"{ByteSize.Describe(known)} ({unknown:N0} without a recorded size)"
+                ? $"{ByteSize.Describe(known)} in all"
+                : $"{ByteSize.Describe(known)} in all, and {unknown:N0} without a recorded size"
         ];
     }
 

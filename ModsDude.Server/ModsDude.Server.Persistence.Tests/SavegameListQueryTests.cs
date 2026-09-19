@@ -363,6 +363,59 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
     }
 
 
+    [Fact]
+    public async Task A_savegames_totals_are_its_snapshots_counted_and_summed()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var many = await GivenASavegame(repoId, profileId, "Many");
+        var few = await GivenASavegame(repoId, profileId, "Few");
+
+        await GivenSnapshots(repoId, profileId, many, HashOf('1'), HashOf('2'), HashOf('3'));
+        await GivenSnapshots(repoId, profileId, few, HashOf('4'));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var totals = await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(repoId, CancellationToken.None);
+
+        Assert.Equal(new SavegameSnapshotTotals(3, 3 * 1024), totals[many]);
+        Assert.Equal(new SavegameSnapshotTotals(1, 1024), totals[few]);
+    }
+
+    [Fact]
+    public async Task Totals_can_be_asked_for_one_savegame_and_never_include_another_repos()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var (otherRepoId, otherProfileId) = await GivenARepoWithAProfile();
+        var wanted = await GivenASavegame(repoId, profileId, "Wanted");
+        var other = await GivenASavegame(repoId, profileId, "Other");
+        var foreign = await GivenASavegame(otherRepoId, otherProfileId, "Foreign");
+
+        await GivenSnapshots(repoId, profileId, wanted, HashOf('1'), HashOf('2'));
+        await GivenSnapshots(repoId, profileId, other, HashOf('3'));
+        await GivenSnapshots(otherRepoId, otherProfileId, foreign, HashOf('4'));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var totals = await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(repoId, CancellationToken.None, wanted);
+
+        Assert.Equal(new SavegameSnapshotTotals(2, 2 * 1024), Assert.Single(totals).Value);
+        Assert.Equal(wanted, Assert.Single(totals).Key);
+    }
+
+    /// <summary>A savegame with nothing stored has no entry, which callers read as zero.</summary>
+    [Fact]
+    public async Task A_savegame_with_no_snapshots_is_absent_from_the_totals()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var empty = await GivenASavegame(repoId, profileId, "Empty");
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var totals = await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(repoId, CancellationToken.None);
+
+        Assert.False(totals.ContainsKey(empty));
+    }
+
     private static string HashOf(char character) => new(character, ModImageHash.Length);
 
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenARepoWithAProfile()

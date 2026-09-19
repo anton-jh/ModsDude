@@ -188,11 +188,19 @@
                        Text="Saves"
                        Margin="0 8 0 24" />
 
-            <TextBlock Grid.Row="2"
-                       Margin="0 0 0 12"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                       Text="Every save in this repo, and which profile each one follows. One person holds a save at a time and hands it back explicitly - so checking one out stops anybody else taking it until you check it in. Taking a copy stops nobody." />
+            <StackPanel Grid.Row="2" Margin="0 0 0 12" HorizontalAlignment="Left">
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                           Text="Every save in this repo, and which profile each one follows. One person holds a save at a time and hands it back explicitly - so checking one out stops anybody else taking it until you check it in. Taking a copy stops nobody." />
+
+                <!-- What the repo's saves add up to. Kept apart from the sentence above, which is about
+                     how saves work and does not change, because this is the number somebody comes to
+                     check when deciding what to prune. -->
+                <TextBlock Margin="0 6 0 0"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding StatisticsText}"
+                           Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
 
             <Border Grid.Row="3"
                     Margin="0 0 0 12"

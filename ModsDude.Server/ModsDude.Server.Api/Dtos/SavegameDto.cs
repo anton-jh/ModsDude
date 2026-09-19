@@ -30,6 +30,12 @@ namespace ModsDude.Server.Api.Dtos;
 /// is, so "Anton has had this since March" is a claim like any other and is the thing the next person
 /// needs to read.
 /// </param>
+/// <param name="SnapshotCount">How many snapshots the savegame has now - pruning is what takes it down.</param>
+/// <param name="TotalSizeBytes">
+/// What those snapshots add up to, counted per snapshot: two that share a blob are counted twice. It is how
+/// much history the save carries, which is what a page adding a repo's saves up is asking - not what
+/// storage holds, which is a fact about blobs.
+/// </param>
 public record SavegameDto(
     Guid Id,
     Guid RepoId,
@@ -39,7 +45,9 @@ public record SavegameDto(
     SavegameSnapshotDto? Head,
     SavegameCheckoutDto? Checkout,
     DateTime? SupersededAt,
-    DateTime? ArchivedAt);
+    DateTime? ArchivedAt,
+    int SnapshotCount,
+    long TotalSizeBytes);
 
 
 /// <summary>

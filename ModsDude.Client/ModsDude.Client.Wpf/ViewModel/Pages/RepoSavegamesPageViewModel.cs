@@ -156,6 +156,17 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     public bool HasHiddenPast => HiddenPastCount > 0;
 
+    /// <summary>
+    /// What every save in the repo adds up to - how many, how many snapshots, and how many bytes of history.
+    /// Over all of them, hidden past ones included: what a repo carries does not depend on what the list
+    /// is showing. Empty for a repo with none.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatistics))]
+    private string _statisticsText = "";
+
+    public bool HasStatistics => StatisticsText.Length > 0;
+
     public string HiddenPastText => HiddenPastCount == 1
         ? "1 past savegame is hidden."
         : $"{HiddenPastCount} past savegames are hidden.";
@@ -739,6 +750,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         HiddenPastCount = savegames.Count - shown.Count;
 
+        StatisticsText = DescribeStatistics(SavegameStatistics.From(savegames));
+
         // Two people called Anton can both hold a save in this repo, and neither of them is the
         // duplicate - so the tag goes on both or on neither, decided over this list.
         var ambiguous = UserDisplay.FindAmbiguous(
@@ -782,6 +795,19 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Selected = Savegames.FirstOrDefault(x => x.Id == wanted) ?? Savegames.FirstOrDefault();
 
         _ = AnnotateAsync([.. Savegames]);
+    }
+
+    private static string DescribeStatistics(SavegameStatistics statistics)
+    {
+        if (statistics.Savegames == 0)
+        {
+            return "";
+        }
+
+        var saves = statistics.Savegames == 1 ? "1 savegame" : $"{statistics.Savegames:N0} savegames";
+        var snapshots = statistics.Snapshots == 1 ? "1 snapshot" : $"{statistics.Snapshots:N0} snapshots";
+
+        return $"{saves} · {snapshots} · {ByteSize.Describe(statistics.TotalBytes)} in all";
     }
 
     private void ClearRows()

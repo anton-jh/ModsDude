@@ -358,8 +358,16 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>The head snapshot's number and size, for the row's second line. Empty where nothing has been checked in yet.</summary>
     public string Summary => Savegame.Head is SavegameSnapshotDto head
-        ? $"Snapshot {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}"
+        ? $"Snapshot {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}{History}"
         : "No snapshots yet";
+
+    /// <summary>
+    /// What the rest of the history adds up to, said only where there is more than the head: one snapshot's
+    /// size is already on the line, and repeating it as a total would be the same number twice.
+    /// </summary>
+    private string History => Savegame.SnapshotCount > 1
+        ? $" · {Savegame.SnapshotCount} snapshots, {SavegameWording.Size(Savegame.TotalSizeBytes)} in all"
+        : "";
 
     /// <summary>
     /// What the game says about the head snapshot - the map, the hours in it - recorded by whoever

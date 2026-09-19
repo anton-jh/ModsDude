@@ -61,6 +61,7 @@ internal static class SavegameReads
             cancellationToken);
 
         var checkouts = await dbContext.SavegameCheckouts.GetOpenCheckoutsAsync(repoId, cancellationToken);
+        var totals = await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(repoId, cancellationToken);
 
         var names = await GetNamesAsync(
             dbContext,
@@ -81,7 +82,9 @@ internal static class SavegameReads
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
                 checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names) : null,
                 row.SupersededAt,
-                row.ArchivedAt))
+                row.ArchivedAt,
+                totals.GetValueOrDefault(row.Id).Count,
+                totals.GetValueOrDefault(row.Id).Bytes))
         ];
     }
 
@@ -110,6 +113,9 @@ internal static class SavegameReads
             userIds.Add(checkout.UserId);
         }
 
+        var totals = (await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(savegame.RepoId, cancellationToken, savegame.Id))
+            .GetValueOrDefault(savegame.Id);
+
         var names = await GetNamesAsync(dbContext, userIds, cancellationToken);
 
         return new SavegameDto(
@@ -121,7 +127,9 @@ internal static class SavegameReads
             head is null ? null : ToDto(savegame.RepoId, head, names),
             checkout is null ? null : ToDto(checkout, names),
             savegame.SupersededAt,
-            savegame.ArchivedAt);
+            savegame.ArchivedAt,
+            totals.Count,
+            totals.Bytes);
     }
 
     public static async Task<List<SavegameSnapshotDto>> ToDtosAsync(

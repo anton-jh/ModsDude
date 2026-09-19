@@ -1361,10 +1361,18 @@
             "format": "guid",
             "type": "string"
           },
+          "snapshotCount": {
+            "format": "int32",
+            "type": "integer"
+          },
           "supersededAt": {
             "format": "date-time",
             "nullable": true,
             "type": "string"
+          },
+          "totalSizeBytes": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "type": "object"

@@ -324,6 +324,31 @@ public static class SavegameExtensions
     }
 
     /// <summary>
+    /// How many snapshots each savegame has, and what they add up to - the repo's, or one savegame's.
+    /// A savegame with no snapshot is absent, which is the answer "nothing stored".
+    /// </summary>
+    /// <remarks>
+    /// The sum of the snapshots' own sizes, not of the distinct blobs behind them: snapshots that share
+    /// a content hash share a blob, so what storage actually holds can be less. What a person is asking
+    /// is how much history a savegame carries, which is this, and it is what pruning reduces.
+    /// </remarks>
+    public static async Task<Dictionary<SavegameId, SavegameSnapshotTotals>> GetSnapshotTotalsAsync(
+        this DbSet<SavegameSnapshot> dbSet,
+        RepoId repoId,
+        CancellationToken cancellationToken,
+        SavegameId? savegameId = null)
+    {
+        var rows = await dbSet
+            .AsNoTracking()
+            .Where(x => x.RepoId == repoId && (savegameId == null || x.SavegameId == savegameId))
+            .GroupBy(x => x.SavegameId)
+            .Select(x => new { SavegameId = x.Key, Count = x.Count(), Bytes = x.Sum(snapshot => snapshot.SizeBytes) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.SavegameId, x => new SavegameSnapshotTotals(x.Count, x.Bytes));
+    }
+
+    /// <summary>
     /// The head snapshot of each of several savegames at once, for a list that carries its heads
     /// inline.
     /// </summary>
@@ -507,4 +532,11 @@ public record SavegameSnapshotRow(
     /// the owned collection's own loading, because nothing here materializes a snapshot.
     /// </summary>
     public IReadOnlyList<SavegameDetail> Details { get; init; } = [];
+}
+
+
+/// <summary>What a savegame's snapshots come to: how many, and how many bytes.</summary>
+public readonly record struct SavegameSnapshotTotals(int Count, long Bytes)
+{
+    public static SavegameSnapshotTotals None => default;
 }

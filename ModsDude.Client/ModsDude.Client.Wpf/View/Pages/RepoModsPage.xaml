@@ -12,7 +12,7 @@
       Title="RepoModsPage">
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto auto *">
+        <Grid RowDefinitions="auto auto auto auto auto *">
 
             <TextBlock Grid.Row="0"
                        Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -41,7 +41,16 @@
                 </TextBlock.Style>
             </TextBlock>
 
-            <Grid Grid.Row="3" Margin="0 0 0 12" ColumnDefinitions="* auto auto">
+            <!-- What the whole repo holds. Above the search because it does not narrow with it - see
+                 StatisticsText. -->
+            <TextBlock Grid.Row="3"
+                       Margin="0 0 0 12"
+                       HorizontalAlignment="Left"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding StatisticsText}"
+                       Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+            <Grid Grid.Row="4" Margin="0 0 0 12" ColumnDefinitions="* auto auto">
 
                 <!-- No clear button of its own. The Fluent theme's TextBox template draws one, and a
                      second hand-rolled one sat exactly on top of it. -->
@@ -85,7 +94,7 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </Grid>
 
-            <Border Grid.Row="4"
+            <Border Grid.Row="5"
                     CornerRadius="6"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
