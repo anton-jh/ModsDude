@@ -629,10 +629,14 @@
       "ModUsageDto": {
         "additionalProperties": false,
         "properties": {
+          "currentProfileCount": {
+            "format": "int32",
+            "type": "integer"
+          },
           "modId": {
             "type": "string"
           },
-          "profileCount": {
+          "pastProfileCount": {
             "format": "int32",
             "type": "integer"
           },

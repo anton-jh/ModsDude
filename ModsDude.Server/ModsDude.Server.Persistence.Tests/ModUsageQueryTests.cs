@@ -29,7 +29,7 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 100, CancellationToken.None);
+        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 100, CancellationToken.None);
 
         Assert.Equal(["1.0.0"], usage.Select(x => x.VersionId.Value));
     }
@@ -43,14 +43,16 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 100, CancellationToken.None);
+        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 100, CancellationToken.None);
 
-        Assert.Equal(2, Assert.Single(usage).ProfileCount);
+        Assert.Equal(2, Assert.Single(usage).CurrentProfileCount);
     }
 
     /// <summary>
     /// Otherwise a profile that has held a version across ten saves would read as ten profiles, and
-    /// the Manage page's "used by" number would grow with the history rather than with the use.
+    /// the Mods page's "used by" number would grow with the history rather than with the use. It is
+    /// counted once on each side of the split it is on: here 1.0.0 is in the newest revision and in an
+    /// older one, so it is one profile in each column - and 2.0.0 is only in an older one.
     /// </summary>
     [Fact]
     public async Task A_profile_that_pinned_a_version_in_several_revisions_is_still_counted_once()
@@ -63,9 +65,11 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 100, CancellationToken.None);
+        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 100, CancellationToken.None);
 
-        Assert.Equal([1, 1], usage.Select(x => x.ProfileCount));
+        Assert.Equal(
+            [("1.0.0", 1, 1), ("2.0.0", 0, 1)],
+            usage.Select(x => (x.VersionId.Value, x.CurrentProfileCount, x.PastProfileCount)));
     }
 
     /// <summary>
@@ -83,9 +87,11 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 100, CancellationToken.None);
+        var usage = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 100, CancellationToken.None);
 
-        Assert.Equal(["1.0.0", "2.0.0"], usage.Select(x => x.VersionId.Value));
+        Assert.Equal(
+            [("1.0.0", 0, 1), ("2.0.0", 1, 0)],
+            usage.Select(x => (x.VersionId.Value, x.CurrentProfileCount, x.PastProfileCount)));
     }
 
     [Fact]
@@ -98,7 +104,7 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.Empty(await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 100, CancellationToken.None));
+        Assert.Empty(await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 100, CancellationToken.None));
     }
 
     [Fact]
@@ -112,8 +118,8 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var first = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 0, 2, CancellationToken.None);
-        var second = await dbContext.ProfileRevisions.GetModUsageAsync(repoId, 2, 2, CancellationToken.None);
+        var first = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 0, 2, CancellationToken.None);
+        var second = await dbContext.ProfileRevisions.GetModUsageAsync(dbContext.Profiles, repoId, 2, 2, CancellationToken.None);
 
         Assert.Equal([("A", "1.0.0"), ("A", "2.0.0")], first.Select(x => (x.ModId.Value, x.VersionId.Value)));
         Assert.Equal([("B", "1.0.0")], second.Select(x => (x.ModId.Value, x.VersionId.Value)));

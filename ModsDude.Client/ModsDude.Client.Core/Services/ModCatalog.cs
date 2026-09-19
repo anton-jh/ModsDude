@@ -78,7 +78,7 @@ public sealed class ModCatalog : IDisposable
 
     private Task<IReadOnlyList<ModDto>>? _registeredLoad;
     private DateTime? _registeredThrough;
-    private Task<IReadOnlyDictionary<ModVersionIdentity, int>>? _usageLoad;
+    private Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>>? _usageLoad;
 
 
     public ModCatalog(
@@ -484,7 +484,7 @@ public sealed class ModCatalog : IDisposable
         }
     }
 
-    private Task<IReadOnlyDictionary<ModVersionIdentity, int>> GetOrStartUsageLoad()
+    private Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>> GetOrStartUsageLoad()
     {
         lock (_lock)
         {
@@ -493,7 +493,8 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
-    /// Which registered versions the repo's profiles pin, and how many pin each.
+    /// Which registered versions the repo's profiles pin, and how many pin each - in their newest
+    /// revision and in an older one.
     /// </summary>
     /// <remarks>
     /// Read to exhaustion before it is used, deliberately: absence from the listing is what makes a
@@ -501,9 +502,9 @@ public sealed class ModCatalog : IDisposable
     /// picked up on the next page. Deleting on that view is exactly the hazard the endpoint exists
     /// to remove. See docs/09-mod-catalog.md#manage.
     /// </remarks>
-    private async Task<IReadOnlyDictionary<ModVersionIdentity, int>> LoadUsageAsync()
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>> LoadUsageAsync()
     {
-        var usage = new Dictionary<ModVersionIdentity, int>();
+        var usage = new Dictionary<ModVersionIdentity, ModUsage>();
         string? cursor = null;
 
         do
@@ -514,7 +515,8 @@ public sealed class ModCatalog : IDisposable
             {
                 // Normalized on the way in for the same reason the mod list is: the server holds
                 // whatever casing was registered, and an un-normalized id silently misses its row.
-                usage[new ModVersionIdentity(ModKey.From(entry.ModId), ModVersionKey.From(entry.VersionId))] = entry.ProfileCount;
+                usage[new ModVersionIdentity(ModKey.From(entry.ModId), ModVersionKey.From(entry.VersionId))] =
+                    new ModUsage(entry.CurrentProfileCount, entry.PastProfileCount);
             }
 
             cursor = page.NextCursor;
@@ -527,7 +529,7 @@ public sealed class ModCatalog : IDisposable
     private static IReadOnlyList<CatalogModVersion> Merge(
         IReadOnlyList<SourceScan> scans,
         IReadOnlyList<ModDto> registered,
-        IReadOnlyDictionary<ModVersionIdentity, int> usage)
+        IReadOnlyDictionary<ModVersionIdentity, ModUsage> usage)
     {
         // Deduplication is on (ModId, VersionId); every source a version turned up in is kept, so a
         // row can say where it came from and two sources disagreeing about the bytes stays visible.
@@ -586,7 +588,7 @@ public sealed class ModCatalog : IDisposable
         ModDto? dto,
         LocalMod? local,
         List<ModOccurrence>? occurrences,
-        int? usedByProfiles)
+        ModUsage? usage)
     {
         // The registered record is the shared truth, so it wins where both exist - two members
         // looking at the same registered version should read the same thing. That extends to
@@ -613,7 +615,7 @@ public sealed class ModCatalog : IDisposable
             FoundIn = occurrences ?? [],
             ContentHash = dto?.ContentHash,
             SequenceNumber = dto?.SequenceNumber,
-            UsedByProfiles = usedByProfiles
+            Usage = usage
         };
     }
 

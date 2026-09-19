@@ -3,7 +3,8 @@
 namespace ModsDude.Server.Api.Dtos;
 
 /// <summary>
-/// How many of a repo's profiles pin one registered version.
+/// How many of a repo's profiles pin one registered version: those whose newest revision does, and those
+/// with an older revision that does. A profile that has held it all along is in both.
 /// </summary>
 /// <remarks>
 /// Its own resource rather than a field on <see cref="ModDto"/>, because usage changes for reasons a
@@ -12,10 +13,10 @@ namespace ModsDude.Server.Api.Dtos;
 /// restamping every version a profile touches — which for a profile of two thousand mods restamps
 /// two thousand rows on every save and makes the delta the same size as a full listing.
 /// </remarks>
-public record ModUsageDto(string ModId, string VersionId, int ProfileCount)
+public record ModUsageDto(string ModId, string VersionId, int CurrentProfileCount, int PastProfileCount)
 {
     public static ModUsageDto FromModel(ModVersionUsage model)
     {
-        return new ModUsageDto(model.ModId.Value, model.VersionId.Value, model.ProfileCount);
+        return new ModUsageDto(model.ModId.Value, model.VersionId.Value, model.CurrentProfileCount, model.PastProfileCount);
     }
 }

@@ -492,7 +492,10 @@ content hash, so the storage cost is bounded by distinct files rather than by pi
 
 `GetModUsageAsync` counts accordingly: a profile that pinned a version across ten revisions
 counts once, but it does count, whether or not its current revision still pins it. The number
-exists to tell somebody whether a delete will be refused.
+exists to tell somebody whether a delete will be refused - and it is reported as two, so that the
+reader can also tell *how* a version is used: by how many profiles' newest revisions, and by how
+many profiles' older ones (a profile that holds it in both is in both counts). Unused means both
+are zero.
 
 ### Concurrent saves
 

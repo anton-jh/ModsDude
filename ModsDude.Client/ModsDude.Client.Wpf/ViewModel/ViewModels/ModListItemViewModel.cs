@@ -199,6 +199,43 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [ObservableProperty]
     private bool _movesPin;
 
+
+    /// <summary>
+    /// Set by the page that wants usage on the row - which is the repo's own list, and nothing else:
+    /// in the profile editor the question is what this draft pins, and a count of the repo's other
+    /// profiles beside it would answer one nobody asked.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showUsage;
+
+    /// <summary>
+    /// How many profiles use this version, in the words a row has room for: current ones first, then
+    /// how many more reach it only through an older revision. Null for a version the repo does not
+    /// hold, which nothing can pin.
+    /// </summary>
+    public string? UsageText => Mod.Usage is not ModUsage usage
+        ? null
+        : usage switch
+        {
+            { IsUnused: true } => "Not used",
+            { CurrentProfiles: 0 } => $"Older revisions of {Plural(usage.PastProfiles, "profile")}",
+            { PastProfiles: 0 } => Plural(usage.CurrentProfiles, "profile"),
+            _ => $"{Plural(usage.CurrentProfiles, "profile")} · {usage.PastProfiles} in older revisions"
+        };
+
+    public string? UsageTooltip => Mod.Usage is ModUsage usage
+        ? $"Profiles whose newest revision uses this version: {usage.CurrentProfiles}.\n"
+            + $"Profiles with an older revision that uses it: {usage.PastProfiles}.\n"
+            + "A profile that has used it throughout is in both. A version any revision uses cannot be deleted."
+        : null;
+
+    public bool HasUsage => ShowUsage && UsageText is not null;
+
+    partial void OnShowUsageChanged(bool value)
+        => OnPropertyChanged(nameof(HasUsage));
+
+    private static string Plural(int count, string noun)
+        => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
     public bool HasSources => string.IsNullOrWhiteSpace(Sources) is false;
 
     public bool HasActions => Actions is not null;

@@ -525,7 +525,7 @@ without a second endpoint that can only express one shape of change.
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
 | GET | `repos/{repoId}/mods` | Guest | Paginated **and** delta. See below |
-| GET | `repos/{repoId}/mods/usage` | Guest | Which registered versions the repo's profiles pin, and how many. Paginated |
+| GET | `repos/{repoId}/mods/usage` | Guest | Which registered versions the repo's profiles pin, and how many - profiles whose newest revision pins it, and profiles with an older revision that does. Paginated |
 | GET | `repos/{repoId}/mods/{modId}/dependents` | Guest | Which profiles and revisions pin any version of a mod. Read after a delete is refused |
 | GET | `repos/{repoId}/mods/{modId}/versions/{versionId}/dependents` | Guest | The same for one version |
 | GET | `repos/{repoId}/mods/{modId}/versions` | Guest | One mod's versions, oldest first. Unpaged deliberately — bounded by how many releases one mod has had, not by the repo |

@@ -409,6 +409,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         // A registered version has nothing to say about presence, and there is no draft to pick from.
         item.Status = ModDisplayStatus.None;
         item.IsSelectable = false;
+        item.ShowUsage = true;
         item.Actions = _rowActions;
 
         return item;

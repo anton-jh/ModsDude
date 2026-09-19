@@ -122,6 +122,24 @@
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                    Style="{DynamicResource CaptionTextBlockStyle}"
                                    Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <!-- Where the sources go on the lists that have them. The repo's own list has
+                             no sources to name and this is what it has instead, so the two never
+                             share a row. -->
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Margin="8 2 0 0"
+                                   MaxWidth="260"
+                                   Text="{Binding UsageText}"
+                                   ToolTip="{Binding UsageTooltip}"
+                                   ToolTipService.InitialShowDelay="400"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   TextAlignment="Right"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                   Visibility="{Binding HasUsage, Converter={StaticResource BoolToVisibilityConverter}}" />
                     </Grid>
 
                     <!-- The adapter's determination, not a setting: it is re-derived from every

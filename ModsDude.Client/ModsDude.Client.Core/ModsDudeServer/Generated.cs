@@ -9142,8 +9142,11 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("versionId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string VersionId { get; set; } = default!;
 
-        [Newtonsoft.Json.JsonProperty("profileCount", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public int ProfileCount { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("currentProfileCount", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int CurrentProfileCount { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("pastProfileCount", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int PastProfileCount { get; set; } = default!;
 
     }
 

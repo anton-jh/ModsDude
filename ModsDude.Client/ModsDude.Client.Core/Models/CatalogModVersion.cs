@@ -91,8 +91,8 @@ public record CatalogModVersion(
     public int? SequenceNumber { get; init; }
 
     /// <summary>
-    /// How many of the repo's profiles pin this version. Null for a version the repo does not hold,
-    /// which has no dependency that could name it.
+    /// How many of the repo's profiles pin this version, in their newest revision and in an older one.
+    /// Null for a version the repo does not hold, which has no dependency that could name it.
     /// </summary>
     /// <remarks>
     /// Comes from the server rather than from whichever profiles this client happens to have loaded:
@@ -100,10 +100,10 @@ public record CatalogModVersion(
     /// version a teammate's profile just picked up. Advisory even so - the delete endpoints re-ask
     /// the database at the moment it matters. See docs/09-mod-catalog.md#manage.
     /// </remarks>
-    public int? UsedByProfiles { get; init; }
+    public ModUsage? Usage { get; init; }
 
     /// <summary>Registered, and nothing in the repo depends on it - so a delete would be accepted.</summary>
-    public bool IsUnused => IsOnServer && UsedByProfiles is 0;
+    public bool IsUnused => IsOnServer && Usage is { IsUnused: true };
 
     /// <summary>
     /// A cheap warning that this version's sources may disagree: they hold files of different sizes,
@@ -152,6 +152,16 @@ public record CatalogModVersion(
     public ModFileName? FileName => HasSourceConflict || FoundIn.FirstOrDefault() is not ModOccurrence source
         ? null
         : ModFileName.ForFile(ModId, source.FilePath);
+}
+
+/// <summary>
+/// How many of a repo's profiles pin one registered version: those whose newest revision does, and
+/// those with an older revision that does. A profile that has held it all along is in both.
+/// </summary>
+public readonly record struct ModUsage(int CurrentProfiles, int PastProfiles)
+{
+    /// <summary>Nothing pins it in any revision, which is the only state a delete is accepted in.</summary>
+    public bool IsUnused => CurrentProfiles == 0 && PastProfiles == 0;
 }
 
 /// <summary>One source's copy of a version, and the file it found there.</summary>

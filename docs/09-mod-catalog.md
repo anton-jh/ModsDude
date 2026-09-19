@@ -739,6 +739,11 @@ Two things this needed, and both now exist:
   acting on it — acting on a partial view is the hazard the endpoint exists to remove. It is
   advisory in any case; the delete endpoints re-ask the database when it matters, and the
   dependency foreign key refuses underneath them.
+
+  **Two counts per row**, `currentProfileCount` and `pastProfileCount`: the profiles whose *newest*
+  revision pins the version, and the profiles that have an *older* revision pinning it. A profile that
+  holds a version in both is in both. Each is distinct profiles rather than revisions. The Mods page
+  shows them on the row; "unused" is both being zero.
 - **There was no delete endpoint**, and the per-version delete refuses the last version, so
   "remove whole mod" needed its own path rather than a loop of version deletes. Both exist, and
   both delete the blob as well as the row — the database commit first, since a stranded blob is

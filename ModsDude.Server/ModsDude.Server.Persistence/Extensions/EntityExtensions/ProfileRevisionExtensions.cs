@@ -286,7 +286,8 @@ public static class ProfileRevisionExtensions
     }
 
     /// <summary>
-    /// How many of the repo's profiles pin each version, for the versions at least one of them pins.
+    /// How many of the repo's profiles pin each version, split by whether the pin is in the profile's
+    /// newest revision or in an older one, for the versions at least one of them pins.
     /// Ordered by <c>(ModId, VersionId)</c> and windowed, because a repo's dependency rows are its
     /// profile count times its revision count times its profile sizes - thousands of mods each - and
     /// nothing that renders a catalog may issue a query without a bound.
@@ -297,13 +298,26 @@ public static class ProfileRevisionExtensions
     /// result is proportional to what is actually used rather than to the size of the catalog.
     /// </para>
     /// <para>
-    /// A profile that pinned a version in ten revisions counts once, which is what the
-    /// <c>Distinct</c> is for - but it does count, whether or not its <em>current</em> revision
-    /// still pins it. The number exists to tell somebody whether a delete will be refused, and a
-    /// version any revision holds is a version the foreign key will not let go of.
+    /// <b>Two counts, because they answer two questions.</b> <see cref="ModVersionUsage.CurrentProfileCount"/>
+    /// is the profiles whose <em>newest</em> revision pins the version - what people are running now.
+    /// <see cref="ModVersionUsage.PastProfileCount"/> is the profiles with an <em>older</em> revision
+    /// that pins it, whether or not the newest still does, so a profile that has held a version all
+    /// along is in both. Neither is a count of revisions: a profile that pinned a version in ten
+    /// older revisions counts once, which is what the <c>Distinct</c> is for.
+    /// </para>
+    /// <para>
+    /// A version is unused when both are zero, and only then. A version an older revision holds is a
+    /// version the foreign key will not let go of, so reporting it as unused would offer a delete that
+    /// is certain to be refused.
     /// </para>
     /// </remarks>
-    public static Task<List<ModVersionUsage>> GetModUsageAsync(this DbSet<ProfileRevision> dbSet, RepoId repoId, int skip, int take, CancellationToken cancellationToken)
+    public static Task<List<ModVersionUsage>> GetModUsageAsync(
+        this DbSet<ProfileRevision> dbSet,
+        DbSet<Profile> profiles,
+        RepoId repoId,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
     {
         return dbSet
             .Where(x => x.RepoId == repoId)
@@ -313,14 +327,21 @@ public static class ProfileRevisionExtensions
                 {
                     revision.ProfileId,
                     dependency.ModVersion.ModId,
-                    VersionId = dependency.ModVersion.Id
+                    VersionId = dependency.ModVersion.Id,
+                    IsNewest = profiles.Any(profile => profile.RepoId == revision.RepoId
+                        && profile.Id == revision.ProfileId
+                        && profile.HeadRevision == revision.Number)
                 })
             .Distinct()
             .GroupBy(x => new { x.ModId, x.VersionId })
             // A strongly-typed id has no comparison the provider can translate, so the window is an
             // offset rather than the keyset tuple the ordering would otherwise allow.
             .OrderBy(x => x.Key.ModId).ThenBy(x => x.Key.VersionId)
-            .Select(x => new ModVersionUsage(x.Key.ModId, x.Key.VersionId, x.Count()))
+            .Select(x => new ModVersionUsage(
+                x.Key.ModId,
+                x.Key.VersionId,
+                x.Count(row => row.IsNewest),
+                x.Count(row => row.IsNewest == false)))
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);
@@ -357,11 +378,11 @@ public record ProfileRevisionRow(
 
 
 /// <summary>
-/// One registered version and how many of its repo's profiles pin it. A count rather than the
-/// profiles themselves: the row is read for a whole catalog at once, and what the Manage page needs
-/// of it is whether the number is zero.
+/// One registered version and how many of its repo's profiles pin it, in their newest revision and in an
+/// older one. Counts rather than the profiles themselves: the row is read for a whole catalog at once,
+/// and what the Mods page needs of it is the numbers, and whether both are zero.
 /// </summary>
-public record ModVersionUsage(ModId ModId, ModVersionId VersionId, int ProfileCount);
+public record ModVersionUsage(ModId ModId, ModVersionId VersionId, int CurrentProfileCount, int PastProfileCount);
 
 
 /// <summary>One revision that pins a mod, and which version of it.</summary>
