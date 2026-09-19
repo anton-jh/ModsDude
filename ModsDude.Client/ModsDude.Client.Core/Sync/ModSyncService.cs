@@ -451,6 +451,15 @@ public sealed class ModSyncService(
     {
         var path = item.InstalledPath!;
 
+        // The user's own choice comes first, where they made one. A folder that then cannot be written
+        // to - a drive that went away between the dialog and the work - falls through to the bin rather
+        // than leaving the file where it blocks the install: they asked for the file to be kept, and
+        // the bin keeps it.
+        if (plan.QuarantineFolder is string chosen && TryMoveInto(chosen, path, out var moved))
+        {
+            return new QuarantinedFile(item.ModId, path, QuarantineDestination.ChosenFolder) { Path = moved };
+        }
+
         if (recycleBin.IsAvailableFor(path) && recycleBin.TryRecycle(path))
         {
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.RecycleBin);
@@ -476,6 +485,32 @@ public sealed class ModSyncService(
             logger.LogWarning(exception, "Could not displace {File} for {Mod}; leaving it where it is.", path, item.ModId.Value);
 
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.Failed);
+        }
+    }
+
+    /// <summary>
+    /// Moves a file into a folder the user named, under a name that does not overwrite anything already
+    /// there - a second mod of the same file name from a later apply must not replace the first.
+    /// </summary>
+    private bool TryMoveInto(string folder, string path, out string destination)
+    {
+        destination = string.Empty;
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            destination = FileSystemHelper.GetUnusedPath(folder, Path.GetFileName(path));
+
+            File.Move(path, destination);
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not move {File} into the chosen folder {Folder}.", path, folder);
+
+            return false;
         }
     }
 

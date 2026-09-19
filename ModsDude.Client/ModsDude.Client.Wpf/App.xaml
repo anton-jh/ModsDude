@@ -133,6 +133,9 @@
             <DataTemplate DataType="{x:Type vm:RenameModalViewModel}">
                 <uc:RenameDialog />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:UnrecognisedFilesModalViewModel}">
+                <uc:UnrecognisedFilesDialog />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ProfileSaveAsModalViewModel}">
                 <uc:ProfileSaveAsDialog />
             </DataTemplate>

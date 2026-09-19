@@ -183,6 +183,13 @@ public sealed record ModSyncPlan
     /// <summary>Files in the mod folder the adapter does not recognise as mods. Never touched, recorded so drift does not report them.</summary>
     public required IReadOnlyList<string> UnmanagedFileNames { get; init; }
 
+    /// <summary>
+    /// Where files the repo cannot reproduce go instead of the Recycle Bin, when the user asked for that.
+    /// Null - the ordinary case - leaves them to the bin. Set on the plan after it has been shown,
+    /// because it is the user's answer to the confirmation and the plan is made before it is asked.
+    /// </summary>
+    public string? QuarantineFolder { get; init; }
+
     /// <summary>What the serving store still has to fetch, by hash. Sized before the destructive phase, not during it.</summary>
     public required IReadOnlyList<string> HashesToFetch { get; init; }
 
@@ -266,6 +273,9 @@ public sealed record ModSyncProgress(ModSyncPhase Phase, int Completed, int Tota
 public enum QuarantineDestination
 {
     RecycleBin,
+
+    /// <summary>The folder the user chose to have them moved to instead of the Recycle Bin.</summary>
+    ChosenFolder,
 
     /// <summary>Where the Recycle Bin was unavailable - a drive with it turned off, a network path.</summary>
     QuarantineFolder,

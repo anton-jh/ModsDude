@@ -41,4 +41,32 @@ public static class FileSystemHelper
     {
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToLowerInvariant();
     }
+
+    /// <summary>
+    /// A path in <paramref name="folder"/> for <paramref name="fileName"/> that nothing is using: the name as
+    /// given where it is free, and otherwise with a counter before the extension - <c>mod (2).zip</c>, the
+    /// way Explorer does it, so that a move never overwrites what a previous one put there.
+    /// </summary>
+    public static string GetUnusedPath(string folder, string fileName)
+    {
+        var candidate = Path.Combine(folder, fileName);
+
+        if (File.Exists(candidate) is false && Directory.Exists(candidate) is false)
+        {
+            return candidate;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+
+        for (var counter = 2; ; counter++)
+        {
+            candidate = Path.Combine(folder, $"{stem} ({counter}){extension}");
+
+            if (File.Exists(candidate) is false && Directory.Exists(candidate) is false)
+            {
+                return candidate;
+            }
+        }
+    }
 }

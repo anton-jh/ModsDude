@@ -521,6 +521,15 @@ unrecognised, show a dialog listing the affected mods by name, stating plainly w
 going, and requiring explicit confirmation. Sync silently eating an unrecognised mod is the
 one failure that would make the tool untrustworthy.
 
+**The user chooses where they go.** The Recycle Bin is the default, and the dialog
+(`UnrecognisedFilesModalViewModel`) offers a folder of their own instead - for somebody who does not
+want to dig through the bin for a mod they mean to hand to a teammate. The answer is part of the
+consent, so it is put on every folder's plan (`ModSyncPlan.QuarantineFolder`) after the plans were
+made, and `ModSyncService.Quarantine` tries it first. A file already in that folder is never
+overwritten (`mod (2).zip`, the way Explorer does it), and a folder that cannot be written to falls
+back to the bin rather than leaving the file where it blocks the install: they asked for the file to be
+kept, and the bin keeps it. The last folder chosen is remembered for the session, not persisted.
+
 ### Execution order
 
 1. Populate the serving store with everything this profile needs that it lacks — from another

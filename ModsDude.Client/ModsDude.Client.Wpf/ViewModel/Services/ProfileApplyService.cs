@@ -121,9 +121,17 @@ public sealed class ProfileApplyService(
     GameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
+    IDialogService dialogs,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases)
 {
+    /// <summary>
+    /// The folder the user last chose to keep unrecognised files in, so the second apply of a session
+    /// starts where the first ended. Not persisted: it is a convenience for one sitting, and a folder
+    /// somebody picked last week is not a standing instruction.
+    /// </summary>
+    private string? _lastQuarantineFolder;
+
     /// <summary>
     /// Works out what would change, one plan per folder the game reaches.
     /// </summary>
@@ -359,9 +367,18 @@ public sealed class ProfileApplyService(
 
         // Once, across every folder. Declining is one answer about one gesture, which is what stops
         // an activation being half-consented-to.
-        if (await ConsentedAsync(game, plans, confirmPlan) is false)
+        var consent = await ConsentedAsync(game, plans, confirmPlan);
+
+        if (consent.Given is false)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+        }
+
+        // Where the unrecognised files go is part of the answer, and the plans were made before it was
+        // asked - so it is put on them here, for every folder, rather than asked of each.
+        if (consent.QuarantineFolder is string keepIn)
+        {
+            plans = [.. plans.Select(x => x with { QuarantineFolder = keepIn })];
         }
 
         // Before the work, and only after every way of saying no has been offered. Everything below
@@ -389,21 +406,36 @@ public sealed class ProfileApplyService(
     /// always - the files nothing else on the machine has a copy of. The second is asked even where
     /// the caller waived the first, because it is the only interruption a re-apply is ever worth.
     /// </remarks>
-    private async Task<bool> ConsentedAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool confirmPlan)
+    private async Task<Consent> ConsentedAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool confirmPlan)
     {
         var work = plans.Where(x => x.HasWork).ToList();
 
         if (work.Count == 0)
         {
-            return true;
+            return Consent.Yes;
         }
 
         if (confirmPlan && await ConfirmPlanAsync(game, work) is false)
         {
-            return false;
+            return Consent.No;
         }
 
-        return work.Any(x => x.Unrecognised.Count > 0) is false || await ConfirmUnrecognisedAsync(work);
+        if (work.Any(x => x.Unrecognised.Count > 0) is false)
+        {
+            return Consent.Yes;
+        }
+
+        return await ConfirmUnrecognisedAsync(work) is UnrecognisedFilesChoice choice
+            ? new Consent(true, choice.Folder)
+            : Consent.No;
+    }
+
+    /// <param name="Given">Whether the user agreed to go ahead.</param>
+    /// <param name="QuarantineFolder">Where they asked for unrecognised files to go instead of the Recycle Bin, if they did.</param>
+    private sealed record Consent(bool Given, string? QuarantineFolder)
+    {
+        public static Consent Yes { get; } = new(true, null);
+        public static Consent No { get; } = new(false, null);
     }
 
     /// <summary>
@@ -618,7 +650,7 @@ public sealed class ProfileApplyService(
         if (plan.InstallCount > 0) lines.Add($"{plan.InstallCount} to install");
         if (plan.ReplaceCount > 0) lines.Add($"{plan.ReplaceCount} to replace");
         if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
-        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin");
+        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin or a folder you choose");
         if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
 
         return $"{plan.ModFolder}\n\n{string.Join('\n', lines)}\n{plan.KeepCount} already correct.";
@@ -633,25 +665,31 @@ public sealed class ProfileApplyService(
     /// no less unrecoverable for being in the second folder. Named across all of them; the counts
     /// are the sum.
     /// </param>
-    public async Task<bool> ConfirmUnrecognisedAsync(IReadOnlyList<ModSyncPlan> plans)
+    /// <returns>
+    /// Where to put them, or null where the user backed out. Which of the two answers is in the choice
+    /// itself - a null <see cref="UnrecognisedFilesChoice.Folder"/> is the Recycle Bin.
+    /// </returns>
+    public async Task<UnrecognisedFilesChoice?> ConfirmUnrecognisedAsync(IReadOnlyList<ModSyncPlan> plans)
     {
         var unrecognised = plans.SelectMany(x => x.Unrecognised).ToList();
 
-        var names = unrecognised.Take(10).Select(x => $"  {x.DisplayName}");
-        var more = unrecognised.Count > 10 ? $"\n  ...and {unrecognised.Count - 10} more" : "";
-
-        var modal = new ConfirmationDialogViewModel(
-            "These are not in the repo",
-            $"{unrecognised.Count} installed files are not registered in this repo, so nothing else has a copy of them:\n\n" +
-            $"{string.Join('\n', names)}{more}\n\n" +
-            "They will be moved to the Windows Recycle Bin, where you can restore them. Nothing is deleted.",
-            IconKind.Warning,
-            "Apply the profile",
-            "Cancel");
+        var modal = new UnrecognisedFilesModalViewModel(
+            [.. unrecognised.Select(x => $"  {x.DisplayName}")],
+            dialogs,
+            _lastQuarantineFolder);
 
         await modalService.Value.Show(modal);
 
-        return modal.Result;
+        if (modal.Result is not UnrecognisedFilesChoice choice)
+        {
+            return null;
+        }
+
+        // Only a folder is remembered: choosing the bin is the default and needs no memory, and one
+        // apply going to the bin should not forget where the last one was sent.
+        _lastQuarantineFolder = choice.Folder ?? _lastQuarantineFolder;
+
+        return choice;
     }
 
 

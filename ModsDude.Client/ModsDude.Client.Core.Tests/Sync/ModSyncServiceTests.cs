@@ -238,6 +238,63 @@ public class ModSyncServiceTests
     }
 
     [Fact]
+    public async Task A_file_the_user_asked_to_keep_in_a_folder_goes_there_instead_of_the_recycle_bin()
+    {
+        using var fixture = new SyncFixture();
+        using var chosen = new TempDirectory("sync-chosen");
+        fixture.Install("fs25_mine.zip", Mod("1.0.0", "the user's own file"));
+
+        var plan = await fixture.PlanAsync();
+        var result = await fixture.ExecuteAsync(plan with { QuarantineFolder = chosen.Path });
+
+        var quarantined = Assert.Single(result.Quarantined);
+
+        Assert.Equal(QuarantineDestination.ChosenFolder, quarantined.Destination);
+        Assert.Equal(chosen.Combine("fs25_mine.zip"), quarantined.Path);
+        Assert.Equal(Mod("1.0.0", "the user's own file"), File.ReadAllText(chosen.Combine("fs25_mine.zip")));
+        Assert.False(File.Exists(fixture.Folder.Combine("fs25_mine.zip")));
+        Assert.Empty(fixture.RecycleBin.Recycled);
+    }
+
+    /// <summary>
+    /// The same folder is likely to be used again, and a later apply moving a mod of the same file name
+    /// must not replace the one an earlier apply put there.
+    /// </summary>
+    [Fact]
+    public async Task A_file_already_in_the_chosen_folder_is_not_overwritten()
+    {
+        using var fixture = new SyncFixture();
+        using var chosen = new TempDirectory("sync-chosen");
+        chosen.WriteFile("fs25_mine.zip", "an earlier one");
+        fixture.Install("fs25_mine.zip", Mod("1.0.0", "the user's own file"));
+
+        var result = await fixture.ExecuteAsync((await fixture.PlanAsync()) with { QuarantineFolder = chosen.Path });
+
+        Assert.Equal(chosen.Combine("fs25_mine (2).zip"), Assert.Single(result.Quarantined).Path);
+        Assert.Equal("an earlier one", File.ReadAllText(chosen.Combine("fs25_mine.zip")));
+        Assert.Equal(Mod("1.0.0", "the user's own file"), File.ReadAllText(chosen.Combine("fs25_mine (2).zip")));
+    }
+
+    /// <summary>
+    /// The user asked for the file to be kept, not for it to stay in the way of the install - a folder
+    /// that has gone away since the dialog leaves the bin, which keeps it too.
+    /// </summary>
+    [Fact]
+    public async Task A_chosen_folder_that_cannot_be_written_falls_back_to_the_recycle_bin()
+    {
+        using var fixture = new SyncFixture();
+        using var chosen = new TempDirectory("sync-chosen");
+        var blocker = chosen.WriteFile("not-a-folder", "a file where the folder's parent should be");
+        fixture.Install("fs25_mine.zip", Mod("1.0.0", "the user's own file"));
+
+        var result = await fixture.ExecuteAsync(
+            (await fixture.PlanAsync()) with { QuarantineFolder = System.IO.Path.Combine(blocker, "kept") });
+
+        Assert.Equal(QuarantineDestination.RecycleBin, Assert.Single(result.Quarantined).Destination);
+        Assert.Equal([Mod("1.0.0", "the user's own file")], fixture.RecycleBin.Recycled);
+    }
+
+    [Fact]
     public async Task Where_the_recycle_bin_is_unavailable_the_file_is_moved_to_quarantine_instead()
     {
         using var fixture = new SyncFixture(recycleBinAvailable: false);
