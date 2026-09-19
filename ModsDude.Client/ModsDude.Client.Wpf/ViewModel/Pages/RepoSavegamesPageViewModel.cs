@@ -64,6 +64,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private readonly Dictionary<(Guid ProfileId, int From, int To), bool> _lockedDrift = [];
 
+    private const string _unseenProfileName = "A profile you cannot see";
+
     private IReadOnlyList<SavegameDto> _fetched = [];
     private string? _currentUserId;
 
@@ -762,11 +764,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // parses of it.
         var host = ReadHost();
 
-        foreach (var savegame in shown.OrderBy(x => x.Name, NaturalOrder.Comparer))
+        foreach (var savegame in InListOrder(shown))
         {
             var row = new SavegameListItemViewModel(
                 savegame,
-                FindProfile(savegame.ProfileId)?.Name ?? "A profile you cannot see",
+                FindProfile(savegame.ProfileId)?.Name ?? _unseenProfileName,
                 _currentUserId,
                 IsMember,
                 ambiguous.Contains(savegame.Checkout?.User.Id ?? ""));
@@ -796,6 +798,24 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         _ = AnnotateAsync([.. Savegames]);
     }
+
+    /// <summary>
+    /// A profile's savegames together, its current one first and the past ones under it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Grouped by profile rather than sorted by name</b>, because a past savegame is only meaningful
+    /// beside the one that displaced it. Past ones run most recently displaced first - the one you
+    /// were playing before this is the one you are likeliest to be looking for - and savegames that
+    /// follow no mod list have no group to sit in, so they come last.
+    /// </remarks>
+    private IEnumerable<SavegameDto> InListOrder(IEnumerable<SavegameDto> savegames)
+        => savegames
+            .OrderBy(x => x.ProfileId is null)
+            .ThenBy(x => FindProfile(x.ProfileId)?.Name ?? _unseenProfileName, NaturalOrder.Comparer)
+            .ThenBy(x => x.ProfileId)
+            .ThenBy(x => x.SupersededAt is not null)
+            .ThenByDescending(x => x.SupersededAt)
+            .ThenBy(x => x.Name, NaturalOrder.Comparer);
 
     private static string DescribeStatistics(SavegameStatistics statistics)
     {

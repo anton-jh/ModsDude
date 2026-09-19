@@ -258,7 +258,31 @@
 
                                     <!-- The inset the container no longer provides, and it clears the
                                          selection bar rather than sitting under it. -->
-                                    <Grid Margin="12 10" ColumnDefinitions="auto * auto">
+                                    <Grid ColumnDefinitions="auto * auto">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Setter Property="Margin" Value="12 10" />
+                                                <Style.Triggers>
+                                                    <!-- A past savegame hangs under its profile's current one. -->
+                                                    <DataTrigger Binding="{Binding IsPast}" Value="True">
+                                                        <Setter Property="Margin" Value="36 10 12 10" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+
+                                        <!-- The elbow that says "under the row above": a line down from the
+                                             row's top edge to the title, then across. Drawn into the row's
+                                             own margin, so the past row's content is what moves right and the
+                                             connector needs no column of its own. -->
+                                        <Border Grid.ColumnSpan="3"
+                                                Width="14" Height="24"
+                                                Margin="-22 -10 0 0"
+                                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                CornerRadius="0 0 0 5"
+                                                BorderThickness="1.5 0 0 1.5"
+                                                BorderBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                                Visibility="{Binding IsPast, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                         <StackPanel Grid.Column="0"
                                                     Orientation="Horizontal"
@@ -287,7 +311,21 @@
                                             </Border>
                                         </StackPanel>
 
+                                        <!-- Past rows are dimmed as well as indented: the profile has moved on
+                                             from them, so they should recede behind the one it is following.
+                                             Only this column - the buttons stay at full strength, because a
+                                             past savegame is still playable. -->
                                         <StackPanel Grid.Column="1">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPast}" Value="True">
+                                                            <Setter Property="Opacity" Value="0.7" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+
                                             <TextBlock Text="{Binding Name}"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -360,7 +398,9 @@
                                              mods, so the apply that makes the folder right is its own
                                              button with its own dialog. Neither of the first two is offered to a guest -
                                              a control leading to a refusal is worse than one never
-                                             offered - and each carries its own reason when disabled.
+                                             offered - and each carries its own reason when disabled. Apply profile
+                                             is not one of them: it writes nothing anybody else can see, and a guest
+                                             taking a copy wants the mod folder on the list it was played on.
 
                                              An accent primary and three ordinary buttons, which is the
                                              pairing the snapshot footer already uses. Not SubtleMenuButton:
@@ -431,8 +471,7 @@
                                                     Content="Apply profile"
                                                     HorizontalAlignment="Stretch"
                                                     ToolTip="{Binding ApplyToolTip}"
-                                                    Command="{Binding ApplyProfileCommand}"
-                                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                    Command="{Binding ApplyProfileCommand}" />
 
                                             <Button Margin="0 4 0 0"
                                                     Content="Take a copy"

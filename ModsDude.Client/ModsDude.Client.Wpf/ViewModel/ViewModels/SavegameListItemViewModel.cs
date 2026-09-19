@@ -148,13 +148,25 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool HasProfile => Savegame.ProfileId is not null;
 
     /// <summary>
+    /// Whether this is the savegame its profile is following right now: the opposite of
+    /// <see cref="IsPast"/>, for a savegame that has a profile to be current in.
+    /// </summary>
+    public bool IsCurrent => HasProfile && IsPast is false;
+
+    /// <summary>
     /// Whether taking the claim is on offer here and now: Member, and nothing about this machine in
     /// the way. <see cref="CheckOutBlockedReason"/> is the half that says why not.
     /// </summary>
     public bool CanCheckOut => IsMember && _offer?.CanCheckOut is true;
 
-    /// <summary>Whether putting the mod folder on this savegame's list is on offer. Member, like check-out.</summary>
-    public bool CanApplyProfile => IsMember && _offer?.CanApply is true;
+    /// <summary>
+    /// Whether putting the mod folder on this savegame's list is on offer.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not gated on membership.</b> It writes nothing anybody else can see, and a guest who can take a
+    /// copy has every reason to want the mod folder on the list that copy was played on.
+    /// </remarks>
+    public bool CanApplyProfile => _offer?.CanApply is true;
 
     /// <summary>
     /// Whether this savegame can be put back in its profile's current slot.
@@ -279,7 +291,13 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// acting on. Applying is the way out of it, so its own refusal is only worth a line where it is
     /// the one that differs - which is a savegame following no mod list, where there is nothing to apply.
     /// </summary>
-    public string? BlockedReason => CheckOutBlockedReason ?? ApplyBlockedReason;
+    /// <remarks>
+    /// A guest is never offered check-out, so its refusal is not what they are acting on - and "Apply X
+    /// first" beside a button they do not have is a line about nothing they can do.
+    /// </remarks>
+    public string? BlockedReason => IsMember
+        ? CheckOutBlockedReason ?? ApplyBlockedReason
+        : ApplyBlockedReason;
 
     public bool IsBlocked => BlockedReason is not null;
 
@@ -576,17 +594,22 @@ public partial class SavegameListItemViewModel : ObservableObject
         Chips.Clear();
         Chips.Add(BuildStateChip());
 
-        // Current is the unmarked default, so only the exception carries one of these. Both are
-        // Neutral and neither is ever Caution: which savegame a profile is following, and whether a savegame
-        // follows one at all, are facts rather than problems - and spending the loud tone on them is
-        // what teaches people to ignore it where it does mean a damaged save.
+        // Current and past are both said, because the list groups a profile's savegames together and
+        // which one is which has to read at a glance. All three are Neutral and none is ever Caution:
+        // which savegame a profile is following, and whether a savegame follows one at all, are facts
+        // rather than problems - and spending the loud tone on them is what teaches people to ignore it
+        // where it does mean a damaged save.
         if (IsPast)
         {
             Chips.Add(new SavegameChip(
                 PinnedRevision is int revision ? $"Past · {ProfileName} rev {revision}" : $"Past · {ProfileName}",
                 SavegameChipTone.Neutral));
         }
-        else if (HasProfile is false)
+        else if (HasProfile)
+        {
+            Chips.Add(new SavegameChip("Current", SavegameChipTone.Neutral));
+        }
+        else
         {
             Chips.Add(new SavegameChip("No mod list", SavegameChipTone.Neutral));
         }

@@ -590,10 +590,14 @@ with either.
 
 ### Savegames list
 
-Current is the unmarked default. Only the exception carries a chip.
+The list is grouped by profile, in profile-name order, with savegames that follow no mod list last.
+Inside a profile its current savegame comes first and the past ones hang under it, most recently
+displaced first. A past row is also indented behind an elbow connector and dimmed - its buttons are
+not, since a past savegame is still playable - so which is which reads before any chip is read.
 
 | State | Chip | Tone |
 | --- | --- | --- |
+| Current | `Current` | Neutral |
 | Past | `Past · Old-school rev 4` | Neutral |
 | No profile | `No mod list` | Neutral |
 | Held by you | existing | Accent |
@@ -619,6 +623,11 @@ clears that one; the folder being elsewhere is the thing it is *for*. Its own ca
 mod list: *This save follows no mod list*. It names the revision it would install, so the apply a past
 savegame needs is the apply that runs — letting the game decide resolves to head, which is correct
 for a current savegame and wrong for the one this button exists to prepare for.
+
+**Apply profile is open to a Guest.** It writes nothing anybody else can see, and a guest who can
+take a copy wants the mod folder on the list that copy was played on. Check out stays Member, so a
+guest's row carries only the reason for Apply - "Apply X first" beside a button they do not have
+would be a line about nothing they can do.
 
 **There is nothing to choose between.** A game is keyed by its identity and a repo is about one
 game, so both buttons act on the one this repo offers, and the last row is the absence of it rather
