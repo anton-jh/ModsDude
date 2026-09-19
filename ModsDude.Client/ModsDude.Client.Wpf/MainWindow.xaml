@@ -39,12 +39,16 @@
              bottom corner both report something that has already happened and both offer a way to
              deal with it, so this one is somewhere else on purpose. It survives navigation - an
              import queued on one page is still visible from another - which is the half a page's own
-             progress cannot do. Nothing to dismiss: it goes when the work does. -->
+             progress cannot do. Nothing to dismiss: it goes when the work does.
+
+             A fixed width rather than one sized to its text: the widest line is a subtask name or a
+             phase, both of which change every few seconds, and a strip that follows them breathes.
+             Long lines trim instead. -->
         <Border Grid.Column="0"
                 DataContext="{Binding BackgroundTasks}"
                 Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
                 HorizontalAlignment="Center" VerticalAlignment="Top"
-                MinWidth="360" MaxWidth="560"
+                Width="520"
                 Margin="0 4 0 0"
                 Padding="16 10"
                 CornerRadius="6"
@@ -60,6 +64,7 @@
                 <Grid ColumnDefinitions="* auto auto">
                     <TextBlock Grid.Column="0"
                                Text="{Binding Title}"
+                               ToolTip="{Binding Title}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center"
