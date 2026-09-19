@@ -315,11 +315,10 @@ MainWindow
 Saves and Manage, reached through an entry titled with the game's own name — see [the game is not a
 place](#the-game-is-not-a-place).
 
-`RepoModsPage` used to be a shell over Import and Manage. They were sibling pages showing
-overlapping data under different rules, which is the main thing about that area that confused;
-they are now one page laid out like the profile mod editor - what the sources hold on the left,
-what the repo holds on the right, and importing as the move between them rather than a separate
-destination. See [09 — Mod catalog](09-mod-catalog.md#manage).
+`RepoModsPage` used to be a shell over Import and Manage, and then one page with both. It is now
+just the repo's own list - search, an *unused* filter, and per-row reorder and delete - because
+importing happens where a mod is chosen for a profile, in the mod list editor. See
+[09 — Mod catalog](09-mod-catalog.md#manage).
 
 **The profile list belongs to `RepoPageViewModel`**, so it only appears once a repo is selected
 and everything in it is scoped to that repo — and therefore to its adapter. Only one repo's menu
@@ -671,20 +670,11 @@ code, so the pages keep their own checks and the server remains the only authori
 | Profile → **Manage** | Member |
 
 **Part of a page → the control is disabled, the page stays open.** Only `RepoModsPage`: every
-read on it is Guest-level, so browsing, searching and filtering all work, and just Import,
-Reorder versions, Delete version and Delete mod are refused. `CanModify` drives their
+read on it is Guest-level, so browsing, searching and filtering all work, and just Reorder
+versions, Delete version and Delete mod are refused. `CanModify` drives their
 `CanExecute`, and `ModifyRestriction` is the tooltip — carried to the row menu through
 `ModRowActions.Restriction`, since that template is shared.
 
-The **sources** are the exception that is hidden rather than disabled: sources exist to feed an
-import and nothing else, so for a guest they would be controls serving one refused action. Their
-chip row sits in the left column with the list it feeds, and the whole column is collapsed for a
-guest, which gives the space to the repo's own list rather than leaving a hole.
-
-The list itself is filtered to the repo's own mods for a guest — the floor is in `Passes`, not in
-a chip, so "All" means all of the repo's — and the **On disk only** chip is hidden, since it
-would select a list that is now always empty. An unregistered file on a guest's disk is only ever
-interesting as something to import, which they cannot do.
 
 ### Saving is one request, and one revision
 
@@ -941,7 +931,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
-| `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
+| `RepoModsPage` | Working | The repo's mods as one list: search, an "unused only" filter, per-row reorder and delete. Nothing is imported here - that is the profile mod list editor's job. Browsing is open to a guest; the writing actions are refused with a reason |
 | `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's snapshots and claims on the right. Check out, take a copy, check in, **discard**, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it. A held row also says which of the game's folders holds the copy, and offers **Stop tracking** where the settings no longer name that folder |
 | `ConnectGamePage` | Working | The local settings form and nothing else. Refuses a game already connected here, and a folder another game owns |
 | `GameSettingsPage` | Working | *Game configuration* in the repo's menu: this machine's folders for the game, and disconnecting it. The only page a local installation has |

@@ -123,7 +123,7 @@ the grouping that the lookup above now does on demand. `LocalMod` keeps its name
 genuinely is "what was found on disk".
 
 `ModStatus` was split. It mixed fact (`AlreadyInRepo`) with context-dependent
-judgment (`New`, `UpdateAvailable`), and "New" means different things on the management page than
+judgment (`New`, `UpdateAvailable`), and "New" meant different things on the old management page than
 in the profile editor. The facts are the two bools on `CatalogModVersion`; `ModDisplayStatus` is
 computed per context from them.
 
@@ -428,8 +428,8 @@ anything.
 ## Mod sources
 
 A mod does not only arrive via the game's mod folder. It is at least as common for it to be
-sitting in Downloads, freshly fetched from wherever the group gets mods. The import surfaces —
-Manage and the profile editor — scan a **set of sources**, not a fixed folder.
+sitting in Downloads, freshly fetched from wherever the group gets mods. The import surface —
+the profile editor — scans a **set of sources**, not a fixed folder.
 
 ### Standing sources
 
@@ -701,51 +701,25 @@ registered versions per repo.
 
 ### Manage
 
-**Import was merged into Manage.** They were sibling menu items under `RepoModsPage`
-showing overlapping data under different rules, which was the main thing about that area that
-confused. Same rows, same templates, one service.
+**Manage no longer imports.** It was once Import and Manage as sibling menu items, then one page
+laid out like the profile editor - what the sources held on the left, what the repo held on the
+right, and importing as the move between them. That left the repo's own list with a job to do
+(reorder, delete, find out what is unused) sharing a page with a second job that already has a home:
+the profile mod list editor registers whatever its draft pins that the repo does not hold, as part of
+[Save](#import-on-save). So the page is **one list, the repo's**, with no source chips, no left
+column and no bar of import buttons. It reads the repo and nothing else - `ModCatalog` is built with
+no source switched on, so opening it never touches a disk.
 
-**It is laid out like the profile mod editor**, and for the same reason: both pages are one act —
-deciding what a collection should hold, then writing it. Two lists. On the left, what the enabled
-sources hold and the repo does not; directly above it, the [source chips](#the-source-chips) — the
-game's own folders, Downloads, anything the user adds for the session — so the set of local
-candidates is adjustable in place rather than being a fixed consequence of where the game is. On
-the right, what the repo holds, plus whatever has been lined up to join it.
+**Its one filter is *Unused*.** Presence is no longer a question (everything on the page is
+registered), and the rest is what the search box is for. *Unused* is the one thing the list cannot
+draw and a delete needs.
 
-A mod is **never on both sides at once**, and the row that moves rightwards is the same row object,
-so its icon and its per-row import marks come with it. Presence is therefore which list a row is in
-rather than a chip on it, which is why the filter chips are gone — all but *Unused*, which the
-lists cannot draw and a delete needs.
+**A guest reads the same list**, and Reorder versions, Delete version and Delete mod are refused
+with a reason - see [the permission rules](05-client.md#what-a-level-closes-and-how-it-says-so).
 
-**The bulk moves sit under the list they read**, not in the bar at the bottom of the page: what "add
-all shown" takes is what is on screen above it, and the search is how a subset of it is picked. The
-bar keeps the two actions that write — Import, and the discard that throws the queue away.
-
-Beside it, **"add N updates"** — the versions the repo's own ordering places after everything it
-holds of that mod, which is the errand this page exists for and is otherwise picking six rows out of
-a folder of five hundred. The count is on the button because that is the only place it would be
-acted on, and those rows carry the existing `UpdateAvailable` chip so the count is findable. It
-ignores the search: an update is a fact about the repo, not about the view.
-
-It is a **split button**, like the editor's save. Behind the caret: *add N unregistered versions* —
-every version the repo lacks of every mod it holds, including ones older than its newest and ones
-the comparer could not place. That is a real thing to want (a profile can pin any version, and a
-repo missing the one a teammate is on cannot be joined) but not the daily errand, so it costs the
-extra click. Neutral chrome rather than the editor's accent: the accent on this page belongs to
-Import. The caret carries **its own** enabled condition rather than following the primary, unlike
-the editor's — there can be older versions to add when there is not a single update, which is
-exactly when the menu is worth opening.
-
-**Nothing is uploaded until Import**, exactly as nothing is uploaded until Save in the editor. That
-is what makes taking a mod back free, and what the discard confirmation says rather than warns. What a run did not finish stays queued and marked, so the
-button is also the retry, and the summary keeps the per-row results on screen until the user asks
-for a fresh list.
-
-**The right list is ordered by what wants an answer**, not alphabetically: failed, then skipped,
-then still-queued, then what the repo already held. The top of a two thousand row list is the only
-part anyone reads after an import, and a failure buried at "S" is a failure nobody sees. It is
-ordered when the list is *built* and never live — rows changing rank mid-import would reshuffle the
-list under the pointer watching it — so the import re-sorts exactly once, when it is over.
+**Ordered by name, then by the repo's own version order** - the arbitrated `SequenceNumber`, never
+one re-derived from the version strings. A second opinion here would be free to disagree with the
+one the whole repo shares.
 
 Two things this needed, and both now exist:
 
@@ -802,8 +776,7 @@ what keeps a rescan able to take a deleted file back out of it.
 header, because a mod is only ever on one side: a box that reached only the left list answered
 half the question, and the half it could not answer was "is this already in the profile?".
 `ProfileModRowViewModel.Matches` delegates to its `Item`, so both sides answer the same question
-the same way and the answer follows the version selector. Same shape as Manage, which has the
-same two lists and the same question.
+the same way and the answer follows the version selector. 
 
 Each header then reads **"N of M mods"** while a search is narrowing it — a count that only ever
 said "412 mods" could not distinguish a search that found nothing from an empty list. The right
@@ -952,7 +925,7 @@ the set somebody assembled across several searches is theirs and splitting it wo
 labelling it honestly. Locked pins are left alone and counted, exactly as the batch update leaves
 them.
 
-**Both lists lead with what the draft has done to them.** On the right, the same ranking as Manage:
+**Both lists lead with what the draft has done to them.** On the right, the same ranking the old Manage page used:
 what could not be imported, then what is still pending, then the rest. On the left, mods this draft
 has *taken out* of the profile — they are back on the left looking exactly like a mod that was never
 in it, so they get a **"Taken out" chip**, the counterpart of the pending-import chip on the other
@@ -1336,7 +1309,7 @@ as metadata in the same commit.
 
 ## A note on "update available"
 
-On the management page, "this local version is not registered yet" is the right
+On the old management page, "this local version is not registered yet" was the right
 definition, and it needs no version-string parsing at all — a local version either has a server
 counterpart or it does not.
 
@@ -1366,7 +1339,7 @@ Two rules keep that from becoming a guess:
   one is worse than saying nothing. The pairs the comparer abstained on are therefore kept beside
   the order rather than discarded, which is what makes the question answerable at all.
 
-This is the same rule the management page's `IsUpdate` applies against the repo's own newest,
+This is the same rule the old management page applied against the repo's own newest,
 arrived at from the other end.
 
 **An abstention against the repo's newest is not nothing, though — it is a question of its own.**

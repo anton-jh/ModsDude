@@ -99,9 +99,11 @@ savegame held, for however many folders the adapter reaches.
 
 ## Importing mods from an installed game
 
-Repo → **Mods**. This is the most performance-sensitive path in the app.
+Profile → **Mods** (the editor). This is the most performance-sensitive path in the app. Nothing is
+imported from Repo → **Mods**, which only lists what the repo already holds; a mod reaches the repo
+when a profile that pins it is saved.
 
-1. `RepoModsPageViewModel` builds a repo-scoped `ModCatalog`, which resolves `IBaseModAdapter`
+1. `ProfileModsEditorPageViewModel` builds a repo-scoped `ModCatalog`, which resolves `IBaseModAdapter`
    from the repo's adapter and throws a user-friendly error if the game does not support mods.
 2. **Nothing is scanned until a source is switched on.** Sources start off every time — the set is
    never persisted — so opening the page reads the repo's mod list and no disk at all; switch a
@@ -127,9 +129,10 @@ Repo → **Mods**. This is the most performance-sensitive path in the app.
 7. As rows scroll into view, `LazyLoad` calls `LoadAsync`, which pulls the icon through
    `ModImagerySource` — the server's derivatives for a registered version, the archive for an
    unregistered candidate — and then `ModImageProvider`'s memory and disk caches.
-8. Select rows individually or via Select all / Select none, which operate on the *visible*
+8. Rows are moved into the profile individually or in bulk, which operates on the *visible*
    (filtered) set.
-9. Import runs `ModImportService` over the selection, with per-row phase and progress.
+9. Save runs `ModImportService` over the versions the draft pins that the repo does not hold, with
+   per-row phase and progress.
 
 Navigating away cancels the scan, and `OnInitFailed` swallows the resulting
 `OperationCanceledException`.
