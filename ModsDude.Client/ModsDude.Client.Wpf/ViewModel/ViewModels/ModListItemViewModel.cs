@@ -174,7 +174,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
     [NotifyPropertyChangedFor(nameof(IsUpdateRow))]
-    [NotifyPropertyChangedFor(nameof(IsDowngradeRow))]
     private ModDisplayStatus _status = ModDisplayStatus.None;
 
     /// <summary>
@@ -195,12 +194,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// chip and the button cannot disagree.
     /// </summary>
     public bool IsUpdateRow => Status is ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending;
-
-    /// <summary>
-    /// Whether this row's button would move the pin back to an older version. Which of the two arrows it
-    /// carries, and derived from the status for the same reason <see cref="IsUpdateRow"/> is.
-    /// </summary>
-    public bool IsDowngradeRow => Status is ModDisplayStatus.Downgrade;
 
     /// <summary>
     /// Whether pressing this row's button moves a pin the profile already has rather than adding a
@@ -274,7 +267,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         // which of the two it is is what the colour carries.
         ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
         ModDisplayStatus.NewVersion => "New version",
-        ModDisplayStatus.Downgrade => "Downgrade",
         ModDisplayStatus.AlreadyInRepo => "In repo",
         ModDisplayStatus.PendingRemoval => "Taken out",
         _ => string.Empty

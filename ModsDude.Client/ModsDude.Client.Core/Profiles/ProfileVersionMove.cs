@@ -14,10 +14,10 @@ public enum ProfileVersionMove
     /// <summary>A later version of one it holds.</summary>
     Update,
 
-    /// <summary>An earlier version of one it holds.</summary>
-    Downgrade,
-
-    /// <summary>A version the ordering will not place against the pin, in either direction.</summary>
+    /// <summary>
+    /// Any other version of one it holds: an earlier one, or one the ordering will not place against the
+    /// pin. Only a later version is an update, and only where the order says so.
+    /// </summary>
     Move,
 
     /// <summary>
@@ -76,8 +76,6 @@ public static class ProfileVersionMoves
             return ProfileVersionMove.Update;
         }
 
-        return set?.IsAfter(pinned, chosen) is true
-            ? ProfileVersionMove.Downgrade
-            : ProfileVersionMove.Move;
+        return ProfileVersionMove.Move;
     }
 }

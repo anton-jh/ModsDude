@@ -210,6 +210,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private Dictionary<ModKey, ModVersionKey> _pinnedVersions = [];
 
     /// <summary>
+    /// The mods this draft has moved to a version before the one the profile held when it was read. The
+    /// user chose that, so the left list does not offer the way back as though it were an update - see
+    /// <see cref="FindDowngraded"/>.
+    /// </summary>
+    private HashSet<ModKey> _downgraded = [];
+
+    /// <summary>
     /// Mods the profile still holds on the server and this draft does not - taken out, and waiting
     /// for a save to write that. They are back on the left, which is where they would be if they had
     /// never been in the profile at all, so the sort is what tells the two apart. Keyed to the pin
@@ -974,7 +981,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
                     pinned[chosen.ModId] = Pinned[^1];
                 }
-                else if (kind is ProfileVersionMove.Update or ProfileVersionMove.Downgrade or ProfileVersionMove.Move)
+                else if (kind is ProfileVersionMove.Update or ProfileVersionMove.Move)
                 {
                     pinned[row.ModId].SetVersion(row.SelectedVersion.Version.VersionId);
                 }
@@ -987,16 +994,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>How a selection sorts into <see cref="ProfileVersionMove"/>s, which is what its button says.</summary>
-    private readonly record struct MoveCounts(int Adds, int Updates, int Downgrades, int Moves, int Locked)
+    private readonly record struct MoveCounts(int Adds, int Updates, int Moves, int Locked)
     {
         /// <summary>Everything the button would actually do. Locked rows are counted apart: they will not move.</summary>
-        public int Movable => Adds + Updates + Downgrades + Moves;
+        public int Movable => Adds + Updates + Moves;
 
         public MoveCounts With(ProfileVersionMove kind) => kind switch
         {
             ProfileVersionMove.Add => this with { Adds = Adds + 1 },
             ProfileVersionMove.Update => this with { Updates = Updates + 1 },
-            ProfileVersionMove.Downgrade => this with { Downgrades = Downgrades + 1 },
             ProfileVersionMove.Move => this with { Moves = Moves + 1 },
             ProfileVersionMove.Locked => this with { Locked = Locked + 1 },
             _ => this
@@ -1034,7 +1040,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var moved = counts.Movable == 0
             ? null
             : Sentence(
-                [("added", counts.Adds), ("updated", counts.Updates), ("downgraded", counts.Downgrades), ("moved", counts.Moves)],
+                [("added", counts.Adds), ("updated", counts.Updates), ("moved", counts.Moves)],
                 counts.Movable);
 
         return (moved, counts.Locked) switch
@@ -1059,7 +1065,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var text = counts.Movable == 0
             ? counts.Locked > 0 ? "Nothing to update" : "Add"
             : Sentence(
-                [("add", counts.Adds), ("update", counts.Updates), ("downgrade", counts.Downgrades), ("move", counts.Moves)],
+                [("add", counts.Adds), ("update", counts.Updates), ("move", counts.Moves)],
                 counts.Movable);
 
         return counts.Locked > 0 ? $"{text} ({counts.Locked} locked)" : text;
@@ -1067,7 +1073,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// The verbs that have something to do, in one phrase: <c>Add 3 mods</c> for one of them and
-    /// <c>Add 3, update 2 and downgrade 1</c> for several, its first word capitalised either way.
+    /// <c>Add 3, update 2 and move 1</c> for several, its first word capitalised either way.
     /// </summary>
     private static string Sentence(IReadOnlyList<(string Verb, int Count)> verbs, int total)
     {
@@ -3039,7 +3045,42 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool PassesExceptFilter(ProfileModRowViewModel row)
         => row.Matches(SearchText)
         && IsPinnedAt(row.SelectedVersion.Version) is false
+        && _downgraded.Contains(row.ModId) is false
         && (ShowRemovals || IsPendingRemoval(row) is false);
+
+    /// <summary>
+    /// Which pinned mods the user has explicitly moved backwards in this draft.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>An available update shows in both lists; a chosen downgrade shows in one.</b> A mod pinned below its
+    /// newest version is an update on the left, and that is right for a pin that merely fell behind. Once
+    /// somebody has picked an older version on the right, offering the newer one again on the left is the
+    /// list arguing with them, so the mod stays on the right alone.
+    /// </para>
+    /// <para>
+    /// Measured against what the profile held when the page read it, so it lasts as long as the draft does:
+    /// saved, the older pin is the profile's and the newer version is an update again - which is what a
+    /// lock is for. Only where the order says so, like every other direction on this page: a version the
+    /// comparer will not place is not a downgrade.
+    /// </para>
+    /// </remarks>
+    private HashSet<ModKey> FindDowngraded()
+    {
+        var held = _original.ToDictionary(x => x.ModId, x => x.VersionId);
+        var downgraded = new HashSet<ModKey>();
+
+        foreach (var row in Pinned)
+        {
+            if (held.TryGetValue(row.ModId, out var was)
+                && _versionsByMod.GetValueOrDefault(row.ModId)?.IsAfter(was, row.SelectedVersion.Version.VersionId) is true)
+            {
+                downgraded.Add(row.ModId);
+            }
+        }
+
+        return downgraded;
+    }
 
     /// <summary>Whether the profile pins this mod at exactly this version.</summary>
     private bool IsPinnedAt(CatalogModVersion version)
@@ -3140,10 +3181,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// profile moves by taking it.
     /// </item>
     /// <item><b>Green <em>New</em></b> - a version the repo does not hold, with nothing else to say.</item>
-    /// <item>
-    /// <b>Neutral <em>Downgrade</em></b> - an earlier version of a mod this profile pins, so pressing the row's
-    /// button moves the pin backwards.
-    /// </item>
     /// </list>
     /// A version the ordering will not place is none of the update states: the walk is the same
     /// abstention rule the update planner applies, and for the same reason.
@@ -3166,11 +3203,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 return version.IsOnServer ? ModDisplayStatus.UpdateAvailable : ModDisplayStatus.UpdatePending;
             }
 
-            // The other direction, said as its own word: the row's button is the one an update uses, and
-            // a move that goes backwards should not look like every other row above it.
-            return set?.IsAfter(pinned, version.VersionId) is true
-                ? ModDisplayStatus.Downgrade
-                : version.GetImportStatus();
+            return version.GetImportStatus();
         }
 
         if (version.IsOnServer)
@@ -3441,6 +3474,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
         _pinnedVersions = Pinned.ToDictionary(x => x.ModId, x => x.SelectedVersion.Version.VersionId);
+        _downgraded = FindDowngraded();
         _pendingRemovals = _original
             .Where(x => _pinnedIds.Contains(x.ModId) is false)
             .ToDictionary(x => x.ModId);

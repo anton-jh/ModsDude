@@ -20,13 +20,12 @@ public class ProfileVersionMovesTests
     }
 
     /// <summary>
-    /// The row that used to say Update, or nothing at all: the same button as an update, over a move
-    /// that goes the other way.
+    /// Only a later version is an update, so pressing the button over an earlier one is a move.
     /// </summary>
     [Fact]
-    public void An_earlier_version_of_a_held_mod_is_a_downgrade()
+    public void An_earlier_version_of_a_held_mod_is_a_move_rather_than_an_update()
     {
-        Assert.Equal(ProfileVersionMove.Downgrade, Classify("1.0", held: "1.2"));
+        Assert.Equal(ProfileVersionMove.Move, Classify("1.0", held: "1.2"));
     }
 
     [Fact]
@@ -49,10 +48,10 @@ public class ProfileVersionMovesTests
 
     /// <summary>
     /// Two versions the comparer abstained on come out one after the other in a sorted order, and
-    /// calling that an update is how a possible downgrade gets offered as one.
+    /// calling that an update is how a move backwards gets offered as one.
     /// </summary>
     [Fact]
-    public void A_pair_the_comparer_could_not_place_is_neither_an_update_nor_a_downgrade()
+    public void A_pair_the_comparer_could_not_place_is_a_move_rather_than_an_update()
     {
         var set = new ModVersionSet(
             [Registered("map", "a", 0), Registered("map", "b", 1)],

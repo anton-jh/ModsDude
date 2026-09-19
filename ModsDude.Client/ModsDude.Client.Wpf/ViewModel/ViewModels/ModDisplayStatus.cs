@@ -47,14 +47,6 @@ public enum ModDisplayStatus
     /// </summary>
     NewVersion,
 
-    /// <summary>
-    /// An older version of a mod this profile pins, which pressing the row's button would move the pin
-    /// back to. Said as its own word because the button is the same one an update uses, and a row that
-    /// looks like every other row over a move that goes backwards is one people press by accident - a
-    /// downgrade is the one move here that can leave a savegame ahead of its mods.
-    /// </summary>
-    Downgrade,
-
     AlreadyInRepo,
 
     /// <summary>

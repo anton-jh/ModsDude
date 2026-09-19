@@ -514,13 +514,10 @@
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
 
-                                                    <!-- The arrow says which way the pin goes: up for an update,
-                                                         down for a downgrade, and the neutral glyph only for
-                                                         a version the ordering cannot place against the pin
-                                                         in either direction. The tooltip goes with it - an
-                                                         up arrow over a downgrade, or the same sentence over
-                                                         all three, is what made this a button people pressed
-                                                         without knowing which. -->
+                                                    <!-- The arrow says which way the pin goes: up for an update, and the
+                                                         neutral glyph for any other move. The tooltip goes with
+                                                         it, so an up arrow never sits over a move that is not
+                                                         an update. -->
                                                     <Button Margin="0 0 8 0"
                                                             Visibility="{Binding Item.MovesPin, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
@@ -533,10 +530,6 @@
                                                                     <DataTrigger Binding="{Binding Item.IsUpdateRow}" Value="True">
                                                                         <Setter Property="Content" Value="&#xE74A;" />
                                                                         <Setter Property="ToolTip" Value="Update this profile's pin to this version" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding Item.IsDowngradeRow}" Value="True">
-                                                                        <Setter Property="Content" Value="&#xE74B;" />
-                                                                        <Setter Property="ToolTip" Value="Downgrade this profile's pin to this version" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>

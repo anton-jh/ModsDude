@@ -871,7 +871,6 @@ true of one entry in the dropdown and not of the mod as a whole.
 | **Update** | green | The same, for a version only on disk. Saving imports it. |
 | **New version** | green | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
 | **New** | green | A version the repo does not hold, with nothing else to say. |
-| **Downgrade** | neutral | An *earlier* version of a mod this profile pins, so the row's button moves the pin backwards. Neutral rather than a warning: it is an option the user is looking at, and the word is the whole of what it needs to say. Only where the order says so - a pair the comparer abstained on is neither an update nor a downgrade |
 | **Taken out** | caution | This draft has removed the mod, whatever version is currently selected — removal outranks everything above, since a removed mod is not pinned and nothing is an update to it. |
 
 Green is "saving uploads a file", which is what three of the first four have in common; the accent is
@@ -943,7 +942,7 @@ one that was there.
 
 **Adding and upgrading stay apart.** Now that an update row is on the left, *Add all shown new* and
 the count on it exclude those rows: a bulk add that silently moved pins would be a different act
-under the same label. A mixed *selection* does both, and says so — **"Add 12, update 3 and downgrade 1"** — since
+under the same label. A mixed *selection* does both, and says so — **"Add 12, update 3 and move 1"** — since
 the set somebody assembled across several searches is theirs and splitting it would be worse than
 labelling it honestly. Locked pins are left alone and counted, exactly as the batch update leaves
 them.
@@ -952,13 +951,20 @@ them.
 selection, so the button names it - **"Update 2 mods (1 locked)"** - and a selection of nothing but
 locked pins reads **"Nothing to update (2 locked)"** and is *disabled*, with a tooltip saying how
 to move one on purpose. It used to be an enabled "Update 1 mod" that did nothing and reported it
-afterwards. What each row would do is `ProfileVersionMoves.Classify` - add, update, downgrade, an
-unplaceable move, locked, or already there - and the glyph, the chip, the bar's wording and the
-command all read it.
+afterwards. What each row would do is `ProfileVersionMoves.Classify` - add, update, any
+other move (an earlier version, or one the order will not place), locked, or already there - and the
+bar's wording, the glyph and the command all read it. Adding is never blocked by a lock, so a selection
+of adds and locked pins still has something to do and reads **"Add 3 mods (2 locked)"**.
 
-The row's button carries the direction: up for an update, down for a downgrade, and the neutral
-glyph only for a version the ordering cannot place against the pin. The profile-side update button on
-the right list is the same up arrow, not the refresh glyph it had.
+The row's button is the up arrow for an update and the neutral glyph for any other move. The
+profile-side update button on the right list is the same up arrow, not the refresh glyph it had.
+
+**A chosen downgrade stays on the right.** A mod pinned below its newest version is an update on the
+left as well as the right - that is right for a pin that merely fell behind. Once the user has picked
+an *older* version on the right, offering the newer one back on the left is the list arguing with them,
+so the mod is left out of the left list (`FindDowngraded`). It is measured against what the profile
+held when the page read it, so it lasts as long as the draft: once saved, the older pin is the
+profile's and the newer version is an update again, which is what a lock is for.
 
 **Both lists lead with what the draft has done to them.** On the right, the same ranking the old Manage page used:
 what could not be imported, then what is still pending, then the rest. On the left, mods this draft

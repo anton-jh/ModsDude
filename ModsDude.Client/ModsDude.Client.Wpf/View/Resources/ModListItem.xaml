@@ -236,12 +236,6 @@
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
-                                    <!-- Neutral rather than a warning colour: the row is an option the user is
-                                         looking at, and the word is the whole of what it needs to say. -->
-                                    <DataTrigger Binding="{Binding Status}" Value="Downgrade">
-                                        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
