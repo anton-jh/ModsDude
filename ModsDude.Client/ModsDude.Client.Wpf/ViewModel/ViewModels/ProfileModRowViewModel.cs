@@ -34,6 +34,13 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly Func<ProfileModRowViewModel, ProfileModVersionOption, Task<bool>> _confirmLockedChange;
 
+    /// <summary>
+    /// Whether this is a row of the profile's own list. Only what its shared row draws depends on it: the
+    /// pinned list has a lock toggle that says what holds the pin, so it leaves the adapter's padlock to
+    /// the available list.
+    /// </summary>
+    private readonly bool _isPinned;
+
     private ProfileModVersionOption _selectedVersion;
     private IReadOnlyList<ProfileModVersionOption> _versions;
 
@@ -52,12 +59,14 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         bool lockedByProfile,
         ModListItemViewModel.Factory itemFactory,
         Func<ProfileModRowViewModel, ProfileModVersionOption, Task<bool>> confirmLockedChange,
-        ModVersionSet? set = null)
+        ModVersionSet? set = null,
+        bool isPinned = false)
     {
         _repoId = repoId;
         _itemFactory = itemFactory;
         _confirmLockedChange = confirmLockedChange;
         _set = set;
+        _isPinned = isPinned;
 
         ModId = selected.ModId;
         Name = selected.Name;
@@ -384,6 +393,7 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         // sides.
         item.IsSelectable = true;
         item.IsSelected = selected;
+        item.ShowAdapterLock = _isPinned is false;
 
         item.PropertyChanged += OnItemChanged;
 

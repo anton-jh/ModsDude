@@ -164,7 +164,7 @@
                                FontFamily="{DynamicResource SymbolThemeFontFamily}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                ToolTip="Version-sensitive. Batch updates leave this mod alone."
-                               Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibilityConverter}}" />
+                               Visibility="{Binding ShowsAdapterLockIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <!-- Shares one slot between two facts that both mean "this row will ask you
                          something at save": a source conflict, and a version the ordering could not
@@ -235,6 +235,12 @@
                                     <DataTrigger Binding="{Binding Status}" Value="PendingRemoval">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                    </DataTrigger>
+                                    <!-- Neutral rather than a warning colour: the row is an option the user is
+                                         looking at, and the word is the whole of what it needs to say. -->
+                                    <DataTrigger Binding="{Binding Status}" Value="Downgrade">
+                                        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />

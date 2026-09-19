@@ -136,6 +136,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>
+    /// Whether the row draws the adapter's own lock - "version-sensitive", a fact about the mod. Off on the
+    /// editor's right-hand list, whose lock toggle already says what holds the pin and would otherwise sit
+    /// a few pixels from a second, identical padlock that means something else.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsAdapterLockIcon))]
+    private bool _showAdapterLock = true;
+
+    /// <summary>Whether the row draws the padlock: the mod is version-sensitive, and the page wants it said here.</summary>
+    public bool ShowsAdapterLockIcon => IsLocked && ShowAdapterLock;
+
     /// <summary>Set to false where the list is for browsing rather than picking.</summary>
     [ObservableProperty]
     private bool _isSelectable = true;
@@ -162,6 +174,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
     [NotifyPropertyChangedFor(nameof(IsUpdateRow))]
+    [NotifyPropertyChangedFor(nameof(IsDowngradeRow))]
     private ModDisplayStatus _status = ModDisplayStatus.None;
 
     /// <summary>
@@ -182,6 +195,12 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// chip and the button cannot disagree.
     /// </summary>
     public bool IsUpdateRow => Status is ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending;
+
+    /// <summary>
+    /// Whether this row's button would move the pin back to an older version. Which of the two arrows it
+    /// carries, and derived from the status for the same reason <see cref="IsUpdateRow"/> is.
+    /// </summary>
+    public bool IsDowngradeRow => Status is ModDisplayStatus.Downgrade;
 
     /// <summary>
     /// Whether pressing this row's button moves a pin the profile already has rather than adding a
@@ -255,6 +274,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         // which of the two it is is what the colour carries.
         ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
         ModDisplayStatus.NewVersion => "New version",
+        ModDisplayStatus.Downgrade => "Downgrade",
         ModDisplayStatus.AlreadyInRepo => "In repo",
         ModDisplayStatus.PendingRemoval => "Taken out",
         _ => string.Empty

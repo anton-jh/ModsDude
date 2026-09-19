@@ -514,22 +514,29 @@
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
 
-                                                    <!-- ⬆ only where the move genuinely goes up; a pin
-                                                         move in any other direction gets the neutral
-                                                         glyph, since the tooltip is the same sentence
-                                                         either way and an up arrow over a downgrade
-                                                         is not. -->
+                                                    <!-- The arrow says which way the pin goes: up for an update,
+                                                         down for a downgrade, and the neutral glyph only for
+                                                         a version the ordering cannot place against the pin
+                                                         in either direction. The tooltip goes with it - an
+                                                         up arrow over a downgrade, or the same sentence over
+                                                         all three, is what made this a button people pressed
+                                                         without knowing which. -->
                                                     <Button Margin="0 0 8 0"
-                                                            ToolTip="Move this profile's pin to this version"
                                                             Visibility="{Binding Item.MovesPin, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}">
                                                         <Button.Style>
                                                             <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
                                                                 <Setter Property="Content" Value="&#xE72C;" />
+                                                                <Setter Property="ToolTip" Value="Move this profile's pin to this version" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding Item.IsUpdateRow}" Value="True">
                                                                         <Setter Property="Content" Value="&#xE74A;" />
+                                                                        <Setter Property="ToolTip" Value="Update this profile's pin to this version" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Item.IsDowngradeRow}" Value="True">
+                                                                        <Setter Property="Content" Value="&#xE74B;" />
+                                                                        <Setter Property="ToolTip" Value="Downgrade this profile's pin to this version" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -562,6 +569,8 @@
                                             HorizontalAlignment="Stretch"
                                             Style="{DynamicResource AccentButtonStyle}"
                                             Content="{Binding AvailableSelection.ActionText}"
+                                            ToolTip="Mods whose pin is locked are left where they are. Unlock one on the right, or move it there, to change it."
+                                            ToolTipService.ShowOnDisabled="True"
                                             Command="{Binding AddSelectedCommand}" />
                                     <Button Grid.Column="1"
                                             Margin="8 0 0 0"
@@ -832,7 +841,7 @@
                                                     </Border>
 
                                                     <Button Style="{DynamicResource SubtleIconButton}"
-                                                            Content="&#xE777;"
+                                                            Content="&#xE74A;"
                                                             ToolTip="{Binding UpdateTooltip}"
                                                             Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding DataContext.UpdateOneCommand, RelativeSource={RelativeSource AncestorType=Page}}"
@@ -849,10 +858,34 @@
                                                               IsEnabled="{Binding HasSeveralVersions}"
                                                               ToolTip="Which version this profile pins" />
 
-                                                    <ToggleButton Style="{DynamicResource SubtleIconToggleButton}"
-                                                                  Content="&#xE72E;"
-                                                                  ToolTip="{Binding LockTooltip}"
-                                                                  IsChecked="{Binding LockedByProfile, Mode=TwoWay}" />
+                                                    <!-- The one lock on this row, and it says what holds the pin
+                                                         rather than only what the user set: an open padlock
+                                                         while nothing does, a closed one while something
+                                                         does, and the accent on it while the game adapter
+                                                         is what does - the toggle can only ever set the
+                                                         user's own lock, so a padlock in the accent is one
+                                                         that unticking will not release. The shared row's
+                                                         own padlock is off on this list, because it drew
+                                                         the same glyph for the adapter's lock a few pixels
+                                                         to the left of this one and the two were read as
+                                                         one thing. -->
+                                                    <ToggleButton ToolTip="{Binding LockTooltip}"
+                                                                  IsChecked="{Binding LockedByProfile, Mode=TwoWay}">
+                                                        <ToggleButton.Style>
+                                                            <Style TargetType="ToggleButton" BasedOn="{StaticResource SubtleIconToggleButton}">
+                                                                <Setter Property="Content" Value="&#xE785;" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                                                        <Setter Property="Content" Value="&#xE72E;" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding LockedByAdapter}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ToggleButton.Style>
+                                                    </ToggleButton>
 
                                                     <Button Margin="0 0 8 0"
                                                             Style="{DynamicResource SubtleIconButton}"

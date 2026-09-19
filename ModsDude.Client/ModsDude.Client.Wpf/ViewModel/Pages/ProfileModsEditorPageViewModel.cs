@@ -913,8 +913,24 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private void ToggleRemovals() => ShowRemovals = ShowRemovals is false;
 
 
-    [RelayCommand(CanExecute = nameof(NotReadOnly))]
+    [RelayCommand(CanExecute = nameof(CanAddSelected))]
     private void AddSelected() => AddRows(AvailableSelection.Picked());
+
+    /// <summary>
+    /// Not while every picked row is a locked pin: the button would do nothing, and the bar says why.
+    /// A selection with anything else in it still moves that part and leaves the locked rows alone.
+    /// </summary>
+    private bool CanAddSelected()
+    {
+        if (NotReadOnly() is false)
+        {
+            return false;
+        }
+
+        var counts = CountMoves(AvailableSelection.Picked());
+
+        return counts.Movable > 0 || counts.Locked == 0;
+    }
 
     [RelayCommand(CanExecute = nameof(NotReadOnly))]
     private void RemoveSelected() => RemoveRows(PinnedSelection.Picked());
@@ -942,93 +958,132 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // A picked row may have been moved by its own button in the meantime, so the draft is
             // read once into a lookup rather than re-scanned per row.
             var pinned = Pinned.ToDictionary(x => x.ModId);
-            var added = 0;
-            var updated = 0;
-            var locked = 0;
+            var counts = new MoveCounts();
 
             foreach (var row in rows.OfType<ProfileModRowViewModel>())
             {
-                var chosen = row.SelectedVersion.Version;
+                var kind = Classify(row, pinned);
 
-                if (pinned.TryGetValue(chosen.ModId, out var existing) is false)
+                counts = counts.With(kind);
+
+                if (kind is ProfileVersionMove.Add)
                 {
+                    var chosen = row.SelectedVersion.Version;
+
                     Pin(row, chosen);
 
                     pinned[chosen.ModId] = Pinned[^1];
-                    added++;
                 }
-                else if (existing.SelectedVersion.Version.VersionId == chosen.VersionId)
+                else if (kind is ProfileVersionMove.Update or ProfileVersionMove.Downgrade or ProfileVersionMove.Move)
                 {
-                    // Nothing to do - the row is showing the very version the profile is on.
-                }
-                else if (existing.IsLocked)
-                {
-                    locked++;
-                }
-                else
-                {
-                    existing.SetVersion(chosen.VersionId);
-
-                    updated++;
+                    pinned[row.ModId].SetVersion(row.SelectedVersion.Version.VersionId);
                 }
 
                 row.IsSelected = false;
             }
 
-            return DescribeMoves(added, updated, locked);
+            return DescribeMoves(counts);
         });
     }
 
-    /// <summary>What a mixed bulk move turned out to do, or null for one that did nothing.</summary>
-    private static string? DescribeMoves(int added, int updated, int locked)
+    /// <summary>How a selection sorts into <see cref="ProfileVersionMove"/>s, which is what its button says.</summary>
+    private readonly record struct MoveCounts(int Adds, int Updates, int Downgrades, int Moves, int Locked)
     {
-        var text = (Describe("Added", added), Describe("Updated", updated)) switch
-        {
-            (null, null) => null,
-            (string adds, null) => adds,
-            (null, string updates) => updates,
-            (string adds, string updates) => $"{adds} and updated {updated}"
-        };
+        /// <summary>Everything the button would actually do. Locked rows are counted apart: they will not move.</summary>
+        public int Movable => Adds + Updates + Downgrades + Moves;
 
-        return (text, locked) switch
+        public MoveCounts With(ProfileVersionMove kind) => kind switch
+        {
+            ProfileVersionMove.Add => this with { Adds = Adds + 1 },
+            ProfileVersionMove.Update => this with { Updates = Updates + 1 },
+            ProfileVersionMove.Downgrade => this with { Downgrades = Downgrades + 1 },
+            ProfileVersionMove.Move => this with { Moves = Moves + 1 },
+            ProfileVersionMove.Locked => this with { Locked = Locked + 1 },
+            _ => this
+        };
+    }
+
+    private ProfileVersionMove Classify(ProfileModRowViewModel row, IReadOnlyDictionary<ModKey, ProfileModRowViewModel> pinned)
+    {
+        var chosen = row.SelectedVersion.Version;
+        var held = pinned.GetValueOrDefault(chosen.ModId);
+
+        return ProfileVersionMoves.Classify(
+            chosen.VersionId,
+            held?.SelectedVersion.Version.VersionId,
+            held?.IsLocked ?? false,
+            _versionsByMod.GetValueOrDefault(chosen.ModId));
+    }
+
+    private MoveCounts CountMoves(IReadOnlyList<ISelectableRow> rows)
+    {
+        var pinned = Pinned.ToDictionary(x => x.ModId);
+        var counts = new MoveCounts();
+
+        foreach (var row in rows.OfType<ProfileModRowViewModel>())
+        {
+            counts = counts.With(Classify(row, pinned));
+        }
+
+        return counts;
+    }
+
+    /// <summary>What a mixed bulk move turned out to do, or null for one that did nothing.</summary>
+    private static string? DescribeMoves(MoveCounts counts)
+    {
+        var moved = counts.Movable == 0
+            ? null
+            : Sentence(
+                [("added", counts.Adds), ("updated", counts.Updates), ("downgraded", counts.Downgrades), ("moved", counts.Moves)],
+                counts.Movable);
+
+        return (moved, counts.Locked) switch
         {
             (null, 0) => null,
             (null, var left) => $"Nothing moved - {Locked(left)}",
-            (var moved, 0) => moved,
-            (var moved, var left) => $"{moved}, {Locked(left)}"
+            (var text, 0) => text,
+            (var text, var left) => $"{text}, {Locked(left)}"
         };
     }
 
     /// <summary>
-    /// What the left list's selection bar says its button will do. Two verbs rather than one,
-    /// because a selection spanning both kinds of row does both - and "Add 15 mods" over a set that
-    /// would move three pins is a label that lies about what pressing it does.
+    /// What the left list's selection bar says its button will do. Every verb the selection spans,
+    /// because a selection that does several things and a label that names one of them is a label that
+    /// lies about what pressing it does - and what the profile would refuse is said beside it, so a
+    /// button that will not touch a locked mod says so before it is pressed rather than after.
     /// </summary>
     private string DescribeAdd(IReadOnlyList<ISelectableRow> picked)
     {
-        var adds = 0;
-        var updates = 0;
+        var counts = CountMoves(picked);
 
-        foreach (var row in picked.OfType<ProfileModRowViewModel>())
+        var text = counts.Movable == 0
+            ? counts.Locked > 0 ? "Nothing to update" : "Add"
+            : Sentence(
+                [("add", counts.Adds), ("update", counts.Updates), ("downgrade", counts.Downgrades), ("move", counts.Moves)],
+                counts.Movable);
+
+        return counts.Locked > 0 ? $"{text} ({counts.Locked} locked)" : text;
+    }
+
+    /// <summary>
+    /// The verbs that have something to do, in one phrase: <c>Add 3 mods</c> for one of them and
+    /// <c>Add 3, update 2 and downgrade 1</c> for several, its first word capitalised either way.
+    /// </summary>
+    private static string Sentence(IReadOnlyList<(string Verb, int Count)> verbs, int total)
+    {
+        var active = verbs.Where(x => x.Count > 0).ToList();
+
+        if (active.Count == 1)
         {
-            if (_pinnedIds.Contains(row.ModId))
-            {
-                updates++;
-            }
-            else
-            {
-                adds++;
-            }
+            return $"{Capitalised(active[0].Verb)} {(total == 1 ? "1 mod" : $"{total} mods")}";
         }
 
-        return (adds, updates) switch
-        {
-            (0, 0) => "Add",
-            (_, 0) => adds == 1 ? "Add 1 mod" : $"Add {adds} mods",
-            (0, _) => updates == 1 ? "Update 1 mod" : $"Update {updates} mods",
-            _ => $"Add {adds} and update {updates}"
-        };
+        var parts = active.Select(x => $"{x.Verb} {x.Count}").ToList();
+
+        return Capitalised($"{string.Join(", ", parts.Take(parts.Count - 1))} and {parts[^1]}");
     }
+
+    private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
 
     private void RemoveRows(IReadOnlyList<ISelectableRow> rows)
     {
@@ -2929,7 +2984,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             lockedByProfile,
             _itemFactory,
             ConfirmLockedVersionChangeAsync,
-            _versionsByMod.GetValueOrDefault(selected.ModId));
+            _versionsByMod.GetValueOrDefault(selected.ModId),
+            isPinned: true);
 
         row.PropertyChanged += OnPinnedRowChanged;
 
@@ -3084,6 +3140,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// profile moves by taking it.
     /// </item>
     /// <item><b>Green <em>New</em></b> - a version the repo does not hold, with nothing else to say.</item>
+    /// <item>
+    /// <b>Neutral <em>Downgrade</em></b> - an earlier version of a mod this profile pins, so pressing the row's
+    /// button moves the pin backwards.
+    /// </item>
     /// </list>
     /// A version the ordering will not place is none of the update states: the walk is the same
     /// abstention rule the update planner applies, and for the same reason.
@@ -3101,8 +3161,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (_pinnedVersions.TryGetValue(version.ModId, out var pinned))
         {
-            return set?.IsAfter(version.VersionId, pinned) is true
-                ? version.IsOnServer ? ModDisplayStatus.UpdateAvailable : ModDisplayStatus.UpdatePending
+            if (set?.IsAfter(version.VersionId, pinned) is true)
+            {
+                return version.IsOnServer ? ModDisplayStatus.UpdateAvailable : ModDisplayStatus.UpdatePending;
+            }
+
+            // The other direction, said as its own word: the row's button is the one an update uses, and
+            // a move that goes backwards should not look like every other row above it.
+            return set?.IsAfter(pinned, version.VersionId) is true
+                ? ModDisplayStatus.Downgrade
                 : version.GetImportStatus();
         }
 
