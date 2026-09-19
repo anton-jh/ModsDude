@@ -364,7 +364,7 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
 
 
     [Fact]
-    public async Task A_savegames_totals_are_its_snapshots_counted_and_summed()
+    public async Task A_savegames_totals_count_its_snapshots_and_sum_its_blobs()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var many = await GivenASavegame(repoId, profileId, "Many");
@@ -379,6 +379,25 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
 
         Assert.Equal(new SavegameSnapshotTotals(3, 3 * 1024), totals[many]);
         Assert.Equal(new SavegameSnapshotTotals(1, 1024), totals[few]);
+    }
+
+    /// <summary>
+    /// A restore copies an old snapshot forward under the hash it already had, and the blob is addressed
+    /// by that hash - so two snapshots, one blob. Storage holds it once, and so does the total.
+    /// </summary>
+    [Fact]
+    public async Task Snapshots_sharing_a_content_hash_are_one_blob_in_the_total()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegame(repoId, profileId, "Restored");
+
+        await GivenSnapshots(repoId, profileId, savegameId, HashOf('1'), HashOf('2'), HashOf('1'));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var totals = await dbContext.SavegameSnapshots.GetSnapshotTotalsAsync(repoId, CancellationToken.None);
+
+        Assert.Equal(new SavegameSnapshotTotals(3, 2 * 1024), totals[savegameId]);
     }
 
     [Fact]

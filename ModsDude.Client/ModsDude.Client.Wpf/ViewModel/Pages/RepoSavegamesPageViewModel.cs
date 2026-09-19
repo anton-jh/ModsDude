@@ -807,7 +807,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var saves = statistics.Savegames == 1 ? "1 savegame" : $"{statistics.Savegames:N0} savegames";
         var snapshots = statistics.Snapshots == 1 ? "1 snapshot" : $"{statistics.Snapshots:N0} snapshots";
 
-        return $"{saves} · {snapshots} · {ByteSize.Describe(statistics.TotalBytes)} in all";
+        return $"{saves} · {snapshots} · {ByteSize.Describe(statistics.TotalBytes)} stored";
     }
 
     private void ClearRows()

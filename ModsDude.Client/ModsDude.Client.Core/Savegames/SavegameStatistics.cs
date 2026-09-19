@@ -6,8 +6,8 @@ namespace ModsDude.Client.Core.Savegames;
 /// What a set of savegames adds up to: how many, how many snapshots they carry, and how many bytes.
 /// </summary>
 /// <param name="TotalBytes">
-/// Counted per snapshot, as the server reports it: snapshots that share a blob are counted twice. It is
-/// how much history the saves carry rather than what storage holds, and pruning is what brings it down.
+/// What storage holds for the saves, as the server reports it: counted per blob, so snapshots that share
+/// one are counted once. Pruning is what brings it down.
 /// </param>
 public sealed record SavegameStatistics(int Savegames, int Snapshots, long TotalBytes)
 {

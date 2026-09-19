@@ -362,11 +362,10 @@ public partial class SavegameListItemViewModel : ObservableObject
         : "No snapshots yet";
 
     /// <summary>
-    /// What the rest of the history adds up to, said only where there is more than the head: one snapshot's
-    /// size is already on the line, and repeating it as a total would be the same number twice.
+    /// What the rest of the history adds up to, said only where there is more than the head:     /// size is already on the line, and repeating it as a total would be the same number twice.
     /// </summary>
     private string History => Savegame.SnapshotCount > 1
-        ? $" · {Savegame.SnapshotCount} snapshots, {SavegameWording.Size(Savegame.TotalSizeBytes)} in all"
+        ? $" · {Savegame.SnapshotCount} snapshots, {SavegameWording.Size(Savegame.TotalSizeBytes)} stored"
         : "";
 
     /// <summary>

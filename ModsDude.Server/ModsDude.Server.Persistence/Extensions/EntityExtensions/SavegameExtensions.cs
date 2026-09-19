@@ -324,13 +324,15 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// How many snapshots each savegame has, and what they add up to - the repo's, or one savegame's.
-    /// A savegame with no snapshot is absent, which is the answer "nothing stored".
+    /// How many snapshots each savegame has, and how many bytes storage holds for them - the repo's, or
+    /// one savegame's. A savegame with no snapshot is absent, which is the answer "nothing stored".
     /// </summary>
     /// <remarks>
-    /// The sum of the snapshots' own sizes, not of the distinct blobs behind them: snapshots that share
-    /// a content hash share a blob, so what storage actually holds can be less. What a person is asking
-    /// is how much history a savegame carries, which is this, and it is what pruning reduces.
+    /// <b>Bytes are counted per blob, not per snapshot.</b> A snapshot's blob is addressed by
+    /// <c>(repo, savegame, content hash)</c>, so snapshots with the same hash are one blob: a restore
+    /// copies an old snapshot forward under the hash it already had, and a check-in that changed nothing
+    /// is free. Summing every snapshot's size would charge that blob once per snapshot pointing at it,
+    /// which is not what storage holds and not what pruning would free.
     /// </remarks>
     public static async Task<Dictionary<SavegameId, SavegameSnapshotTotals>> GetSnapshotTotalsAsync(
         this DbSet<SavegameSnapshot> dbSet,
@@ -338,14 +340,19 @@ public static class SavegameExtensions
         CancellationToken cancellationToken,
         SavegameId? savegameId = null)
     {
-        var rows = await dbSet
+        // One row per blob, with how many snapshots point at it. Grouped twice - by blob, then by
+        // savegame - because a provider cannot nest a distinct sum of a second column; the second pass is
+        // over a row per blob, which retention keeps to a handful per savegame.
+        var blobs = await dbSet
             .AsNoTracking()
             .Where(x => x.RepoId == repoId && (savegameId == null || x.SavegameId == savegameId))
-            .GroupBy(x => x.SavegameId)
-            .Select(x => new { SavegameId = x.Key, Count = x.Count(), Bytes = x.Sum(snapshot => snapshot.SizeBytes) })
+            .GroupBy(x => new { x.SavegameId, x.ContentHash })
+            .Select(x => new { x.Key.SavegameId, Snapshots = x.Count(), Bytes = x.Max(snapshot => snapshot.SizeBytes) })
             .ToListAsync(cancellationToken);
 
-        return rows.ToDictionary(x => x.SavegameId, x => new SavegameSnapshotTotals(x.Count, x.Bytes));
+        return blobs
+            .GroupBy(x => x.SavegameId)
+            .ToDictionary(x => x.Key, x => new SavegameSnapshotTotals(x.Sum(blob => blob.Snapshots), x.Sum(blob => blob.Bytes)));
     }
 
     /// <summary>
@@ -535,7 +542,7 @@ public record SavegameSnapshotRow(
 }
 
 
-/// <summary>What a savegame's snapshots come to: how many, and how many bytes.</summary>
+/// <summary>What a savegame's snapshots come to: how many, and how many bytes storage holds for them.</summary>
 public readonly record struct SavegameSnapshotTotals(int Count, long Bytes)
 {
     public static SavegameSnapshotTotals None => default;

@@ -581,7 +581,7 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/savegames` | Guest | Each carries its head snapshot and its open claim inline. Four queries flat, not one per row. Each also carries `snapshotCount` and `totalSizeBytes` - what its snapshots add up to, counted per snapshot - which the Saves page sums into a line under its title |
+| GET | `repos/{repoId}/savegames` | Guest | Each carries its head snapshot and its open claim inline. Four queries flat, not one per row. Each also carries `snapshotCount` and `totalSizeBytes` - how many snapshots it has and how many bytes storage holds for them (counted per blob: snapshots with the same content hash are one) - which the Saves page sums into a line under its title |
 | POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its snapshot 1, and a claim for the publisher. The profile is optional, and publishing to one supersedes whatever savegame it was following |
 | PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename. Nothing moves a savegame to another profile — see below |
 | POST | `repos/{repoId}/savegames/{savegameId}/makeCurrent` | Member | Points the profile back at this past savegame, superseding whatever held the slot. Answers with both |

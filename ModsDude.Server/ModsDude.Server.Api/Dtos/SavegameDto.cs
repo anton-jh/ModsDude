@@ -32,9 +32,8 @@ namespace ModsDude.Server.Api.Dtos;
 /// </param>
 /// <param name="SnapshotCount">How many snapshots the savegame has now - pruning is what takes it down.</param>
 /// <param name="TotalSizeBytes">
-/// What those snapshots add up to, counted per snapshot: two that share a blob are counted twice. It is how
-/// much history the save carries, which is what a page adding a repo's saves up is asking - not what
-/// storage holds, which is a fact about blobs.
+/// What storage holds for them, counted per blob: snapshots with the same content hash are one blob - a
+/// restore copies an old snapshot forward under the hash it already had - and are counted once.
 /// </param>
 public record SavegameDto(
     Guid Id,
