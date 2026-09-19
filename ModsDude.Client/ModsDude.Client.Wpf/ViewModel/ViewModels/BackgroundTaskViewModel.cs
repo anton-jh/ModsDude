@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Collections.ObjectModel;
@@ -109,6 +110,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasDetail))]
+    [NotifyPropertyChangedFor(nameof(HasStatusLine))]
     private string? _detail;
 
     /// <summary>
@@ -125,6 +127,16 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
     [ObservableProperty]
     private bool _isIndeterminate = true;
+
+    /// <summary>
+    /// "about 3 min left", for the task on screen once it has been watched long enough to guess. On
+    /// the task and not on its parts: a row's bytes are a fraction of a job whose other rows have not
+    /// started, so the only figure that means anything is for the whole.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRemaining))]
+    [NotifyPropertyChangedFor(nameof(HasStatusLine))]
+    private string? _remaining;
 
     /// <summary>"and 2 more taking a while", for the rows past <see cref="MaxRows"/>.</summary>
     [ObservableProperty]
@@ -170,6 +182,10 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     public ObservableCollection<BackgroundSubtaskViewModel> Subtasks { get; } = [];
 
     public bool HasDetail => string.IsNullOrWhiteSpace(Detail) is false;
+    public bool HasRemaining => Remaining is not null;
+
+    /// <summary>Whether the line under the title has anything on it, either side.</summary>
+    public bool HasStatusLine => HasDetail || HasRemaining;
     public bool HasLimit => Limit is not null;
     public bool HasMoreSubtasks => MoreSubtasks is not null;
 
@@ -374,6 +390,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         Title = snapshot.Title;
         Detail = Compose(snapshot);
         Limit = snapshot.Limit;
+        Remaining = snapshot.Remaining is { } left ? RemainingTimeEstimator.Describe(left) : null;
         IsIndeterminate = snapshot.Total <= 0;
         Progress = snapshot.Total > 0 ? Math.Clamp(snapshot.Completed * 100d / snapshot.Total, 0, 100) : 0;
 
@@ -436,6 +453,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
             Completed = shown.Completed,
             Total = shown.Total,
             Amount = shown.Amount,
+            Remaining = shown.Remaining,
             Running = shown.LiveSubtasks,
             Rows = rows,
             Hidden = hidden,
@@ -548,6 +566,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public long Completed { get; init; }
         public long Total { get; init; }
         public string? Amount { get; init; }
+        public TimeSpan? Remaining { get; init; }
         public int Running { get; init; }
         public IReadOnlyList<Row> Rows { get; init; }
         public int Hidden { get; init; }
@@ -565,6 +584,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         : IBackgroundTask
     {
         private readonly List<RunningSubtask> _subtasks = [];
+        private readonly RemainingTimeEstimator _remaining = new();
 
         private Action? _cancel = cancel;
 
@@ -575,6 +595,8 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public long Total { get; private set; }
         public string? Amount { get; private set; }
         public TransferDirection Transfers { get; private set; }
+
+        public TimeSpan? Remaining => _remaining.Remaining;
 
         public bool CanCancel => _cancel is not null;
 
@@ -609,6 +631,10 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
                 Completed = completed;
                 Total = total;
                 Amount = amount;
+
+                // The detail is the stage: a sync's phase and a savegame's step are each their own
+                // distance, so a new one is a new estimate rather than a bend in the old one.
+                _remaining.Observe(detail, completed, total);
             }
 
             owner.Publish();

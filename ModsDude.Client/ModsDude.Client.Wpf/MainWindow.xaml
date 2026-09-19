@@ -124,12 +124,24 @@
                             Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
 
-                <TextBlock Text="{Binding Detail}"
-                           Margin="0 2 0 0"
-                           TextTrimming="CharacterEllipsis"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <!-- What the task said on the left, and how long it reckons is left on the right. The
+                     estimate is its own column so a long detail trims instead of pushing it off. -->
+                <Grid ColumnDefinitions="* auto"
+                      Margin="0 2 0 0"
+                      Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Detail}"
+                               TextTrimming="CharacterEllipsis"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Remaining}"
+                               Margin="12 0 0 0"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Visibility="{Binding HasRemaining, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
 
                 <!-- Only for work that moves bytes while a speed limit is set, so a slow transfer
                      explains itself. Quieter than the detail above: it is why, not what. -->
@@ -140,7 +152,7 @@
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                            Visibility="{Binding HasLimit, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <ProgressBar Height="3"
+                <ProgressBar Height="5"
                              Margin="0 8 0 0"
                              Minimum="0" Maximum="100"
                              Value="{Binding Progress, Mode=OneWay}"
@@ -170,7 +182,7 @@
                                                Visibility="{Binding HasAmount, Converter={StaticResource BoolToVisibilityConverter}}" />
                                 </Grid>
 
-                                <ProgressBar Height="2"
+                                <ProgressBar Height="4"
                                              Margin="0 3 0 0"
                                              Minimum="0" Maximum="100"
                                              Value="{Binding Progress, Mode=OneWay}"

@@ -269,7 +269,17 @@ declares an upload long from the size on its first `Uploading` report. Everythin
 `5 running` on the task's line, which is what replaced the mod name that used to flicker there. A row
 once earned is never taken back, rows are ordered by when they were promoted, and three are drawn
 with the rest a count. Reports are coalesced onto a 100ms timer: byte callbacks arrive far faster
-than a 3px bar can say anything, and that timer is also what promotes.
+than a bar can say anything, and that timer is also what promotes. The task's bar is 5px and a
+row's 4px.
+
+**The task on screen carries an estimate of the time left** — `about 3 min left`, right-aligned on
+the detail line, never on a row (a row's bytes are a fraction of a job whose other rows have not
+started). `RemainingTimeEstimator` takes the rate over a trailing 30 second window, which smooths
+work that arrives in lumps and still follows a lifted speed limit, and measures it to *now*, so work
+that goes quiet stretches its estimate instead of freezing it. It says nothing for the first four
+seconds and restarts whenever the stage (the report's detail), the total, or a backwards count says
+the distance changed — so a sync's estimate is for the phase it is in, and a savegame's for the
+stage. It is rounded coarsely on purpose.
 
 **What reports bytes, and where they go.** Apply planning hashes an archive whose manifest entry is
 stale as one long read, so the planner hands `hashFile` an `IProgress<long>` and reports the bytes
