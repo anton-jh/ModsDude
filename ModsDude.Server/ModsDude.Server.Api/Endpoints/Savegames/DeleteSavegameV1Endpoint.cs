@@ -20,7 +20,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <b>The one destructive operation in this aggregate</b>, and deliberately the only one: a
 /// check-in supersedes, a restore copies forward, and pruning keeps the head and everything
 /// labelled. Deleting a savegame is somebody saying the whole thing is finished with, so the
-/// versions and the claims go with it - a claim log for a savegame that no longer exists is not a
+/// snapshots and the claims go with it - a claim log for a savegame that no longer exists is not a
 /// record of anything.
 /// </para>
 /// <para>
@@ -29,7 +29,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// nobody has renewed since March would be blocked for good.
 /// </para>
 /// <para>
-/// The blobs are not deleted here. They are addressed by content and several versions can name one,
+/// The blobs are not deleted here. They are addressed by content and several snapshots can name one,
 /// so the reclamation sweep is what removes them once nothing refers to them - the same bargain as
 /// a deleted mod's file.
 /// </para>
@@ -72,7 +72,7 @@ public class DeleteSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotArchived("Savegame", savegameId));
         }
 
-        // The versions and the claims go with it by cascade, in the database rather than here, so
+        // The snapshots and the claims go with it by cascade, in the database rather than here, so
         // that a savegame cannot be left half-deleted by a request that stopped between two loops.
         dbContext.Savegames.Remove(savegame);
 

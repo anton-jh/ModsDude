@@ -9,7 +9,7 @@ public enum SavegameStage
     /// <summary>Sending the packed archive to storage. The bytes are the archive's.</summary>
     Uploading,
 
-    /// <summary>The server is being told about the new version. No bytes; it is quick, but it is not nothing.</summary>
+    /// <summary>The server is being told about the new snapshot. No bytes; it is quick, but it is not nothing.</summary>
     Recording,
 
     /// <summary>Fetching the archive to a temporary file.</summary>

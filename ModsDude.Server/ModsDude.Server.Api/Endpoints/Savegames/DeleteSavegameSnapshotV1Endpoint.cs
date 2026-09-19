@@ -13,13 +13,13 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// Deletes one version of a savegame's history.
+/// Deletes one snapshot of a savegame's history.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The reason this exists is the other direction.</b> A savegame version pins the profile
+/// <b>The reason this exists is the other direction.</b> A savegame snapshot pins the profile
 /// revision it was played on, so it is what stops that revision being pruned. Without a way to
-/// remove one, "this revision was played on save X version 3" would be a refusal with nothing behind
+/// remove one, "this revision was played on save X snapshot 3" would be a refusal with nothing behind
 /// it - the user could see the obstacle and never move it.
 /// </para>
 /// <para>
@@ -27,22 +27,22 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// not part of running a repo.
 /// </para>
 /// <para>
-/// <b>The head is refused.</b> It is the version a check-out hands people, and a savegame whose
-/// current version is missing is a savegame nobody can play. Deleting the whole savegame is a
+/// <b>The head is refused.</b> It is the snapshot a check-out hands people, and a savegame whose
+/// current snapshot is missing is a savegame nobody can play. Deleting the whole savegame is a
 /// different act with its own endpoint.
 /// </para>
 /// <para>
-/// <b>Rows only.</b> Several versions legitimately share one blob - the address is the content hash
+/// <b>Rows only.</b> Several snapshots legitimately share one blob - the address is the content hash
 /// - so the bytes are left to the reclamation sweep, which asks whether anything still refers to the
 /// address. Deleting them here would mean re-asking that in this transaction and destroying
 /// somebody's save when the answer came out wrong. Same bargain as <see cref="SavegamePruning"/>.
 /// </para>
 /// </remarks>
-public class DeleteSavegameVersionV1Endpoint : IEndpoint
+public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapDelete("repos/{repoId:guid}/savegames/{savegameId:guid}/versions/{number:int}", Delete)
+        return builder.MapDelete("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots/{number:int}", Delete)
             .WithTags("Savegames");
     }
 
@@ -69,19 +69,19 @@ public class DeleteSavegameVersionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' does not exist in repo '{repoId}'"));
         }
 
-        var version = new SavegameVersionNumber(number);
+        var snapshot = new SavegameSnapshotNumber(number);
 
-        if (version == savegame.HeadVersion)
+        if (snapshot == savegame.HeadSnapshot)
         {
-            return TypedResults.BadRequest(Problems.CannotDeleteHeadSavegameVersion(new SavegameId(savegameId), version));
+            return TypedResults.BadRequest(Problems.CannotDeleteHeadSavegameSnapshot(new SavegameId(savegameId), snapshot));
         }
 
-        var deleted = await dbContext.SavegameVersions.DeleteVersionsAsync(
-            new RepoId(repoId), savegame.Id, [version], cancellationToken);
+        var deleted = await dbContext.SavegameSnapshots.DeleteSnapshotsAsync(
+            new RepoId(repoId), savegame.Id, [snapshot], cancellationToken);
 
         if (deleted == 0)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no version {number}"));
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no snapshot {number}"));
         }
 
         await unitOfWork.CommitAsync(cancellationToken);

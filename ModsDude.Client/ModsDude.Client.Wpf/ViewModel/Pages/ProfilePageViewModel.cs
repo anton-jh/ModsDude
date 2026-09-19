@@ -384,7 +384,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Selects the History sub-page, for a deep link from a savegame - whose versions each name the
+    /// Selects the History sub-page, for a deep link from a savegame - whose snapshots each name the
     /// revision they were played on, and whose "what changed under this save" is exactly the question
     /// that page already answers.
     /// </summary>

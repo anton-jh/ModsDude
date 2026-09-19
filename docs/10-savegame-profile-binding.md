@@ -21,29 +21,29 @@ and no shape below is constrained by what an older client wrote.
 
 Two different things advance over time, and this document is about how they relate.
 
-**Versions of one savegame.** A `Savegame` has a linear history of `SavegameVersion` rows,
+**Snapshots of one savegame.** A `Savegame` has a linear history of `SavegameSnapshot` rows,
 numbered from 1. A check-in mints one. They are snapshots of the same savegame at different points,
-and its head is the newest. Each version records the profile revision it was played on.
+and its head is the newest. Each snapshot records the profile revision it was played on.
 
 **Savegames on one profile.** A `Profile` has a succession of `Savegame` rows. These are
-separate savegames — separate names, separate claims, separate version histories numbered from 1
+separate savegames — separate names, separate claims, separate snapshot histories numbered from 1
 each. Starting a second savegame on "Old-school" creates a second `Savegame`; it does not add a
-version to the first.
+snapshot to the first.
 
-| | Versions | Savegames on a profile |
+| | Snapshots | Savegames on a profile |
 | --- | --- | --- |
 | Belong to | One savegame | One profile |
 | Created by | Check-in, publish, restore | Publish |
-| Newest is called | The **head** version | The **current** savegame |
-| Older ones are called | Earlier versions | **Past** savegames |
+| Newest is called | The **head** snapshot | The **current** savegame |
+| Older ones are called | Earlier snapshots | **Past** savegames |
 | Numbered | Yes, from 1 per savegame | No |
 
 ## Cardinality
 
 A profile has **at most one current savegame**, enforced. Any other savegame on it is past.
 
-Only *current* is one-to-one. Past savegames keep pointing at the profile — their versions name
-its revisions, and `SavegameVersion`'s foreign key onto `ProfileRevision` is `Restrict`. A
+Only *current* is one-to-one. Past savegames keep pointing at the profile — their snapshots name
+its revisions, and `SavegameSnapshot`'s foreign key onto `ProfileRevision` is `Restrict`. A
 profile therefore has many savegames, at most one of which is current.
 
 Current is `SupersededAt IS NULL`, and one-per-profile is enforced by a filtered unique index —
@@ -93,7 +93,7 @@ folder, and two savegames in two slots never touched it.
 
 A savegame's profile is fixed at publish. **There is no operation that moves a savegame to a
 different profile** — `UpdateSavegameV1Endpoint` becomes a rename. Moving one would make
-`Savegame.ProfileId` and every version's `ProfileId` disagree, and revision numbers of two
+`Savegame.ProfileId` and every snapshot's `ProfileId` disagree, and revision numbers of two
 profiles are not comparable
 ([SavegameDrift.cs:168](../ModsDude.Client/ModsDude.Client.Core/Savegames/SavegameDrift.cs)).
 
@@ -117,8 +117,8 @@ Running two savegames in parallel on one mod list is done by branching the profi
 
 ## Savegames without a profile
 
-`Savegame.ProfileId` is optional, and so are `SavegameVersion.ProfileId` and
-`SavegameVersion.ProfileRevision`.
+`Savegame.ProfileId` is optional, and so are `SavegameSnapshot.ProfileId` and
+`SavegameSnapshot.ProfileRevision`.
 
 The connection is optional in every repo, not only where the adapter lacks mod support. Adapters
 with savegame support and no mod support are planned and have no profile to offer; a savegame in
@@ -129,24 +129,24 @@ in anything below. Check-out writes the slot and takes the claim; no profile is 
 is refused on its behalf, and nothing reports it as drifted from a mod list. It is unmanaged, by
 the publisher's choice.
 
-A null revision is a valid state meaning "this version is not connected to a profile". The
+A null revision is a valid state meaning "this snapshot is not connected to a profile". The
 invalid state is a half-set pair, and it is a database check constraint: `ProfileId` and
-`ProfileRevision` are both null or both set on `SavegameVersion`, which is the only row carrying
+`ProfileRevision` are both null or both set on `SavegameSnapshot`, which is the only row carrying
 both. `Savegame` pins no revision — that is the whole of the two-successions argument above — so
 what it carries instead is the other half of the same idea: `SupersededAt` requires a `ProfileId`,
 since a savegame following no mod list is in no succession and is neither current nor past.
 
 A savegame cannot acquire or lose a profile, since nothing moves one between profiles. A history
-mixing versions that name a revision with versions that do not therefore cannot arise.
+mixing snapshots that name a revision with snapshots that do not therefore cannot arise.
 
 Nothing is left for the client to enforce about whether a profile is present. The pair travels as one
 value — `SavegamePublishTarget`, or null — so a caller cannot set half of it, and
 `SavegameService.DeclaredRevisionFor` answers the other half for whichever profile the dialog was
-given. A folder that has never been synced is not an obstacle: the first version's revision is
+given. A folder that has never been synced is not an obstacle: the first snapshot's revision is
 declared, so the answer there is the chosen profile's head.
 
 `SavegameService.ResolveAppliedRevision` still throws at *check-in* where a profile was chosen and no
-revision of it can be found anywhere — a version that names a profile has to name a revision of it
+revision of it can be found anywhere — a snapshot that names a profile has to name a revision of it
 too, and that one is observed rather than declared.
 
 ## Profiles with no savegame
@@ -187,7 +187,7 @@ adapter does not support savegames is one where no client ever creates any.
 ## Current and past savegames
 
 A past savegame is **not read-only**. It can be checked out, played, and checked in, and doing
-so mints versions as normal. The single restriction is that **its profile revision does not
+so mints snapshots as normal. The single restriction is that **its profile revision does not
 move**.
 
 Two things change which savegame is current, and both are stated before they run:
@@ -226,17 +226,17 @@ savegame is two steps — archive, then delete — and it remains current in bet
 | Savegame | Check-out applies |
 | --- | --- |
 | **Current** | The profile's **head** revision |
-| **Past** | The revision recorded on its head version |
+| **Past** | The revision recorded on its head snapshot |
 | **No profile** | Nothing. No profile is applied |
 
 A current savegame follows its profile — that is what current means — so it gets whatever the
 profile says now. Preparing the mod list before a session and then checking the savegame out is the
 ordinary case, and it must not be undone by the check-out.
 
-The head version's revision is **not** the right target for a current savegame: it names the last
+The head snapshot's revision is **not** the right target for a current savegame: it names the last
 list the savegame was *played* on, which is older than head whenever the profile has been edited since.
 
-A past savegame gets the `(ProfileId, ProfileRevision)` pair from its head version, never the
+A past savegame gets the `(ProfileId, ProfileRevision)` pair from its head snapshot, never the
 number alone. With no operation that moves a savegame between profiles, that `ProfileId` always
 equals `Savegame.ProfileId`.
 
@@ -297,7 +297,7 @@ check-out, and that is the answer this design wants. The two things that change 
 current are both stated before they run, and somebody else's publish is not stated to a holder — so
 the alternative is the apply button and the drift notice quietly changing meaning because of an action
 the person looking at them did not take. Nothing breaks either way: the savegame goes on following its
-profile until it is checked in, the version that check-in mints records the revision it was genuinely
+profile until it is checked in, the snapshot that check-in mints records the revision it was genuinely
 played on, and its target moves forward to that revision with it, so the invariant below still holds.
 The next check-out reads the truth.
 
@@ -355,13 +355,13 @@ different lifetimes.
 
 | Field | Rewritten | Question it answers |
 | --- | --- | --- |
-| `ContentHash` | Never, after check-out | Do the slot's bytes still match the version the server holds? |
+| `ContentHash` | Never, after check-out | Do the slot's bytes still match the snapshot the server holds? |
 | `LastObservedHash` | At every observation | Have the slot's bytes moved since the last time we looked? |
 
 `ContentHash` is what was downloaded into the slot at check-out. `SavegameDriftRules.Classify`
 compares the slot against it to report `UncheckedInPlay` — play that exists on this disk and
 nowhere else. It stays fixed at the check-out value for as long as the savegame is held, since
-the version on the server is the thing being compared to.
+the snapshot on the server is the thing being compared to.
 
 `LastObservedHash` tracks a moving boundary instead. It is set to the slot's current bytes every
 time `Observe()` runs, so a comparison against it means "since the last observation" rather than
@@ -399,7 +399,7 @@ Two fields on `SavegameCheckoutBinding`:
 | `LastPlayedRevision` | `= null` | Newest revision play has been confirmed on. Null until play is observed |
 
 Publishing and checking in while carrying on playing leave the same pair, for the same reason: the
-version on the server is these bytes, so the next evening is the first that has not been recorded
+snapshot on the server is these bytes, so the next evening is the first that has not been recorded
 anywhere. `LastObservedHash` unset reads as `ContentHash`, which is what makes that hold for any
 route into a binding rather than only the three that exist.
 
@@ -426,7 +426,7 @@ Two call sites:
 | Site | Order |
 | --- | --- |
 | Apply | `Observe()` runs **inside** the manifest write, before it, so it reads the outgoing revision |
-| Check-in | `Observe()` runs first; the version is then sent with `LastPlayedRevision ?? AppliedRevision` |
+| Check-in | `Observe()` runs first; the snapshot is then sent with `LastPlayedRevision ?? AppliedRevision` |
 
 Inside the write rather than beside it, so that no path can move the revision without attributing the
 play first — including the one that installs nothing, since a revision can move without a single mod
@@ -450,7 +450,7 @@ Checked out at revision 4. Other users move the profile head to 1004. `Observe()
 | Played | 1004 | 1004 | H2 | H1 | 4 |
 | **Check in** | 1004 | 1004 | H2 | H2 | 1004 |
 
-Version records revision **1004**.
+Snapshot records revision **1004**.
 
 Same start, but the savegame is not played again after the apply:
 
@@ -462,19 +462,19 @@ Same start, but the savegame is not played again after the apply:
 | (a week) | 1005 | 1005 | H1 | H1 | 4 |
 | **Check in** | 1005 | 1005 | H1 | H1 | 4 |
 
-Version records revision **4**. The interval between check-out and check-in does not enter into
+Snapshot records revision **4**. The interval between check-out and check-in does not enter into
 it.
 
 ### Never played
 
 `LastPlayedRevision` stays null and check-in falls back to the folder's current revision. The
-slot's bytes equal the head version's, so `CheckInSavegameV1Endpoint` mints no version and
+slot's bytes equal the head snapshot's, so `CheckInSavegameV1Endpoint` mints no snapshot and
 answers with the existing head.
 
 ## Publishing
 
 `PublishSavegameV1Endpoint` opens a claim on the new savegame in the same transaction as the
-savegame and its first version, so a publish always leaves the new savegame held.
+savegame and its first snapshot, so a publish always leaves the new savegame held.
 
 Publishing **to a profile** therefore requires that no savegame with a profile is already checked
 out on the game — the same limit as check-out, reached from the other side, rather than a rule
@@ -490,7 +490,7 @@ one.
 keep the save and the claim, or hand both straight back. Publishing with **no profile** offers the
 same, since such a savegame claims no mod folder.
 
-**Publishing to any other profile takes the choice away** and hands the save back — the version is
+**Publishing to any other profile takes the choice away** and hands the save back — the snapshot is
 minted, the claim is released and the local copy goes to the Recycle Bin, which is exactly
 `DiscardAsync`, called by `PublishAsync` once the publish has committed. The dialog says so before
 the button is pressed and the button says it too.
@@ -507,7 +507,7 @@ is refused.
 Nothing is lost by it: the savegame is in the repo, the claim is free, and checking it out again
 after applying its profile is the ordinary flow.
 
-**A first version's revision is declared, not observed**, and this is the only version in the
+**A first snapshot's revision is declared, not observed**, and this is the only snapshot in the
 system of which that is true. The bytes predate ModsDude: there is no binding, no
 `LastObservedHash` and no prior state, so nothing knows which mods were in the folder while that
 savegame was actually played. Requiring the target profile to be applied first would not change that —
@@ -518,7 +518,7 @@ The recorded revision is the applied revision where the chosen profile is the on
 and that profile's head otherwise. The dialog shows the number it is going to record, so the
 declaration is on screen rather than implied.
 
-Every version after the first is observed, through `Observe()`.
+Every snapshot after the first is observed, through `Observe()`.
 
 Nothing checks that the savegame can actually run on the profile it is published to, and nothing can.
 The dialog says so.
@@ -559,7 +559,7 @@ the engine refuses them before the server is told anything. Putting the setting 
 way out.
 
 **A binding whose savegame the repo has deleted is the opposite case, and is dropped unasked.**
-There is no claim left to hand back, no history to check a version into, and every server-side verb
+There is no claim left to hand back, no history to check a snapshot into, and every server-side verb
 on it answers 404 — so the only thing anybody can do about it is stop tracking it, and a dialog
 offering a choice with one sane answer exists to be clicked through. `RepoSavegamesPageViewModel`
 forgets those holds when it loads, and only when **both** the live and archived lists came back:
@@ -734,8 +734,8 @@ savegame and is archived. Un-archive it, delete it, or publish a new savegame."*
 
 ## Consequences elsewhere
 
-`SavegameVersion`'s foreign key onto `ProfileRevision` is `Restrict`, and
-`PruneProfileRevisionsV1Endpoint` already refuses to delete a revision a savegame version holds.
+`SavegameSnapshot`'s foreign key onto `ProfileRevision` is `Restrict`, and
+`PruneProfileRevisionsV1Endpoint` already refuses to delete a revision a savegame snapshot holds.
 A past savegame's revision therefore stays reproducible with no further guarantee.
 
 `SavegameDriftKind.PlayedOnAnotherModList` is retained, and its rule changes what it compares
@@ -763,7 +763,7 @@ decides drift.
 | Transition | Target becomes | Last played | Holds |
 | --- | --- | --- | --- |
 | Current, profile advances | head | ≤ head | ✓ |
-| Current superseded | its head version's revision | that same revision | ✓ equal |
+| Current superseded | its head snapshot's revision | that same revision | ✓ equal |
 | Past, played and checked in | unchanged | unchanged | ✓ |
 | Past made current | head | ≤ head | ✓ |
 
@@ -786,6 +786,6 @@ cheap drift check detects that the folder moved; it cannot attribute the play to
 Checking out a past savegame costs a full apply back to its revision, and returning to current
 play costs another. Both are ordinary syncs against the content store.
 
-A published savegame's first version carries a declared revision rather than an observed one. The
+A published savegame's first snapshot carries a declared revision rather than an observed one. The
 bytes existed before ModsDude saw them, and no arrangement of the publish flow can recover which
 mods were in the folder while that savegame was played.

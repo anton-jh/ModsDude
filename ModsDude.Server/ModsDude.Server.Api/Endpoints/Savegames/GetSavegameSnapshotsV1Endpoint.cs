@@ -17,10 +17,10 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </summary>
 /// <remarks>
 /// Readable at Guest, like a profile's history and for the same reason: somebody who only ever takes
-/// a copy of a save still needs to know what happened to it, and which version to ask to have back
+/// a copy of a save still needs to know what happened to it, and which snapshot to ask to have back
 /// when the current one turns out to be broken.
 /// </remarks>
-public class GetSavegameVersionsV1Endpoint : IEndpoint
+public class GetSavegameSnapshotsV1Endpoint : IEndpoint
 {
     private const int _defaultLimit = 50;
     private const int _maximumLimit = 200;
@@ -28,13 +28,13 @@ public class GetSavegameVersionsV1Endpoint : IEndpoint
 
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapGet("repos/{repoId:guid}/savegames/{savegameId:guid}/versions", Get)
+        return builder.MapGet("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots", Get)
             .WithTags("Savegames");
     }
 
 
-    /// <param name="skip">How many of the newest versions to pass over. See the response for why this is an offset.</param>
-    private static async Task<Results<Ok<GetSavegameVersionsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
+    /// <param name="skip">How many of the newest snapshots to pass over. See the response for why this is an offset.</param>
+    private static async Task<Results<Ok<GetSavegameSnapshotsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
         Guid repoId, Guid savegameId,
         int? skip, int? limit,
         ClaimsPrincipal claimsPrincipal,
@@ -59,33 +59,33 @@ public class GetSavegameVersionsV1Endpoint : IEndpoint
         var pageSize = Math.Clamp(limit ?? _defaultLimit, 1, _maximumLimit);
         var offset = Math.Max(skip ?? 0, 0);
 
-        var rows = await dbContext.SavegameVersions.GetHistoryAsync(
+        var rows = await dbContext.SavegameSnapshots.GetHistoryAsync(
             savegame.RepoId, savegame.Id, offset, pageSize, cancellationToken);
 
-        // Counted rather than inferred from the head. Version numbers are not contiguous - pruning
-        // leaves the gap where an old version was - so the head says nothing about how many rows are
+        // Counted rather than inferred from the head. Snapshot numbers are not contiguous - pruning
+        // leaves the gap where an old snapshot was - so the head says nothing about how many rows are
         // behind it, unlike a profile's revision number.
-        var total = await dbContext.SavegameVersions.CountVersionsAsync(savegame.RepoId, savegame.Id, cancellationToken);
+        var total = await dbContext.SavegameSnapshots.CountSnapshotsAsync(savegame.RepoId, savegame.Id, cancellationToken);
 
-        var versions = await SavegameReads.ToDtosAsync(dbContext, savegame.RepoId, rows, cancellationToken);
+        var snapshots = await SavegameReads.ToDtosAsync(dbContext, savegame.RepoId, rows, cancellationToken);
 
-        return TypedResults.Ok(new GetSavegameVersionsResponse(
-            versions,
-            savegame.HeadVersion.Value,
-            offset + versions.Count < total));
+        return TypedResults.Ok(new GetSavegameSnapshotsResponse(
+            snapshots,
+            savegame.HeadSnapshot.Value,
+            offset + snapshots.Count < total));
     }
 
 
-    /// <param name="HeadVersion">
+    /// <param name="HeadSnapshot">
     /// Which of them is current. Carried so that a history page does not have to infer "this is the
     /// live one" from the first row of a listing it may have paged into - and it could not infer it
     /// from the highest number either, since a restore makes the newest row the head while an older
     /// number is what it was copied from.
     /// </param>
     /// <param name="HasMore">
-    /// Whether older versions remain. The window is an offset from the newest, because
-    /// <see cref="SavegameVersionNumber"/> is a value object and a provider cannot translate a
+    /// Whether older snapshots remain. The window is an offset from the newest, because
+    /// <see cref="SavegameSnapshotNumber"/> is a value object and a provider cannot translate a
     /// comparison on one - so a page read while somebody is checking in can repeat a row.
     /// </param>
-    public record GetSavegameVersionsResponse(IEnumerable<SavegameVersionDto> Versions, int HeadVersion, bool HasMore);
+    public record GetSavegameSnapshotsResponse(IEnumerable<SavegameSnapshotDto> Snapshots, int HeadSnapshot, bool HasMore);
 }

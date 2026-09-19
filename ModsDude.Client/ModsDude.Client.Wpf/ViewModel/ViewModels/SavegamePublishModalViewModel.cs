@@ -15,7 +15,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// drifted. It is also permanent: nothing moves a savegame between profiles, or into one.
 /// </remarks>
 /// <param name="DeclaredRevision">
-/// The number this first version records, from <see cref="SavegameService.DeclaredRevisionFor"/>.
+/// The number this first snapshot records, from <see cref="SavegameService.DeclaredRevisionFor"/>.
 /// Null only for <see cref="NoModList"/>, whose pair is null on both halves.
 /// </param>
 /// <param name="CurrentSavegameName">
@@ -48,12 +48,12 @@ public sealed record SavegamePublishOption(
 
 /// <summary>
 /// Publishing a save that is already on this machine: what the repo should call it, which mod list it
-/// follows, and optionally what this first version was.
+/// follows, and optionally what this first snapshot was.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new version of that thing"
-/// have opposite failure modes, and one button doing both is how somebody's savegame ends up as a version
+/// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new snapshot of that thing"
+/// have opposite failure modes, and one button doing both is how somebody's savegame ends up as a snapshot
 /// of somebody else's. This one is only ever reached from a slot, and it names the thing being made.
 /// </para>
 /// <para>
@@ -174,7 +174,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <summary>The name to publish under, or null where the dialog was dismissed.</summary>
     public string? Result { get; private set; }
 
-    /// <summary>Blank means no description of the first version, which is the ordinary answer.</summary>
+    /// <summary>Blank means no description of the first snapshot, which is the ordinary answer.</summary>
     public string? TrimmedLabel => string.IsNullOrWhiteSpace(Label) ? null : Label.Trim();
 
     /// <summary>
@@ -183,13 +183,13 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <remarks>
     /// <b>A declaration, which is why it is shown rather than implied.</b> The bytes predate ModsDude,
     /// so nothing knows which mods were in the folder while this savegame was played, and no arrangement of
-    /// this dialog recovers it. Every version after this one is observed.
+    /// this dialog recovers it. Every snapshot after this one is observed.
     /// </remarks>
     public string? RevisionText => SelectedProfile switch
     {
         null => null,
         { DeclaredRevision: int revision } profile =>
-            $"This first version is recorded as played on {profile.Name} rev {revision}. Nothing checks that this savegame can actually run on it - nothing can.",
+            $"This first snapshot is recorded as played on {profile.Name} rev {revision}. Nothing checks that this savegame can actually run on it - nothing can.",
         _ => "This save follows no mod list. It records no revision, no profile is ever applied on its behalf, and nothing reports it as drifted. It cannot be given one later."
     };
 

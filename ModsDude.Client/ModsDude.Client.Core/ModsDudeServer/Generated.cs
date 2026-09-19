@@ -6380,11 +6380,11 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SavegameVersionDto> CheckInSavegameV1Async(System.Guid repoId, System.Guid savegameId, CheckInSavegameRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<SavegameSnapshotDto> CheckInSavegameV1Async(System.Guid repoId, System.Guid savegameId, CheckInSavegameRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<GetSavegameVersionsResponse> GetSavegameVersionsV1Async(System.Guid repoId, System.Guid savegameId, int? skip = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<GetSavegameSnapshotsResponse> GetSavegameSnapshotsV1Async(System.Guid repoId, System.Guid savegameId, int? skip = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -6404,7 +6404,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task DeleteSavegameVersionV1Async(System.Guid repoId, System.Guid savegameId, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task DeleteSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -6432,7 +6432,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SavegameVersionDto> RestoreSavegameVersionV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameVersionRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -6591,7 +6591,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<SavegameVersionDto> CheckInSavegameV1Async(System.Guid repoId, System.Guid savegameId, CheckInSavegameRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<SavegameSnapshotDto> CheckInSavegameV1Async(System.Guid repoId, System.Guid savegameId, CheckInSavegameRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -6617,12 +6617,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/versions"
+                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/snapshots"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/savegames/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(savegameId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/versions");
+                    urlBuilder_.Append("/snapshots");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -6649,7 +6649,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<SavegameVersionDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<SavegameSnapshotDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -6708,7 +6708,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<GetSavegameVersionsResponse> GetSavegameVersionsV1Async(System.Guid repoId, System.Guid savegameId, int? skip = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<GetSavegameSnapshotsResponse> GetSavegameSnapshotsV1Async(System.Guid repoId, System.Guid savegameId, int? skip = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -6727,12 +6727,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/versions"
+                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/snapshots"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/savegames/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(savegameId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/versions");
+                    urlBuilder_.Append("/snapshots");
                     urlBuilder_.Append('?');
                     if (skip != null)
                     {
@@ -6769,7 +6769,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<GetSavegameVersionsResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<GetSavegameSnapshotsResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -7278,7 +7278,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task DeleteSavegameVersionV1Async(System.Guid repoId, System.Guid savegameId, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task DeleteSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -7299,12 +7299,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}"
+                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/snapshots/{number}"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/savegames/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(savegameId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/versions/");
+                    urlBuilder_.Append("/snapshots/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(number, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -8031,7 +8031,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<SavegameVersionDto> RestoreSavegameVersionV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameVersionRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -8057,12 +8057,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}/restore"
+                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/snapshots/{number}/restore"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/savegames/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(savegameId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/versions/");
+                    urlBuilder_.Append("/snapshots/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(number, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/restore");
 
@@ -8091,7 +8091,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<SavegameVersionDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<SavegameSnapshotDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -8708,8 +8708,8 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-image-set")]
         InvalidImageSet = 18,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/cannot-delete-head-savegame-version")]
-        CannotDeleteHeadSavegameVersion = 19,
+        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/cannot-delete-head-savegame-snapshot")]
+        CannotDeleteHeadSavegameSnapshot = 19,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-archived")]
         NotArchived = 20,
@@ -8738,8 +8738,8 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/profile-revision-stale")]
         ProfileRevisionStale = 28,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-version-stale")]
-        SavegameVersionStale = 29,
+        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-snapshot-stale")]
+        SavegameSnapshotStale = 29,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-checkout-conflict")]
         SavegameCheckoutConflict = 30,
@@ -9516,7 +9516,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         public BlockedRevisionReason Reason { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("savegames", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.Collections.Generic.ICollection<SavegameVersionRefDto> Savegames { get; set; } = default!;
+        public System.Collections.Generic.ICollection<SavegameSnapshotRefDto> Savegames { get; set; } = default!;
 
     }
 
@@ -9533,7 +9533,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record SavegameVersionRefDto
+    public partial record SavegameSnapshotRefDto
     {
 
         [Newtonsoft.Json.JsonProperty("savegameId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
@@ -9663,7 +9663,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record SavegameVersionDto
+    public partial record SavegameSnapshotDto
     {
 
         [Newtonsoft.Json.JsonProperty("repoId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
@@ -9698,10 +9698,10 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("origin", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
-        public SavegameVersionOrigin Origin { get; set; } = default!;
+        public SavegameSnapshotOrigin Origin { get; set; } = default!;
 
-        [Newtonsoft.Json.JsonProperty("baseVersion", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public int? BaseVersion { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("baseSnapshot", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int? BaseSnapshot { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("checkoutId", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Guid? CheckoutId { get; set; } = default!;
@@ -9712,7 +9712,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum SavegameVersionOrigin
+    public enum SavegameSnapshotOrigin
     {
 
         [System.Runtime.Serialization.EnumMember(Value = @"Created")]
@@ -9868,7 +9868,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         public System.DateTime Created { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("head", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public SavegameVersionDto? Head { get; set; } = default!;
+        public SavegameSnapshotDto? Head { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("checkout", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public SavegameCheckoutDto? Checkout { get; set; } = default!;
@@ -9894,14 +9894,14 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record GetSavegameVersionsResponse
+    public partial record GetSavegameSnapshotsResponse
     {
 
-        [Newtonsoft.Json.JsonProperty("versions", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.Collections.Generic.ICollection<SavegameVersionDto> Versions { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("snapshots", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<SavegameSnapshotDto> Snapshots { get; set; } = default!;
 
-        [Newtonsoft.Json.JsonProperty("headVersion", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public int HeadVersion { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("headSnapshot", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int HeadSnapshot { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("hasMore", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public bool HasMore { get; set; } = default!;
@@ -9951,7 +9951,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record RestoreSavegameVersionRequest
+    public partial record RestoreSavegameSnapshotRequest
     {
 
         [Newtonsoft.Json.JsonProperty("label", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]

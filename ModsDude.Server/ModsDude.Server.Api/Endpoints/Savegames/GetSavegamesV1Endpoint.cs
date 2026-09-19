@@ -13,7 +13,7 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// The repo's savegames, each carrying its head version and whoever has it.
+/// The repo's savegames, each carrying its head snapshot and whoever has it.
 /// </summary>
 /// <remarks>
 /// <para>

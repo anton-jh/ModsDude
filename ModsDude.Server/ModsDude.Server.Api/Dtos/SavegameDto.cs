@@ -7,13 +7,13 @@ namespace ModsDude.Server.Api.Dtos;
 /// and who has it.
 /// </summary>
 /// <remarks>
-/// The head version is carried inline because every row needs it and a list of ten savegames should
+/// The head snapshot is carried inline because every row needs it and a list of ten savegames should
 /// not be ten follow-up requests. The history behind it is read through
-/// <c>GET repos/{repoId}/savegames/{savegameId}/versions</c>.
+/// <c>GET repos/{repoId}/savegames/{savegameId}/snapshots</c>.
 /// </remarks>
 /// <param name="ProfileId">
 /// The profile this save follows, or <c>null</c> where it follows none. Decided when the save was
-/// published and never after, so it agrees with every version's own profile by construction.
+/// published and never after, so it agrees with every snapshot's own profile by construction.
 /// </param>
 /// <param name="SupersededAt">
 /// When the profile stopped following this savegame, or <c>null</c> while it still does. Null for a
@@ -36,17 +36,17 @@ public record SavegameDto(
     string Name,
     Guid? ProfileId,
     DateTime Created,
-    SavegameVersionDto? Head,
+    SavegameSnapshotDto? Head,
     SavegameCheckoutDto? Checkout,
     DateTime? SupersededAt,
     DateTime? ArchivedAt);
 
 
 /// <summary>
-/// One version in a savegame's history.
+/// One snapshot in a savegame's history.
 /// </summary>
 /// <param name="ProfileRevision">
-/// The revision of <paramref name="ProfileId"/> this version was played on. It is what lets a client
+/// The revision of <paramref name="ProfileId"/> this snapshot was played on. It is what lets a client
 /// say that a mod folder is on a list this save has never seen, which is the one kind of drift no
 /// directory listing could find.
 /// <para>
@@ -58,16 +58,16 @@ public record SavegameDto(
 /// SHA-256 of the packed save, and the address its blob is stored at. The client needs it to ask for
 /// a download link, and to tell whether what is in a slot is still what was checked in.
 /// </param>
-/// <param name="BaseVersion">
-/// What the uploader was holding. For <see cref="SavegameVersionOrigin.Forced"/> it names the
-/// version somebody's play was built on but did not follow, which is how a fork stays in the record
-/// without a tree; for <see cref="SavegameVersionOrigin.Restored"/> it names what was copied forward.
+/// <param name="BaseSnapshot">
+/// What the uploader was holding. For <see cref="SavegameSnapshotOrigin.Forced"/> it names the
+/// snapshot somebody's play was built on but did not follow, which is how a fork stays in the record
+/// without a tree; for <see cref="SavegameSnapshotOrigin.Restored"/> it names what was copied forward.
 /// </param>
 /// <param name="CheckoutId">
-/// The claim this version was checked in against, which is what joins versions and checkouts into
+/// The claim this snapshot was checked in against, which is what joins snapshots and checkouts into
 /// one timeline. Null for a publish and for a forced check-in made without holding the save.
 /// </param>
-public record SavegameVersionDto(
+public record SavegameSnapshotDto(
     Guid RepoId,
     Guid SavegameId,
     int Number,
@@ -78,14 +78,14 @@ public record SavegameVersionDto(
     DateTime Created,
     UserDto CreatedBy,
     string? Label,
-    SavegameVersionOrigin Origin,
-    int? BaseVersion,
+    SavegameSnapshotOrigin Origin,
+    int? BaseSnapshot,
     Guid? CheckoutId,
     IEnumerable<SavegameDetailDto> Details);
 
 
 /// <summary>
-/// One thing a client's game adapter chose to say about a version - the map, when it was played,
+/// One thing a client's game adapter chose to say about a snapshot - the map, when it was played,
 /// how long for. <b>The server never parses one</b>; see <c>SavegameDetail</c>.
 /// </summary>
 /// <param name="Key">Stable and machine-readable. Never rendered - it exists so a fact can be found again later.</param>

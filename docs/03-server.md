@@ -363,7 +363,7 @@ stamped into metadata as the client uploads, and the API never touching the byte
 Member-level and download is Guest-level, because a Guest is offered *Take a copy*.
 
 **The one deliberate difference is the address.** A savegame's blob is named by its content rather
-than by its version number, and that is what makes concurrent check-ins safe: numbering the blob
+than by its snapshot number, and that is what makes concurrent check-ins safe: numbering the blob
 would have two people mint upload links for the same name, so whichever wrote second would replace
 the other's bytes — and the stale-base check that decides who takes the head runs after that, by
 which point the loser's save is gone. Content addressing also makes a restore a metadata operation
@@ -372,8 +372,8 @@ with no blob copy, and a duplicate check-in free.
 Two consequences follow. A blob already at the requested address holds *the bytes being offered*,
 so `createSavegameUploadLink` reports it as `AlreadyStored` and the client skips to checking in —
 where the mod path has to refuse the same situation as an identity collision. And **several
-versions can share one blob**, so the reclamation sweep asks whether an address is still referred
-to, not whether a version still exists.
+snapshots can share one blob**, so the reclamation sweep asks whether an address is still referred
+to, not whether a snapshot still exists.
 
 ### Blob reclamation
 
@@ -561,21 +561,21 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/savegames` | Guest | Each carries its head version and its open claim inline. Four queries flat, not one per row |
-| POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its version 1, and a claim for the publisher. The profile is optional, and publishing to one supersedes whatever savegame it was following |
+| GET | `repos/{repoId}/savegames` | Guest | Each carries its head snapshot and its open claim inline. Four queries flat, not one per row |
+| POST | `repos/{repoId}/savegames` | Member | **Publish.** Creates the savegame, its snapshot 1, and a claim for the publisher. The profile is optional, and publishing to one supersedes whatever savegame it was following |
 | PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename. Nothing moves a savegame to another profile — see below |
 | POST | `repos/{repoId}/savegames/{savegameId}/makeCurrent` | Member | Points the profile back at this past savegame, superseding whatever held the slot. Answers with both |
-| POST | `repos/{repoId}/savegames/{savegameId}/archive` | Member | Puts it away, keeping its versions and its claim log |
-| POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | Member | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *version* back |
+| POST | `repos/{repoId}/savegames/{savegameId}/archive` | Member | Puts it away, keeping its snapshots and its claim log |
+| POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | Member | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *snapshot* back |
 | GET | `repos/{repoId}/savegames/archived` | Guest | The archived half of the same list |
 | DELETE | `repos/{repoId}/savegames/{savegameId}` | **Admin** | Permanent, and refused unless archived |
-| DELETE | `repos/{repoId}/savegames/{savegameId}/versions/{number}` | **Admin** | Deletes one version. Refuses the head. Rows only - the blobs go to the reclamation sweep |
-| GET | `repos/{repoId}/savegames/{savegameId}/versions` | Guest | The history, newest first, windowed by `skip`/`limit` |
-| PUT | `repos/{repoId}/savegames/{savegameId}/versions` | Member | **Check in.** Based on a version number, forcible |
-| POST | `.../versions/{number}/restore` | Member | Copies an older version forward as a new one |
+| DELETE | `repos/{repoId}/savegames/{savegameId}/snapshots/{number}` | **Admin** | Deletes one snapshot. Refuses the head. Rows only - the blobs go to the reclamation sweep |
+| GET | `repos/{repoId}/savegames/{savegameId}/snapshots` | Guest | The history, newest first, windowed by `skip`/`limit` |
+| PUT | `repos/{repoId}/savegames/{savegameId}/snapshots` | Member | **Check in.** Based on a snapshot number, forcible |
+| POST | `.../snapshots/{number}/restore` | Member | Copies an older snapshot forward as a new one |
 | GET | `repos/{repoId}/savegames/{savegameId}/checkouts` | Guest | The claim log, newest first, windowed |
 | POST | `repos/{repoId}/savegames/{savegameId}/checkouts` | Member | Take the claim, or renew your own. Answers with who it was taken from |
-| DELETE | `.../checkouts/current` | Member | **Discard** — give it back unplayed. Mints no version |
+| DELETE | `.../checkouts/current` | Member | **Discard** — give it back unplayed. Mints no snapshot |
 
 **The client mints the savegame id**, as it does a repo id. The blob lives at
 `{repoId}/{savegameId}/{contentHash}`, so a server-minted id would name a blob nobody could have
@@ -590,15 +590,15 @@ archived savegame still holds its profile's slot — and savegames with no profi
 since nulls in a unique index are distinct.
 
 **The profile is chosen at publish and never after**, which is why `PUT` is only a rename. Moving a
-savegame would put its row and its versions in disagreement, and two profiles' revision numbers are
+savegame would put its row and its snapshots in disagreement, and two profiles' revision numbers are
 not comparable. Republishing the savegame is the route, and it is three operations the client already
 has. `ProfileId` and `ProfileRevision` are nullable and paired — both set or both null, by check
 constraint — so a savegame that follows no mod list records no revision and takes no part in any of
 the above. See [10 — Savegames and profile revisions](10-savegame-profile-binding.md).
 
-`BasedOn` names the version the check-in was built on, and a stale one is refused with
-`savegame-version-stale` carrying the head. **Forcing past it is allowed** and records the fork as
-`Origin = Forced` with the version actually played, rather than hiding it — the claim is the social
+`BasedOn` names the snapshot the check-in was built on, and a stale one is refused with
+`savegame-snapshot-stale` carrying the head. **Forcing past it is allowed** and records the fork as
+`Origin = Forced` with the snapshot actually played, rather than hiding it — the claim is the social
 guard and this is the mechanical one. **A check-in whose hash equals the head's mints nothing** and
 answers with the head; a night that changed nothing is not an event. It still ends the caller's
 claim, because they pressed check in and should not be left holding a save they handed back.
@@ -611,7 +611,7 @@ check-out route is for, and it records `TakenOver`.
 
 Checking in and restoring both prune the history afterwards, in a separate commit so a failed prune
 cannot cost somebody their play. Pruning deletes **rows only**; the blobs fall out on the next
-reclamation pass, which is what makes it safe when two versions name one address.
+reclamation pass, which is what makes it safe when two snapshots name one address.
 
 Reading is Guest throughout, including the claim log: somebody who plays a shared save without
 curating it is exactly the person who needs to see who has had it.
@@ -640,20 +640,20 @@ responsible for the repo rather than to whoever is editing a profile today. Ever
 action that is not required for normal operation sits at the same level.
 
 **Numbers are not renumbered.** Pruning leaves the gap where a revision was, exactly as
-`SavegameVersionNumber` already does, and for the same reason: a number exists to be said out loud,
+`SavegameSnapshotNumber` already does, and for the same reason: a number exists to be said out loud,
 and renumbering would make yesterday's sentence point at a different mod list.
 
-**The head is always refused**, and so is any revision a `SavegameVersion` records having been
+**The head is always refused**, and so is any revision a `SavegameSnapshot` records having been
 played on — the foreign key is `Restrict` and the endpoint asks first, once for the whole batch. It
 **deletes what it can and names what it cannot**, because a batch that refused wholesale over one
 blocked revision would make pruning a hundred of them an exercise in bisection. Each refusal carries
-the savegame versions holding it, so the next step is a link rather than a guess.
+the savegame snapshots holding it, so the next step is a link rather than a guess.
 
 That link needs somewhere to go, which is why
-`DELETE .../savegames/{savegameId}/versions/{number}` exists. Without it, "played on save X version
-3" would be an obstacle the user could see and never move. Admin again, and the **head version is
-refused**: it is what a check-out hands people, and a savegame whose current version is missing is
-one nobody can play. Rows only — several versions legitimately share one content-addressed blob, so
+`DELETE .../savegames/{savegameId}/snapshots/{number}` exists. Without it, "played on save X snapshot
+3" would be an obstacle the user could see and never move. Admin again, and the **head snapshot is
+refused**: it is what a check-out hands people, and a savegame whose current snapshot is missing is
+one nobody can play. Rows only — several snapshots legitimately share one content-addressed blob, so
 the bytes stay with the reclamation sweep, which asks the one question that makes deleting them
 
 ### Files

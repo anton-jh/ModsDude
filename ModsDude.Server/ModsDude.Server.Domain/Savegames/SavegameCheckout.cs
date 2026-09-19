@@ -11,13 +11,13 @@ namespace ModsDude.Server.Domain.Savegames;
 /// <b>A log, not a field.</b> The current holder is the row that has not ended, which is why there is
 /// no <c>Checkout</c> property on <see cref="Savegame"/> to keep in step with a history beside it. A
 /// filtered unique index permits one open row per savegame. Check-ins are already history - they are
-/// versions - so only the check-out half needs recording, and
-/// <see cref="SavegameVersion.CheckoutId"/> joins the two into one timeline.
+/// snapshots - so only the check-out half needs recording, and
+/// <see cref="SavegameSnapshot.CheckoutId"/> joins the two into one timeline.
 /// </para>
 /// <para>
 /// <b>The claim is advisory.</b> Anybody may take it from anybody, which closes the previous row as
 /// <see cref="SavegameCheckoutEndReason.TakenOver"/> and warns naming who held it. What actually
-/// protects a save is the base-version check on check-in: the claim is the social half, and only the
+/// protects a save is the base-snapshot check on check-in: the claim is the social half, and only the
 /// mechanical half is a guarantee.
 /// </para>
 /// <para>

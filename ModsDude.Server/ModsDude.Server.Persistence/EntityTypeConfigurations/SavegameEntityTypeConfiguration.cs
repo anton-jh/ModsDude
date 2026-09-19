@@ -33,8 +33,8 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
 
         // Restrict, not the cascade EF would infer: ProfileId is the standing statement that this
         // save follows that profile, so deleting the profile would leave the save pointing at
-        // nothing. The profile a save has actually been played on is held per version and is
-        // Restrict too - see SavegameVersionEntityTypeConfiguration - so in practice a profile that
+        // nothing. The profile a save has actually been played on is held per snapshot and is
+        // Restrict too - see SavegameSnapshotEntityTypeConfiguration - so in practice a profile that
         // has been played is already undeletable. This keeps a profile that was only ever pointed at
         // from slipping through that rule.
         // Optional, because ProfileId is: a savegame published without a mod list points at no
@@ -47,9 +47,9 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
         builder.Property(x => x.Name).HasMaxLength(SavegameName.MaximumLength);
         builder.Property(x => x.Created);
 
-        // A scalar, and there is deliberately no navigation to the versions themselves - see
+        // A scalar, and there is deliberately no navigation to the snapshots themselves - see
         // Savegame for why loading a savegame must not be able to drag its history in with it.
-        builder.Property(x => x.HeadVersion);
+        builder.Property(x => x.HeadSnapshot);
 
         // A savegame's name is what people say to each other, so it has to mean one thing inside a
         // repo. Unique rather than checked in the endpoint, so two people publishing "Season 4" at

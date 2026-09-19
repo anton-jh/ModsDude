@@ -147,8 +147,8 @@ public class SavegameCheckoutTests
     }
 
     /// <summary>
-    /// A discard ends the claim without minting a version - taken by mistake, never played. Without
-    /// it the only ways out are a junk version or waiting to be taken over.
+    /// A discard ends the claim without minting a snapshot - taken by mistake, never played. Without
+    /// it the only ways out are a junk snapshot or waiting to be taken over.
     /// </summary>
     [Fact]
     public void A_claim_can_end_without_anything_having_been_played()

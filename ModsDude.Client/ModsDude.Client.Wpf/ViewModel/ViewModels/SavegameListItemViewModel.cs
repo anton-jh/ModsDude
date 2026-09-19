@@ -202,7 +202,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool CanCheckIn => IsMember && IsHeldByMe && IsHeldHere && IsHoldUnreachable is false;
 
     /// <summary>
-    /// Whether giving the save back without minting a version is on offer - the verb for a save
+    /// Whether giving the save back without minting a snapshot is on offer - the verb for a save
     /// taken by mistake and never played.
     /// </summary>
     /// <remarks>
@@ -279,7 +279,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public string CheckOutToolTip => CheckOutBlockedReason
         ?? (IsHeldByMe
-            ? "Writes the newest version into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
+            ? "Writes the newest snapshot into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
             : "Takes the claim and writes it into a slot. Nobody else can take it until you check it in.");
 
     /// <summary>
@@ -287,10 +287,10 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// the whole of what checking in needs.
     /// </summary>
     public string CheckInToolTip =>
-        "Uploads what is in the slot as a new version and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.";
+        "Uploads what is in the slot as a new snapshot and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.";
 
     public string DiscardToolTip =>
-        "Hands the claim back without minting a version. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
+        "Hands the claim back without minting a snapshot. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
 
     public string DisconnectToolTip =>
         "ModsDude forgets this copy. Nothing on disk changes and the server is not told, so the claim stays yours.";
@@ -346,17 +346,17 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     public ObservableCollection<SavegameChip> Chips { get; }
 
-    /// <summary>The head version's number and size, for the row's second line. Empty where nothing has been checked in yet.</summary>
-    public string Summary => Savegame.Head is SavegameVersionDto head
-        ? $"Version {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}"
-        : "No versions yet";
+    /// <summary>The head snapshot's number and size, for the row's second line. Empty where nothing has been checked in yet.</summary>
+    public string Summary => Savegame.Head is SavegameSnapshotDto head
+        ? $"Snapshot {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}"
+        : "No snapshots yet";
 
     /// <summary>
-    /// What the game says about the head version - the map, the hours in it - recorded by whoever
+    /// What the game says about the head snapshot - the map, the hours in it - recorded by whoever
     /// checked it in and read here by everybody else. It is the half of a savegame row that is about
     /// the save rather than about the sharing of it.
     /// </summary>
-    public string? GameSummary => Savegame.Head is SavegameVersionDto head && head.Details.Count > 0
+    public string? GameSummary => Savegame.Head is SavegameSnapshotDto head && head.Details.Count > 0
         ? string.Join(" · ", head.Details.Select(x => x.Value))
         : null;
 
@@ -384,7 +384,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     private void CheckOut() => CheckOutRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
-    /// Hands the save back from the slot holding it, as a new version.
+    /// Hands the save back from the slot holding it, as a new snapshot.
     /// </summary>
     /// <remarks>
     /// Here rather than on a slot list of its own, because this is the list somebody is looking at when
@@ -537,7 +537,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <param name="lockedPinMoved">
     /// Whether a <em>locked</em> pin moved between the two revisions. Only that turns the chip
     /// caution-coloured: an unlocked mod at a different version is untidy, a locked map at a different
-    /// version is a damaged save waiting to happen.
+    /// snapshot is a damaged save waiting to happen.
     /// </param>
     public void SetRevisionDrift(int revisionsBehind, bool lockedPinMoved)
     {

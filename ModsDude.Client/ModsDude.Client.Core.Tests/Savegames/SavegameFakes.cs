@@ -18,12 +18,12 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 /// <remarks>
 /// The rules the client is tested against are the server's real ones, reproduced rather than
 /// stubbed: a stale base is refused unless forced, a check-in whose hash equals the head's mints no
-/// version, and the head answered back is the one a client would have been given. A fake that said
+/// snapshot, and the head answered back is the one a client would have been given. A fake that said
 /// yes to everything would let a client that never sends <c>basedOn</c> pass.
 /// </remarks>
 internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 {
-    private readonly List<SavegameVersionDto> _versions = [];
+    private readonly List<SavegameSnapshotDto> _snapshots = [];
     private readonly Dictionary<string, byte[]> _blobs = [];
 
     private SavegameDto _savegame = null!;
@@ -56,17 +56,17 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public List<PublishSavegameRequest> Publishes { get; } = [];
 
-    /// <summary>The versions this savegame has, oldest first.</summary>
-    public IReadOnlyList<SavegameVersionDto> Versions => _versions;
+    /// <summary>The snapshots this savegame has, oldest first.</summary>
+    public IReadOnlyList<SavegameSnapshotDto> Snapshots => _snapshots;
 
     public SavegameDto Savegame => _savegame;
 
-    public SavegameVersionDto? Head => _savegame.Head;
+    public SavegameSnapshotDto? Head => _savegame.Head;
 
 
     /// <summary>
     /// Makes this savegame follow no mod list, which publish offers as a choice and which every
-    /// adapter with savegames but no mods gets by default. Its versions then record no revision.
+    /// adapter with savegames but no mods gets by default. Its snapshots then record no revision.
     /// </summary>
     public void FollowNoProfile() => _savegame = _savegame with { ProfileId = null };
 
@@ -77,24 +77,24 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// </summary>
     public void Supersede() => _savegame = _savegame with { SupersededAt = DateTime.UtcNow };
 
-    /// <summary>Puts a version and its bytes on the server - a publish that happened before the test.</summary>
-    public SavegameVersionDto Seed(byte[] content, int? profileRevision = 1)
+    /// <summary>Puts a snapshot and its bytes on the server - a publish that happened before the test.</summary>
+    public SavegameSnapshotDto Seed(byte[] content, int? profileRevision = 1)
     {
         var hash = HashOf(content);
 
         _blobs[hash] = content;
 
-        return AddVersion(hash, content.Length, profileRevision, SavegameVersionOrigin.Created, null);
+        return AddSnapshot(hash, content.Length, profileRevision, SavegameSnapshotOrigin.Created, null);
     }
 
     /// <summary>Somebody else took the save over and checked in while this machine was playing.</summary>
-    public SavegameVersionDto CheckInFromAnotherMachine(byte[] content, int profileRevision = 1)
+    public SavegameSnapshotDto CheckInFromAnotherMachine(byte[] content, int profileRevision = 1)
     {
         var hash = HashOf(content);
 
         _blobs[hash] = content;
 
-        return AddVersion(hash, content.Length, profileRevision, SavegameVersionOrigin.CheckedIn, _savegame.Head?.Number);
+        return AddSnapshot(hash, content.Length, profileRevision, SavegameSnapshotOrigin.CheckedIn, _savegame.Head?.Number);
     }
 
     public bool HasBlob(string contentHash) => _blobs.ContainsKey(contentHash);
@@ -119,13 +119,13 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         return Task.CompletedTask;
     }
 
-    public Task<SavegameVersionDto> CheckInSavegameV1Async(Guid repoId, Guid savegameId, CheckInSavegameRequest request, CancellationToken cancellationToken = default)
+    public Task<SavegameSnapshotDto> CheckInSavegameV1Async(Guid repoId, Guid savegameId, CheckInSavegameRequest request, CancellationToken cancellationToken = default)
     {
         CheckIns.Add(request);
 
         if (_blobs.ContainsKey(request.ContentHash) is false)
         {
-            // The server refuses a version whose blob is absent, because that is a head nobody can
+            // The server refuses a snapshot whose blob is absent, because that is a head nobody can
             // check out. Reproduced so that a client which skips the upload wrongly fails here.
             throw Problem(ProblemType.NotFound, $"No savegame blob '{request.ContentHash}'.");
         }
@@ -144,7 +144,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
         if (isStale && request.Force is false)
         {
-            throw Problem(ProblemType.SavegameVersionStale, $"Based on {request.BasedOn}, head is {head!.Number}.");
+            throw Problem(ProblemType.SavegameSnapshotStale, $"Based on {request.BasedOn}, head is {head!.Number}.");
         }
 
         // A check-in that changes nothing mints nothing, and is answered with the head instead.
@@ -153,11 +153,11 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             return Task.FromResult(head);
         }
 
-        return Task.FromResult(AddVersion(
+        return Task.FromResult(AddSnapshot(
             request.ContentHash,
             request.SizeBytes,
             request.ProfileRevision,
-            isStale ? SavegameVersionOrigin.Forced : SavegameVersionOrigin.CheckedIn,
+            isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
             request.BasedOn,
             request.Label));
     }
@@ -178,16 +178,16 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             ProfileId = request.ProfileId
         };
 
-        AddVersion(request.ContentHash, request.SizeBytes, request.ProfileRevision, SavegameVersionOrigin.Created, null, request.Label);
+        AddSnapshot(request.ContentHash, request.SizeBytes, request.ProfileRevision, SavegameSnapshotOrigin.Created, null, request.Label);
 
         return Task.FromResult(_savegame);
     }
 
-    public Task<GetSavegameVersionsResponse> GetSavegameVersionsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(new GetSavegameVersionsResponse
+    public Task<GetSavegameSnapshotsResponse> GetSavegameSnapshotsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(new GetSavegameSnapshotsResponse
         {
-            Versions = [.. _versions],
-            HeadVersion = _savegame.Head?.Number ?? 0,
+            Snapshots = [.. _snapshots],
+            HeadSnapshot = _savegame.Head?.Number ?? 0,
             HasMore = false
         });
 
@@ -223,7 +223,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         => throw new NotSupportedException();
     public Task<System.Collections.Generic.ICollection<SavegameDto>> GetArchivedSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
-    public Task DeleteSavegameVersionV1Async(Guid repoId, Guid savegameId, int number, CancellationToken cancellationToken = default)
+    public Task DeleteSavegameSnapshotV1Async(Guid repoId, Guid savegameId, int number, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task DeleteSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
@@ -246,7 +246,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     public int MadeCurrent { get; private set; }
     public Task<ICollection<SavegameDto>> GetSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
-    public Task<SavegameVersionDto> RestoreSavegameVersionV1Async(Guid repoId, Guid savegameId, int number, RestoreSavegameVersionRequest? request = null, CancellationToken cancellationToken = default)
+    public Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(Guid repoId, Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
@@ -256,17 +256,17 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public static string HashOf(byte[] content) => ModContentHasher.Format(SHA256.HashData(content));
 
-    private SavegameVersionDto AddVersion(
+    private SavegameSnapshotDto AddSnapshot(
         string contentHash,
         long sizeBytes,
         // Nullable like the wire shape it stands in for: a savegame that follows no mod list records
         // no revision, and the pair is null together with the profile above it.
         int? profileRevision,
-        SavegameVersionOrigin origin,
-        int? baseVersion,
+        SavegameSnapshotOrigin origin,
+        int? baseSnapshot,
         string? label = null)
     {
-        var version = new SavegameVersionDto
+        var snapshot = new SavegameSnapshotDto
         {
             RepoId = RepoId,
             SavegameId = _savegame.Id,
@@ -279,13 +279,13 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             CreatedBy = new UserDto { Id = "someone", DisplayName = "Someone", Tag = "0001" },
             Label = label,
             Origin = origin,
-            BaseVersion = baseVersion
+            BaseSnapshot = baseSnapshot
         };
 
-        _versions.Add(version);
-        _savegame = _savegame with { Head = version };
+        _snapshots.Add(snapshot);
+        _savegame = _savegame with { Head = snapshot };
 
-        return version;
+        return snapshot;
     }
 
     private SavegameCheckoutDto Checkout() => new()
@@ -431,14 +431,14 @@ internal sealed class FakeSavegameAdapters(ILocalSavegameAdapter? adapter) : ILo
 
 
 /// <summary>What this client has been told the heads are. Empty is "not asked", never "unchanged".</summary>
-internal sealed class FakeSavegameHeadVersions : ISavegameHeadVersions
+internal sealed class FakeSavegameHeadSnapshots : ISavegameHeadSnapshots
 {
     private readonly Dictionary<Guid, int> _heads = [];
 
 
-    public void Set(Guid savegameId, int headVersion) => _heads[savegameId] = headVersion;
+    public void Set(Guid savegameId, int headSnapshot) => _heads[savegameId] = headSnapshot;
 
-    public int? GetHeadVersion(Guid repoId, Guid savegameId)
+    public int? GetHeadSnapshot(Guid repoId, Guid savegameId)
         => _heads.TryGetValue(savegameId, out var head) ? head : null;
 }
 

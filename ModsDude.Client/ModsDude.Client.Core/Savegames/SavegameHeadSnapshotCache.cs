@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// What this client last saw a savegame's head version to be, remembered so the drift check can ask
+/// What this client last saw a savegame's head snapshot to be, remembered so the drift check can ask
 /// without going to the network.
 /// </summary>
 /// <remarks>
@@ -23,12 +23,12 @@ namespace ModsDude.Client.Core.Savegames;
 /// the next time the list is opened it corrects itself.
 /// </para>
 /// </remarks>
-public sealed class SavegameHeadVersionCache : ISavegameHeadVersions
+public sealed class SavegameHeadSnapshotCache : ISavegameHeadSnapshots
 {
     private readonly ConcurrentDictionary<(Guid RepoId, Guid SavegameId), int> _heads = [];
 
 
-    public int? GetHeadVersion(Guid repoId, Guid savegameId)
+    public int? GetHeadSnapshot(Guid repoId, Guid savegameId)
     {
         return _heads.TryGetValue((repoId, savegameId), out var head) ? head : null;
     }

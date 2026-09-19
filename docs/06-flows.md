@@ -375,7 +375,7 @@ and not for the others. See
 ## Checking out a savegame
 
 Repo → **Saves** → a save → *Check out*. One gesture, whose second half is derived: a savegame
-version records the profile revision it was played on, so the mod list the user needs is not
+snapshot records the profile revision it was played on, so the mod list the user needs is not
 something to ask about.
 
 1. **The slot picker**, blocking and up front, because writing a slot is the destructive local step.
@@ -404,6 +404,6 @@ clicked from the drift notification rather than found by navigating: unchecked-i
 three savegame drift states, and the app coming back to a folder with newer bytes in it is the
 moment worth speaking up.
 
-A check-in names the version it was built on. If somebody took the save over and checked in while
-you were away, `savegame-version-stale` says so and carries the head; forcing past it is allowed and
-records the fork as `Origin = Forced` with the version you actually played, rather than hiding it.
+A check-in names the snapshot it was built on. If somebody took the save over and checked in while
+you were away, `savegame-snapshot-stale` says so and carries the head; forcing past it is allowed and
+records the fork as `Origin = Forced` with the snapshot you actually played, rather than hiding it.

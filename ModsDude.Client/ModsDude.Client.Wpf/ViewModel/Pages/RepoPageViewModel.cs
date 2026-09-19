@@ -26,7 +26,7 @@ public partial class RepoPageViewModel
     private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
     /// <summary>
     /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
-    /// versions holding a revision, and a link that could not open the list would be no link at all.
+    /// snapshots holding a revision, and a link that could not open the list would be no link at all.
     /// Null for a game with no savegames, where there is no entry to select.
     /// </summary>
     private readonly MenuItemViewModel? _savesMenuItem;
@@ -294,7 +294,7 @@ public partial class RepoPageViewModel
     /// and an archived one is only in the archive.
     /// </para>
     /// <para>
-    /// Which list it is in is asked of the server rather than guessed. The head-version cache would
+    /// Which list it is in is asked of the server rather than guessed. The head-snapshot cache would
     /// have been free, but it is populated as a side effect of the saves page having been visited -
     /// so on a fresh window every savegame would look archived.
     /// </para>

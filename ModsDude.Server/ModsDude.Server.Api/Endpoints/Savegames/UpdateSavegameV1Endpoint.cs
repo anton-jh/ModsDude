@@ -20,8 +20,8 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <remarks>
 /// <para>
 /// <b>There is no operation that moves a savegame to another profile</b>, and this used to be it.
-/// Moving one would put <see cref="Savegame.ProfileId"/> and every version's
-/// <see cref="SavegameVersion.ProfileId"/> in disagreement, and the versions are the honest half -
+/// Moving one would put <see cref="Savegame.ProfileId"/> and every snapshot's
+/// <see cref="SavegameSnapshot.ProfileId"/> in disagreement, and the snapshots are the honest half -
 /// they name the mod lists that actually produced those bytes. It would also make a save's target
 /// revision incomparable with its own history, since revision numbers of two profiles have nothing
 /// to do with each other.

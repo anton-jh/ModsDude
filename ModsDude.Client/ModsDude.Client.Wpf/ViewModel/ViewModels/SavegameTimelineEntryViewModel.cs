@@ -14,8 +14,8 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </para>
 /// <para>
 /// One order covers all three, which is why this is a rank and not a special case per event.
-/// Earliest to latest inside an instant: a claim ends, a version is minted, a claim is taken.
-/// Publishing mints the first version and then hands the publisher the claim; a check-in closes the
+/// Earliest to latest inside an instant: a claim ends, a snapshot is minted, a claim is taken.
+/// Publishing mints the first snapshot and then hands the publisher the claim; a check-in closes the
 /// claim and then mints what it produced; a take-over closes the old claim and then opens the new
 /// one.
 /// </para>
@@ -23,18 +23,18 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public enum SavegameTimelineRank
 {
     ClaimEnded,
-    Version,
+    Snapshot,
     ClaimTaken
 }
 
 
 /// <summary>
-/// One entry in a savegame's history - a version that was minted, a claim that was taken, or a claim
+/// One entry in a savegame's history - a snapshot that was minted, a claim that was taken, or a claim
 /// that ended.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One timeline, not two lists.</b> Versions and claims are read from two logs on the server and
+/// <b>One timeline, not two lists.</b> Snapshots and claims are read from two logs on the server and
 /// merged into one column here, because "who had it when, and what came back" is a single question.
 /// </para>
 /// <para>
@@ -44,12 +44,12 @@ public enum SavegameTimelineRank
 /// strikes the check-out through once the claim behind it is over.
 /// </para>
 /// <para>
-/// <b>A claim that a version already records gets no ending row.</b> An ordinary check-in mints a
-/// version stamped with <see cref="SavegameVersionDto.CheckoutId"/>, and that version <em>is</em> the
+/// <b>A claim that a snapshot already records gets no ending row.</b> An ordinary check-in mints a
+/// snapshot stamped with <see cref="SavegameSnapshotDto.CheckoutId"/>, and that snapshot <em>is</em> the
 /// check-in - drawing a thin "Checked back in" a millimetre under it would say the same thing twice
 /// at the same second. The ending row is for the endings nothing else records: a check-in whose bytes
-/// matched the head and so minted nothing, a claim given back without a version, a save taken over,
-/// and a check-in whose version has since been pruned.
+/// matched the head and so minted nothing, a claim given back without a snapshot, a save taken over,
+/// and a check-in whose snapshot has since been pruned.
 /// </para>
 /// </remarks>
 public sealed class SavegameTimelineEntryViewModel
@@ -86,24 +86,24 @@ public sealed class SavegameTimelineEntryViewModel
     public string? Label { get; private init; }
     public string? SizeText { get; private init; }
 
-    /// <summary>The profile revision this version was played on. The recorded truth, not what the save file believes.</summary>
+    /// <summary>The profile revision this snapshot was played on. The recorded truth, not what the save file believes.</summary>
     public string? RevisionText { get; private init; }
 
     public int? ProfileRevision { get; private init; }
 
-    /// <summary>The version behind this row, or null for either of the two claim rows.</summary>
-    public SavegameVersionDto? Version { get; private init; }
+    /// <summary>The snapshot behind this row, or null for either of the two claim rows.</summary>
+    public SavegameSnapshotDto? Snapshot { get; private init; }
 
-    public int? VersionNumber => Version?.Number;
+    public int? SnapshotNumber => Snapshot?.Number;
 
-    public bool IsVersion => Version is not null;
+    public bool IsSnapshot => Snapshot is not null;
 
     /// <summary>
-    /// The other half of <see cref="IsVersion"/>, and what the list draws a thin row for. A version is
+    /// The other half of <see cref="IsSnapshot"/>, and what the list draws a thin row for. A snapshot is
     /// something the savegame still has; a claim row is something that merely happened to it, and the
     /// two reading alike is what made the history hard to skim.
     /// </summary>
-    public bool IsEvent => Version is null;
+    public bool IsEvent => Snapshot is null;
 
     /// <summary>
     /// Whether the claim this row opened is over. Only ever true on a
@@ -112,7 +112,7 @@ public sealed class SavegameTimelineEntryViewModel
     /// </summary>
     public bool IsClosed { get; private init; }
 
-    /// <summary>Whether this is the version a check-out would take without restoring anything first.</summary>
+    /// <summary>Whether this is the snapshot a check-out would take without restoring anything first.</summary>
     public bool IsHead { get; private init; }
 
     public bool HasLabel => Label is { Length: > 0 };
@@ -121,30 +121,30 @@ public sealed class SavegameTimelineEntryViewModel
     public bool HasDetail => Detail is { Length: > 0 };
 
     /// <summary>
-    /// What the adapter recorded about this version, in its own order. Empty for a claim row, and for
-    /// a version checked in by a client whose adapter describes nothing.
+    /// What the adapter recorded about this snapshot, in its own order. Empty for a claim row, and for
+    /// a snapshot checked in by a client whose adapter describes nothing.
     /// </summary>
     public IReadOnlyList<SavegameDetailDto> Details { get; private init; } = [];
 
     public bool HasDetails => Details.Count > 0;
 
 
-    public static SavegameTimelineEntryViewModel ForVersion(SavegameVersionDto version, bool isHead)
+    public static SavegameTimelineEntryViewModel ForSnapshot(SavegameSnapshotDto snapshot, bool isHead)
     {
         return new SavegameTimelineEntryViewModel(
-            version.Created,
-            SavegameTimelineRank.Version,
-            version.Label is { Length: > 0 } label ? $"Version {version.Number} · {label}" : $"Version {version.Number}",
-            version.CreatedBy.DisplayName,
-            Describe(version))
+            snapshot.Created,
+            SavegameTimelineRank.Snapshot,
+            snapshot.Label is { Length: > 0 } label ? $"Snapshot {snapshot.Number} · {label}" : $"Snapshot {snapshot.Number}",
+            snapshot.CreatedBy.DisplayName,
+            Describe(snapshot))
         {
-            Version = version,
+            Snapshot = snapshot,
             IsHead = isHead,
-            Label = version.Label,
-            SizeText = SavegameWording.Size(version.SizeBytes),
-            RevisionText = $"Played on revision {version.ProfileRevision}",
-            Details = [.. version.Details],
-            ProfileRevision = version.ProfileRevision
+            Label = snapshot.Label,
+            SizeText = SavegameWording.Size(snapshot.SizeBytes),
+            RevisionText = $"Played on revision {snapshot.ProfileRevision}",
+            Details = [.. snapshot.Details],
+            ProfileRevision = snapshot.ProfileRevision
         };
     }
 
@@ -170,7 +170,7 @@ public sealed class SavegameTimelineEntryViewModel
     }
 
     /// <summary>
-    /// The moment a claim ended. Only built for claims no version records - see the remarks on the
+    /// The moment a claim ended. Only built for claims no snapshot records - see the remarks on the
     /// type for which endings those are.
     /// </summary>
     public static SavegameTimelineEntryViewModel ForClaimEnded(SavegameCheckoutDto checkout)
@@ -189,19 +189,19 @@ public sealed class SavegameTimelineEntryViewModel
 
 
     /// <summary>
-    /// What a version was. A forced check-in and a restore both name what they were built on, because
+    /// What a snapshot was. A forced check-in and a restore both name what they were built on, because
     /// that is the only place the fork shows up without anybody having to draw a tree.
     /// </summary>
-    private static string Describe(SavegameVersionDto version) => version.Origin switch
+    private static string Describe(SavegameSnapshotDto snapshot) => snapshot.Origin switch
     {
-        SavegameVersionOrigin.Created => "Published",
-        SavegameVersionOrigin.CheckedIn => "Checked in",
-        SavegameVersionOrigin.Forced => version.BaseVersion is int forced
-            ? $"Forced in over version {forced}, which stays in the history"
-            : "Forced in over a newer version, which stays in the history",
-        SavegameVersionOrigin.Restored => version.BaseVersion is int restored
-            ? $"Restored version {restored}"
-            : "Restored an earlier version",
+        SavegameSnapshotOrigin.Created => "Published",
+        SavegameSnapshotOrigin.CheckedIn => "Checked in",
+        SavegameSnapshotOrigin.Forced => snapshot.BaseSnapshot is int forced
+            ? $"Forced in over snapshot {forced}, which stays in the history"
+            : "Forced in over a newer snapshot, which stays in the history",
+        SavegameSnapshotOrigin.Restored => snapshot.BaseSnapshot is int restored
+            ? $"Restored snapshot {restored}"
+            : "Restored an earlier snapshot",
         _ => ""
     };
 
@@ -223,7 +223,7 @@ public sealed class SavegameTimelineEntryViewModel
     {
         SavegameCheckoutEndReason.CheckedIn => ("Checked back in", ""),
         SavegameCheckoutEndReason.TakenOver => ("Taken over", "Somebody else took the save"),
-        SavegameCheckoutEndReason.Discarded => ("Given back", "Without a version"),
+        SavegameCheckoutEndReason.Discarded => ("Given back", "Without a snapshot"),
         _ => ("Handed back", "")
     };
 }

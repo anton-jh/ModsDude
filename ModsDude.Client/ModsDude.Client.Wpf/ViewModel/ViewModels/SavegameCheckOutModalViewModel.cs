@@ -13,7 +13,7 @@ public enum SavegameCheckOutMode
 
     /// <summary>
     /// Writes the slot and nothing else - no claim, no binding, no mods. What a Guest is offered, and
-    /// what a Member uses to look at an old version without holding the save hostage.
+    /// what a Member uses to look at an old snapshot without holding the save hostage.
     /// </summary>
     TakeCopy
 }
@@ -101,26 +101,26 @@ public sealed record SavegameCheckOutContext(
 /// </remarks>
 public partial class SavegameCheckOutModalViewModel : ModalViewModel
 {
-    private readonly int _headVersion;
+    private readonly int _headSnapshot;
 
 
-    /// <param name="versionNumber">
-    /// The version being taken. Where it is not the head, this dialog is also confirming the restore
-    /// that copies it forward - said out loud rather than hidden, because it mints a version.
+    /// <param name="snapshotNumber">
+    /// The snapshot being taken. Where it is not the head, this dialog is also confirming the restore
+    /// that copies it forward - said out loud rather than hidden, because it mints a snapshot.
     /// </param>
     public SavegameCheckOutModalViewModel(
         SavegameCheckOutMode mode,
         string savegameName,
         string profileName,
-        int versionNumber,
-        int headVersion,
+        int snapshotNumber,
+        int headSnapshot,
         SavegameCheckOutContext context)
     {
         Mode = mode;
         SavegameName = savegameName;
         ProfileName = profileName;
-        VersionNumber = versionNumber;
-        _headVersion = headVersion;
+        SnapshotNumber = snapshotNumber;
+        _headSnapshot = headSnapshot;
 
         Slots = [];
 
@@ -153,15 +153,15 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
 
     public string SavegameName { get; }
     public string ProfileName { get; }
-    public int VersionNumber { get; }
+    public int SnapshotNumber { get; }
 
     public string Title => Mode is SavegameCheckOutMode.TakeCopy
         ? $"Take a copy of '{SavegameName}'"
         : $"Check out '{SavegameName}'";
 
     /// <summary>
-    /// The one line under the title. An older version says that taking it copies it forward, because
-    /// that is a version somebody else will see appear.
+    /// The one line under the title. An older snapshot says that taking it copies it forward, because
+    /// that is a snapshot somebody else will see appear.
     /// </summary>
     public string Intro
     {
@@ -169,14 +169,14 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         {
             if (Mode is SavegameCheckOutMode.TakeCopy)
             {
-                return VersionNumber == _headVersion
+                return SnapshotNumber == _headSnapshot
                     ? "A copy, and nothing more: nobody is stopped from playing it, and this machine records no claim on it. The slot is an ordinary save of your own from then on."
-                    : $"A copy of version {VersionNumber}, and nothing more: nobody is stopped from playing it, and this machine records no claim on it. The slot is an ordinary save of your own from then on.";
+                    : $"A copy of snapshot {SnapshotNumber}, and nothing more: nobody is stopped from playing it, and this machine records no claim on it. The slot is an ordinary save of your own from then on.";
             }
 
-            return VersionNumber == _headVersion
+            return SnapshotNumber == _headSnapshot
                 ? "Nobody else can check this out until you check it back in."
-                : $"Version {VersionNumber} is copied forward as the newest version first - nothing in between is deleted - and that is what lands in the slot. Nobody else can check it out until you check it back in.";
+                : $"Snapshot {SnapshotNumber} is copied forward as the newest snapshot first - nothing in between is deleted - and that is what lands in the slot. Nobody else can check it out until you check it back in.";
         }
     }
 

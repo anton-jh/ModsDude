@@ -11,10 +11,10 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// <b>It asks nothing about the slot.</b> The open checkout already names it. Choosing between twenty
 /// near-identical folders from memory is precisely where a wrong answer publishes somebody else's
-/// savegame under this save's name and burns a version doing it.
+/// savegame under this save's name and burns a snapshot doing it.
 /// </para>
 /// <para>
-/// <b>Keep playing is the mid-session backup.</b> The same version is minted, but the local copy and
+/// <b>Keep playing is the mid-session backup.</b> The same snapshot is minted, but the local copy and
 /// the claim both stay - so saving your progress for the others to see does not become an upload
 /// followed immediately by downloading what was just sent.
 /// </para>
@@ -32,7 +32,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public partial class SavegameCheckInModalViewModel : ModalViewModel
 {
     /// <param name="playedOn">
-    /// Which mod list and revision the version being minted will record, or null where it records
+    /// Which mod list and revision the snapshot being minted will record, or null where it records
     /// none - a savegame following no mod list, and one whose revision nothing on this machine knows.
     /// </param>
     public SavegameCheckInModalViewModel(string savegameName, string slotLabel, string? playedOn = null)
@@ -54,14 +54,14 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     public string Title => $"Check '{SavegameName}' in";
 
     public string Message =>
-        $"Everything in '{SlotLabel}' is uploaded as a new version, and the others can take it from there. " +
+        $"Everything in '{SlotLabel}' is uploaded as a new snapshot, and the others can take it from there. " +
         "A save that changed nothing mints nothing.";
 
     [ObservableProperty]
     private string _label = "";
 
     /// <summary>
-    /// Mints the version and keeps both the copy and the claim, for somebody who is still playing.
+    /// Mints the snapshot and keeps both the copy and the claim, for somebody who is still playing.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]

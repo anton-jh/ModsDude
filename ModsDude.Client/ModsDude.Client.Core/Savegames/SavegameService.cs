@@ -136,17 +136,17 @@ public interface IHeldSavegames
 
 
 /// <summary>
-/// Which mod list a savegame being published follows, and the revision its first version declares.
+/// Which mod list a savegame being published follows, and the revision its first snapshot declares.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>One value rather than two parameters</b>, because the two are all-or-nothing: the server carries
 /// a check constraint saying so, and a half-set pair is the one invalid state
-/// <see cref="SavegameVersionDto"/> has. Null in place of this record is the savegame that follows no
+/// <see cref="SavegameSnapshotDto"/> has. Null in place of this record is the savegame that follows no
 /// mod list - a real choice the publish dialog offers, not a fallback.
 /// </para>
 /// <para>
-/// <b>The revision is declared, not observed</b>, and this is the only version in the system of which
+/// <b>The revision is declared, not observed</b>, and this is the only snapshot in the system of which
 /// that is true. See <see cref="SavegameService.DeclaredRevisionFor"/> for which number it is.
 /// </para>
 /// </remarks>
@@ -159,10 +159,10 @@ public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One holder at a time, an explicit hand-back, and a version for every hand-back.</b> There is no
+/// <b>One holder at a time, an explicit hand-back, and a snapshot for every hand-back.</b> There is no
 /// merge here and there never will be: two people's afternoons in one save cannot be reconciled by
 /// anything, so the design refuses the situation instead of attempting the reconciliation. The
-/// mechanical guarantee is the base-version check at check-in; the checkout is the social half, and
+/// mechanical guarantee is the base-snapshot check at check-in; the checkout is the social half, and
 /// only the first is a guarantee. See docs/PLAN.md#phase-8--savegames.
 /// </para>
 /// <para>
@@ -205,18 +205,18 @@ public interface ISavegameService : IHeldSavegames
     /// </remarks>
     Task<SavegameSlotAvailability> ClassifySlotAsync(Game game, SavegameSlotRef slot, CancellationToken ct);
 
-    /// <summary>Takes the claim on a savegame and writes its head version into a slot.</summary>
+    /// <summary>Takes the claim on a savegame and writes its head snapshot into a slot.</summary>
     /// <param name="progress">
     /// Where to say which stage the bytes are in and how far through it they are. The same
     /// parameter, with the same meaning, on every verb below that moves a save.
     /// </param>
     Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
-    /// <summary>Writes a named version into a slot without claiming anything.</summary>
-    Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    /// <summary>Writes a named snapshot into a slot without claiming anything.</summary>
+    Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
-    /// <summary>Hands a held savegame back, minting a version from whatever is in its slot now.</summary>
-    Task<SavegameVersionDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    /// <summary>Hands a held savegame back, minting a snapshot from whatever is in its slot now.</summary>
+    Task<SavegameSnapshotDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
     /// Puts a past savegame back in its profile's current slot, and lets go of the revision it was
@@ -249,7 +249,7 @@ public interface ISavegameService : IHeldSavegames
 
     /// <summary>Turns whatever is in a slot into a new savegame in the repo.</summary>
     /// <param name="target">
-    /// Which mod list the new savegame follows and the revision its first version declares, or null
+    /// Which mod list the new savegame follows and the revision its first snapshot declares, or null
     /// for a savegame that follows none. The pair travels as one value because the server refuses a
     /// half-set one, and because there is no third state - see
     /// docs/10-savegame-profile-binding.md#savegames-without-a-profile.
@@ -269,7 +269,7 @@ public interface ISavegameService : IHeldSavegames
         CancellationToken ct,
         IProgress<SavegameProgress>? progress = null);
 
-    /// <summary>Gives a savegame back without minting a version - taken by mistake, never played.</summary>
+    /// <summary>Gives a savegame back without minting a snapshot - taken by mistake, never played.</summary>
     Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct);
 
     /// <summary>
@@ -383,13 +383,13 @@ public sealed class SavegameService(
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     ILogger<SavegameService> logger,
-    ISavegameHeadVersions? headVersions = null)
+    ISavegameHeadSnapshots? headSnapshots = null)
     : ISavegameService
 {
     private const int _bufferSize = 64 * 1024;
 
-    /// <summary>One page is every version any savegame is ever going to have; retention keeps ten.</summary>
-    private const int _versionPageSize = 200;
+    /// <summary>One page is every snapshot any savegame is ever going to have; retention keeps ten.</summary>
+    private const int _snapshotPageSize = 200;
 
 
     /// <summary>
@@ -402,8 +402,8 @@ public sealed class SavegameService(
     /// unwrapped so a caller can read the server's own wording out of it - this is only here so a
     /// view model can ask the question without knowing the generated types.
     /// </remarks>
-    public static bool IsVersionStale(Exception exception)
-        => exception is ApiException<CustomProblemDetails> { Result.Type: ProblemType.SavegameVersionStale };
+    public static bool IsSnapshotStale(Exception exception)
+        => exception is ApiException<CustomProblemDetails> { Result.Type: ProblemType.SavegameSnapshotStale };
 
 
     public async Task<IReadOnlyList<GameSavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct)
@@ -471,7 +471,7 @@ public sealed class SavegameService(
     /// different apply from the one that runs.
     /// </para>
     /// <para>
-    /// <b>The head version's revision is not the answer for a current savegame.</b> It names the last
+    /// <b>The head snapshot's revision is not the answer for a current savegame.</b> It names the last
     /// list the savegame was <em>played</em> on, which is older than head whenever anybody has edited the
     /// profile since - and a current savegame follows its profile, which is what current means.
     /// Preparing the mod list before a session and then checking the savegame out is the ordinary case,
@@ -484,7 +484,7 @@ public sealed class SavegameService(
         => savegame.SupersededAt is null ? null : savegame.Head?.ProfileRevision;
 
     /// <summary>
-    /// Which revision a published savegame's first version declares: <b>the revision the folder is
+    /// Which revision a published savegame's first snapshot declares: <b>the revision the folder is
     /// actually on where that is a revision of the chosen profile</b>, and that profile's head
     /// otherwise.
     /// </summary>
@@ -569,7 +569,7 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Takes the claim on a savegame and writes its head version into a slot.
+    /// Takes the claim on a savegame and writes its head snapshot into a slot.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -604,11 +604,11 @@ public sealed class SavegameService(
         var head = savegame.Head
             ?? throw new UserFriendlyException(
                 $"'{savegame.Name}' has nothing to check out",
-                $"Savegame '{savegame.Id}' has no head version, so there is nothing to write into a slot.");
+                $"Savegame '{savegame.Id}' has no head snapshot, so there is nothing to write into a slot.");
 
-        // Read off the version rather than the savegame, because that is what the binding will record
+        // Read off the snapshot rather than the savegame, because that is what the binding will record
         // a moment later and the limit has to count what the binding claims. The server keeps the two
-        // in step - a version's profile is its savegame's - so they cannot disagree.
+        // in step - a snapshot's profile is its savegame's - so they cannot disagree.
         EnsureModFolderIsFree(game, savegame.Id, head.ProfileId, savegame.Name);
 
         await EnsureWritable(game, adapter, target, slot, savegame.Name, ct);
@@ -618,7 +618,7 @@ public sealed class SavegameService(
         await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
-        // and which version is in it, and writing it before the unpack would claim a slot holding
+        // and which snapshot is in it, and writing it before the unpack would claim a slot holding
         // somebody else's save.
         bindings.SetBinding(game.Identity, new SavegameCheckoutBinding(
             savegame.RepoId,
@@ -643,23 +643,23 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Writes a named version into a slot with <b>no claim and no binding</b>. The slot is an
+    /// Writes a named snapshot into a slot with <b>no claim and no binding</b>. The slot is an
     /// ordinary unrecognised one afterwards.
     /// </summary>
     /// <remarks>
-    /// What looking at an old version without disturbing anybody looks like, and what a Guest gets:
+    /// What looking at an old snapshot without disturbing anybody looks like, and what a Guest gets:
     /// they may download and never check in. Nothing about it is reversible by ModsDude either -
-    /// there is no version to mint from it and no claim to give back, so it is a copy in the plainest
+    /// there is no snapshot to mint from it and no claim to give back, so it is a copy in the plainest
     /// sense.
     /// </remarks>
-    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int versionNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
+    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
 
         await EnsureWritable(game, adapter, target, slot, savegame.Name, ct);
 
-        var contentHash = await ResolveVersionHashAsync(savegame, versionNumber, ct);
+        var contentHash = await ResolveSnapshotHashAsync(savegame, snapshotNumber, ct);
 
         await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, progress, ct);
 
@@ -674,34 +674,34 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Hands a held savegame back, minting a version from whatever is in its slot now.
+    /// Hands a held savegame back, minting a snapshot from whatever is in its slot now.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>It asks nothing.</b> It acts on the slot the binding already names, because choosing
     /// between twenty near-identical folders from memory is precisely the moment where a wrong answer
-    /// publishes somebody else's slot under this save's name and burns a version doing it.
+    /// publishes somebody else's slot under this save's name and burns a snapshot doing it.
     /// </para>
     /// <para>
     /// <b>The local copy is recycled only after the commit.</b> Not after the upload - an uploaded
-    /// blob that no version names is unreachable - and never before. Every failure up to and
+    /// blob that no snapshot names is unreachable - and never before. Every failure up to and
     /// including the commit leaves the binding and the folder exactly as they were, so the whole
     /// thing is retryable.
     /// </para>
     /// <para>
-    /// <b>A stale base is not swallowed.</b> The server's <c>savegame-version-stale</c> comes back
+    /// <b>A stale base is not swallowed.</b> The server's <c>savegame-snapshot-stale</c> comes back
     /// out of here as the <see cref="ApiException{TResult}"/> it arrived as, carrying the server's own
     /// wording, so the caller can turn it into the "force?" question - see
-    /// <see cref="IsVersionStale"/>. Forcing is a decision only the person holding the save can make,
+    /// <see cref="IsSnapshotStale"/>. Forcing is a decision only the person holding the save can make,
     /// and it records the fork rather than hiding it.
     /// </para>
     /// </remarks>
     /// <param name="keepPlaying">
-    /// Keeps the save checked out and the slot as it is, rebased onto the version just minted. For
+    /// Keeps the save checked out and the slot as it is, rebased onto the snapshot just minted. For
     /// somebody who wants tonight's progress on the server and intends to carry on.
     /// </param>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
-    public async Task<SavegameVersionDto> CheckInAsync(
+    public async Task<SavegameSnapshotDto> CheckInAsync(
         Game game,
         Guid savegameId,
         string? label,
@@ -722,14 +722,14 @@ public sealed class SavegameService(
 
         // The last observation, and the packed hash is exactly what one would compute - the packer
         // hashes what it writes - so it costs no second pass over the folder. Play since the previous
-        // look belongs to the revision this folder is on now, which is what the version will name.
+        // look belongs to the revision this folder is on now, which is what the snapshot will name.
         binding = Observe(game.Identity, binding, packed.ContentHash);
 
         // Read from the slot these bytes came from, before the upload rather than after: the details
-        // describe the version being minted.
+        // describe the snapshot being minted.
         var details = await DescribeAsync(adapter, target, slot, ct);
 
-        SavegameVersionDto version;
+        SavegameSnapshotDto snapshot;
 
         try
         {
@@ -737,9 +737,9 @@ public sealed class SavegameService(
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
-            version = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
+            snapshot = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
             {
-                BasedOn = binding.Version,
+                BasedOn = binding.Snapshot,
                 ProfileRevision = ResolveAppliedRevision(game, binding),
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
@@ -758,24 +758,24 @@ public sealed class SavegameService(
         if (keepPlaying)
         {
             // Rebased onto what was just minted, so the next check-in is based on this one rather
-            // than on a version that is no longer the head. The hash is the packed one and not the
+            // than on a snapshot that is no longer the head. The hash is the packed one and not the
             // slot's - they are the same bytes by construction, and re-hashing the folder would cost
             // a second full pass to learn nothing.
             bindings.SetBinding(game.Identity, binding with
             {
-                Version = version.Number,
-                ContentHash = version.ContentHash,
+                Snapshot = snapshot.Number,
+                ContentHash = snapshot.ContentHash,
                 WrittenAt = DateTime.UtcNow,
-                ProfileId = version.ProfileId,
-                ProfileRevision = version.ProfileRevision,
+                ProfileId = snapshot.ProfileId,
+                ProfileRevision = snapshot.ProfileRevision,
                 // Both boundaries move together, because this is a check-out in every respect that
-                // matters: the version on the server is these bytes, and the next evening is the
+                // matters: the snapshot on the server is these bytes, and the next evening is the
                 // first that has not been recorded anywhere.
-                LastObservedHash = version.ContentHash,
+                LastObservedHash = snapshot.ContentHash,
                 LastPlayedRevision = null
             });
 
-            return version;
+            return snapshot;
         }
 
         // Only now. The binding goes first so that a failure to recycle cannot leave a slot claimed
@@ -784,7 +784,7 @@ public sealed class SavegameService(
         bindings.ClearBinding(game.Identity, savegameId);
         Recycle(adapter, target, slot);
 
-        return version;
+        return snapshot;
     }
 
     /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
@@ -821,7 +821,7 @@ public sealed class SavegameService(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new version of that
+    /// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new snapshot of that
     /// thing" have opposite failure modes, and one button doing both is how the MVP managed to
     /// overwrite saves.
     /// </para>
@@ -837,7 +837,7 @@ public sealed class SavegameService(
     /// answer and so is none of them - the game's active one is only the likeliest - so the
     /// caller settles it and hands the pair down. The revision half is a <em>declaration</em>: the
     /// bytes predate ModsDude, nothing knows which mods were in the folder while that savegame was
-    /// actually played, and no arrangement of this flow recovers it. Every version after the first is
+    /// actually played, and no arrangement of this flow recovers it. Every snapshot after the first is
     /// observed.
     /// </para>
     /// <para>
@@ -904,7 +904,7 @@ public sealed class SavegameService(
         }
 
         // Written even where the save is about to be handed straight back, because until the claim is
-        // released this machine genuinely is holding it: the server opened one beside the version.
+        // released this machine genuinely is holding it: the server opened one beside the snapshot.
         // Writing it unconditionally is what makes the hand-back below retryable - a release that
         // fails leaves a row offering Check in and Discard rather than a claim nothing on this machine
         // remembers taking.
@@ -924,7 +924,7 @@ public sealed class SavegameService(
             TargetRevision = null,
             // The same clean slate a check-out leaves. The bytes in the slot are what was just
             // published, and whatever produced them happened before ModsDude saw this save at all -
-            // which is why the first version's revision is declared rather than observed.
+            // which is why the first snapshot's revision is declared rather than observed.
             LastObservedHash = packed.ContentHash,
             LastPlayedRevision = null
         });
@@ -942,11 +942,11 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Gives a savegame back without minting a version, and recycles the local copy.
+    /// Gives a savegame back without minting a snapshot, and recycles the local copy.
     /// </summary>
     /// <remarks>
     /// The way out of a checkout taken by mistake. Without it the only ways to release one are a junk
-    /// version nobody wanted and waiting to be taken over, and both of those are worse than an
+    /// snapshot nobody wanted and waiting to be taken over, and both of those are worse than an
     /// explicit "I never played this".
     /// </remarks>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
@@ -1076,7 +1076,7 @@ public sealed class SavegameService(
             }
 
             var slot = slots.FirstOrDefault(x => x.Ref.Addresses(binding.Slot));
-            var head = headVersions?.GetHeadVersion(binding.RepoId, binding.SavegameId);
+            var head = headSnapshots?.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
 
             // This folder's own manifest, not an average of the game's: what a held save was played
             // against is what the folder it sits in was applied to, and with several targets the
@@ -1100,8 +1100,8 @@ public sealed class SavegameService(
             drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
             {
                 SlotDisplayName = slot?.DisplayName,
-                HeldVersion = binding.Version,
-                HeadVersion = head,
+                HeldSnapshot = binding.Snapshot,
+                HeadSnapshot = head,
                 PlayedRevision = binding.ProfileRevision,
                 AppliedRevision = manifest?.ProfileRevision,
                 TargetRevision = binding.TargetRevision,
@@ -1293,7 +1293,7 @@ public sealed class SavegameService(
     }
 
     /// <summary>
-    /// Fetches a version's blob and replaces the slot's contents with it.
+    /// Fetches a snapshot's blob and replaces the slot's contents with it.
     /// </summary>
     /// <remarks>
     /// Staged to a temporary file rather than unpacked from the response stream, because a zip is
@@ -1414,48 +1414,48 @@ public sealed class SavegameService(
             ct);
 
         // The uploader hashes what it actually sent. Disagreeing with the packer means the archive
-        // changed under us between the two reads, and committing a version pointing at a blob nobody
+        // changed under us between the two reads, and committing a snapshot pointing at a blob nobody
         // can reproduce is worse than failing here - where nothing has been recorded yet.
         if (ModContentHasher.Matches(uploaded, packed.ContentHash) is false)
         {
             throw new UserFriendlyException(
                 "The savegame changed while it was being uploaded",
-                $"Packed as '{packed.ContentHash}' but uploaded '{uploaded}'. No version has been recorded.");
+                $"Packed as '{packed.ContentHash}' but uploaded '{uploaded}'. No snapshot has been recorded.");
         }
     }
 
     /// <summary>
-    /// The content hash of one numbered version.
+    /// The content hash of one numbered snapshot.
     /// </summary>
     /// <remarks>
     /// The head is answered from what the caller already has, which is the overwhelmingly common case
-    /// and saves a round trip; anything older costs the version list, which is a page of rows and no
+    /// and saves a round trip; anything older costs the snapshot list, which is a page of rows and no
     /// blobs.
     /// </remarks>
-    private async Task<string> ResolveVersionHashAsync(SavegameDto savegame, int versionNumber, CancellationToken ct)
+    private async Task<string> ResolveSnapshotHashAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct)
     {
-        if (savegame.Head is SavegameVersionDto head && head.Number == versionNumber)
+        if (savegame.Head is SavegameSnapshotDto head && head.Number == snapshotNumber)
         {
             return head.ContentHash;
         }
 
-        var versions = await savegamesClient.GetSavegameVersionsV1Async(savegame.RepoId, savegame.Id, null, _versionPageSize, ct);
+        var snapshots = await savegamesClient.GetSavegameSnapshotsV1Async(savegame.RepoId, savegame.Id, null, _snapshotPageSize, ct);
 
-        return versions.Versions.FirstOrDefault(x => x.Number == versionNumber)?.ContentHash
+        return snapshots.Snapshots.FirstOrDefault(x => x.Number == snapshotNumber)?.ContentHash
             ?? throw new UserFriendlyException(
-                $"Version {versionNumber} of '{savegame.Name}' is not there any more",
-                $"Savegame '{savegame.Id}' has no version {versionNumber}. Retention keeps the last few versions and anything labelled; pruning leaves the gap where an old one was.");
+                $"Snapshot {snapshotNumber} of '{savegame.Name}' is not there any more",
+                $"Savegame '{savegame.Id}' has no snapshot {snapshotNumber}. Retention keeps the last few snapshots and anything labelled; pruning leaves the gap where an old one was.");
     }
 
     /// <summary>
-    /// Which revision the version a check-in is about to mint was played on, or null where the
+    /// Which revision the snapshot a check-in is about to mint was played on, or null where the
     /// savegame follows no mod list and there is no such thing.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>What was observed beats what is installed.</b> The binding's
     /// <see cref="SavegameCheckoutBinding.LastPlayedRevision"/> is the revision the folder was on the
-    /// last time the slot's bytes actually moved, which is the question a version answers; the
+    /// last time the slot's bytes actually moved, which is the question a snapshot answers; the
     /// manifest only says what the folder runs at this instant, and an apply between the last evening
     /// and the hand-back moves it without anybody playing on it. Preferring the manifest would credit
     /// a fortnight-old session to a mod list it never ran on.
@@ -1542,7 +1542,7 @@ public sealed class SavegameService(
     /// <remarks>
     /// <para>
     /// Read at the moment of publish or check-in, from the slot the bytes are being packed out of,
-    /// so what is recorded describes the version being minted rather than whatever that slot holds
+    /// so what is recorded describes the snapshot being minted rather than whatever that slot holds
     /// later.
     /// </para>
     /// <para>
@@ -1565,7 +1565,7 @@ public sealed class SavegameService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(exception, "Could not describe slot {Slot}; the version will carry no details.", slot.Value);
+            logger.LogWarning(exception, "Could not describe slot {Slot}; the snapshot will carry no details.", slot.Value);
 
             return [];
         }

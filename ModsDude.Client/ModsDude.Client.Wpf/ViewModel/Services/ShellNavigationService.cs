@@ -55,7 +55,7 @@ public sealed class ShellNavigationService
     }
 
     /// <summary>
-    /// Into a repo's list of savegames. Reached from a prune that a savegame version blocked, whose
+    /// Into a repo's list of savegames. Reached from a prune that a savegame snapshot blocked, whose
     /// only useful next step is looking at that savegame.
     /// </summary>
     /// <returns>False where the shell is not up yet, the repo has no savegames, or navigation was refused.</returns>
@@ -99,7 +99,7 @@ public sealed class ShellNavigationService
 
     /// <summary>
     /// Into a profile's own history, where any two revisions can be compared. Reached from a savegame,
-    /// whose versions each name the revision they were played on - so "what changed under this save"
+    /// whose snapshots each name the revision they were played on - so "what changed under this save"
     /// is a question this already answers, and a cut-down comparison beside the savegame list would be
     /// a second answer to keep true.
     /// </summary>

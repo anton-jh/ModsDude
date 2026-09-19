@@ -15,9 +15,9 @@ namespace ModsDude.Server.Persistence.Tests;
 /// <see cref="SavegameRetention.PlanPrune"/> is pure and tested on its own; these are the two halves
 /// around it that only a database can answer - the read that turns rows into the policy's input, and
 /// the delete that carries the decision out. Pruning is the one operation here that destroys
-/// somebody's backups, so every property it relies on is worth pinning: that a labelled version is
+/// somebody's backups, so every property it relies on is worth pinning: that a labelled snapshot is
 /// reported as labelled, that the delete removes exactly what it names, that the gaps it leaves stay
-/// gaps, and that a blob two versions share survives one of them going.
+/// gaps, and that a blob two snapshots share survives one of them going.
 /// </remarks>
 [Collection(nameof(DatabaseCollection))]
 public class SavegameRetentionQueryTests(DatabaseFixture fixture)
@@ -27,19 +27,19 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
     /// <summary>
     /// <c>IsLabelled</c> is the entire exemption rule, derived from a nullable column after the round
-    /// trip. Reading it the wrong way round would prune exactly the versions somebody named to keep.
+    /// trip. Reading it the wrong way round would prune exactly the snapshots somebody named to keep.
     /// </summary>
     [Fact]
-    public async Task A_version_counts_as_labelled_exactly_when_somebody_named_it()
+    public async Task A_snapshot_counts_as_labelled_exactly_when_somebody_named_it()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenVersions(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), "Before the harvest"), (HashOf('3'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), "Before the harvest"), (HashOf('3'), null));
 
         using var dbContext = fixture.CreateDbContext();
 
-        var rows = await dbContext.SavegameVersions.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var rows = await dbContext.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
 
         Assert.Equal(
             [(1, false), (2, true), (3, false)],
@@ -58,34 +58,34 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
         var mine = await GivenASavegame(repoId, profileId);
         var theirs = await GivenASavegame(repoId, profileId);
 
-        await GivenVersions(repoId, profileId, mine, (HashOf('1'), null), (HashOf('2'), null));
-        await GivenVersions(repoId, profileId, theirs, (HashOf('3'), null), (HashOf('4'), null), (HashOf('5'), null));
+        await GivenSnapshots(repoId, profileId, mine, (HashOf('1'), null), (HashOf('2'), null));
+        await GivenSnapshots(repoId, profileId, theirs, (HashOf('3'), null), (HashOf('4'), null), (HashOf('5'), null));
 
         using var dbContext = fixture.CreateDbContext();
 
-        var rows = await dbContext.SavegameVersions.GetRetentionRowsAsync(repoId, mine, CancellationToken.None);
+        var rows = await dbContext.SavegameSnapshots.GetRetentionRowsAsync(repoId, mine, CancellationToken.None);
 
         Assert.Equal([1, 2], rows.Select(x => x.Number.Value).Order());
     }
 
     [Fact]
-    public async Task Pruning_removes_the_versions_it_names_and_leaves_the_rest()
+    public async Task Pruning_removes_the_snapshots_it_names_and_leaves_the_rest()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenVersions(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null), (HashOf('3'), null), (HashOf('4'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null), (HashOf('3'), null), (HashOf('4'), null));
 
         using var dbContext = fixture.CreateDbContext();
 
-        var deleted = await dbContext.SavegameVersions.DeleteVersionsAsync(
+        var deleted = await dbContext.SavegameSnapshots.DeleteSnapshotsAsync(
             repoId, savegameId,
-            [new SavegameVersionNumber(1), new SavegameVersionNumber(3)],
+            [new SavegameSnapshotNumber(1), new SavegameSnapshotNumber(3)],
             CancellationToken.None);
 
         using var verification = fixture.CreateDbContext();
 
-        var remaining = await verification.SavegameVersions.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
 
         Assert.Equal(2, deleted);
         Assert.Equal([2, 4], remaining.Select(x => x.Number.Value).Order());
@@ -103,24 +103,24 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenVersions(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null));
 
         var dbContext = fixture.CreateDbContext();
-        var versions = dbContext.SavegameVersions;
+        var snapshots = dbContext.SavegameSnapshots;
 
         dbContext.Dispose();
 
-        Assert.Equal(0, await versions.DeleteVersionsAsync(repoId, savegameId, [], CancellationToken.None));
+        Assert.Equal(0, await snapshots.DeleteSnapshotsAsync(repoId, savegameId, [], CancellationToken.None));
 
         using var verification = fixture.CreateDbContext();
 
-        var remaining = await verification.SavegameVersions.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
 
         Assert.Equal([1, 2], remaining.Select(x => x.Number.Value).Order());
     }
 
     /// <summary>
-    /// Version numbers are said out loud - "put us back on 3" - so a number has to keep meaning the
+    /// Snapshot numbers are said out loud - "put us back on 3" - so a number has to keep meaning the
     /// same save for as long as anybody might say it. The head is the authority on what comes next,
     /// and it does not move backwards when the rows beneath it go, so pruning leaves the gap and the
     /// next check-in carries on past it.
@@ -131,84 +131,84 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenVersions(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null), (HashOf('3'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), null), (HashOf('3'), null));
 
         using (var pruning = fixture.CreateDbContext())
         {
-            await pruning.SavegameVersions.DeleteVersionsAsync(
+            await pruning.SavegameSnapshots.DeleteSnapshotsAsync(
                 repoId, savegameId,
-                [new SavegameVersionNumber(1), new SavegameVersionNumber(2)],
+                [new SavegameSnapshotNumber(1), new SavegameSnapshotNumber(2)],
                 CancellationToken.None);
         }
 
-        await GivenVersions(repoId, profileId, savegameId, (HashOf('4'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('4'), null));
 
         using var verification = fixture.CreateDbContext();
 
         var savegame = await verification.Savegames.GetAsync(repoId, savegameId, CancellationToken.None);
-        var remaining = await verification.SavegameVersions.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
 
-        Assert.Equal(new SavegameVersionNumber(4), savegame!.HeadVersion);
+        Assert.Equal(new SavegameSnapshotNumber(4), savegame!.HeadSnapshot);
         Assert.Equal([3, 4], remaining.Select(x => x.Number.Value).Order());
     }
 
     /// <summary>
-    /// The property that lets pruning stop at the rows and leave the bytes to the sweep. Versions are
-    /// addressed by content, so a restore - and a night that changed nothing - leaves two versions
+    /// The property that lets pruning stop at the rows and leave the bytes to the sweep. Snapshots are
+    /// addressed by content, so a restore - and a night that changed nothing - leaves two snapshots
     /// naming one blob. If deleting one row could take the address out of the registered set, the
-    /// next sweep would delete a blob the surviving version still points at, and the save behind it
+    /// next sweep would delete a blob the surviving snapshot still points at, and the save behind it
     /// is gone.
     /// </summary>
     [Fact]
-    public async Task A_blob_two_versions_share_stays_registered_when_one_of_them_is_pruned()
+    public async Task A_blob_two_snapshots_share_stays_registered_when_one_of_them_is_pruned()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
         var shared = HashOf('a');
 
-        await GivenVersions(repoId, profileId, savegameId, (shared, null), (HashOf('b'), null), (shared, null));
+        await GivenSnapshots(repoId, profileId, savegameId, (shared, null), (HashOf('b'), null), (shared, null));
 
         using (var pruning = fixture.CreateDbContext())
         {
-            await pruning.SavegameVersions.DeleteVersionsAsync(
+            await pruning.SavegameSnapshots.DeleteSnapshotsAsync(
                 repoId, savegameId,
-                [new SavegameVersionNumber(1)],
+                [new SavegameSnapshotNumber(1)],
                 CancellationToken.None);
         }
 
         using var verification = fixture.CreateDbContext();
 
-        var registered = await verification.SavegameVersions.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await verification.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
 
         Assert.Contains(new SavegameBlobAddress(repoId, savegameId, shared), registered);
     }
 
     /// <summary>
-    /// The other side of it: an address no surviving version names must fall out of the set, or the
+    /// The other side of it: an address no surviving snapshot names must fall out of the set, or the
     /// sweep never reclaims anything and pruning saves no storage at all.
     /// </summary>
     [Fact]
-    public async Task An_address_the_last_version_naming_it_was_pruned_from_stops_being_registered()
+    public async Task An_address_the_last_snapshot_naming_it_was_pruned_from_stops_being_registered()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
         var dropped = HashOf('c');
 
-        await GivenVersions(repoId, profileId, savegameId, (dropped, null), (HashOf('d'), null));
+        await GivenSnapshots(repoId, profileId, savegameId, (dropped, null), (HashOf('d'), null));
 
         using (var pruning = fixture.CreateDbContext())
         {
-            await pruning.SavegameVersions.DeleteVersionsAsync(
+            await pruning.SavegameSnapshots.DeleteSnapshotsAsync(
                 repoId, savegameId,
-                [new SavegameVersionNumber(1)],
+                [new SavegameSnapshotNumber(1)],
                 CancellationToken.None);
         }
 
         using var verification = fixture.CreateDbContext();
 
-        var registered = await verification.SavegameVersions.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await verification.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
 
         Assert.DoesNotContain(new SavegameBlobAddress(repoId, savegameId, dropped), registered);
         Assert.Contains(new SavegameBlobAddress(repoId, savegameId, HashOf('d')), registered);
@@ -228,12 +228,12 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         var shared = HashOf('e');
 
-        await GivenVersions(repoId, profileId, first, (shared, null));
-        await GivenVersions(repoId, profileId, second, (shared, null));
+        await GivenSnapshots(repoId, profileId, first, (shared, null));
+        await GivenSnapshots(repoId, profileId, second, (shared, null));
 
         using var dbContext = fixture.CreateDbContext();
 
-        var registered = await dbContext.SavegameVersions.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await dbContext.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
 
         Assert.Contains(new SavegameBlobAddress(repoId, first, shared), registered);
         Assert.Contains(new SavegameBlobAddress(repoId, second, shared), registered);
@@ -289,20 +289,20 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The same write a check-in makes, one version per pair: the head moves and the version is
+    /// The same write a check-in makes, one snapshot per pair: the head moves and the snapshot is
     /// numbered by the savegame rather than by the caller.
     /// </summary>
-    private async Task GivenVersions(
+    private async Task GivenSnapshots(
         RepoId repoId, ProfileId profileId, SavegameId savegameId,
-        params (string ContentHash, string? Label)[] versions)
+        params (string ContentHash, string? Label)[] snapshots)
     {
-        foreach (var (contentHash, label) in versions)
+        foreach (var (contentHash, label) in snapshots)
         {
             using var dbContext = fixture.CreateDbContext();
 
             var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
-            var version = savegame.CreateVersion(
+            var snapshot = savegame.CreateSnapshot(
                 new RevisionNumber(1),
                 contentHash,
                 sizeBytes: 1024,
@@ -310,7 +310,7 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
                 DateTime.UtcNow,
                 label);
 
-            dbContext.SavegameVersions.Add(version);
+            dbContext.SavegameSnapshots.Add(snapshot);
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
         }

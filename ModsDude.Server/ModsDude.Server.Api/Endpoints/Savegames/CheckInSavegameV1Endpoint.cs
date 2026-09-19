@@ -19,29 +19,29 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// Hands a savegame back, as a new version of it.
+/// Hands a savegame back, as a new snapshot of it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Check-in asks nothing about which savegame it is.</b> The route names one and the client knows
 /// it from the checkout binding it wrote when the save went into the slot. Choosing between twenty
 /// near-identical folders from memory is where the MVP went wrong, and it is precisely the moment
-/// where a wrong answer publishes somebody else's slot under this save's name and burns a version
+/// where a wrong answer publishes somebody else's slot under this save's name and burns a snapshot
 /// doing it.
 /// </para>
 /// <para>
 /// <b><c>BasedOn</c> is the guarantee; the claim is only the manners.</b> Anybody may take a save
 /// from anybody, so what actually stops one person's evening overwriting another's is that a
-/// check-in names the version it was built on and is refused when that is no longer the head. The
+/// check-in names the snapshot it was built on and is refused when that is no longer the head. The
 /// claim is what makes that refusal rare - the base check is what makes it impossible to lose play
 /// silently.
 /// </para>
 /// <para>
 /// <b>Forcing is allowed, and leaves the fork in the record.</b> Somebody who has played four hours
 /// on a base that has since moved is not helped by being told no and nothing else. The forced
-/// check-in becomes the head, stamped <see cref="SavegameVersionOrigin.Forced"/> with
-/// <c>BaseVersion</c> naming what was actually played, so the history says a fork happened and
-/// which version was superseded - without anybody having to render a tree.
+/// check-in becomes the head, stamped <see cref="SavegameSnapshotOrigin.Forced"/> with
+/// <c>BaseSnapshot</c> naming what was actually played, so the history says a fork happened and
+/// which snapshot was superseded - without anybody having to render a tree.
 /// </para>
 /// <para>
 /// <b>A check-in whose bytes equal the head's mints nothing.</b> Launching the game, looking at it
@@ -60,12 +60,12 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPut("repos/{repoId:guid}/savegames/{savegameId:guid}/versions", CheckIn)
+        return builder.MapPut("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots", CheckIn)
             .WithTags("Savegames");
     }
 
 
-    private static async Task<Results<Ok<SavegameVersionDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CheckIn(
+    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CheckIn(
         Guid repoId, Guid savegameId,
         CheckInSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -92,7 +92,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
         }
 
-        var basedOn = new SavegameVersionNumber(request.BasedOn);
+        var basedOn = new SavegameSnapshotNumber(request.BasedOn);
 
         // Paired with the savegame's own profile rather than checked on its own: a save that follows
         // no mod list records no revision, and one that follows a mod list has to record which. The
@@ -114,7 +114,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId.Value}' has no revision {request.ProfileRevision}"));
         }
 
-        // Before storage sees it, and before the version's own constructor does. Both validate the
+        // Before storage sees it, and before the snapshot's own constructor does. Both validate the
         // hash again, and both throw where this reports - and there is no global handler to turn a
         // domain validation exception into anything but a 500.
         if (!ModImageHash.IsValid(request.ContentHash))
@@ -122,7 +122,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        // Before anything is written, and for the same reason as at publish: a version whose blob is
+        // Before anything is written, and for the same reason as at publish: a snapshot whose blob is
         // absent is a head nobody can check out, and the savegame is stuck there until somebody
         // restores past it. A refused check-in is retried by uploading and asking again.
         if (!await savegameStorageService.CheckIfSavegameExists(savegame.RepoId, savegame.Id, request.ContentHash, cancellationToken))
@@ -130,25 +130,25 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(savegame.RepoId, savegame.Id, request.ContentHash));
         }
 
-        var isStale = basedOn != savegame.HeadVersion;
+        var isStale = basedOn != savegame.HeadSnapshot;
 
         if (isStale && !request.Force)
         {
             // The head is carried in the problem so the client can say what it is now rather than
             // only that it is not what was sent - and so the person can decide to force past it,
             // which is a decision only they can make.
-            return TypedResults.BadRequest(Problems.SavegameVersionStale(savegame.Id, basedOn, savegame.HeadVersion));
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, savegame.HeadSnapshot));
         }
 
         var now = timeService.Now();
 
-        var head = await dbContext.SavegameVersions.GetRowAsync(
-            savegame.RepoId, savegame.Id, savegame.HeadVersion, cancellationToken);
+        var head = await dbContext.SavegameSnapshots.GetRowAsync(
+            savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
 
         if (head is not null && head.ContentHash == request.ContentHash)
         {
             // Nothing happened to the save, so nothing is recorded. The head is answered with
-            // instead, which is what the client would have been given had a version been minted.
+            // instead, which is what the client would have been given had a snapshot been minted.
             //
             // The claim still ends: the person pressed check in, and leaving them holding a save
             // they have just handed back would keep the slot claimed for a night that never
@@ -161,21 +161,21 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
         var checkout = await EndOwnCheckoutAsync(dbContext, savegame, userId, now, cancellationToken);
 
-        var version = savegame.CreateVersion(
+        var snapshot = savegame.CreateSnapshot(
             profileRevision,
             request.ContentHash,
             request.SizeBytes,
             userId,
             now,
             request.Label,
-            isStale ? SavegameVersionOrigin.Forced : SavegameVersionOrigin.CheckedIn,
+            isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
             basedOn,
             // Null where somebody else holds the save, which is the ordinary shape of a forced
-            // check-in: the version was not checked in against any claim of this person's.
+            // check-in: the snapshot was not checked in against any claim of this person's.
             checkout?.Id,
             SavegameDetails.From(request.Details));
 
-        dbContext.SavegameVersions.Add(version);
+        dbContext.SavegameSnapshots.Add(snapshot);
 
         try
         {
@@ -186,14 +186,14 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             // Two check-ins holding the same head both computed the same next number, and the
             // primary key let exactly one of them through. The check above is what gives the good
             // error message; the key is what makes it a guarantee rather than a likelihood.
-            return TypedResults.BadRequest(Problems.SavegameVersionStale(savegame.Id, basedOn, version.Number));
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, snapshot.Number));
         }
 
         // After the check-in is safely committed, never in the same transaction as it: a prune that
         // fails must not take somebody's play down with it.
         await SavegamePruning.PruneAsync(dbContext, savegame, cancellationToken);
 
-        return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, version, cancellationToken));
+        return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
     }
 
 
@@ -222,7 +222,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
 
     /// <param name="BasedOn">
-    /// The version that was checked out and played. A check-in is refused when it is no longer the
+    /// The snapshot that was checked out and played. A check-in is refused when it is no longer the
     /// head, so that somebody who was away is told rather than silently overwriting an evening.
     /// </param>
     /// <param name="ProfileRevision">
@@ -239,9 +239,9 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to. Equal to the
     /// head's is how "nothing was played" is recognised, and it costs nothing to send.
     /// </param>
-    /// <param name="Label">What to call this version in the history. Optional; most check-ins are not named.</param>
+    /// <param name="Label">What to call this snapshot in the history. Optional; most check-ins are not named.</param>
     /// <param name="Details">
-    /// What the client's adapter says about the save as it stands now. Recorded per version rather
+    /// What the client's adapter says about the save as it stands now. Recorded per snapshot rather
     /// than per savegame, because a map and a playtime describe the bytes being checked in.
     /// </param>
     /// <param name="Force">

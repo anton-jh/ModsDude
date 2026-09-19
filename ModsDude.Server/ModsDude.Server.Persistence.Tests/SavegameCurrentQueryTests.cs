@@ -233,66 +233,66 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The pairing on a version, from the side the domain cannot see: a profile with no revision.
+    /// The pairing on a snapshot, from the side the domain cannot see: a profile with no revision.
     /// A revision is only readable against the profile that issued it, so half a pair is a row that
     /// means nothing rather than a row that is merely incomplete.
     /// </summary>
     [Fact]
-    public async Task A_version_cannot_name_a_profile_without_a_revision()
+    public async Task A_snapshot_cannot_name_a_profile_without_a_revision()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenACurrentSavegame(repoId, profileId);
 
-        await GivenAVersion(repoId, savegameId);
+        await GivenASnapshot(repoId, savegameId);
 
         using var dbContext = fixture.CreateDbContext();
 
         await Assert.ThrowsAsync<PostgresException>(() => dbContext.Database.ExecuteSqlRawAsync(
-            """UPDATE "SavegameVersions" SET "ProfileRevision" = NULL WHERE "SavegameId" = {0}""",
+            """UPDATE "SavegameSnapshots" SET "ProfileRevision" = NULL WHERE "SavegameId" = {0}""",
             savegameId.Value));
     }
 
-    /// <inheritdoc cref="A_version_cannot_name_a_profile_without_a_revision"/>
+    /// <inheritdoc cref="A_snapshot_cannot_name_a_profile_without_a_revision"/>
     [Fact]
-    public async Task A_version_cannot_name_a_revision_without_a_profile()
+    public async Task A_snapshot_cannot_name_a_revision_without_a_profile()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenACurrentSavegame(repoId, profileId);
 
-        await GivenAVersion(repoId, savegameId);
+        await GivenASnapshot(repoId, savegameId);
 
         using var dbContext = fixture.CreateDbContext();
 
         await Assert.ThrowsAsync<PostgresException>(() => dbContext.Database.ExecuteSqlRawAsync(
-            """UPDATE "SavegameVersions" SET "ProfileId" = NULL WHERE "SavegameId" = {0}""",
+            """UPDATE "SavegameSnapshots" SET "ProfileId" = NULL WHERE "SavegameId" = {0}""",
             savegameId.Value));
     }
 
     /// <summary>
     /// The state the nullability exists for, written all the way to the database: a savegame with no
-    /// mod list, and a version of it naming neither profile nor revision. The foreign key onto the
+    /// mod list, and a snapshot of it naming neither profile nor revision. The foreign key onto the
     /// revision has a null in it and is therefore not checked, which is what lets these rows exist
     /// without a nullable-aware path anywhere above them.
     /// </summary>
     [Fact]
-    public async Task A_version_may_name_neither_a_profile_nor_a_revision()
+    public async Task A_snapshot_may_name_neither_a_profile_nor_a_revision()
     {
         var (repoId, _) = await GivenARepoWithAProfile();
 
         using var dbContext = fixture.CreateDbContext();
 
         var savegame = new Savegame(repoId, new SavegameName($"save-{Guid.NewGuid()}"), null, DateTime.UtcNow);
-        var version = savegame.CreateVersion(
+        var snapshot = savegame.CreateSnapshot(
             null, new string('4', ModImageHash.Length), 1024, _author, DateTime.UtcNow,
-            origin: SavegameVersionOrigin.Created);
+            origin: SavegameSnapshotOrigin.Created);
 
         dbContext.Savegames.Add(savegame);
-        dbContext.SavegameVersions.Add(version);
+        dbContext.SavegameSnapshots.Add(snapshot);
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        var row = await dbContext.SavegameVersions.GetRowAsync(
-            repoId, savegame.Id, version.Number, CancellationToken.None);
+        var row = await dbContext.SavegameSnapshots.GetRowAsync(
+            repoId, savegame.Id, snapshot.Number, CancellationToken.None);
 
         Assert.Null(row!.ProfileId);
         Assert.Null(row.ProfileRevision);
@@ -357,19 +357,19 @@ public class SavegameCurrentQueryTests(DatabaseFixture fixture)
         return savegame.Id;
     }
 
-    private async Task GivenAVersion(RepoId repoId, SavegameId savegameId)
+    private async Task GivenASnapshot(RepoId repoId, SavegameId savegameId)
     {
         using var dbContext = fixture.CreateDbContext();
 
         var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
-        dbContext.SavegameVersions.Add(savegame.CreateVersion(
+        dbContext.SavegameSnapshots.Add(savegame.CreateSnapshot(
             new RevisionNumber(1),
             new string('3', ModImageHash.Length),
             1024,
             _author,
             DateTime.UtcNow,
-            origin: SavegameVersionOrigin.Created));
+            origin: SavegameSnapshotOrigin.Created));
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }

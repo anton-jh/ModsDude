@@ -16,14 +16,14 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// Puts an older version of a savegame back, by copying it to the front as a new one.
+/// Puts an older snapshot of a savegame back, by copying it to the front as a new one.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Nothing is deleted and the head never moves backwards.</b> Restoring version 4 while the head
-/// is 12 produces version 13 naming the same bytes. Moving the head back to 4 instead would strand
+/// <b>Nothing is deleted and the head never moves backwards.</b> Restoring snapshot 4 while the head
+/// is 12 produces snapshot 13 naming the same bytes. Moving the head back to 4 instead would strand
 /// 5 to 12 as a future nobody can reach, and would put a client that is holding one of them on a
-/// version the server says is ahead of its own head.
+/// snapshot the server says is ahead of its own head.
 /// </para>
 /// <para>
 /// So <b>check-out always takes the head</b>. There is no stale base to reason about at the moment
@@ -31,7 +31,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// somebody moves.
 /// </para>
 /// <para>
-/// <b>No bytes move.</b> A version is addressed by content, so the restored version names the hash
+/// <b>No bytes move.</b> A snapshot is addressed by content, so the restored snapshot names the hash
 /// it was copied from and the blob it points at is already there - which is what makes restoring a
 /// 400 MB save a metadata write. It carries the source's <c>ProfileRevision</c> too, because that
 /// describes the play in the file rather than the moment the restore was clicked; the profile comes
@@ -44,18 +44,18 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// would from any other check-in, by their base no longer being the head.
 /// </para>
 /// </remarks>
-public class RestoreSavegameVersionV1Endpoint : IEndpoint
+public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPost("repos/{repoId:guid}/savegames/{savegameId:guid}/versions/{number:int}/restore", Restore)
+        return builder.MapPost("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots/{number:int}/restore", Restore)
             .WithTags("Savegames");
     }
 
 
-    private static async Task<Results<Ok<SavegameVersionDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Restore(
+    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Restore(
         Guid repoId, Guid savegameId, int number,
-        RestoreSavegameVersionRequest? request,
+        RestoreSavegameSnapshotRequest? request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
@@ -79,38 +79,38 @@ public class RestoreSavegameVersionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
         }
 
-        var sourceNumber = new SavegameVersionNumber(number);
+        var sourceNumber = new SavegameSnapshotNumber(number);
 
-        // Absent rather than merely old: a pruned version's number stays out of the sequence for
+        // Absent rather than merely old: a pruned snapshot's number stays out of the sequence for
         // good, so this is the ordinary answer for anything far enough back and not the sign of a
         // bad request.
-        var source = await dbContext.SavegameVersions.GetRowAsync(savegame.RepoId, savegame.Id, sourceNumber, cancellationToken);
+        var source = await dbContext.SavegameSnapshots.GetRowAsync(savegame.RepoId, savegame.Id, sourceNumber, cancellationToken);
         if (source is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no version {number}"));
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no snapshot {number}"));
         }
 
-        // The blob is not checked for. Its address is already named by a version that is registered,
+        // The blob is not checked for. Its address is already named by a snapshot that is registered,
         // so anything that would fail here has failed for the source too - and a restore is the one
         // thing that can still be useful when a blob has gone: it moves nothing.
-        var version = savegame.CreateVersion(
+        var snapshot = savegame.CreateSnapshot(
             source.ProfileRevision,
             source.ContentHash,
             source.SizeBytes,
             userId,
             timeService.Now(),
             // The source's own label is not copied. A label is the note somebody wrote on the
-            // version they named, and duplicating it would leave two rows claiming to be the one
+            // snapshot they named, and duplicating it would leave two rows claiming to be the one
             // that was kept.
             request?.Label,
-            SavegameVersionOrigin.Restored,
+            SavegameSnapshotOrigin.Restored,
             sourceNumber,
             // Copied forward with the bytes. A restore is the same save, so the map it was played on
             // and the hours in it are the same facts - re-deriving them is impossible here anyway,
             // since the server has never looked inside a savegame.
             details: source.Details);
 
-        dbContext.SavegameVersions.Add(version);
+        dbContext.SavegameSnapshots.Add(snapshot);
 
         try
         {
@@ -121,22 +121,22 @@ public class RestoreSavegameVersionV1Endpoint : IEndpoint
             // Somebody checked in against the head this restore also computed a successor to, and
             // the primary key let one of them through. Reported as staleness because that is what it
             // is: the restore was built on a head that has moved.
-            return TypedResults.BadRequest(Problems.SavegameVersionStale(savegame.Id, sourceNumber, version.Number));
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, sourceNumber, snapshot.Number));
         }
 
-        // A restore mints a version like any other, so it can push the oldest one over the limit.
-        // The version it copied forward is safe from that by being recent, and its bytes are safe
+        // A restore mints a snapshot like any other, so it can push the oldest one over the limit.
+        // The snapshot it copied forward is safe from that by being recent, and its bytes are safe
         // regardless: the new head names the same blob.
         await SavegamePruning.PruneAsync(dbContext, savegame, cancellationToken);
 
-        return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, version, cancellationToken));
+        return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
     }
 
 
     /// <summary>
     /// A restore is recorded whether or not it changes anything - unlike a check-in, which mints
-    /// nothing when the bytes are unchanged. Restoring the version that is already the head is
+    /// nothing when the bytes are unchanged. Restoring the snapshot that is already the head is
     /// somebody asking for it explicitly, and a history that quietly did nothing would read as a bug.
     /// </summary>
-    public record RestoreSavegameVersionRequest(string? Label);
+    public record RestoreSavegameSnapshotRequest(string? Label);
 }

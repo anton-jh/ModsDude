@@ -23,7 +23,7 @@ public class SavegameDriftTests
     [Fact]
     public void A_slot_that_still_holds_what_was_written_into_it_has_not_drifted()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(), "aaaa", headVersion: 4, _profileId, appliedRevision: 6);
+        var kinds = SavegameDriftRules.Classify(Binding(), "aaaa", headSnapshot: 4, _profileId, appliedRevision: 6);
 
         Assert.Empty(kinds);
     }
@@ -34,7 +34,7 @@ public class SavegameDriftTests
     [Fact]
     public void A_slot_whose_contents_have_moved_is_unchecked_in_play()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(), "bbbb", headVersion: 4, _profileId, appliedRevision: 6);
+        var kinds = SavegameDriftRules.Classify(Binding(), "bbbb", headSnapshot: 4, _profileId, appliedRevision: 6);
 
         Assert.Equal([SavegameDriftKind.UncheckedInPlay], kinds);
     }
@@ -55,7 +55,7 @@ public class SavegameDriftTests
 
     /// <summary>
     /// The two hashes answer two questions, and this is the one that is asked here: does the slot
-    /// still hold the version the server has? An apply has just moved the observation boundary to the
+    /// still hold the snapshot the server has? An apply has just moved the observation boundary to the
     /// played bytes - so nothing further will be attributed - and the evening is still an evening
     /// that exists on this disk and nowhere else. One field could not say both.
     /// </summary>
@@ -66,7 +66,7 @@ public class SavegameDriftTests
 
         Assert.Equal(
             [SavegameDriftKind.UncheckedInPlay],
-            SavegameDriftRules.Classify(binding, "bbbb", headVersion: 4, _profileId, appliedRevision: 6));
+            SavegameDriftRules.Classify(binding, "bbbb", headSnapshot: 4, _profileId, appliedRevision: 6));
     }
 
     /// <summary>
@@ -81,9 +81,9 @@ public class SavegameDriftTests
     }
 
     [Fact]
-    public void A_head_past_the_version_being_held_is_a_takeover()
+    public void A_head_past_the_snapshot_being_held_is_a_takeover()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(version: 4), "aaaa", headVersion: 5, _profileId, appliedRevision: 6);
+        var kinds = SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 5, _profileId, appliedRevision: 6);
 
         Assert.Equal([SavegameDriftKind.TakenOverAndCheckedIn], kinds);
     }
@@ -93,10 +93,10 @@ public class SavegameDriftTests
     /// out of that would fire the notice on stale data rather than on anything that happened.
     /// </summary>
     [Fact]
-    public void A_head_at_or_behind_the_held_version_is_not_a_takeover()
+    public void A_head_at_or_behind_the_held_snapshot_is_not_a_takeover()
     {
-        Assert.Empty(SavegameDriftRules.Classify(Binding(version: 4), "aaaa", headVersion: 4, _profileId, 6));
-        Assert.Empty(SavegameDriftRules.Classify(Binding(version: 4), "aaaa", headVersion: 3, _profileId, 6));
+        Assert.Empty(SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 4, _profileId, 6));
+        Assert.Empty(SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 3, _profileId, 6));
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public class SavegameDriftTests
     [Fact]
     public void A_past_savegame_whose_folder_left_its_revision_is_drift()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(target: 6), "aaaa", headVersion: 4, _profileId, appliedRevision: 8);
+        var kinds = SavegameDriftRules.Classify(Binding(target: 6), "aaaa", headSnapshot: 4, _profileId, appliedRevision: 8);
 
         Assert.Equal([SavegameDriftKind.PlayedOnAnotherModList], kinds);
     }
@@ -122,7 +122,7 @@ public class SavegameDriftTests
     [Fact]
     public void A_current_savegame_whose_profile_moved_underneath_it_is_not_this_drift()
     {
-        Assert.Empty(SavegameDriftRules.Classify(Binding(revision: 6), "aaaa", headVersion: 4, _profileId, appliedRevision: 8));
+        Assert.Empty(SavegameDriftRules.Classify(Binding(revision: 6), "aaaa", headSnapshot: 4, _profileId, appliedRevision: 8));
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public class SavegameDriftTests
     [Fact]
     public void Play_and_a_takeover_are_both_reported()
     {
-        var kinds = SavegameDriftRules.Classify(Binding(version: 4), "bbbb", headVersion: 5, _profileId, appliedRevision: 6);
+        var kinds = SavegameDriftRules.Classify(Binding(snapshot: 4), "bbbb", headSnapshot: 5, _profileId, appliedRevision: 6);
 
         Assert.Equal(
             [SavegameDriftKind.UncheckedInPlay, SavegameDriftKind.TakenOverAndCheckedIn],
@@ -198,14 +198,14 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        harness.Hold(await harness.WriteAndHashAsync("a savegame"), version: 3);
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
         harness.Heads.Set(_savegameId, 4);
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.TakenOverAndCheckedIn, drift.Kind);
-        Assert.Equal(3, drift.HeldVersion);
-        Assert.Equal(4, drift.HeadVersion);
+        Assert.Equal(3, drift.HeldSnapshot);
+        Assert.Equal(4, drift.HeadSnapshot);
     }
 
     /// <summary>
@@ -300,11 +300,11 @@ public class SavegameDriftTests
     /// follows its profile and pins nothing.
     /// </param>
     private static SavegameCheckoutBinding Binding(
-        int version = 4, string hash = "aaaa", int? revision = 6, int? target = null) => new(
+        int snapshot = 4, string hash = "aaaa", int? revision = 6, int? target = null) => new(
         _repoId,
         _savegameId,
         _slot,
-        version,
+        snapshot,
         hash,
         DateTime.UtcNow)
     {
@@ -360,7 +360,7 @@ public class SavegameDriftTests
 
 
         public FakeSavegameServer Server { get; } = new();
-        public FakeSavegameHeadVersions Heads { get; } = new();
+        public FakeSavegameHeadSnapshots Heads { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameService Service { get; }
@@ -384,12 +384,12 @@ public class SavegameDriftTests
 
         /// <summary>Records that this machine holds the savegame in the slot, at a known hash.</summary>
         /// <param name="target">A number makes it a past savegame, pinned to that revision.</param>
-        public void Hold(string contentHash, int version = 1, int revision = 6, int? target = null)
+        public void Hold(string contentHash, int snapshot = 1, int revision = 6, int? target = null)
             => _bindings.SetBinding(Game.Identity, new SavegameCheckoutBinding(
                 _repoId,
                 _savegameId,
                 _slot,
-                version,
+                snapshot,
                 contentHash,
                 DateTime.UtcNow)
             {

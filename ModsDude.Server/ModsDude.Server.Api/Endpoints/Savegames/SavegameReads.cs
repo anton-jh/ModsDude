@@ -8,7 +8,7 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// A savegame, its versions and its claims, as the API answers with them.
+/// A savegame, its snapshots and its claims, as the API answers with them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,7 +27,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 internal static class SavegameReads
 {
     /// <summary>
-    /// The person, named. A version records who made it as a <see cref="UserId"/> and there is no
+    /// The person, named. A snapshot records who made it as a <see cref="UserId"/> and there is no
     /// foreign key holding that user in place, so a name that cannot be resolved falls back to the
     /// id rather than dropping the row out of the history.
     /// </summary>
@@ -36,7 +36,7 @@ internal static class SavegameReads
 
 
     /// <summary>
-    /// Every savegame in the repo, each carrying its head version and its open claim.
+    /// Every savegame in the repo, each carrying its head snapshot and its open claim.
     /// </summary>
     /// <param name="archived">
     /// Which list this is. The two are disjoint - the saves page shows what the repo is using, the
@@ -56,9 +56,9 @@ internal static class SavegameReads
             return [];
         }
 
-        var heads = await dbContext.SavegameVersions.GetHeadVersionsAsync(
+        var heads = await dbContext.SavegameSnapshots.GetHeadSnapshotsAsync(
             repoId,
-            rows.ToDictionary(x => x.Id, x => x.HeadVersion),
+            rows.ToDictionary(x => x.Id, x => x.HeadSnapshot),
             cancellationToken);
 
         var checkouts = await dbContext.SavegameCheckouts.GetOpenCheckoutsAsync(repoId, cancellationToken);
@@ -96,8 +96,8 @@ internal static class SavegameReads
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var head = await dbContext.SavegameVersions.GetRowAsync(
-            savegame.RepoId, savegame.Id, savegame.HeadVersion, cancellationToken);
+        var head = await dbContext.SavegameSnapshots.GetRowAsync(
+            savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
 
         var checkout = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(
             savegame.RepoId, savegame.Id, cancellationToken);
@@ -126,10 +126,10 @@ internal static class SavegameReads
             savegame.ArchivedAt);
     }
 
-    public static async Task<List<SavegameVersionDto>> ToDtosAsync(
+    public static async Task<List<SavegameSnapshotDto>> ToDtosAsync(
         ApplicationDbContext dbContext,
         RepoId repoId,
-        IReadOnlyList<SavegameVersionRow> rows,
+        IReadOnlyList<SavegameSnapshotRow> rows,
         CancellationToken cancellationToken)
     {
         if (rows.Count == 0)
@@ -142,10 +142,10 @@ internal static class SavegameReads
         return [.. rows.Select(row => ToDto(repoId, row, names))];
     }
 
-    public static async Task<SavegameVersionDto> ToDtoAsync(
+    public static async Task<SavegameSnapshotDto> ToDtoAsync(
         ApplicationDbContext dbContext,
         RepoId repoId,
-        SavegameVersionRow row,
+        SavegameSnapshotRow row,
         CancellationToken cancellationToken)
     {
         var dtos = await ToDtosAsync(dbContext, repoId, [row], cancellationToken);
@@ -154,31 +154,31 @@ internal static class SavegameReads
     }
 
     /// <summary>
-    /// One version as it stands in the database, for a caller that has just written it. Reading it
+    /// One snapshot as it stands in the database, for a caller that has just written it. Reading it
     /// back through <see cref="SavegameExtensions.GetRowAsync"/> would be a round trip to fetch the
     /// fields already in hand.
     /// </summary>
-    public static async Task<SavegameVersionDto> ToDtoAsync(
+    public static async Task<SavegameSnapshotDto> ToDtoAsync(
         ApplicationDbContext dbContext,
-        SavegameVersion version,
+        SavegameSnapshot snapshot,
         CancellationToken cancellationToken)
     {
         return await ToDtoAsync(
             dbContext,
-            version.RepoId,
-            new SavegameVersionRow(
-                version.SavegameId,
-                version.Number,
-                version.ProfileId,
-                version.ProfileRevision,
-                version.ContentHash,
-                version.SizeBytes,
-                version.Created,
-                version.CreatedBy,
-                version.Label,
-                version.Origin,
-                version.BaseVersion,
-                version.CheckoutId),
+            snapshot.RepoId,
+            new SavegameSnapshotRow(
+                snapshot.SavegameId,
+                snapshot.Number,
+                snapshot.ProfileId,
+                snapshot.ProfileRevision,
+                snapshot.ContentHash,
+                snapshot.SizeBytes,
+                snapshot.Created,
+                snapshot.CreatedBy,
+                snapshot.Label,
+                snapshot.Origin,
+                snapshot.BaseSnapshot,
+                snapshot.CheckoutId),
             cancellationToken);
     }
 
@@ -218,9 +218,9 @@ internal static class SavegameReads
         return dbContext.Users.GetDisplayNamesAsync([.. userIds.Distinct()], cancellationToken);
     }
 
-    private static SavegameVersionDto ToDto(RepoId repoId, SavegameVersionRow row, IReadOnlyDictionary<UserId, DisplayName> names)
+    private static SavegameSnapshotDto ToDto(RepoId repoId, SavegameSnapshotRow row, IReadOnlyDictionary<UserId, DisplayName> names)
     {
-        return new SavegameVersionDto(
+        return new SavegameSnapshotDto(
             repoId.Value,
             row.SavegameId.Value,
             row.Number.Value,
@@ -232,7 +232,7 @@ internal static class SavegameReads
             Describe(row.CreatedBy, names.TryGetValue(row.CreatedBy, out var name) ? name : null),
             row.Label,
             row.Origin,
-            row.BaseVersion?.Value,
+            row.BaseSnapshot?.Value,
             row.CheckoutId?.Value,
             [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))]);
     }
@@ -247,7 +247,7 @@ internal static class SavegameReads
 }
 
 /// <summary>
-/// Turns what a client's adapter said into what the version stores. The server does not look inside
+/// Turns what a client's adapter said into what the snapshot stores. The server does not look inside
 /// - see <see cref="SavegameDetail"/> - so this only drops the empties and keeps the order sent.
 /// </summary>
 internal static class SavegameDetails

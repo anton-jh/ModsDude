@@ -8,7 +8,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </summary>
 public enum SavegameChipTone
 {
-    /// <summary>A fact. Somebody else holds it, the save is available, the version is old.</summary>
+    /// <summary>A fact. Somebody else holds it, the save is available, the snapshot is old.</summary>
     Neutral,
 
     /// <summary>A fact about <em>you</em> - what you are holding right now.</summary>

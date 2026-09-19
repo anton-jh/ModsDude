@@ -377,8 +377,8 @@ public static class NoticeBuilder
                 + "until it is checked in.",
 
         SavegameDriftKind.TakenOverAndCheckedIn =>
-            $"{save} has been checked in by somebody else - they are on version {drift.HeadVersion}, this "
-                + $"machine is holding version {drift.HeldVersion}. Checking in from here forks it, and will "
+            $"{save} has been checked in by somebody else - they are on snapshot {drift.HeadSnapshot}, this "
+                + $"machine is holding snapshot {drift.HeldSnapshot}. Checking in from here forks it, and will "
                 + "be refused unless you force it.",
 
         // Two sentences for one kind, because the rule reaches it two ways and only one of them is

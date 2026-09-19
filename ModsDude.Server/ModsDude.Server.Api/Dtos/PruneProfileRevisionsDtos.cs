@@ -16,14 +16,14 @@ public record PruneProfileRevisionsResponse(
     IEnumerable<BlockedRevisionDto> Blocked);
 
 /// <param name="Savegames">
-/// The savegame versions played on this revision, for <see cref="BlockedRevisionReason.PlayedOn"/>.
+/// The savegame snapshots played on this revision, for <see cref="BlockedRevisionReason.PlayedOn"/>.
 /// Empty otherwise. They are what the user has to remove first, so they are named rather than
 /// counted.
 /// </param>
 public record BlockedRevisionDto(
     int Revision,
     BlockedRevisionReason Reason,
-    IEnumerable<SavegameVersionRefDto> Savegames);
+    IEnumerable<SavegameSnapshotRefDto> Savegames);
 
 public enum BlockedRevisionReason
 {
@@ -34,11 +34,11 @@ public enum BlockedRevisionReason
     IsHead,
 
     /// <summary>
-    /// A savegame version records having been played on it, and a save whose mod list is gone is not
+    /// A savegame snapshot records having been played on it, and a save whose mod list is gone is not
     /// restorable - which is the only thing that made keeping it worth anything.
     /// </summary>
     PlayedOn
 }
 
-/// <summary>One savegame version, named the way somebody would say it out loud.</summary>
-public record SavegameVersionRefDto(Guid SavegameId, string SavegameName, int Number);
+/// <summary>One savegame snapshot, named the way somebody would say it out loud.</summary>
+public record SavegameSnapshotRefDto(Guid SavegameId, string SavegameName, int Number);

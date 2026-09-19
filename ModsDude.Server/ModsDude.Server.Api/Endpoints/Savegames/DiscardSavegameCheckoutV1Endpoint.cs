@@ -18,8 +18,8 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>It mints no version</b>, which is the entire point. A save taken by mistake and never played
-/// has nothing to record, and without this route the only ways out are a junk version in the history
+/// <b>It mints no snapshot</b>, which is the entire point. A save taken by mistake and never played
+/// has nothing to record, and without this route the only ways out are a junk snapshot in the history
 /// or waiting to be taken over - the first lies about what happened and the second leaves the save
 /// looking held all evening.
 /// </para>

@@ -203,7 +203,7 @@ public class SavegameSlotStateTests
         Guid.NewGuid(),
         Guid.NewGuid(),
         Keys.Slot(slotId, target),
-        Version: 4,
+        Snapshot: 4,
         ContentHash: hash,
         WrittenAt: DateTime.UtcNow);
 }

@@ -17,7 +17,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// <para>
 /// <b>Two reasons, and only one of them is work.</b> The head cannot be pruned at all - it is what
 /// the profile pins - so that row is an explanation and nothing more. A revision a savegame was
-/// played on can be freed, by deleting that savegame version, which is why those rows carry links.
+/// played on can be freed, by deleting that savegame snapshot, which is why those rows carry links.
 /// </para>
 /// </remarks>
 public partial class BlockedRevisionsModalViewModel : ModalViewModel
@@ -84,13 +84,13 @@ public sealed class BlockedRevisionViewModel
         Revision = dto.Revision;
         IsHead = dto.Reason is BlockedRevisionReason.IsHead;
 
-        Savegames = [.. dto.Savegames.Select(x => new SavegameVersionLinkViewModel(x, goTo))];
+        Savegames = [.. dto.Savegames.Select(x => new SavegameSnapshotLinkViewModel(x, goTo))];
 
         Reason = IsHead
             ? "This is the profile's current revision. Editing the profile is what replaces it; it can never be deleted on its own."
             : Savegames.Count == 1
-                ? "A savegame version was played on it. Delete that version first, and this revision can go."
-                : $"{Savegames.Count} savegame versions were played on it. Delete those first, and this revision can go.";
+                ? "A savegame snapshot was played on it. Delete that snapshot first, and this revision can go."
+                : $"{Savegames.Count} savegame snapshots were played on it. Delete those first, and this revision can go.";
     }
 
 
@@ -102,25 +102,25 @@ public sealed class BlockedRevisionViewModel
 
     public string Reason { get; }
 
-    public IReadOnlyList<SavegameVersionLinkViewModel> Savegames { get; }
+    public IReadOnlyList<SavegameSnapshotLinkViewModel> Savegames { get; }
 
     public bool HasSavegames => Savegames.Count > 0;
 }
 
 
-/// <summary>One savegame version, as a link into the repo's saves list.</summary>
-public partial class SavegameVersionLinkViewModel
+/// <summary>One savegame snapshot, as a link into the repo's saves list.</summary>
+public partial class SavegameSnapshotLinkViewModel
 {
     private readonly Guid _savegameId;
     private readonly Action<Guid> _goTo;
 
 
-    public SavegameVersionLinkViewModel(SavegameVersionRefDto dto, Action<Guid> goTo)
+    public SavegameSnapshotLinkViewModel(SavegameSnapshotRefDto dto, Action<Guid> goTo)
     {
         _savegameId = dto.SavegameId;
         _goTo = goTo;
 
-        Label = $"{dto.SavegameName} · version {dto.Number}";
+        Label = $"{dto.SavegameName} · snapshot {dto.Number}";
     }
 
 

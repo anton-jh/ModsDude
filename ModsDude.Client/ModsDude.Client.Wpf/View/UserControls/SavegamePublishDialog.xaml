@@ -76,7 +76,7 @@
                            Foreground="{DynamicResource SystemFillColorCautionBrush}"
                            Visibility="{Binding HasMismatchNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <TextBlock Text="What this first version was, for the history (optional)"
+                <TextBlock Text="What this first snapshot was, for the history (optional)"
                            Margin="0 16 0 4"
                            Style="{DynamicResource CaptionTextBlockStyle}"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" />

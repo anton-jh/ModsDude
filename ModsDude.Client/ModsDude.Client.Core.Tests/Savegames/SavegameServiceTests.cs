@@ -49,11 +49,11 @@ public class SavegameServiceTests
 
         Assert.NotNull(binding);
         Assert.Equal(_slot1, binding.Value.Slot);
-        Assert.Equal(head.Number, binding.Value.Version);
+        Assert.Equal(head.Number, binding.Value.Snapshot);
         Assert.Equal(head.ContentHash, binding.Value.ContentHash);
 
         // The two facts the third drift state needs, and the only place they can be recorded: asking
-        // the server which revision a held version was played on is a network call in a check that
+        // the server which revision a held snapshot was played on is a network call in a check that
         // has to work offline.
         Assert.Equal(head.ProfileId, binding.Value.ProfileId);
         Assert.Equal(head.ProfileRevision, binding.Value.ProfileRevision);
@@ -105,7 +105,7 @@ public class SavegameServiceTests
 
     /// <summary>
     /// A current savegame follows its profile, so it pins the mod folder to nothing and the apply that
-    /// comes after the check-out installs head. The head version's revision is emphatically not the
+    /// comes after the check-out installs head. The head snapshot's revision is emphatically not the
     /// answer: it names the last list this savegame was <em>played</em> on, which is older than head
     /// whenever anybody has edited the profile since - which is the ordinary case, since preparing the
     /// mod list and then checking the savegame out is how a session starts.
@@ -319,7 +319,7 @@ public class SavegameServiceTests
 
         await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        var versionsBefore = harness.Server.Versions.Count;
+        var snapshotsBefore = harness.Server.Snapshots.Count;
 
         await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
@@ -327,11 +327,11 @@ public class SavegameServiceTests
         Assert.Equal(0, harness.Uploader.Uploads);
 
         // And the server minted nothing either: a save that changes nothing costs no line of history.
-        Assert.Equal(versionsBefore, harness.Server.Versions.Count);
+        Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
     }
 
     [Fact]
-    public async Task Checking_in_played_bytes_uploads_them_and_mints_a_version_based_on_what_was_held()
+    public async Task Checking_in_played_bytes_uploads_them_and_mints_a_snapshot_based_on_what_was_held()
     {
         using var harness = new Harness();
         var head = await harness.SeedHeadAsync("a savegame");
@@ -340,13 +340,13 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var version = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
+        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
-        Assert.Equal(head.Number + 1, version.Number);
-        Assert.Equal("after playing", version.Label);
+        Assert.Equal(head.Number + 1, snapshot.Number);
+        Assert.Equal("after playing", snapshot.Label);
 
-        // Based on the version that was actually in the slot, which is the mechanical half of the
+        // Based on the snapshot that was actually in the slot, which is the mechanical half of the
         // one-holder-at-a-time guarantee - the checkout is only the social half.
         Assert.Equal(head.Number, Assert.Single(harness.Server.CheckIns).BasedOn);
 
@@ -411,7 +411,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// <b>Only after the upload is verified</b>, which here means after the commit: a blob no version
+    /// <b>Only after the upload is verified</b>, which here means after the commit: a blob no snapshot
     /// names is unreachable, so the upload alone is not the moment.
     /// </summary>
     [Fact]
@@ -456,7 +456,7 @@ public class SavegameServiceTests
 
         // Surfaced, never swallowed: forcing past a moved head is a decision only the person holding
         // the save can make, and the caller can only offer it if it can tell this failure apart.
-        Assert.True(SavegameService.IsVersionStale(exception));
+        Assert.True(SavegameService.IsSnapshotStale(exception));
 
         Assert.Empty(harness.RecycleBin.Recycled);
         Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
@@ -474,15 +474,15 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
 
-        var version = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
+        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
 
-        Assert.Equal(SavegameVersionOrigin.Forced, version.Origin);
-        Assert.Equal(head.Number, version.BaseVersion);
+        Assert.Equal(SavegameSnapshotOrigin.Forced, snapshot.Origin);
+        Assert.Equal(head.Number, snapshot.BaseSnapshot);
     }
 
     /// <summary>
     /// For somebody who wants tonight's progress on the server and intends to carry on. The binding
-    /// has to be rebased, or the next check-in is based on a version that is no longer the head and is
+    /// has to be rebased, or the next check-in is based on a snapshot that is no longer the head and is
     /// refused for a takeover that never happened.
     /// </summary>
     [Fact]
@@ -495,25 +495,25 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var version = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
         var binding = harness.Service.GetBinding(harness.Game, harness.Server.SavegameId);
 
         Assert.NotNull(binding);
-        Assert.Equal(version.Number, binding.Value.Version);
-        Assert.Equal(version.ContentHash, binding.Value.ContentHash);
+        Assert.Equal(snapshot.Number, binding.Value.Snapshot);
+        Assert.Equal(snapshot.ContentHash, binding.Value.ContentHash);
 
         // Nothing was recycled, and the slot still reads as held and clean - which is exactly what
         // "carry on playing" has to mean.
         Assert.Empty(harness.RecycleBin.Recycled);
         Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Service.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
 
-        // And a second check-in is based on the first, not on the version that was checked out.
+        // And a second check-in is based on the first, not on the snapshot that was checked out.
         harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
         await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
-        Assert.Equal(version.Number, harness.Server.CheckIns[^1].BasedOn);
+        Assert.Equal(snapshot.Number, harness.Server.CheckIns[^1].BasedOn);
     }
 
     [Fact]
@@ -528,23 +528,23 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// Taken by mistake, never played. Without this the only ways out are a junk version and waiting
+    /// Taken by mistake, never played. Without this the only ways out are a junk snapshot and waiting
     /// to be taken over.
     /// </summary>
     [Fact]
-    public async Task Discarding_ends_the_checkout_and_mints_no_version()
+    public async Task Discarding_ends_the_checkout_and_mints_no_snapshot()
     {
         using var harness = new Harness();
         await harness.SeedHeadAsync("a savegame");
 
         await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        var versionsBefore = harness.Server.Versions.Count;
+        var snapshotsBefore = harness.Server.Snapshots.Count;
 
         await harness.Service.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None);
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
-        Assert.Equal(versionsBefore, harness.Server.Versions.Count);
+        Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
         Assert.Empty(harness.Server.CheckIns);
 
         // Nothing was uploaded either - a discard is not a check-in with a shrug.
@@ -589,7 +589,7 @@ public class SavegameServiceTests
 
     /// <summary>
     /// The other ending, which is what publishing to a mod list this game is not on always takes: the
-    /// version is minted, the claim goes straight back, and the local copy goes to the Recycle Bin.
+    /// snapshot is minted, the claim goes straight back, and the local copy goes to the Recycle Bin.
     /// Without it, one publish leaves a savegame following one profile checked out into a folder on
     /// another - drift no apply can clear, because the apply table refuses every profile the folder
     /// could move to.
@@ -604,7 +604,7 @@ public class SavegameServiceTests
         var savegame = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
-        // The savegame is real and the version was minted: this is a publish, not a cancelled one.
+        // The savegame is real and the snapshot was minted: this is a publish, not a cancelled one.
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Single(harness.Server.Publishes);
 
@@ -619,7 +619,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// A first version's revision is declared rather than observed, so a folder that has never been
+    /// A first snapshot's revision is declared rather than observed, so a folder that has never been
     /// synced is not an obstacle: nothing knows which mods were in it while that savegame was played
     /// either way, and requiring a sync first would observe the folder at the moment of publishing -
     /// which is a different fact, not a better one.
@@ -723,7 +723,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// The revision a first version declares: what the folder is actually on where the chosen profile
+    /// The revision a first snapshot declares: what the folder is actually on where the chosen profile
     /// is the one it is on, and that profile's head otherwise - which is the honest answer, since the
     /// alternative is a number belonging to a different mod list.
     /// </summary>
@@ -738,7 +738,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// What a Guest gets, and what looking at an old version without disturbing anybody looks like:
+    /// What a Guest gets, and what looking at an old snapshot without disturbing anybody looks like:
     /// bytes in a slot, no claim, no binding, and therefore nothing that can be checked in from it.
     /// </summary>
     [Fact]
@@ -761,7 +761,7 @@ public class SavegameServiceTests
     }
 
     [Fact]
-    public async Task Taking_a_copy_of_a_pruned_version_says_so()
+    public async Task Taking_a_copy_of_a_pruned_snapshot_says_so()
     {
         using var harness = new Harness();
         await harness.SeedHeadAsync("a savegame");
@@ -776,7 +776,7 @@ public class SavegameServiceTests
     /// <summary>
     /// <b>The first worked example</b> in docs/10-savegame-profile-binding.md#worked-examples. Checked
     /// out on revision 4, an evening played, the profile applied at 1004 while other people moved it
-    /// there, and another evening. The version records 1004, and the evening before the apply was
+    /// there, and another evening. The snapshot records 1004, and the evening before the apply was
     /// attributed to 4 as it happened rather than reconstructed afterwards - which is not something
     /// timestamps could have told anybody.
     /// </summary>
@@ -808,7 +808,7 @@ public class SavegameServiceTests
 
     /// <summary>
     /// <b>The second worked example.</b> Same start, but nothing is played after the apply - and a
-    /// week goes by. The version records 4, because that is the list the play ran on; the interval
+    /// week goes by. The snapshot records 4, because that is the list the play ran on; the interval
     /// between check-out and check-in does not enter into it, and neither does what the folder is on
     /// at the moment of the hand-back.
     /// </summary>
@@ -844,12 +844,12 @@ public class SavegameServiceTests
 
         Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
 
-        var versionsBefore = harness.Server.Versions.Count;
+        var snapshotsBefore = harness.Server.Snapshots.Count;
 
         await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
         Assert.Equal(1004, Assert.Single(harness.Server.CheckIns).ProfileRevision);
-        Assert.Equal(versionsBefore, harness.Server.Versions.Count);
+        Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
     }
 
     /// <summary>
@@ -1203,7 +1203,7 @@ public class SavegameServiceTests
     }
 
     /// <summary>
-    /// Carrying on playing is a check-out in every respect that matters: the version on the server is
+    /// Carrying on playing is a check-out in every respect that matters: the snapshot on the server is
     /// these bytes, so both boundaries move and the next evening is the first that has not been
     /// recorded anywhere. Leaving the old attribution behind would credit tonight's play to the list
     /// last night ran on.
@@ -1218,11 +1218,11 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var version = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
         var rebased = harness.Binding(harness.Server.SavegameId);
 
-        Assert.Equal(version.ContentHash, rebased.LastObservedHash);
+        Assert.Equal(snapshot.ContentHash, rebased.LastObservedHash);
         Assert.Null(rebased.LastPlayedRevision);
 
         // Tonight's evening happens after the folder moved, and is recorded against where it is now.
@@ -1293,7 +1293,7 @@ public class SavegameServiceTests
         public FakeSavegameServer Server { get; } = new();
         public FakeSavegameUploader Uploader { get; }
         public FakeSlotRecycleBin RecycleBin { get; } = new();
-        public FakeSavegameHeadVersions Heads { get; } = new();
+        public FakeSavegameHeadSnapshots Heads { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameBindingStore Bindings { get; }
@@ -1306,7 +1306,7 @@ public class SavegameServiceTests
 
     /// <summary>
     /// What the publish dialog settles: which mod list the new savegame follows, and the revision its
-    /// first version declares.
+    /// first snapshot declares.
     /// </summary>
     /// <remarks>
     /// Through <see cref="SavegameService.DeclaredRevisionFor"/> rather than by naming a number, so
@@ -1336,7 +1336,7 @@ public class SavegameServiceTests
         public void RemoveSecondTarget() => Adapter.RemoveTarget(_client.Target);
 
         /// <summary>Puts a savegame on the server whose bytes are a real packed slot.</summary>
-        public async Task<SavegameVersionDto> SeedHeadAsync(string content, int? profileRevision = 1)
+        public async Task<SavegameSnapshotDto> SeedHeadAsync(string content, int? profileRevision = 1)
             => Server.Seed(await PackedBytesAsync(content), profileRevision);
 
         /// <summary>

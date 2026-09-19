@@ -18,9 +18,9 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The other half of the timeline the versions listing gives. Check-ins are already history - they
-/// are versions - so only the taking half needs a log of its own, and
-/// <see cref="SavegameVersionDto.CheckoutId"/> is what lets a client interleave the two into one
+/// The other half of the timeline the snapshots listing gives. Check-ins are already history - they
+/// are snapshots - so only the taking half needs a log of its own, and
+/// <see cref="SavegameSnapshotDto.CheckoutId"/> is what lets a client interleave the two into one
 /// sequence rather than showing them as two lists.
 /// </para>
 /// <para>
@@ -43,7 +43,7 @@ public class GetSavegameCheckoutsV1Endpoint : IEndpoint
     }
 
 
-    /// <param name="skip">How many of the newest claims to pass over. An offset, as for the versions listing.</param>
+    /// <param name="skip">How many of the newest claims to pass over. An offset, as for the snapshots listing.</param>
     private static async Task<Results<Ok<GetSavegameCheckoutsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
         Guid repoId, Guid savegameId,
         int? skip, int? limit,
@@ -85,7 +85,7 @@ public class GetSavegameCheckoutsV1Endpoint : IEndpoint
 
     /// <param name="HasMore">
     /// Whether older claims remain. Claims arrive at the front, so a page read while somebody is
-    /// taking the save can repeat a row - the same bargain the versions listing makes.
+    /// taking the save can repeat a row - the same bargain the snapshots listing makes.
     /// </param>
     public record GetSavegameCheckoutsResponse(IEnumerable<SavegameCheckoutDto> Checkouts, bool HasMore);
 }

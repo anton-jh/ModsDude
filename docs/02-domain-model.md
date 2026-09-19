@@ -574,16 +574,16 @@ same aggregate placement as `Profile`, and for the same reasons.
 | `Name` | `SavegameName(string)`, unique within the repo |
 | `ProfileId` | The profile this save **follows**, or null where it follows none — see below |
 | `Created` | |
-| `HeadVersion` | `SavegameVersionNumber(int)` — which version is current |
+| `HeadSnapshot` | `SavegameSnapshotNumber(int)` — which snapshot is current |
 | `SupersededAt` | When the profile stopped following this savegame. Null while it still does |
 
 **A savegame is not owned by a profile.** It sits beside profiles in the repo, and it is the
-*version* that records the one profile revision it was played on. A save moves from revision 6 to
+*snapshot* that records the one profile revision it was played on. A save moves from revision 6 to
 revision 7 as the group updates its mods, so pinning a revision on the savegame would either forbid
 that or lie about it.
 
 **The profile is fixed at publish**, and nothing moves a savegame onto another one — a move would
-put this row and every version's `ProfileId` in disagreement, and two profiles' revision numbers are
+put this row and every snapshot's `ProfileId` in disagreement, and two profiles' revision numbers are
 not comparable. Republishing the savegame is the route, and it is three operations that already exist.
 
 **A profile has at most one current savegame** and a succession of past ones. Current is
@@ -592,37 +592,37 @@ is still playable and simply stops following the mod list. `SupersededAt` is a d
 `ArchivedAt`, so a savegame can be current or past, archived or not, in any combination.
 
 **`ProfileId` is optional.** A savegame that follows no mod list is unmanaged by the publisher's
-choice: its versions record no revision, and it is neither current nor past. Full design in
+choice: its snapshots record no revision, and it is neither current nor past. Full design in
 [10 — Savegames and profile revisions](10-savegame-profile-binding.md).
 
-As with a profile, **there is no navigation to the versions**. A savegame's history is read through
-its own set; this row only ever says which version is current.
+As with a profile, **there is no navigation to the snapshots**. A savegame's history is read through
+its own set; this row only ever says which snapshot is current.
 
 
-## Savegame versions
+## Savegame snapshots
 
-`ModsDude.Server.Domain/Savegames/SavegameVersion.cs`
+`ModsDude.Server.Domain/Savegames/SavegameSnapshot.cs`
 
-One immutable version, keyed `(RepoId, SavegameId, Number)`.
+One immutable snapshot, keyed `(RepoId, SavegameId, Number)`.
 
 | Field | Notes |
 | --- | --- |
-| `Number` | `SavegameVersionNumber(int)`. One-based, and **not contiguous** — see below |
+| `Number` | `SavegameSnapshotNumber(int)`. One-based, and **not contiguous** — see below |
 | `ProfileId`, `ProfileRevision` | What it was played on. Both null or both set, by check constraint; `ProfileId` is always the savegame's. FK is `Restrict` |
 | `ContentHash`, `SizeBytes` | SHA-256 of the packed save, and what it weighs |
-| `CreatedBy`, `Created`, `Label` | `Label` is optional, and is what exempts a version from pruning |
+| `CreatedBy`, `Created`, `Label` | `Label` is optional, and is what exempts a snapshot from pruning |
 | `Origin` | `Created \| CheckedIn \| Forced \| Restored` |
-| `BaseVersion` | What the uploader was holding |
+| `BaseSnapshot` | What the uploader was holding |
 | `CheckoutId` | The claim it was checked in against, or null for a publish |
 
 Read-only by the same mechanism a profile revision is: **nothing addresses one to write to it**. A
-check-in produces a successor and a restore copies an old one forward, so no route names a version
+check-in produces a successor and a restore copies an old one forward, so no route names a snapshot
 and there is no `IsReadOnly` column for fifteen places to remember to check.
 
 
-### What a version says about itself
+### What a snapshot says about itself
 
-`SavegameVersion` carries an owned collection of **`SavegameDetail`** — `(Key, Label, Value,
+`SavegameSnapshot` carries an owned collection of **`SavegameDetail`** — `(Key, Label, Value,
 Position)` — written by the client's game adapter and **never parsed by the server**. Same bargain
 as `ModAttribute` and the repo's adapter configuration, and it is what lets a new game describe its
 saves without a server deployment: Farming Simulator has a map, a difficulty and a money balance,
@@ -638,8 +638,8 @@ shortenable because a column got narrow. The key is the stable name for "this is
 fact that turns out to be worth promoting to a real column later can be found and migrated rather
 than parsed back out of a sentence.
 
-**On the version, not the savegame.** A map, a playtime and a money balance describe the bytes
-somebody checked in — two versions of one save legitimately disagree about every one of them.
+**On the snapshot, not the savegame.** A map, a playtime and a money balance describe the bytes
+somebody checked in — two snapshots of one save legitimately disagree about every one of them.
 `Position` is stored because "map, then when, then how long" is a judgment the adapter made and a
 set has no order to recover it from; a restore copies them forward with the bytes, since the same
 bytes were played on the same map and the server has never looked inside a savegame.
@@ -654,18 +654,18 @@ same name, so whichever wrote second would silently replace the other's bytes �
 check that decides who takes the head runs *after* that, by which point the loser's save is already
 gone. Hashing also makes a restore a pure metadata operation and a duplicate check-in free.
 
-The consequence: **several versions can share one blob**, so what the reclamation sweep reads is a
-set of addresses rather than one entry per version.
+The consequence: **several snapshots can share one blob**, so what the reclamation sweep reads is a
+set of addresses rather than one entry per snapshot.
 
 ### Numbers are not contiguous
 
-Unlike `RevisionNumber`, pruning leaves the gap where an old version was. Numbers exist to be said
+Unlike `RevisionNumber`, pruning leaves the gap where an old snapshot was. Numbers exist to be said
 out loud, and renumbering would make yesterday's sentence point at a different save.
 
 ### A played profile cannot be deleted
 
-`SavegameVersion`'s foreign key onto `ProfileRevision` is `Restrict`, and `Savegame`'s onto `Profile`
-is too — so a profile any savegame follows, or any version was ever played on, cannot be deleted.
+`SavegameSnapshot`'s foreign key onto `ProfileRevision` is `Restrict`, and `Savegame`'s onto `Profile`
+is too — so a profile any savegame follows, or any snapshot was ever played on, cannot be deleted.
 Both are optional now that a savegame may follow no mod list, and a key with a null in it is simply
 not checked, which is what lets those rows exist without a second code path anywhere.
 The same bargain as a pinned mod version, one aggregate up, and accepted for the same reason: a save
@@ -674,14 +674,14 @@ anything. `DeleteProfileV1Endpoint` reports it; the database refuses it again un
 
 ### Retention
 
-`SavegameRetention.PlanPrune` keeps the last N versions (default 10), and never prunes the head or
-anything carrying a `Label` — labelling a version is the gesture by which somebody keeps it.
+`SavegameRetention.PlanPrune` keeps the last N snapshots (default 10), and never prunes the head or
+anything carrying a `Label` — labelling a snapshot is the gesture by which somebody keeps it.
 
-Labelled versions are **exempt rather than counted**: the recency window is taken over the unlabelled
+Labelled snapshots are **exempt rather than counted**: the recency window is taken over the unlabelled
 ones. Otherwise naming your last two saves would silently leave you with two backups where the
 policy promised ten, the keeping gesture causing the loss.
 
-Pruning a savegame's history is legitimate where pruning a profile's is not: a savegame version is a
+Pruning a savegame's history is legitimate where pruning a profile's is not: a savegame snapshot is a
 backup, and an old profile revision has to stay *reproducible*.
 
 ## Savegame checkouts
@@ -699,11 +699,11 @@ One person's claim on one savegame, keyed on `Id` and carrying `(RepoId, Savegam
 **A log, not a field.** The current holder is the row that has not ended — a filtered unique index on
 `(RepoId, SavegameId) WHERE "EndedAt" IS NULL` permits exactly one — so there is no
 current-checkout column to keep in step with a history sitting beside it. Check-ins are already
-history, because they are versions; `SavegameVersion.CheckoutId` joins the two halves into one
+history, because they are snapshots; `SavegameSnapshot.CheckoutId` joins the two halves into one
 timeline.
 
 **The claim is advisory.** Anybody may take it from anybody, which closes the previous row as
-`TakenOver` and warns naming who held it. What actually protects a save is the base-version check on
+`TakenOver` and warns naming who held it. What actually protects a save is the base-snapshot check on
 check-in: the claim is the social half, and only the mechanical half is a guarantee.
 
 **Expiry is not an end reason.** An expired claim is still the open row; it just reads as stale,
@@ -756,7 +756,7 @@ savegame follows or was played on (`profile-in-use-by-savegame`). A save whose m
 not restorable, which is the only thing that made keeping it worth anything.
 
 **Deleting a repo is the exception, and takes everything in it** — the whole mod catalog, every
-profile with its history, every savegame with its versions and its claim log. Those refusals exist
+profile with its history, every savegame with its snapshots and its claim log. Those refusals exist
 to stop one thing being taken out from under another; deleting the repo takes the dependants and
 the dependencies together, so there is nothing left to protect. Being archived first, by an Admin,
 is what makes it deliberate. `DeleteRepoV1Endpoint` names the order the foreign keys force.

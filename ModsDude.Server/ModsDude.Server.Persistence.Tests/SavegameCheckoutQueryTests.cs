@@ -68,7 +68,7 @@ public class SavegameCheckoutQueryTests(DatabaseFixture fixture)
 
     /// <summary>
     /// A savegame played every evening accumulates one ended claim per evening, and the log is never
-    /// pruned with the versions. Nothing about the index may make that history cost anything.
+    /// pruned with the snapshots. Nothing about the index may make that history cost anything.
     /// </summary>
     [Fact]
     public async Task A_savegame_may_carry_any_number_of_ended_claims()
@@ -114,7 +114,7 @@ public class SavegameCheckoutQueryTests(DatabaseFixture fixture)
 
     /// <summary>
     /// The predicate tests the <c>EndedAt</c> column rather than <see cref="SavegameCheckout.IsOpen"/>,
-    /// which is computed and has nothing for a provider to translate. A version of this query that
+    /// which is computed and has nothing for a provider to translate. A snapshot of this query that
     /// compiled but read the newest row instead would answer correctly right up until somebody was
     /// taken over.
     /// </summary>

@@ -32,10 +32,10 @@ public static class RepoExtensions
     /// <para>
     /// <b>The order is the whole method.</b> Three foreign keys inside a repo are <c>Restrict</c>
     /// rather than <c>Cascade</c>, each so that deleting one thing cannot rewrite another's record:
-    /// a savegame version names the profile revision it was played on, a revision pins mod versions,
+    /// a savegame snapshot names the profile revision it was played on, a revision pins mod versions,
     /// and a mod version belongs to the repo. Removing the repo row on its own walks into the
     /// innermost of them, so the dependants go first and each step frees the next — savegames (their
-    /// versions and their claims cascade with them), then revisions (their mod dependencies cascade
+    /// snapshots and their claims cascade with them), then revisions (their mod dependencies cascade
     /// with them), then the mod versions nothing pins any more. Profiles, memberships and invites
     /// are left to the repo's own cascade, in the database where it belongs.
     /// </para>

@@ -426,8 +426,8 @@ public class NoticeBuilderTests
         => new(_repoId, id ?? Guid.NewGuid(), new(new("mods"), new(slot)), kind)
         {
             SlotDisplayName = slot,
-            HeldVersion = 4,
-            HeadVersion = 5
+            HeldSnapshot = 4,
+            HeadSnapshot = 5
         };
 
 

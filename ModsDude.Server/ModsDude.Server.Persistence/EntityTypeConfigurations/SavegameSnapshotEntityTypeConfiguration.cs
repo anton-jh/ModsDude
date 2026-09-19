@@ -5,9 +5,9 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Savegames;
 
 namespace ModsDude.Server.Persistence.EntityTypeConfigurations;
-internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration<SavegameVersion>
+internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguration<SavegameSnapshot>
 {
-    public void Configure(EntityTypeBuilder<SavegameVersion> builder)
+    public void Configure(EntityTypeBuilder<SavegameSnapshot> builder)
     {
         // This key is the concurrency control for check-ins, not merely an identity. Two people
         // holding the same head both compute the same next number, so both insert the same
@@ -18,21 +18,21 @@ internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration
         builder.HasKey(x => new { x.RepoId, x.SavegameId, x.Number });
 
         // Cascade: a deleted savegame takes its history with it. Nothing outside the savegame
-        // addresses a version, and a history whose savegame is gone is not a record of anything.
+        // addresses a snapshot, and a history whose savegame is gone is not a record of anything.
         builder.HasOne<Savegame>()
             .WithMany()
             .HasForeignKey(x => new { x.RepoId, x.SavegameId })
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Restrict, not the cascade EF would infer: a version names the one mod list it was played
+        // Restrict, not the cascade EF would infer: a snapshot names the one mod list it was played
         // against, and deleting that revision would leave the save claiming to be reproducible
         // against a list nobody can read any more. The consequence to accept knowingly is that a
         // profile that has been played can no longer be deleted - the same bargain as
         // ModDependency -> ModVersion one aggregate down, which
         // ProfileRevisionEntityTypeConfiguration makes for the same reason. The delete endpoints
-        // should report it the way CheckIfVersionIsDependedOn reports its own, so this fires only
-        // for a version checked in between the check and the commit.
-        // Optional, because a version of a savegame that follows no mod list names no revision. A
+        // should report it the way CheckIfSnapshotIsDependedOn reports its own, so this fires only
+        // for a snapshot checked in between the check and the commit.
+        // Optional, because a snapshot of a savegame that follows no mod list names no revision. A
         // foreign key with a null in it is not checked, which is what lets those rows exist without
         // a second nullable-aware code path anywhere.
         builder.HasOne<ProfileRevision>()
@@ -48,31 +48,31 @@ internal class SavegameVersionEntityTypeConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.ContentHash).HasMaxLength(ModImageHash.Length);
 
         builder.Property(x => x.Origin).HasConversion<string>();
-        builder.Property(x => x.Label).HasMaxLength(SavegameVersion.MaximumLabelLength);
+        builder.Property(x => x.Label).HasMaxLength(SavegameSnapshot.MaximumLabelLength);
 
         // Answers "which blob addresses are still referred to?" for the reclamation sweep, which
-        // reads every version in the system and must not do it by scanning them. Deliberately not
-        // unique: a version's bytes are addressed by content, so a restore copies an old version
-        // forward under the same hash and several versions legitimately share one blob.
+        // reads every snapshot in the system and must not do it by scanning them. Deliberately not
+        // unique: a snapshot's bytes are addressed by content, so a restore copies an old snapshot
+        // forward under the same hash and several snapshots legitimately share one blob.
         builder.HasIndex(x => new { x.RepoId, x.SavegameId, x.ContentHash });
 
         // Owned, like ModVersion.Attributes, and mapped through the backing field because the entity
-        // exposes them read-only - a version is immutable, so its details are decided when it is
+        // exposes them read-only - a snapshot is immutable, so its details are decided when it is
         // minted and never after. The key is left to EF, as the attributes' is: uniqueness per key
         // is the writer's business, and SavegameDetails.From is where it is enforced.
-        builder.OwnsMany(x => x.Details, x => x.ToTable("SavegameVersionDetails"));
+        builder.OwnsMany(x => x.Details, x => x.ToTable("SavegameSnapshotDetails"));
 
-        // Through the backing field, because the navigation is read-only: a version is immutable, so
+        // Through the backing field, because the navigation is read-only: a snapshot is immutable, so
         // its details are decided when it is minted and never after.
         builder.Navigation(x => x.Details).UsePropertyAccessMode(PropertyAccessMode.Field);
 
-        // The pairing, stated once where it cannot be forgotten. Null means "this version is not
+        // The pairing, stated once where it cannot be forgotten. Null means "this snapshot is not
         // connected to a mod list" and is a state a publisher chooses; a half-set pair means
         // nothing, since a revision number is only readable against the profile that numbered it.
-        // Savegame.CreateVersion refuses the same thing, and this is what makes it a fact rather
+        // Savegame.CreateSnapshot refuses the same thing, and this is what makes it a fact rather
         // than a convention - the pair is written by three endpoints and read by the client.
         builder.ToTable(x => x.HasCheckConstraint(
-            "CK_SavegameVersions_ProfileAndRevisionAreSetTogether",
+            "CK_SavegameSnapshots_ProfileAndRevisionAreSetTogether",
             "(\"ProfileId\" IS NULL) = (\"ProfileRevision\" IS NULL)"));
     }
 }

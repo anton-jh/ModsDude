@@ -37,7 +37,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <para>
 /// <b>What actually changes is which revision the savegame runs on.</b> A current savegame follows its
 /// profile and is checked out at head; a past one stays pinned to the revision recorded on its head
-/// version. Nothing else about either savegame moves - no version is minted, no claim is touched,
+/// snapshot. Nothing else about either savegame moves - no snapshot is minted, no claim is touched,
 /// and a past savegame was playable all along.
 /// </para>
 /// <para>

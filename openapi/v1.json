@@ -13,7 +13,7 @@
           },
           "savegames": {
             "items": {
-              "$ref": "#/components/schemas/SavegameVersionRefDto"
+              "$ref": "#/components/schemas/SavegameSnapshotRefDto"
             },
             "type": "array"
           }
@@ -428,19 +428,19 @@
         },
         "type": "object"
       },
-      "GetSavegameVersionsResponse": {
+      "GetSavegameSnapshotsResponse": {
         "additionalProperties": false,
         "properties": {
           "hasMore": {
             "type": "boolean"
           },
-          "headVersion": {
+          "headSnapshot": {
             "format": "int32",
             "type": "integer"
           },
-          "versions": {
+          "snapshots": {
             "items": {
-              "$ref": "#/components/schemas/SavegameVersionDto"
+              "$ref": "#/components/schemas/SavegameSnapshotDto"
             },
             "type": "array"
           }
@@ -728,7 +728,7 @@
           "https://server.modsdude.com/api/problems/hash-mismatch",
           "https://server.modsdude.com/api/problems/invalid-hash",
           "https://server.modsdude.com/api/problems/invalid-image-set",
-          "https://server.modsdude.com/api/problems/cannot-delete-head-savegame-version",
+          "https://server.modsdude.com/api/problems/cannot-delete-head-savegame-snapshot",
           "https://server.modsdude.com/api/problems/not-archived",
           "https://server.modsdude.com/api/problems/batch-too-large",
           "https://server.modsdude.com/api/problems/invalid-cursor",
@@ -738,7 +738,7 @@
           "https://server.modsdude.com/api/problems/invalid-invite-limits",
           "https://server.modsdude.com/api/problems/invite-cannot-grant-admin",
           "https://server.modsdude.com/api/problems/profile-revision-stale",
-          "https://server.modsdude.com/api/problems/savegame-version-stale",
+          "https://server.modsdude.com/api/problems/savegame-snapshot-stale",
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
           "https://server.modsdude.com/api/problems/savegame-not-checked-out",
           "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
@@ -768,7 +768,7 @@
           "HashMismatch",
           "InvalidHash",
           "InvalidImageSet",
-          "CannotDeleteHeadSavegameVersion",
+          "CannotDeleteHeadSavegameSnapshot",
           "NotArchived",
           "BatchTooLarge",
           "InvalidCursor",
@@ -778,7 +778,7 @@
           "InvalidInviteLimits",
           "InviteCannotGrantAdmin",
           "ProfileRevisionStale",
-          "SavegameVersionStale",
+          "SavegameSnapshotStale",
           "SavegameCheckoutConflict",
           "SavegameNotCheckedOut",
           "ProfileInUseBySavegame",
@@ -1191,7 +1191,7 @@
         },
         "type": "object"
       },
-      "RestoreSavegameVersionRequest": {
+      "RestoreSavegameSnapshotRequest": {
         "additionalProperties": false,
         "properties": {
           "label": {
@@ -1333,7 +1333,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SavegameVersionDto"
+                "$ref": "#/components/schemas/SavegameSnapshotDto"
               }
             ]
           },
@@ -1361,10 +1361,10 @@
         },
         "type": "object"
       },
-      "SavegameVersionDto": {
+      "SavegameSnapshotDto": {
         "additionalProperties": false,
         "properties": {
-          "baseVersion": {
+          "baseSnapshot": {
             "format": "int32",
             "nullable": true,
             "type": "integer"
@@ -1399,7 +1399,7 @@
             "type": "integer"
           },
           "origin": {
-            "$ref": "#/components/schemas/SavegameVersionOrigin"
+            "$ref": "#/components/schemas/SavegameSnapshotOrigin"
           },
           "profileId": {
             "format": "guid",
@@ -1426,7 +1426,7 @@
         },
         "type": "object"
       },
-      "SavegameVersionOrigin": {
+      "SavegameSnapshotOrigin": {
         "description": "",
         "enum": [
           "Created",
@@ -1442,7 +1442,7 @@
           "Restored"
         ]
       },
-      "SavegameVersionRefDto": {
+      "SavegameSnapshotRefDto": {
         "additionalProperties": false,
         "properties": {
           "number": {
@@ -5506,90 +5506,9 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/unarchive": {
-      "post": {
-        "operationId": "RestoreSavegameV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "savegameId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RestoreRequest"
-              }
-            }
-          },
-          "x-name": "request",
-          "x-position": 3
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Savegames"
-        ]
-      }
-    },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions": {
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/snapshots": {
       "get": {
-        "operationId": "GetSavegameVersionsV1",
+        "operationId": "GetSavegameSnapshotsV1",
         "parameters": [
           {
             "in": "path",
@@ -5637,7 +5556,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetSavegameVersionsResponse"
+                  "$ref": "#/components/schemas/GetSavegameSnapshotsResponse"
                 }
               }
             },
@@ -5724,7 +5643,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SavegameVersionDto"
+                  "$ref": "#/components/schemas/SavegameSnapshotDto"
                 }
               }
             },
@@ -5771,9 +5690,9 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}": {
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/snapshots/{number}": {
       "delete": {
-        "operationId": "DeleteSavegameVersionV1",
+        "operationId": "DeleteSavegameSnapshotV1",
         "parameters": [
           {
             "in": "path",
@@ -5851,9 +5770,9 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/versions/{number}/restore": {
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/snapshots/{number}/restore": {
       "post": {
-        "operationId": "RestoreSavegameVersionV1",
+        "operationId": "RestoreSavegameSnapshotV1",
         "parameters": [
           {
             "in": "path",
@@ -5890,7 +5809,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RestoreSavegameVersionRequest"
+                "$ref": "#/components/schemas/RestoreSavegameSnapshotRequest"
               }
             }
           },
@@ -5902,10 +5821,91 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SavegameVersionDto"
+                  "$ref": "#/components/schemas/SavegameSnapshotDto"
                 }
               }
             },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/unarchive": {
+      "post": {
+        "operationId": "RestoreSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
             "description": ""
           },
           "400": {

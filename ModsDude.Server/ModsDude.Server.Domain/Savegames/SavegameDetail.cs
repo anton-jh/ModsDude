@@ -1,7 +1,7 @@
 namespace ModsDude.Server.Domain.Savegames;
 
 /// <summary>
-/// One fact a client's game adapter chose to record about a version of a savegame - the map it was
+/// One fact a client's game adapter chose to record about a snapshot of a savegame - the map it was
 /// played on, when, for how long - already worded for a person to read.
 /// </summary>
 /// <remarks>
@@ -14,13 +14,13 @@ namespace ModsDude.Server.Domain.Savegames;
 /// </para>
 /// <para>
 /// <b>Nothing may depend on one.</b> A fact the system needs in order to behave correctly is a real
-/// property with a real column - <see cref="SavegameVersion.ContentHash"/> and
-/// <see cref="SavegameVersion.ProfileRevision"/> are what that looks like. These exist to be
+/// property with a real column - <see cref="SavegameSnapshot.ContentHash"/> and
+/// <see cref="SavegameSnapshot.ProfileRevision"/> are what that looks like. These exist to be
 /// displayed, and a client that ignores them entirely is still correct.
 /// </para>
 /// <para>
-/// <b>On the version, not the savegame.</b> A map, a playtime and a money balance describe the
-/// bytes somebody checked in, not the savegame that has been carrying them for a year. Two versions
+/// <b>On the snapshot, not the savegame.</b> A map, a playtime and a money balance describe the
+/// bytes somebody checked in, not the savegame that has been carrying them for a year. Two snapshots
 /// of one save legitimately disagree about every one of these.
 /// </para>
 /// </remarks>

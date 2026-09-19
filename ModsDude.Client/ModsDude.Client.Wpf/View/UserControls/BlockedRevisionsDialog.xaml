@@ -56,7 +56,7 @@
                                                   Margin="0 8 0 0"
                                                   Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
                                         <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type vm:SavegameVersionLinkViewModel}">
+                                            <DataTemplate DataType="{x:Type vm:SavegameSnapshotLinkViewModel}">
                                                 <TextBlock Margin="0 0 0 2">
                                                     <Hyperlink Style="{StaticResource TextLink}"
                                                                ToolTip="Open this repo's savegames"

@@ -43,7 +43,7 @@ public class SavegamePackerTests
 
     /// <summary>
     /// The property everything else rests on. If packing an unchanged save produced new bytes, every
-    /// check-in would mint a version and a 400 MB blob for a night nobody played, and the drift check
+    /// check-in would mint a snapshot and a 400 MB blob for a night nobody played, and the drift check
     /// would report play in a slot that has been sitting still.
     /// </summary>
     [Fact]

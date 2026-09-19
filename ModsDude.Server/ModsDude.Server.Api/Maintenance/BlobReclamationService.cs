@@ -145,11 +145,11 @@ public class BlobReclamationService(
             stored.Add(blob);
         }
 
-        // A set of addresses rather than one entry per version, because several versions can name
-        // one address: a restore copies an old version forward under the same hash, and so does a
+        // A set of addresses rather than one entry per snapshot, because several snapshots can name
+        // one address: a restore copies an old snapshot forward under the same hash, and so does a
         // night that changed nothing. So the question worth asking of a blob is whether anything
-        // still refers to it, never how many versions do or which one owns it.
-        var registered = await dbContext.SavegameVersions.GetRegisteredBlobAddressesAsync(cancellationToken);
+        // still refers to it, never how many snapshots do or which one owns it.
+        var registered = await dbContext.SavegameSnapshots.GetRegisteredBlobAddressesAsync(cancellationToken);
 
         var plan = BlobReclamation.PlanSavegameSweep(stored, registered, cutoff);
 

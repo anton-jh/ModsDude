@@ -50,16 +50,16 @@ public static class Problems
     };
 
     /// <summary>
-    /// The check-in was built on a version that is no longer the head - somebody took the save over
+    /// The check-in was built on a snapshot that is no longer the head - somebody took the save over
     /// and checked in while this one was being played. <paramref name="head"/> is carried so the
     /// client can say what it is now, and so the user can decide to force past it: forcing is
     /// allowed, and records the fork rather than hiding it.
     /// </summary>
-    public static CustomProblemDetails SavegameVersionStale(SavegameId savegameId, SavegameVersionNumber basedOn, SavegameVersionNumber head) => new()
+    public static CustomProblemDetails SavegameSnapshotStale(SavegameId savegameId, SavegameSnapshotNumber basedOn, SavegameSnapshotNumber head) => new()
     {
-        Type = ProblemType.SavegameVersionStale,
+        Type = ProblemType.SavegameSnapshotStale,
         Title = "The savegame changed while you were playing it",
-        Detail = $"This check-in is based on version {basedOn.Value} of savegame '{savegameId.Value}', which is now at version {head.Value}. Somebody else checked in while you were away."
+        Detail = $"This check-in is based on snapshot {basedOn.Value} of savegame '{savegameId.Value}', which is now at snapshot {head.Value}. Somebody else checked in while you were away."
     };
 
     /// <summary>
@@ -136,7 +136,7 @@ public static class Problems
     public static CustomProblemDetails SavegameFileDoesNotExist(RepoId repoId, SavegameId savegameId, string contentHash) => new()
     {
         Type = ProblemType.FileNotFound,
-        Title = "Cannot find file for savegame version",
+        Title = "Cannot find file for savegame snapshot",
         Detail = $"Nothing is stored for repo '{repoId.Value}', savegame '{savegameId.Value}' at content hash '{contentHash}'."
     };
 
@@ -290,14 +290,14 @@ public static class Problems
     };
 
     /// <summary>
-    /// The head version is what a check-out hands people, so a savegame whose current version is
+    /// The head snapshot is what a check-out hands people, so a savegame whose current snapshot is
     /// missing is a savegame nobody can play. Deleting the savegame itself is a different act.
     /// </summary>
-    public static CustomProblemDetails CannotDeleteHeadSavegameVersion(SavegameId savegameId, SavegameVersionNumber number) => new()
+    public static CustomProblemDetails CannotDeleteHeadSavegameSnapshot(SavegameId savegameId, SavegameSnapshotNumber number) => new()
     {
-        Type = ProblemType.CannotDeleteHeadSavegameVersion,
-        Title = "Cannot delete a savegame's current version",
-        Detail = $"Version {number.Value} is the current version of savegame '{savegameId.Value}'. Check in or restore another version first, or delete the whole savegame."
+        Type = ProblemType.CannotDeleteHeadSavegameSnapshot,
+        Title = "Cannot delete a savegame's current snapshot",
+        Detail = $"Snapshot {number.Value} is the current snapshot of savegame '{savegameId.Value}'. Check in or restore another snapshot first, or delete the whole savegame."
     };
 
     /// <summary>
@@ -386,7 +386,7 @@ public static class Problems
     };
 
     /// <summary>
-    /// A savegame follows the profile, or a version of one was played on a revision of it. Either
+    /// A savegame follows the profile, or a snapshot of one was played on a revision of it. Either
     /// makes the profile undeletable - the same bargain as a pinned mod version one aggregate down,
     /// and reported here rather than left to surface as a foreign key violation.
     /// </summary>
@@ -483,9 +483,9 @@ public static class Problems
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-image-set")]
         InvalidImageSet,
 
-        [EnumMember(Value = _typeBaseUri + "cannot-delete-head-savegame-version")]
-        [JsonStringEnumMemberName(_typeBaseUri + "cannot-delete-head-savegame-version")]
-        CannotDeleteHeadSavegameVersion,
+        [EnumMember(Value = _typeBaseUri + "cannot-delete-head-savegame-snapshot")]
+        [JsonStringEnumMemberName(_typeBaseUri + "cannot-delete-head-savegame-snapshot")]
+        CannotDeleteHeadSavegameSnapshot,
 
         [EnumMember(Value = _typeBaseUri + "not-archived")]
         [JsonStringEnumMemberName(_typeBaseUri + "not-archived")]
@@ -523,9 +523,9 @@ public static class Problems
         [JsonStringEnumMemberName(_typeBaseUri + "profile-revision-stale")]
         ProfileRevisionStale,
 
-        [EnumMember(Value = _typeBaseUri + "savegame-version-stale")]
-        [JsonStringEnumMemberName(_typeBaseUri + "savegame-version-stale")]
-        SavegameVersionStale,
+        [EnumMember(Value = _typeBaseUri + "savegame-snapshot-stale")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-snapshot-stale")]
+        SavegameSnapshotStale,
 
         [EnumMember(Value = _typeBaseUri + "savegame-checkout-conflict")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-checkout-conflict")]

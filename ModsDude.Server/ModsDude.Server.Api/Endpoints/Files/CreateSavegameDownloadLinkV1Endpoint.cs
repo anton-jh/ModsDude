@@ -23,8 +23,8 @@ public class CreateSavegameDownloadLinkV1Endpoint : IEndpoint
 
 
     /// <param name="ContentHash">
-    /// Which version's bytes, by the address they are stored at. The version number is not what is
-    /// asked for here: the blob is addressed by content, so two versions that were checked in from
+    /// Which snapshot's bytes, by the address they are stored at. The snapshot number is not what is
+    /// asked for here: the blob is addressed by content, so two snapshots that were checked in from
     /// the same save read the same blob.
     /// </param>
     public record CreateSavegameDownloadLinkRequest(Guid RepoId, Guid SavegameId, string ContentHash);

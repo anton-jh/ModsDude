@@ -6,7 +6,7 @@ namespace ModsDude.Client.Core.Models;
 /// <remarks>
 /// <para>
 /// <b>A source of truth, not a cache</b>, for the same reason <see cref="ActiveProfile"/> is. Once
-/// somebody has played, the bytes in the slot match no version on the server, so nothing can work
+/// somebody has played, the bytes in the slot match no snapshot on the server, so nothing can work
 /// out afterwards which savegame that slot was. Losing this loses the ability to check the save back
 /// in at all.
 /// </para>
@@ -23,7 +23,9 @@ namespace ModsDude.Client.Core.Models;
 /// A key the adapter no longer offers is a hold this machine can no longer address, and the binding
 /// deliberately survives it: see <c>SavegameBindingStore</c>.
 /// </param>
-/// <param name="Version">The version that was written into the slot - what a check-in is based on.</param>
+/// <param name="Snapshot">
+/// The snapshot that was written into the slot - what a check-in is based on.
+/// </param>
 /// <param name="ContentHash">
 /// What was written at check-out, so that the slot having moved since is a comparison rather than a
 /// guess. This is the half that could be recomputed by rehashing the slot, and the only reason it is
@@ -33,7 +35,7 @@ public readonly record struct SavegameCheckoutBinding(
     Guid RepoId,
     Guid SavegameId,
     SavegameSlotRef Slot,
-    int Version,
+    int Snapshot,
     string ContentHash,
     DateTime WrittenAt)
 {
@@ -41,11 +43,11 @@ public readonly record struct SavegameCheckoutBinding(
 
 
     /// <summary>
-    /// The profile the version being held was played on, and which revision of it.
+    /// The profile the snapshot being held was played on, and which revision of it.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Recorded here because it is the only place it can be: the version's own revision lives on the
+    /// Recorded here because it is the only place it can be: the snapshot's own revision lives on the
     /// server, and asking for it is a network call in a drift check that must work offline. With both
     /// numbers in local state, "this save was checked out against a mod list this folder no longer
     /// runs" - the state that actually corrupts saves - costs no I/O whatsoever.
@@ -100,7 +102,7 @@ public readonly record struct SavegameCheckoutBinding(
     /// </para>
     /// <para>
     /// <b>Not <see cref="ProfileRevision"/>, which it happens to equal at check-out.</b> That one is
-    /// what the held version was <em>played</em> on and belongs to play attribution; this is what the
+    /// what the held snapshot was <em>played</em> on and belongs to play attribution; this is what the
     /// mod folder has to be on and belongs to the rules. A current savegame's are already different -
     /// it was played on some older revision and runs on head - and nothing that decides drift reads
     /// the other.
@@ -112,11 +114,11 @@ public readonly record struct SavegameCheckoutBinding(
     /// The newest profile revision play has actually been observed on, or null until any has been.
     /// </summary>
     /// <remarks>
-    /// What a check-in records the version as played on, in preference to whatever the folder happens
+    /// What a check-in records the snapshot as played on, in preference to whatever the folder happens
     /// to be on when the save is handed back: an apply between the last evening and the check-in moves
     /// the folder and not the play, and the interval between the two does not enter into it. Null is
     /// the never-played case and falls back to the folder's revision, where the slot's bytes still
-    /// equal the held version's and the server mints nothing anyway.
+    /// equal the held snapshot's and the server mints nothing anyway.
     /// </remarks>
     public int? LastPlayedRevision { get; init; }
 }

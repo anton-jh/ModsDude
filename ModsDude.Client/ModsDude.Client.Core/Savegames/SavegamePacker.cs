@@ -30,7 +30,7 @@ public readonly record struct PackedSavegame(string FilePath, string ContentHash
 /// <para>
 /// <b>The archive is deterministic.</b> Identical slot contents produce identical bytes and therefore
 /// an identical hash, whoever packed them and whenever. Everything else in savegames rests on that:
-/// a check-in whose hash equals the head's mints no version, so launching the game and quitting must
+/// a check-in whose hash equals the head's mints no snapshot, so launching the game and quitting must
 /// not cost a 400 MB blob and a line of history - and a drift check can only ask "has this been
 /// played?" if replaying the same bytes answers no. Two things buy it, and both are load-bearing:
 /// entries sorted <see cref="StringComparer.Ordinal"/> rather than in whatever order the filesystem

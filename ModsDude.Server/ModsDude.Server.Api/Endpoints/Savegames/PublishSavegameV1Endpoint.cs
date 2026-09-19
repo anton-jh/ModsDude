@@ -19,11 +19,11 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
 /// Puts a save that only existed in somebody's game folder into the repo, as a new savegame with a
-/// first version, held by whoever published it.
+/// first snapshot, held by whoever published it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new version of that thing"
+/// <b>Publish is not check-in.</b> "Upload this new thing" and "upload a new snapshot of that thing"
 /// have opposite failure modes - the first can collide with a name, the second with somebody else's
 /// play - and the old MVP made them one button. They are two routes here so that neither can
 /// silently do the other's job.
@@ -32,7 +32,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <b>Publishing leaves the save checked out to the publisher.</b> Somebody who has just uploaded
 /// the savegame they are playing has not handed it back, and a publish that left the slot free would
 /// invite the next person to take a save whose owner is still in it. The claim is opened in the same
-/// transaction as the savegame and its first version, so there is no window in which the save exists
+/// transaction as the savegame and its first snapshot, so there is no window in which the save exists
 /// unheld.
 /// </para>
 /// <para>
@@ -110,7 +110,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
-        // The revision has to exist before the version can name it: the foreign key onto it is
+        // The revision has to exist before the snapshot can name it: the foreign key onto it is
         // Restrict, so a revision that is not there surfaces as a database error rather than as the
         // answer "that mod list is not one of this profile's".
         // Both patterns, though the check above already made them one condition: the pair being set
@@ -122,7 +122,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{request.ProfileId}' has no revision {request.ProfileRevision}"));
         }
 
-        // Before storage sees it, and before the version's own constructor does. Both validate the
+        // Before storage sees it, and before the snapshot's own constructor does. Both validate the
         // hash again, and both throw where this reports - and there is no global handler to turn a
         // domain validation exception into anything but a 500.
         if (!ModImageHash.IsValid(request.ContentHash))
@@ -148,20 +148,20 @@ public class PublishSavegameV1Endpoint : IEndpoint
             Id = savegameId
         };
 
-        // Origin.Created rather than CheckedIn: this version was not built on anything, which is
-        // also why it is the one version whose BaseVersion is null.
-        var version = savegame.CreateVersion(
+        // Origin.Created rather than CheckedIn: this snapshot was not built on anything, which is
+        // also why it is the one snapshot whose BaseSnapshot is null.
+        var snapshot = savegame.CreateSnapshot(
             profileRevision,
             request.ContentHash,
             request.SizeBytes,
             userId,
             now,
             request.Label,
-            SavegameVersionOrigin.Created,
+            SavegameSnapshotOrigin.Created,
             details: SavegameDetails.From(request.Details));
 
-        // The version carries no CheckoutId even though a claim is opened beside it. CheckoutId
-        // names the claim a version was checked in *against*, and this claim starts here rather
+        // The snapshot carries no CheckoutId even though a claim is opened beside it. CheckoutId
+        // names the claim a snapshot was checked in *against*, and this claim starts here rather
         // than ending here - the play it will eventually record has not happened yet.
         var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now);
 
@@ -178,7 +178,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         await unitOfWork.CommitAsync(cancellationToken);
 
         dbContext.Savegames.Add(savegame);
-        dbContext.SavegameVersions.Add(version);
+        dbContext.SavegameSnapshots.Add(snapshot);
         dbContext.SavegameCheckouts.Add(checkout);
 
         try
@@ -215,7 +215,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// remarks on the endpoint for why this end chooses it.
     /// </param>
     /// <param name="ProfileId">
-    /// The profile this save follows from now on, and the one its first version was played on -
+    /// The profile this save follows from now on, and the one its first snapshot was played on -
     /// which is the same profile for the whole of its life, since nothing moves a save between them.
     /// <para>
     /// <c>null</c> is <b>no mod list</b>, offered in the publish dialog as an explicit choice rather
@@ -227,7 +227,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// Which revision of that profile the save was played against, or <c>null</c> with a null
     /// <paramref name="ProfileId"/>. Half a pair is refused.
     /// <para>
-    /// <b>Declared rather than observed</b>, and the only version in the system of which that is
+    /// <b>Declared rather than observed</b>, and the only snapshot in the system of which that is
     /// true: the bytes predate ModsDude, so nothing knows which mods were in the folder while that
     /// savegame was actually played, and requiring the profile to be applied first would only observe a
     /// different moment. Never derived from the profile's head here either - the client sends the
@@ -237,7 +237,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// <param name="ContentHash">
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to.
     /// </param>
-    /// <param name="Label">What to call this first version in the history. Optional.</param>
+    /// <param name="Label">What to call this first snapshot in the history. Optional.</param>
     /// <param name="Details">
     /// What the client's adapter says about the save - the map, when it was played. Opaque here and
     /// never parsed; optional, because an adapter that describes nothing is a perfectly ordinary one.

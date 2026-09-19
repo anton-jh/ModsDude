@@ -13,10 +13,10 @@
 
     <Page.Resources>
 
-        <!-- A version: something the savegame still has, and the only kind of row the buttons under
+        <!-- A snapshot: something the savegame still has, and the only kind of row the buttons under
              the list can act on. It gets the height, the weight and a solid marker, because picking
              one out of an evening's worth of claim rows is what somebody opens this panel to do. -->
-        <DataTemplate x:Key="TimelineVersionRow" DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
+        <DataTemplate x:Key="TimelineSnapshotRow" DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
             <Grid Margin="14 10" ColumnDefinitions="20 * auto">
 
                 <!-- The spine. Solid here and hollow on an event row, which is the distinction at a
@@ -63,7 +63,7 @@
 
         <!-- A claim taken or a claim ended: something that merely happened to the save. One line,
              half the height and none of the weight, so a run of them reads as a margin note beside
-             the versions rather than competing with them. -->
+             the snapshots rather than competing with them. -->
         <DataTemplate x:Key="TimelineEventRow" DataType="{x:Type vm:SavegameTimelineEntryViewModel}">
             <Grid Margin="14 5" ColumnDefinitions="20 auto * auto">
 
@@ -284,7 +284,7 @@
                                                        Style="{DynamicResource CaptionTextBlockStyle}"
                                                        Text="{Binding Summary}" />
 
-                                            <!-- What the game says about the head version, recorded
+                                            <!-- What the game says about the head snapshot, recorded
                                                  by whoever checked it in. The half of the row that
                                                  is about the save rather than about sharing it. -->
                                             <TextBlock Margin="0 2 0 0"
@@ -343,7 +343,7 @@
                                              offered - and each carries its own reason when disabled.
 
                                              An accent primary and three ordinary buttons, which is the
-                                             pairing the version footer already uses. Not SubtleMenuButton:
+                                             pairing the snapshot footer already uses. Not SubtleMenuButton:
                                              that one is transparent until hovered, which is right for the
                                              page's own menu verbs - Rename, Archive, Refresh - where the
                                              surrounding chrome says a control is there. Out here each
@@ -373,7 +373,7 @@
                                                     Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                             <!-- The other way out of a hold, immediately below the
-                                                 first: Check in mints a version, Discard mints
+                                                 first: Check in mints a snapshot, Discard mints
                                                  nothing and recycles the copy. The choice between
                                                  them is about what happened while you had the save,
                                                  so they belong on the same row rather than a page
@@ -473,7 +473,7 @@
                     </Grid>
                 </Border>
 
-                <!-- Its history: versions and checkouts as one column. -->
+                <!-- Its history: snapshots and checkouts as one column. -->
                 <Border Grid.Column="1"
                         CornerRadius="6"
                         BorderThickness="1"
@@ -507,7 +507,7 @@
                                         Command="{Binding RenameSavegameCommand}"
                                         Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                <!-- The only way a savegame goes away. It keeps its versions and
+                                <!-- The only way a savegame goes away. It keeps its snapshots and
                                      whoever holds it; it leaves this list and frees its name. -->
                                 <Button Style="{DynamicResource SubtleMenuButton}"
                                         Content="Archive"
@@ -539,8 +539,8 @@
                                                     <Setter Property="Focusable" Value="False" />
                                                     <Setter Property="ContentTemplate" Value="{StaticResource TimelineEventRow}" />
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsVersion}" Value="True">
-                                                            <Setter Property="ContentTemplate" Value="{StaticResource TimelineVersionRow}" />
+                                                        <DataTrigger Binding="{Binding IsSnapshot}" Value="True">
+                                                            <Setter Property="ContentTemplate" Value="{StaticResource TimelineSnapshotRow}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -596,7 +596,7 @@
                                            Text="{Binding RevisionText}"
                                            Visibility="{Binding HasRevision, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                <!-- Whatever the adapter chose to record about this version. Labels
+                                <!-- Whatever the adapter chose to record about this snapshot. Labels
                                      and values both come from it, so nothing here knows what a map
                                      is - see SavegameDetail. -->
                                 <ItemsControl Margin="0 6 0 0"
@@ -631,7 +631,7 @@
                         </Border>
 
                         <!-- The two verbs sit on the entry rather than on the row, because which
-                             version they act on is what the timeline selection decides. -->
+                             snapshot they act on is what the timeline selection decides. -->
                         <StackPanel Grid.Row="3"
                                     Orientation="Horizontal"
                                     Margin="16 12 16 12"
@@ -640,22 +640,22 @@
 
                             <Button Margin="0 0 8 0"
                                     Style="{DynamicResource AccentButtonStyle}"
-                                    Content="Check this version out"
-                                    ToolTip="An older version is copied forward as the newest one first, so nothing in between is deleted."
-                                    Command="{Binding CheckOutVersionCommand}"
+                                    Content="Check this snapshot out"
+                                    ToolTip="An older snapshot is copied forward as the newest one first, so nothing in between is deleted."
+                                    Command="{Binding CheckOutSnapshotCommand}"
                                     Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <Button Margin="0 0 8 0"
-                                    Content="Take a copy of this version"
+                                    Content="Take a copy of this snapshot"
                                     ToolTip="Writes it into a slot and claims nothing. Whoever holds the save keeps holding it."
-                                    Command="{Binding TakeCopyVersionCommand}" />
+                                    Command="{Binding TakeCopySnapshotCommand}" />
 
-                            <!-- Admin only, and never the current version. Also the way an old
+                            <!-- Admin only, and never the current snapshot. Also the way an old
                                  profile revision stops being blocked from pruning. -->
-                            <Button Content="Delete this version"
-                                    ToolTip="Removes this copy for good. The current version and the others stay."
-                                    Command="{Binding DeleteVersionCommand}"
-                                    Visibility="{Binding CanPruneVersions, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Button Content="Delete this snapshot"
+                                    ToolTip="Removes this copy for good. The current snapshot and the others stay."
+                                    Command="{Binding DeleteSnapshotCommand}"
+                                    Visibility="{Binding CanPruneSnapshots, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </Grid>
                 </Border>

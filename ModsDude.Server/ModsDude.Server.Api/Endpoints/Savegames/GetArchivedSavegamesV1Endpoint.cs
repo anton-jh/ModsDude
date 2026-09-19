@@ -16,7 +16,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// The repo's archived savegames, on the same Archive page as its archived profiles.
 /// </summary>
 /// <remarks>
-/// Each row still carries its head version and whoever holds it, exactly as a live one does -
+/// Each row still carries its head snapshot and whoever holds it, exactly as a live one does -
 /// archiving changed the visibility, not the save. Somebody looking at the archive to decide
 /// whether a save is safe to delete needs both of those to answer it.
 /// </remarks>

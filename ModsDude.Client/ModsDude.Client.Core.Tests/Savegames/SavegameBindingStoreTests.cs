@@ -16,7 +16,7 @@ public class SavegameBindingStoreTests
     {
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
-        var binding = Binding(savegameId, "savegame3", version: 7, hash: "aaaa");
+        var binding = Binding(savegameId, "savegame3", snapshot: 7, hash: "aaaa");
 
         store.SetBinding(_game, binding);
 
@@ -25,9 +25,9 @@ public class SavegameBindingStoreTests
         Assert.NotNull(read);
         Assert.Equal(binding, read);
 
-        // The version and the hash are the two halves a check-in needs: the base it was built on, and
+        // The snapshot and the hash are the two halves a check-in needs: the base it was built on, and
         // whether the slot has moved since. Neither can be re-derived once somebody has played.
-        Assert.Equal(7, read.Value.Version);
+        Assert.Equal(7, read.Value.Snapshot);
         Assert.Equal("aaaa", read.Value.ContentHash);
     }
 
@@ -383,11 +383,11 @@ public class SavegameBindingStoreTests
     /// a test about the rules should not have to say so; the two-folder tests name it.
     /// </param>
     private SavegameCheckoutBinding Binding(
-        Guid savegameId, string slotId, int version = 1, string hash = "aaaa", string target = "mods") => new(
+        Guid savegameId, string slotId, int snapshot = 1, string hash = "aaaa", string target = "mods") => new(
         _repoId,
         savegameId,
         Keys.Slot(slotId, target),
-        version,
+        snapshot,
         hash,
         DateTime.UtcNow);
 

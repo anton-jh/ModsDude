@@ -28,7 +28,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// <b>The claim log is left exactly as it was.</b> Archiving a save somebody is holding must not
-/// quietly release their hold on it - if they finish playing and check in, the version should land
+/// quietly release their hold on it - if they finish playing and check in, the snapshot should land
 /// on the savegame they took, archived or not. Only visibility and the name change.
 /// </para>
 /// </remarks>

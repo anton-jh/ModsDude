@@ -170,7 +170,7 @@ public static class ProfileRevisionExtensions
     /// <remarks>
     /// <para>
     /// <b>Leaves a gap, and that is the point.</b> Revision numbers exist to be said out loud;
-    /// renumbering would make yesterday's sentence point at a different list. Savegame version
+    /// renumbering would make yesterday's sentence point at a different list. Savegame snapshot
     /// numbers already work this way, and for the same reason.
     /// </para>
     /// <para>
@@ -257,16 +257,16 @@ public static class ProfileRevisionExtensions
     }
 
     /// <summary>
-    /// Which savegame versions were played on a profile revision. The other half of what stops a
+    /// Which savegame snapshots were played on a profile revision. The other half of what stops a
     /// revision being deleted, and the only one the user can do anything about.
     /// </summary>
-    public static async Task<List<SavegameRevisionDependency>> GetDependentSavegameVersionsAsync(
-        this DbSet<Domain.Savegames.SavegameVersion> dbSet,
+    public static async Task<List<SavegameRevisionDependency>> GetDependentSavegameSnapshotsAsync(
+        this DbSet<Domain.Savegames.SavegameSnapshot> dbSet,
         RepoId repoId, ProfileId profileId, IReadOnlyCollection<RevisionNumber> revisions,
         CancellationToken cancellationToken)
     {
         // Widened to the column's own nullability rather than unwrapping the column to the
-        // parameter's, because a null revision is a version of a savegame that follows no mod list -
+        // parameter's, because a null revision is a snapshot of a savegame that follows no mod list -
         // it matches nothing here, and the list holding no null is what says so. Unwrapping instead
         // would put a Nullable.Value in the predicate for the provider to make sense of.
         var wanted = revisions.Select(x => (RevisionNumber?)x).ToList();
@@ -367,8 +367,8 @@ public record ModVersionUsage(ModId ModId, ModVersionId VersionId, int ProfileCo
 /// <summary>One revision that pins a mod, and which version of it.</summary>
 public record ProfileRevisionDependency(ProfileId ProfileId, RevisionNumber Revision, ModVersionId VersionId);
 
-/// <summary>One savegame version that was played on a profile revision.</summary>
+/// <summary>One savegame snapshot that was played on a profile revision.</summary>
 public record SavegameRevisionDependency(
     Domain.Savegames.SavegameId SavegameId,
-    Domain.Savegames.SavegameVersionNumber Number,
+    Domain.Savegames.SavegameSnapshotNumber Number,
     RevisionNumber Revision);

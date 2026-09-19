@@ -28,7 +28,7 @@ public enum SavegameDriftKind
     UncheckedInPlay,
 
     /// <summary>
-    /// Somebody took the save over and checked in, so the version being held here is no longer the
+    /// Somebody took the save over and checked in, so the snapshot being held here is no longer the
     /// head. A check-in from here is a fork, and will be refused unless it is forced.
     /// </summary>
     TakenOverAndCheckedIn,
@@ -65,11 +65,11 @@ public sealed record SavegameDrift(
     /// <summary>What the game calls the save in that slot, where the adapter could read it.</summary>
     public string? SlotDisplayName { get; init; }
 
-    /// <summary>The version this machine is holding - what a check-in from here would be based on.</summary>
-    public int HeldVersion { get; init; }
+    /// <summary>The snapshot this machine is holding - what a check-in from here would be based on.</summary>
+    public int HeldSnapshot { get; init; }
 
     /// <summary>What the server's head is now, where the caller knew. Null is "not asked", not "unchanged".</summary>
-    public int? HeadVersion { get; init; }
+    public int? HeadSnapshot { get; init; }
 
     /// <summary>The profile revision the save was checked out against.</summary>
     public int? PlayedRevision { get; init; }
@@ -107,7 +107,7 @@ public sealed record SavegameDrift(
 
 
 /// <summary>
-/// Which version a savegame's head is at, for the savegames this client happens to know about.
+/// Which snapshot a savegame's head is at, for the savegames this client happens to know about.
 /// </summary>
 /// <remarks>
 /// Deliberately partial, and deliberately <b>not</b> a client call - the same bargain
@@ -116,10 +116,10 @@ public sealed record SavegameDrift(
 /// alternative is a network round trip per held savegame on every window activation, in a check
 /// whose entire point is that it works offline and costs a directory listing.
 /// </remarks>
-public interface ISavegameHeadVersions
+public interface ISavegameHeadSnapshots
 {
-    /// <summary>The savegame's head version, or null where this client has not been told.</summary>
-    int? GetHeadVersion(Guid repoId, Guid savegameId);
+    /// <summary>The savegame's head snapshot, or null where this client has not been told.</summary>
+    int? GetHeadSnapshot(Guid repoId, Guid savegameId);
 }
 
 
@@ -149,7 +149,7 @@ public static class SavegameDriftRules
     /// The slot hashed now, or null where the caller did not hash it. Null says nothing, rather than
     /// saying the slot moved.
     /// </param>
-    /// <param name="headVersion">The server's head, or null where nobody asked.</param>
+    /// <param name="headSnapshot">The server's head, or null where nobody asked.</param>
     /// <param name="appliedProfileId">
     /// The profile the mod folder was last made to match. A <em>different</em> profile than the one
     /// the save was checked out against is the third state in its starkest form - the folder is not
@@ -159,14 +159,14 @@ public static class SavegameDriftRules
     public static IReadOnlyList<SavegameDriftKind> Classify(
         SavegameCheckoutBinding binding,
         string? currentContentHash,
-        int? headVersion,
+        int? headSnapshot,
         Guid? appliedProfileId,
         int? appliedRevision)
     {
         var kinds = new List<SavegameDriftKind>();
 
         // Against the check-out value, never against LastObservedHash: this asks whether the slot
-        // still matches the version the server holds, which an apply refreshing the observation
+        // still matches the snapshot the server holds, which an apply refreshing the observation
         // boundary does not answer. Collapsing the two would stop this reporting play entirely.
         if (currentContentHash is not null && ModContentHasher.Matches(currentContentHash, binding.ContentHash) is false)
         {
@@ -176,7 +176,7 @@ public static class SavegameDriftRules
         // Strictly past, not merely different. A client holding a head number older than the binding
         // is a client that has not refreshed, and inventing a takeover out of that would fire the
         // notice on stale data rather than on anything that happened.
-        if (headVersion is int head && head > binding.Version)
+        if (headSnapshot is int head && head > binding.Snapshot)
         {
             kinds.Add(SavegameDriftKind.TakenOverAndCheckedIn);
         }

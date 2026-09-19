@@ -50,7 +50,7 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
     /// <para>
     /// <b>A blob already at the address is a success here, and a refusal in
     /// <see cref="CreateModUploadLinkV1Endpoint"/>.</b> That endpoint addresses a file by the mod
-    /// version it belongs to, so a blob sitting at the address holds <em>some other bytes</em>
+    /// snapshot it belongs to, so a blob sitting at the address holds <em>some other bytes</em>
     /// somebody published under this id - an identity collision that has to be reported before it is
     /// registered over. A savegame blob is addressed by its content, so a blob at the address holds
     /// precisely the bytes being offered, and the only thing left to do with them is nothing.

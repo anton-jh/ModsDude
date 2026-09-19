@@ -41,7 +41,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly SavegameHeadVersionCache _headVersions;
+    private readonly SavegameHeadSnapshotCache _headSnapshots;
     private readonly ISavegameService _savegameService;
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
@@ -72,7 +72,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Repo repo,
         ISavegamesClient savegamesClient,
         ISavegameService savegameService,
-        SavegameHeadVersionCache headVersions,
+        SavegameHeadSnapshotCache headSnapshots,
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         CurrentUserService currentUserService,
@@ -92,7 +92,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _savegamesClient = savegamesClient;
         _savegameService = savegameService;
-        _headVersions = headVersions;
+        _headSnapshots = headSnapshots;
         _bindingStore = bindingStore;
         _profileService = profileService;
         _currentUserService = currentUserService;
@@ -111,7 +111,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         // Admin, like pruning a profile's revisions and for the same reason: it destroys a backup,
         // which is not part of running a repo.
-        CanPruneVersions = repo.MembershipLevel >= RepoMembershipLevel.Admin;
+        CanPruneSnapshots = repo.MembershipLevel >= RepoMembershipLevel.Admin;
 
         Savegames = [];
         Timeline = [];
@@ -121,7 +121,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     public string RepoName => _repo.Name;
 
     /// <summary>
-    /// Whether this user may take a claim at all. Reading the list and copying a version is not gated.
+    /// Whether this user may take a claim at all. Reading the list and copying a snapshot is not gated.
     /// </summary>
     /// <remarks>
     /// The coarse half of the answer. Whether a particular savegame can be taken <em>here and now</em>
@@ -130,8 +130,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     public bool IsMember { get; }
 
-    /// <summary>Whether deleting a version of a savegame's history is on offer. Admin only.</summary>
-    public bool CanPruneVersions { get; }
+    /// <summary>Whether deleting a snapshot of a savegame's history is on offer. Admin only.</summary>
+    public bool CanPruneSnapshots { get; }
 
     public ObservableCollection<SavegameListItemViewModel> Savegames { get; }
 
@@ -171,7 +171,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         ? "Every save here is a past savegame. Turn on 'Show past savegames' to see them - they are still playable."
         : "No saves here yet. Publish one of the saves already on this machine, and it appears in this list for everybody.";
 
-    /// <summary>Versions and checkouts as one column, newest first.</summary>
+    /// <summary>Snapshots and checkouts as one column, newest first.</summary>
     public ObservableCollection<SavegameTimelineEntryViewModel> Timeline { get; }
 
 
@@ -184,9 +184,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedEntry))]
-    [NotifyCanExecuteChangedFor(nameof(CheckOutVersionCommand))]
-    [NotifyCanExecuteChangedFor(nameof(TakeCopyVersionCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteVersionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CheckOutSnapshotCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TakeCopySnapshotCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSnapshotCommand))]
     private SavegameTimelineEntryViewModel? _selectedEntry;
 
     [ObservableProperty]
@@ -196,8 +196,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private bool _isLoadingTimeline;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CheckOutVersionCommand))]
-    [NotifyCanExecuteChangedFor(nameof(TakeCopyVersionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CheckOutSnapshotCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TakeCopySnapshotCommand))]
     [NotifyCanExecuteChangedFor(nameof(RenameSavegameCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSavegameCommand))]
     [NotifyCanExecuteChangedFor(nameof(PublishSaveCommand))]
@@ -257,7 +257,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// <para>
     /// <b>Done rather than asked.</b> A binding whose savegame has been archived and then deleted for
     /// good names something nobody can produce: there is no claim left to hand back, no history to
-    /// check a version into, and every server-side verb on it answers 404. The only thing anybody can
+    /// check a snapshot into, and every server-side verb on it answers 404. The only thing anybody can
     /// do about it is stop tracking it, and a dialog offering a choice with one sane answer is a
     /// dialog that exists to be clicked through. So the row is not built, the button is not offered,
     /// and the state is simply gone the next time this list is opened.
@@ -352,7 +352,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// <para>
     /// <b>The slot is still what it is about</b>, so it is asked for first: the same flat slot list
     /// across every savegame folder the game reaches, filtered to the ones ModsDude has no copy of.
-    /// Everything after that - the name, the mod list, the revision this first version declares - is
+    /// Everything after that - the name, the mod list, the revision this first snapshot declares - is
     /// the publish dialog's, unchanged.
     /// </para>
     /// </remarks>
@@ -455,23 +455,23 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Checks out the selected entry's version. Where that is not the head it is a restore first -
-    /// copied forward as a new version, with nothing in between deleted - which is why there is no
+    /// Checks out the selected entry's snapshot. Where that is not the head it is a restore first -
+    /// copied forward as a new snapshot, with nothing in between deleted - which is why there is no
     /// separate restore flow to find.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanActOnEntry))]
-    private async Task CheckOutVersion()
+    private async Task CheckOutSnapshot()
     {
-        if (Selected is SavegameListItemViewModel row && SelectedEntry?.VersionNumber is int number)
+        if (Selected is SavegameListItemViewModel row && SelectedEntry?.SnapshotNumber is int number)
         {
             await StartAsync(row, number, SavegameCheckOutMode.CheckOut);
         }
     }
 
     [RelayCommand(CanExecute = nameof(CanCopyEntry))]
-    private async Task TakeCopyVersion()
+    private async Task TakeCopySnapshot()
     {
-        if (Selected is SavegameListItemViewModel row && SelectedEntry?.VersionNumber is int number)
+        if (Selected is SavegameListItemViewModel row && SelectedEntry?.SnapshotNumber is int number)
         {
             await StartAsync(row, number, SavegameCheckOutMode.TakeCopy);
         }
@@ -482,7 +482,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Nothing else moves with the name.</b> The versions, the claim log, whoever is holding it and
+    /// <b>Nothing else moves with the name.</b> The snapshots, the claim log, whoever is holding it and
     /// which mod list it follows are all untouched - a savegame cannot be moved between profiles, so
     /// there is no second field this dialog could grow. The server's route says the same thing from
     /// its end: it became a rename in Phase 9 and takes nothing but a name.
@@ -503,7 +503,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
 
         var title = $"Rename '{row.Name}'";
-        var message = "What everybody else in this repo will see it called. Its versions, its history and "
+        var message = "What everybody else in this repo will see it called. Its snapshots, its history and "
             + "whoever is holding it are untouched, and so is the mod list it follows.";
         var suggested = row.Name;
 
@@ -574,7 +574,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     /// <remarks>
     /// The only way a savegame goes away, and deliberately not a delete: what it carries is backups
-    /// of somebody's play. It keeps its versions and its claim log - archiving a save somebody is
+    /// of somebody's play. It keeps its snapshots and its claim log - archiving a save somebody is
     /// holding must not quietly release their hold on it.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanArchiveSelected))]
@@ -617,37 +617,37 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     // Member, like publishing and checking in: archiving is reversible and is part of keeping the
-    // repo's saves tidy. CanPruneVersions is the Admin one, and gates deleting a version.
+    // repo's saves tidy. CanPruneSnapshots is the Admin one, and gates deleting a snapshot.
     private bool CanArchiveSelected() => IsMember && IsWorking is false && Selected is not null;
 
     /// <summary>
-    /// Deletes the selected version from the savegame's history.
+    /// Deletes the selected snapshot from the savegame's history.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Admin only, and never the head.</b> It destroys a backup, which is not part of running a
-    /// repo; and the head is what a check-out hands people, so a savegame whose current version is
+    /// repo; and the head is what a check-out hands people, so a savegame whose current snapshot is
     /// missing is one nobody can play. The server refuses both, and the button is simply absent
     /// rather than present-and-doomed.
     /// </para>
     /// <para>
-    /// <b>The reason this exists is a profile's history.</b> A version pins the profile revision it
-    /// was played on, so it is what stops that revision being pruned - and "played on save X version
+    /// <b>The reason this exists is a profile's history.</b> A snapshot pins the profile revision it
+    /// was played on, so it is what stops that revision being pruned - and "played on save X snapshot
     /// 3" would be an obstacle somebody could see and never move.
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanDeleteEntry))]
-    private async Task DeleteVersion()
+    private async Task DeleteSnapshot()
     {
-        if (Selected is not SavegameListItemViewModel row || SelectedEntry?.VersionNumber is not int number)
+        if (Selected is not SavegameListItemViewModel row || SelectedEntry?.SnapshotNumber is not int number)
         {
             return;
         }
 
         var confirmation = new ConfirmationDialogViewModel(
-            $"Delete version {number}?",
+            $"Delete snapshot {number}?",
             $"This copy of '{row.Name}' goes for good. The others stay, and whoever is playing it now "
-                + "is unaffected - they hold the current version, which this is not.",
+                + "is unaffected - they hold the current snapshot, which this is not.",
             IconKind.Warning,
             "Delete it",
             "Keep it");
@@ -663,7 +663,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _savegamesClient.DeleteSavegameVersionV1Async(_repo.Id, row.Id, number, _pageLifetime.Token);
+            await _savegamesClient.DeleteSavegameSnapshotV1Async(_repo.Id, row.Id, number, _pageLifetime.Token);
 
             await LoadTimelineAsync(row);
         }
@@ -673,7 +673,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         }
         catch (Exception exception)
         {
-            await _errorReporter.ShowAsync(exception, "deleting a savegame version");
+            await _errorReporter.ShowAsync(exception, "deleting a savegame snapshot");
         }
         finally
         {
@@ -682,14 +682,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanDeleteEntry()
-        => CanPruneVersions && IsWorking is false && SelectedEntry is { IsVersion: true, IsHead: false };
+        => CanPruneSnapshots && IsWorking is false && SelectedEntry is { IsSnapshot: true, IsHead: false };
 
-    private bool CanActOnEntry() => IsMember && IsWorking is false && SelectedEntry is { IsVersion: true };
-    private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsVersion: true };
+    private bool CanActOnEntry() => IsMember && IsWorking is false && SelectedEntry is { IsSnapshot: true };
+    private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsSnapshot: true };
 
     /// <summary>
     /// Into the profile's own history, where two revisions can be compared properly. The comparison
-    /// already exists; repeating a cut-down version of it here would be a second answer to maintain.
+    /// already exists; repeating a cut-down snapshot of it here would be a second answer to maintain.
     /// </summary>
     [RelayCommand]
     private async Task CompareRevisions()
@@ -726,7 +726,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // "somebody took this over and checked in" is fed from this one place rather than from each
         // fetch. It answers nothing for a repo whose list nobody has opened - deliberately, since the
         // alternative is a round trip per held save on every window activation.
-        _headVersions.Record(_repo.Id, savegames);
+        _headSnapshots.Record(_repo.Id, savegames);
 
         var wanted = select ?? Selected?.Id;
 
@@ -961,7 +961,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             _lifetime.ThrowIfCancellationRequested();
 
-            if (row.Savegame.Head is not SavegameVersionDto head ||
+            if (row.Savegame.Head is not SavegameSnapshotDto head ||
                 head.ProfileRevision is not int played ||
                 FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
             {
@@ -1045,9 +1045,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Versions and checkouts, merged and ordered newest first. Two reads rather than one, because the
+    /// Snapshots and checkouts, merged and ordered newest first. Two reads rather than one, because the
     /// server keeps them as two logs on purpose - the checkout rows outlive the blobs, so history can
-    /// still say that a version existed and was pruned.
+    /// still say that a snapshot existed and was pruned.
     /// <para>
     /// A claim becomes up to two rows, at the two moments it actually happened: see the remarks on
     /// <see cref="SavegameTimelineEntryViewModel"/>.
@@ -1059,7 +1059,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var versions = await _savegamesClient.GetSavegameVersionsV1Async(
+            var snapshots = await _savegamesClient.GetSavegameSnapshotsV1Async(
                 _repo.Id, row.Id, null, null, _lifetime);
 
             var checkouts = await _savegamesClient.GetSavegameCheckoutsV1Async(
@@ -1072,12 +1072,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            // Which claims a version already speaks for. Those get no ending row of their own - the
-            // version minted against a claim is the check-in, and a thin "Checked back in" at the same
+            // Which claims a snapshot already speaks for. Those get no ending row of their own - the
+            // snapshot minted against a claim is the check-in, and a thin "Checked back in" at the same
             // second would only say it again. Taken from the loaded window rather than from the whole
-            // history on purpose: a check-in whose version has since been pruned, or scrolled past,
+            // history on purpose: a check-in whose snapshot has since been pruned, or scrolled past,
             // then gets its ending drawn, which is the point of the claim log outliving the blobs.
-            var recorded = versions.Versions
+            var recorded = snapshots.Snapshots
                 .Where(x => x.CheckoutId is not null)
                 .Select(x => x.CheckoutId!.Value)
                 .ToHashSet();
@@ -1086,15 +1086,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             // checking in and taking a save over each write two rows off one clock reading, so the
             // moment alone leaves the tie to whichever read was concatenated first - which is what put
             // a publish above the claim it opened and made the save look checked out before it existed.
-            var entries = versions.Versions
-                .Select(x => SavegameTimelineEntryViewModel.ForVersion(x, x.Number == versions.HeadVersion))
+            var entries = snapshots.Snapshots
+                .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot))
                 .Concat(checkouts.Checkouts.Select(SavegameTimelineEntryViewModel.ForClaimTaken))
                 .Concat(checkouts.Checkouts
                     .Where(x => x.EndedAt is not null && recorded.Contains(x.Id) is false)
                     .Select(SavegameTimelineEntryViewModel.ForClaimEnded))
                 .OrderByDescending(x => x.Moment)
                 .ThenByDescending(x => x.Rank)
-                .ThenByDescending(x => x.VersionNumber);
+                .ThenByDescending(x => x.SnapshotNumber);
 
             Timeline.Clear();
 
@@ -1103,7 +1103,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 Timeline.Add(entry);
             }
 
-            HasOlder = versions.HasMore || checkouts.HasMore;
+            HasOlder = snapshots.HasMore || checkouts.HasMore;
 
             SelectedEntry = Timeline.FirstOrDefault();
         }
@@ -1165,8 +1165,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             }
 
             Status = outcome.KeptPlaying
-                ? $"Version {outcome.Version!.Number} of '{row.Name}' is on the server. The save is still in '{game.Name}' and still yours."
-                : $"Version {outcome.Version!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.";
+                ? $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server. The save is still in '{game.Name}' and still yours."
+                : $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.";
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1189,7 +1189,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Gives a save back without minting a version - taken by mistake, never played.
+    /// Gives a save back without minting a snapshot - taken by mistake, never played.
     /// </summary>
     /// <remarks>
     /// <b>Beside Check in, because it is the other answer to the same question.</b> It was a row
@@ -1227,7 +1227,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Status = $"'{row.Name}' was given back without a version. The local copy is in the Recycle Bin.";
+            Status = $"'{row.Name}' was given back without a snapshot. The local copy is in the Recycle Bin.";
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1448,12 +1448,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// The destructive step is local and comes first, the claim is social and wants to be fast, and the
     /// mod question is last because it is the only one that can be deferred. This is that order.
     /// </summary>
-    private async Task StartAsync(SavegameListItemViewModel row, int versionNumber, SavegameCheckOutMode mode)
+    private async Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
     {
-        if (row.Savegame.Head is null || versionNumber <= 0)
+        if (row.Savegame.Head is null || snapshotNumber <= 0)
         {
             await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                $"'{row.Name}' has no version yet",
+                $"'{row.Name}' has no snapshot yet",
                 "Nothing has been checked in for this savegame, so there is nothing to write into a slot."));
 
             return;
@@ -1478,7 +1478,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 mode,
                 row.Name,
                 row.ProfileName,
-                versionNumber,
+                snapshotNumber,
                 row.Savegame.Head.Number,
                 context);
 
@@ -1486,7 +1486,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             if (modal.CheckInFirstSavegameId is Guid blocking)
             {
-                await CheckInBlockingAsync(game, blocking, row, versionNumber, mode);
+                await CheckInBlockingAsync(game, blocking, row, snapshotNumber, mode);
 
                 return;
             }
@@ -1496,7 +1496,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            await ExecuteAsync(row, versionNumber, mode, game, slot);
+            await ExecuteAsync(row, snapshotNumber, mode, game, slot);
         }
         catch (OperationCanceledException)
         {
@@ -1522,7 +1522,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Game game,
         Guid blockingSavegameId,
         SavegameListItemViewModel row,
-        int versionNumber,
+        int snapshotNumber,
         SavegameCheckOutMode mode)
     {
         var blocking = Savegames.FirstOrDefault(x => x.Id == blockingSavegameId);
@@ -1547,13 +1547,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (Savegames.FirstOrDefault(x => x.Id == row.Id) is SavegameListItemViewModel refreshed)
         {
-            await StartAsync(refreshed, versionNumber, mode);
+            await StartAsync(refreshed, snapshotNumber, mode);
         }
     }
 
     private async Task ExecuteAsync(
         SavegameListItemViewModel row,
-        int versionNumber,
+        int snapshotNumber,
         SavegameCheckOutMode mode,
         Game game,
         SavegameSlotOptionViewModel slot)
@@ -1564,16 +1564,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             mode is SavegameCheckOutMode.TakeCopy
                 ? $"Copying '{row.Name}' into '{game.Name}'"
                 : $"Checking '{row.Name}' out into '{game.Name}'",
-            $"Version {versionNumber}");
+            $"Snapshot {snapshotNumber}");
 
         task.DeclareTransfers(TransferDirection.Download);
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
             await _savegameService.TakeCopyAsync(
-                game, row.Savegame, versionNumber, slot.Ref, _lifetime, new SavegameStripProgress(task));
+                game, row.Savegame, snapshotNumber, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
-            Status = $"Version {versionNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
+            Status = $"Snapshot {snapshotNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
                      "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
 
             return;
@@ -1581,14 +1581,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         var savegame = row.Savegame;
 
-        // Restoring copies forward, so an old version becomes the head and the check-out that follows
+        // Restoring copies forward, so an old snapshot becomes the head and the check-out that follows
         // has no stale base to reason about. Nothing in between is deleted.
-        if (versionNumber != savegame.Head?.Number)
+        if (snapshotNumber != savegame.Head?.Number)
         {
-            task.Report($"Restoring version {versionNumber} as the newest one");
+            task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
 
-            await _savegamesClient.RestoreSavegameVersionV1Async(
-                _repo.Id, savegame.Id, versionNumber, new RestoreSavegameVersionRequest(), _lifetime);
+            await _savegamesClient.RestoreSavegameSnapshotV1Async(
+                _repo.Id, savegame.Id, snapshotNumber, new RestoreSavegameSnapshotRequest(), _lifetime);
 
             var refreshed = await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime);
 
@@ -1878,7 +1878,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private async Task<SavegameRevisionNote?> BuildRevisionNoteAsync(SavegameListItemViewModel row)
     {
-        if (row.Savegame.Head is not SavegameVersionDto head ||
+        if (row.Savegame.Head is not SavegameSnapshotDto head ||
             head.ProfileRevision is not int played ||
             FindProfile(row.Savegame.ProfileId) is not ProfileDto profile ||
             profile.HeadRevision <= played)

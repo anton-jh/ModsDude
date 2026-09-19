@@ -8,7 +8,7 @@ using ModsDude.Server.Domain.Users;
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 /// <summary>
-/// Everything that reads a savegame, its claims, or the blob addresses its versions refer to.
+/// Everything that reads a savegame, its claims, or the blob addresses its snapshots refer to.
 /// </summary>
 /// <remarks>
 /// The reads that answer a question project rather than materialize, for the reason
@@ -29,8 +29,8 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// The savegame row itself - name, which profile it follows, and which version is its head. Its
-    /// versions are not here and cannot be reached from here; see <see cref="Savegame"/> for why the
+    /// The savegame row itself - name, which profile it follows, and which snapshot is its head. Its
+    /// snapshots are not here and cannot be reached from here; see <see cref="Savegame"/> for why the
     /// navigation does not exist.
     /// </summary>
     public static ValueTask<Savegame?> GetAsync(this DbSet<Savegame> dbSet, RepoId repoId, SavegameId savegameId, CancellationToken cancellationToken)
@@ -58,8 +58,8 @@ public static class SavegameExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The head version and the open claim are two further reads over the whole repo -
-    /// <see cref="GetHeadVersionsAsync"/> and <see cref="GetOpenCheckoutsAsync"/> - rather than a
+    /// The head snapshot and the open claim are two further reads over the whole repo -
+    /// <see cref="GetHeadSnapshotsAsync"/> and <see cref="GetOpenCheckoutsAsync"/> - rather than a
     /// join here or a follow-up per row. A repo's savegame list then costs a fixed number of
     /// queries whether it holds three saves or fifty, which is the only property that matters: the
     /// per-row shape is the one that quietly turns a page into a hundred round trips.
@@ -108,7 +108,7 @@ public static class SavegameExtensions
             // that is the only thing telling them apart.
             .OrderBy(x => archived ? x.ArchivedAt : null)
             .ThenBy(x => x.Name)
-            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadVersion, x.SupersededAt, x.ArchivedAt))
+            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadSnapshot, x.SupersededAt, x.ArchivedAt))
             .ToListAsync(cancellationToken);
     }
 
@@ -244,26 +244,26 @@ public static class SavegameExtensions
     /// </para>
     /// <para>
     /// An offset rather than a keyset, and the same reason again -
-    /// <see cref="SavegameVersionNumber"/> is a value object, so ordering by it translates and
-    /// comparing two of them does not. New versions arrive at the front, so a page read while
+    /// <see cref="SavegameSnapshotNumber"/> is a value object, so ordering by it translates and
+    /// comparing two of them does not. New snapshots arrive at the front, so a page read while
     /// somebody is checking in can repeat a row.
     /// </para>
     /// </remarks>
-    public static Task<List<SavegameVersionRow>> GetHistoryAsync(
-        this DbSet<SavegameVersion> dbSet,
+    public static Task<List<SavegameSnapshotRow>> GetHistoryAsync(
+        this DbSet<SavegameSnapshot> dbSet,
         RepoId repoId, SavegameId savegameId,
         int skip, int take,
         CancellationToken cancellationToken)
     {
         return dbSet
             // Owned entities cannot be tracked without the owner they hang off, and Details is
-            // projected out of a row that deliberately never materializes a version.
+            // projected out of a row that deliberately never materializes a snapshot.
             .AsNoTracking()
             .Where(x => x.RepoId == repoId && x.SavegameId == savegameId)
             .OrderByDescending(x => x.Number)
             .Skip(skip)
             .Take(take)
-            .Select(x => new SavegameVersionRow(
+            .Select(x => new SavegameSnapshotRow(
                 x.SavegameId,
                 x.Number,
                 x.ProfileId,
@@ -274,7 +274,7 @@ public static class SavegameExtensions
                 x.CreatedBy,
                 x.Label,
                 x.Origin,
-                x.BaseVersion,
+                x.BaseSnapshot,
                 x.CheckoutId)
             {
                 Details = x.Details.OrderBy(y => y.Position).ToList()
@@ -283,28 +283,28 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// How many versions the savegame still has. Read rather than inferred from the head, because
-    /// version numbers are <b>not contiguous</b> - pruning leaves the gap where an old version was,
+    /// How many snapshots the savegame still has. Read rather than inferred from the head, because
+    /// snapshot numbers are <b>not contiguous</b> - pruning leaves the gap where an old snapshot was,
     /// so a savegame whose head is 40 may hold ten rows.
     /// </summary>
-    public static Task<int> CountVersionsAsync(
-        this DbSet<SavegameVersion> dbSet,
+    public static Task<int> CountSnapshotsAsync(
+        this DbSet<SavegameSnapshot> dbSet,
         RepoId repoId, SavegameId savegameId,
         CancellationToken cancellationToken)
     {
         return dbSet.CountAsync(x => x.RepoId == repoId && x.SavegameId == savegameId, cancellationToken);
     }
 
-    /// <summary>One version's entry, or <c>null</c> where the savegame has no such version.</summary>
-    public static Task<SavegameVersionRow?> GetRowAsync(
-        this DbSet<SavegameVersion> dbSet,
-        RepoId repoId, SavegameId savegameId, SavegameVersionNumber number,
+    /// <summary>One snapshot's entry, or <c>null</c> where the savegame has no such snapshot.</summary>
+    public static Task<SavegameSnapshotRow?> GetRowAsync(
+        this DbSet<SavegameSnapshot> dbSet,
+        RepoId repoId, SavegameId savegameId, SavegameSnapshotNumber number,
         CancellationToken cancellationToken)
     {
         return dbSet
             .AsNoTracking()
             .Where(x => x.RepoId == repoId && x.SavegameId == savegameId && x.Number == number)
-            .Select(x => new SavegameVersionRow(
+            .Select(x => new SavegameSnapshotRow(
                 x.SavegameId,
                 x.Number,
                 x.ProfileId,
@@ -315,7 +315,7 @@ public static class SavegameExtensions
                 x.CreatedBy,
                 x.Label,
                 x.Origin,
-                x.BaseVersion,
+                x.BaseSnapshot,
                 x.CheckoutId)
             {
                 Details = x.Details.OrderBy(y => y.Position).ToList()
@@ -324,27 +324,27 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// The head version of each of several savegames at once, for a list that carries its heads
+    /// The head snapshot of each of several savegames at once, for a list that carries its heads
     /// inline.
     /// </summary>
     /// <param name="heads">
-    /// What each savegame says its head is - <see cref="SavegameRow.HeadVersion"/>, read in the same
+    /// What each savegame says its head is - <see cref="SavegameRow.HeadSnapshot"/>, read in the same
     /// request. The head is asked for by number rather than found by maximum because the savegame
-    /// row is the authority on which version is current, and a maximum would only agree with it by
+    /// row is the authority on which snapshot is current, and a maximum would only agree with it by
     /// coincidence of how pruning happens to work.
     /// </param>
     /// <remarks>
     /// <b>The predicate is the cross product of the two sets and the pairing is done afterwards.</b>
     /// A provider cannot translate a membership test on a tuple of two value objects, so asking for
     /// exactly these <c>(savegame, number)</c> pairs in SQL would mean an OR-chain the length of the
-    /// repo. Fetching every version whose savegame is in the list and whose number is one of the
+    /// repo. Fetching every snapshot whose savegame is in the list and whose number is one of the
     /// head numbers over-reads by a bounded amount - retention keeps a savegame to a handful of
-    /// versions - and the exact pairing is a dictionary lookup once the rows are here.
+    /// snapshots - and the exact pairing is a dictionary lookup once the rows are here.
     /// </remarks>
-    public static async Task<List<SavegameVersionRow>> GetHeadVersionsAsync(
-        this DbSet<SavegameVersion> dbSet,
+    public static async Task<List<SavegameSnapshotRow>> GetHeadSnapshotsAsync(
+        this DbSet<SavegameSnapshot> dbSet,
         RepoId repoId,
-        IReadOnlyDictionary<SavegameId, SavegameVersionNumber> heads,
+        IReadOnlyDictionary<SavegameId, SavegameSnapshotNumber> heads,
         CancellationToken cancellationToken)
     {
         if (heads.Count == 0)
@@ -358,7 +358,7 @@ public static class SavegameExtensions
         var rows = await dbSet
             .AsNoTracking()
             .Where(x => x.RepoId == repoId && savegameIds.Contains(x.SavegameId) && numbers.Contains(x.Number))
-            .Select(x => new SavegameVersionRow(
+            .Select(x => new SavegameSnapshotRow(
                 x.SavegameId,
                 x.Number,
                 x.ProfileId,
@@ -369,7 +369,7 @@ public static class SavegameExtensions
                 x.CreatedBy,
                 x.Label,
                 x.Origin,
-                x.BaseVersion,
+                x.BaseSnapshot,
                 x.CheckoutId)
             {
                 Details = x.Details.OrderBy(y => y.Position).ToList()
@@ -380,15 +380,15 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// Every blob address any savegame version still refers to, across every repo. What the
+    /// Every blob address any savegame snapshot still refers to, across every repo. What the
     /// reclamation sweep reads to decide that a stored blob is garbage.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Projected and deduplicated in the database rather than materialized. Versions are addressed by
-    /// content, so a restore copies an older version forward under the same hash and several versions
+    /// Projected and deduplicated in the database rather than materialized. Snapshots are addressed by
+    /// content, so a restore copies an older snapshot forward under the same hash and several snapshots
     /// legitimately share one address - what the sweep needs is the set of addresses, not one entry
-    /// per version. Loading the entities to build it would read every savegame ever checked in.
+    /// per snapshot. Loading the entities to build it would read every savegame ever checked in.
     /// </para>
     /// <para>
     /// The record struct is built after the round trip because a provider cannot see through its
@@ -401,7 +401,7 @@ public static class SavegameExtensions
     /// </para>
     /// </remarks>
     public static async Task<IReadOnlySet<SavegameBlobAddress>> GetRegisteredBlobAddressesAsync(
-        this DbSet<SavegameVersion> dbSet,
+        this DbSet<SavegameSnapshot> dbSet,
         CancellationToken cancellationToken)
     {
         var rows = await dbSet
@@ -416,17 +416,17 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// Every version of one savegame, reduced to what the retention policy actually looks at: the
+    /// Every snapshot of one savegame, reduced to what the retention policy actually looks at: the
     /// number, and whether somebody named it.
     /// </summary>
     /// <remarks>
     /// A whole history rather than a window, because the policy's rules are about the set - the most
     /// recent N of the unlabelled ones - and cannot be evaluated from a page of it. Two integers and
-    /// a boolean per version is cheap enough to read all of even at the point where pruning starts
+    /// a boolean per snapshot is cheap enough to read all of even at the point where pruning starts
     /// to matter.
     /// </remarks>
-    public static async Task<IReadOnlyList<SavegameVersionRetention>> GetRetentionRowsAsync(
-        this DbSet<SavegameVersion> dbSet,
+    public static async Task<IReadOnlyList<SavegameSnapshotRetention>> GetRetentionRowsAsync(
+        this DbSet<SavegameSnapshot> dbSet,
         RepoId repoId, SavegameId savegameId,
         CancellationToken cancellationToken)
     {
@@ -436,25 +436,25 @@ public static class SavegameExtensions
             .Select(x => new { x.Number, x.Label })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(x => new SavegameVersionRetention(x.Number, x.Label != null))];
+        return [.. rows.Select(x => new SavegameSnapshotRetention(x.Number, x.Label != null))];
     }
 
     /// <summary>
-    /// Drops the named versions of one savegame.
+    /// Drops the named snapshots of one savegame.
     /// </summary>
     /// <remarks>
     /// <b>Rows only. The blobs are left to the reclamation sweep</b>, and that is the safety property
-    /// rather than an omission: versions are addressed by content, so a restore and a night that
-    /// changed nothing both leave two versions naming one blob. Deleting bytes here would mean asking
-    /// whether any other version still refers to them, in a transaction, every time - and getting it
-    /// wrong destroys the save a different version still points at. The sweep already asks exactly
+    /// rather than an omission: snapshots are addressed by content, so a restore and a night that
+    /// changed nothing both leave two snapshots naming one blob. Deleting bytes here would mean asking
+    /// whether any other snapshot still refers to them, in a transaction, every time - and getting it
+    /// wrong destroys the save a different snapshot still points at. The sweep already asks exactly
     /// that question of the whole store, so pruning stops at the rows and the bytes fall out on the
     /// next pass.
     /// </remarks>
-    public static Task<int> DeleteVersionsAsync(
-        this DbSet<SavegameVersion> dbSet,
+    public static Task<int> DeleteSnapshotsAsync(
+        this DbSet<SavegameSnapshot> dbSet,
         RepoId repoId, SavegameId savegameId,
-        IReadOnlyCollection<SavegameVersionNumber> numbers,
+        IReadOnlyCollection<SavegameSnapshotNumber> numbers,
         CancellationToken cancellationToken)
     {
         if (numbers.Count == 0)
@@ -470,7 +470,7 @@ public static class SavegameExtensions
 
 
 /// <summary>
-/// One savegame as a list renders it, and nothing that hangs off it. Its head version and its open
+/// One savegame as a list renders it, and nothing that hangs off it. Its head snapshot and its open
 /// claim are read separately - see <see cref="SavegameExtensions.GetRowsAsync"/>.
 /// </summary>
 public record SavegameRow(
@@ -478,19 +478,19 @@ public record SavegameRow(
     SavegameName Name,
     ProfileId? ProfileId,
     DateTime Created,
-    SavegameVersionNumber HeadVersion,
+    SavegameSnapshotNumber HeadSnapshot,
     DateTime? SupersededAt,
     DateTime? ArchivedAt);
 
 
 /// <summary>
-/// One version as a history renders it. Everything the row itself holds, and none of the bytes it
-/// addresses - <see cref="SavegameVersionRow.ContentHash"/> is what a client turns into a download
+/// One snapshot as a history renders it. Everything the row itself holds, and none of the bytes it
+/// addresses - <see cref="SavegameSnapshotRow.ContentHash"/> is what a client turns into a download
 /// link when somebody actually wants them.
 /// </summary>
-public record SavegameVersionRow(
+public record SavegameSnapshotRow(
     SavegameId SavegameId,
-    SavegameVersionNumber Number,
+    SavegameSnapshotNumber Number,
     ProfileId? ProfileId,
     RevisionNumber? ProfileRevision,
     string ContentHash,
@@ -498,13 +498,13 @@ public record SavegameVersionRow(
     DateTime Created,
     UserId CreatedBy,
     string? Label,
-    SavegameVersionOrigin Origin,
-    SavegameVersionNumber? BaseVersion,
+    SavegameSnapshotOrigin Origin,
+    SavegameSnapshotNumber? BaseSnapshot,
     SavegameCheckoutId? CheckoutId)
 {
     /// <summary>
-    /// What the adapter said about this version, in its own order. Projected rather than left to
-    /// the owned collection's own loading, because nothing here materializes a version.
+    /// What the adapter said about this snapshot, in its own order. Projected rather than left to
+    /// the owned collection's own loading, because nothing here materializes a snapshot.
     /// </summary>
     public IReadOnlyList<SavegameDetail> Details { get; init; } = [];
 }

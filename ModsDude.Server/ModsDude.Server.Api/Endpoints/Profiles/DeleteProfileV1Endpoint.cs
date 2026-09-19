@@ -55,7 +55,7 @@ public class DeleteProfileV1Endpoint : IEndpoint
         // aggregate are Restrict - so this check exists to make the refusal readable rather than to
         // make it true. Reported the way ModVersionInUse is, and racing past it between the check
         // and the commit still lands on the foreign key.
-        if (await dbContext.Savegames.CheckIfUsedBySavegameAsync(dbContext.SavegameVersions, new RepoId(repoId), new ProfileId(profileId), cancellationToken))
+        if (await dbContext.Savegames.CheckIfUsedBySavegameAsync(dbContext.SavegameSnapshots, new RepoId(repoId), new ProfileId(profileId), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.ProfileInUseBySavegame(new RepoId(repoId), new ProfileId(profileId)));
         }

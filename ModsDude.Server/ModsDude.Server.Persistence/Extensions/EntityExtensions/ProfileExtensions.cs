@@ -43,7 +43,7 @@ public static class ProfileExtensions
     }
 
     /// <summary>
-    /// Whether any savegame in the repo follows this profile, or any savegame version was played on
+    /// Whether any savegame in the repo follows this profile, or any savegame snapshot was played on
     /// one of its revisions. Either one makes the profile undeletable, and the delete endpoint
     /// refuses on it rather than letting the foreign keys behind it produce a database error.
     /// </summary>
@@ -51,16 +51,16 @@ public static class ProfileExtensions
     /// <para>
     /// Two questions because there are two facts, and they can disagree: <see cref="Savegame.ProfileId"/>
     /// is the standing intent that a save follows this profile, while
-    /// <see cref="SavegameVersion.ProfileId"/> is what a version was actually played against. Move a
-    /// save onto a branch and the old versions still honestly name the old profile - so asking only
+    /// <see cref="SavegameSnapshot.ProfileId"/> is what a snapshot was actually played against. Move a
+    /// save onto a branch and the old snapshots still honestly name the old profile - so asking only
     /// the first would let a profile somebody has played be deleted, and only the second would let
     /// one that has only ever been pointed at slip through. Both foreign keys are <c>Restrict</c>
     /// for that reason; see <c>SavegameEntityTypeConfiguration</c> and
-    /// <c>SavegameVersionEntityTypeConfiguration</c>.
+    /// <c>SavegameSnapshotEntityTypeConfiguration</c>.
     /// </para>
     /// <para>
     /// History is what makes this strict, exactly as it is for a pinned mod version: a profile that
-    /// has ever been played is a profile that cannot be deleted, because a version still names the
+    /// has ever been played is a profile that cannot be deleted, because a snapshot still names the
     /// revision it was played on. See
     /// <see cref="ProfileRevisionExtensions.CheckIfVersionIsDependedOn"/> for the same bargain one
     /// aggregate down.
@@ -95,12 +95,12 @@ public static class ProfileExtensions
 
     public static async Task<bool> CheckIfUsedBySavegameAsync(
         this DbSet<Savegame> dbSet,
-        DbSet<SavegameVersion> versions,
+        DbSet<SavegameSnapshot> snapshots,
         RepoId repoId, ProfileId profileId,
         CancellationToken cancellationToken)
     {
         return await dbSet.AnyAsync(x => x.RepoId == repoId && x.ProfileId == profileId, cancellationToken)
-            || await versions.AnyAsync(x => x.RepoId == repoId && x.ProfileId == profileId, cancellationToken);
+            || await snapshots.AnyAsync(x => x.RepoId == repoId && x.ProfileId == profileId, cancellationToken);
     }
 }
 

@@ -26,7 +26,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// <b>Taking it from somebody is allowed.</b> That is this design's whole position on conflict: the
-/// claim is the social half and refusing here would only teach people to check in junk versions to
+/// claim is the social half and refusing here would only teach people to check in junk snapshots to
 /// free a save. The previous claim is closed as
 /// <see cref="SavegameCheckoutEndReason.TakenOver"/> and returned in
 /// <see cref="CheckOutSavegameResponse.TakenFrom"/>, so the client can say whose evening it just
@@ -38,8 +38,8 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// would put a <c>TakenOver</c> in the log for something nobody did.
 /// </para>
 /// <para>
-/// The response carries no version. <b>Check-out always takes the head</b> - a restore copies
-/// forward rather than moving the head back - so the version to write into the slot is the one the
+/// The response carries no snapshot. <b>Check-out always takes the head</b> - a restore copies
+/// forward rather than moving the head back - so the snapshot to write into the slot is the one the
 /// savegame listing already gives.
 /// </para>
 /// </remarks>

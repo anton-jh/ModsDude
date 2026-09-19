@@ -40,8 +40,8 @@ public sealed class SavegameFlowService(
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
     /// </summary>
     /// <returns>
-    /// The version that was minted, or null where nothing was - the user backed out, the save had not
-    /// changed, or they chose to look at the newer version first.
+    /// The snapshot that was minted, or null where nothing was - the user backed out, the save had not
+    /// changed, or they chose to look at the newer snapshot first.
     /// </returns>
     public async Task<SavegameCheckInOutcome> CheckInAsync(
         Game game,
@@ -66,7 +66,7 @@ public sealed class SavegameFlowService(
     /// Hands the claim back without minting anything - taken by mistake, never played.
     /// </summary>
     /// <remarks>
-    /// The confirmation carries what it costs, because this is the one verb with no version behind it:
+    /// The confirmation carries what it costs, because this is the one verb with no snapshot behind it:
     /// whatever is in the slot is gone, and the Recycle Bin is the only way back.
     /// </remarks>
     public async Task<bool> DiscardAsync(
@@ -79,8 +79,8 @@ public sealed class SavegameFlowService(
     {
         var consequence = hasUnpublishedPlay
             ? $"'{slotLabel}' has been played since it was downloaded, and none of that has been checked in. " +
-              "It goes to the Recycle Bin and no version is minted, so the only copy of that play is one you restore by hand."
-            : $"'{slotLabel}' goes to the Recycle Bin and no version is minted. The savegame goes back to being anybody's to take.";
+              "It goes to the Recycle Bin and no snapshot is minted, so the only copy of that play is one you restore by hand."
+            : $"'{slotLabel}' goes to the Recycle Bin and no snapshot is minted. The savegame goes back to being anybody's to take.";
 
         var modal = new ConfirmationDialogViewModel(
             $"Give '{savegameName}' back without checking it in?",
@@ -173,7 +173,7 @@ public sealed class SavegameFlowService(
         string slotLabel,
         CancellationToken cancellationToken)
     {
-        // This slot's own folder, because the first version's revision is a declaration about the
+        // This slot's own folder, because the first snapshot's revision is a declaration about the
         // mods that were beside these bytes: a save in the MP client's folder was played against the
         // MP client's mods, whatever the dedicated server is on.
         var manifest = manifestStore.TryRead(new ModTargetRef(game.Identity, slot.Target));
@@ -300,12 +300,12 @@ public sealed class SavegameFlowService(
 
 
     /// <summary>
-    /// Which mod list the version about to be minted records, in the one line that says it.
+    /// Which mod list the snapshot about to be minted records, in the one line that says it.
     /// </summary>
     /// <remarks>
     /// <b>Read rather than recomputed.</b> The number is <see cref="ISavegameService.GetPlayedRevision"/>'s,
     /// which is the same one the check-in sends - working it out a second time here is how a dialog
-    /// comes to name a revision the version does not carry. The profile's name is this layer's to add:
+    /// comes to name a revision the snapshot does not carry. The profile's name is this layer's to add:
     /// the binding records an id, and a bare "rev 1004" is a number belonging to no list in particular.
     /// </remarks>
     private string? DescribePlayedOn(Game game, Guid savegameId)
@@ -326,7 +326,7 @@ public sealed class SavegameFlowService(
 
     /// <summary>
     /// Somebody checked in while this save was out. Both answers are safe and neither destroys
-    /// anything: a forced check-in becomes the head with the version it was built on recorded beside
+    /// anything: a forced check-in becomes the head with the snapshot it was built on recorded beside
     /// it, so the fork ends up in the record rather than one side of it being lost.
     /// </summary>
     private async Task<SavegameCheckInOutcome> SendAsync(
@@ -343,16 +343,16 @@ public sealed class SavegameFlowService(
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
             task.DeclareTransfers(TransferDirection.Upload);
 
-            var version = await savegames.CheckInAsync(
+            var snapshot = await savegames.CheckInAsync(
                 game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task));
 
-            return SavegameCheckInOutcome.CheckedIn(version, keepPlaying);
+            return SavegameCheckInOutcome.CheckedIn(snapshot, keepPlaying);
         }
-        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameVersionStale)
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
             var choice = new ConfirmationDialogViewModel(
                 $"Somebody else checked '{savegameName}' in",
-                "Your save was built on an older version. Checking yours in anyway records it as the newest one, with " +
+                "Your save was built on an older snapshot. Checking yours in anyway records it as the newest one, with " +
                 "theirs named beside it and still in the history - nothing is deleted either way. Leaving it alone keeps " +
                 "your copy exactly where it is, so you can look at theirs first and decide.",
                 IconKind.Warning,
@@ -390,20 +390,20 @@ public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlayi
 
 
 /// <summary>
-/// What a check-in ended up doing. Three outcomes rather than a nullable version, because "you backed
+/// What a check-in ended up doing. Three outcomes rather than a nullable snapshot, because "you backed
 /// out" and "you chose to look at theirs first" leave the caller with different things to say.
 /// </summary>
-public sealed record SavegameCheckInOutcome(SavegameVersionDto? Version, bool KeptPlaying, bool WasDeferred)
+public sealed record SavegameCheckInOutcome(SavegameSnapshotDto? Snapshot, bool KeptPlaying, bool WasDeferred)
 {
     public static SavegameCheckInOutcome Cancelled { get; } = new(null, false, false);
 
-    /// <summary>The base was stale and the user chose to look at the newer version first.</summary>
+    /// <summary>The base was stale and the user chose to look at the newer snapshot first.</summary>
     public static SavegameCheckInOutcome Deferred { get; } = new(null, false, true);
 
-    public static SavegameCheckInOutcome CheckedIn(SavegameVersionDto version, bool keptPlaying)
-        => new(version, keptPlaying, false);
+    public static SavegameCheckInOutcome CheckedIn(SavegameSnapshotDto snapshot, bool keptPlaying)
+        => new(snapshot, keptPlaying, false);
 
-    public bool Succeeded => Version is not null;
+    public bool Succeeded => Snapshot is not null;
 
     /// <summary>Whether the slot is now free, which is what the caller has to re-read the disk about.</summary>
     public bool ReleasedTheSlot => Succeeded && KeptPlaying is false;

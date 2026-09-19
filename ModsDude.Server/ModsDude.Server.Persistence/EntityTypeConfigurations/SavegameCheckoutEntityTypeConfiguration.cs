@@ -7,8 +7,8 @@ internal class SavegameCheckoutEntityTypeConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<SavegameCheckout> builder)
     {
-        // A claim is addressed on its own, by the version that was checked in against it, so its id
-        // stands alone rather than being qualified by the savegame the way a version's number is.
+        // A claim is addressed on its own, by the snapshot that was checked in against it, so its id
+        // stands alone rather than being qualified by the savegame the way a snapshot's number is.
         builder.HasKey(x => x.Id);
 
         // Cascade: a deleted savegame takes its claims with it. The log outlives the blobs and

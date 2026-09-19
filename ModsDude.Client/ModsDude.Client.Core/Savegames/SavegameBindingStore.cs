@@ -52,7 +52,7 @@ public sealed class StateStoreGameState(StateStore store) : IPersistedGameState
 /// <remarks>
 /// <para>
 /// <b>The binding is a source of truth, not a cache.</b> Once somebody has played, the bytes in the
-/// slot match no version on the server, so nothing afterwards can work out which savegame that slot
+/// slot match no snapshot on the server, so nothing afterwards can work out which savegame that slot
 /// was - losing this loses the ability to check the save back in at all. Same argument as
 /// <see cref="ActiveProfile"/>, and the same conclusion: persisted, and written before anything else
 /// depends on it.
@@ -294,7 +294,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// <remarks>
     /// Written out rather than <c>FirstOrDefault</c> because <see cref="SavegameCheckoutBinding"/> is
     /// a struct: the default it hands back is a fully-formed binding with a blank slot reference, a zero
-    /// version and an empty hash, and every caller here reads that as a real one. A slot safety check
+    /// snapshot and an empty hash, and every caller here reads that as a real one. A slot safety check
     /// handed that binding declares the slot held with unpublished play and refuses to write to it.
     /// </remarks>
     private static SavegameCheckoutBinding? FirstOrNull(

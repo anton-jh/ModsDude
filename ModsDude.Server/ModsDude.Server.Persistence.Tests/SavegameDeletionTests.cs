@@ -26,18 +26,18 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
 
 
     /// <summary>
-    /// The bargain Phase 8 accepts knowingly: a version names the one mod list it was played
+    /// The bargain Phase 8 accepts knowingly: a snapshot names the one mod list it was played
     /// against, so a profile that has been played can no longer be deleted. The delete endpoint is
     /// expected to report this itself; the constraint is what stops a check-in landing between that
     /// check and the commit from taking the revision with it.
     /// </summary>
     [Fact]
-    public async Task Deleting_a_revision_a_savegame_version_was_played_on_is_refused_by_the_database()
+    public async Task Deleting_a_revision_a_savegame_snapshot_was_played_on_is_refused_by_the_database()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenAVersion(repoId, profileId, savegameId, HashOf('1'));
+        await GivenASnapshot(repoId, profileId, savegameId, HashOf('1'));
 
         using var dbContext = fixture.CreateDbContext();
 
@@ -50,28 +50,28 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// Nothing outside a savegame addresses one of its versions, so a history whose savegame is gone
+    /// Nothing outside a savegame addresses one of its snapshots, so a history whose savegame is gone
     /// is not a record of anything. The cascade is at the database rather than in the endpoint
-    /// because there is no navigation from a savegame to its versions to walk - see
+    /// because there is no navigation from a savegame to its snapshots to walk - see
     /// <see cref="Savegame"/> for why that navigation deliberately does not exist.
     /// </summary>
     [Fact]
-    public async Task Deleting_a_savegame_takes_its_versions_with_it()
+    public async Task Deleting_a_savegame_takes_its_snapshots_with_it()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
         var survivor = await GivenASavegame(repoId, profileId);
 
-        await GivenAVersion(repoId, profileId, savegameId, HashOf('1'));
-        await GivenAVersion(repoId, profileId, savegameId, HashOf('2'));
-        await GivenAVersion(repoId, profileId, survivor, HashOf('3'));
+        await GivenASnapshot(repoId, profileId, savegameId, HashOf('1'));
+        await GivenASnapshot(repoId, profileId, savegameId, HashOf('2'));
+        await GivenASnapshot(repoId, profileId, survivor, HashOf('3'));
 
         await GivenTheSavegameIsDeleted(repoId, savegameId);
 
         using var verification = fixture.CreateDbContext();
 
-        Assert.Equal(0, await verification.SavegameVersions.CountVersionsAsync(repoId, savegameId, CancellationToken.None));
-        Assert.Equal(1, await verification.SavegameVersions.CountVersionsAsync(repoId, survivor, CancellationToken.None));
+        Assert.Equal(0, await verification.SavegameSnapshots.CountSnapshotsAsync(repoId, savegameId, CancellationToken.None));
+        Assert.Equal(1, await verification.SavegameSnapshots.CountSnapshotsAsync(repoId, survivor, CancellationToken.None));
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
     /// <summary>
     /// A savegame outside a repo is addressable by nothing, and the blobs behind it are reclaimed by
     /// the sweep afterwards. The interesting part is that the cascade has to reach through the
-    /// savegame to its versions while those versions still hold a <c>Restrict</c> key onto the
+    /// savegame to its snapshots while those snapshots still hold a <c>Restrict</c> key onto the
     /// profile revisions the same delete is removing.
     /// </summary>
     [Fact]
@@ -105,7 +105,7 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
 
-        await GivenAVersion(repoId, profileId, savegameId, HashOf('1'));
+        await GivenASnapshot(repoId, profileId, savegameId, HashOf('1'));
         await GivenAnOpenCheckout(repoId, savegameId);
 
         using (var dbContext = fixture.CreateDbContext())
@@ -120,7 +120,7 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
         using var verification = fixture.CreateDbContext();
 
         Assert.Empty(await verification.Savegames.GetRowsAsync(repoId, CancellationToken.None));
-        Assert.Equal(0, await verification.SavegameVersions.CountVersionsAsync(repoId, savegameId, CancellationToken.None));
+        Assert.Equal(0, await verification.SavegameSnapshots.CountSnapshotsAsync(repoId, savegameId, CancellationToken.None));
         Assert.Equal(0, await verification.SavegameCheckouts.CountCheckoutsAsync(repoId, savegameId, CancellationToken.None));
     }
 
@@ -230,20 +230,20 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
         return savegame.Id;
     }
 
-    private async Task GivenAVersion(RepoId repoId, ProfileId profileId, SavegameId savegameId, string contentHash)
+    private async Task GivenASnapshot(RepoId repoId, ProfileId profileId, SavegameId savegameId, string contentHash)
     {
         using var dbContext = fixture.CreateDbContext();
 
         var savegame = (await dbContext.Savegames.GetAsync(repoId, savegameId, CancellationToken.None))!;
 
-        var version = savegame.CreateVersion(
+        var snapshot = savegame.CreateSnapshot(
             new RevisionNumber(1),
             contentHash,
             sizeBytes: 1024,
             _author,
             DateTime.UtcNow);
 
-        dbContext.SavegameVersions.Add(version);
+        dbContext.SavegameSnapshots.Add(snapshot);
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }

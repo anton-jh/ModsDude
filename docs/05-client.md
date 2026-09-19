@@ -758,8 +758,8 @@ delete that visibly did not happen.
 below Restore and Save-as because it is the one action on that page that destroys rather than adds.
 A blocked prune opens `BlockedRevisionsModalViewModel`, which distinguishes the two reasons: the
 head is an explanation and nothing more, while a revision a savegame was played on carries links to
-that savegame — and the saves page grew an Admin-only *Delete this version* for exactly that,
-absent rather than present-and-doomed on the head version.
+that savegame — and the saves page grew an Admin-only *Delete this snapshot* for exactly that,
+absent rather than present-and-doomed on the head snapshot.
 
 Both dialogs close themselves before navigating, and regardless of whether navigation was refused: a
 page holding unsaved changes is entitled to say no, and reopening a dialog over the page the user is
@@ -799,7 +799,7 @@ synchronizer never mapped is one it would never remove, and restoring the profil
 
 A savegame has no page of its own, so `TrySelectSavegameAsync` takes the user to the list it is in:
 the saves page for a live one, the Archive with the row picked out for an archived one. Which list
-is asked of the server rather than guessed - the head-version cache would have been free, but it is
+is asked of the server rather than guessed - the head-snapshot cache would have been free, but it is
 populated as a side effect of the saves page having been visited, so on a fresh window every
 savegame would look archived.
 
@@ -942,7 +942,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The catalog, as two lists: local candidates and the source list on the left, the repo's mods and whatever is queued to join them on the right. Import, an "unused only" filter, per-row reorder and delete. Browsing is open to a guest, who gets the right-hand list alone; the writing actions are refused with a reason |
-| `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's versions and claims on the right. Check out, take a copy, check in, **discard**, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it. A held row also says which of the game's folders holds the copy, and offers **Stop tracking** where the settings no longer name that folder |
+| `RepoSavegamesPage` | Working | Every save in the repo on the left, the selected one's snapshots and claims on the right. Check out, take a copy, check in, **discard**, apply the profile, make current, rename, archive — and **Publish a save**, which picks a slot on this machine and makes a savegame of what is in it. A held row also says which of the game's folders holds the copy, and offers **Stop tracking** where the settings no longer name that folder |
 | `ConnectGamePage` | Working | The local settings form and nothing else. Refuses a game already connected here, and a folder another game owns |
 | `GameSettingsPage` | Working | *Game configuration* in the repo's menu: this machine's folders for the game, and disconnecting it. The only page a local installation has |
 | `CreateProfilePage` | Working | |

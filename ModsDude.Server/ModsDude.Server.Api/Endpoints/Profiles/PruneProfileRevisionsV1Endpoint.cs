@@ -26,7 +26,7 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// </para>
 /// <para>
 /// <b>Numbers are not renumbered.</b> Pruning leaves the gap where a revision was, the same way
-/// savegame version numbers already do: a number exists to be said out loud, and renumbering would
+/// savegame snapshot numbers already do: a number exists to be said out loud, and renumbering would
 /// make yesterday's sentence point at a different mod list.
 /// </para>
 /// <para>
@@ -37,7 +37,7 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// <para>
 /// <b>Deletes what it can and reports what it cannot.</b> A batch that refused wholesale because one
 /// revision was played on a savegame would make pruning a hundred revisions an exercise in
-/// bisection. What comes back names the savegame versions holding each refused revision, so the
+/// bisection. What comes back names the savegame snapshots holding each refused revision, so the
 /// next step is a link rather than a guess.
 /// </para>
 /// </remarks>
@@ -102,7 +102,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
 
         // Asked once for the whole batch rather than per revision: one query answers "which of these
         // was played on", and a hundred revisions is a hundred round trips otherwise.
-        var played = await dbContext.SavegameVersions.GetDependentSavegameVersionsAsync(
+        var played = await dbContext.SavegameSnapshots.GetDependentSavegameSnapshotsAsync(
             new RepoId(repoId), profile.Id, requested, cancellationToken);
 
         var savegameNames = await dbContext.Savegames.GetNamesAsync(
@@ -129,7 +129,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
                 blocked.Add(new BlockedRevisionDto(
                     revision.Value,
                     BlockedRevisionReason.PlayedOn,
-                    [.. playedByRevision[revision].Select(x => new SavegameVersionRefDto(
+                    [.. playedByRevision[revision].Select(x => new SavegameSnapshotRefDto(
                         x.SavegameId.Value,
                         savegameNames.TryGetValue(x.SavegameId, out var name) ? name.Value : x.SavegameId.Value.ToString(),
                         x.Number.Value))]));

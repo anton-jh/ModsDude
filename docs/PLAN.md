@@ -877,7 +877,7 @@ Only once mod sync is solid. `IBaseSavegameAdapter`, `IInstanceSavegameAdapter` 
 
 Transport is the easy half — the mod upload path pointed at a different container. The hard half
 is conflict, and this design refuses the merge rather than attempting one: **one holder at a time,
-an explicit hand-back, and a version for every hand-back.**
+an explicit hand-back, and a snapshot for every hand-back.**
 
 > **Built, apart from six boxes below.** Publish, check out, check in, force, keep playing, take a
 > copy, discard and restore all work end to end. Packing, the checkout binding, the slot picker and
@@ -890,12 +890,12 @@ an explicit hand-back, and a version for every hand-back.**
 > instance-side half of reaching a check-out. The implicit profile for mods-less repos is not
 > missing but abandoned — see [Phase 9](#phase-9--one-current-savegame-per-profile).
 
-### A savegame belongs to the repo; a version belongs to a revision
+### A savegame belongs to the repo; a snapshot belongs to a revision
 
 A savegame is not owned by a profile. It sits in the repo beside profiles, keyed `(RepoId, Id)` —
 the same aggregate placement as `Profile`, for the same reasons.
 
-**Every version records exactly one `ProfileRevision`**, and that is where the dependency lives. A
+**Every snapshot records exactly one `ProfileRevision`**, and that is where the dependency lives. A
 save moves from revision 6 to revision 7 as the group updates mods, so pinning a profile on the
 savegame itself would either forbid that or lie about it.
 
@@ -903,32 +903,32 @@ savegame itself would either forbid that or lie about it.
 follows that profile. It is the distinction `ActiveProfile` draws against the manifest in
 [07 — Mod sync design](07-mod-sync-design.md#what-sync-records-and-why-it-has-to), one aggregate
 over. The two may legitimately disagree — branch a profile, move the save onto the branch, and the
-old versions still honestly name the old profile's revisions.
+old snapshots still honestly name the old profile's revisions.
 
 ### Server model
 
-- [x] `Savegame (RepoId, Id)` — `Name` unique per repo, `ProfileId`, `HeadVersion`, `Created`. No
-      navigation to its versions, for the reason `Profile` has none to its revisions.
-- [x] `SavegameVersion (RepoId, SavegameId, Number)` — `ProfileId` + `ProfileRevision` (FK,
+- [x] `Savegame (RepoId, Id)` — `Name` unique per repo, `ProfileId`, `HeadSnapshot`, `Created`. No
+      navigation to its snapshots, for the reason `Profile` has none to its revisions.
+- [x] `SavegameSnapshot (RepoId, SavegameId, Number)` — `ProfileId` + `ProfileRevision` (FK,
       `Restrict`), `ContentHash`, `SizeBytes`, `CreatedBy`, `Created`, `Label`,
-      `Origin (Created | CheckedIn | Forced | Restored)`, `BaseVersion`, `CheckoutId?`. Numbers
+      `Origin (Created | CheckedIn | Forced | Restored)`, `BaseSnapshot`, `CheckoutId?`. Numbers
       one-based, so somebody can say one out loud and find it — but, unlike a revision number,
-      **not contiguous**: pruning leaves the gap where an old version was, because renumbering would
+      **not contiguous**: pruning leaves the gap where an old snapshot was, because renumbering would
       make yesterday's sentence point at a different save.
-- [x] **A check-in names the version it was built on**, and a stale base is refused with
-      `savegame-version-stale` carrying what the head is now. The primary key on
+- [x] **A check-in names the snapshot it was built on**, and a stale base is refused with
+      `savegame-snapshot-stale` carrying what the head is now. The primary key on
       `(RepoId, SavegameId, Number)` is what makes that true rather than merely likely — the same
       argument as [Phase 4.5](#phase-45--profile-revisions), one aggregate over.
 - [x] **Forcing over a stale base copies forward.** The forced check-in becomes the new head,
-      stamped `Origin = Forced` with `BaseVersion` naming what was actually played. The fork ends
+      stamped `Origin = Forced` with `BaseSnapshot` naming what was actually played. The fork ends
       up in the record without anybody needing a tree.
-- [x] **A check-in whose hash equals the head's mints no version.** Launching the game and quitting
+- [x] **A check-in whose hash equals the head's mints no snapshot.** Launching the game and quitting
       must not cost a 400 MB blob and a line of history. A save that changes nothing mints nothing,
       exactly as for revisions.
 - [x] Authorization: Guest downloads; Member publishes, checks in, forces, and takes a checkout.
 
 The consequence to accept knowingly: **a profile that has been played can no longer be deleted**,
-because a version still names one of its revisions and the foreign key is `Restrict`. Same bargain
+because a snapshot still names one of its revisions and the foreign key is `Restrict`. Same bargain
 as a pinned mod version one level up, and it should be reported the way
 `ProfileRevisionExtensions.CheckIfVersionIsDependedOn` reports its own rather than surfacing as a
 database error.
@@ -945,7 +945,7 @@ database error.
 - [x] **The current holder is the open row.** A filtered unique index on `(RepoId, SavegameId)`
       where `EndedAt is null` permits one, so there is no current-checkout field to keep in step
       with the history sitting beside it.
-- [x] `SavegameVersion.CheckoutId` joins the two halves into one timeline — check-ins are already
+- [x] `SavegameSnapshot.CheckoutId` joins the two halves into one timeline — check-ins are already
       history, so only the check-out half needs recording. Null for a publish, and for a forced
       check-in taken without a checkout.
 - [x] **The claim expires, and is renewed while it is held.** Somebody who checks out on Friday and
@@ -953,15 +953,15 @@ database error.
       a warning everybody learns to click past, which is
       [Phase 4](#phase-4--make-drift-unmissable)'s argument seen from the other end.
 - [x] **Taking it anyway is allowed.** It closes the previous row as `TakenOver` and warns naming
-      who holds it and since when. The checkout is the social half; the base-version check is the
+      who holds it and since when. The checkout is the social half; the base-snapshot check is the
       mechanical one, and only the second is a guarantee.
-- [x] **The log is never pruned with the versions.** The rows are tiny and outlive the blobs, so
-      history can still say that a version existed and was pruned.
+- [x] **The log is never pruned with the snapshots.** The rows are tiny and outlive the blobs, so
+      history can still say that a snapshot existed and was pruned.
 
 ### Storage and retention
 
 - [x] Blobs at **`{repoId}/{savegameId}/{contentHash}`**, through the same SAS mint as mods —
-      addressed by content rather than by version number, which is the one place this deliberately
+      addressed by content rather than by snapshot number, which is the one place this deliberately
       diverges from `ModStorageService`. Numbering the blob would have two people checking in at the
       same moment mint upload links for the same name, so whichever wrote second would silently
       replace the other's bytes; the stale-base check decides who takes the head, but by then the
@@ -970,8 +970,8 @@ database error.
 - [x] `BlobReclamation` grows `PlanSavegameSweep` and a third name parser. The hazard is unchanged
       and so is the remedy: a grace period well past the SAS lifetime, and list the blobs **before**
       reading the registrations.
-- [x] Keep the last N versions, default 10, configurable per repo. **The head is never pruned, and
-      neither is anything carrying a `Label`** — labelling a version is how somebody keeps it.
+- [x] Keep the last N snapshots, default 10, configurable per repo. **The head is never pruned, and
+      neither is anything carrying a `Label`** — labelling a snapshot is how somebody keeps it.
 - [x] Pruning leaves gaps in the numbering. Numbers exist to be said out loud; nothing renumbers.
 
 ### Four verbs, and only one of them asks about a slot
@@ -980,17 +980,17 @@ database error.
 | --- | --- | --- | --- |
 | **Publish** | slot → new savegame | already known | kept, now checked out |
 | **Check out** | savegame → slot | **every time** | written |
-| **Check in** | slot → new version | no | recycled |
-| **Discard** | — | no | recycled, no version minted |
+| **Check in** | slot → new snapshot | no | recycled |
+| **Discard** | — | no | recycled, no snapshot minted |
 
-- [x] **Publish is not check-in.** "Upload this new thing" and "upload a new version of that thing"
+- [x] **Publish is not check-in.** "Upload this new thing" and "upload a new snapshot of that thing"
       have opposite failure modes, and the old MVP made them one button.
 - [x] **Check-in asks nothing.** It acts on the slot the open checkout already names. Choosing
       between twenty near-identical folders from memory is where the MVP went wrong, and it is
       precisely the moment where a wrong answer publishes somebody else's slot under this save's
-      name and burns a version doing it.
-- [x] **Discard ends a checkout without minting a version** — taken by mistake, never played.
-      Without it the only ways out are a junk version or waiting to be taken over.
+      name and burns a snapshot doing it.
+- [x] **Discard ends a checkout without minting a snapshot** — taken by mistake, never played.
+      Without it the only ways out are a junk snapshot or waiting to be taken over.
 
 ### Slots
 
@@ -998,8 +998,8 @@ database error.
       recycling the local copy. That is what removes any need for eviction machinery — the slots in
       use are the saves actually being played, which is one or two, not twenty.
 - [x] **The live checkout binding is authoritative and persisted** in `LocalState`: which slot holds
-      which savegame at which version, and the hash that was written there. Once somebody has
-      played, the bytes match no version on the server, so nothing can re-derive it. Same argument
+      which savegame at which snapshot, and the hash that was written there. Once somebody has
+      played, the bytes match no snapshot on the server, so nothing can re-derive it. Same argument
       as `ActiveProfile`, and the same conclusion.
 - [x] **The last-slot hint is a separate, advisory thing**, kept after check-in purely to
       pre-select next time. Never repaired, never trusted, and worth nothing when wrong — the
@@ -1048,8 +1048,8 @@ database error.
 - [x] Three states, found by the same startup-and-window-activation check that already runs, and
       surfaced in the same place as mod drift:
       - a checked-out slot holds play newer than its recorded hash → **unchecked-in play**
-      - the server head is past the version being held → **somebody took it over and checked in**
-      - the version's revision is not the instance's applied revision → **played on a mod list this
+      - the server head is past the snapshot being held → **somebody took it over and checked in**
+      - the snapshot's revision is not the instance's applied revision → **played on a mod list this
         folder no longer runs**
 - [x] Each is phrased as the consequence rather than the condition — the third especially, which is
       the case that corrupts saves and the reason locking exists at all.
@@ -1101,17 +1101,17 @@ Manage removed.
       drag-to-activate and "everything visible is compatible by construction" both rest on.
 - [x] **`RepoSavegamesPage` is master-detail**, the shape this client already uses three times.
       Saves on the left — name, profile, holder chip, state — with *Check out* as the row action.
-      The selected save on the right: versions and checkouts as one timeline, and for the selected
+      The selected save on the right: snapshots and checkouts as one timeline, and for the selected
       entry who, when, size, label, and the profile revision it was played on, with a link into the
       revision comparison that already exists.
 
       **Not an accordion.** A two-pane history does not fit inside a row, and an expander moves the
       list under the pointer — the thing the import list is explicitly ordered to avoid.
-- [x] **Restoring copies forward**, exactly as it does for a profile revision: version 4 restored
-      while the head is 12 becomes version 13, stamped `Origin = Restored` with `BaseVersion = 4`,
+- [x] **Restoring copies forward**, exactly as it does for a profile revision: snapshot 4 restored
+      while the head is 12 becomes snapshot 13, stamped `Origin = Restored` with `BaseSnapshot = 4`,
       and no bytes move because the blob is addressed by its hash. So **check-out always takes the
       head** — there is no stale base to reason about at the moment somebody wants to play, and
-      looking at an old version without disturbing anybody is what *Take a copy* is for.
+      looking at an old snapshot without disturbing anybody is what *Take a copy* is for.
 - [ ] **The repo overview does not repeat the list.** It answers *where was I* — the game, its
       active profile, drift, and what you are holding — and links into Saves.
 
@@ -1193,10 +1193,10 @@ mod question is last because it is the only one that can be deferred.
 
 ### Settled
 
-- [x] **Check-in has a _keep playing_ option.** The same version is minted, and the local copy and
+- [x] **Check-in has a _keep playing_ option.** The same snapshot is minted, and the local copy and
       the claim are both kept, so a mid-session backup does not become an upload followed
       immediately by re-downloading what was just sent. `CheckInAsync` rebases the binding onto the
-      version it just minted.
+      snapshot it just minted.
 
 Three things settled with it, and deliberately not built:
 
@@ -1230,8 +1230,8 @@ revision 5"*, where re-apply did not help because re-apply always applies head.
       clash from somebody else's publish. It replaces the plain foreign-key index EF had made over
       the same two columns, so the one query that wants past savegames too — "does anything follow
       this profile?", asked once by `DeleteProfileV1Endpoint` — scans a repo's handful of rows.
-- [x] **`ProfileId` and `ProfileRevision` nullable** on `Savegame` and `SavegameVersion`, with a
-      check constraint making each pair all-or-nothing. The pair only exists on `SavegameVersion`,
+- [x] **`ProfileId` and `ProfileRevision` nullable** on `Savegame` and `SavegameSnapshot`, with a
+      check constraint making each pair all-or-nothing. The pair only exists on `SavegameSnapshot`,
       which is where that constraint went: a savegame pins no revision, and pinning one on it would
       be the thing `Savegame`'s own remarks refuse. `Savegame` carries the constraint that is
       available to it instead — superseded implies a profile, since a savegame following no mod list
@@ -1245,9 +1245,9 @@ revision 5"*, where re-apply did not help because re-apply always applies head.
       client can name what it displaced. Two commits inside one transaction, the shape
       `MoveModVersionV1Endpoint` already uses to take an ordering through a unique index.
 - [x] **`UpdateSavegameV1Endpoint` becomes a rename.** Moving a savegame between profiles would put
-      `Savegame.ProfileId` and its versions' `ProfileId` in disagreement. `CreateVersion` stopped
-      taking a profile at all with it: the version's is the savegame's, so nothing can pass one that
-      disagrees, and the pairing became one rule at the single place versions are minted.
+      `Savegame.ProfileId` and its snapshots' `ProfileId` in disagreement. `CreateSnapshot` stopped
+      taking a profile at all with it: the snapshot's is the savegame's, so nothing can pass one that
+      disagrees, and the pairing became one rule at the single place snapshots are minted.
 - [x] **Regenerate the client.** `openapi/v1.json` and `Generated.cs` both.
 
 Two things fell out of the boxes above rather than being added to them:
@@ -1360,7 +1360,7 @@ Three things fell out of the boxes above rather than being added to them:
 
 - **Publishing from a never-synced instance stopped being refused.** `RequireAppliedRevision` was the
   last place the client insisted the folder be on the profile first, and the design says why it should
-  not: a first version's revision is *declared*, so requiring a sync would observe the folder at the
+  not: a first snapshot's revision is *declared*, so requiring a sync would observe the folder at the
   moment of publishing — a different fact, not a better one. The number is now
   `SavegameService.DeclaredRevisionFor`, shown in the dialog before it is recorded.
 - **`ProfileApplyService.ApplyAsync` gained a revision.** The row's *Apply profile* prepares the folder
@@ -1369,8 +1369,8 @@ Three things fell out of the boxes above rather than being added to them:
   against the revision it had just pinned. The same number goes into `DecideApply`, so the refusal and
   the apply are asked the same question.
 - **`ISavegameService.GetPlayedRevision`**, and `ResolveAppliedRevision` split in two to answer it. The
-  check-in dialog has to name the revision the version will carry, and a second computation of that is
-  how a dialog comes to name a number the version does not have. The refusal stayed on the check-in:
+  check-in dialog has to name the revision the snapshot will carry, and a second computation of that is
+  how a dialog comes to name a number the snapshot does not have. The refusal stayed on the check-in:
   what a dialog has to say about a savegame whose revision nothing on this machine knows is nothing.
 
 ### Verified after slice 4
@@ -1421,7 +1421,7 @@ Worth knowing before starting, so none of it gets rediscovered:
 - **The no-mods branch already exists** in `RepoSavegamesPageViewModel.ApplyProfileAsync`.
 - **`GetModDependenciesV1Endpoint` already serves any revision**, the client can ask for one since
   slice 2, and slice 3 decides which. Nothing is left here.
-- **Pruning already refuses** a revision a savegame version holds, so a past savegame stays
+- **Pruning already refuses** a revision a savegame snapshot holds, so a past savegame stays
   reproducible with no new guarantee.
 
 ### Settled with it
@@ -1429,9 +1429,9 @@ Worth knowing before starting, so none of it gets rediscovered:
 - **Mods-less repos still get no implicit profile**, and now never will — the savegame-to-profile
   relationship is optional on both ends instead. This supersedes the box and the note under
   [Phase 8's Settled](#settled).
-- **A published savegame's first version carries a declared revision.** The bytes existed before
+- **A published savegame's first snapshot carries a declared revision.** The bytes existed before
   ModsDude saw them; no arrangement of the publish flow recovers what was in the folder at the
-  time. Every version after it is observed.
+  time. Every snapshot after it is observed.
 
 ## Phase 10 — One game, many targets
 
@@ -1695,7 +1695,7 @@ per-game looks simpler and is not.
       `WriteManifestAsync`, so nothing is attributed, which is correct: that folder did not change,
       so what is being played there did not change either. Record the *activated* revision instead
       and the case breaks exactly where it matters — activate rev 12, the server's apply fails, the
-      folder is still physically on rev 8, and a check-in stamps the version with 12. The save then
+      folder is still physically on rev 8, and a check-in stamps the snapshot with 12. The save then
       reproduces wrong for whoever checks it out next.
 - [x] **Activated-but-not-applied becomes a normal state** under this phase rather than an
       exceptional one, so divergence gets *more* reachable, not less. That argues for observing
@@ -1879,7 +1879,7 @@ Worth knowing before starting, because it is most of the argument for doing it:
   disagree with the first.
 - **The current-instance dropdown is not built.** It was the right answer to a question this phase
   removes.
-- **Attribution is observed, never declared** — except a published savegame's first version, which
+- **Attribution is observed, never declared** — except a published savegame's first snapshot, which
   declares because the bytes predate ModsDude and nothing recovers what was in the folder then.
 
 ## Phase 11 — The game stops being a place

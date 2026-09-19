@@ -286,8 +286,8 @@ public partial class App : Application
         // The savegame counterpart, populated as a side effect of the Saves page having read a list.
         // Registered under both names for the same reason: the page records into it, the drift check
         // reads it, and they have to be the one object.
-        services.AddSingleton<SavegameHeadVersionCache>();
-        services.AddSingleton<ISavegameHeadVersions>(sp => sp.GetRequiredService<SavegameHeadVersionCache>());
+        services.AddSingleton<SavegameHeadSnapshotCache>();
+        services.AddSingleton<ISavegameHeadSnapshots>(sp => sp.GetRequiredService<SavegameHeadSnapshotCache>());
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

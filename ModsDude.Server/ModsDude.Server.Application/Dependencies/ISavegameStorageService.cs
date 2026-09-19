@@ -18,8 +18,8 @@ namespace ModsDude.Server.Application.Dependencies;
 /// hash differently write two different blobs and neither is lost.
 /// </para>
 /// <para>
-/// The second consequence is restore: copying an old version forward to the head is a pure metadata
-/// operation, because the bytes are already stored under the address the new version names. A
+/// The second consequence is restore: copying an old snapshot forward to the head is a pure metadata
+/// operation, because the bytes are already stored under the address the new snapshot names. A
 /// check-in of something already stored costs nothing at all, which is what makes a 400 MB save
 /// cheap to keep re-checking in.
 /// </para>
@@ -60,7 +60,7 @@ public interface ISavegameStorageService
     /// For a savegame this <b>verifies</b> the address rather than discovering it, since the address
     /// already is the hash. An upload whose recorded hash disagrees with the address it was written
     /// to was not produced by a client that hashed what it actually sent, and the check-in it
-    /// belongs to should be refused rather than recorded - a version whose <c>ContentHash</c> does
+    /// belongs to should be refused rather than recorded - a snapshot whose <c>ContentHash</c> does
     /// not describe its bytes is a backup nobody can trust to be the save they checked in.
     /// </remarks>
     Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
@@ -78,9 +78,9 @@ public interface ISavegameStorageService
     /// Deletes the bytes at one address.
     /// </summary>
     /// <remarks>
-    /// <b>Not the same thing as deleting a version.</b> Several versions of a savegame can name one
+    /// <b>Not the same thing as deleting a snapshot.</b> Several snapshots of a savegame can name one
     /// content hash - a restore does exactly that, and so does checking in a save that was played
-    /// and reverted - so pruning one version must only reach here once no remaining version names
+    /// and reverted - so pruning one snapshot must only reach here once no remaining snapshot names
     /// its hash. The reclamation sweep is the safety net for the case that is missed, not the
     /// mechanism relied on.
     /// </remarks>

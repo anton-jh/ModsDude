@@ -47,7 +47,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         Assert.Equal(0, await verification.Profiles.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Equal(0, await verification.ProfileRevisions.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Equal(0, await verification.Savegames.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
-        Assert.Equal(0, await verification.SavegameVersions.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
+        Assert.Equal(0, await verification.SavegameSnapshots.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Equal(0, await verification.SavegameCheckouts.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Equal(0, await verification.RepoInvites.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Equal(0, await verification.RepoMemberships.CountAsync(x => x.RepoId == repoId, CancellationToken.None));
@@ -71,7 +71,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         Assert.Equal(1, await verification.Profiles.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
         Assert.Equal(2, await verification.ProfileRevisions.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
         Assert.Equal(1, await verification.Savegames.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
-        Assert.Equal(1, await verification.SavegameVersions.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
+        Assert.Equal(1, await verification.SavegameSnapshots.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
         Assert.Equal(1, await verification.SavegameCheckouts.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
         Assert.Equal(1, await verification.RepoInvites.CountAsync(x => x.RepoId == survivor, CancellationToken.None));
     }
@@ -164,7 +164,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         var savegame = new Savegame(repoId, new SavegameName($"save-{Guid.NewGuid()}"), profileId, DateTime.UtcNow);
 
         dbContext.Savegames.Add(savegame);
-        dbContext.SavegameVersions.Add(savegame.CreateVersion(
+        dbContext.SavegameSnapshots.Add(savegame.CreateSnapshot(
             new RevisionNumber(1),
             new string('1', ModImageHash.Length),
             sizeBytes: 1024,

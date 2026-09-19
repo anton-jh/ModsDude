@@ -18,7 +18,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </summary>
 /// <remarks>
 /// Named "unarchive" in the route rather than "restore", because a savegame already has a restore
-/// and it means something else entirely: putting an old <em>version</em> back. Two things called
+/// and it means something else entirely: putting an old <em>snapshot</em> back. Two things called
 /// restore, one aggregate apart, is how somebody ends up rolling a save back a month by accident.
 /// </remarks>
 public class RestoreSavegameV1Endpoint : IEndpoint
