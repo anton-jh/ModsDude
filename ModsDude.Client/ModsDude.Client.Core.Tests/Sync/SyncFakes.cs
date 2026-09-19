@@ -24,7 +24,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     public Guid RepoId { get; } = Guid.NewGuid();
     public Guid ProfileId { get; } = Guid.NewGuid();
 
-    public int DownloadLinksMinted { get; private set; }
+    private int _downloadLinksMinted;
+
+    public int DownloadLinksMinted => Volatile.Read(ref _downloadLinksMinted);
 
     /// <summary>Set to hand back bytes that do not match the hash the repo declared.</summary>
     public Func<string, byte[]>? CorruptDownload { get; set; }
@@ -126,7 +128,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
     {
-        DownloadLinksMinted++;
+        Interlocked.Increment(ref _downloadLinksMinted);
 
         return Task.FromResult(new CreateModDownloadLinkResponse { Link = $"{request.ModId}/{request.VersionId}" });
     }
@@ -161,16 +163,18 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
 internal sealed class FakeModFileDownloader(FakeSyncServer server) : IModFileDownloader
 {
-    public int Downloads { get; private set; }
+    private int _downloads;
+
+    public int Downloads => Volatile.Read(ref _downloads);
 
     /// <summary>Raised before each download, so a test can cancel exactly mid-fetch.</summary>
     public Action? BeforeDownload { get; set; }
 
 
-    public Task<ModFileDownload> OpenAsync(string link, CancellationToken cancellationToken)
+    public Task<ModFileDownload> OpenAsync(string link, IProgress<long>? bytesReceived, CancellationToken cancellationToken)
     {
         BeforeDownload?.Invoke();
-        Downloads++;
+        Interlocked.Increment(ref _downloads);
 
         var bytes = server.CorruptDownload?.Invoke(link) ?? server.Blob(link);
 

@@ -102,6 +102,12 @@ public sealed class ModSyncService(
     /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
     private const int _registeredPageSize = 500;
 
+    /// <summary>
+    /// Mods fetched at once. Their range requests share one connection budget in the downloader,
+    /// so this buys overlap for small files rather than more connections for large ones.
+    /// </summary>
+    private const int _concurrentFetches = 4;
+
 
     /// <param name="progress">
     /// Where to report which mod is being examined. Optional, and worth passing: on a folder whose
@@ -234,6 +240,12 @@ public sealed class ModSyncService(
     /// Fills the serving store: another disk's store first, the network second. A disk-to-disk copy
     /// beats a download every time and leaves the blob local for the next install to this disk.
     /// </summary>
+    /// <remarks>
+    /// <b>Several at once</b>, because a download's cost is mostly per file - a link to mint, a first
+    /// byte to wait for, one connection's ceiling - and most mods are small. Copies from another
+    /// store still go one at a time: several at once on one spinning disk is slower than one.
+    /// See docs/07-mod-sync-design.md#downloading.
+    /// </remarks>
     private async Task FetchAsync(
         ModSyncPlan plan,
         IProgress<ModSyncProgress>? progress,
@@ -246,50 +258,50 @@ public sealed class ModSyncService(
             .GroupBy(x => x.DesiredHash!, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var completed = 0;
+        var run = new FetchRun(wanted.Count, progress);
+        using var copying = new SemaphoreSlim(1);
 
-        foreach (var group in wanted)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var item = group.First();
-
-            progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, completed, wanted.Count)
+        await Parallel.ForEachAsync(
+            wanted,
+            new ParallelOptions { MaxDegreeOfParallelism = _concurrentFetches, CancellationToken = cancellationToken },
+            async (group, ct) =>
             {
-                ModId = item.ModId.Value,
-                Detail = item.DisplayName
+                var item = group.First();
+
+                run.Report(item, 0, 0);
+
+                try
+                {
+                    await FetchOneAsync(plan, item, group.Key, run, copying, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    // Collected rather than thrown, so the rest of the sync still runs - which is
+                    // also why nothing else would ever see the stack.
+                    logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
+
+                    lock (failures)
+                    {
+                        failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
+                    }
+                }
+
+                run.Finish(item);
             });
 
-            try
-            {
-                await FetchOneAsync(plan, item, group.Key, completed, wanted.Count, progress, cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                // Collected rather than thrown, so the rest of the sync still runs - which is also
-                // why nothing else would ever see the stack.
-                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
-
-                failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
-            }
-
-            completed++;
-        }
-
-        progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, completed, wanted.Count));
+        progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, wanted.Count, wanted.Count));
     }
 
     private async Task FetchOneAsync(
         ModSyncPlan plan,
         ModSyncItem item,
         string hash,
-        int completed,
-        int total,
-        IProgress<ModSyncProgress>? progress,
+        FetchRun run,
+        SemaphoreSlim copying,
         CancellationToken cancellationToken)
     {
         var elsewhere = plan.AllStores.FirstOrDefault(x =>
@@ -300,18 +312,36 @@ public sealed class ModSyncService(
         // download - so the row can show a proportion in both cases rather than only one.
         var totalBytes = elsewhere?.GetSize(hash) ?? 0;
 
-        var report = new Forwarder<long>(x => progress?.Report(
-            new ModSyncProgress(ModSyncPhase.Fetching, completed, total)
+        // Two sources on a download - bytes arriving and bytes stored - and the bar follows whichever
+        // is further on. Arriving leads while a ranged download is running; stored has the last word
+        // on a single stream, where the downloader leaves it to the store.
+        var gate = new Lock();
+        long shown = 0;
+
+        var report = new Forwarder<long>(x =>
+        {
+            lock (gate)
             {
-                ModId = item.ModId.Value,
-                Detail = item.DisplayName,
-                BytesTransferred = x,
-                TotalBytes = totalBytes
-            }));
+                if (x > shown)
+                {
+                    shown = x;
+                    run.Report(item, x, totalBytes);
+                }
+            }
+        });
 
         if (elsewhere is not null)
         {
-            await plan.ServingStore.CopyFromAsync(elsewhere, hash, report, cancellationToken);
+            await copying.WaitAsync(cancellationToken);
+
+            try
+            {
+                await plan.ServingStore.CopyFromAsync(elsewhere, hash, report, cancellationToken);
+            }
+            finally
+            {
+                copying.Release();
+            }
 
             return;
         }
@@ -325,7 +355,7 @@ public sealed class ModSyncService(
             },
             cancellationToken);
 
-        using var download = await downloader.OpenAsync(link.Link, cancellationToken);
+        using var download = await downloader.OpenAsync(link.Link, report, cancellationToken);
 
         totalBytes = download.Length ?? 0;
 
@@ -1036,5 +1066,49 @@ public sealed class ModSyncService(
     private sealed class Forwarder<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
+    }
+
+    /// <summary>The fetch phase's count and reports, shared by the items fetching at once.</summary>
+    /// <remarks>
+    /// Reported under a lock, so the count reaches the listener in the order it moved: a report read
+    /// just before another item finished would otherwise land just after it and tick the bar back.
+    /// </remarks>
+    private sealed class FetchRun(int total, IProgress<ModSyncProgress>? progress)
+    {
+        private readonly Lock _gate = new();
+
+        private int _completed;
+
+
+        public void Report(ModSyncItem item, long bytesTransferred, long totalBytes)
+        {
+            lock (_gate)
+            {
+                progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, _completed, total)
+                {
+                    ModId = item.ModId.Value,
+                    Detail = item.DisplayName,
+                    BytesTransferred = bytesTransferred,
+                    TotalBytes = totalBytes,
+                    Concurrent = true
+                });
+            }
+        }
+
+        public void Finish(ModSyncItem item)
+        {
+            lock (_gate)
+            {
+                _completed++;
+
+                progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, _completed, total)
+                {
+                    ModId = item.ModId.Value,
+                    Detail = item.DisplayName,
+                    Concurrent = true,
+                    ItemFinished = true
+                });
+            }
+        }
     }
 }

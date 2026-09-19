@@ -741,19 +741,18 @@ public sealed class ProfileApplyService(
     /// one that walks.
     /// </para>
     /// <para>
-    /// <b>The one file being worked on is a subtask, so the bytes have somewhere to go.</b> A sync
-    /// runs one item at a time, so there is only ever one - which is exactly the case the outer bar
-    /// cannot serve: a 900 MB download, or an archive being hashed during planning, is one tick of a
-    /// count that then stands still for a minute.
+    /// <b>Each file being worked on is a subtask, so the bytes have somewhere to go.</b> That is
+    /// exactly the case the outer bar cannot serve: a 900 MB download, or an archive being hashed
+    /// during planning, is one tick of a count that then stands still for a minute. Most phases run
+    /// one item at a time, so the next item's report ends the last; fetching runs several at once and
+    /// says so, and each of its items ends with a report of its own.
     /// </para>
     /// </remarks>
     private sealed class SyncProgressRelay(IBackgroundTask task, IProgress<ModSyncProgress>? inner)
         : IProgress<ModSyncProgress>
     {
         private readonly Lock _gate = new();
-
-        private string? _current;
-        private IBackgroundSubtask? _subtask;
+        private readonly Dictionary<string, IBackgroundSubtask> _subtasks = [];
 
 
         public void Report(ModSyncProgress value)
@@ -774,21 +773,46 @@ public sealed class ProfileApplyService(
 
             lock (_gate)
             {
-                if (name != _current)
+                // Names carry the phase, so a new phase - whose first report is never concurrent,
+                // or is the fetch phase's closing one with no item at all - ends everything left.
+                if (value.Concurrent is false)
                 {
-                    _subtask?.Dispose();
-
-                    _subtask = name is null
-                        ? null
-                        : task.BeginSubtask(name, value.TotalBytes >= ByteSize.LargeTransfer);
-
-                    _current = name;
+                    foreach (var other in _subtasks.Keys.Where(x => x != name).ToList())
+                    {
+                        End(other);
+                    }
                 }
 
-                _subtask?.Report(
+                if (name is null)
+                {
+                    return;
+                }
+
+                if (value.ItemFinished)
+                {
+                    End(name);
+
+                    return;
+                }
+
+                if (_subtasks.TryGetValue(name, out var subtask) is false)
+                {
+                    subtask = task.BeginSubtask(name, value.TotalBytes >= ByteSize.LargeTransfer);
+                    _subtasks[name] = subtask;
+                }
+
+                subtask.Report(
                     value.BytesTransferred,
                     value.TotalBytes,
                     value.TotalBytes > 0 ? ByteSize.Describe(value.BytesTransferred, value.TotalBytes) : null);
+            }
+        }
+
+        private void End(string name)
+        {
+            if (_subtasks.Remove(name, out var subtask))
+            {
+                subtask.Dispose();
             }
         }
     }

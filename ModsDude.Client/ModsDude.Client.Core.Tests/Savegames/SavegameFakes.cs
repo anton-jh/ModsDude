@@ -341,7 +341,7 @@ internal sealed class FakeSavegameDownloader(FakeSavegameServer server) : IModFi
     public int Downloads { get; private set; }
 
 
-    public Task<ModFileDownload> OpenAsync(string link, CancellationToken cancellationToken)
+    public Task<ModFileDownload> OpenAsync(string link, IProgress<long>? bytesReceived, CancellationToken cancellationToken)
     {
         Downloads++;
 

@@ -233,6 +233,16 @@ public sealed record ModSyncProgress(ModSyncPhase Phase, int Completed, int Tota
     public string? Detail { get; init; }
     public long BytesTransferred { get; init; }
     public long TotalBytes { get; init; }
+
+    /// <summary>
+    /// Other items of this phase are in flight too - the fetch phase, which runs several at once. A
+    /// report naming this item says nothing about the others, which end with their own
+    /// <see cref="ItemFinished"/>. Where it is false, a report naming the next item ends the last.
+    /// </summary>
+    public bool Concurrent { get; init; }
+
+    /// <summary>The last report for <see cref="ModId"/> in a <see cref="Concurrent"/> phase.</summary>
+    public bool ItemFinished { get; init; }
 }
 
 

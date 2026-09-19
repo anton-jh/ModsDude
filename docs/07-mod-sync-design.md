@@ -422,6 +422,59 @@ bytes as they stream past during the copy — they are already passing through m
 verification is close to free and it catches a store entry that has rotted or been rewritten
 through a hardlink.
 
+### Downloading
+
+**One connection to blob storage is not enough to fill a fast line.** Measured outside the app,
+a single GET against a mod's SAS link tops out around 100–120 Mb/s on a 1 Gb/s connection, and two
+concurrent GETs of different blobs got ~80 Mb/s each — so the limit is per connection (RTT and
+TCP window bound), not the line or an account cap. The client therefore fetches in parallel on
+two levels:
+
+**Within a file: parallel range GETs, reassembled in order before anything reads them.**
+`HttpModFileDownloader` opens every download with `Range: bytes=0-{chunk-1}`. A file that fits in
+that first answer — most of the catalog — costs exactly the one request it always did. Anything
+larger learns its total size from `Content-Range` and fans the rest out as fixed-size chunks
+over several connections, pinned to the first answer's ETag with `If-Match` so a blob replaced
+mid-download fails loudly rather than splicing two versions together.
+
+The chunks are handed back **as one ordinary stream, in file order**. That is the decision the
+content store's safety rests on: `ContentStore.IngestAsync` stays the single path in, hashing the
+bytes sequentially as it writes them, and nothing about verification knows chunking exists. The
+alternatives were worse on exactly that axis — writing chunks at their offsets and hashing in a
+second pass re-reads a 1.4 GB file from disk and adds a second code path through the store's one
+check; hashing a contiguous prefix as it grows is the same reassembly with more moving parts.
+The price is memory: a bounded window of chunks is held while the one at the front is still
+arriving (about a hundred megabytes for one large file at the defaults).
+
+- **Chunk failures are retried in isolation.** A dropped connection, a 5xx, a 408/429 or a
+  connection that stops delivering bytes for a while re-requests that one range with backoff; the
+  rest of the file carries on. Only a chunk that exhausts its retries — or a failure that is not
+  transient, like a 403 or a failed `If-Match` — fails the download.
+- **Progress stays one figure per file, and moves smoothly.** The store's own count - bytes
+  hashed, in file order - would wait on the chunk at the front and then leap several chunks at
+  once. So the downloader also reports bytes *received* across every chunk in flight, and the
+  sync shows whichever of the two is further on. The UI still sees a single total and nothing of
+  the chunking. The bar can reach the end a moment before verification does; a retried chunk
+  holds it still rather than moving it back.
+- **A server that ignores `Range`** (a 200 rather than a 206) is simply read as a single stream.
+- **Known trade-off: the SAS lifetime.** Each chunk is a new request authorised by the link, and
+  the link lives 30 minutes. A single GET started inside that window runs to completion; a ranged
+  download slower than ~30 minutes would fail on a late chunk instead. At the speeds this exists
+  for, a 1.4 GB file takes a couple of minutes; if it ever matters, the downloader needs a way to
+  re-mint the link, which is a callback rather than a redesign.
+
+**Across files: a few fetches at once.** A small mod is one request, so the per-file costs — the
+link mint round trip, time to first byte, and a single connection's ceiling — dominate. Fetching
+runs several items concurrently, and every range request from every file draws from one
+process-wide connection budget, so a big file and a handful of small ones share the line rather
+than multiplying connections. Disk-to-disk copies from another store stay one at a time, since
+several at once on one spinning disk is slower than one.
+
+The numbers (chunk size, connections per file, the budget, files at once) are constants on
+`RangedDownloadOptions` and `ModSyncService`, chosen from the two-stream measurement rather than a
+sweep. `RangedDownloadBenchmark` in the test project runs against a real SAS link when
+`MODSDUDE_BENCH_SAS` is set, for re-measuring them.
+
 ### Uninstall rules
 
 This is the part that must never be got wrong, because it is the part that touches files the

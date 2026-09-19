@@ -1312,7 +1312,7 @@ public sealed class SavegameService(
 
         try
         {
-            using (var download = await downloader.OpenAsync(link.Link, ct))
+            using (var download = await downloader.OpenAsync(link.Link, null, ct))
             await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
             {
                 await download.Content.CopyToAsync(file, ct);
