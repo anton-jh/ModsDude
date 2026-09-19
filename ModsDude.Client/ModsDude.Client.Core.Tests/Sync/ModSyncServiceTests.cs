@@ -902,6 +902,72 @@ public class ModSyncServiceTests
         Assert.Empty(fixture.Held.Observed);
     }
 
+    /// <summary>
+    /// What anybody holding a scan of that folder needs to hear: the apply is what makes the scan wrong,
+    /// by installing what it did not list and recycling what it did.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_that_changed_the_folder_says_which_folder()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        var changed = new List<string>();
+        fixture.Service.ModFolderChanged += changed.Add;
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Equal([fixture.Folder.Path], changed);
+    }
+
+    [Fact]
+    public async Task An_apply_with_nothing_to_change_says_nothing()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        var changed = new List<string>();
+        fixture.Service.ModFolderChanged += changed.Add;
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Empty(changed);
+    }
+
+    /// <summary>
+    /// A fetch that fails stops before the folder is touched, so there is nothing for a scan to have
+    /// gone stale about - and a listener told otherwise would walk a folder for no reason.
+    /// </summary>
+    [Fact]
+    public async Task An_apply_that_fails_before_touching_the_folder_says_nothing()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.CorruptDownload = _ => SyncTestContent.Bytes(Mod("1.0.0", "hostile"));
+        var changed = new List<string>();
+        fixture.Service.ModFolderChanged += changed.Add;
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Empty(changed);
+    }
+
+    /// <summary>
+    /// A listener's own failure is not the apply's: the files have moved, and reporting the apply as
+    /// failed would send somebody to redo work that was done.
+    /// </summary>
+    [Fact]
+    public async Task A_listener_that_throws_does_not_fail_the_apply()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Service.ModFolderChanged += _ => throw new InvalidOperationException("a page that has gone");
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+    }
+
 
     private static string Mod(string version, string build) => SyncTestContent.File(version, build);
 

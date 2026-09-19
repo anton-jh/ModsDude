@@ -109,6 +109,19 @@ public sealed class ModSyncService(
     private const int _concurrentFetches = 4;
 
 
+    /// <summary>
+    /// Raised with the folder's path when an apply has changed what is in a mod folder - after the files
+    /// moved, and after the lease on the stores was released.
+    /// </summary>
+    /// <remarks>
+    /// <b>For whoever holds a picture of that folder.</b> The mod list editor keeps a scan of every folder it
+    /// has looked in, and an apply is exactly the thing that makes that scan wrong: mods it installed are
+    /// missing from it, and mods it recycled are still there - as import candidates whose file no longer
+    /// exists. Raised from whichever thread ran the apply, so a handler that touches the UI marshals.
+    /// </remarks>
+    public event Action<string>? ModFolderChanged;
+
+
     /// <param name="progress">
     /// Where to report which mod is being examined. Optional, and worth passing: on a folder whose
     /// files no longer match the manifest this reads and hashes every one of them, which is the
@@ -196,6 +209,7 @@ public sealed class ModSyncService(
         var failures = new List<ModSyncFailure>();
         var quarantined = new List<QuarantinedFile>();
         var completed = false;
+        var folderTouched = false;
 
         // Scoped tightly, because the sweep below wants the other side of this very lease.
         using (await leases.AcquireSharedAsync(
@@ -212,8 +226,22 @@ public sealed class ModSyncService(
                 return new ModSyncResult(false, failures);
             }
 
-            await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
-            await InstallAsync(plan, progress, failures, cancellationToken);
+            // From here the folder is being changed - if there is anything to change - so whatever happens next - success, a failure part way,
+            // a cancel - what anybody has cached about it is out of date. Announced once the lease is
+            // let go of, below.
+            folderTouched = plan.HasWork;
+
+            try
+            {
+                await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
+                await InstallAsync(plan, progress, failures, cancellationToken);
+            }
+            catch
+            {
+                AnnounceChange(plan);
+
+                throw;
+            }
 
             completed = failures.Count == 0;
 
@@ -223,6 +251,11 @@ public sealed class ModSyncService(
             {
                 await WriteManifestAsync(plan);
             }
+        }
+
+        if (folderTouched)
+        {
+            AnnounceChange(plan);
         }
 
         var eviction = Evict(plan, cancellationToken);
@@ -235,6 +268,20 @@ public sealed class ModSyncService(
         };
     }
 
+
+    private void AnnounceChange(ModSyncPlan plan)
+    {
+        try
+        {
+            ModFolderChanged?.Invoke(plan.ModFolder);
+        }
+        catch (Exception exception)
+        {
+            // A listener that throws is the listener's bug, and it must not turn an apply that worked into one
+            // that is reported as failing.
+            logger.LogError(exception, "A handler of ModFolderChanged failed for {Folder}.", plan.ModFolder);
+        }
+    }
 
     /// <summary>
     /// Fills the serving store: another disk's store first, the network second. A disk-to-disk copy

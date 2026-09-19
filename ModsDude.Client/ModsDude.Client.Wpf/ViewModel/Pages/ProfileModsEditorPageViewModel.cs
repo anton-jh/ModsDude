@@ -69,6 +69,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly NavigationLockService _navigationLock;
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
+    private readonly ModSyncService _syncService;
     private readonly DriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
     private readonly IResourceLeases _leases;
@@ -260,6 +261,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         NavigationLockService navigationLock,
         GameRepository gameRepository,
         ProfileApplyService applyService,
+        ModSyncService syncService,
         DriftMonitor driftMonitor,
         NoticeCenterViewModel notices,
         IResourceLeases leases)
@@ -277,6 +279,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _navigationLock = navigationLock;
         _gameRepository = gameRepository;
         _applyService = applyService;
+        _syncService = syncService;
         _driftMonitor = driftMonitor;
         _notices = notices;
         _activeProfile = new ActiveProfile(repo.Id, profile.Id);
@@ -284,6 +287,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // The page owns the catalog and disposes it, so the per-source scan cache lives exactly as
         // long as the checkboxes that recompose from it.
         _catalog = catalogFactory.Create(repo);
+
+        // An apply changes what is in a mod folder, which is what a scan of it was a picture of. Held from
+        // here to Dispose: the page can be open while an apply is started from the profile bar, the drift
+        // notice or its own save, and every one of them ends in the same event.
+        _syncService.ModFolderChanged += OnModFolderChanged;
 
         ProfileName = profile.Name;
 
@@ -2188,6 +2196,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _navigationLock.ReleaseLock(this);
         _notices.Release(_activeProfile);
         _leases.Changed -= OnLeasesChanged;
+        _syncService.ModFolderChanged -= OnModFolderChanged;
 
         // The save itself is not stopped: it belongs to the profile, not to this page, and the strip
         // keeps its Cancel. What this gives up is being the one that reports the outcome, which then
@@ -2226,6 +2235,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshApplyTargets();
+    }
+
+    /// <summary>
+    /// An apply changed a mod folder, so the scan of it - if this page has one - is a picture of a folder
+    /// that is not that folder any more: what the apply installed is missing from it, and what it
+    /// recycled is still there, offered as an import whose file no longer exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Any source that is that folder, on standby or not.</b> A chip switched off is a statement about
+    /// what is being looked at, not about what has been read - see <see cref="ModCatalog.RescanFolder"/>.
+    /// A folder this page never scanned costs nothing and does not recompose.
+    /// </para>
+    /// <para>
+    /// <b>A recompose, never a reload</b>: the draft, the selections and the pending removals are the
+    /// user's and stay. One that lands mid-save is held until the save is over, like any other.
+    /// </para>
+    /// </remarks>
+    private void OnModFolderChanged(string folder)
+    {
+        if (_cancellation.IsCancellationRequested || _catalog.RescanFolder(folder) is false)
+        {
+            return;
+        }
+
+        // Raised from whichever thread ran the apply.
+        _ = Application.Current?.Dispatcher.InvokeAsync(RecomposeAsync);
     }
 
     private void OnGameChanged(object? sender, PropertyChangedEventArgs e)

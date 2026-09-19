@@ -277,6 +277,43 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
+    /// Drops the cached scan of every source that is this folder, so the next read walks it again.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>By path, not by source.</b> An apply knows which folder it changed and nothing about which
+    /// chips point at it - a game's own mod folder is a source, but so can a folder somebody added by
+    /// hand, or Downloads, be the same directory.
+    /// </para>
+    /// <para>
+    /// <b>A source on standby counts.</b> It is switched off, not forgotten: it still contributes to
+    /// <see cref="ModCatalogSnapshot.Known"/>, and a scan that outlived the apply would go on offering
+    /// versions whose file the apply removed. A source that was never read has nothing cached and is
+    /// left alone - dropping nothing is not a reason for anybody to recompose.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether anything was dropped, which is whether a page showing this catalog is now stale.</returns>
+    public bool RescanFolder(string folder)
+    {
+        var sources = GetSources()
+            .Where(x => FileSystemHelper.ArePathsEqual(x.Path, folder))
+            .Select(x => x.Id)
+            .ToList();
+
+        var dropped = false;
+
+        lock (_lock)
+        {
+            foreach (var id in sources)
+            {
+                dropped |= _scans.Remove(id);
+            }
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
     /// Fetches whatever the repo has registered since the last read. Correct after an import, which
     /// only ever adds - a version deleted on the server is invisible to a delta and needs
     /// <see cref="ReloadRegisteredMods"/>.

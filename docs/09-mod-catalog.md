@@ -689,6 +689,16 @@ registered versions per repo.
   so expose a Rescan action, per source and for all. The pages surface only the one that covers
   every source — a per-source button is one more control on every row for something the whole-list
   one already does, and the per-source call stays available for a caller that needs it.
+
+  **An apply is the exception to "never silently"**, because it is not a refresh but a fact: it has
+  just changed the folder the scan is a picture of. `ModSyncService` raises `ModFolderChanged` once
+  the files have moved - and only where the plan had something to change, so a re-apply that finds
+  nothing to do raises nothing - and the editor drops the cached scan of every source that is that
+  folder (`ModCatalog.RescanFolder`, by path, **whether the chip is on or on standby**) and
+  recomposes. Without it a mod the apply recycled stayed in the scan as an import candidate whose
+  file was gone, and one it installed was missing from it. A recompose rather than a reload, so the
+  draft survives, and one that lands mid-save waits for the save like any other. A folder the page
+  never scanned has nothing cached and does not recompose.
 - **The 150 ms scan delay and the cancellation behaviour moved into the service**, unchanged.
   They exist so that a page nobody stopped on never touches the disk; that reasoning is not
   specific to the import page. Note the delay predates the sidebar's drag-selection fix and stays
