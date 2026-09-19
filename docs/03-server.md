@@ -594,7 +594,7 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 | PUT | `repos/{repoId}/savegames/{savegameId}/snapshots` | Member | **Check in.** Based on a snapshot number, forcible |
 | POST | `.../snapshots/{number}/restore` | Member | Copies an older snapshot forward as a new one |
 | GET | `repos/{repoId}/savegames/{savegameId}/checkouts` | Guest | The claim log, newest first, windowed |
-| POST | `repos/{repoId}/savegames/{savegameId}/checkouts` | Member | Take the claim, or renew your own. Answers with who it was taken from |
+| POST | `repos/{repoId}/savegames/{savegameId}/checkouts` | Member | Take the claim. Taking your own again changes nothing. Answers with who it was taken from |
 | DELETE | `.../checkouts/current` | Member | **Discard** — give it back unplayed. Mints no snapshot |
 
 **The client mints the savegame id**, as it does a repo id. The blob lives at

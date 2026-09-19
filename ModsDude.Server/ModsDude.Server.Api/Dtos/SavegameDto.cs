@@ -26,9 +26,9 @@ namespace ModsDude.Server.Api.Dtos;
 /// </para>
 /// </param>
 /// <param name="Checkout">
-/// The open claim, or <c>null</c> where nobody holds it. A claim past its expiry is still reported -
-/// with <see cref="SavegameCheckoutStatus.Stale"/> - rather than omitted, because "Anton has had
-/// this since March" is the thing the next person needs to read.
+/// The open claim, or <c>null</c> where nobody holds it. A claim is held from the moment it is taken until it ends, however long that
+/// is, so "Anton has had this since March" is a claim like any other and is the thing the next person
+/// needs to read.
 /// </param>
 public record SavegameDto(
     Guid Id,
@@ -97,12 +97,12 @@ public record SavegameDetailDto(string Key, string Label, string Value);
 /// One claim on a savegame, open or closed.
 /// </summary>
 /// <param name="Status">
-/// Folded server-side so that every client tells a live claim from a forgotten one the same way, and
-/// so that "held" cannot drift apart from the expiry it is derived from.
+/// Held while the claim is open and ended once it is not. Derived on the server so that every client
+/// reads the two the same way.
 /// </param>
 /// <param name="EndedReason">
-/// Null while the claim is open. Expiry is not among the reasons: nothing closes a row when it
-/// lapses, so an expired claim is an open row reading <see cref="SavegameCheckoutStatus.Stale"/>.
+/// Null while the claim is open. Nothing closes a claim by itself: it ends when its holder checks in
+/// or discards, or when somebody takes it over.
 /// </param>
 public record SavegameCheckoutDto(
     Guid Id,
@@ -110,12 +110,11 @@ public record SavegameCheckoutDto(
     Guid SavegameId,
     UserDto User,
     DateTime TakenAt,
-    DateTime ExpiresAt,
     DateTime? EndedAt,
     SavegameCheckoutEndReason? EndedReason,
     SavegameCheckoutStatus Status)
 {
-    public static SavegameCheckoutDto FromModel(SavegameCheckout checkout, UserDto user, DateTime now)
+    public static SavegameCheckoutDto FromModel(SavegameCheckout checkout, UserDto user)
     {
         return new(
             checkout.Id.Value,
@@ -123,9 +122,8 @@ public record SavegameCheckoutDto(
             checkout.SavegameId.Value,
             user,
             checkout.TakenAt,
-            checkout.ExpiresAt,
             checkout.EndedAt,
             checkout.EndedReason,
-            checkout.GetStatus(now));
+            checkout.Status);
     }
 }

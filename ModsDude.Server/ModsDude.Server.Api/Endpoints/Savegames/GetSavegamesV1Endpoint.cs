@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
-using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
@@ -46,7 +45,6 @@ public class GetSavegamesV1Endpoint : IEndpoint
         Guid repoId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ITimeService timeService,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -60,7 +58,7 @@ public class GetSavegamesV1Endpoint : IEndpoint
 
         // The clock is read once for the whole list, so that two rows cannot disagree about whether
         // the same instant had passed a claim's expiry.
-        var savegames = await SavegameReads.GetListAsync(dbContext, new RepoId(repoId), timeService.Now(), cancellationToken);
+        var savegames = await SavegameReads.GetListAsync(dbContext, new RepoId(repoId), cancellationToken);
 
         return TypedResults.Ok<IEnumerable<SavegameDto>>(savegames);
     }

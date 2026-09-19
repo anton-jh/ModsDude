@@ -45,7 +45,6 @@ internal static class SavegameReads
     public static async Task<List<SavegameDto>> GetListAsync(
         ApplicationDbContext dbContext,
         RepoId repoId,
-        DateTime now,
         CancellationToken cancellationToken,
         bool archived = false)
     {
@@ -80,7 +79,7 @@ internal static class SavegameReads
                 row.ProfileId?.Value,
                 row.Created,
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
-                checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names, now) : null,
+                checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names) : null,
                 row.SupersededAt,
                 row.ArchivedAt))
         ];
@@ -93,7 +92,6 @@ internal static class SavegameReads
     public static async Task<SavegameDto> DescribeAsync(
         ApplicationDbContext dbContext,
         Savegame savegame,
-        DateTime now,
         CancellationToken cancellationToken)
     {
         var head = await dbContext.SavegameSnapshots.GetRowAsync(
@@ -121,7 +119,7 @@ internal static class SavegameReads
             savegame.ProfileId?.Value,
             savegame.Created,
             head is null ? null : ToDto(savegame.RepoId, head, names),
-            checkout is null ? null : ToDto(checkout, names, now),
+            checkout is null ? null : ToDto(checkout, names),
             savegame.SupersededAt,
             savegame.ArchivedAt);
     }
@@ -185,7 +183,6 @@ internal static class SavegameReads
     public static async Task<List<SavegameCheckoutDto>> ToDtosAsync(
         ApplicationDbContext dbContext,
         IReadOnlyList<SavegameCheckout> checkouts,
-        DateTime now,
         CancellationToken cancellationToken)
     {
         if (checkouts.Count == 0)
@@ -195,16 +192,15 @@ internal static class SavegameReads
 
         var names = await GetNamesAsync(dbContext, checkouts.Select(x => x.UserId), cancellationToken);
 
-        return [.. checkouts.Select(checkout => ToDto(checkout, names, now))];
+        return [.. checkouts.Select(checkout => ToDto(checkout, names))];
     }
 
     public static async Task<SavegameCheckoutDto> ToDtoAsync(
         ApplicationDbContext dbContext,
         SavegameCheckout checkout,
-        DateTime now,
         CancellationToken cancellationToken)
     {
-        var dtos = await ToDtosAsync(dbContext, [checkout], now, cancellationToken);
+        var dtos = await ToDtosAsync(dbContext, [checkout], cancellationToken);
 
         return dtos[0];
     }
@@ -237,12 +233,11 @@ internal static class SavegameReads
             [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))]);
     }
 
-    private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, DisplayName> names, DateTime now)
+    private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, DisplayName> names)
     {
         return SavegameCheckoutDto.FromModel(
             checkout,
-            Describe(checkout.UserId, names.TryGetValue(checkout.UserId, out var name) ? name : null),
-            now);
+            Describe(checkout.UserId, names.TryGetValue(checkout.UserId, out var name) ? name : null));
     }
 }
 

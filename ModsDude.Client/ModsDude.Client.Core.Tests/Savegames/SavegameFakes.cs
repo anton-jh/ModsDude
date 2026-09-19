@@ -295,7 +295,6 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         SavegameId = _savegame.Id,
         User = new UserDto { Id = "me", DisplayName = "Me", Tag = "0002" },
         TakenAt = DateTime.UtcNow,
-        ExpiresAt = DateTime.UtcNow.AddDays(1),
         Status = SavegameCheckoutStatus.Held
     };
 

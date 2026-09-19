@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
-using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
@@ -33,7 +32,6 @@ public class GetArchivedSavegamesV1Endpoint : IEndpoint
         Guid repoId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ITimeService timeService,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -46,7 +44,7 @@ public class GetArchivedSavegamesV1Endpoint : IEndpoint
         }
 
         var savegames = await SavegameReads.GetListAsync(
-            dbContext, new RepoId(repoId), timeService.Now(), cancellationToken, archived: true);
+            dbContext, new RepoId(repoId), cancellationToken, archived: true);
 
         return TypedResults.Ok<IEnumerable<SavegameDto>>(savegames);
     }

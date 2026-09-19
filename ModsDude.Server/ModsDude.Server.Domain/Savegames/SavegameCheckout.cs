@@ -21,20 +21,15 @@ namespace ModsDude.Server.Domain.Savegames;
 /// mechanical half is a guarantee.
 /// </para>
 /// <para>
-/// <b>It expires, and is renewed while it is held.</b> Somebody who takes a save on Friday and goes
-/// on holiday has to read as stale rather than as holding it - a warning that never clears is a
-/// warning everybody learns to click past.
+/// <b>It does not expire.</b> It used to: a claim lapsed a day after it was last renewed and read as
+/// stale. The day was arbitrary - nothing about a savegame becomes free to take after twenty-four hours
+/// - so the date it produced meant nothing to whoever read it, and a claim is now held from the moment it
+/// is taken until it ends. What a reader needs is who took it and when, which is <see cref="TakenAt"/>;
+/// whether that is long enough ago to take it over is theirs to judge, and taking it over is always allowed.
 /// </para>
 /// </remarks>
 public class SavegameCheckout
 {
-    /// <summary>
-    /// How long a fresh claim stands without being renewed. Long enough that a session, a meal and an
-    /// evening do not expire it; short enough that a forgotten claim stops shouting by the next day.
-    /// </summary>
-    public static readonly TimeSpan Lifetime = TimeSpan.FromHours(24);
-
-
     // ef
     private SavegameCheckout() { }
 
@@ -48,7 +43,6 @@ public class SavegameCheckout
         SavegameId = savegameId;
         UserId = userId;
         TakenAt = takenAt;
-        ExpiresAt = takenAt + Lifetime;
     }
 
 
@@ -62,12 +56,6 @@ public class SavegameCheckout
 
     public DateTime TakenAt { get; private set; }
 
-    /// <summary>
-    /// When the claim stops reading as held. Pushed forward by <see cref="Renew"/> while the holder
-    /// still has the app open, so a live claim never goes stale under somebody who is playing.
-    /// </summary>
-    public DateTime ExpiresAt { get; private set; }
-
     /// <summary>Null while this is the open row - which is what "open" means.</summary>
     public DateTime? EndedAt { get; private set; }
 
@@ -77,36 +65,10 @@ public class SavegameCheckout
     public bool IsOpen => EndedAt is null;
 
 
-    /// <summary>
-    /// Ended is reported ahead of expiry because it is the one that actually happened: a claim that
-    /// was checked in yesterday is ended, not stale, however long ago it was due to expire.
-    /// </summary>
-    public SavegameCheckoutStatus GetStatus(DateTime now)
-    {
-        if (!IsOpen)
-        {
-            return SavegameCheckoutStatus.Ended;
-        }
-
-        return ExpiresAt <= now
-            ? SavegameCheckoutStatus.Stale
-            : SavegameCheckoutStatus.Held;
-    }
-
-    /// <summary>
-    /// Pushes the claim's expiry out from <paramref name="now"/>. Renewing a claim that has already
-    /// gone stale is deliberately allowed: the holder coming back is exactly the case, and refusing
-    /// it would force them to take their own save off themselves.
-    /// </summary>
-    public void Renew(DateTime now)
-    {
-        if (!IsOpen)
-        {
-            throw new InvalidOperationException($"Checkout '{Id.Value}' has ended and cannot be renewed.");
-        }
-
-        ExpiresAt = now + Lifetime;
-    }
+    /// <summary>Held while it is the open row, and ended once it is not.</summary>
+    public SavegameCheckoutStatus Status => IsOpen
+        ? SavegameCheckoutStatus.Held
+        : SavegameCheckoutStatus.Ended;
 
     public void End(DateTime now, SavegameCheckoutEndReason reason)
     {
@@ -127,14 +89,8 @@ public readonly record struct SavegameCheckoutId(Guid Value);
 /// <summary>What a claim looks like to somebody reading the savegame list.</summary>
 public enum SavegameCheckoutStatus
 {
-    /// <summary>Somebody has it, and has had the app open recently enough to say so.</summary>
+    /// <summary>Somebody has it. Since when is <see cref="SavegameCheckout.TakenAt"/>.</summary>
     Held,
-
-    /// <summary>
-    /// Open, but nobody has renewed it. Read as "Anton has had this since 3 March" rather than as
-    /// "Anton has this", because the two mean very different things to whoever wants to play.
-    /// </summary>
-    Stale,
 
     Ended
 }

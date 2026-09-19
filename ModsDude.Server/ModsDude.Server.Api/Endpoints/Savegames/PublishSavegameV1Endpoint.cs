@@ -206,7 +206,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
 
         await transaction.CommitAsync(cancellationToken);
 
-        return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, now, cancellationToken));
+        return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
     }
 
 

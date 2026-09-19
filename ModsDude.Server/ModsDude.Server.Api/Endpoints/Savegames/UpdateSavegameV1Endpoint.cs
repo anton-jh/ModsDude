@@ -4,7 +4,6 @@ using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
@@ -47,7 +46,6 @@ public class UpdateSavegameV1Endpoint : IEndpoint
         UpdateSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ITimeService timeService,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
@@ -78,7 +76,7 @@ public class UpdateSavegameV1Endpoint : IEndpoint
 
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, timeService.Now(), cancellationToken));
+        return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
     }
 
 

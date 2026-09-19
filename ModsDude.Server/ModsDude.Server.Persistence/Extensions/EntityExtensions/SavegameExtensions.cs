@@ -160,7 +160,7 @@ public static class SavegameExtensions
     /// </para>
     /// <para>
     /// Open is not the same as held. A claim taken on Friday is still the open row on Monday; whether
-    /// it reads as held or as stale is <see cref="SavegameCheckout.GetStatus"/>'s answer, and it needs
+    /// it reads as held or ended is <see cref="SavegameCheckout.Status"/>'s answer, which needs
     /// a clock this query does not have.
     /// </para>
     /// </remarks>

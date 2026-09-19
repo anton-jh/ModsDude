@@ -163,7 +163,7 @@ public sealed class SavegameTimelineEntryViewModel
             checkout.User.DisplayName,
             // Nothing under a struck-through check-out: the strike says the claim is over, and what
             // ended it is its own row further up rather than a second sentence down here.
-            closed ? "" : DescribeHold(checkout))
+            closed ? "" : "Still held")
         {
             IsClosed = closed
         };
@@ -204,15 +204,6 @@ public sealed class SavegameTimelineEntryViewModel
             : "Restored an earlier snapshot",
         _ => ""
     };
-
-    /// <summary>
-    /// What an open claim is. An expired one is deliberately not an ending - nothing closed it, so it
-    /// is still the open row and reads as stale rather than as something that happened.
-    /// </summary>
-    private static string DescribeHold(SavegameCheckoutDto checkout)
-        => checkout.Status is SavegameCheckoutStatus.Stale
-            ? $"Still held, and past its expiry on {SavegameWording.OnDate(checkout.ExpiresAt)}"
-            : "Still held";
 
     /// <summary>
     /// How a claim ended. <see cref="Who"/> on this row is whoever held it, which is also whoever

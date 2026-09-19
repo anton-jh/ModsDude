@@ -37,9 +37,8 @@ public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? F
 /// <remarks>
 /// <para>
 /// <b>The status is the server's, not a recomputation.</b> <see cref="SavegameCheckoutDto.Status"/>
-/// already folds "open row" and "past its expiry" into Held, Stale and Ended, reporting Ended ahead of
-/// expiry - what actually happened outranks what would have happened. Working that out again here
-/// would be a second copy of a rule that has to agree with the server's or be worse than useless.
+/// already folds "open row" into Held and Ended. Working that out again here would be a second copy of
+/// a rule that has to agree with the server's or be worse than useless.
 /// </para>
 /// <para>
 /// <b>Two of the chips arrive late</b>, because they are not facts about the savegame: whether the
@@ -591,9 +590,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The vocabulary the member list already uses: a person, what they have, and since when. A stale
-    /// claim is said in a different tense on purpose - "has had it since 3 March" is somebody who
-    /// forgot, and it has to read differently from somebody who is playing.
+    /// The vocabulary the member list already uses: a person, what they have, and since when. A claim
+    /// does not expire - it is held until it ends - so how long ago it was taken is the whole of what
+    /// there is to say, and the reader is left to judge whether that is long enough to take it over.
     /// </summary>
     private SavegameChip BuildStateChip()
     {
@@ -609,8 +608,6 @@ public partial class SavegameListItemViewModel : ObservableObject
 
         var name = holder.User.DisplayName;
 
-        return holder.Status is SavegameCheckoutStatus.Stale
-            ? new SavegameChip($"{name} has had it since {SavegameWording.OnDate(holder.TakenAt)}", SavegameChipTone.Neutral)
-            : new SavegameChip($"{name} has it, since {SavegameWording.Ago(holder.TakenAt)}", SavegameChipTone.Neutral);
+        return new SavegameChip($"{name} has it, since {SavegameWording.Ago(holder.TakenAt)}", SavegameChipTone.Neutral);
     }
 }

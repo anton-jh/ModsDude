@@ -9811,9 +9811,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("takenAt", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.DateTime TakenAt { get; set; } = default!;
 
-        [Newtonsoft.Json.JsonProperty("expiresAt", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.DateTime ExpiresAt { get; set; } = default!;
-
         [Newtonsoft.Json.JsonProperty("endedAt", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.DateTime? EndedAt { get; set; } = default!;
 
@@ -9849,11 +9846,8 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"Held")]
         Held = 0,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"Stale")]
-        Stale = 1,
-
         [System.Runtime.Serialization.EnumMember(Value = @"Ended")]
-        Ended = 2,
+        Ended = 1,
 
     }
 

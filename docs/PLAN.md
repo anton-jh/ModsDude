@@ -936,12 +936,12 @@ database error.
 ### The checkout is a log, not a field
 
 - [x] `SavegameCheckout`, keyed on `Id` alone and carrying `(RepoId, SavegameId)` — `UserId`,
-      `TakenAt`, `ExpiresAt`, `EndedAt?`,
+      `TakenAt`, `EndedAt?`,
       `EndedReason (CheckedIn | TakenOver | Discarded)`.
 - [x] **Expiry is not an end reason.** An expired claim is still the open row — it just reads as
       stale — because nothing runs to close it and a job that did would be inventing an event nobody
-      caused. `GetStatus(now)` folds the two facts into `Held | Stale | Ended`, reporting `Ended`
-      ahead of expiry: what actually happened outranks what would have happened.
+      caused. *Since then the claim does not expire at all - see the next item - so `Status` is just
+      `Held | Ended`.*
 - [x] **The current holder is the open row.** A filtered unique index on `(RepoId, SavegameId)`
       where `EndedAt is null` permits one, so there is no current-checkout field to keep in step
       with the history sitting beside it.
@@ -949,9 +949,9 @@ database error.
       history, so only the check-out half needs recording. Null for a publish, and for a forced
       check-in taken without a checkout.
 - [x] **The claim expires, and is renewed while it is held.** Somebody who checks out on Friday and
-      goes on holiday has to read as stale rather than as holding it: a warning that never clears is
-      a warning everybody learns to click past, which is
-      [Phase 4](#phase-4--make-drift-unmissable)'s argument seen from the other end.
+      goes on holiday had to read as stale rather than as holding it. *Removed: the day it was
+      measured in was arbitrary and the date it produced meant nothing to whoever read it. A claim is
+      held until it ends, and the row says when it was taken.*
 - [x] **Taking it anyway is allowed.** It closes the previous row as `TakenOver` and warns naming
       who holds it and since when. The checkout is the social half; the base-snapshot check is the
       mechanical one, and only the second is a guarantee.
@@ -1180,7 +1180,7 @@ mod question is last because it is the only one that can be deferred.
       offers no check-out, so the second row is still missing.*
 - [x] **State is one chip per row**, in the vocabulary the member list already uses: *Available*;
       *You have it*, plus *unchecked-in play* where the slot has moved; *Anton has it, since 20
-      minutes ago*; *Anton has had it since 3 March* for a stale claim; *2 revisions behind*,
+      minutes ago*; *2 revisions behind*,
       caution-coloured only where a locked pin moved between the two.
 - [x] **The check-out confirmation is where the locked-mod warning finally lands.** This design has
       always said locked drift deserves naming rather than a count, and nothing renders it yet. The

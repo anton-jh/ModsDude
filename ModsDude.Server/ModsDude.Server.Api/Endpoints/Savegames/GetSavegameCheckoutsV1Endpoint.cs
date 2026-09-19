@@ -3,7 +3,6 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
-using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
@@ -49,7 +48,6 @@ public class GetSavegameCheckoutsV1Endpoint : IEndpoint
         int? skip, int? limit,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ITimeService timeService,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -75,7 +73,7 @@ public class GetSavegameCheckoutsV1Endpoint : IEndpoint
 
         var total = await dbContext.SavegameCheckouts.CountCheckoutsAsync(savegame.RepoId, savegame.Id, cancellationToken);
 
-        var checkouts = await SavegameReads.ToDtosAsync(dbContext, rows, timeService.Now(), cancellationToken);
+        var checkouts = await SavegameReads.ToDtosAsync(dbContext, rows, cancellationToken);
 
         return TypedResults.Ok(new GetSavegameCheckoutsResponse(
             checkouts,

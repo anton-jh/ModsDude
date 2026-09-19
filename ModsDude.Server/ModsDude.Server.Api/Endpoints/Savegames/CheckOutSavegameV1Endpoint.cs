@@ -33,9 +33,9 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// interrupted and since when - a warning naming a person is the only kind anybody reads.
 /// </para>
 /// <para>
-/// <b>Renewing a stale claim of one's own is not taking it over.</b> The holder coming back is
-/// exactly the case staleness exists to describe, and making them take their own save off themselves
-/// would put a <c>TakenOver</c> in the log for something nobody did.
+/// <b>Taking one's own claim again is not taking it over.</b> The holder coming back is answered with
+/// the claim they already have, unchanged - making them take their own save off themselves would put a
+/// <c>TakenOver</c> in the log for something nobody did.
 /// </para>
 /// <para>
 /// The response carries no snapshot. <b>Check-out always takes the head</b> - a restore copies
@@ -85,9 +85,8 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
 
         if (existing is not null && existing.UserId == userId)
         {
-            // Still the caller's, however long ago it was taken. Pushing the expiry out is the whole
-            // change, so no second row is opened and nothing about this reads as an event.
-            existing.Renew(now);
+            // Still the caller's, however long ago it was taken: nothing changes, no second row is opened
+            // and nothing about this reads as an event.
             checkout = existing;
         }
         else
@@ -116,12 +115,12 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
         }
 
         return TypedResults.Ok(new CheckOutSavegameResponse(
-            await SavegameReads.ToDtoAsync(dbContext, checkout, now, cancellationToken),
-            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, now, cancellationToken)));
+            await SavegameReads.ToDtoAsync(dbContext, checkout, cancellationToken),
+            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, cancellationToken)));
     }
 
 
-    /// <param name="Checkout">The caller's claim - freshly opened, or their own with its expiry pushed out.</param>
+    /// <param name="Checkout">The caller's claim - freshly opened, or the one of their own they already held.</param>
     /// <param name="TakenFrom">
     /// The claim this one closed, or <c>null</c> where nobody held the save. Carried so the client
     /// can name the person and the date it was taken on rather than saying only that somebody had

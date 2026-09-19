@@ -98,7 +98,7 @@ public class MakeSavegameCurrentV1Endpoint : IEndpoint
         if (savegame.IsCurrent)
         {
             return TypedResults.Ok(new MakeSavegameCurrentResponse(
-                await SavegameReads.DescribeAsync(dbContext, savegame, now, cancellationToken),
+                await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken),
                 null));
         }
 
@@ -131,8 +131,8 @@ public class MakeSavegameCurrentV1Endpoint : IEndpoint
         await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new MakeSavegameCurrentResponse(
-            await SavegameReads.DescribeAsync(dbContext, savegame, now, cancellationToken),
-            superseded is null ? null : await SavegameReads.DescribeAsync(dbContext, superseded, now, cancellationToken)));
+            await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken),
+            superseded is null ? null : await SavegameReads.DescribeAsync(dbContext, superseded, cancellationToken)));
     }
 
 

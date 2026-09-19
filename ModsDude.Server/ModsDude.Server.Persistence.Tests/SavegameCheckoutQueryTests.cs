@@ -151,11 +151,11 @@ public class SavegameCheckoutQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// A claim taken on Friday is still the open row on Monday. Expiry is not an end reason - nothing
-    /// runs to close it - so the query must not quietly filter on it and report the savegame free.
+    /// A claim taken on Friday is still the open row on Monday. Nothing closes a claim by itself, so the
+    /// query must not quietly filter on its age and report the savegame free.
     /// </summary>
     [Fact]
-    public async Task An_expired_claim_is_still_the_open_row()
+    public async Task A_claim_that_has_been_open_a_long_time_is_still_the_open_row()
     {
         var (repoId, profileId) = await GivenARepoWithAProfile();
         var savegameId = await GivenASavegame(repoId, profileId);
@@ -167,8 +167,7 @@ public class SavegameCheckoutQueryTests(DatabaseFixture fixture)
         var found = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(repoId, savegameId, CancellationToken.None);
 
         Assert.NotNull(found);
-        Assert.Equal(SavegameCheckoutStatus.Stale, found.GetStatus(_takenAt + SavegameCheckout.Lifetime + TimeSpan.FromHours(1)));
-        Assert.Equal(SavegameCheckoutStatus.Held, found.GetStatus(_takenAt.AddHours(1)));
+        Assert.Equal(SavegameCheckoutStatus.Held, found.Status);
     }
 
     /// <summary>

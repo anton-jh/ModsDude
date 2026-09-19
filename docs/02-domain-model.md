@@ -697,7 +697,6 @@ One person's claim on one savegame, keyed on `Id` and carrying `(RepoId, Savegam
 | Field | Notes |
 | --- | --- |
 | `UserId`, `TakenAt` | Who took it, and when |
-| `ExpiresAt` | Pushed forward by `Renew` while the holder still has the app open |
 | `EndedAt`, `EndedReason` | `CheckedIn \| TakenOver \| Discarded`. Null while this is the open row |
 
 **A log, not a field.** The current holder is the row that has not ended — a filtered unique index on
@@ -710,11 +709,13 @@ timeline.
 `TakenOver` and warns naming who held it. What actually protects a save is the base-snapshot check on
 check-in: the claim is the social half, and only the mechanical half is a guarantee.
 
-**Expiry is not an end reason.** An expired claim is still the open row; it just reads as stale,
-because nothing runs to close it and a job that did would be inventing an event nobody caused.
-`GetStatus(now)` folds the two facts into `Held | Stale | Ended`, reporting `Ended` ahead of expiry —
-what actually happened outranks what would have happened. The distinction is the point of the type:
-"Anton has had this since 3 March" must not read as "Anton has this".
+**A claim does not expire.** It used to: `ExpiresAt` was pushed forward while the holder had the app
+open, and a claim past it read as `Stale`. The day it was measured in was arbitrary - nothing about a
+save becomes free to take after twenty-four hours - so the date it produced told nobody anything, and
+it is gone, along with `Renew` and the `Stale` status. `Status` is `Held` while the row is open and
+`Ended` once it is not; what a reader is told is when it was taken (`TakenAt`), and whether that is
+long enough ago to take it over is theirs to judge. Taking it over is always allowed, and nothing
+runs to close a claim by itself, so a job that did would be inventing an event nobody caused.
 
 ## Archiving
 
