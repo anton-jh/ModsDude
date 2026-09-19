@@ -16,6 +16,12 @@ public interface IModStorageService
     Task<bool> CheckIfModExists(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// How many bytes the stored file holds, or <c>null</c> when there is no such blob. Read from storage
+    /// rather than from anything a client says, because the API never sees the bytes.
+    /// </summary>
+    Task<long?> GetModSize(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The SHA-256 the uploader recorded against the blob, or <c>null</c> when the blob is absent or
     /// carries no such record. Not Azure's own content hash, which is MD5.
     /// </summary>

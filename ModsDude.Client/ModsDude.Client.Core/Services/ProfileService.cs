@@ -215,12 +215,15 @@ public class ProfileService(
     }
 
 
-    /// <summary>How many mods the profile pins. Not held in <see cref="Profiles"/>: the DTO does not carry it.</summary>
-    public async Task<int> GetModCount(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    /// <summary>
+    /// How many mods the profile pins and how big they are. Not held in <see cref="Profiles"/>: the DTO does
+    /// not carry them.
+    /// </summary>
+    public async Task<ProfileModStatistics> GetModStatistics(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
         var response = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, null, cancellationToken);
 
-        return response.Dependencies.Count;
+        return ProfileModStatistics.From(response.Dependencies);
     }
 
     /// <summary>

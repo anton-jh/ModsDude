@@ -37,9 +37,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     /// What the repo says the file is called. Defaults to the name the id alone produces, which is
     /// what a repo whose mods were imported from lower-cased folders holds.
     /// </param>
-    public void Pin(string modId, string version, string content, bool locked = false, string? fileName = null)
+    public void Pin(string modId, string version, string content, bool locked = false, string? fileName = null, bool recordSize = true)
     {
-        Register(modId, version, content, locked, fileName);
+        Register(modId, version, content, locked, fileName, recordSize);
 
         _dependencies.Add(new ModDependencyDto
         {
@@ -47,6 +47,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             ModVersionId = version,
             FileName = fileName ?? $"{modId}.zip",
             ContentHash = SyncTestContent.HashOf(content),
+            SizeBytes = recordSize ? SyncTestContent.Bytes(content).Length : null,
             Locked = locked
         });
     }
@@ -73,7 +74,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         => _dependencies.RemoveAll(x => x.ModId == modId);
 
     /// <summary>Registers a version without pinning it - what the repo can reproduce but does not want here.</summary>
-    public void Register(string modId, string version, string content, bool locked = false, string? fileName = null)
+    public void Register(string modId, string version, string content, bool locked = false, string? fileName = null, bool recordSize = true)
     {
         var hash = SyncTestContent.HashOf(content);
 
@@ -86,6 +87,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             Description = "",
             FileName = fileName ?? $"{modId}.zip",
             ContentHash = hash,
+            SizeBytes = recordSize ? SyncTestContent.Bytes(content).Length : null,
             Locked = locked,
             Attributes = [],
             Images = [],

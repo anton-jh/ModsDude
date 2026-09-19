@@ -22,6 +22,32 @@ public static class ModVersionExtensions
     }
 
     /// <summary>
+    /// Every registered version whose size has not been recorded - the ones from before sizes were kept,
+    /// and any whose blob could not be read when the backfill last ran.
+    /// </summary>
+    public static Task<List<ModBlobAddress>> GetAddressesWithoutSizeAsync(this DbSet<ModVersion> dbSet, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .AsNoTracking()
+            .Where(x => x.SizeBytes == null)
+            .Select(x => new ModBlobAddress(x.RepoId, x.ModId, x.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Records how big a version's file is, without loading the version and without touching
+    /// <c>Updated</c> - the mod list's delta form is keyed on it, and a size arriving late is not a change
+    /// a client needs to be told about. Returns how many rows it wrote: zero for a version deleted in the
+    /// meantime.
+    /// </summary>
+    public static Task<int> RecordSizeAsync(this DbSet<ModVersion> dbSet, ModBlobAddress address, long sizeBytes, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .Where(x => x.RepoId == address.RepoId && x.ModId == address.ModId && x.Id == address.VersionId)
+            .ExecuteUpdateAsync(x => x.SetProperty(version => version.SizeBytes, sizeBytes), cancellationToken);
+    }
+
+    /// <summary>
     /// Every version sharing one <c>(RepoId, ModId)</c>, tracked. This is the sibling set the
     /// domain needs wherever it used to reach through a parent — placement, upgrades, and closing
     /// the gap after a removal.

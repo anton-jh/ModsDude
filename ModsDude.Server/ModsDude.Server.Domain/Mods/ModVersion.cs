@@ -34,6 +34,18 @@ public class ModVersion
     public required string ContentHash { get; set; }
 
     /// <summary>
+    /// How big the stored file is, in bytes. Read from storage at registration rather than taken from the
+    /// client - the API never sees the bytes, so what an uploader says about them is only ever a claim -
+    /// and what lets a client say what an apply will download before it starts one.
+    /// </summary>
+    /// <remarks>
+    /// Null for a version registered before this was recorded, until the size backfill reaches it: the
+    /// size is always a fact about the blob, so an unknown one is filled in rather than defaulted to a
+    /// zero that would read as an empty file.
+    /// </remarks>
+    public long? SizeBytes { get; set; }
+
+    /// <summary>
     /// The mod itself is version-sensitive, as determined by the adapter from the mod file at
     /// registration. The per-profile override lives on ModDependency.
     /// </summary>

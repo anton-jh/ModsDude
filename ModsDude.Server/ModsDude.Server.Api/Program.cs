@@ -98,6 +98,7 @@ builder.Services.AddScoped<NotAuthenticatedMiddleware>();
 builder.Services
     .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
 builder.Services.AddHostedService<BlobReclamationService>();
+builder.Services.AddHostedService<ModVersionSizeBackfillService>();
 
 builder.Services
     .AddSingleton<ITimeService, TimeService>();

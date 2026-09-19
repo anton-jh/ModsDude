@@ -106,6 +106,7 @@ public static class ModSyncPlanner
                     DisplayName = want.DisplayName ?? want.ModId.Value,
                     DesiredVersion = want.VersionId,
                     DesiredHash = want.ContentHash,
+                    DesiredSize = want.SizeBytes,
                     FileName = want.FileName,
                     Locked = want.Locked
                 });
@@ -131,6 +132,7 @@ public static class ModSyncPlanner
                 DisplayName = want.DisplayName ?? have.DisplayName,
                 DesiredVersion = want.VersionId,
                 DesiredHash = want.ContentHash,
+                DesiredSize = want.SizeBytes,
                 FileName = want.FileName,
                 Locked = want.Locked,
                 InstalledVersion = have.VersionId,

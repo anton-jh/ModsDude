@@ -54,11 +54,12 @@ public static class ProfileRevisionExtensions
                 VersionId = x.ModVersion.Id,
                 x.ModVersion.FileName,
                 x.ModVersion.ContentHash,
+                x.ModVersion.SizeBytes,
                 x.Locked
             })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(x => new ProfileModDependencyRow(x.ModId, x.VersionId, x.FileName, x.ContentHash, x.Locked))];
+        return [.. rows.Select(x => new ProfileModDependencyRow(x.ModId, x.VersionId, x.FileName, x.ContentHash, x.SizeBytes, x.Locked))];
     }
 
     public static Task<bool> ExistsAsync(
@@ -350,7 +351,7 @@ public static class ProfileRevisionExtensions
 
 
 /// <summary>One mod as a revision pins it, with the content hash sync needs to fetch the file.</summary>
-public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, bool Locked)
+public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked)
 {
     public ProfileModPin ToPin() => new(ModId, VersionId, Locked);
 }

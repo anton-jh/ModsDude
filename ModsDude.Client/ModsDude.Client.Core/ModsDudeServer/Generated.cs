@@ -9085,6 +9085,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("contentHash", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string ContentHash { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("sizeBytes", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long? SizeBytes { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("locked", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public bool Locked { get; set; } = default!;
 
@@ -9183,6 +9186,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("contentHash", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string ContentHash { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("sizeBytes", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long? SizeBytes { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("locked", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public bool Locked { get; set; } = default!;

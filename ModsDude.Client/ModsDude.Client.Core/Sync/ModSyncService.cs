@@ -849,7 +849,8 @@ public sealed class ModSyncService(
                 x.ContentHash,
                 x.Locked)
             {
-                FileName = ModFileName.For(modId, x.FileName)
+                FileName = ModFileName.For(modId, x.FileName),
+                SizeBytes = x.SizeBytes
             };
         })], response.Revision);
     }

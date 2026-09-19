@@ -614,6 +614,7 @@ public sealed class ModCatalog : IDisposable
             ServerImages = dto is null ? [] : [.. dto.Images.Select(ModImageReference.FromDto)],
             FoundIn = occurrences ?? [],
             ContentHash = dto?.ContentHash,
+            SizeBytes = dto?.SizeBytes,
             SequenceNumber = dto?.SequenceNumber,
             Usage = usage
         };

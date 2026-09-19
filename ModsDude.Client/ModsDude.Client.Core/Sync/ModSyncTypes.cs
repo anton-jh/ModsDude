@@ -18,6 +18,13 @@ public sealed record DesiredMod(ModKey ModId, ModVersionKey VersionId, string Co
     /// call it. Null where the repo has nothing usable, which leaves the name to the adapter.
     /// </summary>
     public ModFileName? FileName { get; init; }
+
+    /// <summary>
+    /// How big the registered file is, for saying what an apply will download before it starts. Null
+    /// where the repo does not know - a version registered before sizes were recorded, until the server
+    /// backfills it - which is reported as unknown rather than counted as nothing.
+    /// </summary>
+    public long? SizeBytes { get; init; }
 }
 
 /// <summary>One mod file the adapter found in the mod folder.</summary>
@@ -88,6 +95,9 @@ public sealed record ModSyncItem
 
     public ModVersionKey? DesiredVersion { get; init; }
     public string? DesiredHash { get; init; }
+
+    /// <summary>The registered size of <see cref="DesiredHash"/>, where the repo knows it.</summary>
+    public long? DesiredSize { get; init; }
 
     /// <summary>
     /// What the file has to be called once this item has run. Null where the repo registered nothing
@@ -175,6 +185,13 @@ public sealed record ModSyncPlan
 
     /// <summary>What the serving store still has to fetch, by hash. Sized before the destructive phase, not during it.</summary>
     public required IReadOnlyList<string> HashesToFetch { get; init; }
+
+    /// <summary>
+    /// What the fetch phase will take off the network, as opposed to <see cref="HashesToFetch"/>, which
+    /// also counts what it will copy from another disk's store. Worked out here, before anything is
+    /// touched, so that the confirmation can say how much there is.
+    /// </summary>
+    public PlannedDownloads Downloads => PlannedDownloads.For(this);
 
     /// <summary>What executing this plan needs, carried on it so nothing has to be resolved twice.</summary>
     public required ILocalModAdapter Adapter { get; init; }
@@ -281,4 +298,59 @@ public sealed record ModSyncResult(bool Completed, IReadOnlyList<ModSyncFailure>
     public ContentStoreEvictionResult? Eviction { get; init; }
 
     public bool ManifestWritten { get; init; }
+}
+
+
+/// <summary>
+/// The mods an apply has to download, and how much that is.
+/// </summary>
+/// <param name="Count">How many files. Distinct by content: two mods sharing bytes are fetched once.</param>
+/// <param name="KnownBytes">
+/// The sum of the sizes the repo could give. A lower bound while <paramref name="UnknownCount"/> is
+/// above zero.
+/// </param>
+/// <param name="UnknownCount">How many of them the repo has no size for.</param>
+public sealed record PlannedDownloads(int Count, long KnownBytes, int UnknownCount)
+{
+    public static PlannedDownloads None { get; } = new(0, 0, 0);
+
+    public bool IsAny => Count > 0;
+
+    /// <summary>Whether <see cref="KnownBytes"/> is the whole of it.</summary>
+    public bool IsComplete => UnknownCount == 0;
+
+    /// <summary>
+    /// Everything that will come off the network: what the fetch phase would fetch, less what another
+    /// store on the machine already holds - which it copies from disk instead of downloading.
+    /// </summary>
+    public static PlannedDownloads For(ModSyncPlan plan)
+        => Across([plan]);
+
+    /// <summary>
+    /// The same across every folder one apply reaches. <b>Distinct by content across the lot</b>: a mod
+    /// two folders both want is downloaded for the first and copied from its store for the second, so
+    /// adding the folders' own counts up would say a mod was downloaded twice.
+    /// </summary>
+    public static PlannedDownloads Across(IEnumerable<ModSyncPlan> plans)
+    {
+        var sizes = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var plan in plans)
+        {
+            var wanted = plan.HashesToFetch
+                .Where(hash => plan.AllStores.Any(store => store.Contains(hash)) is false)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in plan.Items.Where(x => x.DesiredHash is not null && wanted.Contains(x.DesiredHash)))
+            {
+                // One folder may know a size that another does not, so a known one is never
+                // overwritten by an unknown one.
+                sizes[item.DesiredHash!] = item.DesiredSize ?? sizes.GetValueOrDefault(item.DesiredHash!);
+            }
+        }
+
+        return sizes.Count == 0
+            ? None
+            : new PlannedDownloads(sizes.Count, sizes.Values.Sum(x => x ?? 0), sizes.Values.Count(x => x is null));
+    }
 }

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -32,7 +33,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly ShellNavigationService _navigation;
     private readonly DriftMonitor _driftMonitor;
 
-    private int? _fetchedModCount;
+    private ProfileModStatistics? _fetchedModStatistics;
     private IReadOnlyList<SavegameDto> _fetchedSavegames = [];
 
     /// <summary>Whether the repo answered at all. Unknown is not the same as "no savegame here".</summary>
@@ -141,13 +142,13 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     protected override async Task InitAsync()
     {
-        _fetchedModCount = await _profileService.GetModCount(_repo.Id, _profile.Id, CancellationToken.None);
+        _fetchedModStatistics = await _profileService.GetModStatistics(_repo.Id, _profile.Id, CancellationToken.None);
         _fetchedSavegames = await LoadSavegamesAsync(CancellationToken.None);
     }
 
     protected override void OnInitCompleted()
     {
-        ModSummary = Describe(_fetchedModCount);
+        ModSummary = Describe(_fetchedModStatistics);
 
         DescribeSavegames(_fetchedSavegames);
     }
@@ -230,18 +231,30 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// <summary>
     /// The revision is on the same line rather than a field of its own: it is what somebody says
     /// out loud when asking a teammate to look at the same list, and the History page is where it
-    /// stops being a number and starts being a thing to act on.
+    /// stops being a number and starts being a thing to act on. The size is what the list would cost to
+    /// download in full - what an apply fetches is less, and depends on what this machine already has.
     /// </summary>
-    private string Describe(int? modCount)
+    private string Describe(ProfileModStatistics? statistics)
     {
-        var mods = modCount switch
+        var mods = statistics?.ModCount switch
         {
             0 or null => "No mods pinned yet",
             1 => "1 mod pinned",
             var count => $"{count} mods pinned"
         };
 
-        return $"{mods} · revision {_profile.HeadRevision}.";
+        var parts = new List<string> { mods };
+
+        if (statistics is { ModCount: > 0 })
+        {
+            parts.Add(statistics.IsSizeComplete
+                ? ByteSize.Describe(statistics.KnownBytes)
+                : $"{ByteSize.Describe(statistics.KnownBytes)} and {statistics.UnknownSizeCount} without a recorded size");
+        }
+
+        parts.Add($"revision {_profile.HeadRevision}");
+
+        return string.Join(" · ", parts) + ".";
     }
 
 
@@ -253,7 +266,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
             // The head moves when somebody saves or restores, and this page can be standing open
             // while that happens - from the History page next door, most obviously.
-            ModSummary = Describe(_fetchedModCount);
+            ModSummary = Describe(_fetchedModStatistics);
         }
     }
 

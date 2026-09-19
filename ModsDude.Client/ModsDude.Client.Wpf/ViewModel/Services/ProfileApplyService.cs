@@ -573,8 +573,9 @@ public sealed class ProfileApplyService(
     {
         var modal = new ConfirmationDialogViewModel(
             $"Apply to '{game.Name}'?",
-            string.Join("\n\n", plans.Select(Describe)) +
-            "\n\nAnything the profile does not pin is taken out of the folder.",
+            $"{DescribeDownloads(PlannedDownloads.Across(plans))}\n\n"
+                + string.Join("\n\n", plans.Select(Describe))
+                + "\n\nAnything the profile does not pin is taken out of the folder.",
             IconKind.Question,
             "Apply",
             "Cancel");
@@ -582,6 +583,31 @@ public sealed class ProfileApplyService(
         await modalService.Value.Show(modal);
 
         return modal.Result;
+    }
+
+    /// <summary>
+    /// What the apply will download, first in the dialog because it is the part that costs something:
+    /// time and, on a metered line, money. Says so when there is nothing to fetch, rather than saying
+    /// nothing - "nothing" reads the same as "not worked out".
+    /// </summary>
+    public static string DescribeDownloads(PlannedDownloads downloads)
+    {
+        if (downloads.IsAny is false)
+        {
+            return "Nothing to download - every mod it needs is already on this machine.";
+        }
+
+        var mods = downloads.Count == 1 ? "1 mod" : $"{downloads.Count} mods";
+
+        if (downloads.IsComplete)
+        {
+            return $"{mods} to download, {ByteSize.Describe(downloads.KnownBytes)} in total.";
+        }
+
+        // A lower bound, said as one: a size the repo could not give is not a size of nothing.
+        return downloads.KnownBytes == 0
+            ? $"{mods} to download. The repo does not know how big they are."
+            : $"{mods} to download, at least {ByteSize.Describe(downloads.KnownBytes)} - {downloads.UnknownCount} of unknown size.";
     }
 
     /// <summary>One folder's block of the plan dialog: where it is, and what would happen there.</summary>

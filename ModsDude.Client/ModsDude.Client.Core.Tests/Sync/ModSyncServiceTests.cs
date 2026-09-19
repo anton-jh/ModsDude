@@ -80,6 +80,74 @@ public class ModSyncServiceTests
     }
 
     [Fact]
+    public async Task The_plan_says_how_many_mods_it_will_download_and_how_big_they_are()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
+
+        var plan = await fixture.PlanAsync();
+
+        var expected = SyncTestContent.Bytes(Mod("1.0.0", "a")).Length + SyncTestContent.Bytes(Mod("2.0.0", "b")).Length;
+
+        Assert.Equal(new PlannedDownloads(2, expected, 0), plan.Downloads);
+        Assert.True(plan.Downloads.IsComplete);
+    }
+
+    /// <summary>
+    /// Otherwise the confirmation would warn about a download that is really a copy between two disks.
+    /// </summary>
+    [Fact]
+    public async Task A_hash_another_disk_already_holds_is_not_counted_as_a_download()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
+
+        await fixture.OtherStore.IngestAsync(
+            new MemoryStream(SyncTestContent.Bytes(Mod("1.0.0", "a"))),
+            SyncTestContent.HashOf(Mod("1.0.0", "a")),
+            null,
+            CancellationToken.None);
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(2, plan.HashesToFetch.Count);
+        Assert.Equal(1, plan.Downloads.Count);
+        Assert.Equal(SyncTestContent.Bytes(Mod("2.0.0", "b")).Length, plan.Downloads.KnownBytes);
+    }
+
+    /// <summary>
+    /// A size the repo does not have is unknown, not zero - a total that quietly left a mod out would be
+    /// wrong in the reassuring direction.
+    /// </summary>
+    [Fact]
+    public async Task A_mod_the_repo_has_no_size_for_is_counted_but_reported_as_unknown()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"), recordSize: false);
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(
+            new PlannedDownloads(2, SyncTestContent.Bytes(Mod("1.0.0", "a")).Length, 1),
+            plan.Downloads);
+        Assert.False(plan.Downloads.IsComplete);
+    }
+
+    [Fact]
+    public async Task A_folder_that_already_matches_has_nothing_to_download()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.Equal(PlannedDownloads.None, (await fixture.PlanAsync()).Downloads);
+    }
+
+    [Fact]
     public async Task A_download_that_does_not_hash_to_the_declared_address_stops_the_sync_before_anything_is_touched()
     {
         using var fixture = new SyncFixture();

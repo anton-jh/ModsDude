@@ -4,9 +4,11 @@ using ModsDude.Server.Domain.Savegames;
 namespace ModsDude.Server.Domain.Mods;
 
 /// <summary>
-/// A blob as storage reports it: the name it is stored under and when it was last written.
+/// A blob as storage reports it: the name it is stored under, when it was last written, and how many
+/// bytes it holds. The length is only filled in where a caller asked for it - the reclamation sweep never
+/// reads it, and a listing that reports it costs nothing extra.
 /// </summary>
-public readonly record struct StoredBlob(string Name, DateTimeOffset LastModified);
+public readonly record struct StoredBlob(string Name, DateTimeOffset LastModified, long Length = 0);
 
 /// <summary>
 /// The triple a mod file is stored against. Kept as a value rather than three parameters so a set of

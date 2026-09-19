@@ -80,7 +80,9 @@ HTTPS redirect
 Migrations are applied at startup, after the pipeline is built, by resolving
 `ApplicationDbContext` in a scope and calling `Database.Migrate()`.
 
-A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage).
+A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage). A
+`ModVersionSizeBackfillService` runs once shortly after startup, filling in `SizeBytes` for versions
+registered before it existed - see [Mod sizes](#mod-sizes).
 
 ### Authentication
 
@@ -318,6 +320,8 @@ Mod files live in the `mods` container at:
   hash into blob metadata as it uploads.
 - `GetDownloadLink` — the same with `Read`. Guest-level, because a Guest who can see a profile
   must be able to apply it.
+- `GetModSize` — the stored blob's length, or `null` when there is no blob. Read by registration,
+  which is what keeps `ModVersion.SizeBytes` a fact about the bytes rather than a claim about them.
 - `GetRecordedContentHash` — reads back the `sha256` metadata entry the upload wrote. Azure's
   built-in content hash is MD5, so the SHA-256 has to be recorded explicitly; without it,
   adopting an orphaned blob would register a digest describing bytes nobody has, which no
@@ -386,6 +390,22 @@ residue of deleted versions and repos. Two rules make it safe:
   uploads and then registers; a sweep that did not wait would delete the bytes in between.
 
 A blob name that does not parse is reported, never deleted.
+
+### Mod sizes
+
+`ModVersion.SizeBytes` is what lets a client say what an apply will download before it starts, and
+what the Mods page adds up into a repo's size. It is read from the blob's properties by
+`RegisterModV1Endpoint` - the API never sees the bytes, so nothing the client says about them can be
+checked - and it travels on `ModDto` and on `ModDependencyDto`, the latter because sync reads a
+profile's dependencies and nothing else.
+
+Versions registered before it existed have no size. **`null` means unknown, and stays null on the wire**:
+a client that treated it as zero would report an apply as free that is not. `ModVersionSizeBackfillService`
+fills them in once, twenty seconds after startup, from a single container listing (one request per five
+thousand blobs, against one per version for a property read). A version whose blob is not in the listing
+keeps no size and is tried again on the next start. It writes with `ExecuteUpdate` and does **not** touch
+`Updated`: the mod list's delta form is keyed on it, and restamping every old version would make the first
+delta after a deploy the size of the whole list.
 
 ## Endpoint reference
 
@@ -501,7 +521,7 @@ what changed under them.
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | `?revision=N` for an older one, omitted for the current list. Each dependency carries `ContentHash`, so sync never has to pull the mod list to resolve it |
+| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | `?revision=N` for an older one, omitted for the current list. Each dependency carries `ContentHash` and `SizeBytes`, so sync never has to pull the mod list to resolve it, and can say what an apply will download |
 
 **There is only one, and it reads.** A profile's mod list is written through
 `PUT repos/{repoId}/profiles/{profileId}/revisions`, which addresses the profile and always

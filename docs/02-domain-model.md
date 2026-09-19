@@ -211,6 +211,7 @@ therefore two different sets of rows.
 | `DisplayName`, `Description` | Per-version, because mods rename themselves between releases |
 | `FileName` | What the archive is called on disk, in the casing it was imported with. See [The casing trap](09-mod-catalog.md#the-casing-trap) |
 | `ContentHash` | SHA-256 of the mod file. See [Content hash](#content-hash) |
+| `SizeBytes` | How big the stored file is, read from storage at registration rather than taken from the client, which cannot be checked. Nullable: a version from before it was recorded reads as *unknown* - never zero - until the startup backfill reaches it |
 | `Locked` | The mod is version-sensitive. See [Locking, in two places](#locking-in-two-places) |
 | `Attributes` | An owned collection of free-form `(Key, Value?)` pairs |
 | `Images` | An ordered collection of `ModImageReference`. See [Images](#images) |

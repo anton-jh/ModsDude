@@ -510,6 +510,11 @@
           },
           "modVersionId": {
             "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -568,6 +573,11 @@
           },
           "sequenceNumber": {
             "format": "int32",
+            "type": "integer"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "nullable": true,
             "type": "integer"
           },
           "updated": {

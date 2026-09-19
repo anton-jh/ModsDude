@@ -201,12 +201,17 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
 
     /// <summary>
-    /// Set by the page that wants usage on the row - which is the repo's own list, and nothing else:
-    /// in the profile editor the question is what this draft pins, and a count of the repo's other
-    /// profiles beside it would answer one nobody asked.
+    /// Set by the page that wants the repo's statistics on the row - its size and how many profiles use
+    /// it - which is the repo's own list, and nothing else: in the profile editor the question is what
+    /// this draft pins, and a count of the repo's other profiles beside it would answer one nobody asked.
     /// </summary>
     [ObservableProperty]
-    private bool _showUsage;
+    private bool _showStatistics;
+
+    /// <summary>The registered file's size in the units somebody thinks in. Null where it is not known.</summary>
+    public string? SizeText => Mod.SizeBytes is long bytes ? ByteSize.Describe(bytes) : null;
+
+    public bool HasSize => ShowStatistics && SizeText is not null;
 
     /// <summary>
     /// How many profiles use this version, in the words a row has room for: current ones first, then
@@ -229,10 +234,13 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
             + "A profile that has used it throughout is in both. A version any revision uses cannot be deleted."
         : null;
 
-    public bool HasUsage => ShowUsage && UsageText is not null;
+    public bool HasUsage => ShowStatistics && UsageText is not null;
 
-    partial void OnShowUsageChanged(bool value)
-        => OnPropertyChanged(nameof(HasUsage));
+    partial void OnShowStatisticsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasUsage));
+        OnPropertyChanged(nameof(HasSize));
+    }
 
     private static string Plural(int count, string noun)
         => count == 1 ? $"1 {noun}" : $"{count} {noun}s";

@@ -119,7 +119,14 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     public bool HasRepoMods => RepoTotal > 0;
     public bool HasVisibleRepoMods => RepoCount > 0;
 
-    public string RepoCountText => Describe(RepoCount, RepoTotal);
+    /// <summary>
+    /// How much the repo holds, in the three numbers somebody managing it asks for: versions, mods and
+    /// bytes. The versions narrow with the search; the mods and the bytes are the whole repo's, because
+    /// what a repo costs to keep does not depend on what is being looked at.
+    /// </summary>
+    public string RepoCountText => string.Join(" · ", [Describe(RepoCount, RepoTotal), .. _statistics]);
+
+    private IReadOnlyList<string> _statistics = [];
 
 
     [RelayCommand]
@@ -397,9 +404,37 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         RepoView = view;
 
+        _statistics = DescribeRepo(_registered);
+        OnPropertyChanged(nameof(RepoCountText));
+
         Recount();
 
         IsLoading = false;
+    }
+
+    /// <summary>
+    /// The whole repo in a phrase: how many mods, and how many bytes they add up to. A version the
+    /// server has no size for is said to be uncounted rather than added as zero, so the total is never
+    /// quietly wrong in the reassuring direction.
+    /// </summary>
+    private static IReadOnlyList<string> DescribeRepo(IReadOnlyList<ModListItemViewModel> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var mods = rows.Select(x => x.Mod.ModId).Distinct().Count();
+        var known = rows.Sum(x => x.Mod.SizeBytes ?? 0);
+        var unknown = rows.Count(x => x.Mod.SizeBytes is null);
+
+        return
+        [
+            mods == 1 ? "1 mod" : $"{mods:N0} mods",
+            unknown == 0
+                ? ByteSize.Describe(known)
+                : $"{ByteSize.Describe(known)} ({unknown:N0} without a recorded size)"
+        ];
     }
 
     private ModListItemViewModel CreateRow(CatalogModVersion version)
@@ -409,7 +444,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         // A registered version has nothing to say about presence, and there is no draft to pick from.
         item.Status = ModDisplayStatus.None;
         item.IsSelectable = false;
-        item.ShowUsage = true;
+        item.ShowStatistics = true;
         item.Actions = _rowActions;
 
         return item;
@@ -419,7 +454,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         => row.Matches(SearchText) && (UnusedOnly is false || row.Mod.IsUnused);
 
     private static string Describe(int visible, int total)
-        => visible == total ? $"{total} mods" : $"{visible} of {total} mods";
+    {
+        var noun = total == 1 ? "version" : "versions";
+
+        return visible == total ? $"{total:N0} {noun}" : $"{visible:N0} of {total:N0} {noun}";
+    }
 
     partial void OnSearchTextChanged(string value)
         => RefreshList();

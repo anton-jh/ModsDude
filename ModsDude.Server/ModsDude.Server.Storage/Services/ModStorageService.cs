@@ -46,6 +46,20 @@ internal class ModStorageService(
         return result.Value;
     }
 
+    public async Task<long?> GetModSize(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var properties = await GetBlobClient(repoId, modId, versionId).GetPropertiesAsync(cancellationToken: cancellationToken);
+
+            return properties.Value.ContentLength;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            return null;
+        }
+    }
+
     public async Task<string?> GetRecordedContentHash(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
     {
         try
@@ -85,7 +99,10 @@ internal class ModStorageService(
         {
             // A blob storage does not date is treated as written this instant, so the sweep's grace
             // period retains it. Erring the other way would delete on missing information.
-            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue);
+            yield return new StoredBlob(
+                blob.Name,
+                blob.Properties.LastModified ?? DateTimeOffset.MaxValue,
+                blob.Properties.ContentLength ?? 0);
         }
     }
 

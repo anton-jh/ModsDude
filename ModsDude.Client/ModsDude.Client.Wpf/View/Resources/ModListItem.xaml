@@ -82,19 +82,32 @@
                         </TextBlock>
 
                         <!-- Right aligned so the chip hugs the version instead of stretching to
-                             whatever width the sources below it need. -->
-                        <Border Grid.Row="0" Grid.Column="1"
-                                Margin="8 0 0 0"
-                                Padding="6 1"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center"
-                                CornerRadius="3"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="{Binding Version}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Style="{DynamicResource CaptionTextBlockStyle}" />
-                        </Border>
+                             whatever width the sources below it need. The size, where a page shows
+                             one, sits before it: it is a fact about the file this version is, and the
+                             chip stays the last thing on the line so the chips still make a column. -->
+                        <StackPanel Grid.Row="0" Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <TextBlock Margin="8 0 0 0"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding SizeText}"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                       ToolTip="The size of the file in the repo"
+                                       Visibility="{Binding HasSize, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <Border Margin="8 0 0 0"
+                                    Padding="6 1"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="3"
+                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Text="{Binding Version}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                            </Border>
+                        </StackPanel>
 
                         <!-- The mod's description, whatever the import is doing. What went wrong with
                              an import is a chip and an icon on the row and a dialog behind that: an
