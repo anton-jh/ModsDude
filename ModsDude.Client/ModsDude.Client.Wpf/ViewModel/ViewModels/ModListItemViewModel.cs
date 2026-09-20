@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
@@ -200,6 +201,41 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public bool HasStatus => Status is not ModDisplayStatus.None;
 
     /// <summary>
+    /// What the profile editor's draft has done to this mod, which is a different thing from
+    /// <see cref="Status"/>: a status is a fact about the version, and this is something the user
+    /// did. It is drawn as its own filled chip and a stripe down the row's edge, so the two cannot be
+    /// mistaken for one another. <see cref="ProfileModTouch.None"/> everywhere but the editor.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTouch))]
+    [NotifyPropertyChangedFor(nameof(TouchText))]
+    private ProfileModTouch _touch;
+
+    /// <summary>What the mark says when hovered: what the saved profile holds, and what the draft would make of it.</summary>
+    [ObservableProperty]
+    private string? _touchTooltip;
+
+    public bool HasTouch => Touch is not ProfileModTouch.None;
+
+    public string TouchText => Touch switch
+    {
+        ProfileModTouch.Added => "Added",
+        ProfileModTouch.VersionChanged => "Version changed",
+        ProfileModTouch.LockChanged => "Lock changed",
+        ProfileModTouch.VersionAndLockChanged => "Version & lock changed",
+        ProfileModTouch.TakenOut => "Taken out",
+        _ => string.Empty
+    };
+
+    /// <summary>
+    /// Whether the status chip is drawn as an outline rather than a fill. Set where a draft exists to
+    /// tell apart from: there a filled chip means "you did this", and the status is only ever a fact
+    /// about the version, so it steps back.
+    /// </summary>
+    [ObservableProperty]
+    private bool _outlineStatus;
+
+    /// <summary>
     /// Whether this row's version is newer than what the profile pins - which is what decides where
     /// it sorts, and which of the two pin-moving glyphs it carries. Derived from the status so the
     /// chip and the button cannot disagree.
@@ -279,7 +315,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
-        ModDisplayStatus.PendingRemoval => "Taken out",
         _ => string.Empty
     };
 

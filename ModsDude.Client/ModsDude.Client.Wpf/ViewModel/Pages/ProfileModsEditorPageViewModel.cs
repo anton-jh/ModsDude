@@ -3343,11 +3343,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private ModDisplayStatus DescribeRow(CatalogModVersion version)
     {
-        // The counterpart of the pending-import chip on the right, and it outranks everything below:
-        // a row that has moved but has not been saved looks exactly like one that was always there.
+        // A mod the draft has taken out carries the Taken out mark instead - see ProfileModTouch - and
+        // has no use for a second chip saying what is on offer of it.
         if (_pendingRemovals.ContainsKey(version.ModId))
         {
-            return ModDisplayStatus.PendingRemoval;
+            return ModDisplayStatus.None;
         }
 
         var set = _versionsByMod.GetValueOrDefault(version.ModId);
@@ -3679,6 +3679,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // What the row's eye offers, for the same reason: it is the draft that says whether the mod
             // is pinned or locked.
             row.IgnoreState = IgnoreStateOf(row);
+
+            // A row on this side is only ever touched by having been taken out. Everything else the
+            // draft can do to a mod happens to a row on the other side.
+            _pendingRemovals.TryGetValue(row.ModId, out var removed);
+
+            row.Touch = ProfileModTouches.Classify(removed, null);
+            row.TouchTooltip = ProfileModTouches.Describe(removed, null);
+        }
+
+        var savedPins = _original.ToDictionary(x => x.ModId);
+
+        foreach (var row in Pinned)
+        {
+            savedPins.TryGetValue(row.ModId, out var saved);
+
+            row.Touch = ProfileModTouches.Classify(saved, row.Pin);
+            row.TouchTooltip = ProfileModTouches.Describe(saved, row.Pin);
         }
 
         PinnedCount = Pinned.Count;

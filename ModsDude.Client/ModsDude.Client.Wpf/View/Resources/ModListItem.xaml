@@ -107,6 +107,36 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Style="{DynamicResource CaptionTextBlockStyle}" />
                             </Border>
+
+                            <!-- What the editor's draft has done to this mod, in the slot the version
+                                 chip leaves free there. Filled, where every status beside it is an
+                                 outline: this is the one chip on the row that is somebody's own
+                                 doing. The words behind it are the tooltip. -->
+                            <Border Margin="8 0 0 0"
+                                    ToolTip="{Binding TouchTooltip}"
+                                    ToolTipService.InitialShowDelay="300"
+                                    Visibility="{Binding HasTouch, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Touch}" Value="Added">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                            </DataTrigger>
+                                            <!-- Caution: this is a row about to lose something, and it
+                                                 matches the count in the list's own header. -->
+                                            <DataTrigger Binding="{Binding Touch}" Value="TakenOut">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding TouchText}"
+                                           Style="{DynamicResource CaptionTextBlockStyle}" />
+                            </Border>
                         </StackPanel>
 
                         <!-- The mod's description, whatever the import is doing. What went wrong with
@@ -229,13 +259,22 @@
                                         <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                     </DataTrigger>
-                                    <!-- Caution rather than the accent a pending import gets: this
-                                         one is a row about to lose something, and it matches the
-                                         count in the list's own header. -->
-                                    <DataTrigger Binding="{Binding Status}" Value="PendingRemoval">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                    </DataTrigger>
+                                    <!-- Where a draft exists to tell apart from, every fill above steps
+                                         back to an outline: a filled chip there means "you did this"
+                                         (see the touch chip), and a status is only a fact about the
+                                         version. A running import is not a fact, so it keeps its fill,
+                                         and the triggers below it win. -->
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding OutlineStatus}" Value="True" />
+                                            <Condition Binding="{Binding HasImportState}" Value="False" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="1" />
+                                        <Setter Property="Padding" Value="7 1" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </MultiDataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
@@ -318,6 +357,31 @@
                         </Grid>
                     </StackPanel>
                 </Grid>
+
+                <!-- Down the leading edge where the draft has touched this mod, in the touch chip's
+                     colour: a column of them reads at a glance down a list a chip would have to be
+                     read one row at a time. Set in from the edge, which is where the editor draws
+                     the mark for a picked row. -->
+                <Rectangle Width="3"
+                           Margin="5 8 0 8"
+                           HorizontalAlignment="Left"
+                           RadiusX="1.5" RadiusY="1.5"
+                           IsHitTestVisible="False"
+                           Visibility="{Binding HasTouch, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Setter Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Touch}" Value="Added">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Touch}" Value="TakenOut">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
 
                 <!-- Along the bottom edge rather than in the row, so a list mid-import reads as a
                      column of bars rather than as a column of numbers nobody can scan. -->

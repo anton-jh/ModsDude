@@ -47,15 +47,7 @@ public enum ModDisplayStatus
     /// </summary>
     NewVersion,
 
-    AlreadyInRepo,
-
-    /// <summary>
-    /// A draft has taken this mod out of the list it belongs to, and the removal is not written yet.
-    /// The counterpart of the pending-import chip on the other side: a row that has moved but has
-    /// not been saved looks exactly like one that was always there, and the chip is what says
-    /// otherwise.
-    /// </summary>
-    PendingRemoval
+    AlreadyInRepo
 }
 
 public static class ModDisplayStatusExtensions

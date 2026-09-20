@@ -167,6 +167,21 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     [NotifyPropertyChangedFor(nameof(IgnoreTooltip))]
     private IgnoreState _ignoreState;
 
+    /// <summary>
+    /// What the draft has done to this mod, written by the page beside the status. Kept here as well
+    /// as on <see cref="Item"/> because the item is replaced whenever the selector moves, and the
+    /// mark has to survive that until the page has recounted.
+    /// </summary>
+    [ObservableProperty]
+    private ProfileModTouch _touch;
+
+    [ObservableProperty]
+    private string? _touchTooltip;
+
+    partial void OnTouchChanged(ProfileModTouch value) => Item.Touch = value;
+
+    partial void OnTouchTooltipChanged(string? value) => Item.TouchTooltip = value;
+
     /// <summary>Set apart from the rest, by somebody's decision or by a lock.</summary>
     public bool IsIgnored => IgnoreState is IgnoreState.Ignored or IgnoreState.OtherVersionOfLocked;
 
@@ -428,6 +443,11 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 
         // The row's own selector already says which version this is, on both sides.
         item.ShowVersion = false;
+
+        // There is a draft to tell apart from here, so a filled chip is reserved for what was done to it.
+        item.OutlineStatus = true;
+        item.Touch = Touch;
+        item.TouchTooltip = TouchTooltip;
 
         item.PropertyChanged += OnItemChanged;
 
