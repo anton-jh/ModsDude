@@ -226,6 +226,11 @@ public partial class App : Application
         services.AddSingleton<BackgroundTaskViewModel>();
         services.AddSingleton<IBackgroundTaskReporter>(sp => sp.GetRequiredService<BackgroundTaskViewModel>());
 
+        // Both faces once more: everything that has just done something says so through the interface,
+        // and the shell draws the card along the bottom edge out of what is still up.
+        services.AddSingleton<ToastCenterViewModel>();
+        services.AddSingleton<IToastService>(sp => sp.GetRequiredService<ToastCenterViewModel>());
+
         services.AddSingleton<ModListItemViewModel.Factory>();
 
         // Singleton because switching user is what replaces the shell it is drawn in.

@@ -80,22 +80,11 @@
     </Page.Resources>
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto *">
+        <Grid RowDefinitions="auto *">
 
             <uc:PageTitle Grid.Row="0" Text="Archive" />
 
-            <Border Grid.Row="2"
-                    Margin="0 0 0 16"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                    Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="{Binding Status}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-            </Border>
-
-            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
                     <ItemsControl ItemsSource="{Binding Repos}"

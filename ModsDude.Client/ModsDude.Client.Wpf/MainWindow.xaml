@@ -8,6 +8,7 @@
         xmlns:wvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Windows"
         xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
         xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
+        xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=wvm:MainWindowViewModel, IsDesignTimeCreatable=False}"
         Title="ModsDude" Width="1600" Height="900"
@@ -601,6 +602,12 @@
                             VerticalAlignment="Center" />
 
         </Grid>
+
+        <!-- Last, so it is on top of the modal layer as well: a result reported while a dialog is open
+             should still be seen. Bottom centre of the window rather than of a page, which is what
+             lets any page or service use it without knowing where it is drawn. -->
+        <uc:ToastHost Grid.Column="0" Grid.ColumnSpan="2"
+                      DataContext="{Binding Toasts}" />
     </Grid>
 
 </Window>

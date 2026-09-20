@@ -57,6 +57,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly DriftMonitor _driftMonitor;
     private readonly ProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
+    private readonly IToastService _toasts;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
 
@@ -82,6 +83,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         DriftMonitor driftMonitor,
         ProfileSyncStatusService syncStatus,
         IResourceLeases leases,
+        IToastService toasts,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
@@ -95,6 +97,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         _driftMonitor = driftMonitor;
         _syncStatus = syncStatus;
         _leases = leases;
+        _toasts = toasts;
 
         _syncStatus.Changed += OnSyncStatusChanged;
 
@@ -186,8 +189,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHoldRefusal))]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private string? _holdRefusal;
 
@@ -199,23 +200,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private bool _blockedByUnsavedChanges;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    [NotifyPropertyChangedFor(nameof(HasStatusText))]
+    [NotifyPropertyChangedFor(nameof(ActivationDescription))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private bool _isApplying;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasActivationStatus))]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    [NotifyPropertyChangedFor(nameof(HasStatusText))]
-    private string? _activationStatus;
-
 
     /// <summary>
     /// Whether there is anything to activate on. Nothing at all is drawn where this repo's game is
@@ -223,8 +214,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// is worse than the sidebar entry that already says so.
     /// </summary>
     public bool HasActivation => ConnectedGame is not null;
-
-    public bool HasActivationStatus => ActivationStatus is not null;
 
     public ProfileActivationKind ActivationKind => ProfileActivation.Describe(
         ConnectedGame?.ActiveProfile,
@@ -247,9 +236,9 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// already running. Null - nearly always - where nothing is in the way.
     /// </summary>
     /// <remarks>
-    /// Separate from <see cref="ActivationDescription"/> because the header shows this one in place
-    /// and the other only as a tooltip: an explanation of a refusal has to be readable where the
-    /// button is, and the ordinary "what pressing this does" sentence does not.
+    /// Separate from <see cref="ActivationDescription"/> because the reason has to win over the
+    /// ordinary "what pressing this does" sentence: a greyed button with a promise under it explains
+    /// the wrong thing. It is only ever said in the button's tooltip - the header stays quiet.
     /// </remarks>
     private string? ActivationBlockReason
     {
@@ -276,14 +265,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             return null;
         }
     }
-
-    /// <summary>
-    /// What the header's status slot says beside the profile's name: the reason the button is closed,
-    /// and otherwise the outcome of the last thing the button did.
-    /// </summary>
-    public string? StatusText => ActivationBlockReason ?? ActivationStatus;
-
-    public bool HasStatusText => StatusText is not null;
 
     public string ActivationDescription
     {
@@ -316,8 +297,8 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
         var kind = ActivationKind;
 
+        // No line saying it has started: the strip along the top already names the work while it runs.
         IsApplying = true;
-        ActivationStatus = kind is ProfileActivationKind.Apply ? "Re-applying..." : "Activating...";
 
         try
         {
@@ -337,7 +318,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 progress: null,
                 cancellationToken);
 
-            ActivationStatus = outcome.Message;
+            _toasts.Show(outcome.Message, outcome.ToastSeverity);
 
             OnPropertyChanged(nameof(ActivationKind));
             OnPropertyChanged(nameof(ActivationLabel));
@@ -382,8 +363,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             ActivateCommand.NotifyCanExecuteChanged();
 
             OnPropertyChanged(nameof(ActivationDescription));
-            OnPropertyChanged(nameof(StatusText));
-            OnPropertyChanged(nameof(HasStatusText));
         });
     }
 

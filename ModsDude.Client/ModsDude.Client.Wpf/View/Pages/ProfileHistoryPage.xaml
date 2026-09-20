@@ -13,7 +13,7 @@
       FontSize="14">
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto *">
+        <Grid RowDefinitions="auto auto *">
 
             <uc:PageTitle Grid.Row="0" Text="History" />
 
@@ -23,18 +23,7 @@
                        TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
                        Text="Every save this profile has had, newest first. Pick one to see what it pinned. Restoring copies an old list back to the front - nothing in between is deleted, so a restore can itself be undone." />
 
-            <Border Grid.Row="2"
-                    Margin="0 0 0 12"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                    Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="{Binding Status}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-            </Border>
-
-            <Grid Grid.Row="3" ColumnDefinitions="380 *">
+            <Grid Grid.Row="2" ColumnDefinitions="380 *">
 
                 <!-- The revisions. -->
                 <Border Grid.Column="0"

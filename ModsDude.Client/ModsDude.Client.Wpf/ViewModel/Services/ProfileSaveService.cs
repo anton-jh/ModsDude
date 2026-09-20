@@ -2,7 +2,6 @@ using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -58,6 +57,9 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
 
     /// <summary>What the re-apply did, where the save asked for one. Null where it did not.</summary>
     public string? ApplyMessage { get; init; }
+
+    /// <summary>How loudly to say <see cref="ApplyMessage"/>: whether the apply left the folder as it should be.</summary>
+    public ToastSeverity ApplySeverity { get; init; } = ToastSeverity.Info;
 
     public bool Succeeded => Status is ProfileSaveStatus.Saved;
 }
@@ -123,8 +125,6 @@ public sealed class ProfileSaveRun
     private readonly ConcurrentDictionary<ModVersionIdentity, ModImportProgress> _progress = new();
     private readonly ConcurrentDictionary<ModVersionIdentity, ModImportItemResult> _results = new();
 
-    private int _watchers;
-
 
     internal ProfileSaveRun(ProfileSaveRequest request)
     {
@@ -150,22 +150,6 @@ public sealed class ProfileSaveRun
     /// <summary>The strip entry the whole gesture is drawn on, for the steps that have none of their own.</summary>
     internal IBackgroundTask? Strip { get; set; }
 
-    /// <summary>Whether an editor is on screen to show this run's outcome when it finishes.</summary>
-    public bool IsWatched => Volatile.Read(ref _watchers) > 0;
-
-
-    /// <summary>
-    /// Says that an editor is drawing this run, until the returned handle is disposed. What it
-    /// decides is where the outcome goes: an unwatched save that finishes has nobody to tell, so it
-    /// goes to the notice column instead.
-    /// </summary>
-    public IDisposable Watch()
-    {
-        Interlocked.Increment(ref _watchers);
-
-        return new Watcher(this);
-    }
-
     /// <summary>
     /// Everything the run has reported so far, so a page built half way through starts where the run
     /// is rather than at the beginning.
@@ -188,25 +172,6 @@ public sealed class ProfileSaveRun
         _results[result.Identity] = result;
 
         Advanced?.Invoke();
-    }
-
-
-    private sealed class Watcher(ProfileSaveRun run) : IDisposable
-    {
-        private int _released;
-
-
-        public void Dispose()
-        {
-            // Idempotent for the same reason every other handle in this app is: a page disposed twice
-            // must not take the count below zero and make a watched run look abandoned.
-            if (Interlocked.Exchange(ref _released, 1) == 1)
-            {
-                return;
-            }
-
-            Interlocked.Decrement(ref run._watchers);
-        }
     }
 }
 
@@ -251,25 +216,11 @@ public sealed class ProfileSaveService(
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
+    IToastService toasts,
     IResourceLeases leases)
 {
-    /// <summary>Notice keys are prefixed with this, so the column knows these are the save's.</summary>
-    public const string KeyPrefix = "profile-save/";
-
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, ProfileSaveRun> _runs = [];
-
-    /// <summary>
-    /// Outcomes of saves that finished with no editor on screen, waiting to be told to somebody.
-    /// Cleared by the next editor for that profile, which shows it as its own summary instead.
-    /// </summary>
-    private readonly Dictionary<Guid, ProfileSaveOutcome> _unreported = [];
-
-    private readonly HashSet<Guid> _dismissed = [];
-
-
-    /// <summary>Raised when a run starts, finishes, or leaves something for the notice column.</summary>
-    public event EventHandler? Changed;
 
 
     /// <summary>
@@ -286,27 +237,6 @@ public sealed class ProfileSaveService(
     }
 
     /// <summary>
-    /// The same, said to be watched before the lock is let go of.
-    /// </summary>
-    /// <remarks>
-    /// <b>Under one lock, because <see cref="Retire"/> takes the same one.</b> Finding a run and then
-    /// watching it as two acts leaves a gap the run can finish in - and a run that retires unwatched
-    /// files its outcome for the notice column, which the page is about to render off
-    /// <see cref="ProfileSaveRun.Completion"/> anyway. The result was one save reported twice.
-    /// </remarks>
-    public ProfileSaveRun? FindAndWatch(Guid profileId, out IDisposable? watch)
-    {
-        lock (_gate)
-        {
-            var run = _runs.GetValueOrDefault(profileId);
-
-            watch = run?.Watch();
-
-            return run;
-        }
-    }
-
-    /// <summary>
     /// Whether a save of this profile would be refused right now. A hint for a <c>CanExecute</c>, and
     /// not the guard - <see cref="RunAsync"/> is what actually decides.
     /// </summary>
@@ -317,28 +247,6 @@ public sealed class ProfileSaveService(
     /// a <em>different</em> profile, whose Save is only blocked if it has mods to import.
     /// </summary>
     public string? DescribeImportBusy(Guid repoId) => imports.DescribeBusy(repoId);
-
-    /// <summary>
-    /// Takes the outcome of a save that finished while nobody was looking, so the editor that has
-    /// just opened can say it rather than the notice column.
-    /// </summary>
-    public ProfileSaveOutcome? TakeUnreported(Guid profileId)
-    {
-        lock (_gate)
-        {
-            if (_unreported.Remove(profileId, out var outcome) is false)
-            {
-                return null;
-            }
-
-            _dismissed.Remove(profileId);
-
-            Raise();
-
-            return outcome;
-        }
-    }
-
 
     /// <summary>
     /// Imports whatever the draft pins and the repo does not hold, writes the revision, re-applies,
@@ -352,20 +260,17 @@ public sealed class ProfileSaveService(
     /// as unrecognised - which sends the very files the user was importing to the Recycle Bin, one
     /// confirmation click away. Nothing downstream can tell that apart from a folder full of junk,
     /// so the only place it can be caught is here, before anything is written.
+    /// <para>
+    /// <b>How it went is said here, as toasts</b>, whether or not an editor is on screen to draw it:
+    /// the editor may have been navigated away from, and a save is a gesture rather than a page. The
+    /// editor reports nothing of its own about the outcome - it only marks its rows.
+    /// </para>
     /// </remarks>
     /// <returns>
     /// The run, so the caller can mark its own rows. A refusal comes back as a run that has already
     /// finished, so there is one shape for a caller to handle rather than two.
     /// </returns>
-    /// <param name="watch">
-    /// Already held on the caller's behalf, to be disposed when it stops drawing the run - null for a
-    /// refusal, which never runs and never retires. <b>Taken before the work starts</b>, because a
-    /// caller that watched the run it was handed back would leave a gap the run could finish in, and
-    /// a run that retires unwatched files its outcome for the notice column while the caller is still
-    /// going to render it. See <see cref="FindAndWatch"/>, which closes the same gap from the other
-    /// side.
-    /// </param>
-    public ProfileSaveRun Start(ProfileSaveRequest request, out IDisposable? watch)
+    public ProfileSaveRun Start(ProfileSaveRequest request)
     {
         var run = new ProfileSaveRun(request);
 
@@ -375,11 +280,11 @@ public sealed class ProfileSaveService(
 
         if (lease is null)
         {
-            watch = null;
-
             run.Completion = Task.FromResult(new ProfileSaveOutcome(
                 ProfileSaveStatus.Refused,
                 $"'{request.ProfileName}' is already being saved. Nothing was written."));
+
+            Report(run.Completion.Result);
 
             return run;
         }
@@ -387,55 +292,11 @@ public sealed class ProfileSaveService(
         lock (_gate)
         {
             _runs[request.ProfileId] = run;
-
-            watch = run.Watch();
         }
-
-        Raise();
 
         run.Completion = FinishAsync(run, lease);
 
         return run;
-    }
-
-
-    /// <summary>
-    /// The notice column's share of this: a save that finished with nobody there to be told.
-    /// </summary>
-    /// <remarks>
-    /// <b>The strip is enough while it runs.</b> This is only for afterwards - a failed import above
-    /// all, which used to be a modal raised by a page that no longer existed and therefore a modal
-    /// nobody ever saw.
-    /// </remarks>
-    public IReadOnlyList<Notice> Build()
-    {
-        lock (_gate)
-        {
-            return
-            [
-                .. _unreported
-                    .Where(x => _dismissed.Contains(x.Key) is false)
-                    .Select(x => Build(x.Key, x.Value))
-            ];
-        }
-    }
-
-    /// <summary>Whether this key is one of these, so the column routes its dismissal back here.</summary>
-    public static bool Owns(string key) => key.StartsWith(KeyPrefix, StringComparison.Ordinal);
-
-    public void Dismiss(string key)
-    {
-        if (Guid.TryParse(key[KeyPrefix.Length..], out var profileId) is false)
-        {
-            return;
-        }
-
-        lock (_gate)
-        {
-            _dismissed.Add(profileId);
-        }
-
-        Raise();
     }
 
 
@@ -544,6 +405,8 @@ public sealed class ProfileSaveService(
         // not undo the revision - it is said, beside what did save.
         var ignoredNote = await WriteIgnoredAsync(run, cancellationToken);
 
+        var applied = await ApplyAsync(request, cancellationToken);
+
         return new ProfileSaveOutcome(
             ProfileSaveStatus.Saved,
             ignoredNote is null ? Describe(changes) : $"{Describe(changes)} {ignoredNote}")
@@ -552,7 +415,8 @@ public sealed class ProfileSaveService(
             Changes = changes,
             Saved = request.Desired,
             RevisionWritten = true,
-            ApplyMessage = await ApplyAsync(request, cancellationToken)
+            ApplyMessage = applied?.Message,
+            ApplySeverity = applied?.Severity ?? ToastSeverity.Info
         };
     }
 
@@ -757,11 +621,11 @@ public sealed class ProfileSaveService(
     /// the page: it is a mode change with a chosen target, which is a different operation and needs
     /// somebody looking at it.
     /// </remarks>
-    private async Task<string?> ApplyAsync(ProfileSaveRequest request, CancellationToken cancellationToken)
+    private async Task<ApplyReport?> ApplyAsync(ProfileSaveRequest request, CancellationToken cancellationToken)
     {
         if (request.Apply is false)
         {
-            return "Saved without applying. Your installed mods are untouched.";
+            return new ApplyReport("Saved without applying. Your installed mods are untouched.", ToastSeverity.Info);
         }
 
         if (games.GetGameFollowing(request.Repo.Scope, new ActiveProfile(request.Repo.Id, request.ProfileId))
@@ -779,8 +643,10 @@ public sealed class ProfileSaveService(
             progress: null,
             cancellationToken);
 
-        return outcome.Message;
+        return new ApplyReport(outcome.Message, outcome.ToastSeverity);
     }
+
+    private sealed record ApplyReport(string Message, ToastSeverity Severity);
 
     private async Task<string> DescribeFailureAsync(Exception exception, ProfileSaveRequest request)
     {
@@ -790,47 +656,46 @@ public sealed class ProfileSaveService(
     }
 
     /// <summary>
-    /// Takes the run off the register and decides who is told about it.
+    /// Takes the run off the register and says how it went.
     /// </summary>
     /// <remarks>
-    /// An outcome nobody is watching goes to the notice column rather than being dropped, which is
-    /// the whole of what "a save that finished while you were elsewhere says so" means. A watched one
-    /// is the page's to render, and putting it in both places would say it twice.
+    /// Said the same whether or not anybody is looking at the editor, which is what "a save that
+    /// finished while you were elsewhere says so" comes to now. It used to be filed for the notice
+    /// column when nobody was watching and left to the page when somebody was, which was two routes
+    /// to one sentence and a race between them.
     /// </remarks>
     private ProfileSaveOutcome Retire(ProfileSaveRun run, ProfileSaveOutcome outcome)
     {
         lock (_gate)
         {
             _runs.Remove(run.Request.ProfileId);
-
-            if (run.IsWatched is false && outcome.Status is not ProfileSaveStatus.Refused)
-            {
-                _unreported[run.Request.ProfileId] = outcome;
-                _dismissed.Remove(run.Request.ProfileId);
-            }
         }
 
-        Raise();
+        Report(outcome);
 
         return outcome;
     }
 
-    private static Notice Build(Guid profileId, ProfileSaveOutcome outcome)
+    /// <summary>
+    /// The sentence, and beside it - where the save went on to apply - the sentence about that.
+    /// </summary>
+    /// <remarks>
+    /// A failure was already put in front of the user as a dialog where it had anything to add, so
+    /// what is said here is the short version of what was left undone: the draft is still open and
+    /// saving again is the way on.
+    /// </remarks>
+    private void Report(ProfileSaveOutcome outcome)
     {
-        var failed = outcome.Status is not ProfileSaveStatus.Saved;
+        var severity = outcome.Status is ProfileSaveStatus.Saved or ProfileSaveStatus.Stopped
+            ? ToastSeverity.Info
+            : ToastSeverity.Warning;
 
-        return new Notice(
-            $"{KeyPrefix}{profileId}",
-            $"{KeyPrefix}{profileId}/{outcome.Status}/{outcome.Message}",
-            failed ? NoticeSeverity.Critical : NoticeSeverity.Info,
-            failed ? "A profile save did not finish" : "A profile was saved")
+        toasts.Show(outcome.Message, severity);
+
+        if (outcome.ApplyMessage is string applied)
         {
-            Body = outcome.Message,
-            Footnote = failed
-                ? "The list is still here - open the profile's mods and press Save again."
-                : outcome.ApplyMessage,
-            CanDismiss = true
-        };
+            toasts.Show(applied, outcome.ApplySeverity);
+        }
     }
 
     private static string Describe(ProfileModListChanges changes)
@@ -858,11 +723,6 @@ public sealed class ProfileSaveService(
         }
 
         return string.Join(" · ", parts);
-    }
-
-    private void Raise()
-    {
-        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc cref="ModImportCoordinator" path="/remarks"/>

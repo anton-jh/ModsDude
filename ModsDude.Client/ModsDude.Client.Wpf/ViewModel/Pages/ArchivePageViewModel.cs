@@ -28,6 +28,7 @@ public partial class ArchivePageViewModel : PageViewModel
     private readonly RepoRepository _repoRepository;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IToastService _toasts;
 
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -37,11 +38,13 @@ public partial class ArchivePageViewModel : PageViewModel
     public ArchivePageViewModel(
         RepoRepository repoRepository,
         IModalService modalService,
-        IErrorReporter errorReporter)
+        IErrorReporter errorReporter,
+        IToastService toasts)
     {
         _repoRepository = repoRepository;
         _modalService = modalService;
         _errorReporter = errorReporter;
+        _toasts = toasts;
     }
 
 
@@ -52,13 +55,6 @@ public partial class ArchivePageViewModel : PageViewModel
 
     [ObservableProperty]
     private bool _isWorking;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStatus))]
-    private string? _status;
-
-
-    public bool HasStatus => Status is not null;
 
     public bool IsEmpty => IsLoading is false && Repos.Count == 0;
 
@@ -165,13 +161,12 @@ public partial class ArchivePageViewModel : PageViewModel
     private async Task RestoreAsync(ArchivedItemViewModel item)
     {
         IsWorking = true;
-        Status = null;
 
         try
         {
             await _repoRepository.RestoreRepo(item.Id, _lifetime.Token);
 
-            Status = $"'{item.Name}' is back in your repos.";
+            _toasts.Show($"'{item.Name}' is back in your repos.");
 
             await ReloadAsync();
         }
@@ -206,7 +201,7 @@ public partial class ArchivePageViewModel : PageViewModel
         {
             await _repoRepository.DeleteRepo(item.Id, _lifetime.Token);
 
-            Status = $"'{item.Name}' is gone for good.";
+            _toasts.Show($"'{item.Name}' is gone for good.");
 
             await ReloadAsync();
         }

@@ -18,7 +18,6 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Data;
-using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
@@ -73,10 +72,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly DriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
     private readonly IResourceLeases _leases;
+    private readonly IToastService _toasts;
     private readonly ActiveProfile _activeProfile;
 
-    /// <summary>Held for as long as this page is drawing a save. See <see cref="ProfileSaveRun.Watch"/>.</summary>
-    private IDisposable? _watch;
+    /// <summary>
+    /// The toast offering to undo the last bulk move, while it is up. Held so the next change of any
+    /// kind can take it down: it is an undo only for as long as nothing has been built on top of it.
+    /// </summary>
+    private IToast? _undoToast;
+
+    /// <summary>
+    /// The toast asking whether to put this profile on a game, after a save that had nothing to apply
+    /// to. Held so leaving the page takes the offer with it.
+    /// </summary>
+    private IToast? _activationToast;
 
     /// <summary>
     /// The versions a save this page rejoined is importing.
@@ -261,14 +270,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private bool _recounting;
 
-    /// <summary>
-    /// How long an undone bulk move stays offered. Long enough to notice a move of two hundred rows
-    /// was not what was meant, short enough that the bar is not permanent furniture - and the draft
-    /// it would restore goes stale the moment anything else changes, which is what actually retires
-    /// it most of the time. See <see cref="Recount"/>.
-    /// </summary>
-    private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(15) };
-
 
     public ProfileModsEditorPageViewModel(
         Repo repo,
@@ -287,9 +288,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ModSyncService syncService,
         DriftMonitor driftMonitor,
         NoticeCenterViewModel notices,
-        IResourceLeases leases)
+        IResourceLeases leases,
+        IToastService toasts)
     {
         _leases = leases;
+        _toasts = toasts;
         _repo = repo;
         _profile = profile;
         _itemFactory = itemFactory;
@@ -337,8 +340,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         AvailableSelection.Changed += OnSelectionChanged;
         PinnedSelection.Changed += OnSelectionChanged;
 
-        _undoTimer.Tick += (_, _) => BulkUndo = null;
-
         _repo.Games.CollectionChanged += OnGamesChanged;
         RefreshApplyTargets();
 
@@ -349,14 +350,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // A save into this repo blocking this page's own is a fact about the world, so the button
         // re-asks whenever a lease moves rather than only when the draft does.
         _leases.Changed += OnLeasesChanged;
-
-        // A save that finished while nobody was looking left its outcome behind. Shown here rather
-        // than in the notice column, which is where it went precisely because there was no editor.
-        if (_saveService.TakeUnreported(profile.Id) is ProfileSaveOutcome unreported)
-        {
-            SaveSummary = unreported.Message;
-            ApplyStatus = unreported.ApplyMessage;
-        }
     }
 
 
@@ -392,24 +385,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <inheritdoc cref="AvailableFilter"/>
     [ObservableProperty]
     private PinnedModFilter _pinnedFilter = PinnedModFilter.All;
-
-    /// <summary>
-    /// What the last bulk move did, and the draft that would put it back. Cleared by the next change
-    /// of any kind, because the draft it holds is only an undo for as long as nothing else has
-    /// happened on top of it.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasBulkUndo))]
-    private BulkUndo? _bulkUndo;
-
-    /// <summary>
-    /// What a paste or a copy found, in a sentence. Held until the next one rather than shown as a
-    /// dialog: it is a report about a selection the user is now looking at, and a modal in front of
-    /// that selection would be a report about something hidden behind it.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelectionStatus))]
-    private string? _selectionStatus;
 
     [ObservableProperty]
     private bool _isLoading = true;
@@ -650,12 +625,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
     private bool _isReadOnly;
 
-    /// <summary>What the last save did, kept until something changes again.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSaveSummary))]
-    private string? _saveSummary;
-
-
     /// <summary>
     /// The game this save re-applies to, or null where none follows this profile.
     /// </summary>
@@ -673,31 +642,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     private Game? _applyTarget;
 
-    /// <summary>What the last save's apply did, per game.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasApplyStatus))]
-    private string? _applyStatus;
-
-    /// <summary>
-    /// Offered after a save that had nothing to apply to, rather than folded into the save itself:
-    /// activation is a mode change with a chosen target, which is a different operation.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasActivationOffer))]
-    private string? _activationOffer;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasActivationChoice))]
-    [NotifyCanExecuteChangedFor(nameof(AcceptActivationOfferCommand))]
-    private Game? _activationCandidate;
-
-    public ObservableCollection<Game> ActivationCandidates { get; } = [];
-
-    public bool HasActivationOffer => ActivationOffer is not null;
-    public bool HasActivationChoice => ActivationCandidates.Count > 1;
-
     public bool HasApplyTargets => ApplyTarget is not null;
-    public bool HasApplyStatus => ApplyStatus is not null;
 
     /// <summary>
     /// Whether a save would re-apply the profile. Not for one that only changes what is ignored: that
@@ -733,9 +678,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public bool HasRemovals => RemovalCount > 0;
     public bool HasPending => PendingCount > 0;
     public bool HasSkippedUpdates => SkippedUpdateCount > 0;
-    public bool HasSaveSummary => SaveSummary is not null;
-    public bool HasBulkUndo => BulkUndo is not null;
-    public bool HasSelectionStatus => SelectionStatus is not null;
 
     public string AvailableCountText => Describe(AvailableCount, AvailableTotal);
 
@@ -1069,7 +1011,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         RefreshIgnored();
 
-        SelectionStatus = Describe(ignored ? "Ignored" : "Stopped ignoring", modIds.Count);
+        if (Describe(ignored ? "Ignored" : "Stopped ignoring", modIds.Count) is string text)
+        {
+            _toasts.Show(text);
+        }
     }
 
     /// <summary>
@@ -1369,19 +1314,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (description is not null)
         {
-            BulkUndo = new BulkUndo(description, before);
+            // A toast with a way back, which lasts as long as any toast with a link does. The draft
+            // it would restore goes stale the moment anything else changes, which is what actually
+            // retires it most of the time - see RetireUndo.
+            _undoToast = _toasts.Show(
+                description,
+                ToastSeverity.Info,
+                new ToastAction("Undo", () => InBulk(() => RestoreDraft(before))));
         }
     }
 
-    [RelayCommand]
-    private void UndoBulk()
+    /// <summary>
+    /// Takes the offer to undo the last bulk move down. Anything at all having changed retires it: the
+    /// draft it holds was an undo for the move that had just happened, and one edit later it is a way
+    /// of throwing that edit away.
+    /// </summary>
+    private void RetireUndo()
     {
-        if (BulkUndo is not BulkUndo undo)
-        {
-            return;
-        }
-
-        InBulk(() => RestoreDraft(undo.Draft));
+        _undoToast?.Dismiss();
+        _undoToast = null;
     }
 
     private IReadOnlyList<ProfileModPin> Snapshot() => [.. Pinned.Select(x => x.Pin)];
@@ -1725,18 +1676,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _catalog,
             apply && HasModListChanges);
 
-        SaveSummary = null;
-        ApplyStatus = null;
-        ActivationOffer = null;
+        RetireActivationOffer();
 
-        // Watched from inside Start rather than once it has handed the run back, so the run cannot
-        // finish in between and file its outcome for the notice column this page is about to report.
-        // Held in a local as well as in the field, because disposing the page part way through
-        // releases the field - and a finally that then read it would be dropping a handle it no
-        // longer owns rather than its own.
-        var run = _saveService.Start(request, out var watch);
-
-        _watch = watch;
+        var run = _saveService.Start(request);
 
         run.Advanced += OnRunAdvanced;
 
@@ -1747,9 +1689,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         finally
         {
             run.Advanced -= OnRunAdvanced;
-
-            watch?.Dispose();
-            _watch = null;
         }
     }
 
@@ -1770,10 +1709,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         try
         {
+            // What it says is the save service's to say - see ProfileSaveService.Start - so this only
+            // acts on how it went.
             var outcome = await completion;
-
-            SaveSummary = outcome.Message;
-            ApplyStatus = outcome.ApplyMessage;
 
             if (outcome.Succeeded is false)
             {
@@ -1837,14 +1775,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// been told about it yet. The marks come from the run's own progress, so an editor that opens
     /// half way through an upload shows where the upload has got to rather than a blank list.
     /// </remarks>
-    private async Task RejoinAsync(ProfileSaveRun run, IDisposable? watch)
+    private async Task RejoinAsync(ProfileSaveRun run)
     {
-        // A local as well as the field, for the reason SaveChanges keeps one: the page can be
-        // disposed part way through, and the finally must release its own handle rather than
-        // whatever the field is holding by then. Taken by FindAndWatch, under the lock that would
-        // otherwise let this run retire unwatched between being found and being drawn.
-        _watch = watch;
-
         run.Advanced += OnRunAdvanced;
 
         // Before the catalog is composed, so the pending rows the draft is about to bring in resolve
@@ -1873,9 +1805,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         finally
         {
             run.Advanced -= OnRunAdvanced;
-
-            watch?.Dispose();
-            _watch = null;
         }
     }
 
@@ -1981,63 +1910,61 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// The onboarding case: a profile nothing is using yet. Naming the game because here that
     /// genuinely is a choice, and offered afterwards rather than folded into the save.
     /// </summary>
+    /// <remarks>
+    /// A toast rather than a bar: it lapses on its own, which is the whole of "not now". It names no
+    /// game, because a repo is about one and there is nothing to choose between.
+    /// </remarks>
     private void OfferActivation()
     {
-        ActivationCandidates.Clear();
+        RetireActivationOffer();
 
-        foreach (var game in _repo.Games)
-        {
-            ActivationCandidates.Add(game);
-        }
-
-        OnPropertyChanged(nameof(HasActivationChoice));
-
-        ActivationCandidate = ActivationCandidates.FirstOrDefault();
-
-        ActivationOffer = ActivationCandidate is Game candidate
-            ? ActivationCandidates.Count == 1
-                ? $"No game is using this profile. Use it on '{candidate.Name}'?"
-                : "No game is using this profile. Use it on one of these?"
-            : null;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanAcceptActivationOffer))]
-    private async Task AcceptActivationOffer(CancellationToken cancellationToken)
-    {
-        if (ActivationCandidate is not Game game)
+        if (_repo.Games.FirstOrDefault() is not Game game)
         {
             return;
         }
 
-        ActivationOffer = null;
-
-        var outcome = await _applyService.ActivateAsync(
-            _repo,
-            game,
-            _profile.Id,
-            _profile.Name,
-            // A mode change, not a re-apply: what the previous profile put in that folder comes back
-            // out, so the reconciler's plan is the confirmation.
-            confirmPlan: true,
-            progress: null,
-            cancellationToken);
-
-        if (outcome.Activated)
-        {
-            RefreshApplyTargets();
-        }
-
-        ApplyStatus = outcome.Message;
-
-        await _driftMonitor.CheckAsync();
+        _activationToast = _toasts.Show(
+            "Do you want to activate this profile?",
+            ToastSeverity.Info,
+            new ToastAction("Activate", () => _ = AcceptActivationOfferAsync(game)));
     }
 
-    private bool CanAcceptActivationOffer() => ActivationCandidate is not null;
-
-    [RelayCommand]
-    private void DismissActivationOffer()
+    private void RetireActivationOffer()
     {
-        ActivationOffer = null;
+        _activationToast?.Dismiss();
+        _activationToast = null;
+    }
+
+    private async Task AcceptActivationOfferAsync(Game game)
+    {
+        try
+        {
+            var outcome = await _applyService.ActivateAsync(
+                _repo,
+                game,
+                _profile.Id,
+                _profile.Name,
+                // A mode change, not a re-apply: what the previous profile put in that folder comes back
+                // out, so the reconciler's plan is the confirmation.
+                confirmPlan: true,
+                progress: null,
+                CancellationToken.None);
+
+            if (outcome.Activated)
+            {
+                RefreshApplyTargets();
+            }
+
+            _toasts.Show(outcome.Message, outcome.ToastSeverity);
+
+            await _driftMonitor.CheckAsync();
+        }
+        catch (Exception exception)
+        {
+            // Nothing awaits a toast's link, so a failure here has no command to carry it to the
+            // global handler and has to reach the user itself.
+            await _errorReporter.ShowAsync(exception, $"putting '{_profile.Name}' on '{game.Name}'");
+        }
     }
 
     /// <summary>
@@ -2129,12 +2056,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             {
                 RestoreDraft(pins);
 
-                return $"Replaced this list with {sourceName}";
+                return pins.Count == 1
+                    ? $"This profile now holds the one mod {sourceName} does."
+                    : $"This profile now holds the {pins.Count} mods {sourceName} does.";
             });
-
-            SelectionStatus = pins.Count == 1
-                ? $"This profile now holds the one mod {sourceName} does."
-                : $"This profile now holds the {pins.Count} mods {sourceName} does.";
 
             return;
         }
@@ -2160,14 +2085,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 added++;
             }
 
-            return Describe("Added", added) is string text ? $"{text} from {sourceName}" : null;
+            // Nothing added means nothing to undo, so the sentence goes out on its own below.
+            return added == 0
+                ? null
+                : already == 0
+                    ? $"Copied {added} {Mods(added)} from {sourceName}."
+                    : $"Copied {added} {Mods(added)} from {sourceName}. {already} {Were(already)} already here.";
         });
 
-        SelectionStatus = added == 0
-            ? $"Nothing to copy - this profile already holds everything {sourceName} does."
-            : already == 0
-                ? $"Copied {added} {Mods(added)} from {sourceName}."
-                : $"Copied {added} {Mods(added)} from {sourceName}. {already} {Were(already)} already here.";
+        if (added == 0)
+        {
+            _toasts.Show($"Nothing to copy - this profile already holds everything {sourceName} does.");
+        }
     }
 
     /// <summary>
@@ -2251,7 +2180,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         AvailableSelection.Recount();
 
-        SelectionStatus = DescribePaste(terms.Count, matched.Count, already, missing);
+        _toasts.Show(DescribePaste(terms.Count, matched.Count, already, missing));
     }
 
     /// <summary>
@@ -2466,12 +2395,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _syncService.ModFolderChanged -= OnModFolderChanged;
 
         // The save itself is not stopped: it belongs to the profile, not to this page, and the strip
-        // keeps its Cancel. What this gives up is being the one that reports the outcome, which then
-        // goes to the notice column instead.
-        _watch?.Dispose();
-        _watch = null;
-
-        _undoTimer.Stop();
+        // keeps its Cancel. Its outcome is the save service's to report, so nothing is given up here.
+        //
+        // The two offers are this page's, though: an undo would restore a draft nobody can see any
+        // more, and an activation offer belongs to a save that page made.
+        RetireUndo();
+        RetireActivationOffer();
 
         foreach (var row in _available)
         {
@@ -2585,8 +2514,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     protected override Task InitAsync()
     {
-        return _saveService.FindAndWatch(_profile.Id, out var watch) is ProfileSaveRun run
-            ? RejoinAsync(run, watch)
+        return _saveService.Find(_profile.Id) is ProfileSaveRun run
+            ? RejoinAsync(run)
             : ReloadAsync();
     }
 
@@ -2771,10 +2700,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // reverts what was ignored here along with the pins.
             _originalIgnored = [.. ignored.ModIds.Select(ModKey.From)];
             _ignoredMods = [.. _originalIgnored];
-
-            // A reload is a new draft, so nothing that was picked survives it - and a report about a
-            // selection that no longer exists would outlive what it described.
-            SelectionStatus = null;
 
             RebuildAvailable();
 
@@ -3544,20 +3469,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The undo bar's clock. Restarted by every offer and stopped when there is nothing to offer, so
-    /// the timer only ever runs while the bar is on screen.
-    /// </summary>
-    partial void OnBulkUndoChanged(BulkUndo? value)
-    {
-        _undoTimer.Stop();
-
-        if (value is not null)
-        {
-            _undoTimer.Start();
-        }
-    }
-
-    /// <summary>
     /// Freezes or releases the one control the shared row template owns: its checkbox.
     /// </summary>
     /// <remarks>
@@ -3715,10 +3626,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void RecountCore()
     {
-        // Anything at all having changed retires the offer: the draft it holds was an undo for the
-        // move that had just happened, and one edit later it is a way of throwing that edit away.
-        // The bulk move that armed it sets it again once this has run - see RunBulk.
-        BulkUndo = null;
+        // The bulk move that armed the offer sets it again once this has run - see RunBulk.
+        RetireUndo();
 
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
         _pinnedVersions = Pinned.ToDictionary(x => x.ModId, x => x.SelectedVersion.Version.VersionId);
@@ -3823,7 +3732,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (HasUnsavedChanges)
         {
-            SaveSummary = null;
             _navigationLock.AcquireLock(this);
         }
         else
@@ -3855,17 +3763,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
     }
 }
-
-/// <summary>
-/// A bulk move that has happened and can still be taken back, with the whole draft as it stood
-/// before it.
-/// </summary>
-/// <remarks>
-/// The draft rather than the individual rows, because one mechanism then covers every bulk action on
-/// the page - adds, removals, a copied list, a batch of version changes - and because restoring a
-/// snapshot cannot half-succeed the way replaying a move in reverse can.
-/// </remarks>
-public sealed record BulkUndo(string Text, IReadOnlyList<ProfileModPin> Draft);
 
 /// <summary>
 /// What the left list is narrowed to, on top of the search.

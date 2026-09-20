@@ -54,6 +54,14 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched;
 
     /// <summary>
+    /// How loudly to say <see cref="Message"/>. Declining is the user's own answer, so it is worded
+    /// like a success; everything else left the folder as it was or only part done.
+    /// </summary>
+    public ToastSeverity ToastSeverity => Succeeded || Status is ProfileApplyStatus.Declined
+        ? ToastSeverity.Info
+        : ToastSeverity.Warning;
+
+    /// <summary>
     /// Whether this game now follows the profile - <b>what happened, not a rule to apply</b>.
     /// </summary>
     /// <remarks>

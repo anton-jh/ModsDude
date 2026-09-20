@@ -22,9 +22,11 @@ public partial class MainWindowViewModel
         IEnumerable<IUserScopedState> userScopedState,
         NoticeCenterViewModel notices,
         BackgroundTaskViewModel backgroundTasks,
+        ToastCenterViewModel toasts,
         IResourceLeases leases)
     {
         BackgroundTasks = backgroundTasks;
+        Toasts = toasts;
 
         _leases = leases;
         _mainPageViewModelFactory = mainPageViewModelFactory;
@@ -49,6 +51,12 @@ public partial class MainWindowViewModel
     /// the page - an import survives navigating away from the list that queued it.
     /// </summary>
     public BackgroundTaskViewModel BackgroundTasks { get; }
+
+    /// <summary>
+    /// Along the bottom edge: what the last thing somebody did just said, for a few seconds. Above the
+    /// modal layer, so a result reported while a dialog is open is still seen.
+    /// </summary>
+    public ToastCenterViewModel Toasts { get; }
 
 
     [ObservableProperty]

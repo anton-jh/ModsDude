@@ -54,6 +54,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IBackgroundTaskReporter _backgroundTasks;
+    private readonly IBackgroundProblemReporter _problems;
+    private readonly IToastService _toasts;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -86,9 +88,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         IModalService modalService,
         IErrorReporter errorReporter,
         IBackgroundTaskReporter backgroundTasks,
+        IBackgroundProblemReporter problems,
+        IToastService toasts,
         bool showPastSavegames = false)
     {
         _backgroundTasks = backgroundTasks;
+        _problems = problems;
+        _toasts = toasts;
         _manifestStore = manifestStore;
         _showPastSavegames = showPastSavegames;
         _repo = repo;
@@ -216,10 +222,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PublishSaveCommand))]
     private bool _isWorking;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStatus))]
-    private string? _status;
-
     /// <summary>
     /// Set where the listing was windowed. Nothing pages further yet, and saying so beats a history
     /// that quietly stops.
@@ -233,7 +235,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     public bool HasSelection => Selected is not null;
     public bool HasSelectedEntry => SelectedEntry is not null;
-    public bool HasStatus => Status is not null;
 
     public string SelectedTitle => Selected is null ? "" : $"{Selected.Name} · {Selected.ProfileName}";
 
@@ -414,11 +415,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             // Two endings, because the slot is in a different state in each and the sentence is the
             // only thing that says which. A publish that handed the save back emptied the folder.
-            Status = published.KeptPlaying
+            _toasts.Show(published.KeptPlaying
                 ? $"'{published.Savegame.Name}' is in {_repo.Name}, and checked out to you. " +
                   "The save has not moved - check it in when you want somebody else to be able to take it."
                 : $"'{published.Savegame.Name}' is in {_repo.Name} and is anybody's to take. The local copy went to the " +
-                  "Recycle Bin - check it out again once the game is on that mod list.";
+                  "Recycle Bin - check it out again once the game is on that mod list.");
 
             await ReloadAsync(published.Savegame.Id);
         }
@@ -552,7 +553,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                     IsWorking = false;
                 }
 
-                Status = $"'{row.Name}' is called '{name}' now.";
+                _toasts.Show($"'{row.Name}' is called '{name}' now.");
 
                 await ReloadAsync(row.Id);
 
@@ -716,7 +717,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (await _shellNavigation.GoToProfileHistoryAsync(_repo.Id, profileId) is false)
         {
-            Status = $"'{row.ProfileName}' could not be opened from here.";
+            _toasts.Show($"'{row.ProfileName}' could not be opened from here.", ToastSeverity.Warning);
         }
     }
 
@@ -998,7 +999,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Nothing awaits this, so an escape would go unobserved rather than reaching the shell.
-            Status ??= $"Some of this list could not be checked against your machine: {exception.Message}";
+            // Logged and left to the notice column rather than raised as a dialog: the list is
+            // correct without these chips, and a modal over a list that loaded fine is the wrong size
+            // of answer for a missing caption.
+            _errorReporter.Record(exception, "checking the savegame list against this machine");
+            _problems.Report(BackgroundProblem.DeferredLoad);
         }
     }
 
@@ -1157,7 +1162,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Timeline.Clear();
-            Status = $"Could not read the history of '{row.Name}': {exception.Message}";
+            IsLoadingTimeline = false;
+
+            await _errorReporter.ShowAsync(exception, $"reading the history of '{row.Name}'");
         }
         finally
         {
@@ -1201,7 +1208,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             if (outcome.WasDeferred)
             {
-                Status = $"Left as it is. Your copy of '{row.Name}' is still in its slot and still yours.";
+                _toasts.Show($"Left as it is. Your copy of '{row.Name}' is still in its slot and still yours.");
 
                 return;
             }
@@ -1211,9 +1218,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Status = outcome.KeptPlaying
+            _toasts.Show(outcome.KeptPlaying
                 ? $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server. The save is still in '{game.Name}' and still yours."
-                : $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.";
+                : $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.");
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1274,7 +1281,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Status = $"'{row.Name}' was given back without a snapshot. The local copy is in the Recycle Bin.";
+            _toasts.Show($"'{row.Name}' was given back without a snapshot. The local copy is in the Recycle Bin.");
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1318,7 +1325,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Status = $"ModsDude has stopped tracking '{row.Name}'. The save is still on this disk, and the claim is still yours.";
+            _toasts.Show($"ModsDude has stopped tracking '{row.Name}'. The save is still on this disk, and the claim is still yours.");
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1385,9 +1392,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             var result = await _savegameService.MakeCurrentAsync(
                 [.. _repo.Games], row.Savegame, _lifetime);
 
-            Status = result.Superseded is SavegameDto displaced
+            _toasts.Show(result.Superseded is SavegameDto displaced
                 ? $"'{row.Name}' is {row.ProfileName}'s current savegame and follows it from here. '{displaced.Name}' is past - still playable, and its mod list no longer moves."
-                : $"'{row.Name}' is {row.ProfileName}'s current savegame and follows it from here.";
+                : $"'{row.Name}' is {row.ProfileName}'s current savegame and follows it from here.");
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
@@ -1469,7 +1476,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 _lifetime,
                 revision: row.PinnedRevision ?? profile.HeadRevision);
 
-            Status = outcome.Message;
+            _toasts.Show(outcome.Message, outcome.ToastSeverity);
 
             await _driftMonitor.CheckAsync();
 
@@ -1583,9 +1590,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (outcome.ReleasedTheSlot is false)
         {
-            Status = outcome.WasDeferred
-                ? "That savegame was left checked out, so its slot is still taken."
-                : "That savegame is still checked out, so its slot is still taken.";
+            _toasts.Show(
+                outcome.WasDeferred
+                    ? "That savegame was left checked out, so its slot is still taken."
+                    : "That savegame is still checked out, so its slot is still taken.",
+                ToastSeverity.Warning);
 
             return;
         }
@@ -1620,8 +1629,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             await _savegameService.TakeCopyAsync(
                 game, row.Savegame, snapshotNumber, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
-            Status = $"Snapshot {snapshotNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
-                     "and this machine holds no claim on it - the slot is an ordinary save of your own now.";
+            _toasts.Show($"Snapshot {snapshotNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
+                         "and this machine holds no claim on it - the slot is an ordinary save of your own now.");
 
             return;
         }
@@ -1646,7 +1655,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
-        Status = $"'{row.Name}' is checked out to you, in '{game.Name}'.";
+        _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'.");
 
         await ApplyProfileAsync(game, savegame);
 
@@ -1693,7 +1702,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var outcome = await _applyService.ActivateAsync(
             _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
 
-        Status += $" {outcome.Message}";
+        _toasts.Show(outcome.Message, outcome.ToastSeverity);
 
         await _driftMonitor.CheckAsync();
 

@@ -39,6 +39,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     private readonly ISavegamesClient _savegamesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IToastService _toasts;
 
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -54,7 +55,8 @@ public partial class RepoArchivePageViewModel : PageViewModel
         GameRepository games,
         ISavegamesClient savegamesClient,
         IModalService modalService,
-        IErrorReporter errorReporter)
+        IErrorReporter errorReporter,
+        IToastService toasts)
     {
         _repo = repo;
         _profileService = profileService;
@@ -62,6 +64,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         _savegamesClient = savegamesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;
+        _toasts = toasts;
 
         // Restoring is the same level as the archiving it undoes - curating the repo's profiles and
         // saves is what a Member is for. Losing one for good is not.
@@ -98,13 +101,6 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
     [ObservableProperty]
     private bool _isWorking;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStatus))]
-    private string? _status;
-
-
-    public bool HasStatus => Status is not null;
 
     public bool HasProfiles => Profiles.Count > 0;
     public bool HasSavegames => Savegames.Count > 0;
@@ -230,7 +226,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         {
             await _profileService.RestoreProfile(_repo.Id, item.Id, name, _lifetime.Token);
 
-            Status = $"'{name ?? item.Name}' is back in the sidebar.";
+            _toasts.Show($"'{name ?? item.Name}' is back in the sidebar.");
         }, item, "profile");
     }
 
@@ -241,7 +237,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
             await _savegamesClient.RestoreSavegameV1Async(
                 _repo.Id, item.Id, new RestoreRequest { Name = name }, _lifetime.Token);
 
-            Status = $"'{name ?? item.Name}' is back in the repo's saves.";
+            _toasts.Show($"'{name ?? item.Name}' is back in the repo's saves.");
         }, item, "savegame");
     }
 
@@ -252,7 +248,6 @@ public partial class RepoArchivePageViewModel : PageViewModel
     private async Task RunAsync(Func<string?, Task> restore, ArchivedItemViewModel item, string what)
     {
         IsWorking = true;
-        Status = null;
 
         try
         {
@@ -327,7 +322,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
             // this is the deletion letting go, not the archiving.
             _games.StopTracking(item.Id);
 
-            Status = $"'{item.Name}' is gone for good. Any game that was on it is no longer tracking a profile.";
+            _toasts.Show($"'{item.Name}' is gone for good. Any game that was on it is no longer tracking a profile.");
 
             await ReloadAsync();
         }
@@ -367,7 +362,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         {
             await _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, _lifetime.Token);
 
-            Status = $"'{item.Name}' is gone for good.";
+            _toasts.Show($"'{item.Name}' is gone for good.");
 
             await ReloadAsync();
         }

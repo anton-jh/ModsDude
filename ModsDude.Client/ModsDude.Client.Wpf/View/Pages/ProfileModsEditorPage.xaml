@@ -210,27 +210,15 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <Grid RowDefinitions="auto auto auto *">
+            <Grid RowDefinitions="auto auto *">
 
                 <uc:PageTitle Grid.Row="0" Text="Mods" />
-
-                <!-- Kept until something changes again, so the result of a save is still on screen
-                     to read. -->
-                <Border Grid.Row="1"
-                        Margin="0 0 0 12"
-                        Padding="12 8"
-                        CornerRadius="4"
-                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                        Visibility="{Binding HasSaveSummary, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="{Binding SaveSummary}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                </Border>
 
                 <!-- One search box over both lists. A mod is only ever on one side, so a box that
                      reached only the left one answered half the question - and the half it could
                      not answer was "is this already in the profile?". Same shape as the repo mods
                      page, which has the same two lists and the same question. -->
-                <StackPanel Grid.Row="2" Margin="0 0 0 12">
+                <StackPanel Grid.Row="1" Margin="0 0 0 12">
 
                 <Grid>
 
@@ -266,22 +254,9 @@
 
                 </Grid>
 
-                    <!-- What a paste or a copy found. Sits under the search box because that is
-                         where the reader's eyes already are, and stays until the next one - a report
-                         about a selection has to be readable for as long as the selection is. -->
-                    <Border Margin="0 8 0 0"
-                            Padding="12 8"
-                            CornerRadius="4"
-                            Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                            Visibility="{Binding HasSelectionStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="{Binding SelectionStatus}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    </Border>
-
                 </StackPanel>
 
-                <Grid Grid.Row="3" ColumnDefinitions="* 16 *">
+                <Grid Grid.Row="2" ColumnDefinitions="* 16 *">
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
@@ -1105,61 +1080,6 @@
         </Border>
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
-
-            <!-- What the last bulk move did, and the way back from it. A move of two hundred rows
-                 has to be reversible by something other than doing it again backwards, and the
-                 offer retires itself: the next change of any kind clears it, because the draft it
-                 holds stops being an undo the moment anything is built on top of it. -->
-            <Border Margin="32 0 32 0"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                    Visibility="{Binding HasBulkUndo, Converter={StaticResource BoolToVisibilityConverter}}">
-                <Grid ColumnDefinitions="* auto">
-                    <TextBlock Grid.Column="0"
-                               VerticalAlignment="Center"
-                               Text="{Binding BulkUndo.Text}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    <Button Grid.Column="1"
-                            Margin="12 0 0 0"
-                            Content="Undo"
-                            Command="{Binding UndoBulkCommand}" />
-                </Grid>
-            </Border>
-
-            <Border Margin="32 8 32 0"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                    Visibility="{Binding HasApplyStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="{Binding ApplyStatus}" TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-            </Border>
-
-            <!-- The onboarding case. A mode change with a chosen target does not belong inside a
-                 save, so it is offered afterwards and can be waved away. -->
-            <Border Margin="32 8 32 0"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                    Visibility="{Binding HasActivationOffer, Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding ActivationOffer}"
-                               VerticalAlignment="Center"
-                               Margin="0 0 12 0"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                    <ComboBox Width="200" Margin="0 0 8 0"
-                              VerticalAlignment="Center"
-                              ItemsSource="{Binding ActivationCandidates}"
-                              DisplayMemberPath="Name"
-                              SelectedItem="{Binding ActivationCandidate, Mode=TwoWay}"
-                              Visibility="{Binding HasActivationChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                    <Button Content="Use it" Margin="0 0 8 0" Command="{Binding AcceptActivationOfferCommand}" />
-                    <Button Content="Not now" Command="{Binding DismissActivationOfferCommand}" />
-                </StackPanel>
-            </Border>
 
             <!-- Only while there is something to save: a box that is always there is a field the
                  page is asking to have filled in, and this one is genuinely optional. Fusion 360's

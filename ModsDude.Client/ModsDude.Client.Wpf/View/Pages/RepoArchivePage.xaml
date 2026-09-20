@@ -68,7 +68,7 @@
     </Page.Resources>
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto *">
+        <Grid RowDefinitions="auto auto *">
 
             <uc:PageTitle Grid.Row="0" Text="Archive" />
 
@@ -78,18 +78,7 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Profiles and savegames that have been put away. They still exist and anything pointing at them still does - they are out of the lists, and they no longer hold their names." />
 
-            <Border Grid.Row="2"
-                    Margin="0 0 0 16"
-                    Padding="12 8"
-                    CornerRadius="4"
-                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                    Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="{Binding Status}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-            </Border>
-
-            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
                     <TextBlock Text="Profiles"

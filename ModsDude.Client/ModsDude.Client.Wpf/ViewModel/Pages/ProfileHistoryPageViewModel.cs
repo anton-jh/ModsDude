@@ -39,6 +39,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IToastService _toasts;
     private readonly ShellNavigationService _shellNavigation;
 
     private ProfileHistory? _fetched;
@@ -69,9 +70,11 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         ModListItemViewModel.Factory itemFactory,
         IModalService modalService,
         IErrorReporter errorReporter,
+        IToastService toasts,
         ShellNavigationService shellNavigation)
     {
         _errorReporter = errorReporter;
+        _toasts = toasts;
         _shellNavigation = shellNavigation;
         _repo = repo;
         _profile = profile;
@@ -157,10 +160,6 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     [NotifyCanExecuteChangedFor(nameof(SaveAsCommand))]
     private bool _isWorking;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStatus))]
-    private string? _status;
-
     /// <summary>
     /// Set when the listing was windowed. Nothing pages further yet, and saying so beats a list that
     /// quietly stops - see docs/PLAN.md.
@@ -171,7 +170,6 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
 
     public bool HasSelection => Selected is not null;
-    public bool HasStatus => Status is not null;
     public bool HasOlder => HasMore;
 
     public bool ShowContents => ShowChanges is false;
@@ -276,13 +274,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         }
 
         IsWorking = true;
-        Status = null;
 
         try
         {
             var result = await _profileService.PruneRevisions(_repo.Id, _profile.Id, marked, cancellationToken);
 
-            Status = Describe(result);
+            _toasts.Show(Describe(result));
 
             if (result.Blocked.Any())
             {
@@ -407,7 +404,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         {
             var restored = await _profileService.RestoreRevision(_repo.Id, _profile.Id, revision.Number, cancellationToken);
 
-            Status = $"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.";
+            _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.");
 
             await ReloadAsync(select: restored.Number, cancellationToken);
         }
@@ -451,7 +448,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
                 new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
                 cancellationToken);
 
-            Status = $"Created '{name}' from revision {revision.Number}. It is in the sidebar.";
+            _toasts.Show($"Created '{name}' from revision {revision.Number}. It is in the sidebar.");
         }
         finally
         {
@@ -601,9 +598,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Nothing awaits this - selecting a row starts it - so an exception that escaped would
-            // go unobserved rather than reaching the shell's handler. Said on the page instead.
+            // go unobserved rather than reaching the shell's handler. Said in the error dialog
+            // instead, with the spinner already off: the dialog stays up until it is closed.
             Mods.Clear();
-            Status = $"Could not read revision {revision}: {exception.Message}";
+            IsLoadingMods = false;
+
+            await _errorReporter.ShowAsync(exception, $"reading revision {revision} of '{_profile.Name}'");
         }
         finally
         {
@@ -658,7 +658,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         {
             Changes.Clear();
             ComparisonIsEmpty = true;
-            Status = $"Could not compare revisions {against.Number} and {selected.Number}: {exception.Message}";
+            IsLoadingChanges = false;
+            OnPropertyChanged(nameof(HasNoChanges));
+
+            await _errorReporter.ShowAsync(
+                exception,
+                $"comparing revisions {against.Number} and {selected.Number} of '{_profile.Name}'");
         }
         finally
         {

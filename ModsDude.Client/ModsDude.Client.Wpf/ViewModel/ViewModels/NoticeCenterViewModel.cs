@@ -60,7 +60,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly INoticeEnvironment _environment;
     private readonly DismissalLedger _dismissals;
     private readonly BackgroundProblemSource _problems;
-    private readonly ProfileSaveService _saves;
     private readonly ILogger _logger;
 
     /// <summary>The one place a notice is suppressed: the drifted profile's own mod list editor.</summary>
@@ -91,7 +90,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         INoticeEnvironment environment,
         DismissalLedger dismissals,
         BackgroundProblemSource problems,
-        ProfileSaveService saves,
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;
@@ -104,7 +102,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _environment = environment;
         _dismissals = dismissals;
         _problems = problems;
-        _saves = saves;
         _logger = logger;
 
         _monitor.Changed += OnDriftChanged;
@@ -126,7 +123,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         _dismissals.Changed += OnRedrawNeeded;
         _problems.Changed += OnRedrawNeeded;
-        _saves.Changed += OnRedrawNeeded;
     }
 
 
@@ -243,7 +239,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _bindingStore.BindingsChanged -= OnFactsChanged;
         _dismissals.Changed -= OnRedrawNeeded;
         _problems.Changed -= OnRedrawNeeded;
-        _saves.Changed -= OnRedrawNeeded;
     }
 
 
@@ -255,16 +250,11 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // button, because the user is saying the same thing to both.
         _dismissals.DismissAll([.. Notices
             .Select(x => x.Model)
-            .Where(x => BackgroundProblemSource.Owns(x.Key) is false && ProfileSaveService.Owns(x.Key) is false)]);
+            .Where(x => BackgroundProblemSource.Owns(x.Key) is false)]);
 
         if (Notices.Any(x => BackgroundProblemSource.Owns(x.Key)))
         {
             _problems.Dismiss();
-        }
-
-        foreach (var save in Notices.Select(x => x.Model.Key).Where(ProfileSaveService.Owns).ToList())
-        {
-            _saves.Dismiss(save);
         }
     }
 
@@ -299,15 +289,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         if (BackgroundProblemSource.Owns(notice.Key))
         {
             _problems.Dismiss();
-
-            return;
-        }
-
-        // Dismissing a save's outcome forgets it rather than filing it: it is a report about
-        // something that has already finished, so there is nothing for it to come back for.
-        if (ProfileSaveService.Owns(notice.Key))
-        {
-            _saves.Dismiss(notice.Key);
 
             return;
         }
@@ -491,10 +472,6 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         var built = NoticeBuilder.Build(drifted, _monitor.StoreCorruption, _environment)
             .Concat(_problems.Build())
-            // A save that finished with no editor on screen. The strip was enough while it ran; what
-            // it has no way to say afterwards is that it failed, which used to be a modal raised by a
-            // page that no longer existed.
-            .Concat(_saves.Build())
             .ToList();
 
         // Forgotten before they are applied, so a problem waved away and then actually fixed leaves

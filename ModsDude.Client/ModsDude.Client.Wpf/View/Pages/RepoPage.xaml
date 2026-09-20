@@ -118,26 +118,14 @@
                     </Grid>
 
                     <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
-                         being so when a profile is open. The status slot follows it - why the button is closed
-                         where it is, otherwise what it last did - on the line where it will be read rather than
-                         only in a tooltip on a disabled button. -->
-                    <Grid Grid.Row="1" Margin="0 4 0 0" ColumnDefinitions="auto *">
-                        <TextBlock Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   FontSize="14"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="{Binding GameName}" />
-
-                        <TextBlock Grid.Column="1"
-                                   Margin="16 0 0 0"
-                                   VerticalAlignment="Center"
-                                   FontSize="13"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                                   Text="{Binding OpenProfile.StatusText}"
-                                   ToolTip="{Binding OpenProfile.StatusText}"
-                                   Visibility="{Binding OpenProfile.HasStatusText, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}" />
-                    </Grid>
+                         being so when a profile is open. Why the button beside it is closed is its tooltip's to
+                         say, and what it last did is a toast's. -->
+                    <TextBlock Grid.Row="1"
+                               Margin="0 4 0 0"
+                               VerticalAlignment="Center"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding GameName}" />
                 </Grid>
 
                 <!-- Labelled for what it will do - Activate, or Re-apply where the game is already on this
