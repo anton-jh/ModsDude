@@ -100,6 +100,7 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
             sourceRevision: source);
 
         dbContext.ProfileRevisions.Add(revision);
+        await dbContext.ReleasePinnedAsync(profile, pins, cancellationToken);
 
         try
         {

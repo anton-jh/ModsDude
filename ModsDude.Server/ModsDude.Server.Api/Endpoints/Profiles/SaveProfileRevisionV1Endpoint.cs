@@ -119,6 +119,7 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
             ProfileRevisionOrigin.Saved);
 
         dbContext.ProfileRevisions.Add(revision);
+        await dbContext.ReleasePinnedAsync(profile, pins, cancellationToken);
 
         try
         {

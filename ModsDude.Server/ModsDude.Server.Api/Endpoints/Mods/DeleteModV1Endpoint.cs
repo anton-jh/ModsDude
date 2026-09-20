@@ -57,6 +57,10 @@ public class DeleteModV1Endpoint : IEndpoint
         // No gap to close: the whole run of sequence numbers goes with the mod.
         dbContext.ModVersions.RemoveRange(versions);
 
+        // Off every ignore list in the repo, in the same commit. A mod that is removed and imported again
+        // later must not come back already hidden from the lists it used to be ignored in.
+        await dbContext.ReleaseModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         foreach (var version in versions)

@@ -35,6 +35,21 @@ public static class ProfileRevisionExtensions
         return [.. rows.Select(x => new ProfileModPin(x.ModId, x.VersionId, x.Locked))];
     }
 
+    /// <summary>Which mods a revision pins, and nothing else about them.</summary>
+    public static async Task<HashSet<ModId>> GetPinnedModIdsAsync(
+        this DbSet<ProfileRevision> dbSet,
+        RepoId repoId, ProfileId profileId, RevisionNumber number,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
+            .SelectMany(x => x.ModDependencies)
+            .Select(x => x.ModVersion.ModId)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows];
+    }
+
     /// <summary>
     /// The same set with each version's content hash, which is what sync reads: it works from a
     /// profile's dependencies rather than from the repo's mod list, and without the hash here every

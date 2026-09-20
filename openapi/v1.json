@@ -745,6 +745,7 @@
           "https://server.modsdude.com/api/problems/cannot-delete-head-savegame-snapshot",
           "https://server.modsdude.com/api/problems/not-archived",
           "https://server.modsdude.com/api/problems/batch-too-large",
+          "https://server.modsdude.com/api/problems/ignored-mod-pinned",
           "https://server.modsdude.com/api/problems/invalid-cursor",
           "https://server.modsdude.com/api/problems/invite-not-found",
           "https://server.modsdude.com/api/problems/invite-not-usable",
@@ -785,6 +786,7 @@
           "CannotDeleteHeadSavegameSnapshot",
           "NotArchived",
           "BatchTooLarge",
+          "IgnoredModPinned",
           "InvalidCursor",
           "InviteNotFound",
           "InviteNotUsable",
@@ -847,6 +849,18 @@
           "repoId": {
             "format": "guid",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileIgnoredModsDto": {
+        "additionalProperties": false,
+        "properties": {
+          "modIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -1481,6 +1495,18 @@
           "images": {
             "items": {
               "$ref": "#/components/schemas/ModImageReferenceDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SetProfileIgnoredModsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "modIds": {
+            "items": {
+              "type": "string"
             },
             "type": "array"
           }
@@ -4107,6 +4133,170 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProfileDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/profiles/{profileId}/ignoredMods": {
+      "get": {
+        "operationId": "GetProfileIgnoredModsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileIgnoredModsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "put": {
+        "operationId": "SetProfileIgnoredModsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProfileIgnoredModsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileIgnoredModsDto"
                 }
               }
             },

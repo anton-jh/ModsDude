@@ -1056,6 +1056,43 @@ is undiscoverable, awkward over a long list and impossible without a pointer. Th
 name of the side it started on — what moves is whatever that side has selected, which the view model
 already knows — which makes the rule for a valid drop simply that the two sides differ.
 
+#### The left list can hide what is ignored
+
+The left list is mostly noise for anybody with a large folder or a large repo: things that will never
+be in this profile, and other versions of mods whose pin is not going to move. Two things are hidden
+by default and shown together by one **eye toggle** beside the list's count:
+
+- **Ignored mods** — mods somebody ignored in this profile (`ProfileIgnoredMod`, see
+  [02 — Ignored mods](02-domain-model.md#ignored-mods)). The row's own crossed-out eye ignores it,
+  the open eye on a shown row stops ignoring it, and the selection bar has a bulk **Ignore** and
+  **Stop ignoring** that say how many of the picked rows they will take.
+- **Other versions of a locked pin.** A mod the profile pins *and holds in place* offers no update
+  that the profile is going to take, so its other versions are ignored for as long as the lock
+  stands. Nobody decided this, so the row's eye is greyed and says why; unlocking the pin turns the
+  row back into the update it is.
+
+**The toggle is a filter, not a source.** It narrows what the enabled sources offer and never adds a
+row they did not, so it composes with the search and the filter chips and sits with the count rather
+than in the source chips. Its count is taken against everything else the list applies, so it says how
+many rows clicking it would reveal; and the list's own total leaves ignored rows out while they are
+hidden, because hidden by a toggle is not hidden by a search.
+
+**A pinned mod is never ignored, and the draft decides.** `ProfileIgnoring.Classify` answers the pin
+first: a mod the server lists as ignored and this draft has pinned is an ordinary update row until a
+save says otherwise, which is what lets discarding undo the pin without the ignore list having moved.
+
+**Ignoring is part of the draft, and is saved with it.** The eye edits a list on the page, which counts as an
+unsaved change, is reverted by Discard, and is written by Save - as the whole list, to its own route, *after*
+the revision and only if the revision was written. A failed ignore write does not undo the revision; the
+save says which half did not land. A pin never mutates the list: what is written is the ignored mods minus
+the draft's pins (`ProfileIgnoring.WithoutPinned`), so pinning an ignored mod and then discarding puts it
+back.
+
+**A save that only changes what is ignored** mints no revision, imports nothing, does not re-apply the
+profile even where it is the active one, and does not check for drift - nothing a folder was built from
+has moved. Its button reads *Save changes* rather than *Save and apply*, and the *Save only* variant is
+not offered (`WillApply`).
+
 ### Import on save
 
 Nothing is uploaded until Save. A local-only mod moved rightward is a **pending** row; Save

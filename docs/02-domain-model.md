@@ -565,6 +565,39 @@ See [03 — Server](03-server.md#persistence).
 what a comparison works in. It is the shape of a dependency with the version's whole record left
 behind.
 
+### Ignored mods
+
+A profile can also carry a set of mods somebody has **actively excluded** — noise in the editor's
+left list, as opposed to a mod that is merely not in the profile yet. `ProfileIgnoredMod` is a row
+of `(RepoId, ProfileId, ModId)`.
+
+**It is not part of a revision.** A revision records what the profile pins, and ignoring a mod
+changes nothing about what the profile applies; it only decides which rows the editor offers. Were
+it versioned, every triaged mod would put a revision in the history, and restoring an old revision
+would silently un-ignore whatever had been ignored since. It is written on its own, through its own
+route, and is not atomic with a save.
+
+**A mod, not a version, and no foreign key onto one.** The left list is keyed by mod, and it holds
+mods that exist only in somebody's folder — the ones most worth ignoring, and the ones the repo has
+never registered. The row cascades from the profile, and so from the repo.
+
+**A pinned mod cannot also be ignored**, and it is held from both directions. Writing the list is
+*refused* if it overlaps what the profile's head pins - only the head: an older revision may well have
+pinned a mod that is ignored now, which is the point of ignoring it. And every write of a revision — a save, a restore — releases whatever it
+pins, in the same unit of work (`ProfileIgnoredModExtensions.ReleasePinnedAsync`), so a mod ignored
+yesterday and pinned today stops being ignored without either write knowing about the other.
+
+**The route takes the whole list**, like a save: `PUT …/ignoredMods` with `{ modIds }` replaces what the
+profile ignores. Two members writing at once is last write wins, which is a fair price for state that
+only decides which rows an editor offers.
+
+**Removing a mod from the repo takes it off every ignore list in the repo** (`DeleteModV1Endpoint`, which
+is also where deleting a mod's last version is redirected), so a mod that is imported again later does
+not come back already hidden. The rows cascade from the profile in the database, and so from the repo.
+
+See [09 — The left list can hide what is ignored](09-mod-catalog.md#the-left-list-can-hide-what-is-ignored)
+for what the client does with it.
+
 ## Savegame
 
 `ModsDude.Server.Domain/Savegames/`

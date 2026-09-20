@@ -494,6 +494,8 @@ everybody.
 | PUT | `repos/{repoId}/profiles/{profileId}/revisions` | Member | **Saves the mod list.** The whole list, based on a revision number |
 | POST | `repos/{repoId}/profiles/{profileId}/revisions/{number}/restore` | Member | Copies an older revision forward as a new one |
 | POST | `repos/{repoId}/profiles/{profileId}/revisions/prune` | **Admin** | Deletes old revisions. Refuses the head and any revision a savegame was played on, naming which |
+| GET | `repos/{repoId}/profiles/{profileId}/ignoredMods` | Guest | The mods the profile ignores. Not part of a revision - see [02 — Ignored mods](02-domain-model.md#ignored-mods) |
+| PUT | `repos/{repoId}/profiles/{profileId}/ignoredMods` | Member | Replaces the ignored list (`{ modIds }`). Refused with `ignored-mod-pinned` where it overlaps what the head pins. Written after a save, not with it |
 
 Same singular/plural inconsistency on the single-profile GET.
 

@@ -50,6 +50,12 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
     public ProfileModListChanges? Changes { get; init; }
     public IReadOnlyList<ProfileModPin> Saved { get; init; } = [];
 
+    /// <summary>
+    /// Whether a revision was written. False for a save that only changed what is ignored, which is
+    /// not an event a folder can have drifted from.
+    /// </summary>
+    public bool RevisionWritten { get; init; }
+
     /// <summary>What the re-apply did, where the save asked for one. Null where it did not.</summary>
     public string? ApplyMessage { get; init; }
 
@@ -73,6 +79,12 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
 /// The starting page's catalog, invalidated when the run ends however it ends. Passed rather than
 /// owned, exactly as <see cref="ModImportCoordinator"/> takes it.
 /// </param>
+/// <param name="IgnoredOriginal">The ignore list as the server held it when the draft was read.</param>
+/// <param name="IgnoredDesired">
+/// What the profile should ignore after the save, with whatever the draft pins already taken out. It is
+/// written <em>after</em> the revision and only if that succeeded, and on its own where the mod list did
+/// not change - which mints no revision, imports nothing and applies nothing.
+/// </param>
 /// <param name="Apply">Whether to re-apply afterwards. <em>Save only</em> is what clears it.</param>
 public sealed record ProfileSaveRequest(
     Repo Repo,
@@ -82,10 +94,16 @@ public sealed record ProfileSaveRequest(
     string? Label,
     IReadOnlyList<ProfileModPin> Original,
     IReadOnlyList<ProfileModPin> Desired,
+    IReadOnlyList<ModKey> IgnoredOriginal,
+    IReadOnlyList<ModKey> IgnoredDesired,
     IReadOnlyList<CatalogModVersion> Pending,
     IReadOnlyDictionary<ModVersionIdentity, string> Names,
     ModCatalog Catalog,
-    bool Apply);
+    bool Apply)
+{
+    /// <summary>Whether the ignore list differs from what the server holds, and so has to be written.</summary>
+    public bool IgnoredChanged => IgnoredDesired.ToHashSet().SetEquals(IgnoredOriginal) is false;
+}
 
 
 /// <summary>
@@ -445,7 +463,7 @@ public sealed class ProfileSaveService(
             // built against the previous one is drifted from that moment - including where the save
             // did not apply, which is precisely the case where the drift is real and nothing else
             // would have looked.
-            if (outcome.Succeeded)
+            if (outcome.Succeeded && outcome.RevisionWritten)
             {
                 await driftMonitor.CheckAsync();
             }
@@ -469,6 +487,11 @@ public sealed class ProfileSaveService(
     private async Task<ProfileSaveOutcome> SaveAsync(ProfileSaveRun run, CancellationToken cancellationToken)
     {
         var request = run.Request;
+
+        if (ProfileModListDiff.Compute(request.Original, request.Desired).IsEmpty)
+        {
+            return await SaveIgnoredOnlyAsync(run, cancellationToken);
+        }
 
         run.Strip?.Report(request.Pending.Count == 0
             ? "Writing the revision"
@@ -516,13 +539,95 @@ public sealed class ProfileSaveService(
 
         var changes = ProfileModListDiff.Compute(request.Original, request.Desired);
 
-        return new ProfileSaveOutcome(ProfileSaveStatus.Saved, Describe(changes))
+        // Only now, and only because the revision is written: the ignore list is not atomic with it,
+        // and a list saved beside a mod list that was not would be half a save. A failure here does
+        // not undo the revision - it is said, beside what did save.
+        var ignoredNote = await WriteIgnoredAsync(run, cancellationToken);
+
+        return new ProfileSaveOutcome(
+            ProfileSaveStatus.Saved,
+            ignoredNote is null ? Describe(changes) : $"{Describe(changes)} {ignoredNote}")
         {
             Revision = revision,
             Changes = changes,
             Saved = request.Desired,
+            RevisionWritten = true,
             ApplyMessage = await ApplyAsync(request, cancellationToken)
         };
+    }
+
+    /// <summary>
+    /// A save whose mod list did not change: the ignore list, and nothing else. No revision, no import,
+    /// no apply and no drift check - nothing a folder was built from has moved, so there is nothing to
+    /// bring back into line.
+    /// </summary>
+    private async Task<ProfileSaveOutcome> SaveIgnoredOnlyAsync(ProfileSaveRun run, CancellationToken cancellationToken)
+    {
+        var request = run.Request;
+
+        var failure = await WriteIgnoredAsync(run, cancellationToken);
+
+        if (failure is not null)
+        {
+            return new ProfileSaveOutcome(ProfileSaveStatus.Failed, failure);
+        }
+
+        var count = request.IgnoredDesired.Count;
+
+        return new ProfileSaveOutcome(
+            ProfileSaveStatus.Saved,
+            count switch
+            {
+                0 => "Saved. Nothing is ignored in this profile now.",
+                1 => "Saved. 1 mod is ignored in this profile.",
+                _ => $"Saved. {count} mods are ignored in this profile."
+            })
+        {
+            // Unchanged: no revision was written, and the page's baseline must stay on the one it has.
+            Revision = request.BasedOn,
+            Saved = request.Desired
+        };
+    }
+
+    /// <summary>
+    /// Replaces what the profile ignores with the draft's list, when it differs. Null on success, and
+    /// otherwise the sentence saying it did not.
+    /// </summary>
+    /// <remarks>
+    /// The whole list rather than a change to it: the list belongs to one profile and is saved the way
+    /// the mod list is, as what the page showed. See <c>ProfileIgnoredMod</c>.
+    /// </remarks>
+    private async Task<string?> WriteIgnoredAsync(ProfileSaveRun run, CancellationToken cancellationToken)
+    {
+        var request = run.Request;
+
+        if (request.IgnoredChanged is false)
+        {
+            return null;
+        }
+
+        run.Strip?.Report("Saving the ignored mods");
+
+        try
+        {
+            await profilesClient.SetProfileIgnoredModsV1Async(
+                request.Repo.Id,
+                request.ProfileId,
+                new SetProfileIgnoredModsRequest { ModIds = [.. request.IgnoredDesired.Select(x => x.Value)] },
+                cancellationToken);
+
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await OnUiThreadAsync(() => errorReporter.ShowAsync(exception, $"saving the ignored mods of '{request.ProfileName}'"));
+
+            return "The ignored mods could not be saved, so they are as they were.";
+        }
     }
 
     /// <summary>

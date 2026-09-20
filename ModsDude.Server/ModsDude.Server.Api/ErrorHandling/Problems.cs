@@ -311,6 +311,18 @@ public static class Problems
         Detail = $"{what} '{id}' has to be archived before it can be permanently deleted."
     };
 
+    /// <summary>
+    /// The ignored list overlaps what the profile pins. A pinned mod cannot also be ignored, and the
+    /// client resolves it before it asks, so reaching this is a client that has fallen out of step -
+    /// refused rather than quietly dropped, because dropping would hide the disagreement.
+    /// </summary>
+    public static CustomProblemDetails IgnoredModPinned(IReadOnlyCollection<ModId> modIds) => new()
+    {
+        Type = ProblemType.IgnoredModPinned,
+        Title = "A pinned mod cannot be ignored",
+        Detail = $"The profile pins {string.Join(", ", modIds.Take(5).Select(x => $"'{x.Value}'"))}{(modIds.Count > 5 ? $" and {modIds.Count - 5} more" : "")}, so {(modIds.Count == 1 ? "it cannot" : "they cannot")} also be ignored."
+    };
+
     public static CustomProblemDetails BatchTooLarge(int size, int maximum) => new()
     {
         Type = ProblemType.BatchTooLarge,
@@ -494,6 +506,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "batch-too-large")]
         [JsonStringEnumMemberName(_typeBaseUri + "batch-too-large")]
         BatchTooLarge,
+
+        [EnumMember(Value = _typeBaseUri + "ignored-mod-pinned")]
+        [JsonStringEnumMemberName(_typeBaseUri + "ignored-mod-pinned")]
+        IgnoredModPinned,
 
         [EnumMember(Value = _typeBaseUri + "invalid-cursor")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-cursor")]

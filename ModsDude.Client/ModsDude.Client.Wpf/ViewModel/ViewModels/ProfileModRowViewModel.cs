@@ -156,6 +156,37 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     [NotifyPropertyChangedFor(nameof(UpdateTooltip))]
     private bool _updateImportsOnSave;
 
+    /// <summary>
+    /// Why the left list would leave this row out by default, if it would. Set by the page beside the
+    /// status chip, because it is the draft that decides it - a pin, or a lock on one, is what turns a
+    /// row from ordinary into noise.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIgnored))]
+    [NotifyPropertyChangedFor(nameof(CanToggleIgnore))]
+    [NotifyPropertyChangedFor(nameof(IgnoreTooltip))]
+    private IgnoreState _ignoreState;
+
+    /// <summary>Set apart from the rest, by somebody's decision or by a lock.</summary>
+    public bool IsIgnored => IgnoreState is IgnoreState.Ignored or IgnoreState.OtherVersionOfLocked;
+
+    /// <summary>
+    /// Whether the row's eye does anything. Only somebody's own decision can be reversed from here: a
+    /// pin cannot be ignored, and a version of a locked one is ignored by the lock rather than by
+    /// anybody.
+    /// </summary>
+    public bool CanToggleIgnore => IgnoreState is IgnoreState.Ignored or IgnoreState.None;
+
+    public string IgnoreTooltip => IgnoreState switch
+    {
+        IgnoreState.Ignored => "Ignored. Click to stop ignoring this mod in this profile.",
+        IgnoreState.OtherVersionOfLocked =>
+            "Ignored because this profile holds its pin of this mod in place at another version. "
+            + "Unlock the pin and this is an update again.",
+        IgnoreState.Pinned => "Pinned in this profile, so it cannot be ignored.",
+        _ => "Ignore this mod in this profile. It is hidden from this list until you show ignored mods."
+    };
+
 
     /// <remarks>
     /// Written by hand rather than generated, because a locked pin has to be asked about

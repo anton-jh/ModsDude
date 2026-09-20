@@ -57,7 +57,7 @@
                             </Trigger>
                             <!-- With nothing to apply to there is no caret beside it, so it rounds
                                  on both sides again. -->
-                            <DataTrigger Binding="{Binding HasApplyTargets}" Value="False">
+                            <DataTrigger Binding="{Binding WillApply}" Value="False">
                                 <Setter TargetName="Background" Property="CornerRadius" Value="4" />
                                 <Setter TargetName="FocusRing" Property="CornerRadius" Value="4" />
                             </DataTrigger>
@@ -287,7 +287,7 @@
                          mod can be added and imported without a detour to the management page. -->
                     <Grid Grid.Column="0" RowDefinitions="auto auto auto * auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
+                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto auto">
 
                             <!-- Selecting everything the list is showing, which is what the search
                                  and the chips below exist to define. Three-valued because a
@@ -323,7 +323,43 @@
                                     Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibilityConverter}}"
                                     Command="{Binding ToggleRemovalsCommand}" />
 
-                            <TextBlock Grid.Column="3"
+                            <!-- Shows or hides what is ignored: mods somebody ignored in this profile,
+                                 and other versions of mods it locks. A filter over the list rather
+                                 than a source chip - it never adds a row the sources did not offer -
+                                 so it sits with the list's count. Crossed out while they are hidden,
+                                 open while they are shown, which is the row's own eye read the same
+                                 way. -->
+                            <ToggleButton Grid.Column="3"
+                                          Margin="8 0 0 0"
+                                          Width="Auto"
+                                          MinWidth="36"
+                                          Padding="8 0"
+                                          Style="{DynamicResource SubtleIconToggleButton}"
+                                          IsChecked="{Binding ShowIgnored, Mode=TwoWay}"
+                                          ToolTip="{Binding IgnoredToggleTooltip}"
+                                          ToolTipService.ShowDuration="20000">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="&#xED1A;" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowIgnored}" Value="True">
+                                                        <Setter Property="Text" Value="&#xE890;" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Margin="6 0 0 0"
+                                               VerticalAlignment="Center"
+                                               FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               Text="{Binding IgnoredText}"
+                                               Visibility="{Binding HasIgnored, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <TextBlock Grid.Column="4"
                                        Margin="12 0 0 0"
                                        VerticalAlignment="Center"
                                        Text="{Binding AvailableCountText}"
@@ -470,10 +506,50 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:ProfileModRowViewModel}">
                                             <Grid ColumnDefinitions="* auto">
+
+                                                <!-- Dimmed where the row is only here because ignored mods
+                                                     are being shown. -->
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsIgnored}" Value="True">
+                                                                <Setter Property="Opacity" Value="0.55" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
+
                                                 <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
 
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                                                             IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+
+                                                    <!-- Ignore this mod in this profile, or stop. The glyph is
+                                                         what pressing it would do: crossed out to hide, open
+                                                         to bring back. It stays here, greyed and saying why,
+                                                         for the rows it cannot act on - a pinned mod cannot be
+                                                         ignored, and a version of a locked one already is. -->
+                                                    <Button Margin="0 0 4 0"
+                                                            IsEnabled="{Binding CanToggleIgnore}"
+                                                            ToolTip="{Binding IgnoreTooltip}"
+                                                            ToolTipService.ShowOnDisabled="True"
+                                                            ToolTipService.ShowDuration="20000"
+                                                            Command="{Binding DataContext.ToggleIgnoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                            CommandParameter="{Binding}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                                                <Setter Property="Content" Value="&#xED1A;" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IgnoreState}" Value="Ignored">
+                                                                        <Setter Property="Content" Value="&#xE890;" />
+                                                                    </DataTrigger>
+                                                                    <Trigger Property="IsEnabled" Value="False">
+                                                                        <Setter Property="Opacity" Value="0.4" />
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
 
                                                     <!-- The list is keyed by mod, so which version the
                                                          + or the ⬆ would add is a choice on the row -
@@ -550,7 +626,7 @@
                         <Border Grid.Row="4"
                                 Style="{StaticResource SelectionBar}"
                                 Visibility="{Binding AvailableSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid RowDefinitions="auto auto">
+                            <Grid RowDefinitions="auto auto auto">
 
                                 <Grid Grid.Row="0" ColumnDefinitions="* auto">
                                     <Button Grid.Column="0"
@@ -566,7 +642,28 @@
                                             Command="{Binding ClearAvailableSelectionCommand}" />
                                 </Grid>
 
-                                <Grid Grid.Row="1"
+                                <!-- Ignoring the picked mods, or bringing them back. Each says how many of
+                                     the picked rows it will take, and is greyed where it would take none:
+                                     pinned mods, and versions of locked ones, are not the selection's to
+                                     ignore. -->
+                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* *">
+                                    <Button Grid.Column="0"
+                                            Margin="0 0 4 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="{Binding IgnoreSelectedText}"
+                                            ToolTip="Hide the picked mods from this list. Pinned mods and mods already ignored are left alone."
+                                            ToolTipService.ShowOnDisabled="True"
+                                            Command="{Binding IgnoreSelectedCommand}" />
+                                    <Button Grid.Column="1"
+                                            Margin="4 0 0 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="{Binding UnignoreSelectedText}"
+                                            ToolTip="Stop ignoring the picked mods that somebody ignored. Other versions of locked mods stay ignored while the lock does."
+                                            ToolTipService.ShowOnDisabled="True"
+                                            Command="{Binding UnignoreSelectedCommand}" />
+                                </Grid>
+
+                                <Grid Grid.Row="2"
                                       Margin="0 8 0 0"
                                       ColumnDefinitions="* auto"
                                       Visibility="{Binding AvailableSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -1103,7 +1200,7 @@
                                   Style="{StaticResource SaveSplitCaret}"
                                   ToolTip="Other ways to save"
                                   IsEnabled="{Binding IsEnabled, ElementName=SaveButton}"
-                                  Visibility="{Binding HasApplyTargets, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                  Visibility="{Binding WillApply, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <!-- Opens upwards, because the button sits on the bottom edge of the page, and
                          hangs off the pair rather than off the caret alone so a menu wider than the

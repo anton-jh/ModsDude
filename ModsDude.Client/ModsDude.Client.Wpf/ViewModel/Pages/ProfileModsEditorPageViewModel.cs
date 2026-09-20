@@ -210,6 +210,22 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private Dictionary<ModKey, ModVersionKey> _pinnedVersions = [];
 
     /// <summary>
+    /// The same pins with whether each is held in place, which is all the ignore rule reads of them.
+    /// Its own dictionary because <see cref="_pinnedVersions"/> is asked a different question per row.
+    /// </summary>
+    private Dictionary<ModKey, (ModVersionKey Version, bool Locked)> _pinnedState = [];
+
+    /// <summary>
+    /// The mods this draft ignores. Edited by the eye buttons and written by a save, like the pins - see
+    /// <see cref="ProfileIgnoring"/> for how a pin overrides it, and <see cref="DesiredIgnored"/> for what is
+    /// actually written.
+    /// </summary>
+    private HashSet<ModKey> _ignoredMods = [];
+
+    /// <summary>What the server held when it was last read. A save writes the ignore list only if it differs.</summary>
+    private HashSet<ModKey> _originalIgnored = [];
+
+    /// <summary>
     /// The mods this draft has moved to a version before the one the profile held when it was read. The
     /// user chose that, so the left list does not offer the way back as though it were an update - see
     /// <see cref="FindDowngraded"/>.
@@ -432,6 +448,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(RemovalToggleTooltip))]
     private bool _showRemovals = true;
 
+    /// <summary>
+    /// Whether the left list is showing what is set apart as ignored. Off by default, which is the point
+    /// of ignoring anything. <b>A filter, not a source:</b> it narrows what the enabled sources offer and
+    /// never adds to it, so it composes with the search and the chips like any of them and sits with the
+    /// list's count rather than in the source chips.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IgnoredToggleTooltip))]
+    private bool _showIgnored;
+
+    /// <summary>
+    /// How many rows the left list is leaving out, or showing dimmed, because they are ignored -
+    /// counted against everything the list applies but this, so it says how many the toggle would
+    /// reveal.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IgnoredText))]
+    [NotifyPropertyChangedFor(nameof(HasIgnored))]
+    [NotifyPropertyChangedFor(nameof(IgnoredToggleTooltip))]
+    private int _ignoredCount;
+
     /// <summary>Of those, how many the ordering could not compare against what the repo holds.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AmbiguousText))]
@@ -533,6 +570,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool _hasUnsavedChanges;
 
     /// <summary>
+    /// Whether the mod list itself differs from the server's: the part of a save that is a revision, an
+    /// import and a re-apply. A draft with only <see cref="HasIgnoredChanges"/> is saved without any of
+    /// them, and its button says so.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveActionText))]
+    [NotifyPropertyChangedFor(nameof(WillApply))]
+    [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
+    private bool _hasModListChanges;
+
+    /// <summary>Whether the ignore list differs from the server's.</summary>
+    [ObservableProperty]
+    private bool _hasIgnoredChanges;
+
+    /// <summary>
     /// What to call this save in the profile's history. Optional, and never required: a field the
     /// save button refused to work without would be answered with "asdf" by the third save, and a
     /// history of "asdf" is worse than a history of unnamed revisions with honest counts.
@@ -580,6 +632,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(RestoreRemovedCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveAllShownCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(IgnoreSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UnignoreSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleIgnoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(LockSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(UnlockSelectedCommand))]
@@ -614,6 +669,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveActionText))]
     [NotifyPropertyChangedFor(nameof(HasApplyTargets))]
+    [NotifyPropertyChangedFor(nameof(WillApply))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     private Game? _applyTarget;
 
@@ -643,7 +699,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public bool HasApplyTargets => ApplyTarget is not null;
     public bool HasApplyStatus => ApplyStatus is not null;
 
-    public string SaveActionText => ProfileApplyTarget.DescribeSaveAction(HasApplyTargets);
+    /// <summary>
+    /// Whether a save would re-apply the profile. Not for one that only changes what is ignored: that
+    /// changes nothing a folder was built from, so applying it would be a pointless rewrite of installed
+    /// mods - and its button must not say otherwise.
+    /// </summary>
+    public bool WillApply => HasApplyTargets && HasModListChanges;
+
+    public string SaveActionText => ProfileApplyTarget.DescribeSaveAction(WillApply);
 
     /// <summary>
     /// Worded with the consequence rather than as a caution. Someone reading only the label has to be
@@ -688,6 +751,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public string RemovalToggleTooltip => ShowRemovals
         ? "Taken out of the profile, and shown here until you save. Click to hide them."
         : "Taken out of the profile and hidden. Click to show them again.";
+
+    public bool HasIgnored => IgnoredCount > 0;
+
+    public string IgnoredText => IgnoredCount == 1 ? "1 ignored" : $"{IgnoredCount} ignored";
+
+    /// <summary>
+    /// Says which way clicking goes, and what "ignored" covers - the second half is the part that is
+    /// not obvious from a count, since some of them nobody chose.
+    /// </summary>
+    public string IgnoredToggleTooltip => ShowIgnored
+        ? "Showing ignored mods, dimmed. Click to hide them again."
+        : IgnoredCount == 0
+            ? "Nothing is ignored here. Mods you ignore, and other versions of mods this profile locks, are hidden."
+            : "Hidden: mods you have ignored in this profile, and other versions of mods it locks. Click to show them.";
 
     public string AmbiguousText => AmbiguousCount == 1
         ? "1 version could not be compared"
@@ -918,6 +995,112 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     [RelayCommand]
     private void ToggleRemovals() => ShowRemovals = ShowRemovals is false;
+
+    /// <summary>
+    /// The row's eye: ignores the mod, or stops ignoring it. Which one is a question about the row
+    /// rather than a mode, so the same button undoes what it did - and does nothing for a row whose
+    /// ignore is not somebody's to reverse.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
+    private void ToggleIgnore(ProfileModRowViewModel? row)
+    {
+        if (row is null || row.CanToggleIgnore is false)
+        {
+            return;
+        }
+
+        SetIgnored([row], row.IgnoreState is not IgnoreState.Ignored);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanIgnoreSelected))]
+    private void IgnoreSelected() => SetIgnored(PickedRows(x => x.CanToggleIgnore && x.IgnoreState is IgnoreState.None), true);
+
+    [RelayCommand(CanExecute = nameof(CanUnignoreSelected))]
+    private void UnignoreSelected() => SetIgnored(PickedRows(x => x.IgnoreState is IgnoreState.Ignored), false);
+
+    private bool CanIgnoreSelected() => NotReadOnly() && PickedRows(x => x.CanToggleIgnore && x.IgnoreState is IgnoreState.None).Count > 0;
+
+    private bool CanUnignoreSelected() => NotReadOnly() && PickedRows(x => x.IgnoreState is IgnoreState.Ignored).Count > 0;
+
+    /// <summary>
+    /// What the bulk buttons say, counted the way the buttons count. The picked rows the ignore cannot
+    /// take - pinned, or ignored already by a lock - are simply not part of the number, so a button
+    /// never promises more than it will do.
+    /// </summary>
+    public string IgnoreSelectedText => DescribeIgnore("Ignore", PickedRows(x => x.CanToggleIgnore && x.IgnoreState is IgnoreState.None).Count);
+
+    public string UnignoreSelectedText => DescribeIgnore("Stop ignoring", PickedRows(x => x.IgnoreState is IgnoreState.Ignored).Count);
+
+    private static string DescribeIgnore(string verb, int count) => count > 0 ? $"{verb} {count}" : verb;
+
+    private List<ProfileModRowViewModel> PickedRows(Func<ProfileModRowViewModel, bool> where)
+        => [.. AvailableSelection.Picked().OfType<ProfileModRowViewModel>().Where(where)];
+
+    /// <summary>
+    /// Ignores or releases some rows' mods in the draft. Nothing is written: like a pin, it is saved
+    /// with the rest of the list - see <see cref="ProfileSaveService"/> for the order.
+    /// </summary>
+    /// <remarks>
+    /// The rows let go of their selection on the way, exactly as a row moved into the profile does, so
+    /// the bar under the list is never left holding rows the list is no longer showing.
+    /// </remarks>
+    private void SetIgnored(IReadOnlyList<ProfileModRowViewModel> rows, bool ignored)
+    {
+        var modIds = rows.Select(x => x.ModId).Distinct().ToList();
+
+        if (modIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var row in rows)
+        {
+            row.IsSelected = false;
+        }
+
+        if (ignored)
+        {
+            _ignoredMods.UnionWith(modIds);
+        }
+        else
+        {
+            _ignoredMods.ExceptWith(modIds);
+        }
+
+        RefreshIgnored();
+
+        SelectionStatus = Describe(ignored ? "Ignored" : "Stopped ignoring", modIds.Count);
+    }
+
+    /// <summary>
+    /// The ignore list as it would be saved: what is ignored, minus what the draft pins.
+    /// </summary>
+    /// <remarks>
+    /// <b>A pinned mod cannot also be ignored, and the pin wins.</b> A pin does not remove the mod from
+    /// <see cref="_ignoredMods"/> - so discarding the pin puts the ignore back, and pinning then taking
+    /// out again is not an edit - it just is not written while the pin stands. The server refuses a list
+    /// that overlaps what it pins, so this is also what keeps a save from being refused.
+    /// </remarks>
+    private HashSet<ModKey> DesiredIgnored() => ProfileIgnoring.WithoutPinned(_ignoredMods, _pinnedIds);
+
+    /// <summary>
+    /// What both lists do when the ignored set changes without any pin changing. Lighter than a
+    /// recount, deliberately: ignoring moves no pin and plans no update, and a recount would retire the
+    /// bulk undo of a move that has nothing to do with it.
+    /// </summary>
+    private void RefreshIgnored()
+    {
+        foreach (var row in _available)
+        {
+            row.IgnoreState = IgnoreStateOf(row);
+        }
+
+        RefreshViews();
+
+        OnSelectionChanged();
+
+        RefreshUnsaved();
+    }
 
 
     [RelayCommand(CanExecute = nameof(CanAddSelected))]
@@ -1535,10 +1718,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             VersionDescription,
             _original,
             [.. Pinned.Select(x => x.Pin)],
+            [.. _originalIgnored],
+            [.. DesiredIgnored()],
             [.. pending.Select(x => x.SelectedVersion.Version)],
             pending.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Name),
             _catalog,
-            apply);
+            apply && HasModListChanges);
 
         SaveSummary = null;
         ApplyStatus = null;
@@ -1617,7 +1802,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // It described the save that just happened, not the next one. Left in place it would be
             // carried onto an unrelated edit ten minutes later, which is how a history fills with
             // labels that are quietly wrong.
-            VersionDescription = "";
+            if (outcome.RevisionWritten)
+            {
+                VersionDescription = "";
+            }
 
             await ReloadAsync();
 
@@ -1700,6 +1888,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             _basedOn = run.Request.BasedOn;
             _original = run.Request.Original;
+            _originalIgnored = [.. run.Request.IgnoredOriginal];
+            _ignoredMods = [.. run.Request.IgnoredDesired];
 
             foreach (var row in Pinned)
             {
@@ -1773,7 +1963,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         return SaveChangesCommand.ExecuteAsync(null);
     }
 
-    private bool CanSaveOnly() => CanSave() && HasApplyTargets;
+    private bool CanSaveOnly() => CanSave() && WillApply;
 
     /// <summary>
     /// Stops the save this page is watching. The same act as the strip's own Cancel, because it is
@@ -2463,14 +2653,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var modList = await _dependenciesClient.GetModDependenciesV1Async(
+            // Asked together: neither depends on the other, and a profile with a long list is slow enough
+            // to read without waiting for a second round trip behind it.
+            var modListRead = _dependenciesClient.GetModDependenciesV1Async(
                 _repo.Id, _profile.Id, null, _cancellation.Token);
+            var ignoredRead = _profilesClient.GetProfileIgnoredModsV1Async(
+                _repo.Id, _profile.Id, _cancellation.Token);
+
+            var modList = await modListRead;
+            var ignored = await ignoredRead;
 
             var snapshot = await _catalog.GetAsync(_cancellation.Token);
 
             // Everything from here down is WPF-facing, and this may well have arrived on a
             // thread-pool thread.
-            await OnUiThreadAsync(() => Load(snapshot, modList));
+            await OnUiThreadAsync(() => Load(snapshot, modList, ignored));
         }
         catch (OperationCanceledException)
         {
@@ -2529,7 +2726,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private void Load(ModCatalogSnapshot snapshot, GetModDependenciesResponse modList)
+    private void Load(ModCatalogSnapshot snapshot, GetModDependenciesResponse modList, ProfileIgnoredModsDto ignored)
     {
         _publishing = true;
 
@@ -2570,7 +2767,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // otherwise compose against the removals of the draft that has just been thrown away -
             // offering their versions, defaulting their rows to them, and giving a row to a mod that
             // is no longer removed at all.
-            _pendingRemovals = [];
+            // The server's ignore list again, as the baseline and as the draft. Discarding reloads, so it
+            // reverts what was ignored here along with the pins.
+            _originalIgnored = [.. ignored.ModIds.Select(ModKey.From)];
+            _ignoredMods = [.. _originalIgnored];
 
             // A reload is a new draft, so nothing that was picked survives it - and a report about a
             // selection that no longer exists would outlive what it described.
@@ -3059,10 +3259,25 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// clicking it will show, which is this and not <see cref="Passes"/>.
     /// </summary>
     private bool PassesExceptFilter(ProfileModRowViewModel row)
+        => PassesExceptIgnore(row)
+        && (ShowIgnored || IgnoreStateOf(row) is not (IgnoreState.Ignored or IgnoreState.OtherVersionOfLocked));
+
+    /// <summary>
+    /// Everything the left list is showing but for the ignore toggle, for the one count that says how
+    /// many rows that toggle is holding back.
+    /// </summary>
+    private bool PassesExceptIgnore(ProfileModRowViewModel row)
         => row.Matches(SearchText)
         && IsPinnedAt(row.SelectedVersion.Version) is false
         && _downgraded.Contains(row.ModId) is false
         && (ShowRemovals || IsPendingRemoval(row) is false);
+
+    /// <summary>
+    /// Worked out from the draft when asked rather than stored on the row, because the filter runs
+    /// while the list is being rebuilt and a stored answer would be one recount behind.
+    /// </summary>
+    private IgnoreState IgnoreStateOf(ProfileModRowViewModel row)
+        => ProfileIgnoring.Classify(row.ModId, row.SelectedVersion.Version.VersionId, _ignoredMods, _pinnedState);
 
     /// <summary>
     /// Which pinned mods the user has explicitly moved backwards in this draft.
@@ -3317,6 +3532,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private void OnSelectionChanged()
     {
         OnPropertyChanged(nameof(UpdateSelectedText));
+        OnPropertyChanged(nameof(IgnoreSelectedText));
+        OnPropertyChanged(nameof(UnignoreSelectedText));
+        IgnoreSelectedCommand.NotifyCanExecuteChanged();
+        UnignoreSelectedCommand.NotifyCanExecuteChanged();
         AddSelectedCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         LockSelectedCommand.NotifyCanExecuteChanged();
@@ -3372,6 +3591,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     partial void OnShowRemovalsChanged(bool value)
+    {
+        RefreshViews();
+    }
+
+    partial void OnShowIgnoredChanged(bool value)
     {
         RefreshViews();
     }
@@ -3433,7 +3657,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private void RecountAvailable()
     {
-        AvailableTotal = _available.Count(x => IsPinnedAt(x.SelectedVersion.Version) is false);
+        // Ignored rows are not part of the total until they are being shown: hidden by a toggle is not
+        // hidden by a search, and "412 of 900" would say the search had found 488 fewer than it had.
+        AvailableTotal = _available.Count(x => IsPinnedAt(x.SelectedVersion.Version) is false
+            && (ShowIgnored || IgnoreStateOf(x) is not (IgnoreState.Ignored or IgnoreState.OtherVersionOfLocked)));
+
+        IgnoredCount = _available.Count(x => PassesExceptIgnore(x)
+            && PassesFilter(x)
+            && IgnoreStateOf(x) is IgnoreState.Ignored or IgnoreState.OtherVersionOfLocked);
 
         AvailableCount = _available.Count(Passes);
         NewCount = _available.Count(IsShownAndNew);
@@ -3491,6 +3722,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _pinnedIds = [.. Pinned.Select(x => x.ModId)];
         _pinnedVersions = Pinned.ToDictionary(x => x.ModId, x => x.SelectedVersion.Version.VersionId);
+        _pinnedState = Pinned.ToDictionary(x => x.ModId, x => (x.SelectedVersion.Version.VersionId, x.IsLocked));
         _downgraded = FindDowngraded();
         _pendingRemovals = _original
             .Where(x => _pinnedIds.Contains(x.ModId) is false)
@@ -3534,6 +3766,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             // or not. Written beside the status, because Item is replaced whenever the selector moves
             // and both of these belong to whichever version it landed on.
             row.Item.MovesPin = _pinnedIds.Contains(row.ModId);
+
+            // What the row's eye offers, for the same reason: it is the draft that says whether the mod
+            // is pinned or locked.
+            row.IgnoreState = IgnoreStateOf(row);
         }
 
         PinnedCount = Pinned.Count;
@@ -3568,7 +3804,22 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         AvailableSelection.Recount();
         PinnedSelection.Recount();
 
-        HasUnsavedChanges = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin)).IsEmpty is false;
+        RefreshUnsaved();
+    }
+
+    /// <summary>
+    /// Whether the draft differs from what the server holds, in either of the two things a save writes.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart because they are saved apart, and cost differently: a changed mod list is a revision,
+    /// an import and a re-apply, while a changed ignore list is one small write that touches nothing on
+    /// disk. See <see cref="HasModListChanges"/>.
+    /// </remarks>
+    private void RefreshUnsaved()
+    {
+        HasModListChanges = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin)).IsEmpty is false;
+        HasIgnoredChanges = DesiredIgnored().SetEquals(_originalIgnored) is false;
+        HasUnsavedChanges = HasModListChanges || HasIgnoredChanges;
 
         if (HasUnsavedChanges)
         {

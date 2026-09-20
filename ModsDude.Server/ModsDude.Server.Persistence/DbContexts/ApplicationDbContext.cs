@@ -19,6 +19,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<RepoInvite> RepoInvites { get; init; }
     public required DbSet<Profile> Profiles { get; init; }
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
+    public required DbSet<ProfileIgnoredMod> ProfileIgnoredMods { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
     public required DbSet<Savegame> Savegames { get; init; }
     public required DbSet<SavegameSnapshot> SavegameSnapshots { get; init; }
