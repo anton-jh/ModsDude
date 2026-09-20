@@ -66,6 +66,7 @@
             </Border.Style>
             <Button Style="{StaticResource SubtleIconButton}"
                     Width="26" Height="26"
+                    b:Sidebar.DismissesPeek="True"
                     Command="{Binding AddCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                     IsEnabled="{Binding IsAddEnabled, RelativeSource={RelativeSource AncestorType=UserControl}}"
                     ToolTip="{Binding AddToolTip, RelativeSource={RelativeSource AncestorType=UserControl}}"

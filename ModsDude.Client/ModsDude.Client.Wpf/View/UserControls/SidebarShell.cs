@@ -61,6 +61,14 @@ public class SidebarShell : ContentControl
     /// </summary>
     private bool _pointerOnDocked;
 
+    /// <summary>
+    /// Set when the peek was put away by a click, or the sidebar was collapsed under a click, and cleared
+    /// when the pointer leaves the rail. The pointer is on the rail at that moment - the peek or the open
+    /// sidebar was over it - so without this the rail would see it arrive and open the peek again a moment
+    /// after the user chose something.
+    /// </summary>
+    private bool _openSuppressed;
+
     private FrameworkElement? _docked;
     private FrameworkElement? _peek;
     private FrameworkElement? _peekContent;
@@ -194,6 +202,7 @@ public class SidebarShell : ContentControl
         {
             _peek.MouseEnter += OnPeekMouseEnter;
             _peek.MouseLeave += OnPeekMouseLeave;
+            _peek.PreviewMouseLeftButtonUp += OnPeekMouseUp;
         }
 
         ApplyState();
@@ -213,34 +222,26 @@ public class SidebarShell : ContentControl
         {
             _peek.MouseEnter -= OnPeekMouseEnter;
             _peek.MouseLeave -= OnPeekMouseLeave;
+            _peek.PreviewMouseLeftButtonUp -= OnPeekMouseUp;
         }
     }
 
     /// <summary>
-    /// The sidebar is being collapsed - by the page changing under it, which is nearly always a click in it.
-    /// If the pointer is on it, it is left open as a peek instead of closing under the pointer, and goes the
-    /// way any peek does: when the pointer leaves it.
+    /// The sidebar is being collapsed - by the page changing under it, which is nearly always a click in it -
+    /// and closes as it is asked to, with the pointer where it was.
     /// </summary>
     /// <remarks>
-    /// The peek is already at full width and needs no animation - it takes over from the docked sidebar in
-    /// the place it was, and the docked one shrinks to a rail underneath. The close timer is started at once
-    /// and stopped again by the pointer being found on the peek, so a pointer that has in fact gone still
-    /// closes it.
+    /// That pointer is on what is now the rail, and would be seen arriving on it and open the peek again a
+    /// moment after the user chose where to go. So the rail waits for the pointer to leave before it will.
     /// </remarks>
     private void OnCollapsedChanged(bool wasCollapsed, bool isCollapsed)
     {
-        var pointerOnSidebar = wasCollapsed is false && isCollapsed && _pointerOnDocked;
+        if (wasCollapsed is false && isCollapsed && _pointerOnDocked)
+        {
+            _openSuppressed = true;
+        }
 
         ApplyState();
-
-        if (pointerOnSidebar && _peek is not null)
-        {
-            _peek.BeginAnimation(WidthProperty, null);
-            IsPeeking = true;
-            IsPeekVisible = true;
-
-            StartClose();
-        }
     }
 
     /// <summary>
@@ -296,15 +297,27 @@ public class SidebarShell : ContentControl
         }
     }
 
+    /// <param name="byClick">
+    /// Whether the peek is going because somebody chose a place in it. The pointer is on the rail at that
+    /// moment - the peek was over it - so the rail must not open it again until the pointer has left.
+    /// </param>
     /// <param name="animate">
     /// False where the state has changed under the peek and it has nothing left to close back into.
     /// </param>
-    private void HidePeek(bool animate = true)
+    private void HidePeek(bool byClick = false, bool animate = true)
     {
         _openTimer.Stop();
         _closeTimer.Stop();
 
         IsPeeking = false;
+
+        // Only ever set here and in OnCollapsedChanged; the pointer leaving the rail is what clears it. A hide
+        // that was not a click - the state changing under an open peek - must not cancel the suppression a
+        // click just made.
+        if (byClick)
+        {
+            _openSuppressed = true;
+        }
 
         if (animate && IsPeekVisible && _peek is { ActualWidth: > 0 } peek)
         {
@@ -336,7 +349,7 @@ public class SidebarShell : ContentControl
 
     private void StartOpen()
     {
-        if (IsCollapsed is false || IsPeeking)
+        if (IsCollapsed is false || IsPeeking || _openSuppressed)
         {
             return;
         }
@@ -374,6 +387,7 @@ public class SidebarShell : ContentControl
     private void OnDockedMouseLeave(object sender, MouseEventArgs e)
     {
         _pointerOnDocked = false;
+        _openSuppressed = false;
         _openTimer.Stop();
 
         if (IsPeeking)
@@ -413,9 +427,42 @@ public class SidebarShell : ContentControl
         }
     }
 
+    /// <summary>
+    /// Choosing a place in the peek is done with it. It goes once the click has been handled, so the selection
+    /// has run before what it was clicked on disappears. Only places - a row, or a button marked as one that
+    /// navigates, like a "+": a button that acts on the list, like refresh, leaves the peek where it is.
+    /// </summary>
+    private void OnPeekMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source
+            && (FindAncestor<ListViewItem>(source) is not null || FindAncestor(source, Sidebar.GetDismissesPeek) is not null))
+        {
+            Dispatcher.BeginInvoke(() => HidePeek(byClick: true), DispatcherPriority.Background);
+        }
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _openTimer.Stop();
         _closeTimer.Stop();
+    }
+
+    private static T? FindAncestor<T>(DependencyObject start)
+        where T : DependencyObject
+        => FindAncestor(start, x => x is T) as T;
+
+    private static DependencyObject? FindAncestor(DependencyObject start, Func<DependencyObject, bool> matches)
+    {
+        for (var current = start; current is not null; current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                 ? VisualTreeHelper.GetParent(current)
+                 : LogicalTreeHelper.GetParent(current))
+        {
+            if (matches(current))
+            {
+                return current;
+            }
+        }
+
+        return null;
     }
 }

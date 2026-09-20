@@ -364,11 +364,11 @@ open the repo's sidebar is one too. A rail is a tinted strip with a rule down it
 side by side read as two. There is no toggle and nothing to persist. Hovering a rail for a moment -
 350 ms, long enough that passing over it on the way somewhere else does nothing - shows the full
 sidebar over the top of the page, growing out of the rail's own edge and back into it (300 ms and 240 ms, eased at both ends); it takes no room, and goes 400 ms after the pointer leaves, so a
-wobble off the edge while travelling down it is forgiven. Clicking in the peek does not
-close it - a row, a "+" or refresh - so it stays for as long as the pointer is on it and goes only when
-the pointer leaves. The same goes for a sidebar that collapses under the pointer because the page changed
-under a click - opening a repo from the list, or a profile from the repo's - which stays open as a peek until
-the pointer leaves it. The outer sidebar's peek is always above the inner one's
+wobble off the edge while travelling down it is forgiven. Navigating closes it: clicking a row or a "+" in the
+peek puts it away, and so does the sidebar collapsing because the page changed under a click - opening a repo
+from the list, or a profile from the repo's. Either way the rail does not open it again until the pointer has
+left it. A button that only acts, like refresh, leaves the peek open. The outer sidebar's peek is always above
+the inner one's
 because it is drawn over the page that contains the inner one. `SidebarShell` owns all of this; the
 sidebars themselves are drawn from one template each and read `Sidebar.IsCompact` to draw as a rail, so
 the two widths cannot say different things. In a rail a list's heading takes the place of its
