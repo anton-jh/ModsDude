@@ -6,12 +6,15 @@
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+      xmlns:vc="clr-namespace:ModsDude.Client.Wpf.View.ValueConverters"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:RepoPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoPage">
 
     <Page.Resources>
+        <vc:ShareWidthConverter x:Key="ShareWidth" />
+
         <!-- The repo name in the header. TextLink is text until the pointer is on it; this is the same, in the
              accent colour, because it is the one thing in the header that goes somewhere. -->
         <Style x:Key="RepoNameLink" TargetType="Hyperlink" BasedOn="{StaticResource TextLink}">
@@ -40,15 +43,19 @@
 
             <Grid VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
-                    <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever
-                         width they end up with: in a window with room they are exactly 600 and the button does not
-                         move with the names; in a narrow one they give way first, and the button stays where it can
-                         be reached. It is the column that has the limit, so the words fill it however short they are. -->
+                    <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever width
+                         they end up with: in a window with room they are exactly 600 and the button does not move with
+                         the names; in a narrow one they give way first, and the button stays where it can be reached.
+                         A star column, and not an Auto one, so that it is measured against the room there is: an Auto
+                         column is measured against unlimited width, grows to whatever its names want, and takes the
+                         button out of the window with it. The limits on the names below are worked out from the width
+                         this column ends up giving the words. -->
                     <ColumnDefinition Width="*" MinWidth="160" MaxWidth="600" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Grid Grid.Column="0"
+                <Grid x:Name="WordsGrid"
+                      Grid.Column="0"
                       VerticalAlignment="Center"
                       RowDefinitions="auto auto">
 
@@ -79,20 +86,19 @@
                         </Hyperlink>
                     </TextBlock>
 
-                    <!-- Under a profile, the same name followed by the profile's, in one line of text. One
-                         TextBlock rather than a row of them, so that when the line is too long it is the end - the
-                         profile's name - that gives way to an ellipsis, and the repo's is kept. The profile's is the
-                         selected entry's title rather than its own name, because that is the one a rename updates
-                         in place. -->
-                    <TextBlock Grid.Row="0"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                               ToolTip="{Binding NavManager.Selected.Title}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
+                    <!-- Under a profile, the repo's name and then the profile's, each in its own colour and each
+                         trimmed in its own. The repo's gives way first: it is given whatever is left of the row
+                         once the profile's name has taken its width, so a long profile name keeps its text and a
+                         long repo name is the one that ends in an ellipsis. The profile's is in turn stopped short
+                         of the whole row, so that the repo's name is never trimmed to nothing. The profile's is the
+                         selected entry's title rather than its own name, because that is the one a rename
+                         updates in place. -->
+                    <Grid x:Name="BreadcrumbRow"
+                          Grid.Row="0"
+                          ColumnDefinitions="auto auto auto"
+                          VerticalAlignment="Center">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
@@ -100,12 +106,79 @@
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </TextBlock.Style>
-                        <Hyperlink Style="{StaticResource RepoNameLink}"
-                                   Command="{Binding GoToOverviewCommand}">
-                            <Run Text="{Binding RepoName, Mode=OneWay}" />
-                        </Hyperlink><Run Text="  &#x203A;  " FontWeight="Normal" Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><Run Text="{Binding NavManager.Selected.Title, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    </TextBlock>
+                        </Grid.Style>
+
+                        <TextBlock x:Name="BreadcrumbSeparator"
+                                   Grid.Column="1"
+                                   Margin="12 0"
+                                   VerticalAlignment="Center"
+                                   FontSize="22"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Text="&#x203A;" />
+
+                        <TextBlock x:Name="BreadcrumbProfile"
+                                   Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   ToolTip="{Binding NavManager.Selected.Title}"
+                                   Text="{Binding NavManager.Selected.Title}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                        </TextBlock>
+
+                        <!-- The width the profile's name wants, measured on a copy of it that is not drawn. The
+                             repo's limit has to be worked out from that, and it cannot be worked out from the drawn
+                             one: that is arranged after the repo's, at whatever the repo left, and a name that
+                             has been left no room reads as no width and so never asks the repo to give way. The copy
+                             has the same limit as the drawn one, so what it measures is what the drawn one will
+                             take. -->
+                        <TextBlock x:Name="BreadcrumbProfileSize"
+                                   Grid.Column="2"
+                                   Visibility="Hidden"
+                                   IsHitTestVisible="False"
+                                   VerticalAlignment="Center"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding NavManager.Selected.Title}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                        </TextBlock>
+
+                        <!-- Last of the four, because it is bound to the widths of the others and a name in a binding has to
+                             be declared before the element that refers to it: the repo's limit is what is left once the
+                             separator and the profile's name have taken theirs. -->
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   ToolTip="{Binding RepoName}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;24">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbProfileSize" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                            <Hyperlink Style="{StaticResource RepoNameLink}"
+                                       Command="{Binding GoToOverviewCommand}">
+                                <Run Text="{Binding RepoName, Mode=OneWay}" />
+                            </Hyperlink>
+                        </TextBlock>
+
+                    </Grid>
 
                     <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
                          being so when a profile is open. Where the profile stands against the game follows it, on
