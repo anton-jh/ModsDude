@@ -102,7 +102,7 @@
                                     VerticalAlignment="Center"
                                     CornerRadius="3"
                                     Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                    Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    Visibility="{Binding ShowsVersionChip, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <TextBlock Text="{Binding Version}"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Style="{DynamicResource CaptionTextBlockStyle}" />

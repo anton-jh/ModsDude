@@ -71,6 +71,17 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </summary>
     public bool HasVersion => string.IsNullOrEmpty(Version) is false;
 
+    /// <summary>
+    /// Whether the row draws its version as a chip. Off in the profile editor, whose rows all carry a
+    /// version selector that says the same thing - and says it for the version the row is showing,
+    /// which is the one that can be changed.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsVersionChip))]
+    private bool _showVersion = true;
+
+    public bool ShowsVersionChip => ShowVersion && HasVersion;
+
     public bool IsOnServer => Mod.IsOnServer;
     public bool IsLocal => Mod.IsLocal;
 

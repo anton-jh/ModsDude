@@ -16,6 +16,13 @@
 
     <Page.Resources>
 
+        <!-- One entry of a row's version selector: the version, starred where saving imports it, with
+             the words behind the star. Null where there is nothing to say, which shows no tooltip at
+             all and leaves the selector's own. -->
+        <DataTemplate x:Key="VersionOptionTemplate" DataType="{x:Type vm:ProfileModVersionOption}">
+            <TextBlock Text="{Binding Label}" ToolTip="{Binding Note}" />
+        </DataTemplate>
+
         <!-- The save button and its variant caret are one control, so the accent chrome lives here
              once and is split down the seam: only the outer corners round, and the halves meet on a
              hairline instead of the gap that made them read as two buttons. -->
@@ -534,7 +541,7 @@
                                                               VerticalAlignment="Center"
                                                               ItemsSource="{Binding Versions}"
                                                               SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
-                                                              DisplayMemberPath="Label"
+                                                              ItemTemplate="{StaticResource VersionOptionTemplate}"
                                                               IsEnabled="{Binding HasSeveralVersions}"
                                                               ToolTip="Which version this would add" />
 
@@ -914,7 +921,7 @@
                                                               VerticalAlignment="Center"
                                                               ItemsSource="{Binding Versions}"
                                                               SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
-                                                              DisplayMemberPath="Label"
+                                                              ItemTemplate="{StaticResource VersionOptionTemplate}"
                                                               IsEnabled="{Binding HasSeveralVersions}"
                                                               ToolTip="Which version this profile pins" />
 
@@ -1081,24 +1088,6 @@
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
 
-            <!-- Only while there is something to save: a box that is always there is a field the
-                 page is asking to have filled in, and this one is genuinely optional. Fusion 360's
-                 wording, because this is the same gesture and somebody will recognise it.
-                 MaxLength matches ProfileRevision.MaximumLabelLength, which the server refuses
-                 beyond - stopping it here means the refusal is never reached. -->
-            <Border Margin="32 8 32 0"
-                    Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel>
-                    <TextBlock Text="Version description (optional)"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <TextBox Margin="0 4 0 0"
-                             MaxLength="100"
-                             Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
-                             ToolTipService.InitialShowDelay="200" />
-                </StackPanel>
-            </Border>
-
             <Grid ColumnDefinitions="auto auto * auto">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the
@@ -1158,6 +1147,39 @@
                         Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
 
                 <StackPanel Grid.Column="2" Margin="16 0" VerticalAlignment="Center">
+
+                    <!-- Only while there is something to save: a box that is always there is a field
+                         the page is asking to have filled in, and this one is genuinely optional. On
+                         the Save row because it is part of pressing Save, and is worded as what the
+                         save is called - Fusion 360's "version description", because this is the same
+                         gesture and somebody will recognise it.
+                         MaxLength matches ProfileRevision.MaximumLabelLength, which the server refuses
+                         beyond - stopping it here means the refusal is never reached. -->
+                    <Grid Margin="0 0 0 6"
+                          Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox x:Name="VersionDescriptionBox"
+                                 MaxLength="100"
+                                 Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
+                                 ToolTipService.InitialShowDelay="200" />
+
+                        <TextBlock Text="Version description (optional)"
+                                   Margin="12 0 0 0"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=VersionDescriptionBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
 
                     <TextBlock Text="{Binding PendingText}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"

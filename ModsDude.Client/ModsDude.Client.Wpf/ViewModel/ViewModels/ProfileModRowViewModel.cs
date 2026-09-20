@@ -426,6 +426,9 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         item.IsSelected = selected;
         item.ShowAdapterLock = _isPinned is false;
 
+        // The row's own selector already says which version this is, on both sides.
+        item.ShowVersion = false;
+
         item.PropertyChanged += OnItemChanged;
 
         return item;
@@ -453,18 +456,27 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 /// </param>
 public sealed record ProfileModVersionOption(CatalogModVersion Version, bool CouldNotCompare = false)
 {
-    public string Label
+    /// <summary>
+    /// The version, starred where saving has to import it first. The words live in <see cref="Note"/>
+    /// rather than on the label: the selector is 150px wide, and a sentence in it was clipped.
+    /// </summary>
+    public string Label => Version.IsOnServer
+        ? Version.VersionId.Value
+        : $"{Version.VersionId.Value}*";
+
+    /// <summary>What the star means, or null for a version that has nothing to say.</summary>
+    public string? Note
     {
         get
         {
             if (Version.IsOnServer)
             {
-                return Version.VersionId.Value;
+                return null;
             }
 
             return CouldNotCompare
-                ? $"{Version.VersionId.Value} — imports on save, order not settled"
-                : $"{Version.VersionId.Value} — imports on save";
+                ? "Imports on save. The order between this and what the repo holds is not settled, so importing will ask which comes first."
+                : "Imports on save.";
         }
     }
 }
