@@ -736,11 +736,6 @@
                                          Content="Locked"
                                          ToolTip="Mods held at their version, by you or by the game adapter"
                                          IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Locked}" />
-                            <RadioButton GroupName="PinnedFilter"
-                                         Style="{StaticResource FilterChip}"
-                                         Content="Pending"
-                                         ToolTip="Pinned at a version the repo does not hold yet. Saving imports these."
-                                         IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Pending}" />
 
                             <!-- The mirror of the left list's diff view. With another profile as the
                                  only enabled source this is exactly what this profile holds and that
@@ -893,19 +888,6 @@
                                                      writing. -->
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                                                             IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
-
-                                                    <!-- Nothing has been uploaded for this row yet;
-                                                         Save is what imports it, and Cancel is what
-                                                         discards it. -->
-                                                    <Border Margin="0 0 8 0"
-                                                            Style="{StaticResource StatusChip}"
-                                                            ToolTip="Not in the repo yet. Saving uploads and registers it first."
-                                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                                            TextElement.Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                                            Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                        <TextBlock Text="Pending"
-                                                                   Style="{DynamicResource CaptionTextBlockStyle}" />
-                                                    </Border>
 
                                                     <Button Style="{DynamicResource SubtleIconButton}"
                                                             Content="&#xE74A;"

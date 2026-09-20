@@ -1723,10 +1723,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 // the cause is fixed is the whole recovery path.
                 Recount();
 
-                // Now that every row carries its outcome, and only now: what could not be imported
-                // comes to the top, where the dialog's list can be matched against it.
-                PinnedView.Refresh();
-
                 return;
             }
 
@@ -3262,7 +3258,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             PinnedModFilter.Updates => row.HasUpdate,
             PinnedModFilter.Locked => row.IsLocked,
-            PinnedModFilter.Pending => row.IsPending,
             PinnedModFilter.NotInSources => _offeredMods.Contains(row.ModId) is false,
             _ => true
         };
@@ -3373,32 +3368,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The right list's order: whatever wants an answer first, then alphabetical. The top of the list
-    /// is the part anyone reads after a save, and a mod that could not be imported buried at "S" is
-    /// one nobody sees.
+    /// The right list's order: alphabetical, always. What the draft has done to a mod is the row's own
+    /// mark, and what a save is doing is the review view's to show, so nothing here needs to come
+    /// first - and a list that keeps its order under the pointer is one somebody can edit.
     /// </summary>
     private static int ComparePinned(ProfileModRowViewModel left, ProfileModRowViewModel right)
-    {
-        var byRank = Rank(left).CompareTo(Rank(right));
-
-        return byRank != 0
-            ? byRank
-            : NaturalOrder.Compare(left.Name, right.Name);
-    }
-
-    /// <summary>
-    /// How near the top a pinned row belongs. Read when the list is sorted rather than as it changes:
-    /// rows reshuffling mid-import would move the list under the pointer that is watching it, so a
-    /// save that stops re-sorts once, at the end.
-    /// </summary>
-    private static int Rank(ProfileModRowViewModel row) => row.Item.ImportState switch
-    {
-        ModImportRowState.Failed => 0,
-        ModImportRowState.Skipped => 1,
-        ModImportRowState.Running => 2,
-        ModImportRowState.Succeeded => 4,
-        _ => row.IsPending ? 3 : 5
-    };
+        => NaturalOrder.Compare(left.Name, right.Name);
 
 
     private void OnPinnedRowChanged(object? sender, PropertyChangedEventArgs e)
@@ -3820,9 +3795,6 @@ public enum PinnedModFilter
     Updates,
 
     Locked,
-
-    /// <summary>Pinned at a version the repo does not hold yet, so a save has to import it.</summary>
-    Pending,
 
     /// <summary>
     /// The mods this profile pins that no enabled source offers any version of.
