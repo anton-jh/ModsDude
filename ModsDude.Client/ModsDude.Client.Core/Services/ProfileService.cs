@@ -256,6 +256,28 @@ public class ProfileService(
     }
 
     /// <summary>
+    /// Records that a save just minted this revision, so the cached head is the server's before anything
+    /// reads it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GetHeadRevision"/> is what the drift check compares a freshly applied folder against.
+    /// A save applies and checks straight after writing the revision, so waiting for the page to catch
+    /// up would compare revision N+1 on disk with an N that is no longer the head, and report a
+    /// profile that has just been applied as drifted until the next window activation.
+    /// </remarks>
+    public void NoteRevisionSaved(Guid profileId, int number)
+    {
+        if (FindProfile(profileId) is not ProfileDto existing || existing.HeadRevision == number)
+        {
+            return;
+        }
+
+        existing.HeadRevision = number;
+
+        ProfileUpdated?.Invoke(profileId);
+    }
+
+    /// <summary>
     /// Deletes old revisions, which is how the mod versions they pin stop being undeletable.
     /// </summary>
     /// <remarks>
