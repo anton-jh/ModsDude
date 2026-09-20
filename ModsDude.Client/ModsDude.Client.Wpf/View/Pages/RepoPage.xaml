@@ -27,137 +27,170 @@
              the game. That act used to be a bar on the profile's shell; it is here because it is the same
              act from every page of the profile.
 
-             The button follows the words rather than sitting in the far corner. The words are capped in
-             width and the button comes straight after them, because the primary act of the app should not be
-             at the far end of a wide window where it is easy to miss. What does not fit the cap is trimmed
-             rather than wrapped, and the status text carries its whole sentence in a tooltip. -->
+             The button follows the words rather than sitting in the far corner, behind a divider. The words
+             are a fixed width where there is room for it, so the button is in the same place on every page of
+             every profile whatever the names are: a button that moves under the pointer with the length of a
+             name is one that gets missed. Where there is not room, the words give way and the button does not.
+             What does not fit is trimmed rather than wrapped, and the full name is in a tooltip. -->
         <Border Grid.Row="0"
                 Padding="24 16"
                 MinHeight="84"
                 CornerRadius="4"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
 
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever
+                         width they end up with: in a window with room they are exactly 600 and the button does not
+                         move with the names; in a narrow one they give way first, and the button stays where it can
+                         be reached. It is the column that has the limit, so the words fill it however short they are. -->
+                    <ColumnDefinition Width="*" MinWidth="160" MaxWidth="600" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                <Grid MaxWidth="960" VerticalAlignment="Center" RowDefinitions="auto auto">
+                <Grid Grid.Column="0"
+                      VerticalAlignment="Center"
+                      RowDefinitions="auto auto">
 
-                    <Grid Grid.Row="0" ColumnDefinitions="auto auto auto auto">
+                    <!-- On the repo's own pages, the repo's name alone: the way back to its overview, and the
+                         title. It is the accent colour because it is the one thing here that is a link; it reads
+                         as plain text of that colour until the pointer is on it. The colour is set on the
+                         TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn in the
+                         TextBlock's own colour and not the link's. -->
+                    <TextBlock Grid.Row="0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Hyperlink Style="{StaticResource RepoNameLink}"
+                                   Command="{Binding GoToOverviewCommand}"
+                                   ToolTip="{Binding RepoName}">
+                            <Run Text="{Binding RepoName, Mode=OneWay}" />
+                        </Hyperlink>
+                    </TextBlock>
 
-                        <!-- The repo's name is the way back to the repo's overview: a breadcrumb when a profile is
-                             open, and the title when one is not - the same size either way, so it does not change
-                             under the pointer. It is the accent colour because it is the one thing here that is a
-                             link; it reads as plain text of that colour until the pointer is on it. The colour is set
-                             on the TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn
-                             in the TextBlock's own colour and not the link's. -->
-                        <TextBlock Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="420"
-                                   FontSize="22"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
-                            <Hyperlink Style="{StaticResource RepoNameLink}"
-                                       Command="{Binding GoToOverviewCommand}"
-                                       ToolTip="{Binding RepoName}">
-                                <Run Text="{Binding RepoName, Mode=OneWay}" />
-                            </Hyperlink>
-                        </TextBlock>
-
-                        <StackPanel Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal"
-                                    Visibility="{Binding HasOpenProfile, Converter={StaticResource BoolToVisibilityConverter}}">
-
-                            <TextBlock Margin="10 0 10 0"
-                                       VerticalAlignment="Center"
-                                       FontSize="16"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="&#x203A;" />
-
-                            <!-- The selected entry's title rather than the profile's own name, because that is the one
-                                 a rename updates in place. -->
-                            <TextBlock VerticalAlignment="Center"
-                                       FontSize="22"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxWidth="480"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       ToolTip="{Binding NavManager.Selected.Title}"
-                                       Text="{Binding NavManager.Selected.Title}" />
-
-                            <!-- Where the profile stands against the game following it. Drawn only on the profile the
-                                 game follows: on any other there is nothing to say, and a chip reading "not active"
-                                 on every other profile would only be noise. The fills are the theme's status
-                                 colours, paired with the text colour each is legible under - see StatusChip. -->
-                            <Border Margin="14 0 0 0"
-                                    VerticalAlignment="Center"
-                                    Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
-                                <Border.Style>
-                                    <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="InSync">
-                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Drifted">
-                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="NotApplied">
-                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Applying">
-                                                <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock FontSize="13" Text="{Binding OpenProfile.SyncLabel}" />
-                            </Border>
-                        </StackPanel>
-                    </Grid>
+                    <!-- Under a profile, the same name followed by the profile's, in one line of text. One
+                         TextBlock rather than a row of them, so that when the line is too long it is the end - the
+                         profile's name - that gives way to an ellipsis, and the repo's is kept. The profile's is the
+                         selected entry's title rather than its own name, because that is the one a rename updates
+                         in place. -->
+                    <TextBlock Grid.Row="0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                               ToolTip="{Binding NavManager.Selected.Title}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Hyperlink Style="{StaticResource RepoNameLink}"
+                                   Command="{Binding GoToOverviewCommand}">
+                            <Run Text="{Binding RepoName, Mode=OneWay}" />
+                        </Hyperlink><Run Text="  &#x203A;  " FontWeight="Normal" Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><Run Text="{Binding NavManager.Selected.Title, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </TextBlock>
 
                     <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
-                         being so when a profile is open. Why the button beside it is closed is its tooltip's to
-                         say, and what it last did is a toast's. -->
-                    <TextBlock Grid.Row="1"
-                               Margin="0 4 0 0"
-                               VerticalAlignment="Center"
-                               FontSize="14"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding GameName}" />
+                         being so when a profile is open. Where the profile stands against the game follows it, on
+                         the profile the game follows only: on any other there is nothing to say, and a chip reading
+                         "not active" on every other profile would only be noise. The fills are the theme's status
+                         colours, paired with the text colour each is legible under - see StatusChip. -->
+                    <StackPanel Grid.Row="1" Margin="0 4 0 0" Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="{Binding GameName}" />
+
+                        <Border Margin="14 0 0 0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="InSync">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Drifted">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="NotApplied">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Applying">
+                                            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13" Text="{Binding OpenProfile.SyncLabel}" />
+                        </Border>
+                    </StackPanel>
                 </Grid>
 
-                <!-- Labelled for what it will do - Activate, or Re-apply where the game is already on this
-                     profile - and taking no target: a repo is about one game, so there is nothing to pick. -->
-                <Button MinWidth="150"
-                        Margin="36 0 0 0"
-                        Padding="28 10"
-                        VerticalAlignment="Center"
-                        FontSize="15"
-                        FontWeight="SemiBold"
-                        Style="{DynamicResource AccentButtonStyle}"
-                        Content="{Binding OpenProfile.ActivationLabel}"
-                        ToolTip="{Binding OpenProfile.ActivationDescription}"
-                        ToolTipService.ShowOnDisabled="True"
-                        ToolTipService.InitialShowDelay="200"
-                        Command="{Binding OpenProfile.ActivateCommand}"
-                        Visibility="{Binding OpenProfile.HasActivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}" />
+                <!-- Behind a divider, and labelled for what it will do - Activate, or Re-apply where the game is
+                     already on this profile - taking no target: a repo is about one game, so there is nothing to
+                     pick. Where there is no game to put anything on, the one thing to do is connect one, which
+                     goes to the Connect game entry in the sidebar rather than opening a page of its own, so the
+                     sidebar still says where you are. Only one of the two is ever showing. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
 
-                <!-- Where there is no game to put anything on, the one thing to do is connect one. It goes
-                     to the Connect game entry in the sidebar rather than opening a page of its own, so the
-                     sidebar still says where you are. -->
-                <Button MinWidth="150"
-                        Margin="36 0 0 0"
-                        Padding="28 10"
-                        VerticalAlignment="Center"
-                        FontSize="15"
-                        FontWeight="SemiBold"
-                        Style="{DynamicResource AccentButtonStyle}"
-                        Content="Connect game"
-                        Command="{Binding ConnectGameCommand}"
-                        Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </StackPanel>
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding OpenProfile.HasActivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                        <Border Width="1"
+                                Margin="32 0"
+                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                        <Button MinWidth="150"
+                                Padding="28 10"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="{Binding OpenProfile.ActivationLabel}"
+                                ToolTip="{Binding OpenProfile.ActivationDescription}"
+                                ToolTipService.ShowOnDisabled="True"
+                                ToolTipService.InitialShowDelay="200"
+                                Command="{Binding OpenProfile.ActivateCommand}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border Width="1"
+                                Margin="32 0"
+                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                        <Button MinWidth="150"
+                                Padding="28 10"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Connect game"
+                                Command="{Binding ConnectGameCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- The sidebar is a rail while a profile is open - the profile's own sidebar is the one in use
