@@ -1162,7 +1162,7 @@
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
 
-            <Grid ColumnDefinitions="auto auto * auto auto">
+            <Grid ColumnDefinitions="auto auto auto * auto">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the
                      dropdown. A checkbox would be persistent visible state, and one left ticked turns
@@ -1220,7 +1220,15 @@
                 <Button Grid.Column="1" Margin="4 24 4 24"
                         Content="Discard changes" Command="{Binding DiscardChangesCommand}" />
 
-                <StackPanel Grid.Column="2" Margin="16 0" VerticalAlignment="Center">
+                <!-- The way into what the save will do, and back out of it. With the buttons rather
+                     than past the text field: it is one more thing to press about the save, and
+                     absent while there is nothing to review. -->
+                <Button Grid.Column="2" Margin="4 24 4 24"
+                        Content="{Binding ReviewButtonText}"
+                        Command="{Binding ToggleReviewCommand}"
+                        Visibility="{Binding HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <StackPanel Grid.Column="3" Margin="12 0 16 0" VerticalAlignment="Center">
 
                     <!-- Only while there is something to save: a box that is always there is a field
                          the page is asking to have filled in, and this one is genuinely optional. On
@@ -1229,7 +1237,8 @@
                          gesture and somebody will recognise it.
                          MaxLength matches ProfileRevision.MaximumLabelLength, which the server refuses
                          beyond - stopping it here means the refusal is never reached. -->
-                    <Grid Margin="0 0 0 6"
+                    <Grid Width="300"
+                          HorizontalAlignment="Left"
                           Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBox x:Name="VersionDescriptionBox"
                                  MaxLength="100"
@@ -1260,17 +1269,11 @@
                          a revision write and saves perfectly well beside an import into the same
                          repo, so this is only ever about the half that has to upload. -->
                     <TextBlock Text="{Binding SaveBlockedReason}"
+                               Margin="0 6 0 0"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
-
-                <!-- The way into what the save will do, and back out of it. Beside Save because that
-                     is where the question is asked, and absent while there is nothing to review. -->
-                <Button Grid.Column="3" Margin="4 24 4 24"
-                        Content="{Binding ReviewButtonText}"
-                        Command="{Binding ToggleReviewCommand}"
-                        Visibility="{Binding HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <Button Grid.Column="4" Margin="4 24 32 24"
                         Content="Stop saving"
