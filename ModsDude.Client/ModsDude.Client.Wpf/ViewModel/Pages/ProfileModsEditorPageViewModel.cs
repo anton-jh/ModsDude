@@ -560,6 +560,41 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool _hasIgnoredChanges;
 
     /// <summary>
+    /// Whether the page is showing what the draft would change instead of the two lists. Where a save
+    /// is watched as well as where it is checked: the import is reported on these rows, not on the
+    /// lists', and the lists are only hidden rather than dropped so the search, the selection and the
+    /// scroll position are all still there on the way back.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReviewButtonText))]
+    private bool _isReviewing;
+
+    /// <summary>How many mods the draft would add, change or take out. What the review is a list of.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReviewButtonText))]
+    private int _changeCount;
+
+    /// <summary>The count broken down, in the order the review's groups run.</summary>
+    [ObservableProperty]
+    private string _changeSummary = string.Empty;
+
+    /// <summary>The review's rows, grouped. Null while the review is not being shown.</summary>
+    [ObservableProperty]
+    private ICollectionView? _changesView;
+
+    public string ReviewButtonText => IsReviewing ? "Back to editing" : $"Review changes ({ChangeCount})";
+
+    /// <summary>What the review is showing, so the run's marks can be put on it as it is built and as they arrive.</summary>
+    private IReadOnlyList<DraftChangeViewModel> _changeRows = [];
+
+    /// <summary>
+    /// The save whose import the review is showing. Held apart from the rows because the rows are
+    /// rebuilt from the draft - after a failed save, after a revert - and a rebuilt row has to be told
+    /// again how its import went, or the review of a failed save would show nothing failing.
+    /// </summary>
+    private ProfileSaveRun? _markedRun;
+
+    /// <summary>
     /// What to call this save in the profile's history. Optional, and never required: a field the
     /// save button refused to work without would be answered with "asdf" by the third save, and a
     /// history of "asdf" is worse than a history of unnamed revisions with honest counts.
@@ -620,6 +655,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(AddSourceCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddProfileSourceCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RevertChangeCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
@@ -1388,6 +1424,208 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #endregion
 
 
+    #region Reviewing the draft
+
+    /// <summary>
+    /// Swaps the two lists for what the draft would change, and back. Reading is not writing, so it
+    /// needs no <c>CanEdit</c> guard - and it is allowed while a save runs, which is what the review
+    /// is for.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not a step Save waits for.</b> A review somebody has to click through before every save is
+    /// friction, and the one place a save's consequences are dangerous - the re-apply - already has
+    /// its own control. This is here to be looked at when the draft has grown past what fits in the
+    /// head, and to be where a save that imports is watched.
+    /// </remarks>
+    [RelayCommand]
+    private void ToggleReview() => IsReviewing = IsReviewing is false;
+
+    partial void OnIsReviewingChanged(bool value)
+    {
+        if (value)
+        {
+            RebuildChanges();
+        }
+        else
+        {
+            _changeRows = [];
+            ChangesView = null;
+        }
+    }
+
+    /// <summary>
+    /// Takes one change back: the mod goes to what the saved profile holds - out again if it was added,
+    /// back in if it was taken out, and to its saved version and lock if it was moved.
+    /// </summary>
+    /// <remarks>
+    /// Its own recount, and no undo toast: the revert is itself the undo, and what it offers to take
+    /// back is one row of a list that has just been redrawn.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(NotReadOnly))]
+    private void RevertChange(DraftChangeViewModel? change)
+    {
+        if (change is null)
+        {
+            return;
+        }
+
+        var saved = _original.FirstOrDefault(x => x.ModId == change.ModId);
+
+        InBulk(() =>
+        {
+            var row = FindPinned(change.ModId);
+
+            if (saved is null)
+            {
+                if (row is not null)
+                {
+                    row.PropertyChanged -= OnPinnedRowChanged;
+
+                    Pinned.Remove(row);
+                }
+
+                return;
+            }
+
+            if (row is null)
+            {
+                Pinned.Add(CreatePinnedRow(saved));
+
+                return;
+            }
+
+            row.SetVersion(saved.VersionId);
+            row.LockedByProfile = saved.Lock.ByProfile;
+
+            // A version the row's selector does not offer cannot be moved to, and a draft that
+            // quietly stayed where it was would be a revert that did nothing.
+            if (row.SelectedVersion.Version.VersionId != saved.VersionId)
+            {
+                row.PropertyChanged -= OnPinnedRowChanged;
+
+                Pinned.Remove(row);
+                Pinned.Add(CreatePinnedRow(saved));
+            }
+        });
+    }
+
+    /// <summary>
+    /// What the draft changes, mod by mod, from the same comparison the history page reads - so the
+    /// two cannot disagree about what a change is, and this cannot disagree with what a save writes
+    /// (a test holds the two answers together).
+    /// </summary>
+    private IReadOnlyList<ProfileModChange> DraftChanges()
+    {
+        var before = _original
+            .Select(x => new PinnedMod(
+                VersionsFor(x.ModId).FirstOrDefault(v => v.VersionId == x.VersionId)
+                    ?? Placeholder(x.ModId, x.VersionId),
+                x.Lock))
+            .ToList();
+
+        var after = Pinned
+            .Select(x => new PinnedMod(x.SelectedVersion.Version, x.Lock))
+            .ToList();
+
+        return ProfileRevisionComparison.Between(_basedOn, _basedOn, before, after).Changes;
+    }
+
+    /// <summary>
+    /// Redraws the review from the draft. It is independent of the sources, the filters and the search
+    /// by construction - it is read from the draft and the catalog's memory of versions, never from
+    /// what the left list happens to be composed of.
+    /// </summary>
+    private void RebuildChanges()
+    {
+        var rows = DraftChanges().Select(BuildChangeRow).ToList();
+
+        if (_markedRun is not null)
+        {
+            StampMarks(rows, _markedRun);
+        }
+
+        foreach (var row in rows)
+        {
+            (row.Group, row.GroupRank) = GroupOf(row);
+        }
+
+        rows = [.. rows
+            .OrderBy(x => x.GroupRank)
+            .ThenBy(x => x.Name, NaturalOrder.Comparer)];
+
+        _changeRows = rows;
+
+        var view = new ListCollectionView(rows);
+
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(DraftChangeViewModel.Group)));
+
+        ChangesView = view;
+    }
+
+    private DraftChangeViewModel BuildChangeRow(ProfileModChange change)
+    {
+        var item = _itemFactory.Create(_repo.Id, change.Version);
+
+        item.IsSelectable = false;
+        item.ShowVersion = false;
+        item.OutlineStatus = true;
+        item.ShowAdapterLock = false;
+        item.Touch = ProfileModTouches.Of(change);
+        item.TouchTooltip = ProfileModTouches.Describe(change);
+        item.Detail = ProfileModChangeViewModel.Describe(change);
+
+        // The one thing a save has to do before it can write the change, said where the change is read.
+        item.Status = change.Kind is not ProfileModChangeKind.Removed && change.Version.IsOnServer is false
+            ? ModDisplayStatus.ImportsOnSave
+            : ModDisplayStatus.None;
+
+        return new DraftChangeViewModel(change, item);
+    }
+
+    /// <summary>
+    /// Which group a row sits under. What could not be imported comes first, because it is the one thing
+    /// here that wants an answer; the rest follow the order a diff reads in.
+    /// </summary>
+    private static (string Name, int Rank) GroupOf(DraftChangeViewModel row)
+    {
+        if (row.Item.HasImportProblem)
+        {
+            return ("Could not be imported", 0);
+        }
+
+        return row.Change.Kind switch
+        {
+            ProfileModChangeKind.Added => ("Added", 1),
+            ProfileModChangeKind.Changed => ("Changed", 2),
+            _ => ("Taken out", 3)
+        };
+    }
+
+    /// <summary>Copies the run's per-version reports onto the review's rows.</summary>
+    private static void StampMarks(IEnumerable<DraftChangeViewModel> rows, ProfileSaveRun run)
+    {
+        var items = rows.ToDictionary(x => x.Item.Mod.Identity, x => x.Item);
+
+        foreach (var progress in run.Progress)
+        {
+            if (items.TryGetValue(progress.Identity, out var item))
+            {
+                item.Apply(progress);
+            }
+        }
+
+        foreach (var result in run.Results)
+        {
+            if (items.TryGetValue(result.Identity, out var item))
+            {
+                item.Apply(result);
+            }
+        }
+    }
+
+    #endregion
+
+
     #region Updates
 
     /// <summary>
@@ -1656,7 +1894,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var pending = Pinned.Where(x => x.IsPending).ToList();
 
-        foreach (var row in pending)
+        // What the last save said about these rows does not carry over to this one. Where there is
+        // something to import it is watched in the review; a save with nothing to upload is over
+        // before there would be anything to watch, and a flicker between views is worse than none.
+        _markedRun = null;
+
+        if (pending.Count > 0)
+        {
+            IsReviewing = true;
+        }
+
+        foreach (var row in _changeRows)
         {
             row.Item.ResetImportState();
         }
@@ -1742,6 +1990,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             }
 
             await ReloadAsync();
+
+            // Nothing is left to review, and the recount the reload ran has already said so; this is for
+            // a save whose reload could not run.
+            IsReviewing = false;
 
             if (request.Apply && outcome.ApplyMessage is null)
             {
@@ -1834,6 +2086,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         Recount();
+
+        // A save with something to import is watched in the review, so a page that arrives half way
+        // through one opens there.
+        if (run.Request.Pending.Count > 0)
+        {
+            IsReviewing = true;
+        }
+
         MarkFromRun(run);
     }
 
@@ -1850,28 +2110,22 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Copies the run's per-version reports onto this page's own rows. The run reports per version
+    /// Copies the run's per-version reports onto the review's rows. The run reports per version
     /// rather than writing into row view models it does not own, which is what lets a second page be
     /// built for the same save without the first one's rows being written into from two places.
     /// </summary>
+    /// <remarks>
+    /// Onto the review and not the lists: a save that imports is watched there, and the lists' rows
+    /// are the profile's own and stay as they are. Remembered, so a review that is not open yet - or
+    /// is rebuilt - is told what has already happened.
+    /// </remarks>
     private void MarkFromRun(ProfileSaveRun run)
     {
-        var rows = Pinned.ToDictionary(x => x.SelectedVersion.Version.Identity, x => x.Item);
+        _markedRun = run;
 
-        foreach (var progress in run.Progress)
+        if (IsReviewing)
         {
-            if (rows.TryGetValue(progress.Identity, out var row))
-            {
-                row.Apply(progress);
-            }
-        }
-
-        foreach (var result in run.Results)
-        {
-            if (rows.TryGetValue(result.Identity, out var row))
-            {
-                row.Apply(result);
-            }
+            StampMarks(_changeRows, run);
         }
     }
 
@@ -2673,6 +2927,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             Pinned.Clear();
 
             _adopted = [];
+
+            // Nothing that save reported is about the list that is being read now.
+            _markedRun = null;
 
             RebuildSources(snapshot);
             BuildIndex(snapshot);
@@ -3706,6 +3963,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         PinnedSelection.Recount();
 
         RefreshUnsaved();
+
+        // Read from the draft, so it is redrawn from here and from nowhere else. With nothing left to
+        // review - the last change taken back, a save that has committed, a discard - there is nothing
+        // to show, and the lists are where the page goes.
+        if (IsReviewing)
+        {
+            if (ChangeCount == 0)
+            {
+                IsReviewing = false;
+            }
+            else
+            {
+                RebuildChanges();
+            }
+        }
+    }
+
+    private static string DescribeChanges(ProfileModListChanges diff)
+    {
+        var parts = new[]
+        {
+            diff.Added.Count > 0 ? $"{diff.Added.Count} added" : null,
+            diff.Changed.Count > 0 ? $"{diff.Changed.Count} changed" : null,
+            diff.Removed.Count > 0 ? $"{diff.Removed.Count} taken out" : null
+        };
+
+        return string.Join(" · ", parts.OfType<string>());
     }
 
     /// <summary>
@@ -3718,7 +4002,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private void RefreshUnsaved()
     {
-        HasModListChanges = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin)).IsEmpty is false;
+        var diff = ProfileModListDiff.Compute(_original, Pinned.Select(x => x.Pin));
+
+        HasModListChanges = diff.IsEmpty is false;
+        ChangeCount = diff.Count;
+        ChangeSummary = DescribeChanges(diff);
         HasIgnoredChanges = DesiredIgnored().SetEquals(_originalIgnored) is false;
         HasUnsavedChanges = HasModListChanges || HasIgnoredChanges;
 

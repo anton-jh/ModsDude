@@ -34,7 +34,7 @@
 
             <Grid>
 
-                <Grid ColumnDefinitions="auto auto * auto auto auto auto">
+                <Grid ColumnDefinitions="auto auto * auto auto auto auto auto">
 
                     <CheckBox Grid.Column="0"
                               Margin="12 0 0 0"
@@ -105,36 +105,6 @@
                                     Visibility="{Binding ShowsVersionChip, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <TextBlock Text="{Binding Version}"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Style="{DynamicResource CaptionTextBlockStyle}" />
-                            </Border>
-
-                            <!-- What the editor's draft has done to this mod, in the slot the version
-                                 chip leaves free there. Filled, where every status beside it is an
-                                 outline: this is the one chip on the row that is somebody's own
-                                 doing. The words behind it are the tooltip. -->
-                            <Border Margin="8 0 0 0"
-                                    ToolTip="{Binding TouchTooltip}"
-                                    ToolTipService.InitialShowDelay="300"
-                                    Visibility="{Binding HasTouch, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Border.Style>
-                                    <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
-                                        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Touch}" Value="Added">
-                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                            </DataTrigger>
-                                            <!-- Caution: this is a row about to lose something, and it
-                                                 matches the count in the list's own header. -->
-                                            <DataTrigger Binding="{Binding Touch}" Value="TakenOut">
-                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding TouchText}"
                                            Style="{DynamicResource CaptionTextBlockStyle}" />
                             </Border>
                         </StackPanel>
@@ -221,10 +191,51 @@
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
+                    <!-- What the editor's draft has done to this mod. Filled, where every status
+                         beside it is an outline: this is the one chip on the row that is somebody's
+                         own doing. On the status chip's line rather than the name's, so the two
+                         read as one row of chips. The words behind it are the tooltip. -->
+                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+
+                    <TextBlock Margin="0 0 8 0"
+                               VerticalAlignment="Center"
+                               Text="{Binding Detail}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Border Margin="0 0 8 0"
+                            ToolTip="{Binding TouchTooltip}"
+                            ToolTipService.InitialShowDelay="300"
+                            Visibility="{Binding HasTouch, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Touch}" Value="Added">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                    </DataTrigger>
+                                    <!-- Caution: this is a row about to lose something, and it
+                                         matches the count in the list's own header. -->
+                                    <DataTrigger Binding="{Binding Touch}" Value="TakenOut">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding TouchText}"
+                                   Style="{DynamicResource CaptionTextBlockStyle}" />
+                    </Border>
+
+                    </StackPanel>
+
                     <!-- One chip, showing the import while it is happening and the presence status
                          otherwise. A running import is the more urgent of the two, and stacking them
                          would make every row two chips wide for the sake of one moment. -->
-                    <Border Grid.Column="5"
+                    <Border Grid.Column="6"
                             Margin="0 0 8 0"
                             ToolTip="{Binding ImportProblemTooltip}"
                             ToolTipService.InitialShowDelay="400">
@@ -308,7 +319,7 @@
 
                     <!-- Margin on the panel rather than on the grid inside it, so the row keeps its
                          trailing gap for a member who has no actions to be offered. -->
-                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
+                    <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="0 0 12 0">
 
                         <Grid Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibilityConverter}}">

@@ -83,6 +83,17 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
     public bool ShowsVersionChip => ShowVersion && HasVersion;
 
+    /// <summary>
+    /// A line of plain text after the name, for a page that has something to say about this row that is
+    /// not the version. The review of a draft says what moved here - "1.2 → 1.3 · locked" - and it is
+    /// drawn on the row rather than beside it so the row's divider runs the whole width.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDetail))]
+    private string? _detail;
+
+    public bool HasDetail => string.IsNullOrEmpty(Detail) is false;
+
     public bool IsOnServer => Mod.IsOnServer;
     public bool IsLocal => Mod.IsLocal;
 
@@ -315,6 +326,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
+        ModDisplayStatus.ImportsOnSave => "Imports on save",
         _ => string.Empty
     };
 
@@ -437,10 +449,14 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </remarks>
     public void Apply(ModImportItemResult result)
     {
+        // A page re-reads the run's results whenever it is rebuilt, and saying the same thing about the
+        // same import twice would put it in the log twice.
+        var alreadyKnown = ImportOutcome == result.Status;
+
         ImportOutcome = result.Status;
         ImportPhase = null;
 
-        if (result.IsSuccess)
+        if (result.IsSuccess || alreadyKnown)
         {
             return;
         }

@@ -81,6 +81,15 @@ public static class ProfileModTouches
         };
     }
 
+    /// <summary>The same words for a change a comparison has already found.</summary>
+    public static string? Describe(ProfileModChange change) => Describe(
+        change.FromVersionId is { } from
+            ? new ProfileModPin(change.ModId, from, new ProfileModLock(false, change.FromLocked))
+            : null,
+        change.ToVersionId is { } to
+            ? new ProfileModPin(change.ModId, to, new ProfileModLock(false, change.ToLocked))
+            : null);
+
     /// <summary>The same answer for a change a comparison has already found.</summary>
     public static ProfileModTouch Of(ProfileModChange change) => change.Kind switch
     {

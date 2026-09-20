@@ -45,7 +45,7 @@ public class ProfileModChangeViewModel
     public bool IsRemoved => Kind is ProfileModChangeKind.Removed;
 
 
-    private static string Describe(ProfileModChange change)
+    internal static string Describe(ProfileModChange change)
     {
         var version = change.Kind switch
         {

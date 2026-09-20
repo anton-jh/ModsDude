@@ -193,6 +193,27 @@
             <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
         </Style>
 
+        <!-- The review of the draft. Rows there are read, and reverted one at a time, rather than
+             picked - so nothing about a row is selectable or focusable, and the container is only a
+             place for the shared row to sit. -->
+        <Style x:Key="ReviewRow" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ReviewList" TargetType="ListBox" BasedOn="{StaticResource ModList}">
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ReviewRow}" />
+            <Setter Property="VirtualizingStackPanel.IsVirtualizingWhenGrouping" Value="True" />
+        </Style>
+
         <!-- The box a list sits in, which is also the target a drag from the other list lands on.
              Nothing here is ordered, so a drop has no position to mean and the whole box lights up
              rather than a line between two rows. -->
@@ -225,7 +246,8 @@
                      reached only the left one answered half the question - and the half it could
                      not answer was "is this already in the profile?". Same shape as the repo mods
                      page, which has the same two lists and the same question. -->
-                <StackPanel Grid.Row="1" Margin="0 0 0 12">
+                <StackPanel Grid.Row="1" Margin="0 0 0 12"
+                            Visibility="{Binding IsReviewing, Converter={StaticResource InverseBoolToVisibilityConverter}}">
 
                 <Grid>
 
@@ -263,7 +285,77 @@
 
                 </StackPanel>
 
-                <Grid Grid.Row="2" ColumnDefinitions="* 16 *">
+                <!-- What the draft would change, in the lists' place while it is being reviewed or
+                     while a save that imports is running. Independent of the sources, the filters
+                     and the search: it is read from the draft, so it is every change and only those. -->
+                <Grid Grid.Row="2" RowDefinitions="auto *"
+                      Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                    <StackPanel Grid.Row="0" Margin="0 0 0 8">
+                        <TextBlock Text="Changes since the saved profile"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                        <TextBlock Margin="0 2 0 0"
+                                   Text="{Binding ChangeSummary}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Margin="0 2 0 0"
+                                   Text="{Binding PendingText}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </StackPanel>
+
+                    <Border Grid.Row="1" Style="{StaticResource ListFrame}">
+                        <ListBox Style="{StaticResource ReviewList}"
+                                 ItemsSource="{Binding ChangesView}">
+
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="16 14 16 6" Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                                                <TextBlock Margin="6 0 0 0"
+                                                           Text="{Binding ItemCount}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
+
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DraftChangeViewModel}">
+                                    <Grid ColumnDefinitions="* auto">
+
+                                        <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                        <!-- The way back. What moved is on the row itself, so its divider
+                                             runs the full width. The revert is a write, so it is under
+                                             the same IsEnabled as every other control that changes the
+                                             draft. -->
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                    IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+
+                                            <Button Margin="0 0 8 0"
+                                                    Style="{DynamicResource SubtleIconButton}"
+                                                    Content="&#xE7A7;"
+                                                    ToolTip="Take this change back"
+                                                    Command="{Binding DataContext.RevertChangeCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="2" ColumnDefinitions="* 16 *"
+                      Visibility="{Binding IsReviewing, Converter={StaticResource InverseBoolToVisibilityConverter}}">
 
                     <!-- The available side: registered mods and local candidates in one list, so a
                          mod can be added and imported without a detour to the management page. -->
@@ -1070,7 +1162,7 @@
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
 
-            <Grid ColumnDefinitions="auto auto * auto">
+            <Grid ColumnDefinitions="auto auto * auto auto">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the
                      dropdown. A checkbox would be persistent visible state, and one left ticked turns
@@ -1163,10 +1255,6 @@
                         </TextBlock>
                     </Grid>
 
-                    <TextBlock Text="{Binding PendingText}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
-
                     <!-- Why Save is greyed, named rather than merely stated: the answer is "wait for
                          that one", and only the name says which. A draft with nothing to import is
                          a revision write and saves perfectly well beside an import into the same
@@ -1177,7 +1265,14 @@
                                Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
 
-                <Button Grid.Column="3" Margin="4 24 32 24"
+                <!-- The way into what the save will do, and back out of it. Beside Save because that
+                     is where the question is asked, and absent while there is nothing to review. -->
+                <Button Grid.Column="3" Margin="4 24 4 24"
+                        Content="{Binding ReviewButtonText}"
+                        Command="{Binding ToggleReviewCommand}"
+                        Visibility="{Binding HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <Button Grid.Column="4" Margin="4 24 32 24"
                         Content="Stop saving"
                         Command="{Binding StopSavingCommand}"
                         Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />

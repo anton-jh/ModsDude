@@ -47,7 +47,13 @@ public enum ModDisplayStatus
     /// </summary>
     NewVersion,
 
-    AlreadyInRepo
+    AlreadyInRepo,
+
+    /// <summary>
+    /// A version the draft pins and the repo does not hold, on the review of what a save will do: it is
+    /// uploaded and registered first. A fact about the version, so it is an outline like the rest.
+    /// </summary>
+    ImportsOnSave
 }
 
 public static class ModDisplayStatusExtensions
