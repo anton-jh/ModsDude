@@ -856,27 +856,76 @@ row the moment it leaves the profile. Without that the header counted a removal 
 the *Taken out* filter selected an empty list. A bulk removal normally touches mods that already have
 rows and costs only a re-offer; the full rebuild is reached when a row is genuinely missing.
 
-#### Four states, two colours, three words
+#### Two kinds of chip: facts, and what you did
 
-A chip's fill says what the version means for the **repo** and its text says what it means for
-**this profile**. This is the *one* status chip a row wears, and it follows the selector: the row
-*is* the selected version, so the chip, the sort rank and the +/⬆ glyph all move together when the
-selection does, exactly as they already do on the right when `Item` is replaced. Per-version facts —
-"imports on save", "order not settled" — go in the selector's own labels instead, since those are
-true of one entry in the dropdown and not of the mod as a whole.
+A row can wear two chips, and they are drawn differently so they cannot be mistaken for each other.
+**A status is a fact about the version; a touch is something the draft did to the mod.** In the editor
+a status is an *outline* — muted, on the trailing edge — and a touch is a *fill* with a stripe down
+the row's leading edge. Filled means you did this; outlined means it is so. (The repo mods page has no
+draft to tell apart from and keeps its filled chips.)
 
-| Chip | Fill | Means |
+**The status chip** follows the selector: the row *is* the selected version, so the chip and the +/⬆
+glyph move together when the selection does, exactly as they already do on the right when `Item` is
+replaced. Its text says what the version means for **this profile**.
+
+| Chip | Means |
+| --- | --- |
+| **Update** | A newer version of a mod this profile pins. Free where the repo holds it; saving imports it where only a folder does. |
+| **New version** | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
+| **New** | A version the repo does not hold, with nothing else to say. |
+| **In repo** | Registered, and not pinned. |
+| **Imports on save** | The review's version of *New*: a version the draft pins that saving has to upload first. |
+
+**The version chip is not drawn in the editor.** Every row on both sides carries a selector that says
+the same thing, and says it for the version the row is showing. A version that saving has to import
+is starred in the selector (`1.3*`) with the words in a tooltip — a sentence in a 150px box was
+clipped.
+
+#### What the draft has done to a mod
+
+`ProfileModTouch` is **derived, never recorded**: the saved profile's pin of a mod against the
+draft's. A mod pinned at another version and pinned back is not touched, because saving it would
+change nothing; a log of clicks would have called it touched twice. It applies the same rule as
+`ProfileModListDiff` and `ProfileRevisionComparison` — a mod's version and the profile's own lock,
+never the adapter's — and a test holds the three together.
+
+| Mark | Fill | Means |
 | --- | --- | --- |
-| **Update** | accent | A newer version of a mod this profile pins, and the repo holds it. The move is free. |
-| **Update** | green | The same, for a version only on disk. Saving imports it. |
-| **New version** | green | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
-| **New** | green | A version the repo does not hold, with nothing else to say. |
-| **Taken out** | caution | This draft has removed the mod, whatever version is currently selected — removal outranks everything above, since a removed mod is not pinned and nothing is an update to it. |
+| **Added** | green | The saved profile does not hold it. |
+| **Version changed** | accent | Pinned at another version than the saved profile holds. |
+| **Lock changed** | accent | Locked or unlocked in this profile since the saved one. |
+| **Version & lock changed** | accent | Both. |
+| **Taken out** | caution | The saved profile holds it and the draft does not. It wears the mark on the left, where it is back among the mods that were never in the profile; a taken-out mod's status chip is suppressed, since nothing is on offer of it. |
 
-Green is "saving uploads a file", which is what three of the first four have in common; the accent is
-the one that costs nothing. One chip per row, as the template was built for, and the glyph on the
-row's button and the row's position in the sort both read the same derived flag, so they cannot
-disagree with the chip.
+The tooltip carries the detail — *Was 1.2 in the saved profile, now 1.3* — and it is worded once, in
+`ProfileModTouches.Describe`, for both lists and the review. **Ignoring is not a touch.** It is saved
+with the rest, but it is an aid to editing rather than a result of it, so it never makes a row
+"changed", does not count in the review, and keeps its own eye button.
+
+#### Reviewing the draft
+
+**Review changes (N)**, beside Save, swaps the two lists for what the draft would change: added,
+changed, taken out — each row with the way it moved (`1.2 → 1.3 · locked`) and a **↺** that takes
+that one change back (a mod is put out again if it was added, back in if it was taken out, and to its
+saved version and lock if it was moved). The lists are hidden rather than dropped, so the search, the
+selection and the scroll position are all there on the way back.
+
+It is read **from the draft**, by the comparison the history page uses, so it is every change and only
+those whatever the sources, filters and search are doing — a mod no enabled source offers is still
+reviewed, because its original version comes from the version index rather than from the left list.
+It is optional: a review somebody has to click through before every save is friction, and the one
+consequence of a save that is dangerous, the re-apply, already has its own control.
+
+**It is also where a save that imports is watched.** Pressing Save on a draft with something to
+upload switches to the review, and each import reports on its row: *Imports on save*, then *Queued*,
+*Uploading 42%*, *Imported* or a failure. A save with nothing to upload finishes before there would be
+anything to watch, so it stays where it is and says what it did in a toast. What could not be imported
+moves to a **Could not be imported** group at the top of the review once the save stops — not while it
+runs, so the list does not reshuffle under the pointer that is watching it — and its ↺ is the way to
+drop the mod and save again. A save that commits reloads and returns to the lists; an editor opened
+in the middle of one lands on the review. The run's marks are held by the page and stamped onto rows
+as they are built, because the review is rebuilt from the draft after a failed save and a rebuilt row
+has to be told again how its import went.
 
 #### A version nothing could compare
 
@@ -969,14 +1018,13 @@ so the mod is left out of the left list (`FindDowngraded`). It is measured again
 held when the page read it, so it lasts as long as the draft: once saved, the older pin is the
 profile's and the newer version is an update again, which is what a lock is for.
 
-**Both lists lead with what the draft has done to them.** On the right, the same ranking the old Manage page used:
-what could not be imported, then what is still pending, then the rest. On the left, mods this draft
-has *taken out* of the profile — they are back on the left looking exactly like a mod that was never
-in it, so they get a **"Taken out" chip**, the counterpart of the pending-import chip on the other
-side, plus a count in the header. Caution-coloured rather than the accent a pending import gets: one
-is a row about to gain something and the other a row about to lose it. It is a
-`ModDisplayStatus`, which is where a per-page judgment about a row belongs. Neither is a live sort; the left re-sorts on every recount, and the right when a save stops at
-a failed import.
+**The left list leads with what the draft has taken out; the right list is alphabetical, always.** Mods
+this draft has *taken out* of the profile are back on the left looking exactly like a mod that was
+never in it, so they sort to the top, wear the **Taken out** mark (see
+[the next section](#what-the-draft-has-done-to-a-mod)) and get a count in the header. The right list
+used to lead with what could not be imported and what was pending; both are now the review's business
+([below](#reviewing-the-draft)), and a list whose order never changes under the pointer is one somebody
+can edit. The left re-sorts on every recount.
 
 #### Picking mods in bulk
 
@@ -1137,8 +1185,8 @@ from a drift notice mid-save now defers its recompose until the save is over.
 
 **Coming back rejoins the save in progress.** An editor built for a profile that is being saved asks
 the service before it asks the server: it draws the draft the service is holding — the server has
-not been told about it yet — marks its rows from the run's own progress, and stays read-only until
-it finishes, at which point it does the post-save reload it would have done anyway. What is retained
+not been told about it yet — opens on the review with its rows marked from the run's own progress, and
+stays read-only until it finishes, at which point it does the post-save reload it would have done anyway. What is retained
 is the draft, not the page instance: keeping the view model alive would need a show/hide lifecycle
 the page has never had, since the notice suppression, the catalog, the games subscription and the
 navigation lock are all acquired on construction and released on dispose, and a retained page holds
@@ -1154,7 +1202,7 @@ it as its own summary, so it is said once.
 **The editor is read-only while its own profile is being saved, per control rather than per list.**
 `IsEnabled` on a `ListBox` stops the mouse wheel along with everything else, so the flag binds to
 what can change the draft: the row buttons, the selection checkboxes, the version selectors, the
-lock toggles, drag-and-drop and the source chips. The lists, their scrolling and the mod name that
+lock toggles, the review's ↺, drag-and-drop and the source chips. The lists, their scrolling and the mod name that
 opens the details dialog stay live — reading is not writing — and so do the search and the filter
 chips, which change the view and nothing else.
 

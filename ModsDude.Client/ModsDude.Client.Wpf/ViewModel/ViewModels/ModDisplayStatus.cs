@@ -14,11 +14,11 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </remarks>
 /// <remarks>
 /// <para>
-/// <b>Four states, two colours, three words</b> in the profile editor, where the left list is now
-/// about versions rather than mods and a row can be an update to something the profile already
-/// holds. A chip's fill says what the version means for the <em>repo</em> and its text says what it
-/// means for <em>this profile</em>: accent where the move is free because the repo holds it, green
-/// where saving would have to upload the file first.
+/// A status is a fact about a version, in the profile editor where the left list is about versions
+/// rather than mods and a row can be an update to something the profile already holds. Its text says
+/// what the version means for <em>this profile</em>, and it is drawn as an outline there: a filled chip
+/// is reserved for what the draft has done to a mod, which is a <see cref="ProfileModTouch"/> and not
+/// a status.
 /// </para>
 /// </remarks>
 public enum ModDisplayStatus

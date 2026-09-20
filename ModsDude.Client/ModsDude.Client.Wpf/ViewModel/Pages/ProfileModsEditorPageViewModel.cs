@@ -3570,25 +3570,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         => _pendingRemovals.ContainsKey(modId);
 
     /// <summary>
-    /// What one left-hand row's chip says. <b>Four states, two colours, three words:</b> the fill
-    /// says what the version means for the repo and the text says what it means for this profile.
+    /// What one left-hand row's status chip says: a fact about the version, worded for this profile.
+    /// What the draft has done to the mod is not here - see <see cref="ProfileModTouch"/>.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item>
-    /// <b>Accent <em>Update</em></b> - a newer version of a mod this profile pins, and the repo holds
-    /// it, so the move is free.
+    /// <b><em>Update</em></b> - a newer version of a mod this profile pins. <see cref="ModDisplayStatus.UpdateAvailable"/>
+    /// where the repo holds it, so the move is free, and <see cref="ModDisplayStatus.UpdatePending"/> for
+    /// a version only on disk, so saving imports it.
     /// </item>
     /// <item>
-    /// <b>Green <em>Update</em></b> - the same, for a version only on disk, so saving imports it.
-    /// </item>
-    /// <item>
-    /// <b>Green <em>New version</em></b> - newer than anything the repo holds, of a mod this profile
+    /// <b><em>New version</em></b> - newer than anything the repo holds, of a mod this profile
     /// does not pin. An import candidate, which is what the repo mods page already calls an
     /// <em>Update</em> from its own point of view and which is not one from here: nothing in this
     /// profile moves by taking it.
     /// </item>
-    /// <item><b>Green <em>New</em></b> - a version the repo does not hold, with nothing else to say.</item>
+    /// <item><b><em>New</em></b> - a version the repo does not hold, with nothing else to say.</item>
     /// </list>
     /// A version the ordering will not place is none of the update states: the walk is the same
     /// abstention rule the update planner applies, and for the same reason.
