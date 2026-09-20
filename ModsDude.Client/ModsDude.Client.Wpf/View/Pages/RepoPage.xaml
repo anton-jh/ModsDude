@@ -1,47 +1,220 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.RepoPage"
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.RepoPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
-      mc:Ignorable="d" 
+      mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:RepoPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoPage">
 
-    <Grid ColumnDefinitions="200 *">
+    <Page.Resources>
+        <!-- The repo name in the header. TextLink is text until the pointer is on it; this is the same, in the
+             accent colour, because it is the one thing in the header that goes somewhere. -->
+        <Style x:Key="RepoNameLink" TargetType="Hyperlink" BasedOn="{StaticResource TextLink}">
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        </Style>
+    </Page.Resources>
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto auto">
+    <Grid RowDefinitions="auto *">
 
-            <ListView Grid.Row="0"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+        <!-- One header for everything under this repo, across the top of the sidebar and the page both.
+             It says where you are - the repo, its game, and the profile when one is open - so the pages
+             under it do not have to, and it is where the primary act of the app lives: putting a profile on
+             the game. That act used to be a bar on the profile's shell; it is here because it is the same
+             act from every page of the profile.
 
-            <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" />
+             The button follows the words rather than sitting in the far corner. The words are capped in
+             width and the button comes straight after them, because the primary act of the app should not be
+             at the far end of a wide window where it is easy to miss. What does not fit the cap is trimmed
+             rather than wrapped, and the status text carries its whole sentence in a tooltip. -->
+        <Border Grid.Row="0"
+                Padding="24 16"
+                MinHeight="84"
+                CornerRadius="4"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
 
-            <ListView Grid.Row="2"
-                      ItemsSource="{Binding Path=Profiles}"
-                      Style="{StaticResource SidebarList}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
-            <!-- At most one row, and only while a link into an archived profile is being followed.
-                 Under its own heading so it reads as reached through the archive rather than as
-                 back in the list above; it goes away on the next navigation. -->
-            <uc:SidebarHeader Grid.Row="3" Title="From the archive" Command="" ActionIcon=""
-                              Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <Grid MaxWidth="960" VerticalAlignment="Center" RowDefinitions="auto auto">
 
-            <ListView Grid.Row="4"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=ArchivedProfiles}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                      Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
-        </Grid>
+                    <Grid Grid.Row="0" ColumnDefinitions="auto auto auto auto">
 
-        <Frame
-            Grid.Column="1"
-            Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+                        <!-- The repo's name is the way back to the repo's overview: a breadcrumb when a profile is
+                             open, and the title when one is not - the same size either way, so it does not change
+                             under the pointer. It is the accent colour because it is the one thing here that is a
+                             link; it reads as plain text of that colour until the pointer is on it. The colour is set
+                             on the TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn
+                             in the TextBlock's own colour and not the link's. -->
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="420"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                            <Hyperlink Style="{StaticResource RepoNameLink}"
+                                       Command="{Binding GoToOverviewCommand}"
+                                       ToolTip="{Binding RepoName}">
+                                <Run Text="{Binding RepoName, Mode=OneWay}" />
+                            </Hyperlink>
+                        </TextBlock>
+
+                        <StackPanel Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal"
+                                    Visibility="{Binding HasOpenProfile, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <TextBlock Margin="10 0 10 0"
+                                       VerticalAlignment="Center"
+                                       FontSize="16"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Text="&#x203A;" />
+
+                            <!-- The selected entry's title rather than the profile's own name, because that is the one
+                                 a rename updates in place. -->
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="480"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       ToolTip="{Binding NavManager.Selected.Title}"
+                                       Text="{Binding NavManager.Selected.Title}" />
+
+                            <!-- Where the profile stands against the game following it. Drawn only on the profile the
+                                 game follows: on any other there is nothing to say, and a chip reading "not active"
+                                 on every other profile would only be noise. The fills are the theme's status
+                                 colours, paired with the text colour each is legible under - see StatusChip. -->
+                            <Border Margin="14 0 0 0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="InSync">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Drifted">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="NotApplied">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Applying">
+                                                <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13" Text="{Binding OpenProfile.SyncLabel}" />
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
+                         being so when a profile is open. The status slot follows it - why the button is closed
+                         where it is, otherwise what it last did - on the line where it will be read rather than
+                         only in a tooltip on a disabled button. -->
+                    <Grid Grid.Row="1" Margin="0 4 0 0" ColumnDefinitions="auto *">
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="{Binding GameName}" />
+
+                        <TextBlock Grid.Column="1"
+                                   Margin="16 0 0 0"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                   Text="{Binding OpenProfile.StatusText}"
+                                   ToolTip="{Binding OpenProfile.StatusText}"
+                                   Visibility="{Binding OpenProfile.HasStatusText, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}" />
+                    </Grid>
+                </Grid>
+
+                <!-- Labelled for what it will do - Activate, or Re-apply where the game is already on this
+                     profile - and taking no target: a repo is about one game, so there is nothing to pick. -->
+                <Button MinWidth="150"
+                        Margin="36 0 0 0"
+                        Padding="28 10"
+                        VerticalAlignment="Center"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="{Binding OpenProfile.ActivationLabel}"
+                        ToolTip="{Binding OpenProfile.ActivationDescription}"
+                        ToolTipService.ShowOnDisabled="True"
+                        ToolTipService.InitialShowDelay="200"
+                        Command="{Binding OpenProfile.ActivateCommand}"
+                        Visibility="{Binding OpenProfile.HasActivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}" />
+
+                <!-- Where there is no game to put anything on, the one thing to do is connect one. It goes
+                     to the Connect game entry in the sidebar rather than opening a page of its own, so the
+                     sidebar still says where you are. -->
+                <Button MinWidth="150"
+                        Margin="36 0 0 0"
+                        Padding="28 10"
+                        VerticalAlignment="Center"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Content="Connect game"
+                        Command="{Binding ConnectGameCommand}"
+                        Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
+        </Border>
+
+        <!-- The sidebar is a rail while a profile is open - the profile's own sidebar is the one in use
+             then - and a hover shows it in full over the top of the page, the profile's sidebar included.
+             See SidebarShell. -->
+        <uc:SidebarShell Grid.Row="1"
+                         Style="{StaticResource SidebarShellStyle}"
+                         IsCollapsed="{Binding IsSidebarCollapsed}">
+
+            <uc:SidebarShell.SidebarTemplate>
+                <DataTemplate>
+                    <Grid RowDefinitions="auto auto * auto auto">
+
+                        <ListView Grid.Row="0"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=MenuItems}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+                        <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="Refresh profiles"
+                                          AddCommand="{Binding CreateProfileCommand}"
+                                          IsAddSelected="{Binding IsCreateProfileSelected}"
+                                          IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"
+                                          AddToolTip="{Binding CreateProfileItem.ToolTip}" />
+
+                        <ListView Grid.Row="2"
+                                  ItemsSource="{Binding Path=Profiles}"
+                                  Style="{StaticResource SidebarList}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+                        <!-- At most one row, and only while a link into an archived profile is being followed.
+                             Under its own heading so it reads as reached through the archive rather than as
+                             back in the list above; it goes away on the next navigation. -->
+                        <uc:SidebarHeader Grid.Row="3" Title="From the archive" Command="" ActionIcon=""
+                                          Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <ListView Grid.Row="4"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=ArchivedProfiles}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                                  Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </Grid>
+                </DataTemplate>
+            </uc:SidebarShell.SidebarTemplate>
+
+            <Frame Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+        </uc:SidebarShell>
     </Grid>
 </Page>

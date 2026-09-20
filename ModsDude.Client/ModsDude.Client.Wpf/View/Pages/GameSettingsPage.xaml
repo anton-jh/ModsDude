@@ -15,11 +15,7 @@
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
             <StackPanel Orientation="Vertical">
 
-                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding RepoName}" />
-                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="Configure game"
-                           Margin="0 8 0 24" />
+                <uc:PageTitle Text="Configure game" />
 
                 <!-- Said out loud, because it is the whole reason this page is settings and not a
                      place: what is being configured is the copy of the game on this machine, not

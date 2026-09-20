@@ -178,17 +178,11 @@
     </Page.Resources>
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto auto *">
+        <Grid RowDefinitions="auto auto auto *">
 
-            <TextBlock Grid.Row="0"
-                       Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding RepoName}" />
-            <TextBlock Grid.Row="1"
-                       Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                       Text="Saves"
-                       Margin="0 8 0 24" />
+            <uc:PageTitle Grid.Row="0" Text="Saves" />
 
-            <StackPanel Grid.Row="2" Margin="0 0 0 12" HorizontalAlignment="Left">
+            <StackPanel Grid.Row="1" Margin="0 0 0 12" HorizontalAlignment="Left">
                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                            Text="Every save in this repo, and which profile each one follows. One person holds a save at a time and hands it back explicitly - so checking one out stops anybody else taking it until you check it in. Taking a copy stops nobody." />
@@ -202,7 +196,7 @@
                            Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
 
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     Margin="0 0 0 12"
                     Padding="12 8"
                     CornerRadius="4"
@@ -213,7 +207,7 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             </Border>
 
-            <Grid Grid.Row="4" ColumnDefinitions="420 *">
+            <Grid Grid.Row="3" ColumnDefinitions="420 *">
 
                 <!-- The saves. -->
                 <Border Grid.Column="0"

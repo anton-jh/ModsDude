@@ -9,54 +9,18 @@
       d:DataContext="{d:DesignInstance Type=pvm:ProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="ProfilePage">
 
-    <Grid RowDefinitions="auto *" ColumnDefinitions="200 *">
+    <!-- The profile's name and the button that applies it are in the repo's header, above this: the
+         header spans the whole repo, so it is the same one from every page of every profile. What is
+         left here is the profile's own menu and the page it opens. -->
+    <Grid ColumnDefinitions="200 *">
 
-        <!-- Across the top of the whole profile rather than at the foot of its sidebar, and on the
-             shell rather than on Overview: applying this profile to the game is the primary act of
-             the app, it is the same act from every sub-page, and the bottom-left corner of a 200px
-             column is the least prominent place in the window. It takes no target - a repo is about
-             one game and a machine configures that game once - so there is nothing to pick. -->
-        <Border Grid.Row="0" Grid.ColumnSpan="2"
-                Margin="8 8 0 8"
-                Padding="16 12"
-                CornerRadius="4"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
-
-            <Grid ColumnDefinitions="* auto">
-
-                <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Center">
-
-                    <TextBlock TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding ActivationDescription}" />
-
-                    <TextBlock Margin="0 6 0 0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                               Text="{Binding ActivationStatus}"
-                               Visibility="{Binding HasActivationStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
-                </StackPanel>
-
-                <Button Grid.Column="1"
-                        MinWidth="200"
-                        Margin="24 0 0 0"
-                        Padding="16 8"
-                        VerticalAlignment="Center"
-                        Style="{DynamicResource AccentButtonStyle}"
-                        Content="{Binding ActivationLabel}"
-                        ToolTip="{Binding ActivationDescription}"
-                        Command="{Binding ActivateCommand}" />
-            </Grid>
-        </Border>
-
-        <ListView Grid.Row="1" Grid.Column="0"
+        <ListView Grid.Column="0"
                   VerticalAlignment="Top"
                   Style="{StaticResource SidebarList}"
                   ItemsSource="{Binding Path=MenuItems}"
                   SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-        <Frame Grid.Row="1" Grid.Column="1"
+        <Frame Grid.Column="1"
                Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
 </Page>

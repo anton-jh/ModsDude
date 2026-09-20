@@ -1,4 +1,4 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.MainPage"
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.MainPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -6,87 +6,149 @@
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
       xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+      xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance Type=pvm:MainPageViewModel, IsDesignTimeCreatable=False}"
       d:DesignHeight="450" d:DesignWidth="800"
       Title="MainPage"
       FontSize="14">
 
-    <Grid ColumnDefinitions="200 *">
+    <!-- The sidebar is a rail while a repo is open - the repo's own sidebar is the one in use then - and
+         a hover shows it in full over the top of the page. See SidebarShell. -->
+    <uc:SidebarShell Style="{StaticResource SidebarShellStyle}"
+                     IsCollapsed="{Binding IsSidebarCollapsed}">
 
-        <Grid Grid.Column="0" RowDefinitions="auto auto * auto">
+        <uc:SidebarShell.SidebarTemplate>
+            <DataTemplate>
+                <Grid RowDefinitions="auto auto * auto">
 
-            <ListView Grid.Row="0"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=MenuItems}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                      />
+                    <ListView Grid.Row="0"
+                              Style="{StaticResource SidebarList}"
+                              ItemsSource="{Binding Path=MenuItems}"
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              />
 
-            <uc:SidebarHeader Grid.Row="1" Title="My repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" />
+                    <uc:SidebarHeader Grid.Row="1" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="Refresh repos"
+                                      AddCommand="{Binding CreateRepoCommand}"
+                                      IsAddSelected="{Binding IsCreateRepoSelected}"
+                                      IsAddEnabled="{Binding CreateRepoItem.IsAvailable}"
+                                      AddToolTip="{Binding CreateRepoItem.ToolTip}" />
 
-            <!-- Grouped by game rather than one flat column: a local installation belongs to a game, so two
-                 repos for different games have nothing in common that the sidebar was saying they
-                 did. ReposView is the same entries with one heading per game - see
-                 MainPageViewModel.ReposView for why it groups and deliberately does not sort. -->
-            <ListView Grid.Row="2"
-                      Style="{StaticResource SidebarList}"
-                      ItemsSource="{Binding Path=ReposView}"
-                      SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                      >
-                <ListView.GroupStyle>
-                    <StaticResource ResourceKey="SidebarGroupStyle" />
-                </ListView.GroupStyle>
-            </ListView>
+                    <!-- Grouped by game rather than one flat column: a local installation belongs to a game, so two
+                         repos for different games have nothing in common that the sidebar was saying they
+                         did. ReposView is the same entries with one heading per game - see
+                         MainPageViewModel.ReposView for why it groups and deliberately does not sort. -->
+                    <ListView Grid.Row="2"
+                              Style="{StaticResource SidebarList}"
+                              ItemsSource="{Binding Path=ReposView}"
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              >
+                        <ListView.GroupStyle>
+                            <StaticResource ResourceKey="SidebarGroupStyle" />
+                        </ListView.GroupStyle>
+                    </ListView>
 
-            <!-- The only account control there is. Signing out has no state worth reaching, so the
-                 panel says who you are and offers to be somebody else instead. -->
-            <Border Grid.Row="3"
-                    DataContext="{Binding Account}"
-                    Margin="8 12 8 8"
-                    Padding="12"
-                    CornerRadius="4"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                    <!-- The only account control there is. Signing out has no state worth reaching, so the
+                         panel says who you are and offers to be somebody else instead. In a rail it is the
+                         avatar alone, with who it is in a tooltip; the rest is a hover away. -->
+                    <Border Grid.Row="3"
+                            DataContext="{Binding Account}"
+                            CornerRadius="4"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            ToolTip="{Binding Description}" ToolTipService.InitialShowDelay="200">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Margin" Value="8 12 8 8" />
+                                <Setter Property="Padding" Value="12" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                        <Setter Property="Margin" Value="4 12 4 8" />
+                                        <Setter Property="Padding" Value="4 8" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
 
-                <StackPanel Orientation="Vertical">
+                        <StackPanel Orientation="Vertical">
 
-                    <TextBlock Text="Signed in as"
-                               FontSize="12"
-                               Opacity="0.7"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="Signed in as"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
-                    <StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+                            <StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                                <Setter Property="Margin" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
 
-                        <!-- The same colour their teammates see beside their name. Held back until
-                             the server has answered, rather than drawn in a colour about to change. -->
-                        <Border Width="24" Height="24" CornerRadius="12"
-                                VerticalAlignment="Center"
-                                Background="{Binding AvatarColor}"
-                                Visibility="{Binding HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="{Binding Initial}"
-                                       Foreground="White" FontWeight="SemiBold" FontSize="12"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                                <!-- The same colour their teammates see beside their name. Held back until
+                                     the server has answered, rather than drawn in a colour about to change. -->
+                                <Border Width="24" Height="24" CornerRadius="12"
+                                        VerticalAlignment="Center"
+                                        Background="{Binding AvatarColor}"
+                                        Visibility="{Binding HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding Initial}"
+                                               Foreground="White" FontWeight="SemiBold" FontSize="12"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
 
-                        <TextBlock Text="{Binding DisplayName}"
-                                   Margin="8 0 0 0"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   TextWrapping="NoWrap"
-                                   ToolTip="{Binding Description}" ToolTipService.InitialShowDelay="200"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    </StackPanel>
+                                <TextBlock Text="{Binding DisplayName}"
+                                           Margin="8 0 0 0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
 
-                    <Button Content="Switch user"
-                            Margin="0 12 0 0"
-                            HorizontalAlignment="Stretch"
-                            Command="{Binding SwitchUserCommand}" />
+                            <Button Content="Switch user"
+                                    Margin="0 12 0 0"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{Binding SwitchUserCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
 
-                </StackPanel>
-            </Border>
-        </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </DataTemplate>
+        </uc:SidebarShell.SidebarTemplate>
 
-        <Frame Grid.Column="1"
-               Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
-    </Grid>
+        <Frame Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+    </uc:SidebarShell>
 </Page>

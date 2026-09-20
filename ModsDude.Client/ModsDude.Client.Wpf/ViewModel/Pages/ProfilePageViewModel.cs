@@ -55,6 +55,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly DriftMonitor _driftMonitor;
+    private readonly ProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
@@ -79,6 +80,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
         DriftMonitor driftMonitor,
+        ProfileSyncStatusService syncStatus,
         IResourceLeases leases,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
@@ -91,7 +93,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         _applyService = applyService;
         _heldSavegames = heldSavegames;
         _driftMonitor = driftMonitor;
+        _syncStatus = syncStatus;
         _leases = leases;
+
+        _syncStatus.Changed += OnSyncStatusChanged;
 
         // The activation button is greyed by a claim anything in the app can take - the drift notice
         // most of all, which belongs to no page - so the only way it can be right is to re-ask when
@@ -181,6 +186,8 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHoldRefusal))]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private string? _holdRefusal;
 
@@ -192,15 +199,21 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private bool _blockedByUnsavedChanges;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
     private bool _isApplying;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActivationStatus))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(HasStatusText))]
     private string? _activationStatus;
 
 
@@ -219,7 +232,26 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public string ActivationLabel => ProfileActivation.Label(ActivationKind);
 
-    public string ActivationDescription
+    /// <summary>
+    /// Where this profile stands against the game that follows it - none of the four unless it is the
+    /// profile the game follows.
+    /// </summary>
+    public ProfileSyncState SyncState => _syncStatus.StateOf(_repo, _profile.Id);
+
+    public bool HasSyncState => SyncState is not ProfileSyncState.None;
+
+    public string SyncLabel => ProfileSyncStatusService.Describe(SyncState);
+
+    /// <summary>
+    /// Why the button cannot be pressed, where it cannot: unsaved edits, a held savegame, or an apply
+    /// already running. Null - nearly always - where nothing is in the way.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ActivationDescription"/> because the header shows this one in place
+    /// and the other only as a tooltip: an explanation of a refusal has to be readable where the
+    /// button is, and the ordinary "what pressing this does" sentence does not.
+    /// </remarks>
+    private string? ActivationBlockReason
     {
         get
         {
@@ -233,17 +265,38 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return refused;
             }
 
-            if (ConnectedGame is not Game game)
-            {
-                return "";
-            }
-
             // Before the two ordinary sentences, because a greyed button with "this will start
             // following the profile" under it explains the wrong thing. What is running is the answer
             // to why nothing can be pressed.
-            if (IsApplying is false && _applyService.IsBusy(_repo, game))
+            if (ConnectedGame is Game game && IsApplying is false && _applyService.IsBusy(_repo, game))
             {
                 return _applyService.Busy(_repo, game);
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What the header's status slot says beside the profile's name: the reason the button is closed,
+    /// and otherwise the outcome of the last thing the button did.
+    /// </summary>
+    public string? StatusText => ActivationBlockReason ?? ActivationStatus;
+
+    public bool HasStatusText => StatusText is not null;
+
+    public string ActivationDescription
+    {
+        get
+        {
+            if (ActivationBlockReason is string reason)
+            {
+                return reason;
+            }
+
+            if (ConnectedGame is not Game game)
+            {
+                return "";
             }
 
             return ActivationKind is ProfileActivationKind.Apply
@@ -329,7 +382,23 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             ActivateCommand.NotifyCanExecuteChanged();
 
             OnPropertyChanged(nameof(ActivationDescription));
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(HasStatusText));
         });
+    }
+
+    /// <summary>
+    /// The pill and the sentence beside it, re-asked: which profile the game follows and whether its
+    /// folders match both change without anything on this page being touched.
+    /// </summary>
+    private void OnSyncStatusChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(SyncState));
+        OnPropertyChanged(nameof(HasSyncState));
+        OnPropertyChanged(nameof(SyncLabel));
+        OnPropertyChanged(nameof(ActivationKind));
+        OnPropertyChanged(nameof(ActivationLabel));
+        OnPropertyChanged(nameof(ActivationDescription));
     }
 
     /// <summary>
@@ -421,6 +490,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         NavManager.PropertyChanged -= OnNavigationChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _leases.Changed -= OnLeasesChanged;
+        _syncStatus.Changed -= OnSyncStatusChanged;
 
         NavManager.Dispose();
     }

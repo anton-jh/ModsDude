@@ -45,4 +45,10 @@ internal static class MenuIcons
     public const string Repo = "\xE8B7";
     public const string Profile = "\xE8FD";
     public const string Game = "\xE7FC";
+
+    // Where a profile stands against the game following it. They replace the entity glyph on the one
+    // row they are about rather than joining it, so a list of profiles keeps a single column of icons.
+    public const string SyncInSync = "\xE930";
+    public const string SyncWarning = "\xE7BA";
+    public const string SyncApplying = "\xE895";
 }

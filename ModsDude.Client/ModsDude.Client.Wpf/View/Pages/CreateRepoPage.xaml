@@ -16,11 +16,7 @@
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
             <StackPanel Orientation="Vertical" >
 
-                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="ModsDude" />
-                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="Create repo"
-                           Margin="0 8 0 36" />
+                <uc:PageTitle Text="Create repo" />
 
                 <Label Content="Name" Margin="0 0 0 12"/>
                 <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />

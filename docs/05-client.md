@@ -303,8 +303,8 @@ The app is a sidebar app, nested up to three levels deep:
 
 ```
 MainWindow
-└─ MainPage                    Home │ Create repo │ Join repo │ Archive │ Settings │ ...repos
-   └─ RepoPage                 Overview │ Admin │ Members │ Mods │ Saves │ Archive │ Create profile │ (Game configuration | Connect game) │ ...profiles
+└─ MainPage                    Home │ Join repo │ Archive │ Settings │ ...repos      (+ Create repo)
+   └─ RepoPage                 header │ Overview │ Admin │ Members │ Mods │ Saves │ Archive │ (Game configuration | Connect game) │ ...profiles      (+ Create profile)
       ├─ RepoModsPage          (one page — the catalog)
       ├─ RepoSavegamesPage     (one page — the saves, their history, and what this machine holds)
       ├─ GameSettingsPage      (one page — this machine's folders, and disconnecting)
@@ -330,6 +330,67 @@ re-checking it.
 game is keyed by its identity and a repo is about one game, so a repo offers at most one — which
 made a list under a "Games" heading a list that is always empty or always one long. It is *Game
 configuration* when one is connected on this machine and *Connect game* when none is.
+
+### The shell around a page
+
+Four things are the same on every page, and none of them is a page's own business.
+
+**One header per repo.** `RepoPage` draws a header across the top of its sidebar and its page: the
+repo's name in the accent colour, with the game under it, on every page. Under a profile the name line
+reads `Repo › Profile`: the repo's name takes you back to its overview, the profile's name is the
+title, and its state is a pill beside it. The words are capped in width and the button follows them
+directly rather than sitting in the far corner, because that button is the app's primary act - putting
+a profile on the game - and it is here rather than on the profile's shell because it is the same act
+from every page of the profile. It is labelled for what it will do (*Activate*, or *Re-apply* where the game is already on this
+profile) and, with no game connected, becomes *Connect game* and selects that entry in the sidebar, so a
+page is never on screen without an entry that names it. Where the button is closed, the **status slot**
+beside the name says why in a sentence - unsaved edits, a held savegame, another apply running - and,
+otherwise, what the button last did: a reason that lived only in a tooltip on a disabled button would
+never be read.
+
+**Pages do not name their context.** The header says which repo and which profile, so a page's title is
+what the page is: *Members*, *Mods*, *History*, *Manage*. `PageTitle` is the one control that draws it,
+so the gap under it is the same on every page. The app-level pages follow the same rule.
+
+**Where a profile stands.** `ProfileSyncStatusService` reads the drift monitor (not the notice, which
+can be dismissed) and the lease table, and answers for a repo and a profile with one of *In sync*,
+*Drifted*, *Not applied* and *Applying…*. The header shows it as a pill, only on the profile the game
+follows. In a sidebar it replaces that one row's profile glyph - green check, amber warning, a turning
+arrow - and a repo whose game has drifted or not been applied wears the amber warning in the repo list,
+so it can be seen from another repo. A repo that is in sync wears nothing.
+
+**Only the deepest sidebar is open.** With a repo open the first sidebar is a 60px rail; with a profile
+open the repo's sidebar is one too. A rail is a tinted strip with a rule down its edge, so two of them
+side by side read as two. There is no toggle and nothing to persist. Hovering a rail for a moment -
+350 ms, long enough that passing over it on the way somewhere else does nothing - shows the full
+sidebar over the top of the page, growing out of the rail's own edge and back into it (300 ms and 240 ms, eased at both ends); it takes no room, and goes 400 ms after the pointer leaves, so a
+wobble off the edge while travelling down it is forgiven. Clicking in the peek does not
+close it - a row, a "+" or refresh - so it stays for as long as the pointer is on it and goes only when
+the pointer leaves. The same goes for a sidebar that collapses under the pointer because the page changed
+under a click - opening a repo from the list, or a profile from the repo's - which stays open as a peek until
+the pointer leaves it. The outer sidebar's peek is always above the inner one's
+because it is drawn over the page that contains the inner one. `SidebarShell` owns all of this; the
+sidebars themselves are drawn from one template each and read `Sidebar.IsCompact` to draw as a rail, so
+the two widths cannot say different things. In a rail a list's heading takes the place of its
+buttons - they are in the peek - so the rail says what it is a rail of. The heading stays where the rail
+centres it when the sidebar is open too, so opening it moves nothing that was already there.
+
+**The picture is in the same place at every width.** A menu entry's glyph and a repo's or a profile's
+square are in a cell that is exactly as wide as the rail is, so opening the sidebar only adds the name
+beside them. That cell's width (`SidebarIconColumn` in `App.xaml`) is the rail's width less what the
+list takes off either side, and moves with it. A repo or a profile is a plain square with its first
+letter, at every width; on the profile the game follows - or a repo whose game has drifted - the
+letter is replaced by the status.
+
+**A "+" is a page that is not in a list.** *Create repo* and *Create profile* are acts on the list under
+their header, so they are a "+" on it rather than a row in the menu above it. They are still menu
+entries - selecting one is how the page opens - and the button is drawn as selected while it is open.
+They keep the rule they had: the button is disabled with the reason as its tooltip.
+
+**Repos and profiles get two lines.** Their names are the one thing here that is not ours to keep short,
+so their rows are two lines tall whether or not the name needs them, and end in an ellipsis on the
+second. Fixed labels like *Overview* stay one. The `#tag` is only there where two repos share a name,
+and sits in the bottom-right corner.
 
 ### The game is not a place
 
@@ -936,7 +997,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `ConnectGamePage` | Working | The local settings form and nothing else. Refuses a game already connected here, and a folder another game owns |
 | `GameSettingsPage` | Working | *Game configuration* in the repo's menu: this machine's folders for the game, and disconnecting it. The only page a local installation has |
 | `CreateProfilePage` | Working | |
-| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage — and the one activation control, a bar across the top of the profile, which asks nothing about where |
+| `ProfilePage` | Working | Profile shell over Overview, Mods, History, Manage. Its name, state and the one activation control - which asks nothing about where - are in the repo
 | `ProfileOverviewPage` | Working | Mod count and current revision, plus the game set to this profile and each of its folders |
 | `ProfileModsEditorPage` | Working | The two-list mod editor: available on the left, pinned on the right, updates and locks on the right-hand rows, import on save. Members and admins only |
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |

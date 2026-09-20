@@ -32,6 +32,16 @@ public partial class RepoPageViewModel
     private readonly MenuItemViewModel? _savesMenuItem;
     private readonly MenuItemViewModel _archiveMenuItem;
     private readonly ISavegamesClient _savegamesClient;
+    private readonly ProfileSyncStatusService _syncStatus;
+
+    /// <summary>The Overview entry, kept so the header's repo name can take the user back to it.</summary>
+    private readonly MenuItemViewModel _overviewMenuItem;
+
+    /// <summary>
+    /// Create profile, which is a page like any other but is reached from the "+" on the Profiles
+    /// header rather than from the menu - so it is held here, not in <see cref="MenuItems"/>.
+    /// </summary>
+    private readonly MenuItemViewModel _createProfileMenuItem;
 
     /// <summary>Which row the Archive should pick out on arrival. One-shot, like the others.</summary>
     private Guid? _highlightInArchiveOnce;
@@ -85,6 +95,7 @@ public partial class RepoPageViewModel
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ISavegamesClient savegamesClient,
+        ProfileSyncStatusService syncStatus,
         ProfileService profileService,
         LastSelectionRepository lastSelectionRepository,
         NavigationLockService navigationLockService,
@@ -92,6 +103,7 @@ public partial class RepoPageViewModel
     {
         _repo = repo;
         _savegamesClient = savegamesClient;
+        _syncStatus = syncStatus;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
@@ -121,9 +133,11 @@ public partial class RepoPageViewModel
         var isGuest = repo.MembershipLevel < RepoMembershipLevel.Member;
         var isNotAdmin = repo.MembershipLevel < RepoMembershipLevel.Admin;
 
+        _overviewMenuItem = new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo))
+            .WithIcon(MenuIcons.Overview);
+
         MenuItems = [
-            new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo))
-                .WithIcon(MenuIcons.Overview),
+            _overviewMenuItem,
             new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo))
                 .WithIcon(MenuIcons.Admin)
                 .RestrictIf(isNotAdmin, "Only an admin can rename this repo, change its game settings or delete it."),
@@ -166,9 +180,12 @@ public partial class RepoPageViewModel
 
         MenuItems.Add(_archiveMenuItem);
 
-        MenuItems.Add(new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
+        // Not in the menu: it is an act on the list below it rather than a place, so it lives as a "+"
+        // on that list's header. It is still an entry - selecting it is how the page opens and how the
+        // header knows to draw the button as selected - and it keeps the membership rule it had.
+        _createProfileMenuItem = new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
             .WithIcon(MenuIcons.CreateProfile)
-            .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level."));
+            .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level.");
 
         Profiles = [];
         _profileService.ProfileCreated += OnProfileCreated;
@@ -192,6 +209,8 @@ public partial class RepoPageViewModel
         }
 
         _repo.Games.CollectionChanged += OnGamesChanged;
+        _repo.PropertyChanged += OnRepoChanged;
+        _syncStatus.Changed += OnSyncStatusChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
     }
 
@@ -212,6 +231,43 @@ public partial class RepoPageViewModel
     public bool HasArchivedProfileOpen => ArchivedProfiles.Count > 0;
 
 
+    // What the header draws. It is here rather than on a page because it spans the repo's own pages and
+    // a profile's, and is the one thing on screen that names both.
+
+    public string RepoName => _repo.Name;
+
+    public string GameName => _repo.Adapter.GameDisplayName;
+
+    /// <summary>
+    /// The profile page in front of the user, or null on any of the repo's own pages. The header reads
+    /// its name, its sync state and its activation control off this, so there is one activation
+    /// control however deep in the profile the user is.
+    /// </summary>
+    public ProfilePageViewModel? OpenProfile => NavManager.CurrentPage as ProfilePageViewModel;
+
+    public bool HasOpenProfile => OpenProfile is not null;
+
+    /// <summary>
+    /// Whether this sidebar is a rail: a profile's own sidebar is the deepest one there is while one is
+    /// open, so this is what is left of the way to it. Opening it again is a hover away.
+    /// </summary>
+    public bool IsSidebarCollapsed => HasOpenProfile;
+
+    /// <summary>
+    /// Whether the header offers to connect a game: only while none is, and not on the page that does
+    /// it.
+    /// </summary>
+    public bool ShowConnectGame => ConnectedGame() is null && ReferenceEquals(NavManager.Selected, _connectGameMenuItem) is false;
+
+    /// <summary>Whether the Create profile page is showing, for the "+" to draw as selected.</summary>
+    public bool IsCreateProfileSelected => ReferenceEquals(NavManager.Selected, _createProfileMenuItem);
+
+    /// <summary>
+    /// Carries the availability and the reason for the "+", so the membership rule stays where it was.
+    /// </summary>
+    public MenuItemViewModel CreateProfileItem => _createProfileMenuItem;
+
+
     protected override void Init()
     {
         LoadProfilesCommand.Execute(null);
@@ -222,6 +278,8 @@ public partial class RepoPageViewModel
         _profileService.ProfileCreated -= OnProfileCreated;
         _profileService.ProfileUpdated -= OnProfileUpdated;
         _repo.Games.CollectionChanged -= OnGamesChanged;
+        _repo.PropertyChanged -= OnRepoChanged;
+        _syncStatus.Changed -= OnSyncStatusChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
 
         _profilesSynchronizer.Dispose();
@@ -235,6 +293,31 @@ public partial class RepoPageViewModel
         await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
 
         RestoreLastSelectedProfile();
+    }
+
+    [RelayCommand]
+    private void GoToOverview()
+    {
+        NavManager.Selected = _overviewMenuItem;
+    }
+
+    /// <summary>
+    /// Takes the user to the Connect game entry, which is in the sidebar for exactly as long as no game
+    /// is connected - so the page the header sends them to is always one the menu also names.
+    /// </summary>
+    [RelayCommand]
+    private void ConnectGame()
+    {
+        if (ConnectedGame() is null)
+        {
+            NavManager.Selected = _connectGameMenuItem;
+        }
+    }
+
+    [RelayCommand]
+    private void CreateProfile()
+    {
+        NavManager.Selected = _createProfileMenuItem;
     }
 
     /// <summary>
@@ -418,6 +501,7 @@ public partial class RepoPageViewModel
         ClearArchivedProfile();
 
         var entry = new ProfileItemViewModel(_repo, archived, _profilePageViewModelFactory);
+        entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);
 
         ArchivedProfiles.Add(entry);
         OnPropertyChanged(nameof(HasArchivedProfileOpen));
@@ -469,10 +553,22 @@ public partial class RepoPageViewModel
 
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(NavigationManager.CurrentPage))
+        {
+            OnPropertyChanged(nameof(OpenProfile));
+            OnPropertyChanged(nameof(HasOpenProfile));
+            OnPropertyChanged(nameof(IsSidebarCollapsed));
+
+            return;
+        }
+
         if (e.PropertyName != nameof(NavigationManager.Selected))
         {
             return;
         }
+
+        OnPropertyChanged(nameof(ShowConnectGame));
+        OnPropertyChanged(nameof(IsCreateProfileSelected));
 
         if (NavManager.Selected is ProfileItemViewModel profile)
         {
@@ -508,7 +604,10 @@ public partial class RepoPageViewModel
 
     private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
     {
-        return new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
+        var entry = new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
+        entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);
+
+        return entry;
     }
 
     /// <summary>
@@ -560,6 +659,27 @@ public partial class RepoPageViewModel
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshGameEntry();
+        OnPropertyChanged(nameof(ShowConnectGame));
+    }
+
+    private void OnRepoChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Repo.Name))
+        {
+            OnPropertyChanged(nameof(RepoName));
+        }
+    }
+
+    /// <summary>
+    /// Re-asks the state of every profile row, because which one the game follows and whether its
+    /// folders match can both change without a row being touched.
+    /// </summary>
+    private void OnSyncStatusChanged(object? sender, EventArgs e)
+    {
+        foreach (var profile in Profiles.Concat(ArchivedProfiles).OfType<ProfileItemViewModel>())
+        {
+            profile.SyncState = _syncStatus.StateOf(_repo, profile.Id);
+        }
     }
 
 

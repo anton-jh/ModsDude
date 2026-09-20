@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Core.Users;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -37,6 +39,7 @@ public partial class MenuItemViewModel
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ToolTip))]
+    [NotifyPropertyChangedFor(nameof(Initial))]
     private string _title = "";
 
     /// <summary>
@@ -45,7 +48,32 @@ public partial class MenuItemViewModel
     /// starts its text where every other entry does.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayIcon))]
     private string _icon = "";
+
+    /// <summary>
+    /// Where the profile this entry stands for stands against the game following it. None - nearly
+    /// always - leaves the entry as it was.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayIcon))]
+    [NotifyPropertyChangedFor(nameof(HasStatus))]
+    private ProfileSyncState _syncState;
+
+    /// <summary>Whether <see cref="SyncState"/> is anything to draw.</summary>
+    public bool HasStatus => SyncState is not ProfileSyncState.None;
+
+    /// <summary>
+    /// The glyph actually drawn: the status where there is one, and otherwise the entry's own. Swapped
+    /// rather than added beside it, so every row keeps the one icon cell it always had.
+    /// </summary>
+    public string DisplayIcon => SyncState switch
+    {
+        ProfileSyncState.InSync => MenuIcons.SyncInSync,
+        ProfileSyncState.Drifted or ProfileSyncState.NotApplied => MenuIcons.SyncWarning,
+        ProfileSyncState.Applying => MenuIcons.SyncApplying,
+        _ => Icon
+    };
 
     /// <summary>
     /// Whether the entry can be navigated to. False greys it out and refuses the click, rather than
@@ -85,6 +113,19 @@ public partial class MenuItemViewModel
     /// takes no space; nothing has to be hidden.
     /// </summary>
     public string TagText => Tag is null ? "" : $" #{Tag}";
+
+    /// <summary>
+    /// Whether the entry names a thing somebody called something - a repo or a profile - rather than a
+    /// place the app offers. Such a name can be any length, so its row gets two lines; a fixed label
+    /// like Overview does not, and stays one.
+    /// </summary>
+    public virtual bool IsEntity => false;
+
+    /// <summary>
+    /// The one character an entity's square is marked with, in place of a glyph every repo - or every
+    /// profile - would share. A name that is all punctuation gets none.
+    /// </summary>
+    public string Initial => UserDisplay.InitialFor(Title);
 
     /// <summary>
     /// One tooltip per row, so it does double duty: the reason when there is one, and otherwise the

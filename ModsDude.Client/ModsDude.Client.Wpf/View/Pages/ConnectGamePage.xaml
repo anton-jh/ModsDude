@@ -16,11 +16,7 @@
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
             <StackPanel Orientation="Vertical">
 
-                <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding RepoName}" />
-                <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                           Text="Connect game"
-                           Margin="0 8 0 36" />
+                <uc:PageTitle Text="Connect game" />
 
                 <!-- Said rather than asked. The game is called what the adapter calls it, and one is
                      configured once per machine, so there is nothing a typed name could

@@ -1,6 +1,7 @@
 <Page x:Class="ModsDude.Client.Wpf.View.Pages.RepoArchivePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
@@ -67,26 +68,17 @@
     </Page.Resources>
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto auto *">
+        <Grid RowDefinitions="auto auto auto *">
 
-            <TextBlock Grid.Row="0"
-                       Style="{DynamicResource TitleTextBlockStyle}"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding RepoName}" />
+            <uc:PageTitle Grid.Row="0" Text="Archive" />
 
             <TextBlock Grid.Row="1"
-                       Style="{DynamicResource SubtitleTextBlockStyle}"
-                       Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                       Text="Archive"
-                       Margin="0 8 0 16" />
-
-            <TextBlock Grid.Row="2"
                        Margin="0 0 0 16"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Profiles and savegames that have been put away. They still exist and anything pointing at them still does - they are out of the lists, and they no longer hold their names." />
 
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     Margin="0 0 0 16"
                     Padding="12 8"
                     CornerRadius="4"
@@ -97,7 +89,7 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             </Border>
 
-            <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
                     <TextBlock Text="Profiles"

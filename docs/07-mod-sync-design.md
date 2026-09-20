@@ -36,7 +36,7 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | Drift | `DriftService`, `DriftMonitor`, `SyncManifest`, `SyncManifestStore` |
 | Rewritten-blob detection | `StoreIntegrityService` off the drift check, `ContentStore.VerifyAllAsync` on demand |
 | Store housekeeping | `ContentStoreMaintenance` — sweep, verify, and what a store is costing |
-| The UI | The activation bar on `ProfilePage`; the plan confirmation from `ProfileApplyService`; the background-task strip; the app-level drift notice; the folder lines on `RepoOverviewPage` |
+| The UI | The activation button in the repo header; the plan confirmation from `ProfileApplyService`; the background-task strip; the app-level drift notice; the folder lines on `RepoOverviewPage` |
 
 ## Content hashing
 

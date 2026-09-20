@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.ViewModel.Pages;
+using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -31,6 +32,8 @@ public class RepoItemViewModel
 
     public Guid Id => _repo.Id;
 
+    public override bool IsEntity => true;
+
     /// <summary>The repo's own name, without whatever the sidebar has decided to draw beside it.</summary>
     public string Name => _repo.Name;
 
@@ -45,6 +48,21 @@ public class RepoItemViewModel
     /// </remarks>
     public string GameName => _repo.Adapter.GameDisplayName;
 
+
+    /// <summary>
+    /// Marks the entry when the profile its game follows is anything but in sync.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only the trouble, never the all-clear.</b> A green mark on every repo whose game is fine
+    /// would turn the list into noise; the profile rows inside the repo say "in sync", and this says
+    /// "something over there needs you" from wherever the user is standing.
+    /// </remarks>
+    public void RefreshSyncState(ProfileSyncStatusService syncStatus)
+    {
+        var state = syncStatus.StateOf(_repo);
+
+        SyncState = state is ProfileSyncState.InSync ? ProfileSyncState.None : state;
+    }
 
     /// <summary>
     /// Shows or hides this entry's tag. Called by whoever owns the list, because whether two entries

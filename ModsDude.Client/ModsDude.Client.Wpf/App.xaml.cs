@@ -193,6 +193,10 @@ public partial class App : Application
         services.AddSingleton<ShellNavigationService>();
         services.AddSingleton<ProfileApplyService>();
 
+        // Where the profile a game follows stands against its folders, asked once for the sidebar rows,
+        // the repo entries and the header rather than three times with three chances to disagree.
+        services.AddSingleton<ProfileSyncStatusService>();
+
         // The other half of that pair: one way into an import, so the repo claim and the two
         // questions an import cannot answer for itself live somewhere a new page cannot forget them.
         services.AddSingleton<ModImportCoordinator>();

@@ -1,6 +1,7 @@
 ﻿<Page x:Class="ModsDude.Client.Wpf.View.Pages.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
@@ -16,11 +17,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Orientation="Vertical">
 
-                    <TextBlock Style="{DynamicResource TitleTextBlockStyle}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Text="ModsDude" />
-                    <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
-                               Text="Settings"
-                               Margin="0 8 0 36" />
+                    <uc:PageTitle Text="Settings" />
 
                     <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="4"

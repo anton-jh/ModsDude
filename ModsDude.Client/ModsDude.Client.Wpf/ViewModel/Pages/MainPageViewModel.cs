@@ -23,7 +23,14 @@ public partial class MainPageViewModel
     private readonly ShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
+    /// <summary>
+    /// Create repo, reached from the "+" on the repo list's header rather than from the menu: it is an act
+    /// on that list, not a place. Still an entry, so that selecting it opens the page and the header
+    /// can draw the button as selected.
+    /// </summary>
     private readonly MenuItemViewModel _createRepoMenuItem;
+
+    private readonly ProfileSyncStatusService _syncStatus;
 
     private bool _selectionRestored;
 
@@ -40,16 +47,17 @@ public partial class MainPageViewModel
         AccountViewModel account,
         IDialogService dialogService,
         IModalService modalService,
-        IFactory<ArchivePageViewModel> archivePageViewModelFactory)
+        IFactory<ArchivePageViewModel> archivePageViewModelFactory,
+        ProfileSyncStatusService syncStatus)
     {
         Account = account;
+        _syncStatus = syncStatus;
 
         _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
             .WithIcon(MenuIcons.CreateRepo);
 
         MenuItems = [
             new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")).WithIcon(MenuIcons.Home),
-            _createRepoMenuItem,
             new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create).WithIcon(MenuIcons.JoinRepo),
             // Above Settings, because it is a place repos went rather than a preference. A repo
             // archived by any admin leaves every member's sidebar, so this is where somebody looks
@@ -92,6 +100,7 @@ public partial class MainPageViewModel
 
         repoService.RepoCreated += OnRepoCreated;
         NavManager.PropertyChanged += OnNavigationChanged;
+        _syncStatus.Changed += OnSyncStatusChanged;
 
         _shellNavigationService.Register(this);
     }
@@ -120,6 +129,18 @@ public partial class MainPageViewModel
     /// </remarks>
     public ICollectionView ReposView { get; }
 
+    /// <summary>
+    /// Whether this sidebar is a rail: while a repo is open, its own sidebar is the deepest one there is,
+    /// and this one is what is left of the way there. Opening it again is a hover away.
+    /// </summary>
+    public bool IsSidebarCollapsed => NavManager.CurrentPage is RepoPageViewModel;
+
+    /// <summary>Whether the Create repo page is showing, for the "+" to draw as selected.</summary>
+    public bool IsCreateRepoSelected => ReferenceEquals(NavManager.Selected, _createRepoMenuItem);
+
+    /// <summary>Carries the availability and the reason for the "+", so the trust rule stays where it was.</summary>
+    public MenuItemViewModel CreateRepoItem => _createRepoMenuItem;
+
 
     protected override void Init()
     {
@@ -133,6 +154,7 @@ public partial class MainPageViewModel
         Account.PropertyChanged -= OnAccountChanged;
         _repoService.RepoCreated -= OnRepoCreated;
         NavManager.PropertyChanged -= OnNavigationChanged;
+        _syncStatus.Changed -= OnSyncStatusChanged;
         Repos.CollectionChanged -= OnReposChanged;
 
         foreach (var entry in Repos.OfType<RepoItemViewModel>())
@@ -173,6 +195,12 @@ public partial class MainPageViewModel
 
 
     [RelayCommand]
+    private void CreateRepo()
+    {
+        NavManager.Selected = _createRepoMenuItem;
+    }
+
+    [RelayCommand]
     private async Task LoadRepos(CancellationToken cancellationToken)
     {
         await _repoService.RefreshRepos(cancellationToken);
@@ -205,10 +233,32 @@ public partial class MainPageViewModel
 
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(NavigationManager.CurrentPage))
+        {
+            OnPropertyChanged(nameof(IsSidebarCollapsed));
+        }
+
+        if (e.PropertyName == nameof(NavigationManager.Selected))
+        {
+            OnPropertyChanged(nameof(IsCreateRepoSelected));
+        }
+
         if (e.PropertyName == nameof(NavigationManager.Selected) &&
             NavManager.Selected is RepoItemViewModel repo)
         {
             _lastSelectionRepository.RecordRepo(repo.Id);
+        }
+    }
+
+    /// <summary>
+    /// Re-asks every repo entry whether the profile its game follows has drifted, because that can
+    /// change while nothing about the list does.
+    /// </summary>
+    private void OnSyncStatusChanged(object? sender, EventArgs e)
+    {
+        foreach (var entry in Repos.OfType<RepoItemViewModel>())
+        {
+            entry.RefreshSyncState(_syncStatus);
         }
     }
 
@@ -290,6 +340,9 @@ public partial class MainPageViewModel
 
     private RepoItemViewModel MapRepoToVm(Repo repo)
     {
-        return new RepoItemViewModel(repo, _repoPageViewModelFactory);
+        var entry = new RepoItemViewModel(repo, _repoPageViewModelFactory);
+        entry.RefreshSyncState(_syncStatus);
+
+        return entry;
     }
 }

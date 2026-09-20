@@ -185,16 +185,46 @@
                  SidebarHeader, which names a whole list and carries an action: this one only says
                  which run of rows follows, so it is a caption and a rule and nothing else. -->
             <GroupStyle x:Key="SidebarGroupStyle">
+                <!-- The theme's group container indents what is in it, which put a grouped list's pictures
+                     a few pixels to the right of an ungrouped one's - and, in a rail, off the centre. The
+                     heading and the rows are all this needs. -->
+                <GroupStyle.ContainerStyle>
+                    <Style TargetType="GroupItem">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="GroupItem">
+                                    <StackPanel>
+                                        <ContentPresenter />
+                                        <ItemsPresenter />
+                                    </StackPanel>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </GroupStyle.ContainerStyle>
                 <GroupStyle.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel Margin="0 8 0 2">
+                            <!-- Hidden rather than collapsed in a rail: the heading keeps its height, so
+                                 the rows under it sit where they do at full width, and what is left is the
+                                 rule - which is what still says that a new run of repos begins here. -->
                             <TextBlock Text="{Binding Name}"
                                        Margin="16 0 16 4"
                                        FontSize="11"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
                                        Opacity="0.7"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                <Setter Property="Visibility" Value="Hidden" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
                             <Border Height="1"
                                     Margin="16 0"
@@ -203,6 +233,12 @@
                     </DataTemplate>
                 </GroupStyle.HeaderTemplate>
             </GroupStyle>
+
+            <!-- The cell every row's picture sits in, and the one number that keeps it still: it is as wide as
+                 a rail is, less what the list and its rows take off either side, so a glyph or a tile is drawn
+                 at the same x whether the sidebar is a rail or open. Widen the rail (SidebarShell.CollapsedWidth)
+                 and this has to move with it. -->
+            <GridLength x:Key="SidebarIconColumn">56</GridLength>
 
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />
@@ -221,6 +257,11 @@
                             <Setter Property="ToolTip" Value="{Binding ToolTip}" />
                             <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
                             <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
+                            <!-- The theme's row is at least 88 wide and pads itself 16 and 12 either side,
+                                 which is more than a rail has, and would put the picture at a different x
+                                 in a rail than open. The row lays itself out instead. -->
+                            <Setter Property="MinWidth" Value="0" />
+                            <Setter Property="Padding" Value="0" />
                         </Style>
                     </Setter.Value>
                 </Setter>
@@ -242,47 +283,167 @@
                                     </Style>
                                 </Grid.Style>
 
-                                <!-- The icon, the title and the tag in cells of their own rather than
-                                     runs of one TextBlock, so that the tag survives a name long
-                                     enough to be trimmed. It is the half that
-                                     says which of the two repos this is, so it must not be the half
-                                     the ellipsis eats.
+                                <!-- The picture, the title and the tag in cells of their own rather than runs of
+                                     one TextBlock, so that the tag survives a name long enough to be trimmed. It
+                                     is the half that says which of the two repos this is, so it must not be the
+                                     half the ellipsis eats.
 
-                                     The layout is what keeps it beside the name rather than out at
-                                     the sidebar's edge. Left-aligned and capped at the row's width,
-                                     the Grid is arranged at its own desired width: the star column
-                                     collapses onto a short name and the tag follows immediately
-                                     after it, while a long name is measured against the cap less the
-                                     tag - which is what makes the name trim and the tag keep its
-                                     space. An entry without one has an empty second column and is
-                                     drawn exactly as before. -->
-                                <Grid HorizontalAlignment="Left"
-                                      MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+                                     The picture is always in the first cell, and the cell is always the same
+                                     width: that is what keeps it still when the sidebar opens and closes. In a
+                                     rail nothing else is drawn and the row is centred, which puts that cell in
+                                     the middle of the rail; open, the row starts at the left edge, which puts it
+                                     in the same place.
+
+                                     A menu entry stays as wide as its content, so the tag follows its name
+                                     immediately. A repo or a profile is different in two ways, both because its
+                                     name is the one thing here that is not chosen by us and can be long. It gets
+                                     two lines, in a row that is two lines tall whether or not the name needs them,
+                                     so a list of them keeps one rhythm. And it fills the row, so the tag sits in
+                                     the bottom-right corner rather than trailing a name that may have wrapped. -->
+                                <Grid MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="HorizontalAlignment" Value="Left" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                                    <Setter Property="MinHeight" Value="56" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <Setter Property="HorizontalAlignment" Value="Center" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="{StaticResource SidebarIconColumn}" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <!-- Fixed width rather than Auto, and never collapsed: an entry
-                                         with no glyph still has to start its text where every other
-                                         entry does, or a list of twenty repos reads as ragged. It is
-                                         dimmed a step below the title on purpose - the icon is there
-                                         to be found at a glance, not read. -->
+                                    <!-- A menu entry's own glyph, dimmed a step below the title on purpose - it is
+                                         there to be found at a glance, not read. -->
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Path=Icon}"
-                                               Width="18"
-                                               Margin="12 8 0 8"
+                                               Margin="0 8"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
                                                FontFamily="{DynamicResource SymbolThemeFontFamily}"
                                                FontSize="14"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <!-- What a repo or a profile is instead: a plain square with its first letter,
+                                         the same at every width so that opening the sidebar only adds the name
+                                         beside it. Where the game follows the profile - or where a repo's does and
+                                         has drifted - the letter gives way to the status: green check, amber
+                                         warning, or an arrow that turns while an apply runs. -->
+                                    <Border Grid.Column="0"
+                                            Width="28" Height="28"
+                                            Margin="0 14"
+                                            CornerRadius="6"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <TextBlock Text="{Binding Initial}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{Binding HasStatus, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+
+                                            <TextBlock Text="{Binding DisplayIcon}"
+                                                       FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                       FontSize="14"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       RenderTransformOrigin="0.5 0.5"
+                                                       Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock.RenderTransform>
+                                                    <RotateTransform Angle="0" />
+                                                </TextBlock.RenderTransform>
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SyncState}" Value="InSync">
+                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding SyncState}" Value="Drifted">
+                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding SyncState}" Value="NotApplied">
+                                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding SyncState}" Value="Applying">
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                                <DataTrigger.EnterActions>
+                                                                    <BeginStoryboard x:Name="SpinIcon">
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Angle"
+                                                                                             From="0" To="360" Duration="0:0:1.2"
+                                                                                             RepeatBehavior="Forever" />
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </DataTrigger.EnterActions>
+                                                                <DataTrigger.ExitActions>
+                                                                    <StopStoryboard BeginStoryboardName="SpinIcon" />
+                                                                </DataTrigger.ExitActions>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
 
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding Path=Title}"
-                                               Padding="8 8 0 8"
-                                               TextTrimming="CharacterEllipsis"
-                                               TextWrapping="NoWrap" />
+                                               Padding="0 8 12 8"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="NoWrap" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                    <!-- Exactly two lines' worth of room, whatever the name
+                                                         needs: the block line height is what makes the cap
+                                                         a number of lines rather than of pixels, and it is
+                                                         what lets the trimming find the end of the second. -->
+                                                    <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                                        <Setter Property="LineHeight" Value="20" />
+                                                        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+                                                        <Setter Property="MaxHeight" Value="56" />
+                                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
 
                                     <!-- TagText carries its own leading space, so the row reads
                                          "Vanilla #1234" and the tooltip spells it the same way. -->
@@ -290,7 +451,21 @@
                                                Text="{Binding Path=TagText}"
                                                Padding="0 8 12 8"
                                                FontFamily="Consolas"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                        <Setter Property="VerticalAlignment" Value="Bottom" />
+                                                        <Setter Property="FontSize" Value="12" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Grid>
                         </DataTemplate>

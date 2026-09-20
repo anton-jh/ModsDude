@@ -26,6 +26,8 @@ public class ProfileItemViewModel
 
     public Guid Id => _profile.Id;
 
+    public override bool IsEntity => true;
+
 
     /// <summary>
     /// Re-reads the DTO, which is updated in place on rename. A generated DTO cannot raise
