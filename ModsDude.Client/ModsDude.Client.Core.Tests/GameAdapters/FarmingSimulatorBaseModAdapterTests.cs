@@ -112,6 +112,20 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
     }
 
+    /// <summary>
+    /// A version the comparer cannot read is still a mod. Whether it can be ordered is a question for
+    /// the page that lists it, never a reason for the scan to leave it out.
+    /// </summary>
+    [Fact]
+    public async Task A_version_that_is_not_a_number_is_still_scanned()
+    {
+        WriteMod("FS25_Plough", "hurr durr", []);
+
+        var mod = await ScanOne();
+
+        Assert.Equal("hurr durr", mod.Version.Value);
+    }
+
     private async Task<LocalMod> ScanOne()
     {
         return Assert.Single(await Scan());

@@ -35,6 +35,15 @@ public class ModVersionIndexTests
     }
 
     [Fact]
+    public void A_version_that_is_not_a_number_at_all_is_uncompared_and_still_in_the_order()
+    {
+        var set = Build(Registered("1.0", 0), LocalOnly("hurr durr"));
+
+        Assert.True(set.CouldNotCompareToNewest(V("hurr durr")));
+        Assert.Equal([V("1.0"), V("hurr durr")], set.Order.Select(x => x.VersionId));
+    }
+
+    [Fact]
     public void The_newest_registered_version_is_never_uncompared_against_itself()
     {
         var set = Build(Registered("1.0", 0), Registered("1.1", 1));
