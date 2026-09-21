@@ -1,8 +1,9 @@
-﻿using H.NotifyIcon;
+using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
@@ -30,12 +31,14 @@ public sealed class TrayService(
     MainWindow window,
     NoticeCenterViewModel notices,
     ClientSettingsRepository settings,
+    IUpdateStatus updates,
     ILogger<TrayService> logger) : IDisposable
 {
     private static string _name => AppIdentity.DisplayName;
 
     private TaskbarIcon? _icon;
     private MenuItem? _status;
+    private MenuItem? _restart;
 
 
     /// <returns>Whether the icon is up. False leaves the app behaving as if there were no tray.</returns>
@@ -48,6 +51,12 @@ public sealed class TrayService(
             var open = new MenuItem { Header = $"Open {_name}" };
             open.Click += (_, _) => window.ShowFromTray();
 
+            // Only while there is one waiting: a menu item for something that is not there is a button that
+            // does nothing. The tray is where an app that lives in it is reached, so this is the way in for
+            // somebody who never opens the window.
+            _restart = new MenuItem { Visibility = Visibility.Collapsed };
+            _restart.Click += async (_, _) => await updates.RestartAsync();
+
             var quit = new MenuItem { Header = "Quit" };
             quit.Click += (_, _) => window.Quit();
 
@@ -55,6 +64,7 @@ public sealed class TrayService(
             menu.Items.Add(open);
             menu.Items.Add(new Separator());
             menu.Items.Add(_status);
+            menu.Items.Add(_restart);
             menu.Items.Add(new Separator());
             menu.Items.Add(quit);
             menu.Opened += (_, _) => Refresh();
@@ -86,6 +96,7 @@ public sealed class TrayService(
         }
 
         notices.SeverityCounts.CollectionChanged += (_, _) => Refresh();
+        updates.Changed += (_, _) => Application.Current?.Dispatcher.InvokeAsync(Refresh);
         window.HiddenToTray += OnHiddenToTray;
         window.HideOnClose = () => settings.Settings.Background.CloseToTray;
 
@@ -111,6 +122,13 @@ public sealed class TrayService(
             : string.Join(", ", notices.SeverityCounts.Select(x => x.Label));
 
         _status?.Header = summary;
+
+        if (_restart is not null)
+        {
+            _restart.Header = $"Restart to update to {updates.ReadyVersion}";
+            _restart.Visibility = updates.ReadyVersion is null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         _icon?.ToolTipText = $"{_name} - {summary}";
     }
 

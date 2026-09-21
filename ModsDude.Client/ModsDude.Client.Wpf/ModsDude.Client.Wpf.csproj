@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <StartupObject>ModsDude.Client.Wpf.Program</StartupObject>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <!-- The debug build's exe is the orange one, so it is not mistaken for the real install in Explorer either. -->
     <ApplicationIcon Condition="'$(Configuration)' == 'Debug'">Assets\AppIcon.Dev.ico</ApplicationIcon>
@@ -26,11 +27,19 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
     <PackageReference Include="SkiaSharp" Version="3.119.0" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\ModsDude.Shared\ModsDude.Shared.csproj" />
     <ProjectReference Include="..\ModsDude.Client.Core\ModsDude.Client.Core.csproj" />
+  </ItemGroup>
+
+  <!-- App.xaml is a page, not the application definition: the entry point is Program.Main, which has to run
+       Velopack before WPF starts. WPF only generates a Main of its own from an application definition. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
   </ItemGroup>
 
   <ItemGroup>

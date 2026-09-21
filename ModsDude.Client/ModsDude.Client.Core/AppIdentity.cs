@@ -51,7 +51,10 @@ public static class AppIdentity
     }
 
     /// <summary>What a person should see on the window and the tray icon: nothing extra in production.</summary>
-    public static string DisplayName => IsProduction ? _product : $"{_product} ({_environmentName})";
+    public static string DisplayName => DisplayNameFor(_environmentName);
+
+    public static string DisplayNameFor(string environmentName)
+        => IsProductionEnvironment(environmentName) ? _product : $"{_product} ({environmentName.Trim()})";
 
 
     /// <exception cref="InvalidOperationException">Where a path has already been built from the old name.</exception>

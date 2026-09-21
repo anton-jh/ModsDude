@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -268,6 +268,37 @@ public partial class MainWindow : Window
         IsVisibleChanged += OnVisibleChanged;
 
         return shown.Task;
+    }
+
+    /// <summary>
+    /// Asks whether the app may leave for an update, and lets the close through if so.
+    /// </summary>
+    /// <remarks>
+    /// The same question as closing, and for the same reason: an update restarts the process, which stops
+    /// whatever is running part way. Skipped where nothing is - an idle app in the tray restarts without a
+    /// window flashing up on the way.
+    /// </remarks>
+    /// <returns>False where the user would rather it kept working.</returns>
+    public async Task<bool> PrepareForRestartAsync()
+    {
+        if (DataContext is not ViewModel.Windows.MainWindowViewModel shell)
+        {
+            return true;
+        }
+
+        if (shell.NeedsCloseConfirmation)
+        {
+            ShowFromTray();
+
+            if (await shell.ConfirmCloseAsync() is false)
+            {
+                return false;
+            }
+        }
+
+        AllowClose();
+
+        return true;
     }
 
     /// <summary>

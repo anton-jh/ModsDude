@@ -137,6 +137,11 @@ rewrites the shortcut whenever the exe has moved) and sends through Windows' API
 only to write the XML. Clicks arrive through the notification's own ``Activated`` event, in the process that
 showed it, and the app clears its toasts on exit, so nothing is left to click once nobody can answer. Each
 install has its own shortcut - a debug build leaves a ``ModsDude (Development)`` entry in the Start Menu.
+**Updates and packaging** are in [11 â€” Releasing the client](11-releasing.md). The entry point is
+``Program.Main``, not WPF's generated one (``App.xaml`` is built as a page): Velopack has to run first, because
+the installer and updater start the app with hook arguments and expect it to do that and exit. An installed
+copy checks for updates in the background and announces a downloaded one - a notice in the column
+(``UpdateNotice``, Info, never a toast), a tray menu item and a Settings line - but restarts only when asked.
 ## Diagnostics
 
 A WPF app has no console, so an `ILogger` with nothing behind it is the same as no logger at all.

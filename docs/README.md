@@ -16,6 +16,7 @@ concentrates on the things the code does not tell you.
 | [08 — Known issues](08-known-issues.md) | What is still wrong or unbuilt in the current tree |
 | [09 — Mod representation and the catalog](09-mod-catalog.md) | Local vs registered mods, the merged model, mod imagery, the sources, and the import protocol |
 | [10 — Savegames and profile revisions](10-savegame-profile-binding.md) | One current savegame per profile, how a snapshot learns which revision it was played on, and which folder a slot is in |
+| [11 — Releasing the client](11-releasing.md) | Cutting a release, what gets installed, how an installed copy updates itself, and why nothing is signed |
 | [PLAN](PLAN.md) | Roadmap, phased |
 
 ## Conventions used here

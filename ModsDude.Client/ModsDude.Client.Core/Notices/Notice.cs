@@ -54,7 +54,10 @@ public enum NoticeActionKind
     OpenSavegame,
 
     /// <summary>Open the log folder. The only thing the quiet notices have to offer.</summary>
-    OpenLog
+    OpenLog,
+
+    /// <summary>Restart into the version that has already been downloaded.</summary>
+    RestartToUpdate
 }
 
 

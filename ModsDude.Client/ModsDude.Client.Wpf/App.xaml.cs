@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
@@ -13,6 +13,8 @@ using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Updates;
+using ModsDude.Client.Wpf.Updates;
 using ModsDude.Client.Wpf.Diagnostics;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
@@ -78,6 +80,15 @@ public partial class App : Application
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 
+        // First instance, and nothing shown yet: the one safe moment to install what was downloaded on an
+        // earlier run. See AppUpdater.ApplyPendingAtStartup.
+        if (_serviceProvider.GetRequiredService<AppUpdater>().ApplyPendingAtStartup(e.Args))
+        {
+            Shutdown();
+
+            return;
+        }
+
         // Two ways out of the process that the dispatcher handler never sees: a throw on a thread
         // that is not the UI one, and a Task nobody awaited. Both used to be silent.
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
@@ -90,8 +101,12 @@ public partial class App : Application
 
         // Before the first window, so the taskbar button is filed under the same identity as the
         // notifications and the shortcut that makes Windows show them.
-        _serviceProvider.GetRequiredService<WindowsToasts>()
-            .Register(AppIdentity.Name, AppIdentity.DisplayName, Environment.ProcessPath);
+        _serviceProvider.GetRequiredService<WindowsToasts>().Register(
+            AppIdentity.Name,
+            AppIdentity.DisplayName,
+            Environment.ProcessPath,
+            // An installed copy has the installer's shortcut, made with this same identity.
+            ensureShortcut: _serviceProvider.GetRequiredService<AppUpdater>().IsInstalled is false);
 
         var window = _serviceProvider.GetRequiredService<MainWindow>();
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
@@ -231,6 +246,8 @@ public partial class App : Application
         _backstop = _serviceProvider.GetRequiredService<DriftBackstop>();
         _backstop.Start();
 
+        _serviceProvider.GetRequiredService<AppUpdater>().Start();
+
         return trayUp;
     }
 
@@ -349,6 +366,16 @@ public partial class App : Application
         services.AddSingleton<WindowsToasts>();
         services.AddSingleton<ISystemToasts>(sp => sp.GetRequiredService<WindowsToasts>());
         services.AddSingleton<ToastNotifier>();
+
+        // Updates for an installed copy. One object seen two ways: the column and the tray ask it whether
+        // something is waiting, the Settings page and the shell ask it for the rest.
+        services.AddSingleton(sp => new Lazy<MainWindow>(sp.GetRequiredService<MainWindow>));
+        services.AddSingleton(sp => new AppUpdater(
+            configuration["Updates:GithubRepository"],
+            configuration["Updates:Directory"],
+            sp.GetRequiredService<Lazy<MainWindow>>(),
+            sp.GetRequiredService<ILogger<AppUpdater>>()));
+        services.AddSingleton<IUpdateStatus>(sp => sp.GetRequiredService<AppUpdater>());
 
         // Only the production install ever registers itself; see AutostartService for why, and for
         // why a debug build running under the dotnet host has nothing stable to register anyway.

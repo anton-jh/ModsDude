@@ -1,9 +1,10 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Diagnostics;
@@ -60,6 +61,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly INoticeEnvironment _environment;
     private readonly DismissalLedger _dismissals;
     private readonly BackgroundProblemSource _problems;
+    private readonly IUpdateStatus _updates;
     private readonly ILogger _logger;
 
     /// <summary>The one place a notice is suppressed: the drifted profile's own mod list editor.</summary>
@@ -90,6 +92,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         INoticeEnvironment environment,
         DismissalLedger dismissals,
         BackgroundProblemSource problems,
+        IUpdateStatus updates,
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;
@@ -102,6 +105,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _environment = environment;
         _dismissals = dismissals;
         _problems = problems;
+        _updates = updates;
         _logger = logger;
 
         _monitor.Changed += OnDriftChanged;
@@ -123,6 +127,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         _dismissals.Changed += OnRedrawNeeded;
         _problems.Changed += OnRedrawNeeded;
+        _updates.Changed += OnRedrawNeeded;
     }
 
 
@@ -278,6 +283,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _bindingStore.BindingsChanged -= OnFactsChanged;
         _dismissals.Changed -= OnRedrawNeeded;
         _problems.Changed -= OnRedrawNeeded;
+        _updates.Changed -= OnRedrawNeeded;
     }
 
 
@@ -369,6 +375,11 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
             case NoticeActionKind.Reapply:
                 await ReapplyAsync(notice, card);
+
+                break;
+
+            case NoticeActionKind.RestartToUpdate:
+                await _updates.RestartAsync();
 
                 break;
         }
@@ -511,6 +522,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         var built = NoticeBuilder.Build(drifted, _monitor.StoreCorruption, _environment)
             .Concat(_problems.Build())
+            .Concat(_updates.ReadyVersion is string ready ? [UpdateNotice.For(ready)] : [])
             .ToList();
 
         // Forgotten before they are applied, so a problem waved away and then actually fixed leaves

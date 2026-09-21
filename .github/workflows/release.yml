@@ -1,0 +1,114 @@
+name: Release
+
+# Builds the installer and the update packages for a version and puts them on a DRAFT GitHub Release. It
+# never publishes: the draft is what somebody looks at, and pressing Publish on it is the decision to ship.
+# Installed copies find new versions from the releases of this repo, so a published release is an update
+# for everyone who has the app - which is why the last step is deliberately left to a person.
+#
+# To cut one: push a tag named for the version, e.g.  git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and draft
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The previous releases are downloaded separately; the history is not needed.
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Work out the version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+
+          # Velopack versions are semantic versions, and a tag that is not one would fail much later and
+          # much less clearly.
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "The tag '${{ github.ref_name }}' is not a version like v1.2.3 or v1.2.3-beta.1."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # The installed app reads the server's address from this file, and the one in the repo's base
+      # appsettings.json is the developer's own machine. A release that shipped without it would be an app
+      # that cannot reach anything, on every machine that installed it.
+      - name: Refuse to ship without the production settings
+        shell: pwsh
+        run: |
+          $path = 'ModsDude.Client/ModsDude.Client.Wpf/appsettings.Production.json'
+
+          if (-not (Test-Path $path)) {
+            throw "$path is missing. It holds the deployed server's address and has to be committed before a release."
+          }
+
+          if ((Get-Content $path -Raw) -match 'localhost|127\.0\.0\.1') {
+            throw "$path still points at this machine. A release has to point at the deployed server."
+          }
+
+      - name: Client tests
+        run: dotnet test ModsDude.Client/ModsDude.Client.Core.Tests/ModsDude.Client.Core.Tests.csproj
+
+      # Self-contained, so nobody has to install .NET first. Release is the Production install: it files its
+      # data under %LocalAppData%\ModsDude and never touches a developer's Development one.
+      - name: Publish
+        run: >
+          dotnet publish ModsDude.Client/ModsDude.Client.Wpf/ModsDude.Client.Wpf.csproj
+          -c Release -r win-x64 --self-contained
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish
+
+      # The same version as the Velopack package the app is built against; a CLI of another version warns
+      # about the mismatch and can produce packages the app's updater does not read.
+      - name: Install the Velopack CLI
+        shell: pwsh
+        run: |
+          $csproj = Get-Content ModsDude.Client/ModsDude.Client.Wpf/ModsDude.Client.Wpf.csproj -Raw
+          $version = [regex]::Match($csproj, 'Include="Velopack" Version="([^"]+)"').Groups[1].Value
+          dotnet tool install -g vpk --version $version
+
+      # Earlier releases, so the new one is packed as a small delta on top of them instead of every update
+      # being the whole app. Nothing to download for the first release, which is not an error.
+      - name: Fetch earlier releases
+        shell: pwsh
+        continue-on-error: true
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+
+      # packId is not the data folder's name on purpose. Velopack installs to %LocalAppData%\<packId> and an
+      # uninstall deletes that folder, and the app's own data is in %LocalAppData%\ModsDude.
+      # --aumid is the app's own identity (AppIdentity.Name), so the installer's shortcuts and the running
+      # process agree on who they are and Windows shows the app's notifications.
+      - name: Pack
+        run: >
+          vpk pack
+          --packId ModsDude.Client
+          --packVersion ${{ steps.version.outputs.version }}
+          --packDir publish
+          --mainExe ModsDude.Client.Wpf.exe
+          --packTitle ModsDude
+          --packAuthors anton-jh
+          --icon ModsDude.Client/ModsDude.Client.Wpf/Assets/AppIcon.ico
+          --aumid ModsDude
+          --shortcuts Desktop,StartMenuRoot
+
+      # No --publish: this is a draft.
+      - name: Upload as a draft release
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --tag ${{ github.ref_name }}
+          --releaseName "ModsDude ${{ steps.version.outputs.version }}"

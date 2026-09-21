@@ -87,7 +87,7 @@ public sealed class WindowsToasts(ILogger<WindowsToasts> logger) : ISystemToasts
     /// and the shortcut agree on who this is.
     /// </summary>
     /// <returns>Whether toasts can be sent at all. False leaves every <see cref="Show"/> a no-op.</returns>
-    public bool Register(string appUserModelId, string displayName, string? executablePath)
+    public bool Register(string appUserModelId, string displayName, string? executablePath, bool ensureShortcut = true)
     {
         try
         {
@@ -108,7 +108,7 @@ public sealed class WindowsToasts(ILogger<WindowsToasts> logger) : ISystemToasts
                 key.SetValue("DisplayName", displayName);
             }
 
-            StartMenuShortcut.Ensure(displayName, executablePath, appUserModelId);
+            // An installed copy has the installer's shortcut, made with this same identity, and rewriting it\n            // would replace what the installer put there - and removes with it on uninstall - with ours.\n            if (ensureShortcut)\n            {\n                StartMenuShortcut.Ensure(displayName, executablePath, appUserModelId);\n            }
 
             _appUserModelId = appUserModelId;
 

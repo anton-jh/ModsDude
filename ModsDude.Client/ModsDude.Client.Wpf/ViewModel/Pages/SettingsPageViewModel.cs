@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
@@ -8,6 +8,7 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
+using ModsDude.Client.Wpf.Updates;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
@@ -53,6 +54,7 @@ public partial class SettingsPageViewModel
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
     private readonly AutostartService _autostart;
+    private readonly AppUpdater _updater;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -74,7 +76,8 @@ public partial class SettingsPageViewModel
         NavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
         TransferLimits transferLimits,
-        AutostartService autostart)
+        AutostartService autostart,
+        AppUpdater updater)
     {
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
@@ -85,6 +88,8 @@ public partial class SettingsPageViewModel
         _backgroundTasks = backgroundTasks;
         _transferLimits = transferLimits;
         _autostart = autostart;
+        _updater = updater;
+        _updater.Changed += OnUpdaterChanged;
 
         var settings = settingsRepository.Settings;
 
@@ -185,6 +190,38 @@ public partial class SettingsPageViewModel
     /// </summary>
     [ObservableProperty]
     private bool _startWithWindows;
+
+    /// <summary>The version this copy is, for the line above the update status.</summary>
+    public string VersionText => $"Version {_updater.CurrentVersion}";
+
+    /// <summary>What the updater is doing, in a sentence.</summary>
+    public string UpdateStatusText => _updater.StatusText;
+
+    /// <summary>Whether there is a downloaded version to restart into.</summary>
+    public bool IsUpdateReady => _updater.ReadyVersion is not null;
+
+    /// <summary>Looks for an update now instead of at the next round. Only an installed copy has one to look for.</summary>
+    [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]
+    private Task CheckForUpdates() => _updater.CheckAsync();
+
+    private bool CanCheckForUpdates() => _updater.CanCheck;
+
+    /// <summary>Restarts into the downloaded version. Asks first if something is still running.</summary>
+    [RelayCommand]
+    private Task RestartToUpdate() => _updater.RestartAsync();
+
+    /// <summary>
+    /// The updater reports from whichever thread it happened to be on; everything bound here is the UI's.
+    /// </summary>
+    private void OnUpdaterChanged(object? sender, EventArgs e)
+    {
+        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            OnPropertyChanged(nameof(UpdateStatusText));
+            OnPropertyChanged(nameof(IsUpdateReady));
+            CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        });
+    }
 
     /// <summary>False for an install that may not register itself, which is the whole of a debug build.</summary>
     public bool IsAutostartAvailable => _autostart.IsAvailable;
@@ -527,6 +564,8 @@ public partial class SettingsPageViewModel
 
     public void Dispose()
     {
+        _updater.Changed -= OnUpdaterChanged;
+
         foreach (var volume in ModFolderVolumes)
         {
             volume.ServingVolumeChanged -= OnServingVolumeChanged;
