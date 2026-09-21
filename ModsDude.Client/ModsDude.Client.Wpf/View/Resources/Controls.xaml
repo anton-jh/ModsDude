@@ -337,6 +337,12 @@
     </Style>
 
 
+    <!-- What every sidebar is drawn on, open, collapsed or peeked: the card tint over the window's base
+         colour, worked out once. Opaque because the peek lies over the page's content, and the same brush
+         for the others so that the three cannot come out as different shades. The app is dark only; if it
+         ever has a light theme this needs a value for it. -->
+    <SolidColorBrush x:Key="SidebarSurfaceBrush" Color="#2B2B2B" />
+
     <!-- A sidebar and the page beside it; see SidebarShell. The docked sidebar takes the first column at
          whatever width the control sets; the peek is a second copy at full width drawn over both
          columns, above everything in this shell's page, and is only visible while the control says it
@@ -353,13 +359,11 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- A rail is a strip of its own rather than part of the page: a tint behind it and a
-                             rule down its edge, so that two rails side by side read as two, and neither as
-                             the start of the page beside it. -->
-                        <Border x:Name="RailBackdrop"
-                                Grid.Column="0"
-                                Visibility="Collapsed"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+                        <!-- A sidebar is a strip of its own rather than part of the page: a tint behind it and a
+                             rule down its edge, so that two side by side read as two, and neither as the start
+                             of the page beside it. -->
+                        <Border Grid.Column="0"
+                                Background="{DynamicResource SidebarSurfaceBrush}" />
 
                         <ContentControl x:Name="PART_Docked"
                                         Grid.Column="0"
@@ -369,12 +373,10 @@
                                         ContentTemplate="{TemplateBinding SidebarTemplate}"
                                         Content="{TemplateBinding DataContext}" />
 
-                        <Border x:Name="RailDivider"
-                                Grid.Column="0"
+                        <Border Grid.Column="0"
                                 Width="1"
                                 HorizontalAlignment="Right"
                                 IsHitTestVisible="False"
-                                Visibility="Collapsed"
                                 Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 
                         <ContentPresenter Grid.Column="1" />
@@ -387,7 +389,7 @@
                                 BorderThickness="0 0 1 0"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                 ClipToBounds="True"
-                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                                Background="{DynamicResource SidebarSurfaceBrush}">
                             <!-- Always laid out at full width and clipped by the border, which is what opens: the
                                  panel is revealed to the right of the rail rather than slid in from beside it, so
                                  the rail's icons and this copy's are never seen in two places. -->
@@ -401,10 +403,6 @@
                     </Grid>
 
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsCollapsed" Value="True">
-                            <Setter TargetName="RailBackdrop" Property="Visibility" Value="Visible" />
-                            <Setter TargetName="RailDivider" Property="Visibility" Value="Visible" />
-                        </Trigger>
                         <Trigger Property="IsPeekVisible" Value="True">
                             <Setter TargetName="PART_Peek" Property="Visibility" Value="Visible" />
                         </Trigger>

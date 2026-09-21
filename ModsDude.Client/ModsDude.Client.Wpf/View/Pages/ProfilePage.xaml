@@ -14,6 +14,16 @@
          left here is the profile's own menu and the page it opens. -->
     <Grid ColumnDefinitions="200 *">
 
+        <!-- The same surface and edge as the repo's sidebar beside it, which is a SidebarShell; this one does
+             not collapse, so it is drawn here rather than by one. -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource SidebarSurfaceBrush}" />
+        <Border Grid.Column="0"
+                Width="1"
+                HorizontalAlignment="Right"
+                IsHitTestVisible="False"
+                Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
         <ListView Grid.Column="0"
                   VerticalAlignment="Top"
                   Style="{StaticResource SidebarList}"
