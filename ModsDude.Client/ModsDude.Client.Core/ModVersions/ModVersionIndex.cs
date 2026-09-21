@@ -85,6 +85,10 @@ public sealed class ModVersionSet
         NewestRegistered = order
             .Where(x => x.SequenceNumber is not null)
             .MaxBy(x => x.SequenceNumber);
+
+        FirstRegistered = order
+            .Where(x => x.Registered is not null)
+            .Min(x => x.Registered);
     }
 
 
@@ -98,6 +102,17 @@ public sealed class ModVersionSet
     /// it would be a second opinion free to disagree.
     /// </summary>
     public CatalogModVersion? NewestRegistered { get; }
+
+    /// <summary>
+    /// When the repo first registered any version of this mod - the mod's arrival in the repo, which is
+    /// what an update to it does not change. Null where the repo holds none of it.
+    /// </summary>
+    /// <remarks>
+    /// Over every version this set knows rather than the one a row pins, so a pin that moves to a newer
+    /// version does not move the mod. A version deleted from the repo is not here to be counted, which
+    /// can only make the date later, never earlier.
+    /// </remarks>
+    public DateTime? FirstRegistered { get; }
 
     /// <inheritdoc cref="ModVersionOrdering.UnorderedPairs"/>
     public IReadOnlyList<ModVersionPair> Unordered { get; }

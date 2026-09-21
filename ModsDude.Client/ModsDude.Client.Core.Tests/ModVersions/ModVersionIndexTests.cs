@@ -73,6 +73,24 @@ public class ModVersionIndexTests
         Assert.False(set.CouldNotCompareToNewest(V("1.2")));
     }
 
+    [Fact]
+    public void A_mods_first_registration_is_the_earliest_of_its_versions()
+    {
+        var set = Build(
+            Registered("1.1", 1, new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)),
+            Registered("1.0", 0, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)),
+            LocalOnly("1.2"));
+
+        Assert.Equal(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), set.FirstRegistered);
+    }
+
+    [Fact]
+    public void A_mod_the_repo_holds_none_of_was_never_registered()
+    {
+        Assert.Null(Build(LocalOnly("1.0")).FirstRegistered);
+    }
+
+
 
     private static ModVersionSet Build(params CatalogModVersion[] versions)
     {
@@ -81,10 +99,11 @@ public class ModVersionIndexTests
         return Assert.Single(index.Values);
     }
 
-    private static CatalogModVersion Registered(string version, int sequenceNumber)
+    private static CatalogModVersion Registered(string version, int sequenceNumber, DateTime? registered = null)
         => new(Mod("map"), V(version), "map", "", IsLocal: false, IsOnServer: true, Locked: false)
         {
-            SequenceNumber = sequenceNumber
+            SequenceNumber = sequenceNumber,
+            Registered = registered
         };
 
     private static CatalogModVersion LocalOnly(string version)

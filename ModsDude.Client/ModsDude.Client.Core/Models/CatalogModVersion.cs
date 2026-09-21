@@ -50,7 +50,8 @@ public record CatalogModVersion(
             ServerImages = [.. dto.Images.Select(ModImageReference.FromDto)],
             ContentHash = dto.ContentHash,
             SizeBytes = dto.SizeBytes,
-            SequenceNumber = dto.SequenceNumber
+            SequenceNumber = dto.SequenceNumber,
+            Registered = dto.Created
         };
     }
 
@@ -93,6 +94,9 @@ public record CatalogModVersion(
     /// recorded a size for yet - an unknown size, which is not the same as an empty file.
     /// </summary>
     public long? SizeBytes { get; init; }
+
+    /// <summary>When the repo registered this version. Null until it has.</summary>
+    public DateTime? Registered { get; init; }
 
     /// <summary>Where the repo orders this version among its siblings. Null until registered.</summary>
     public int? SequenceNumber { get; init; }

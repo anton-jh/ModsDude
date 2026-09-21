@@ -417,6 +417,31 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         Assert.Equal([1], existing.Select(x => x.Value));
     }
 
+    /// <summary>
+    /// The date rides on the dependency row and is read back off it: written by the revision that
+    /// first pinned the version, carried by every revision after that keeps it, and started again by
+    /// the one that moves it. The carry is decided from what <see cref="ProfileRevisionExtensions.GetPinsAsync"/>
+    /// returns, which is why it is asserted through the database rather than the domain.
+    /// </summary>
+    [Fact]
+    public async Task A_mods_date_is_carried_by_revisions_that_keep_its_version_and_restarted_by_one_that_moves_it()
+    {
+        var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
+        var first = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+        var profileId = await GivenAProfilePinning(repoId, "1.0.0", at: first);
+
+        await GivenAFurtherRevisionPinning(repoId, profileId, "1.0.0", at: first.AddDays(1));
+        await GivenAFurtherRevisionPinning(repoId, profileId, "2.0.0", at: first.AddDays(2));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(repoId, profileId, new RevisionNumber(2), CancellationToken.None);
+        Assert.Equal(first, Assert.Single(rows).Added);
+
+        rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(repoId, profileId, new RevisionNumber(3), CancellationToken.None);
+        Assert.Equal(first.AddDays(2), Assert.Single(rows).Added);
+    }
+
     private async Task<RepoId> GivenARepoWithAMod(params string[] versionIds)
     {
         using var dbContext = fixture.CreateDbContext();
@@ -436,7 +461,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         return repo.Id;
     }
 
-    private async Task<ProfileId> GivenAProfilePinning(RepoId repoId, string versionId, bool locked = false)
+    private async Task<ProfileId> GivenAProfilePinning(RepoId repoId, string versionId, bool locked = false, DateTime? at = null)
     {
         using var dbContext = fixture.CreateDbContext();
 
@@ -447,7 +472,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
             [new ModDependency { ModVersion = version!, Locked = locked }],
             [],
             _author,
-            DateTime.UtcNow,
+            at ?? DateTime.UtcNow,
             origin: ProfileRevisionOrigin.Created);
 
         dbContext.Profiles.Add(profile);
@@ -458,7 +483,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         return profile.Id;
     }
 
-    private async Task GivenAFurtherRevisionPinning(RepoId repoId, ProfileId profileId, string versionId, string? label = null)
+    private async Task GivenAFurtherRevisionPinning(RepoId repoId, ProfileId profileId, string versionId, string? label = null, DateTime? at = null)
     {
         using var dbContext = fixture.CreateDbContext();
 
@@ -470,7 +495,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
             [new ModDependency { ModVersion = version!, Locked = false }],
             previous,
             _author,
-            DateTime.UtcNow,
+            at ?? DateTime.UtcNow,
             label);
 
         dbContext.ProfileRevisions.Add(revision);

@@ -523,7 +523,7 @@ what changed under them.
 
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
-| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | `?revision=N` for an older one, omitted for the current list. Each dependency carries `ContentHash` and `SizeBytes`, so sync never has to pull the mod list to resolve it, and can say what an apply will download |
+| GET | `repos/{repoId}/profiles/{profileId}/modDependencies` | Guest | `?revision=N` for an older one, omitted for the current list. Each dependency carries `ContentHash` and `SizeBytes`, so sync never has to pull the mod list to resolve it, and can say what an apply will download, and `Added` - when the mod arrived at that version - which the editor sorts by |
 
 **There is only one, and it reads.** A profile's mod list is written through
 `PUT repos/{repoId}/profiles/{profileId}/revisions`, which addresses the profile and always

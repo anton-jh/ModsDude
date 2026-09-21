@@ -252,6 +252,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private Dictionary<ModKey, ProfileModPin> _pendingRemovals = [];
 
     /// <summary>
+    /// When each mod entered the profile at the version the server holds, as the server read it. What a
+    /// pinned row still at that version shows and sorts by - see <see cref="AddedFor"/>.
+    /// </summary>
+    private Dictionary<ModKey, (ModVersionKey Version, DateTime Added)> _originalAdded = [];
+
+    /// <summary>
+    /// When this draft first put each mod at the version it now has, for a mod whose pin is not what the
+    /// server holds. Pruned to what is still pinned on every recount, so taking a mod out and putting it
+    /// back is a fresh event and not a resumed one.
+    /// </summary>
+    private Dictionary<ModKey, (ModVersionKey Version, DateTime At)> _draftedAt = [];
+
+    /// <summary>
     /// Tracked rather than re-derived from the repo, so a game dropped from its list is still
     /// unsubscribed from.
     /// </summary>
@@ -385,6 +398,33 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <inheritdoc cref="AvailableFilter"/>
     [ObservableProperty]
     private PinnedModFilter _pinnedFilter = PinnedModFilter.All;
+
+    /// <summary>
+    /// What the right list is ordered by. Name by default, the one order that does not move under the
+    /// pointer as the draft is edited - the date sorts do, since a mod added or updated in the draft is
+    /// the most recent thing in it. Not remembered between visits: it is a way of looking, not a setting.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinnedSortDirectionText))]
+    private ProfileModSort _pinnedSort = ProfileModSort.Name;
+
+    /// <summary>
+    /// Whether the sort runs in its natural direction - A to Z, or oldest first. Reset to the sort's own
+    /// default whenever the sort changes, because "descending" means opposite things for a name and for
+    /// a date and carrying it across would open every date sort oldest-first.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinnedSortDirectionText))]
+    private bool _pinnedSortAscending = true;
+
+    /// <summary>What the direction button says the list is doing, and so what pressing it changes.</summary>
+    public string PinnedSortDirectionText => (PinnedSort, PinnedSortAscending) switch
+    {
+        (ProfileModSort.Name, true) => "A to Z. Click to reverse.",
+        (ProfileModSort.Name, false) => "Z to A. Click to reverse.",
+        (_, true) => "Oldest first. Click to reverse.",
+        _ => "Newest first. Click to reverse."
+    };
 
     [ObservableProperty]
     private bool _isLoading = true;
@@ -2038,6 +2078,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             var snapshot = await _catalog.GetAsync(_cancellation.Token);
 
+            await ReadAddedDatesAsync(run.Request.BasedOn);
+
             await OnUiThreadAsync(() =>
             {
                 Compose(snapshot);
@@ -2053,6 +2095,30 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         finally
         {
             run.Advanced -= OnRunAdvanced;
+        }
+    }
+
+    /// <summary>
+    /// The dates the list the save started from carried, for a page that did not load that list itself.
+    /// </summary>
+    /// <remarks>
+    /// Best effort, and on purpose: a date is a nicety on a page that is otherwise a spectator of a save
+    /// that is already running, and a failed read must not stop it from showing the save. Without them
+    /// every row would read as added at the moment the page opened, which is wrong rather than merely
+    /// missing - so the rows fall back to that only when this could not be asked.
+    /// </remarks>
+    private async Task ReadAddedDatesAsync(int revision)
+    {
+        try
+        {
+            var modList = await _dependenciesClient.GetModDependenciesV1Async(
+                _repo.Id, _profile.Id, revision, _cancellation.Token);
+
+            _originalAdded = ReadAdded(modList);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _originalAdded = [];
         }
     }
 
@@ -2944,6 +3010,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             _original = [.. Pinned.Select(x => x.Pin)];
 
+            _originalAdded = ReadAdded(modList);
+            _draftedAt = [];
+
             // The draft is the server's list again, so nothing is taken out of it. Written here
             // rather than left to the recount below, because the left list is built next and would
             // otherwise compose against the removals of the draft that has just been thrown away -
@@ -3623,12 +3692,106 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The right list's order: alphabetical, always. What the draft has done to a mod is the row's own
-    /// mark, and what a save is doing is the review view's to show, so nothing here needs to come
-    /// first - and a list that keeps its order under the pointer is one somebody can edit.
+    /// The right list's order: by name unless it has been switched to a date. What the draft has done to
+    /// a mod is the row's own mark, and what a save is doing is the review view's to show, so nothing
+    /// here needs to come first - and a list that keeps its order under the pointer is one somebody can
+    /// edit, which is why the name sort is where the page opens.
     /// </summary>
-    private static int ComparePinned(ProfileModRowViewModel left, ProfileModRowViewModel right)
-        => NaturalOrder.Compare(left.Name, right.Name);
+    private int ComparePinned(ProfileModRowViewModel left, ProfileModRowViewModel right)
+        => ProfileModSorting.Compare(PinnedSort, PinnedSortAscending, SortKey(left), SortKey(right));
+
+    private static ProfileModSortKey SortKey(ProfileModRowViewModel row)
+        => new(row.Name, row.Added, row.FirstRegistered);
+
+    partial void OnPinnedSortChanged(ProfileModSort value)
+    {
+        // Set before the refresh below, so the list is not sorted by the new key in the old direction
+        // first. Where the direction does not change this raises nothing, which is why the refresh is
+        // asked for here as well.
+        PinnedSortAscending = ProfileModSorting.DefaultAscending(value);
+
+        ApplySortInfo(reorder: true);
+    }
+
+    partial void OnPinnedSortAscendingChanged(bool value)
+    {
+        ApplySortInfo(reorder: true);
+    }
+
+    /// <summary>
+    /// Reverses the right list. Reading is not writing, so no <c>CanEdit</c> guard.
+    /// </summary>
+    [RelayCommand]
+    private void TogglePinnedSortDirection() => PinnedSortAscending = PinnedSortAscending is false;
+
+    /// <summary>
+    /// When a row's mod arrived in the profile at the version the row now shows. The server's date where
+    /// the row is still what the server holds, and otherwise the moment the draft put it there - so a
+    /// mod the draft adds or moves is the newest thing in the list, and one it puts back where it was
+    /// goes back to where it was.
+    /// </summary>
+    private static Dictionary<ModKey, (ModVersionKey Version, DateTime Added)> ReadAdded(GetModDependenciesResponse modList)
+        => modList.Dependencies.ToDictionary(
+            x => ModKey.From(x.ModId),
+            x => (ModVersionKey.From(x.ModVersionId), x.Added));
+
+    private DateTime AddedFor(ModKey mod, ModVersionKey version)
+    {
+        if (_originalAdded.TryGetValue(mod, out var saved) && saved.Version == version)
+        {
+            return saved.Added;
+        }
+
+        if (_draftedAt.TryGetValue(mod, out var drafted) is false || drafted.Version != version)
+        {
+            drafted = (version, DateTime.UtcNow);
+            _draftedAt[mod] = drafted;
+        }
+
+        return drafted.At;
+    }
+
+    /// <summary>
+    /// Writes what each right-hand row is sorted by, and what it says about it, then re-sorts. Called
+    /// from the recount as well as from a change of sort, because it is the draft that moves a row's date.
+    /// </summary>
+    /// <param name="reorder">Whether the list has to be re-sorted whatever moved - the sort itself changed.</param>
+    private void ApplySortInfo(bool reorder = false)
+    {
+        _draftedAt = _draftedAt
+            .Where(x => _pinnedIds.Contains(x.Key))
+            .ToDictionary();
+
+        var now = DateTime.UtcNow;
+        var changed = false;
+
+        foreach (var row in Pinned)
+        {
+            var added = AddedFor(row.ModId, row.SelectedVersion.Version.VersionId);
+            var registered = _versionsByMod.GetValueOrDefault(row.ModId)?.FirstRegistered;
+
+            changed |= row.Added != added || row.FirstRegistered != registered;
+
+            row.Added = added;
+            row.FirstRegistered = registered;
+
+            var key = SortKey(row);
+
+            row.SortCaption = ProfileModSorting.Caption(PinnedSort, key, now);
+            row.SortTooltip = ProfileModSorting.Describe(key);
+        }
+
+        if (reorder)
+        {
+            RefreshViews();
+        }
+        else if (changed && PinnedSort is not ProfileModSort.Name)
+        {
+            // Only the sorts that read a date can be moved by one, and only a date that moved can move
+            // them. The recount that called this counts the visible rows itself.
+            PinnedView.Refresh();
+        }
+    }
 
 
     private void OnPinnedRowChanged(object? sender, PropertyChangedEventArgs e)
@@ -3927,6 +4090,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             row.Touch = ProfileModTouches.Classify(saved, row.Pin);
             row.TouchTooltip = ProfileModTouches.Describe(saved, row.Pin);
         }
+
+        ApplySortInfo();
 
         PinnedCount = Pinned.Count;
         RecountPinnedVisible();

@@ -29,10 +29,10 @@ public static class ProfileRevisionExtensions
         var rows = await dbSet
             .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
             .SelectMany(x => x.ModDependencies)
-            .Select(x => new { x.ModVersion.ModId, VersionId = x.ModVersion.Id, x.Locked })
+            .Select(x => new { x.ModVersion.ModId, VersionId = x.ModVersion.Id, x.Locked, x.Added })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(x => new ProfileModPin(x.ModId, x.VersionId, x.Locked))];
+        return [.. rows.Select(x => new ProfileModPin(x.ModId, x.VersionId, x.Locked, x.Added))];
     }
 
     /// <summary>Which mods a revision pins, and nothing else about them.</summary>
@@ -70,11 +70,12 @@ public static class ProfileRevisionExtensions
                 x.ModVersion.FileName,
                 x.ModVersion.ContentHash,
                 x.ModVersion.SizeBytes,
-                x.Locked
+                x.Locked,
+                x.Added
             })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(x => new ProfileModDependencyRow(x.ModId, x.VersionId, x.FileName, x.ContentHash, x.SizeBytes, x.Locked))];
+        return [.. rows.Select(x => new ProfileModDependencyRow(x.ModId, x.VersionId, x.FileName, x.ContentHash, x.SizeBytes, x.Locked, x.Added))];
     }
 
     public static Task<bool> ExistsAsync(
@@ -366,7 +367,7 @@ public static class ProfileRevisionExtensions
 
 
 /// <summary>One mod as a revision pins it, with the content hash sync needs to fetch the file.</summary>
-public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked)
+public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked, DateTime Added)
 {
     public ProfileModPin ToPin() => new(ModId, VersionId, Locked);
 }

@@ -178,6 +178,30 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     [ObservableProperty]
     private string? _touchTooltip;
 
+    /// <summary>
+    /// When this mod entered the profile at the version the row shows - the server's date for a pin the
+    /// server holds, and the moment the draft made it for one it does not. Set by the page, which is the
+    /// thing that knows which of the two this is; only the right list's rows have one.
+    /// </summary>
+    public DateTime? Added { get; set; }
+
+    /// <summary>When the repo first registered any version of this mod, or null where it has not.</summary>
+    public DateTime? FirstRegistered { get; set; }
+
+    /// <summary>
+    /// What the row says about the date its list is sorted by, or null under the name sort. Set by the
+    /// page along with the dates, because which date it names is the sort's to decide.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSortCaption))]
+    private string? _sortCaption;
+
+    /// <summary>Both dates in full, whichever the list is sorted by.</summary>
+    [ObservableProperty]
+    private string? _sortTooltip;
+
+    public bool HasSortCaption => SortCaption is not null;
+
     partial void OnTouchChanged(ProfileModTouch value) => Item.Touch = value;
 
     partial void OnTouchTooltipChanged(string? value) => Item.TouchTooltip = value;

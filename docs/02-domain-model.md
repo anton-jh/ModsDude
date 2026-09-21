@@ -405,15 +405,32 @@ somebody can say out loud and find.
 | `Origin` | `Created \| Saved \| Restored \| Copied` |
 | `SourceProfileId`, `SourceRevision` | Where the contents came from, for a restore or a branch |
 
-`ModDependency` is unchanged in shape and now set once:
+`ModDependency` is set once, and carries one fact a revision alone does not:
 
 ```csharp
 public class ModDependency
 {
     public required ModVersion ModVersion { get; init; }
     public required bool Locked { get; init; }
+    public DateTime Added { get; internal set; }
 }
 ```
+
+**`Added` is when the mod arrived in the profile at this version** - the instant of the revision that
+first pinned it, carried forward unchanged for as long as every revision after keeps pinning that same
+version. It is what the editor's right list sorts by under *Date added*. A new mod, or a mod that moves
+to another version, is stamped with its revision's own time; a mod taken out and put back starts again.
+**The lock is deliberately not part of it:** toggling one moves no file, and the question the date
+answers is *when did something last happen to this mod that the game would notice*.
+
+`ProfileRevision`'s constructor stamps it, not the caller, because it is a fact about a pair of
+revisions and only the revision has both sides: it compares against the pins the previous head held
+(`ProfileModPin.Added`, filled in only for pins read back from storage) and takes the old date where
+mod and version both match. A restore is compared against the head it is written on top of, so it
+re-dates only what it actually changed; a branched profile has nothing to carry and dates everything
+with the branch. The migration that added the column backfilled existing rows from history - the first
+revision of each mod's current unbroken run at one version, where a revision that still exists and lacks
+the mod ends a run and a pruned one does not.
 
 Three rules make this work as a coordination mechanism:
 
@@ -561,7 +578,7 @@ asked, so a page of fifty revisions would read a hundred thousand rows to render
 lines. Everything in `ProfileRevisionExtensions` and `ProfileRevisionReads` projects instead.
 See [03 — Server](03-server.md#persistence).
 
-`ProfileModPin` — `(ModId, VersionId, Locked)` — is the form those projections come back in, and
+`ProfileModPin` — `(ModId, VersionId, Locked)`, and optionally the `Added` a stored pin carried — is the form those projections come back in, and
 what a comparison works in. It is the shape of a dependency with the version's whole record left
 behind.
 

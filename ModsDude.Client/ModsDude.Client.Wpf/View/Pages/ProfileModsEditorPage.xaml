@@ -813,7 +813,8 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+                        <Grid Grid.Row="1" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
                             <RadioButton GroupName="PinnedFilter"
                                          Style="{StaticResource FilterChip}"
                                          Content="All"
@@ -840,7 +841,51 @@
                                          ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
                                          IsEnabled="{Binding HasEnabledSources}"
                                          IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
-                        </StackPanel>
+                            </WrapPanel>
+
+                            <!-- How the list is ordered. Not a filter and not a setting, so it sits apart
+                                 from the chips and is not remembered: it changes what order the same
+                                 mods are in and nothing about which ones. The arrow reverses it, and
+                                 each sort opens in the direction somebody reaching for it wants. -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Top">
+                                <TextBlock Text="Sort"
+                                           Margin="0 0 8 0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <RadioButton GroupName="PinnedSort"
+                                             Style="{StaticResource FilterChip}"
+                                             Content="Name"
+                                             IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Name}" />
+                                <RadioButton GroupName="PinnedSort"
+                                             Style="{StaticResource FilterChip}"
+                                             Content="Date added"
+                                             ToolTip="When the mod entered the profile, or last moved to another version"
+                                             IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=DateAdded}" />
+                                <RadioButton GroupName="PinnedSort"
+                                             Style="{StaticResource FilterChip}"
+                                             Content="Registered"
+                                             ToolTip="When the repo first registered the mod"
+                                             IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Registered}" />
+                                <Button Style="{DynamicResource SubtleIconButton}"
+                                        ToolTip="{Binding PinnedSortDirectionText}"
+                                        Command="{Binding TogglePinnedSortDirectionCommand}">
+                                    <Button.Content>
+                                        <TextBlock FontFamily="{DynamicResource SymbolThemeFontFamily}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#xE74B;" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding PinnedSortAscending}" Value="True">
+                                                            <Setter Property="Text" Value="&#xE74A;" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button.Content>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
 
                         <!-- The batch action applies to unlocked mods only, and says how many it
                              left alone. The skipped count is a link to the same dialog the per-row
@@ -969,16 +1014,29 @@
 
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:ProfileModRowViewModel}">
-                                            <Grid ColumnDefinitions="* auto">
+                                            <Grid ColumnDefinitions="* auto auto">
 
                                                 <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                                <!-- The date the list is sorted by, so the order can be
+                                                     read off it. Only under a date sort, and outside
+                                                     the enabled group below: it is reading, and a save
+                                                     greying it out would hide the very thing the list
+                                                     is ordered by. -->
+                                                <TextBlock Grid.Column="1"
+                                                           Margin="8 0"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding SortCaption}"
+                                                           ToolTip="{Binding SortTooltip}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                                 <!-- Everything on this row that can change the draft,
                                                      under one IsEnabled. The list itself stays live -
                                                      IsEnabled on a ListBox stops the mouse wheel
                                                      along with everything else, and reading is not
                                                      writing. -->
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                                                             IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
 
                                                     <Button Style="{DynamicResource SubtleIconButton}"

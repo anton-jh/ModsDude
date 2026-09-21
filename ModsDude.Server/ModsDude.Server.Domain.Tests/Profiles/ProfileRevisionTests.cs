@@ -126,6 +126,104 @@ public class ProfileRevisionTests
 
 
     [Fact]
+    public void A_mod_new_to_the_list_is_added_when_its_revision_was_made()
+    {
+        var profile = CreateProfile();
+
+        var revision = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _now);
+
+        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
+    }
+
+    [Fact]
+    public void A_mod_pinned_at_the_same_version_keeps_the_date_it_arrived()
+    {
+        var profile = CreateProfile();
+        var earlier = _now.AddDays(-30);
+
+        var revision = profile.CreateRevision(
+            [Pin(_modId, "1.0.0")],
+            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier)],
+            _author,
+            _now);
+
+        Assert.Equal(earlier, Assert.Single(revision.ModDependencies).Added);
+    }
+
+    /// <summary>
+    /// The lock moves no file, so it is not what the date answers: somebody sorting by when a mod
+    /// last changed in game must not have a toggled lock reshuffle the list.
+    /// </summary>
+    [Fact]
+    public void Toggling_the_lock_does_not_move_the_date()
+    {
+        var profile = CreateProfile();
+        var earlier = _now.AddDays(-30);
+
+        var revision = profile.CreateRevision(
+            [Pin(_modId, "1.0.0", locked: true)],
+            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier)],
+            _author,
+            _now);
+
+        Assert.Equal(earlier, Assert.Single(revision.ModDependencies).Added);
+    }
+
+    [Fact]
+    public void A_mod_that_moved_to_another_version_is_added_again()
+    {
+        var profile = CreateProfile();
+
+        var revision = profile.CreateRevision(
+            [Pin(_modId, "2.0.0")],
+            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, _now.AddDays(-30))],
+            _author,
+            _now);
+
+        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
+    }
+
+    [Fact]
+    public void Only_the_mods_that_changed_get_a_new_date()
+    {
+        var profile = CreateProfile();
+        var earlier = _now.AddDays(-30);
+
+        var revision = profile.CreateRevision(
+            [Pin(_modId, "1.0.0"), Pin(_otherModId, "3.0.0")],
+            [
+                new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier),
+                new ProfileModPin(_otherModId, new ModVersionId("2.0.0"), false, earlier)
+            ],
+            _author,
+            _now);
+
+        var dates = revision.ModDependencies.ToDictionary(x => x.ModVersion.ModId, x => x.Added);
+
+        Assert.Equal(earlier, dates[_modId]);
+        Assert.Equal(_now, dates[_otherModId]);
+    }
+
+    /// <summary>
+    /// A pin read from nowhere - a caller with nothing to carry forward - is treated as new rather
+    /// than as a reason to fail, which is what lets a branched profile start every date afresh.
+    /// </summary>
+    [Fact]
+    public void A_previous_pin_with_no_date_carries_nothing_forward()
+    {
+        var profile = CreateProfile();
+
+        var revision = profile.CreateRevision(
+            [Pin(_modId, "1.0.0")],
+            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)],
+            _author,
+            _now);
+
+        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
+    }
+
+
+    [Fact]
     public void A_mod_the_previous_revision_did_not_pin_is_an_addition()
     {
         var changes = ProfileRevisionChanges.Between(

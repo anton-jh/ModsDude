@@ -11,7 +11,13 @@ namespace ModsDude.Server.Domain.Profiles;
 /// materializing two snapshots' worth of <see cref="ModVersion"/> entities - each dragging its owned
 /// attribute and image collections - to read them is exactly the cost a summary exists to avoid.
 /// </remarks>
-public readonly record struct ProfileModPin(ModId ModId, ModVersionId VersionId, bool Locked);
+/// <param name="Added">
+/// When the mod arrived at this version - see <see cref="ModDependency.Added"/>. Only filled in for pins
+/// read back from a stored revision, which is what lets the next revision carry it forward; a pin
+/// somebody asks for has no such date yet, and <see cref="ModDependency.ToPin"/> leaves it out so a
+/// comparison of what is pinned is never a comparison of when.
+/// </param>
+public readonly record struct ProfileModPin(ModId ModId, ModVersionId VersionId, bool Locked, DateTime? Added = null);
 
 
 /// <summary>

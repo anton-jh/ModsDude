@@ -16,8 +16,12 @@ namespace ModsDude.Server.Api.Dtos;
 /// got, and that has to be knowable from the dependency list alone. Null where the version predates the
 /// size being recorded and has not been backfilled yet.
 /// </param>
-public record ModDependencyDto(string ModId, string ModVersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked)
+/// <param name="Added">
+/// When the mod arrived at this version - see <see cref="ModDependency.Added"/>. What the editor's
+/// right list sorts by.
+/// </param>
+public record ModDependencyDto(string ModId, string ModVersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked, DateTime Added)
 {
     public static ModDependencyDto FromModel(ModDependency model)
-        => new(model.ModVersion.ModId.Value, model.ModVersion.Id.Value, model.ModVersion.FileName, model.ModVersion.ContentHash, model.ModVersion.SizeBytes, model.Locked);
+        => new(model.ModVersion.ModId.Value, model.ModVersion.Id.Value, model.ModVersion.FileName, model.ModVersion.ContentHash, model.ModVersion.SizeBytes, model.Locked, model.Added);
 }

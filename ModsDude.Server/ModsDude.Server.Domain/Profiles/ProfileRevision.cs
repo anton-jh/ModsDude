@@ -86,6 +86,8 @@ public class ProfileRevision
             throw new InvalidOperationException("Cannot pin one mod at two versions in the same revision");
         }
 
+        StampAdded(previousPins, created);
+
         RepoId = repoId;
         ProfileId = profileId;
         Number = number;
@@ -143,6 +145,32 @@ public class ProfileRevision
     /// </summary>
     public RevisionNumber? SourceRevision { get; private set; }
 
+
+    /// <summary>
+    /// Gives every dependency its <see cref="ModDependency.Added"/>: the one it had in the previous
+    /// revision if that pinned the same version of the same mod, and this revision's own instant for
+    /// anything else - a mod new to the list, or one that moved to another version.
+    /// </summary>
+    /// <remarks>
+    /// Compared against the revision this one follows, whichever way it was made. A restore therefore
+    /// stamps only what it actually changed, which is the honest answer to "when did this last change
+    /// in the list": the mods it puts back are the ones that moved, and the rest did not. A pin with no
+    /// date on it - from a caller with nothing to carry forward - is simply treated as new.
+    /// </remarks>
+    private void StampAdded(IReadOnlyCollection<ProfileModPin> previousPins, DateTime created)
+    {
+        var previous = previousPins
+            .Where(x => x.Added is not null)
+            .ToDictionary(x => x.ModId);
+
+        foreach (var dependency in _modDependencies)
+        {
+            dependency.Added = previous.TryGetValue(dependency.ModVersion.ModId, out var pin)
+                && pin.VersionId == dependency.ModVersion.Id
+                ? pin.Added!.Value
+                : created;
+        }
+    }
 
     /// <summary>
     /// The lightweight form of what this revision pins - what a comparison needs, without the

@@ -1018,13 +1018,36 @@ so the mod is left out of the left list (`FindDowngraded`). It is measured again
 held when the page read it, so it lasts as long as the draft: once saved, the older pin is the
 profile's and the newer version is an update again, which is what a lock is for.
 
-**The left list leads with what the draft has taken out; the right list is alphabetical, always.** Mods
+**The left list leads with what the draft has taken out; the right list is alphabetical unless it has been switched.** Mods
 this draft has *taken out* of the profile are back on the left looking exactly like a mod that was
 never in it, so they sort to the top, wear the **Taken out** mark (see
 [the next section](#what-the-draft-has-done-to-a-mod)) and get a count in the header. The right list
 used to lead with what could not be imported and what was pending; both are now the review's business
 ([below](#reviewing-the-draft)), and a list whose order never changes under the pointer is one somebody
 can edit. The left re-sorts on every recount.
+
+**The right list can be sorted by name, by date added, or by registration date**, with an arrow to
+reverse it. Name is where the page opens and A to Z its direction; each date opens newest first, and
+changing the sort always resets the direction to that sort's own default, since "descending" means
+opposite things for a name and for a date. It is a way of looking rather than a setting, so it is not
+remembered between visits. Ties fall back to the name, always ascending, so reversing reverses the list
+rather than shuffling the mods one save added together.
+
+- **Date added** is when the mod entered the profile or last moved to another version - the server's
+  `ModDependency.Added` for a pin the server holds. A row the draft has added or moved has no server
+  date yet and takes the moment the draft did it, so it is the newest thing in the list and sorts to the
+  top under the default direction; putting a mod back at the version it was saved at gives its saved date
+  back. Taking a mod out and adding it again is a new event. This is the one sort that moves rows under
+  the pointer, which is why the name sort stays the default. A page that rejoins a save already running
+  reads the dates of the revision that save started from.
+- **Registered** is when the repo first registered *any* version of the mod
+  (`ModVersionSet.FirstRegistered`, the earliest `Created` of the versions the catalog holds) - the mod's
+  arrival in the repo, which an update to it does not change. A mod the repo has never held, waiting for
+  a save to import it, has none and counts as the newest.
+
+Under either date sort each row says the date it is ordered by (*Added 3 Sep*, *Registered 12 Aug*,
+with the year only where it is not this one) and carries both in full as a tooltip. Under the name sort
+the row has nothing extra to say. See `ProfileModSorting`.
 
 #### Picking mods in bulk
 
