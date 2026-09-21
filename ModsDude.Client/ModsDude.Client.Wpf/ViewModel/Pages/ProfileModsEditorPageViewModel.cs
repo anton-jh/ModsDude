@@ -3701,7 +3701,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         => ProfileModSorting.Compare(PinnedSort, PinnedSortAscending, SortKey(left), SortKey(right));
 
     private static ProfileModSortKey SortKey(ProfileModRowViewModel row)
-        => new(row.Name, row.Added, row.FirstRegistered);
+        => new(row.Name, row.Added);
 
     partial void OnPinnedSortChanged(ProfileModSort value)
     {
@@ -3752,7 +3752,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Writes what each right-hand row is sorted by, and what it says about it, then re-sorts. Called
+    /// Writes each right-hand row's date and what it says about it, then re-sorts. Called
     /// from the recount as well as from a change of sort, because it is the draft that moves a row's date.
     /// </summary>
     /// <param name="reorder">Whether the list has to be re-sorted whatever moved - the sort itself changed.</param>
@@ -3768,12 +3768,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         foreach (var row in Pinned)
         {
             var added = AddedFor(row.ModId, row.SelectedVersion.Version.VersionId);
-            var registered = _versionsByMod.GetValueOrDefault(row.ModId)?.FirstRegistered;
 
-            changed |= row.Added != added || row.FirstRegistered != registered;
+            changed |= row.Added != added;
 
             row.Added = added;
-            row.FirstRegistered = registered;
 
             var key = SortKey(row);
 
@@ -3787,8 +3785,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
         else if (changed && PinnedSort is not ProfileModSort.Name)
         {
-            // Only the sorts that read a date can be moved by one, and only a date that moved can move
-            // them. The recount that called this counts the visible rows itself.
+            // Only the date sort can be moved by a date, and only a date that moved can move it. The
+            // recount that called this counts the visible rows itself.
             PinnedView.Refresh();
         }
     }

@@ -13,20 +13,13 @@ public enum ProfileModSort
     /// By when the mod entered the profile or last had its version changed - the last time something
     /// happened to it that the game would notice. See <c>ModDependency.Added</c> on the server.
     /// </summary>
-    DateAdded,
-
-    /// <summary>By when the repo first registered any version of the mod.</summary>
-    Registered
+    DateAdded
 }
 
 
 /// <summary>What a row is ordered by, apart from the row itself.</summary>
 /// <param name="Added">When the mod arrived in the profile at its pinned version.</param>
-/// <param name="Registered">
-/// When the repo first registered the mod, or null for one it has never held - a mod that is only on
-/// disk, waiting for a save to import it.
-/// </param>
-public readonly record struct ProfileModSortKey(string Name, DateTime? Added, DateTime? Registered);
+public readonly record struct ProfileModSortKey(string Name, DateTime? Added);
 
 
 /// <summary>
@@ -39,10 +32,9 @@ public readonly record struct ProfileModSortKey(string Name, DateTime? Added, Da
 /// as reversing.
 /// </para>
 /// <para>
-/// <b>A missing date sorts as the newest there is.</b> A mod with no registration is one this draft is
-/// about to bring in, and one without an added date is the same kind of thing from the other side -
-/// both are the most recent event in the list, so newest-first puts them where somebody looking for
-/// what they just did will look.
+/// <b>A missing date sorts as the newest there is.</b> Every pinned row has one, so this is only a
+/// guard - but if one were missing it would be the draft's own doing, which is the most recent event
+/// in the list, and newest-first is where somebody looking for what they just did will look.
 /// </para>
 /// </remarks>
 public static class ProfileModSorting
@@ -62,7 +54,6 @@ public static class ProfileModSorting
         var primary = sort switch
         {
             ProfileModSort.DateAdded => CompareDates(left.Added, right.Added),
-            ProfileModSort.Registered => CompareDates(left.Registered, right.Registered),
             _ => NaturalOrder.Compare(left.Name, right.Name)
         };
 
@@ -84,30 +75,20 @@ public static class ProfileModSorting
 
 
     /// <summary>
-    /// What a row shows under a date sort, or null under the name sort where the row has nothing more
+    /// What a row shows under the date sort, or null under the name sort where the row has nothing more
     /// to say. The day and month, and the year only where it is not this one - it is read as a list,
     /// and a year on every row is the same number over and over.
     /// </summary>
     public static string? Caption(ProfileModSort sort, ProfileModSortKey key, DateTime now) => sort switch
     {
         ProfileModSort.DateAdded => key.Added is DateTime added ? $"Added {Day(added, now)}" : null,
-        ProfileModSort.Registered => key.Registered is DateTime registered ? $"Registered {Day(registered, now)}" : "Not registered",
         _ => null
     };
 
-    /// <summary>Both dates in full, for the tooltip a caption carries.</summary>
-    public static string Describe(ProfileModSortKey key)
-    {
-        var added = key.Added is DateTime a
-            ? $"Added to this profile {Full(a)}"
-            : "Not yet added to this profile";
-
-        var registered = key.Registered is DateTime r
-            ? $"first registered in the repo {Full(r)}"
-            : "not registered in the repo yet";
-
-        return $"{added}, {registered}.";
-    }
+    /// <summary>The date in full, for the tooltip a caption carries.</summary>
+    public static string Describe(ProfileModSortKey key) => key.Added is DateTime added
+        ? $"Added to this profile {Full(added)}."
+        : "Not yet added to this profile.";
 
     private static string Day(DateTime value, DateTime now)
     {

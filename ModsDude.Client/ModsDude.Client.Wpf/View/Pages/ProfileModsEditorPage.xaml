@@ -861,11 +861,6 @@
                                              Content="Date added"
                                              ToolTip="When the mod entered the profile, or last moved to another version"
                                              IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=DateAdded}" />
-                                <RadioButton GroupName="PinnedSort"
-                                             Style="{StaticResource FilterChip}"
-                                             Content="Registered"
-                                             ToolTip="When the repo first registered the mod"
-                                             IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Registered}" />
                                 <Button Style="{DynamicResource SubtleIconButton}"
                                         ToolTip="{Binding PinnedSortDirectionText}"
                                         Command="{Binding TogglePinnedSortDirectionCommand}">

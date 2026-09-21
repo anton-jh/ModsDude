@@ -1026,7 +1026,7 @@ used to lead with what could not be imported and what was pending; both are now 
 ([below](#reviewing-the-draft)), and a list whose order never changes under the pointer is one somebody
 can edit. The left re-sorts on every recount.
 
-**The right list can be sorted by name, by date added, or by registration date**, with an arrow to
+**The right list can be sorted by name or by date added**, with an arrow to
 reverse it. Name is where the page opens and A to Z its direction; each date opens newest first, and
 changing the sort always resets the direction to that sort's own default, since "descending" means
 opposite things for a name and for a date. It is a way of looking rather than a setting, so it is not
@@ -1040,14 +1040,14 @@ rather than shuffling the mods one save added together.
   back. Taking a mod out and adding it again is a new event. This is the one sort that moves rows under
   the pointer, which is why the name sort stays the default. A page that rejoins a save already running
   reads the dates of the revision that save started from.
-- **Registered** is when the repo first registered *any* version of the mod
-  (`ModVersionSet.FirstRegistered`, the earliest `Created` of the versions the catalog holds) - the mod's
-  arrival in the repo, which an update to it does not change. A mod the repo has never held, waiting for
-  a save to import it, has none and counts as the newest.
+There is deliberately no sort by registration date. It could only be derived - the earliest `Created`
+among the versions the catalog happens to hold - and it drifts when old revisions are pruned and the
+versions only they pinned are deleted; storing it would mean a per-version copy of a per-mod fact. It
+is a repo-management question anyway, and *Date added* answers the one a profile editor asks.
 
-Under either date sort each row says the date it is ordered by (*Added 3 Sep*, *Registered 12 Aug*,
-with the year only where it is not this one) and carries both in full as a tooltip. Under the name sort
-the row has nothing extra to say. See `ProfileModSorting`.
+Under the date sort each row says the date it is ordered by (*Added 3 Sep*, with the year only where it
+is not this one) and carries it in full as a tooltip. Under the name sort the row has nothing extra to
+say. See `ProfileModSorting`.
 
 #### Picking mods in bulk
 

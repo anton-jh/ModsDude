@@ -21,43 +21,13 @@ public class ProfileModSortingTests
     {
         var keys = new[]
         {
-            Key("middle", added: _now.AddDays(-5)),
-            Key("newest", added: _now),
-            Key("oldest", added: _now.AddDays(-30))
+            Key("middle", _now.AddDays(-5)),
+            Key("newest", _now),
+            Key("oldest", _now.AddDays(-30))
         };
 
         Assert.Equal(["oldest", "middle", "newest"], Sorted(ProfileModSort.DateAdded, true, keys));
         Assert.Equal(["newest", "middle", "oldest"], Sorted(ProfileModSort.DateAdded, false, keys));
-    }
-
-    [Fact]
-    public void Each_sort_reads_its_own_date()
-    {
-        var keys = new[]
-        {
-            Key("a", added: _now.AddDays(-1), registered: _now.AddDays(-30)),
-            Key("b", added: _now.AddDays(-10), registered: _now.AddDays(-5))
-        };
-
-        Assert.Equal(["a", "b"], Sorted(ProfileModSort.DateAdded, false, keys));
-        Assert.Equal(["b", "a"], Sorted(ProfileModSort.Registered, false, keys));
-    }
-
-    /// <summary>
-    /// A mod nothing has registered yet is the most recent thing in the list, so newest-first puts it at
-    /// the top with the rest of what the draft just did.
-    /// </summary>
-    [Fact]
-    public void A_missing_date_counts_as_the_newest()
-    {
-        var keys = new[]
-        {
-            Key("registered", registered: _now.AddDays(-2)),
-            Key("unregistered")
-        };
-
-        Assert.Equal(["unregistered", "registered"], Sorted(ProfileModSort.Registered, false, keys));
-        Assert.Equal(["registered", "unregistered"], Sorted(ProfileModSort.Registered, true, keys));
     }
 
     /// <summary>
@@ -69,13 +39,22 @@ public class ProfileModSortingTests
     {
         var keys = new[]
         {
-            Key("b", added: _now),
-            Key("a", added: _now),
-            Key("older", added: _now.AddDays(-1))
+            Key("b", _now),
+            Key("a", _now),
+            Key("older", _now.AddDays(-1))
         };
 
         Assert.Equal(["older", "a", "b"], Sorted(ProfileModSort.DateAdded, true, keys));
         Assert.Equal(["a", "b", "older"], Sorted(ProfileModSort.DateAdded, false, keys));
+    }
+
+    [Fact]
+    public void A_missing_date_counts_as_the_newest()
+    {
+        var keys = new[] { Key("dated", _now.AddDays(-2)), Key("undated") };
+
+        Assert.Equal(["undated", "dated"], Sorted(ProfileModSort.DateAdded, false, keys));
+        Assert.Equal(["dated", "undated"], Sorted(ProfileModSort.DateAdded, true, keys));
     }
 
     [Fact]
@@ -84,8 +63,7 @@ public class ProfileModSortingTests
         var utc = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         var local = utc.ToLocalTime();
 
-        Assert.Equal(0, ProfileModSorting.Compare(
-            ProfileModSort.DateAdded, true, Key("x", added: utc), Key("x", added: local)));
+        Assert.Equal(0, ProfileModSorting.Compare(ProfileModSort.DateAdded, true, Key("x", utc), Key("x", local)));
     }
 
     [Fact]
@@ -93,43 +71,32 @@ public class ProfileModSortingTests
     {
         Assert.True(ProfileModSorting.DefaultAscending(ProfileModSort.Name));
         Assert.False(ProfileModSorting.DefaultAscending(ProfileModSort.DateAdded));
-        Assert.False(ProfileModSorting.DefaultAscending(ProfileModSort.Registered));
     }
 
     [Fact]
     public void The_name_sort_has_no_caption()
     {
-        Assert.Null(ProfileModSorting.Caption(ProfileModSort.Name, Key("a", added: _now), _now));
+        Assert.Null(ProfileModSorting.Caption(ProfileModSort.Name, Key("a", _now), _now));
     }
 
     [Fact]
-    public void A_date_sort_captions_the_date_it_sorts_by()
+    public void The_date_sort_captions_the_date_it_sorts_by()
     {
-        var key = Key("a", added: _now.AddDays(-3), registered: _now.AddDays(-9));
-
-        Assert.StartsWith("Added ", ProfileModSorting.Caption(ProfileModSort.DateAdded, key, _now));
-        Assert.StartsWith("Registered ", ProfileModSorting.Caption(ProfileModSort.Registered, key, _now));
+        Assert.StartsWith("Added ", ProfileModSorting.Caption(ProfileModSort.DateAdded, Key("a", _now.AddDays(-3)), _now));
     }
 
     [Fact]
     public void The_year_is_only_named_when_it_is_not_this_one()
     {
-        var thisYear = Key("a", added: new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc));
-        var lastYear = Key("a", added: new DateTime(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc));
+        var thisYear = Key("a", new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc));
+        var lastYear = Key("a", new DateTime(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc));
 
         Assert.DoesNotContain("2026", ProfileModSorting.Caption(ProfileModSort.DateAdded, thisYear, _now));
         Assert.Contains("2025", ProfileModSorting.Caption(ProfileModSort.DateAdded, lastYear, _now));
     }
 
-    [Fact]
-    public void A_mod_the_repo_has_not_registered_says_so_under_the_registered_sort()
-    {
-        Assert.Equal("Not registered", ProfileModSorting.Caption(ProfileModSort.Registered, Key("a", added: _now), _now));
-    }
 
-
-    private static ProfileModSortKey Key(string name, DateTime? added = null, DateTime? registered = null)
-        => new(name, added, registered);
+    private static ProfileModSortKey Key(string name, DateTime? added = null) => new(name, added);
 
     private static IEnumerable<string> Sorted(ProfileModSort sort, bool ascending, params ProfileModSortKey[] keys)
         => keys
