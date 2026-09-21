@@ -291,8 +291,6 @@ public partial class RepoPageViewModel
     private async Task LoadProfiles(CancellationToken cancellationToken)
     {
         await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
-
-        RestoreLastSelectedProfile();
     }
 
     [RelayCommand]
@@ -521,34 +519,6 @@ public partial class RepoPageViewModel
 
         ArchivedProfiles.Clear();
         OnPropertyChanged(nameof(HasArchivedProfileOpen));
-    }
-
-    /// <summary>
-    /// Only on the first load, and only once the repo is actually usable - being pushed at "Connect
-    /// game" matters more than coming back to where you were.
-    /// </summary>
-    private void RestoreLastSelectedProfile()
-    {
-        if (_selectionRestored)
-        {
-            return;
-        }
-
-        _selectionRestored = true;
-
-        if (ConnectedGame() is null)
-        {
-            return;
-        }
-
-        var entries = Profiles.OfType<ProfileItemViewModel>().ToList();
-
-        if (_lastSelectionRepository.GetLastProfile(entries.Select(x => x.Id)) is not Guid profileId)
-        {
-            return;
-        }
-
-        NavManager.Selected = entries.First(x => x.Id == profileId);
     }
 
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
