@@ -191,7 +191,10 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="{Binding GameName}" />
 
-                        <Border Margin="14 0 0 0"
+                        <!-- The negative vertical margin takes back what the chip's padding adds over the game's line:
+                             the chip is a little taller than the text beside it, and without it showing the chip
+                             would push the whole page down by the difference. -->
+                        <Border Margin="14 -3 0 -3"
                                 VerticalAlignment="Center"
                                 Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
                             <Border.Style>
