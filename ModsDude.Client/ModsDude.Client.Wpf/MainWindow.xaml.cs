@@ -1,6 +1,7 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Navigation;
 
 namespace ModsDude.Client.Wpf;
@@ -15,10 +16,35 @@ public partial class MainWindow : Window
     /// </summary>
     private bool _closeConfirmed;
 
+    /// <summary>
+    /// Whether the close now under way is the user asking to leave rather than to tuck the window
+    /// away. See <see cref="Quit"/>.
+    /// </summary>
+    private bool _quitting;
+
+
+    /// <summary>
+    /// Whether closing the window should hide it instead. Set by the tray, and only while there is an
+    /// icon to bring it back with - null means closing quits, as it always did.
+    /// </summary>
+    public Func<bool>? HideOnClose { get; set; }
+
+    /// <summary>Raised each time the window is put away, so the tray can explain where it went.</summary>
+    public event EventHandler? HiddenToTray;
+
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // Two copies side by side have to be told apart at a glance - in the taskbar, and by whoever
+        // is about to type into the wrong one.
+        Title = Core.AppIdentity.DisplayName;
+
+        if (Core.AppIdentity.IsProduction is false)
+        {
+            Icon = System.Windows.Media.Imaging.BitmapFrame.Create(Tray.AppIcons.Uri);
+        }
 
         // Fires on every alt-tab, which the monitor throttles. It is worth hooking anyway: coming
         // back from a play session is exactly the moment the answer has to be fresh.
@@ -32,6 +58,94 @@ public partial class MainWindow : Window
 
         Closing += OnClosing;
     }
+
+
+    /// <summary>
+    /// Keeps the window dark from the first pixel, instead of white until the first frame lands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The flash is the native window, not WPF.</b> The window is shown a beat before the first
+    /// frame of a page this size has been laid out, and in that beat Windows paints the client area
+    /// itself, in the window class's brush, which is white whatever <c>ThemeMode</c> says. The title
+    /// bar is already dark by then, which is what makes it read as a flash rather than as a slow
+    /// start. Neither <c>Window.Background</c> (a brush the first frame draws) nor the composition
+    /// target's clear colour (used once WPF renders) reaches that paint - only answering the
+    /// erase-background message ourselves does.
+    /// </para>
+    /// <para>
+    /// The colour is read off the theme rather than written down, so it stays whatever the Fluent
+    /// window base is. The hook belongs to the native window, which survives being hidden to the tray,
+    /// so the same fix covers coming back from it.
+    /// </para>
+    /// </remarks>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        if (PresentationSource.FromVisual(this) is not HwndSource source
+            || TryFindResource("SolidBackgroundFillColorBase") is not System.Windows.Media.Color color)
+        {
+            return;
+        }
+
+        if (source.CompositionTarget is { } target)
+        {
+            target.BackgroundColor = color;
+        }
+
+        _surfaceBrush = CreateSolidBrush(color.R | (color.G << 8) | (color.B << 16));
+
+        source.AddHook(PaintSurface);
+    }
+
+    private const int _wmEraseBackground = 0x0014;
+
+    private IntPtr _surfaceBrush;
+
+    private IntPtr PaintSurface(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message is not _wmEraseBackground || _surfaceBrush == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        GetClientRect(hwnd, out var area);
+        FillRect(wParam, ref area, _surfaceBrush);
+
+        handled = true;
+
+        return 1;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+
+        if (_surfaceBrush != IntPtr.Zero)
+        {
+            DeleteObject(_surfaceBrush);
+            _surfaceBrush = IntPtr.Zero;
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(int colorRef);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr handle);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hwnd, out NativeRect rect);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int FillRect(IntPtr hdc, ref NativeRect rect, IntPtr brush);
 
 
     /// <summary>
@@ -66,13 +180,35 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
 
+        // Hiding is not leaving, so nothing that only matters on leaving is asked: whatever is
+        // running keeps running behind the tray icon, which is the point of it.
+        if (_quitting is false && HideOnClose?.Invoke() is true)
+        {
+            Hide();
+
+            HiddenToTray?.Invoke(this, EventArgs.Empty);
+
+            return;
+        }
+
         _ = Dispatcher.InvokeAsync(() => ConfirmThenCloseAsync(shell)).Task.Unwrap();
     }
 
     private async Task ConfirmThenCloseAsync(ViewModel.Windows.MainWindowViewModel shell)
     {
+        // The question is a modal in this window's own slot, so a window that is hidden to the tray
+        // has to be brought back before it can be asked. Only when there is something to ask: quitting
+        // an idle app from the tray should not flash the window up on the way out.
+        if (shell.NeedsCloseConfirmation && IsVisible is false)
+        {
+            ShowFromTray();
+        }
+
         if (await shell.ConfirmCloseAsync() is false)
         {
+            // Not spent: the next close from the X hides again, and the next Quit asks again.
+            _quitting = false;
+
             return;
         }
 
@@ -80,6 +216,77 @@ public partial class MainWindow : Window
 
         Close();
     }
+
+
+    /// <summary>
+    /// Brings the window back from the tray, or forward from behind whatever covers it.
+    /// </summary>
+    public void ShowFromTray()
+    {
+        if (IsVisible is false)
+        {
+            Show();
+        }
+
+        if (WindowState is WindowState.Minimized)
+        {
+            // Restores to what it was before it was minimised - maximised, here - which setting
+            // WindowState to Normal would not.
+            SystemCommands.RestoreWindow(this);
+        }
+
+        Activate();
+
+        // Activate alone is refused when another app has the foreground, and the tray is by
+        // definition used from somebody else's window. Briefly topmost is the accepted way round it.
+        Topmost = true;
+        Topmost = false;
+    }
+
+    /// <summary>
+    /// Completes when the window is first on screen - immediately, if it already is. For work that
+    /// needs somebody there, and was put off because the app started without a window.
+    /// </summary>
+    public Task WaitUntilShownAsync()
+    {
+        if (IsVisible)
+        {
+            return Task.CompletedTask;
+        }
+
+        var shown = new TaskCompletionSource();
+
+        void OnVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (IsVisible)
+            {
+                IsVisibleChanged -= OnVisibleChanged;
+                shown.TrySetResult();
+            }
+        }
+
+        IsVisibleChanged += OnVisibleChanged;
+
+        return shown.Task;
+    }
+
+    /// <summary>
+    /// Leaves for real: the tray's Quit. Goes through the same close as the X, which is what puts the
+    /// "something is still running" question in front of it.
+    /// </summary>
+    public void Quit()
+    {
+        _quitting = true;
+
+        Close();
+    }
+
+    /// <summary>
+    /// Lets the next close through unasked. For Windows ending the session, which is not a decision
+    /// the user is making about this app - and a close that refuses to happen is what makes Windows
+    /// stop a shutdown to say that ModsDude is preventing it.
+    /// </summary>
+    public void AllowClose() => _closeConfirmed = true;
 
 
     /// <summary>

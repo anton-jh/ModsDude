@@ -1,4 +1,4 @@
-using ModsDude.Client.Wpf.ViewModel.Services;
+﻿using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
 
@@ -27,10 +27,19 @@ public sealed class ToastCenterViewModel : IToastService
     /// <summary>What is on screen. Only ever touched on the UI thread.</summary>
     public ObservableCollection<ToastViewModel> Toasts { get; } = [];
 
+    /// <summary>
+    /// Raised for every toast asked for, on the caller's thread and before it is drawn - including one
+    /// that turns out to be a repeat of a card already up. For whoever wants to say it somewhere the
+    /// window is not: a toast on a hidden window is drawn to nobody.
+    /// </summary>
+    public event Action<string, ToastSeverity>? Announced;
+
 
     public IToast Show(string message, ToastSeverity severity = ToastSeverity.Info, params ToastAction[] actions)
     {
         var toast = new ToastViewModel(message, severity, actions, LifetimeFor(message, severity, actions.Length > 0), Remove);
+
+        Announced?.Invoke(message, severity);
 
         OnUiThread(() => Add(toast));
 

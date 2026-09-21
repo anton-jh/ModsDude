@@ -24,6 +24,9 @@ public class ClientSettings
     /// <summary>How fast mods and savegames may move to and from storage. See <see cref="Transfers.TransferLimits"/>.</summary>
     public TransferLimitSettings Transfers { get; init; } = new();
 
+    /// <summary>How the app behaves while nobody is looking at it. See <see cref="BackgroundSettings"/>.</summary>
+    public BackgroundSettings Background { get; init; } = new();
+
     /// <summary>
     /// Which volume's store serves the mod folders on a volume, keyed by volume root. A volume
     /// served by its own store materialises by hardlink; one served from another disk materialises
@@ -66,7 +69,7 @@ public class ContentStoreSettings
 
 
     public static string GetDefaultPath(string volumeRoot)
-        => System.IO.Path.Combine(volumeRoot, "ModsDude", "store");
+        => System.IO.Path.Combine(volumeRoot, AppIdentity.Name, "store");
 }
 
 public class ImageCacheSettings
@@ -85,7 +88,7 @@ public class ImageCacheSettings
 
     public static string DefaultPath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ModsDude",
+        AppIdentity.Name,
         "image-cache");
 }
 
@@ -98,4 +101,30 @@ public class TransferLimitSettings
 {
     public long? DownloadBytesPerSecond { get; set; }
     public long? UploadBytesPerSecond { get; set; }
+}
+
+
+/// <summary>
+/// What the app does when its window is not on screen.
+/// </summary>
+public class BackgroundSettings
+{
+    /// <summary>
+    /// Whether closing the window hides it to the tray instead of quitting. On by default: the drift
+    /// check is only worth anything to somebody who is not looking at the window, and an app that quits
+    /// when its window is closed cannot tell them anything.
+    /// </summary>
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary>
+    /// Whether the app may put up Windows notifications while its window is not in front: drift, and
+    /// the toasts a finished action would otherwise draw to a window nobody is looking at.
+    /// </summary>
+    public bool Notifications { get; set; } = true;
+
+    /// <summary>
+    /// Whether the user has been told, once, that closing the window leaves the app in the tray. Kept
+    /// so the explanation is given the first time it is needed and never again.
+    /// </summary>
+    public bool TrayHintShown { get; set; }
 }

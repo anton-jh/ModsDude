@@ -75,6 +75,68 @@ wraps anything that is not already a `UserFriendlyException`, and shows an error
 is why view models can let exceptions propagate rather than try/catching everywhere. It logs
 first: the wrapping loses the original stack, so what reaches the log is what actually arrived.
 
+## Installs, and what each one owns
+
+Which install a process is decides where its files live, so a debug build run from the IDE cannot
+touch the copy somebody is actually using. `AppIdentity` (Core) holds the environment name and turns
+it into one folder name - **`ModsDude` for Production, `ModsDude.<Environment>` for anything else** -
+which everything private to an install is filed under: `state.json`, the sync manifests, the logs,
+the sign-in token cache, and the *defaults* for the content store and the image cache. The two installs
+share nothing but the mod folders and savegames they are both pointed at, which is the user's to keep
+straight.
+
+`App.OnStartup` sets it first, before anything has a path. The environment is `DOTNET_ENVIRONMENT`
+where that is set, and otherwise the **build configuration**: Debug is `Development`, Release is
+`Production`. Not the variable alone - a WPF app has no launch profile setting it, so every run would
+be Production, including the debug build. `Initialize` throws if the name has already been used,
+because a late call would mean a store opened in the wrong folder.
+
+The same environment layers `appsettings.{Environment}.json` over `appsettings.json` (optional, so
+absent until somebody writes it); the deployed server's address belongs in `appsettings.Production.json`.
+The window title, tray tooltip and single-instance mutex all carry the install's name, so a debug copy
+runs beside the real one instead of asking it to come forward.
+
+Existing data under `%LocalAppData%\ModsDude` belongs to Production. A Development install starts empty:
+its own sign-in, its own games, its own stores.
+
+## Running in the background
+
+The app can outlive its window. **Closing the window hides it to the tray** (``CloseToTray``, on by
+default, only offered once the icon exists - a hidden window with no icon would be unreachable), and
+**Quit from the tray menu** is what leaves, through the same "something is still running" question as
+before. Windows ending the session skips it, or a close that refuses to happen would stop the shutdown.
+``SingleInstance`` (a named mutex and event, per install) makes a second launch bring the first forward.
+
+A window that is never activated never runs the activation drift check, so ``DriftBackstop`` runs
+``DriftCheckReason.Background`` checks every ten minutes and on resume and unlock - throttled by the
+monitor like every other non-explicit reason - and rebuilds the watchers on resume.
+
+**Start with Windows** is a per-user ``Run`` entry launching the exe with ``--background`` (``AutostartService``).
+The registry is the only truth: Windows' own Startup switch (``StartupApproved``) wins over the entry, so
+the Settings box reads it rather than a setting of ours, and ticking it clears a switch-off. Only the
+Production install can register itself, and the app repairs a stale path at startup but never re-adds an
+entry the user removed. A ``--background`` start shows no window and signs in **only if that is silent**
+(``TrySignInSilentlyAsync``); if it is not, or the network is not up yet, the browser sign-in waits until
+the window is first shown.
+**Windows notifications** say what the window says to somebody who is not looking at it (``ToastNotifier``).
+Two sources, one rule - a toast is sent only when the window is hidden, minimised or not the active
+window: **drift notices**, and **the in-app toasts** (``ToastCenterViewModel.Announced``). What a drift toast
+is worth is ``DriftToastPlanner`` in Core: only **Critical and Warning** (Pending is work that is owed, Info is
+an absorbed failure), never the "checking which repo it belongs to" state before the repo list has loaded,
+and **once per notice key**, not per change of wording - a key that went away and came back is news again. It
+is one digest listing everything eligible, so a later toast that replaces an earlier one in Action Center
+does not lose it. Clicking, or the **Open** button, only opens: the window, and for a toast about exactly one
+notice the page it points at (``NoticeCenterViewModel.OpenAsync``); nothing is ever applied from a toast.
+``Notifications`` in ``BackgroundSettings`` switches all of it off.
+
+**Windows will not show an unpackaged app's toasts without a Start Menu shortcut** naming its exe and carrying
+its app ID - the toast is accepted, recorded in history and never drawn, with no error. The toolkit's own
+registry-only registration is not enough, so ``WindowsToasts.Register`` claims the identity itself
+(``AppIdentity.Name`` as the process AUMID, a registry display name, and ``StartMenuShortcut.Ensure``, which
+rewrites the shortcut whenever the exe has moved) and sends through Windows' API directly, using the toolkit
+only to write the XML. Clicks arrive through the notification's own ``Activated`` event, in the process that
+showed it, and the app clears its toasts on exit, so nothing is left to click once nobody can answer. Each
+install has its own shortcut - a debug build leaves a ``ModsDude (Development)`` entry in the Start Menu.
 ## Diagnostics
 
 A WPF app has no console, so an `ILogger` with nothing behind it is the same as no logger at all.

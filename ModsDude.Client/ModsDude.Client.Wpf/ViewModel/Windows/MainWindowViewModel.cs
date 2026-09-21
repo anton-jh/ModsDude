@@ -68,6 +68,12 @@ public partial class MainWindowViewModel
 
     public bool IsModalVisible => Modal is not null;
 
+    /// <summary>
+    /// Whether <see cref="ConfirmCloseAsync"/> has anything to ask. Separate so that a window hidden
+    /// to the tray is only brought back for a question that exists.
+    /// </summary>
+    public bool NeedsCloseConfirmation => _leases.DescribeAll() is { Count: > 0 };
+
 
     /// <summary>
     /// Whether closing the window right now would kill work part way through, and the answer to give

@@ -176,6 +176,20 @@ public class DriftMonitorTests
     }
 
     [Fact]
+    public void A_check_the_app_woke_itself_for_is_throttled_like_an_activation()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        Assert.True(fixture.Monitor.Check(DriftCheckReason.Background));
+        Assert.False(fixture.Monitor.Check(DriftCheckReason.Background));
+
+        fixture.Time.Advance(DriftMonitor.ThrottleWindow);
+
+        Assert.True(fixture.Monitor.Check(DriftCheckReason.Background));
+    }
+
+    [Fact]
     public void The_throttle_lets_go_once_the_window_has_passed()
     {
         using var fixture = new MonitorFixture();

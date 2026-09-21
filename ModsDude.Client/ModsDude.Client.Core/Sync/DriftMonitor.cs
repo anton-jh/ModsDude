@@ -123,7 +123,14 @@ public enum DriftCheckReason
     WindowActivated,
 
     /// <summary>A watcher saw the folder change. Throttled - an update-all fires it per file.</summary>
-    FolderChanged
+    FolderChanged,
+
+    /// <summary>
+    /// The app woke itself: a timer, a resume from sleep, a session unlock. Throttled, and it exists
+    /// because a window hidden to the tray never gets <see cref="WindowActivated"/>, and a watcher
+    /// misses whatever happened while the machine slept.
+    /// </summary>
+    Background
 }
 
 

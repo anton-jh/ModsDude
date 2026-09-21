@@ -204,6 +204,44 @@
                         </GroupBox>
                     </Border>
 
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16"
+                            Margin="0 16 0 0">
+                        <GroupBox Header="Background" Padding="0 16 0 16">
+                            <StackPanel Orientation="Vertical">
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="ModsDude can keep running in the notification area when its window is closed, so it can go on watching your mod folders while you play. Quit it from the tray icon's menu." />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Closing the window keeps ModsDude running in the tray"
+                                          IsChecked="{Binding CloseToTray, Mode=TwoWay}" />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Show Windows notifications when ModsDude is not in front"
+                                          IsChecked="{Binding Notifications, Mode=TwoWay}" />
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Margin="28 4 0 0"
+                                           Text="For drift and savegames that need attention, and for what a finished action would otherwise tell a window nobody is looking at. Clicking one opens ModsDude." />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Start ModsDude when I sign in to Windows"
+                                          IsEnabled="{Binding IsAutostartAvailable}"
+                                          IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Margin="28 4 0 0"
+                                           Text="{Binding AutostartNote}" />
+
+                            </StackPanel>
+                        </GroupBox>
+                    </Border>
+
                 </StackPanel>
             </ScrollViewer>
         </Border>

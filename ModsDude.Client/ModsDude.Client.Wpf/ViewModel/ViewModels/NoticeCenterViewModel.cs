@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Models;
@@ -181,6 +181,45 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     public ObservableCollection<NoticeSeverityCountViewModel> SeverityCounts { get; } = [];
 
     public bool HasOverflow => Overflow is not null;
+
+    /// <summary>
+    /// Raised at the end of every rebuild with everything that is live - after dismissals, before the
+    /// cap - on the UI thread. For the one listener that is not the column: Windows toasts, which say
+    /// the same things to somebody the column cannot reach.
+    /// </summary>
+    public event EventHandler<IReadOnlyList<Notice>>? Refreshed;
+
+    /// <summary>The notices as of the last rebuild, so a toast can be followed to the one it named.</summary>
+    private IReadOnlyList<Notice> _live = [];
+
+    /// <summary>
+    /// Goes where a notice points - the mod list for a folder, the save for a savegame - without
+    /// changing anything.
+    /// </summary>
+    /// <remarks>
+    /// <b>Looking, never doing.</b> A toast is answered from another window, often after the moment has
+    /// passed, so it only ever navigates: Re-apply is deliberately not reachable from here, and a notice
+    /// with nothing to look at simply leaves the window open on the column.
+    /// </remarks>
+    /// <returns>False where the notice is gone, or has nowhere to go.</returns>
+    public async Task<bool> OpenAsync(string key)
+    {
+        if (_live.FirstOrDefault(x => x.Key == key) is not Notice notice)
+        {
+            return false;
+        }
+
+        var target = notice.Actions.FirstOrDefault(x => x.Kind is NoticeActionKind.Review or NoticeActionKind.OpenSavegame);
+
+        if (target is null)
+        {
+            return false;
+        }
+
+        await InvokeAsync(notice, target.Kind);
+
+        return true;
+    }
 
 
     /// <summary>The first check plus the watcher, once the shell is up.</summary>
@@ -495,6 +534,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             _seen.Add(notice.Key);
         }
 
+        _live = live;
+
         CanDismissAll = live.Count(x => x.CanDismiss) > 1;
 
         // Off the whole live set, never off the capped one: a rail reporting "1 critical" because the
@@ -524,6 +565,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             // behind a rail somebody closed over an unrelated problem an hour ago.
             IsCollapsed = false;
         }
+
+        Refreshed?.Invoke(this, live);
     }
 
     /// <summary>

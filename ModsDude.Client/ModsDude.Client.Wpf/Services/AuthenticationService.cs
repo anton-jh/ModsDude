@@ -60,6 +60,37 @@ public class AuthenticationService : IAccessTokenAccessor
     }
 
     /// <summary>
+    /// Signs in only if that takes no one at the keyboard.
+    /// </summary>
+    /// <remarks>
+    /// For an app that started itself at sign-in and has no window up: <see cref="Get"/> falls back to
+    /// a browser, and a browser tab appearing unprompted at logon is the one thing a background start
+    /// must not do. What it does not swallow is anything other than "needs the user" - a network that
+    /// is not up yet arrives as an exception, and it is the caller's to decide what that means.
+    /// </remarks>
+    /// <returns>False where the account has to be asked for interactively, or there is none.</returns>
+    public async Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken)
+    {
+        await EnsureTokenCacheAsync();
+
+        if (await FindCurrentAccountAsync() is not IAccount account)
+        {
+            return false;
+        }
+
+        try
+        {
+            Adopt(await _client.AcquireTokenSilent(_scopes, account).ExecuteAsync(cancellationToken));
+
+            return true;
+        }
+        catch (MsalUiRequiredException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Prompts for an account and signs in as whoever is picked.
     /// </summary>
     /// <returns>

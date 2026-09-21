@@ -2,8 +2,10 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
+using ModsDude.Client.Core;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.ViewModel.Services;
@@ -50,6 +52,7 @@ public partial class SettingsPageViewModel
     private readonly IDialogService _dialogService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
+    private readonly AutostartService _autostart;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -70,7 +73,8 @@ public partial class SettingsPageViewModel
         IModalService modalService,
         NavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
-        TransferLimits transferLimits)
+        TransferLimits transferLimits,
+        AutostartService autostart)
     {
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
@@ -80,6 +84,7 @@ public partial class SettingsPageViewModel
         _navigationLockService = navigationLockService;
         _backgroundTasks = backgroundTasks;
         _transferLimits = transferLimits;
+        _autostart = autostart;
 
         var settings = settingsRepository.Settings;
 
@@ -106,6 +111,9 @@ public partial class SettingsPageViewModel
         // Straight into the fields, so loading the page does not count as an edit.
         _downloadLimit = DescribeLimit(settings.Transfers.DownloadBytesPerSecond);
         _uploadLimit = DescribeLimit(settings.Transfers.UploadBytesPerSecond);
+        _closeToTray = settings.Background.CloseToTray;
+        _notifications = settings.Background.Notifications;
+        _startWithWindows = autostart.State is AutostartState.On;
 
         foreach (var volume in modFolderVolumes)
         {
@@ -163,6 +171,39 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     private string _uploadLimit;
 
+    /// <summary>Whether closing the window hides it to the tray. See <see cref="BackgroundSettings"/>.</summary>
+    [ObservableProperty]
+    private bool _closeToTray;
+
+    /// <summary>Whether Windows notifications may be sent while the window is not in front.</summary>
+    [ObservableProperty]
+    private bool _notifications;
+
+    /// <summary>
+    /// Whether the app starts with Windows. Read from Windows rather than from a setting of ours - see
+    /// <see cref="AutostartService"/> - so this is what the registry said when the page was opened.
+    /// </summary>
+    [ObservableProperty]
+    private bool _startWithWindows;
+
+    /// <summary>False for an install that may not register itself, which is the whole of a debug build.</summary>
+    public bool IsAutostartAvailable => _autostart.IsAvailable;
+
+    /// <summary>
+    /// The line under the box: what it does, or why it cannot be ticked, or that Windows has it switched
+    /// off - the one state where ticking and saving would otherwise look like it had worked and not.
+    /// </summary>
+    public string AutostartNote => _autostart.State switch
+    {
+        AutostartState.NotAvailable => IsAutostartAvailable is false && AppIdentity.IsProduction is false
+            ? $"Not available in this build: only the installed copy starts with Windows, and this is {AppIdentity.DisplayName}."
+            : "Not available: there is no installed copy of ModsDude to start.",
+        AutostartState.DisabledInWindows =>
+            "Windows has ModsDude switched off under Settings > Apps > Startup, so it is not starting. "
+            + "Tick this and save to switch it back on.",
+        _ => "It starts hidden in the tray, and opens when you click its icon."
+    };
+
     public bool CanManage => HasUnsavedChanges is false && IsBusy is false;
 
     public string ManagementBlockedReason => HasUnsavedChanges
@@ -206,6 +247,11 @@ public partial class SettingsPageViewModel
 
         settings.Transfers.DownloadBytesPerSecond = ParseLimit(DownloadLimit);
         settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
+
+        settings.Background.CloseToTray = CloseToTray;
+        settings.Background.Notifications = Notifications;
+
+        await ApplyAutostartAsync();
 
         _settingsRepository.Save();
 
@@ -829,6 +875,53 @@ public partial class SettingsPageViewModel
     partial void OnDownloadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
 
     partial void OnUploadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnCloseToTrayChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnNotificationsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnStartWithWindowsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Writes the start-with-Windows choice to the registry, if it is a change.
+    /// </summary>
+    /// <remarks>
+    /// <b>A refusal is reported, not thrown.</b> A locked-down machine can stop a user writing to their
+    /// own Run key, and the rest of what was just saved is still saved - the box simply goes back to what
+    /// Windows says, so the page does not go on claiming something that is not true.
+    /// </remarks>
+    private async Task ApplyAutostartAsync()
+    {
+        var isOn = _autostart.State is AutostartState.On;
+
+        if (_autostart.IsAvailable is false || StartWithWindows == isOn)
+        {
+            return;
+        }
+
+        try
+        {
+            if (StartWithWindows)
+            {
+                _autostart.Enable();
+            }
+            else
+            {
+                _autostart.Disable();
+            }
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            await ReportAsync(
+                "Could not change start with Windows",
+                "Windows would not let ModsDude change its startup entry. Everything else was saved.");
+        }
+
+        StartWithWindows = _autostart.State is AutostartState.On;
+
+        // The note reads the state, and the state just changed.
+        OnPropertyChanged(nameof(AutostartNote));
+    }
 
     private static IReadOnlyList<string> GetCandidateVolumes(IEnumerable<string> modFolderVolumes, ClientSettings settings)
     {

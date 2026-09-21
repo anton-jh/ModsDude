@@ -5,7 +5,7 @@ public static class FileSystemHelper
     {
         var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
-        return Path.Combine(localAppDataPath, "ModsDude");
+        return Path.Combine(localAppDataPath, AppIdentity.Name);
     }
 
     /// <summary>

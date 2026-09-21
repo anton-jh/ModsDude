@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
@@ -10,10 +11,12 @@ using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Diagnostics;
 using ModsDude.Client.Wpf.Navigation;
 using ModsDude.Client.Wpf.Services;
+using ModsDude.Client.Wpf.Tray;
 using ModsDude.Client.Wpf.View.Behaviors;
 using ModsDude.Client.Wpf.View.Imaging;
 using ModsDude.Client.Wpf.View.Services;
@@ -34,11 +37,39 @@ public partial class App : Application
     private IServiceProvider _serviceProvider = null!;
     private IConfiguration _configuration = null!;
 
+    private SingleInstance? _singleInstance;
+    private TrayService? _tray;
+    private DriftBackstop? _backstop;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // Before anything that has a path, a name or a setting: which install this is decides where
+        // its state lives, what its mutex is called and which appsettings it reads.
+        var environment = ResolveEnvironment();
+        AppIdentity.Initialize(environment);
+
+        // Started by Windows at sign-in rather than by the user: up in the tray, no window, and no
+        // browser. See AutostartService.
+        var background = e.Args.Contains(AutostartService.BackgroundArgument, StringComparer.OrdinalIgnoreCase);
+
+        // Before configuration or the container: a second copy has nothing to build. It has told the
+        // first one to come forward - unless it was a background start, which asks for nothing - and
+        // has no reason to exist any longer.
+        _singleInstance = SingleInstance.TryAcquire(bringExistingForward: background is false);
+
+        if (_singleInstance is null)
+        {
+            Shutdown();
+
+            return;
+        }
+
         var builder = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            // Layered on top, and absent until somebody writes one: the deployed server's address
+            // lives in appsettings.Production.json, the local one stays in the base file.
+            .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true);
 
         _configuration = builder.Build();
 
@@ -57,13 +88,162 @@ public partial class App : Application
             _serviceProvider.GetRequiredService<ILogger<App>>(),
             _serviceProvider.GetRequiredService<IBackgroundProblemReporter>());
 
+        // Before the first window, so the taskbar button is filed under the same identity as the
+        // notifications and the shortcut that makes Windows show them.
+        _serviceProvider.GetRequiredService<WindowsToasts>()
+            .Register(AppIdentity.Name, AppIdentity.DisplayName, Environment.ProcessPath);
+
         var window = _serviceProvider.GetRequiredService<MainWindow>();
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
-        window.Show();
+
+        if (background is false)
+        {
+            window.Show();
+        }
+
+        var trayUp = StartBackgroundPresence(window);
+
+        if (background && trayUp is false)
+        {
+            // Hidden with no icon to bring it back is an app nobody can reach, so it comes up as an
+            // ordinary start instead.
+            window.Show();
+            background = false;
+        }
+
+        RepairAutostart();
 
         TidyStoresInBackground();
 
-        await _serviceProvider.GetRequiredService<AuthenticationService>().Get(default);
+        var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
+
+        if (background)
+        {
+            await SignInWithoutInterruptingAsync(authentication, window);
+
+            return;
+        }
+
+        await authentication.Get(default);
+    }
+
+
+    /// <summary>
+    /// Signs in for a start nobody is watching: quietly if the cached account allows it, and otherwise
+    /// only once the window has been opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Silent is worth having, not merely permitted.</b> The drift check runs off persisted state and
+    /// needs no account, but what a notice can say about a repo - and everything a repo-scoped toast
+    /// will offer - needs the shell built for somebody, and that is what signing in does.
+    /// </para>
+    /// <para>
+    /// <b>A failure is not a reason to open a browser.</b> Logon is exactly when the network is not up
+    /// yet, which arrives here as an exception rather than as "needs the user" - so it is logged, and the
+    /// full sign-in waits for the window like the interactive case does. Nothing is retried on a timer:
+    /// the next thing that needs the account, opening the window, is the retry.
+    /// </para>
+    /// </remarks>
+    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, MainWindow window)
+    {
+        try
+        {
+            if (await authentication.TrySignInSilentlyAsync(default))
+            {
+                return;
+            }
+        }
+        catch (Exception exception)
+        {
+            _serviceProvider.GetRequiredService<ILogger<App>>()
+                .LogWarning(exception, "Could not sign in quietly at startup; waiting for the window to be opened.");
+        }
+
+        await window.WaitUntilShownAsync();
+
+        await authentication.Get(default);
+    }
+
+    /// <summary>
+    /// Keeps a start-at-sign-in entry pointing at where the app actually is, for the install that has one.
+    /// </summary>
+    /// <remarks>
+    /// Logged and forgotten: a registry that cannot be written is a startup entry that stays as it was,
+    /// and that is no reason for the app not to come up.
+    /// </remarks>
+    private void RepairAutostart()
+    {
+        try
+        {
+            _serviceProvider.GetRequiredService<AutostartService>().Reconcile();
+        }
+        catch (Exception exception)
+        {
+            _serviceProvider.GetRequiredService<ILogger<App>>()
+                .LogWarning(exception, "Could not check the start-with-Windows entry.");
+        }
+    }
+
+
+    /// <summary>
+    /// Which environment this process is, and from that which install it is. See <see cref="AppIdentity"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>The build configuration decides, unless told otherwise.</b> A WPF app has no launch profile
+    /// setting <c>DOTNET_ENVIRONMENT</c> for it - Visual Studio only sets one where a profile asks -
+    /// so leaving it to the variable would make every run Production, including the debug build that
+    /// must never touch the real install's files. The variable still wins where it is set, which is
+    /// the conventional way to run a build as something else.
+    /// </remarks>
+    private static string ResolveEnvironment()
+    {
+        if (Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") is { Length: > 0 } fromHost)
+        {
+            return fromHost;
+        }
+
+#if DEBUG
+        return "Development";
+#else
+        return AppIdentity.ProductionEnvironment;
+#endif
+    }
+
+
+    /// <summary>
+    /// Everything that lets the app go on being useful with its window out of sight: the tray icon,
+    /// the checks that do not wait to be activated, and the way a second launch reaches this copy.
+    /// </summary>
+    /// <returns>Whether the tray icon is up, which is what decides whether hiding the window is safe.</returns>
+    private bool StartBackgroundPresence(MainWindow window)
+    {
+        _singleInstance!.ListenForActivation(() => Dispatcher.InvokeAsync(window.ShowFromTray));
+
+        // Windows ending the session must not be answered with a window that will not close.
+        SessionEnding += (_, _) => window.AllowClose();
+
+        _serviceProvider.GetRequiredService<ToastNotifier>().Start();
+
+        _tray = _serviceProvider.GetRequiredService<TrayService>();
+        var trayUp = _tray.Start();
+
+        _backstop = _serviceProvider.GetRequiredService<DriftBackstop>();
+        _backstop.Start();
+
+        return trayUp;
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Nobody is left to answer a click on what is still in Action Center, so it goes with the app.
+        _serviceProvider?.GetService<WindowsToasts>()?.ClearAll();
+
+        _backstop?.Dispose();
+        _tray?.Dispose();
+        _singleInstance?.Dispose();
+
+        base.OnExit(e);
     }
 
 
@@ -158,6 +338,26 @@ public partial class App : Application
 
         services.AddSingleton<MainWindow>();
         services.AddSingleton<MainWindowViewModel>();
+
+        // Who is left running when the window is closed: the icon that brings it back, and the checks
+        // that no longer wait for it to be looked at.
+        services.AddSingleton<TrayService>();
+        services.AddSingleton<DriftBackstop>();
+
+        // Windows notifications: the toolkit behind one seam, and the object that decides when the
+        // window's own notices and toasts are worth sending through it.
+        services.AddSingleton<WindowsToasts>();
+        services.AddSingleton<ISystemToasts>(sp => sp.GetRequiredService<WindowsToasts>());
+        services.AddSingleton<ToastNotifier>();
+
+        // Only the production install ever registers itself; see AutostartService for why, and for
+        // why a debug build running under the dotnet host has nothing stable to register anyway.
+        services.AddSingleton<IStartupRegistry, RegistryStartupRegistry>();
+        services.AddSingleton(sp => new AutostartService(
+            sp.GetRequiredService<IStartupRegistry>(),
+            AppIdentity.Name,
+            Environment.ProcessPath,
+            AppIdentity.IsProduction));
 
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
