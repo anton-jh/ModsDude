@@ -113,6 +113,24 @@ public class SavegameHoldRulesTests
     }
 
     /// <summary>
+    /// Whichever profile it follows, and whether it is current or past: deactivating takes the game off
+    /// its mod list altogether, so every savegame that claims one is in the way.
+    /// </summary>
+    [Fact]
+    public void Any_savegame_with_a_profile_stops_a_game_being_taken_off_its_profile()
+    {
+        Assert.Equal(_savegameId, SavegameHoldRules.FindProfileHold([Hold()])?.SavegameId);
+        Assert.Equal(_savegameId, SavegameHoldRules.FindProfileHold([Hold(target: 4)])?.SavegameId);
+    }
+
+    [Fact]
+    public void A_savegame_with_no_profile_does_not_stop_a_game_being_taken_off_its_profile()
+    {
+        Assert.Null(SavegameHoldRules.FindProfileHold([]));
+        Assert.Null(SavegameHoldRules.FindProfileHold([Hold(noProfile: true)]));
+    }
+
+    /// <summary>
     /// The required revision is per profile: a hold on one list says nothing about what the folder
     /// should be on for another, and the apply table refuses that combination anyway.
     /// </summary>

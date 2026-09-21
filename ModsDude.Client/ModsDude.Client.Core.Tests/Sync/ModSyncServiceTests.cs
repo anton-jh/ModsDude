@@ -886,6 +886,81 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
+    /// Clearing is the apply engine pointed at an empty list: what a profile put there is uninstalled,
+    /// nothing is asked of the repo's dependency list, and the manifest afterwards describes no profile.
+    /// </summary>
+    [Fact]
+    public async Task Clearing_a_game_takes_back_out_what_was_applied_and_leaves_no_profile_behind()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+        fixture.Server.RevisionsRequested.Clear();
+
+        var plan = await fixture.PlanClearAsync();
+
+        Assert.Equal(2, plan.UninstallCount);
+        Assert.Equal(0, plan.InstallCount);
+        Assert.Empty(fixture.Server.RevisionsRequested);
+
+        var result = await fixture.ExecuteAsync(plan);
+
+        Assert.True(result.Completed);
+        Assert.Empty(fixture.FolderContents());
+
+        var manifest = fixture.Manifests.TryRead(fixture.Target);
+
+        Assert.NotNull(manifest);
+        Assert.Empty(manifest.Entries);
+        Assert.Equal(Guid.Empty, manifest.ProfileId);
+        Assert.Null(manifest.ProfileRevision);
+    }
+
+    /// <summary>
+    /// A folder somebody emptied is already cleared, and saying so is the same "nothing to do" as any
+    /// other apply.
+    /// </summary>
+    [Fact]
+    public async Task Clearing_an_empty_folder_has_no_work()
+    {
+        using var fixture = new SyncFixture();
+
+        var plan = await fixture.PlanClearAsync();
+
+        Assert.False(plan.HasWork);
+    }
+
+    /// <summary>
+    /// The same guard as the active-profile switch, at the same place: a savegame that follows a mod
+    /// list must not have the list emptied from under it.
+    /// </summary>
+    [Fact]
+    public async Task Clearing_while_a_savegame_with_a_profile_is_held_is_refused()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Install("fs25_a.zip", Mod("1.0.0", "a"));
+        fixture.Held.Hold(fixture.Game, fixture.Server.ProfileId);
+
+        var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanClearAsync());
+
+        Assert.Contains("follows a mod list", exception.UserMessage);
+    }
+
+    [Fact]
+    public async Task A_held_savegame_with_no_profile_does_not_stop_a_clear()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Install("fs25_a.zip", Mod("1.0.0", "a"));
+        fixture.Held.HoldWithNoProfile(fixture.Game);
+
+        var plan = await fixture.PlanClearAsync();
+
+        Assert.True(plan.HasWork);
+    }
+
+    /// <summary>
     /// A sync that failed never wrote the manifest, so the folder is still on the revision it was -
     /// and there is nothing to close.
     /// </summary>
@@ -1051,6 +1126,12 @@ public class ModSyncServiceTests
         public Task<ModSyncPlan> PlanAsync(int? revision = null)
             => Service.PlanAsync(
                 new ModSyncRequest(Game, Adapter.Target, Adapter, Server.RepoId, Server.ProfileId) { Revision = revision },
+                CancellationToken.None);
+
+        /// <summary>The same request pointed at an empty list, as deactivating and clearing plans it.</summary>
+        public Task<ModSyncPlan> PlanClearAsync()
+            => Service.PlanAsync(
+                new ModSyncRequest(Game, Adapter.Target, Adapter, Server.RepoId, Guid.Empty) { ClearAll = true },
                 CancellationToken.None);
 
         public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan)

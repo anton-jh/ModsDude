@@ -113,6 +113,9 @@ public interface IHeldSavegames
     /// <inheritdoc cref="SavegameHoldRules.DecideApply"/>
     SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision);
 
+    /// <inheritdoc cref="SavegameHoldRules.FindProfileHold"/>
+    SavegameCheckoutBinding? FindProfileHold(GameIdentity game);
+
     /// <summary>
     /// Which of the held savegames have stopped agreeing with the server, for the drift notice.
     /// </summary>
@@ -472,6 +475,9 @@ public sealed class SavegameService(
 
     public SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision)
         => SavegameHoldRules.DecideApply(bindings.GetBindings(game), profileId, revision);
+
+    public SavegameCheckoutBinding? FindProfileHold(GameIdentity game)
+        => SavegameHoldRules.FindProfileHold(bindings.GetBindings(game));
 
     /// <summary>
     /// Which revision of its profile a savegame runs on: <b>head for a current one, its own pinned

@@ -410,7 +410,10 @@ directly rather than sitting in the far corner, because that button is the app's
 a profile on the game - and it is here rather than on the profile's shell because it is the same act
 from every page of the profile. It is labelled for what it will do (*Activate*, or *Re-apply* where the game is already on this
 profile) and, with no game connected, becomes *Connect game* and selects that entry in the sidebar, so a
-page is never on screen without an entry that names it. Where the button is closed, the **status slot**
+page is never on screen without an entry that names it. Where the game already follows the profile, the button
+has a caret beside it with the two ways of *deactivating* - leaving the mod folder as it is, or clearing it
+too - for managing the mods by hand for a while; see
+[Deactivating](07-mod-sync-design.md#deactivating). Where the button is closed, the **status slot**
 beside the name says why in a sentence - unsaved edits, a held savegame, another apply running - and,
 otherwise, what the button last did: a reason that lived only in a tooltip on a disabled button would
 never be read.

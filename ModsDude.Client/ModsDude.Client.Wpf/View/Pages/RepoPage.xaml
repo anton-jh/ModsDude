@@ -20,6 +20,110 @@
         <Style x:Key="RepoNameLink" TargetType="Hyperlink" BasedOn="{StaticResource TextLink}">
             <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
         </Style>
+
+        <!-- The activation button and the caret that opens the ways of deactivating are one control: the accent
+             chrome is drawn once per half and split down the seam, so only the outer corners round and the halves
+             meet on a hairline. The same idea as the mod list editor's save button, which this is not shared
+             with because its primary half also rounds off when there is no caret - here the whole control is
+             swapped for a plain button instead. -->
+        <Style x:Key="ActivateSplitPrimary" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Background"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="4 0 0 4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="FocusRing"
+                                    CornerRadius="4 0 0 4"
+                                    BorderThickness="0"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The other half. A drawn chevron rather than a glyph: an icon font that is missing is not an error,
+             it just renders as a stray mark in the middle of the button. Stays enabled while the activation is
+             greyed out - the menu behind it is a different question, and its own items are greyed on their own
+             terms. -->
+        <Style x:Key="ActivateSplitCaret" TargetType="ToggleButton">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Background"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                CornerRadius="0 4 4 0">
+                            <Grid>
+                                <Rectangle Width="1" Margin="0 9"
+                                           HorizontalAlignment="Left"
+                                           Fill="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                           Opacity="0.3" />
+                                <Path Data="M 0 0 L 4.5 4.5 L 9 0"
+                                      Stroke="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                      StrokeThickness="1.4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Border x:Name="FocusRing"
+                                        CornerRadius="0 4 4 0"
+                                        BorderThickness="0"
+                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <!-- Held down for as long as the menu it opened is up. -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The plain activation button, for a game that does not follow this profile: there is nothing to
+             deactivate from here, so no caret. Gives way to the split one the moment the game does. -->
+        <Style x:Key="ActivatePlain" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding OpenProfile.HasDeactivation}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Page.Resources>
 
     <Grid RowDefinitions="auto *">
@@ -242,12 +346,82 @@
                                 VerticalAlignment="Center"
                                 FontSize="15"
                                 FontWeight="SemiBold"
-                                Style="{DynamicResource AccentButtonStyle}"
+                                Style="{StaticResource ActivatePlain}"
                                 Content="{Binding OpenProfile.ActivationLabel}"
                                 ToolTip="{Binding OpenProfile.ActivationDescription}"
                                 ToolTipService.ShowOnDisabled="True"
                                 ToolTipService.InitialShowDelay="200"
                                 Command="{Binding OpenProfile.ActivateCommand}" />
+
+                        <!-- Where the game already follows this profile, the same button with a caret: the
+                             ways of deactivating are behind it rather than beside it, because they are the
+                             rare act and this is the everyday one. -->
+                        <StackPanel x:Name="ActivateSplit"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding OpenProfile.HasDeactivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+
+                            <Button MinWidth="150"
+                                    Padding="28 10"
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Style="{StaticResource ActivateSplitPrimary}"
+                                    Content="{Binding OpenProfile.ActivationLabel}"
+                                    ToolTip="{Binding OpenProfile.ActivationDescription}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    ToolTipService.InitialShowDelay="200"
+                                    Command="{Binding OpenProfile.ActivateCommand}" />
+
+                            <ToggleButton x:Name="DeactivateCaret"
+                                          Style="{StaticResource ActivateSplitCaret}"
+                                          ToolTip="{Binding OpenProfile.DeactivationDescription}"
+                                          ToolTipService.ShowOnDisabled="True"
+                                          ToolTipService.InitialShowDelay="200" />
+
+                            <!-- Hangs off the pair rather than the caret alone, so a menu wider than the
+                                 caret still starts at an edge that is there in the layout. Declared inline,
+                                 which is what keeps the data context. -->
+                            <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateCaret, Mode=TwoWay}"
+                                   PlacementTarget="{Binding ElementName=ActivateSplit}"
+                                   Placement="Bottom"
+                                   VerticalOffset="6"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True">
+
+                                <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        Padding="4">
+                                    <StackPanel Orientation="Vertical">
+                                        <Button Width="340"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding OpenProfile.DeactivateCommand}"
+                                                Click="CloseDeactivateMenu">
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
+                                                <TextBlock Text="Stop following this profile and leave the mod folder exactly as it is - for managing the mods yourself for a while."
+                                                           Margin="0 2 0 0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Width="340"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding OpenProfile.DeactivateAndClearCommand}"
+                                                Click="CloseDeactivateMenu">
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
+                                                <TextBlock Text="Stop following this profile and take every mod out of the mod folder. You are shown what goes first."
+                                                           Margin="0 2 0 0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal"

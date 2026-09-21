@@ -134,6 +134,19 @@ public static class SavegameHoldRules
     }
 
     /// <summary>
+    /// The savegame that stops this game being taken off its profile, or null where nothing does.
+    /// </summary>
+    /// <remarks>
+    /// <b>Any savegame with a profile, whichever one.</b> Deactivating is the apply table's other
+    /// half: a game with no active profile is a game nobody is keeping in step with a mod list, and a
+    /// savegame that claims one is exactly what that guard exists for. It is the same set of savegames
+    /// <see cref="FindConflictingHold"/> reads - asked with an id no savegame has - and named for the
+    /// question rather than for the trick.
+    /// </remarks>
+    public static SavegameCheckoutBinding? FindProfileHold(IReadOnlyList<SavegameCheckoutBinding> held)
+        => FindConflictingHold(held, Guid.Empty);
+
+    /// <summary>
     /// The savegame already holding this game's mod folder, which is what stops a second one
     /// being checked out into it. Null where nothing does.
     /// </summary>

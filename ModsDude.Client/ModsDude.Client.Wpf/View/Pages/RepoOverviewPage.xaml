@@ -86,6 +86,62 @@
                                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding ActiveProfileSummary}" />
 
+                                            <!-- For managing the mods by hand for a while without ModsDude
+                                                 objecting. The same two ways as the profile page's Activate
+                                                 button has, and here as well because a game set to another
+                                                 repo's profile has no page of that profile in this repo. -->
+                                            <StackPanel Margin="0 8 0 0"
+                                                        HorizontalAlignment="Left"
+                                                        Visibility="{Binding HasActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <ToggleButton x:Name="DeactivateToggle"
+                                                              Content="Deactivate  ▾"
+                                                              ToolTip="Stop ModsDude keeping this game's mod folders in step with its profile." />
+
+                                                <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateToggle, Mode=TwoWay}"
+                                                       PlacementTarget="{Binding ElementName=DeactivateToggle}"
+                                                       Placement="Bottom"
+                                                       VerticalOffset="4"
+                                                       StaysOpen="False"
+                                                       AllowsTransparency="True">
+                                                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                                            BorderThickness="1"
+                                                            Padding="4">
+                                                        <StackPanel Orientation="Vertical">
+                                                            <Button Width="340"
+                                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                                    Tag="{Binding ElementName=DeactivateToggle}"
+                                                                    Command="{Binding DataContext.DeactivateCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Click="CloseDeactivateMenu">
+                                                                <StackPanel Orientation="Vertical">
+                                                                    <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
+                                                                    <TextBlock Text="Stop following the profile and leave the mod folders exactly as they are."
+                                                                               Margin="0 2 0 0"
+                                                                               TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Button Width="340"
+                                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                                    Tag="{Binding ElementName=DeactivateToggle}"
+                                                                    Command="{Binding DataContext.DeactivateAndClearCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Click="CloseDeactivateMenu">
+                                                                <StackPanel Orientation="Vertical">
+                                                                    <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
+                                                                    <TextBlock Text="Stop following the profile and take every mod out of the mod folders. You are shown what goes first."
+                                                                               Margin="0 2 0 0"
+                                                                               TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Popup>
+                                            </StackPanel>
+
                                             <!-- Neutral. Holding a past savegame is a state
                                                  somebody chose and is playing in, not a problem
                                                  with the game - so it reads like the folder paths

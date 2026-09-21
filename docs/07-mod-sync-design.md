@@ -981,6 +981,45 @@ One interaction to get right: the mod list editor has its own *Save and apply*. 
 unsaved changes, the shell-level control must not quietly apply the last-saved version behind
 them. Disable it there and point at the save button, which is the way to apply pending edits.
 
+#### Deactivating
+
+The other half of intent: withdrawing it. A player who wants to manage their mods by hand for a while
+should not have the drift notice objecting to every change. **Deactivating clears `Game.ActiveProfile`**
+and nothing else follows from that on its own — the drift monitor already answers `NoActiveProfile` for
+a game with none, which raises no notice, no toast and no tray alert. The savegame half of the check
+still reports, on purpose: a held slot is worth saying whatever the folder is doing.
+
+There are two of them, chosen by the user, and they differ in exactly one thing:
+
+| | Deactivate, keep the mods | Deactivate and clear the mods |
+| --- | --- | --- |
+| Intent | Cleared | Cleared |
+| Files | Untouched | Every mod taken out |
+| Manifest | Left as it is | Rewritten empty, for no profile (`ProfileId` is `Guid.Empty`) |
+| Confirmation | None — nothing to disclose | The plan, like any other apply |
+
+**Clearing is the same engine pointed at nothing.** `ModSyncRequest.ClearAll` plans against an empty
+desired list, so recoverable files are uninstalled, files the repo cannot reproduce are quarantined
+(with the usual question about where they go), and the confirmation is the plan preview. It is not a
+second deletion routine with its own idea of what is safe to delete. The manifest it leaves says the
+folder is on no profile, so activating one later — whatever it is — starts from an honest "not applied".
+
+**The order is the activation's, mirrored:** claim the folders, answer the refusal, plan, ask, *then*
+withdraw the intent, then work. A clear that fails part way leaves a game that means to follow nothing,
+which has nothing to drift from; finishing it is another click.
+
+**Refused while a savegame with a profile is checked out** — any of them, current or past. A game with
+no active profile is one nobody is keeping in step with a mod list, and that savegame is what the
+[apply table](10-savegame-profile-binding.md#applying-to-a-game-that-holds-a-savegame) exists to
+protect. `SavegameHoldRules.FindProfileHold` is the one copy of the rule; the control asks it before the
+click and `ModSyncService` asks it again as the backstop for a clear. Savegames with no profile claim
+nothing and never stop it.
+
+The control is a caret on the profile page's activation button, shown only where the game already follows
+that profile, and a *Deactivate* menu on each game's row in the repo overview — the same two items in
+both, and on the overview because a game set to another repo's profile has no page of that profile to do
+it from.
+
 #### Shaping the two actions
 
 *Save and apply* is the primary button and costs **one click**. *Save only* must cost **at least

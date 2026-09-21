@@ -44,9 +44,11 @@ public sealed record GameFolderLine(string Text, string? Drift)
 /// this is the only list left that could tell them.
 /// </para>
 /// <para>
-/// Read-only throughout. Everything on it is acted on somewhere else: the profile page activates,
-/// the repo's Saves list hands a savegame back, and <em>Configure game</em> is where the folders
-/// are edited.
+/// Read-only apart from deactivating. Everything else on it is acted on somewhere else: the profile
+/// page activates, the repo's Saves list hands a savegame back, and <em>Configure game</em> is where
+/// the folders are edited. Deactivating is here as well because it is the one act that is about the
+/// game rather than about a profile - a game set to another repo's profile has no profile page in this
+/// repo to do it from.
 /// </para>
 /// </remarks>
 public class GameOverviewViewModel
@@ -74,6 +76,7 @@ public class GameOverviewViewModel
         string? holdingSummary,
         IReadOnlyList<TargetDrift> drift)
     {
+        Game = game;
         Name = game.Name;
         ActiveProfileSummary = activeProfileSummary;
         HoldingSummary = holdingSummary;
@@ -85,6 +88,16 @@ public class GameOverviewViewModel
             Describe(drift.FirstOrDefault(x => x.Target?.Target.Key == target.Key)?.Report)))];
     }
 
+
+    /// <summary>The game this row is about, for the one thing a row acts on: deactivating it.</summary>
+    public Game Game { get; }
+
+    /// <summary>
+    /// Whether the game follows a profile at all - the only state in which there is something to
+    /// deactivate. It follows one in another repo just as well: deactivating is about the game, and the
+    /// row says whose profile it is.
+    /// </summary>
+    public bool HasActiveProfile => Game.ActiveProfile is not null;
 
     public string Name { get; }
 

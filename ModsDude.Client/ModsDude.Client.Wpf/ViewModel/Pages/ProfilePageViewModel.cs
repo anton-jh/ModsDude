@@ -174,7 +174,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(HasActivation))]
     [NotifyPropertyChangedFor(nameof(ActivationLabel))]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
+    [NotifyPropertyChangedFor(nameof(HasDeactivation))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateAndClearCommand))]
     private Game? _connectedGame;
 
     /// <summary>
@@ -205,8 +208,22 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivationDescription))]
+    [NotifyPropertyChangedFor(nameof(DeactivationDescription))]
     [NotifyCanExecuteChangedFor(nameof(ActivateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateAndClearCommand))]
     private bool _isApplying;
+
+    /// <summary>
+    /// Why the game cannot be taken off its profile, where it cannot: a savegame with a profile is
+    /// checked out. The other half of <see cref="HoldRefusal"/>, from
+    /// <see cref="IHeldSavegames.FindProfileHold"/> and for the same reason - one copy of the rule.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeactivationDescription))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeactivateAndClearCommand))]
+    private string? _deactivationRefusal;
 
     /// <summary>
     /// Whether there is anything to activate on. Nothing at all is drawn where this repo's game is
@@ -333,6 +350,81 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
+    /// Whether the game follows this profile, which is the only state in which deactivating it is
+    /// offered from here. Another profile's page has nothing to say about a game it does not follow.
+    /// </summary>
+    public bool HasDeactivation => ConnectedGame is not null && ActivationKind is ProfileActivationKind.Apply;
+
+    /// <summary>
+    /// What the two ways of deactivating do, or why neither can be used right now. One sentence for the
+    /// pair, in the tooltip of the caret: the two menu items say the difference between them themselves.
+    /// </summary>
+    public string DeactivationDescription
+    {
+        get
+        {
+            if (DeactivationRefusal is string refused)
+            {
+                return refused;
+            }
+
+            if (ConnectedGame is Game game && IsApplying is false && _applyService.IsBusy(_repo, game))
+            {
+                return _applyService.Busy(_repo, game);
+            }
+
+            return "Stop ModsDude keeping the mod folder in step with this profile.";
+        }
+    }
+
+    /// <summary>
+    /// Stop following this profile and leave the mod folders exactly as they are, for managing the mods by
+    /// hand for a while.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDeactivate))]
+    private Task Deactivate(CancellationToken cancellationToken)
+        => DeactivateAsync(clearMods: false, cancellationToken);
+
+    /// <summary>Stop following this profile, and take every mod out of the folders too.</summary>
+    [RelayCommand(CanExecute = nameof(CanDeactivate))]
+    private Task DeactivateAndClear(CancellationToken cancellationToken)
+        => DeactivateAsync(clearMods: true, cancellationToken);
+
+    private async Task DeactivateAsync(bool clearMods, CancellationToken cancellationToken)
+    {
+        if (ConnectedGame is not Game game)
+        {
+            return;
+        }
+
+        IsApplying = true;
+
+        try
+        {
+            var outcome = await _applyService.DeactivateAsync(_repo, game, clearMods, progress: null, cancellationToken);
+
+            _toasts.Show(outcome.Message, outcome.ToastSeverity);
+
+            OnPropertyChanged(nameof(ActivationKind));
+            OnPropertyChanged(nameof(ActivationLabel));
+            OnPropertyChanged(nameof(ActivationDescription));
+            OnPropertyChanged(nameof(HasDeactivation));
+
+            await _driftMonitor.CheckAsync();
+        }
+        finally
+        {
+            IsApplying = false;
+        }
+    }
+
+    private bool CanDeactivate()
+        => ConnectedGame is not null
+        && IsApplying is false
+        && IsGameBusy is false
+        && DeactivationRefusal is null;
+
+    /// <summary>
     /// <see cref="IsApplying"/> covers this page's own click. The lease covers everything else, which
     /// is most of it: the drift notice's one-click re-apply, the mod list editor's save, the savegame
     /// list's two routes - and this page's own click after somebody navigated away and back, which
@@ -361,8 +453,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             ActivateCommand.NotifyCanExecuteChanged();
+            DeactivateCommand.NotifyCanExecuteChanged();
+            DeactivateAndClearCommand.NotifyCanExecuteChanged();
 
             OnPropertyChanged(nameof(ActivationDescription));
+            OnPropertyChanged(nameof(DeactivationDescription));
         });
     }
 
@@ -378,6 +473,8 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(ActivationKind));
         OnPropertyChanged(nameof(ActivationLabel));
         OnPropertyChanged(nameof(ActivationDescription));
+        OnPropertyChanged(nameof(HasDeactivation));
+        OnPropertyChanged(nameof(DeactivationDescription));
     }
 
     /// <summary>
@@ -394,9 +491,14 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         if (ConnectedGame is not Game game)
         {
             HoldRefusal = null;
+            DeactivationRefusal = null;
 
             return;
         }
+
+        DeactivationRefusal = _heldSavegames.FindProfileHold(game.Identity) is not null
+            ? $"'{game.Name}' is holding a savegame that follows a mod list, so it cannot be taken off its profile. Check that savegame in first."
+            : null;
 
         HoldRefusal = _heldSavegames.DecideApply(game.Identity, _profile.Id, revision: null) is { IsAllowed: false }
             ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."

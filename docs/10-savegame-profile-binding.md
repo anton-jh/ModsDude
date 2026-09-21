@@ -664,6 +664,11 @@ thing this section exists to remove.
 
 Profile-less savegames leave it alone.
 
+**Deactivating is refused by the same hold**, and by any savegame with a profile rather than only one
+following another. Taking a game off its profile is the limit of the profile switch - it leaves the folder
+on no list at all - and the savegame that claims one is exactly what that guard is for. See
+[Deactivating](07-mod-sync-design.md#deactivating).
+
 A held past savegame changes what the button means rather than whether it works. It normally
 applies the profile's latest; that is refused here, so it reads `Re-apply rev 4` and its only job
 is repairing folder drift back to that revision.

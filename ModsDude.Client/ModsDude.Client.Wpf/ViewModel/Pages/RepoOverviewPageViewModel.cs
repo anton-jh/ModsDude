@@ -6,6 +6,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -26,6 +27,9 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly DriftMonitor _driftMonitor;
     private readonly ISavegameService _savegameService;
     private readonly SavegameBindingStore _bindingStore;
+    private readonly GameRepository _gameRepository;
+    private readonly ProfileApplyService _applyService;
+    private readonly IToastService _toasts;
 
     private int? _fetchedMemberCount;
 
@@ -36,7 +40,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         MembershipService membershipService,
         DriftMonitor driftMonitor,
         ISavegameService savegameService,
-        SavegameBindingStore bindingStore)
+        SavegameBindingStore bindingStore,
+        GameRepository gameRepository,
+        ProfileApplyService applyService,
+        IToastService toasts)
     {
         _repo = repo;
         _profileService = profileService;
@@ -44,6 +51,9 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _driftMonitor = driftMonitor;
         _savegameService = savegameService;
         _bindingStore = bindingStore;
+        _gameRepository = gameRepository;
+        _applyService = applyService;
+        _toasts = toasts;
 
         Games = [];
 
@@ -51,6 +61,11 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo.Games.CollectionChanged += OnSourceCollectionChanged;
         _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
         _driftMonitor.Changed += OnDriftChanged;
+
+        // Which profile a game follows changes without the collection, the profiles or the drift
+        // answer changing - deactivating a game with nothing wrong with it is exactly that - so the
+        // "Set to ..." line would otherwise go on saying what it said.
+        _gameRepository.GameChanged += OnGameChanged;
 
         // A savegame taken or handed back changes the holding line without touching a mod folder or
         // a profile, so nothing else here would say so.
@@ -95,6 +110,36 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _profileService.Profiles.CollectionChanged -= OnSourceCollectionChanged;
         _driftMonitor.Changed -= OnDriftChanged;
         _bindingStore.BindingsChanged -= OnBindingsChanged;
+        _gameRepository.GameChanged -= OnGameChanged;
+    }
+
+
+    /// <summary>
+    /// Stops the game following its profile and leaves the mod folders exactly as they are.
+    /// </summary>
+    [RelayCommand]
+    private Task Deactivate(GameOverviewViewModel row, CancellationToken cancellationToken)
+        => DeactivateAsync(row, clearMods: false, cancellationToken);
+
+    /// <summary>Stops the game following its profile and takes every mod out of its folders too.</summary>
+    [RelayCommand]
+    private Task DeactivateAndClear(GameOverviewViewModel row, CancellationToken cancellationToken)
+        => DeactivateAsync(row, clearMods: true, cancellationToken);
+
+    /// <remarks>
+    /// Not greyed while something else is applying or a savegame is held: the service refuses both
+    /// with a sentence that says what to wait for or check in, which is a better answer on a page with
+    /// no room for a reason than a button that just does not work.
+    /// </remarks>
+    private async Task DeactivateAsync(GameOverviewViewModel row, bool clearMods, CancellationToken cancellationToken)
+    {
+        var outcome = await _applyService.DeactivateAsync(_repo, row.Game, clearMods, progress: null, cancellationToken);
+
+        _toasts.Show(outcome.Message, outcome.ToastSeverity);
+
+        await _driftMonitor.CheckAsync();
+
+        RefreshGames();
     }
 
 
@@ -154,6 +199,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private void OnDriftChanged(object? sender, EventArgs e)
     {
         // The monitor checks off the UI thread, and these rows are bound.
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
+    }
+
+    /// <inheritdoc cref="OnDriftChanged"/>
+    private void OnGameChanged(object? sender, EventArgs e)
+    {
         _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
     }
 

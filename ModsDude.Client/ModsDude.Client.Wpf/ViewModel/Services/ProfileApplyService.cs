@@ -46,12 +46,18 @@ public enum ProfileApplyStatus
     /// </remarks>
     Busy,
 
-    Failed
+    Failed,
+
+    /// <summary>
+    /// The game no longer follows a profile. The mod folders were either left as they were or, where
+    /// the user asked for it, cleared - the message says which.
+    /// </summary>
+    Deactivated
 }
 
 public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, string Message)
 {
-    public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched;
+    public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched or ProfileApplyStatus.Deactivated;
 
     /// <summary>
     /// How loudly to say <see cref="Message"/>. Declining is the user's own answer, so it is worded
@@ -159,6 +165,11 @@ public sealed class ProfileApplyService(
     /// see <see cref="ModSyncService.PlanAsync"/> - so every caller that has somewhere to put a
     /// sentence passes one.
     /// </param>
+    /// <param name="clearAll">
+    /// Plan against an empty mod list, for clearing a game's folders rather than applying a profile to
+    /// them. <paramref name="profileId"/>, <paramref name="profileName"/> and <paramref name="revision"/>
+    /// are ignored.
+    /// </param>
     public async Task<IReadOnlyList<ModSyncPlan>> TryPlanAsync(
         Repo repo,
         Game game,
@@ -166,7 +177,8 @@ public sealed class ProfileApplyService(
         string? profileName,
         int? revision,
         CancellationToken cancellationToken,
-        IProgress<ModSyncProgress>? progress = null)
+        IProgress<ModSyncProgress>? progress = null,
+        bool clearAll = false)
     {
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
@@ -180,7 +192,7 @@ public sealed class ProfileApplyService(
             // Per folder, and one that cannot be planned does not cost the others theirs: a
             // dedicated server mid-session is exactly the folder somebody wants left out while the
             // client is put right.
-            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken, progress)
+            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken, progress, clearAll)
                 is ModSyncPlan plan)
             {
                 plans.Add(plan);
@@ -200,15 +212,17 @@ public sealed class ProfileApplyService(
         string? profileName,
         int? revision,
         CancellationToken cancellationToken,
-        IProgress<ModSyncProgress>? progress)
+        IProgress<ModSyncProgress>? progress,
+        bool clearAll)
     {
         try
         {
             return await syncService.PlanAsync(
-                new ModSyncRequest(game.Identity, target, adapter, repoId, profileId)
+                new ModSyncRequest(game.Identity, target, adapter, repoId, clearAll ? Guid.Empty : profileId)
                 {
-                    ProfileName = profileName,
-                    Revision = revision
+                    ProfileName = clearAll ? null : profileName,
+                    Revision = clearAll ? null : revision,
+                    ClearAll = clearAll
                 },
                 cancellationToken,
                 progress);
@@ -273,6 +287,129 @@ public sealed class ProfileApplyService(
         CancellationToken cancellationToken,
         int? revision = null)
         => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: false);
+
+    /// <summary>
+    /// Takes the game off its profile, so ModsDude stops keeping its mod folders in step with one - the
+    /// way to manage the mods by hand for a while without the drift notice objecting.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two shapes, chosen by the user and not by this method.</b> Leaving the folders as they are
+    /// is the ordinary one and touches no file: it is only the intent being withdrawn. Clearing them
+    /// as well is the apply engine pointed at an empty list, so it is planned, confirmed and executed
+    /// like any other apply - see <see cref="ModSyncRequest.ClearAll"/>.
+    /// </para>
+    /// <para>
+    /// <b>Refused while a savegame with a profile is checked out</b>, for the reason a profile switch
+    /// is: a game with no profile is one nobody is keeping in step with a mod list, and that savegame
+    /// is exactly what the guard exists for. Asked before anything is planned, and the sync engine
+    /// refuses a clear again as the backstop.
+    /// </para>
+    /// <para>
+    /// <b>The intent is withdrawn after the refusals and the confirmation and before any file moves</b>,
+    /// as it is recorded for an activation. A clear that fails part way leaves a game that means to
+    /// follow nothing, which drifts from nothing - there is no notice to be left with, and finishing
+    /// the job is another click on the same control.
+    /// </para>
+    /// </remarks>
+    /// <param name="clearMods">Whether to also take every mod out of the game's folders.</param>
+    public async Task<ProfileApplyOutcome> DeactivateAsync(
+        Repo repo,
+        Game game,
+        bool clearMods,
+        IProgress<ModSyncProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var lease = leases.TryAcquireExclusive(
+            TargetRefs(repo, game).Select(ResourceKeys.Target),
+            clearMods ? $"Clearing the mods from '{game.Name}'" : $"Deactivating '{game.Name}'");
+
+        if (lease is null)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Busy, Busy(repo, game));
+        }
+
+        if (heldSavegames.FindProfileHold(game.Identity) is SavegameCheckoutBinding held)
+        {
+            return new ProfileApplyOutcome(
+                game,
+                ProfileApplyStatus.Refused,
+                $"'{game.Name}' is holding a savegame that follows a mod list, so it was left as it is. Check that savegame in first.")
+            {
+                BlockedBySavegameId = held.SavegameId
+            };
+        }
+
+        if (clearMods is false)
+        {
+            games.SetActiveProfile(game, null);
+
+            return new ProfileApplyOutcome(
+                game,
+                ProfileApplyStatus.Deactivated,
+                $"'{game.Name}' no longer follows a profile. Its mod folders were left exactly as they are.");
+        }
+
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        IReadOnlyList<ModSyncPlan> plans;
+
+        try
+        {
+            using var planning = backgroundTasks.Begin(
+                $"Working out what would be cleared from '{game.Name}'", cancel: stop.Cancel);
+
+            plans = await TryPlanAsync(
+                repo, game, Guid.Empty, null, null, stop.Token, Report(planning, progress), clearAll: true);
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
+        }
+
+        if (plans.Count == 0)
+        {
+            // Nothing to plan against, so nothing to ask about - but the decision to stop following a
+            // profile was made, and stands. The folders simply could not be reached to be cleared.
+            games.SetActiveProfile(game, null);
+
+            return new ProfileApplyOutcome(
+                game,
+                ProfileApplyStatus.Deactivated,
+                $"'{game.Name}' no longer follows a profile, but its mod folders could not be reached to clear them.");
+        }
+
+        var consent = await ConsentedAsync(game, plans, confirmPlan: true, clearing: true);
+
+        if (consent.Given is false)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+        }
+
+        if (consent.QuarantineFolder is string keepIn)
+        {
+            plans = [.. plans.Select(x => x with { QuarantineFolder = keepIn })];
+        }
+
+        games.SetActiveProfile(game, null);
+
+        var outcomes = new List<ProfileApplyOutcome>();
+
+        foreach (var plan in plans)
+        {
+            outcomes.Add(await ApplyTargetAsync(plan, game, Guid.Empty, null, progress, stop, revision: null, clearing: true));
+        }
+
+        var combined = Combine(game, outcomes);
+
+        return combined.Succeeded
+            ? combined with
+            {
+                Status = ProfileApplyStatus.Deactivated,
+                Message = $"{combined.Message} '{game.Name}' no longer follows a profile."
+            }
+            : combined;
+    }
 
     /// <summary>
     /// Both verbs, in the order the split defines: claim, refuse, plan, ask, <em>then</em> record,
@@ -414,7 +551,7 @@ public sealed class ProfileApplyService(
     /// always - the files nothing else on the machine has a copy of. The second is asked even where
     /// the caller waived the first, because it is the only interruption a re-apply is ever worth.
     /// </remarks>
-    private async Task<Consent> ConsentedAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool confirmPlan)
+    private async Task<Consent> ConsentedAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool confirmPlan, bool clearing = false)
     {
         var work = plans.Where(x => x.HasWork).ToList();
 
@@ -423,7 +560,7 @@ public sealed class ProfileApplyService(
             return Consent.Yes;
         }
 
-        if (confirmPlan && await ConfirmPlanAsync(game, work) is false)
+        if (confirmPlan && await ConfirmPlanAsync(game, work, clearing) is false)
         {
             return Consent.No;
         }
@@ -535,7 +672,8 @@ public sealed class ProfileApplyService(
         string? profileName,
         IProgress<ModSyncProgress>? progress,
         CancellationTokenSource stop,
-        int? revision)
+        int? revision,
+        bool clearing = false)
     {
         var where = Where(game, plan);
 
@@ -548,14 +686,17 @@ public sealed class ProfileApplyService(
             await syncService.RecordAlreadyMatchedAsync(plan);
 
             return new ProfileApplyOutcome(
-                game, ProfileApplyStatus.AlreadyMatched, $"{where} already matches{Pinned(game, profileId, revision)}.");
+                game,
+                ProfileApplyStatus.AlreadyMatched,
+                clearing ? $"{where} has no mods to clear." : $"{where} already matches{Pinned(game, profileId, revision)}.");
         }
 
         // The second of the gesture's two strip entries. Planning had its own - see RunAsync - because
         // it is minutes of work in its own right; this one is the part that moves files, and both are
         // things the user is entitled to walk away from.
         using var task = backgroundTasks.Begin(
-            $"Applying '{profileName ?? "a profile"}' to {where}", cancel: stop.Cancel);
+            clearing ? $"Clearing the mods from {where}" : $"Applying '{profileName ?? "a profile"}' to {where}",
+            cancel: stop.Cancel);
 
         task.DeclareTransfers(TransferDirection.Download);
 
@@ -564,7 +705,10 @@ public sealed class ProfileApplyService(
             var result = await syncService.ExecuteAsync(plan, Report(task, progress), stop.Token);
 
             return result.Completed
-                ? new ProfileApplyOutcome(game, ProfileApplyStatus.Applied, $"{where} now matches{Pinned(game, profileId, revision)}.")
+                ? new ProfileApplyOutcome(
+                    game,
+                    ProfileApplyStatus.Applied,
+                    clearing ? $"{where} has had its mods cleared." : $"{where} now matches{Pinned(game, profileId, revision)}.")
                 : new ProfileApplyOutcome(
                     game,
                     ProfileApplyStatus.Failed,
@@ -579,7 +723,8 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"{where} is in use - a running game or a server mid-session holds its folder. It was left drifted.");
+                $"{where} is in use - a running game or a server mid-session holds its folder. "
+                    + (clearing ? "It was not fully cleared." : "It was left drifted."));
         }
     }
 
@@ -609,16 +754,28 @@ public sealed class ProfileApplyService(
     /// one decision about one profile, so each folder gets a block of its own and the question is
     /// asked once - see the remarks on this class for why the alternative is unrepresentable.
     /// </param>
-    public async Task<bool> ConfirmPlanAsync(Game game, IReadOnlyList<ModSyncPlan> plans)
+    /// <param name="clearing">
+    /// Worded for emptying the folders rather than filling them: there is nothing to download, and
+    /// "anything the profile does not pin" would be a sentence about a profile nobody is applying.
+    /// </param>
+    public async Task<bool> ConfirmPlanAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool clearing = false)
     {
-        var modal = new ConfirmationDialogViewModel(
-            $"Apply to '{game.Name}'?",
-            $"{DescribeDownloads(PlannedDownloads.Across(plans))}\n\n"
-                + string.Join("\n\n", plans.Select(Describe))
-                + "\n\nAnything the profile does not pin is taken out of the folder.",
-            IconKind.Question,
-            "Apply",
-            "Cancel");
+        var modal = clearing
+            ? new ConfirmationDialogViewModel(
+                $"Clear the mods from '{game.Name}'?",
+                string.Join("\n\n", plans.Select(Describe))
+                    + $"\n\n'{game.Name}' will no longer follow a profile, and every mod in the folders above is taken out.",
+                IconKind.Question,
+                "Clear mods",
+                "Cancel")
+            : new ConfirmationDialogViewModel(
+                $"Apply to '{game.Name}'?",
+                $"{DescribeDownloads(PlannedDownloads.Across(plans))}\n\n"
+                    + string.Join("\n\n", plans.Select(Describe))
+                    + "\n\nAnything the profile does not pin is taken out of the folder.",
+                IconKind.Question,
+                "Apply",
+                "Cancel");
 
         await modalService.Value.Show(modal);
 

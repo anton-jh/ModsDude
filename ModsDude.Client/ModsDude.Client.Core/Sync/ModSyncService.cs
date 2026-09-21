@@ -45,6 +45,25 @@ public sealed record ModSyncRequest(
     /// apply for a savegame this machine is not holding yet.
     /// </remarks>
     public int? Revision { get; init; }
+
+    /// <summary>
+    /// Plan against an empty mod list instead of the profile's: everything the adapter recognises in
+    /// the folder is taken back out, and the manifest that results describes no profile at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The same engine, pointed at nothing.</b> Clearing a game's mods is exactly what moving it
+    /// to a profile that pins none would do, so it is planned, confirmed and executed like any other
+    /// apply - recoverable files uninstalled, everything else quarantined - rather than being a
+    /// second deletion routine with its own idea of what is safe to delete.
+    /// </para>
+    /// <para>
+    /// <see cref="ProfileId"/> is <see cref="Guid.Empty"/> for one of these, which is what lets the
+    /// manifest say the folder is on no profile: nothing can later be activated against it and find
+    /// it already matching.
+    /// </para>
+    /// </remarks>
+    public bool ClearAll { get; init; }
 }
 
 
@@ -142,8 +161,22 @@ public sealed class ModSyncService(
                 $"'{modFolder}' does not exist right now. An unplugged drive or an offline network path looks like this; nothing has been changed.");
         }
 
-        var targetRevision = ResolveTargetRevision(request);
-        var (desired, revision) = await GetDesiredAsync(request, targetRevision, cancellationToken);
+        IReadOnlyList<DesiredMod> desired = [];
+        int? revision = null;
+
+        if (request.ClearAll)
+        {
+            RefuseClearWhileHeld(request);
+        }
+        else
+        {
+            var targetRevision = ResolveTargetRevision(request);
+            var (mods, head) = await GetDesiredAsync(request, targetRevision, cancellationToken);
+
+            desired = mods;
+            revision = head;
+        }
+
         var installed = await GetInstalledAsync(request.Adapter, target, cancellationToken);
         var manifest = manifestStore.TryRead(request.TargetRef);
 
@@ -903,6 +936,22 @@ public sealed class ModSyncService(
                 "That savegame runs on one revision, and this is not it",
                 $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
         };
+    }
+
+    /// <summary>
+    /// The backstop for clearing a folder, for the reason <see cref="ResolveTargetRevision"/> is one
+    /// for applying: a savegame that follows a mod list must not have the list emptied from under it,
+    /// and every route to this method passes through here.
+    /// </summary>
+    /// <exception cref="UserFriendlyException">A savegame checked out here follows a mod list.</exception>
+    private void RefuseClearWhileHeld(ModSyncRequest request)
+    {
+        if (heldSavegames.FindProfileHold(request.Game) is SavegameCheckoutBinding held)
+        {
+            throw new UserFriendlyException(
+                "A savegame checked out here follows a mod list",
+                $"Game '{request.Game}' is holding savegame '{held.SavegameId}', which follows a profile. Clearing the mod folder would take that savegame off the mod list it runs on. Check it in first.");
+        }
     }
 
     /// <summary>
