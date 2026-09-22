@@ -51,7 +51,12 @@ public sealed class ToastNotifier(
 
         // Once somebody is looking at the window, what it told them while they were not is either on
         // screen or stale. Left in Action Center it would be a toast about drift they have already seen.
-        window.Activated += (_, _) => system.ClearAll();
+        //
+        // Off the UI thread, and not for speed: Activated is raised while a minimised window is still
+        // handling its activation, before it has been restored, and clearing is a blocking call into
+        // another process. Made there, it swallowed the taskbar's restore - the first click on the
+        // button only beeped, and it took a second to bring the window up.
+        window.Activated += (_, _) => Task.Run(system.ClearAll);
     }
 
 
