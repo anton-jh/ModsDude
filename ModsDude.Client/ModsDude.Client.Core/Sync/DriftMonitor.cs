@@ -149,7 +149,8 @@ public enum DriftCheckReason
 /// Activation checks are <b>throttled on the leading edge</b>: the first one runs immediately, and
 /// alt-tabbing back and forth for the next few seconds does not buy another directory listing. The
 /// leading edge rather than the trailing one because the point of checking on activation is that the
-/// answer is on screen by the time the user has finished looking at the window.
+/// answer is on screen by the time the user has finished looking at the window. A request the
+/// throttle swallows is still owed one check when the window closes - see <c>OweCheck</c>.
 /// </para>
 /// <para>
 /// Dismissal is deliberately weak: it lasts until the drift set changes or the app restarts. Nothing
@@ -178,6 +179,10 @@ public sealed class DriftMonitor : IDisposable
     private readonly List<FileSystemWatcher> _watchers = [];
 
     private DateTimeOffset? _lastCheck;
+
+    /// <summary>The check a throttled request is owed. See <see cref="OweCheck"/>.</summary>
+    private ITimer? _owed;
+
     private IReadOnlyList<TargetDrift> _results = [];
     private readonly List<CorruptedBlob> _corruption = [];
 
@@ -298,10 +303,16 @@ public sealed class DriftMonitor : IDisposable
         {
             if (ShouldRun(reason) is false)
             {
+                OweCheck();
+
                 return false;
             }
 
             _lastCheck = _timeProvider.GetUtcNow();
+
+            // This one starts after whatever was swallowed, so it sees it.
+            _owed?.Dispose();
+            _owed = null;
         }
 
         var results = new List<TargetDrift>();
@@ -587,6 +598,12 @@ public sealed class DriftMonitor : IDisposable
     public void Dispose()
     {
         StopWatching();
+
+        lock (_lock)
+        {
+            _owed?.Dispose();
+            _owed = null;
+        }
     }
 
 
@@ -616,6 +633,39 @@ public sealed class DriftMonitor : IDisposable
         }
 
         return _timeProvider.GetUtcNow() - last >= ThrottleWindow;
+    }
+
+    /// <summary>
+    /// Makes sure a request the throttle swallowed is answered when the window closes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The throttle saves listings, it must not lose changes.</b> A request is swallowed because a
+    /// check ran a moment ago - but that check may have run before the change it is being asked about.
+    /// Files deleted a few seconds after a check, or the tail of an update-all that the check fired by
+    /// its first file listed half of, would otherwise wait for the next thing to ask: an activation
+    /// that a window in the tray never gets, or the backstop ten minutes later.
+    /// </para>
+    /// <para>
+    /// One owed check however many were swallowed, since it lists everything anyway. Called under
+    /// <see cref="_lock"/>.
+    /// </para>
+    /// </remarks>
+    private void OweCheck()
+    {
+        if (_owed is not null || _lastCheck is not DateTimeOffset last)
+        {
+            return;
+        }
+
+        var due = ThrottleWindow - (_timeProvider.GetUtcNow() - last);
+
+        _owed = _timeProvider.CreateTimer(
+            // Explicit, so that it is never swallowed in turn: it is the answer to one that was.
+            _ => _ = CheckAsync(DriftCheckReason.Explicit),
+            null,
+            due > TimeSpan.Zero ? due : TimeSpan.Zero,
+            Timeout.InfiniteTimeSpan);
     }
 
 

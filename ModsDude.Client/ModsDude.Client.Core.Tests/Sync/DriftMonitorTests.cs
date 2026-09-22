@@ -183,10 +183,6 @@ public class DriftMonitorTests
 
         Assert.True(fixture.Monitor.Check(DriftCheckReason.Background));
         Assert.False(fixture.Monitor.Check(DriftCheckReason.Background));
-
-        fixture.Time.Advance(DriftMonitor.ThrottleWindow);
-
-        Assert.True(fixture.Monitor.Check(DriftCheckReason.Background));
     }
 
     [Fact]
@@ -501,13 +497,126 @@ public class DriftMonitorTests
     }
 
 
+    /// <summary>
+    /// A swallowed request being answered later, which the throttle tests above never see: they only
+    /// ask whether a request ran there and then.
+    /// </summary>
+    [Fact]
+    public async Task A_change_the_throttle_swallowed_is_still_found_when_the_window_closes()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(1));
+        File.Delete(fixture.Folder.Combine("fs25_a.zip"));
+
+        Assert.False(fixture.Monitor.Check(DriftCheckReason.FolderChanged));
+        Assert.False(fixture.Monitor.HasDrift);
+
+        var changed = new TaskCompletionSource();
+        fixture.Monitor.Changed += (_, _) => changed.TrySetResult();
+
+        fixture.Time.Advance(DriftMonitor.ThrottleWindow);
+
+        await changed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(fixture.Monitor.HasDrift);
+    }
+
+    [Fact]
+    public void A_check_that_runs_anyway_settles_what_the_throttle_owed()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
+        fixture.Monitor.Check(DriftCheckReason.FolderChanged);
+
+        Assert.Equal(1, fixture.Time.PendingTimers);
+
+        fixture.Monitor.Check();
+
+        Assert.Equal(0, fixture.Time.PendingTimers);
+    }
+
+
+    /// <summary>A clock that only moves when told, and fires its timers when it does.</summary>
     private sealed class TestTimeProvider : TimeProvider
     {
+        private readonly Lock _lock = new();
+        private readonly List<TestTimer> _timers = [];
         private DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
         public override DateTimeOffset GetUtcNow() => _now;
 
-        public void Advance(TimeSpan by) => _now += by;
+        public int PendingTimers
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _timers.Count;
+                }
+            }
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            List<TestTimer> due;
+
+            lock (_lock)
+            {
+                _now += by;
+                due = [.. _timers.Where(x => x.DueAt <= _now)];
+                _timers.RemoveAll(due.Contains);
+            }
+
+            foreach (var timer in due)
+            {
+                timer.Fire();
+            }
+        }
+
+        /// <summary>One-shot only, which is all the monitor asks for.</summary>
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new TestTimer(this, () => callback(state), _now + dueTime);
+
+            lock (_lock)
+            {
+                _timers.Add(timer);
+            }
+
+            return timer;
+        }
+
+        private void Remove(TestTimer timer)
+        {
+            lock (_lock)
+            {
+                _timers.Remove(timer);
+            }
+        }
+
+        private sealed class TestTimer(TestTimeProvider owner, Action fire, DateTimeOffset dueAt) : ITimer
+        {
+            public DateTimeOffset DueAt => dueAt;
+
+            public void Fire() => fire();
+
+            public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
+
+            public void Dispose() => owner.Remove(this);
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
 
