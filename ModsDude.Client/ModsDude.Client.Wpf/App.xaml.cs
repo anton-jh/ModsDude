@@ -42,6 +42,7 @@ public partial class App : Application
     private SingleInstance? _singleInstance;
     private TrayService? _tray;
     private DriftBackstop? _backstop;
+    private RemoteChangeWatcher? _remoteChanges;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -125,6 +126,11 @@ public partial class App : Application
             window.Show();
             background = false;
         }
+
+        // The opposite of the background presence above: it only asks while the window is in sight,
+        // because what it finds is a dot in the sidebar and nothing else.
+        _remoteChanges = _serviceProvider.GetRequiredService<RemoteChangeWatcher>();
+        _remoteChanges.Start(window);
 
         RepairAutostart();
 
@@ -257,6 +263,7 @@ public partial class App : Application
         _serviceProvider?.GetService<WindowsToasts>()?.ClearAll();
 
         _backstop?.Dispose();
+        _remoteChanges?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();
 
@@ -360,6 +367,9 @@ public partial class App : Application
         // that no longer wait for it to be looked at.
         services.AddSingleton<TrayService>();
         services.AddSingleton<DriftBackstop>();
+
+        // Asks whether the sidebar's lists are behind the server, and only says so - see the class.
+        services.AddSingleton<RemoteChangeWatcher>();
 
         // Windows notifications: the toolkit behind one seam, and the object that decides when the
         // window's own notices and toasts are worth sending through it.

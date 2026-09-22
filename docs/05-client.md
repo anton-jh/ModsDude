@@ -689,6 +689,29 @@ unsubscribe it.
 Every holder of a synchronizer must dispose it — it subscribes to `CollectionChanged` on a
 long-lived source, and a leaked subscription keeps a whole page graph alive.
 
+### The sidebar's lists are checked, not refreshed
+
+`RepoRepository.Repos` and `ProfileService.Profiles` are copies of server state read on demand, so
+a teammate's new profile, a rename or a saved revision stays out of them until somebody presses
+refresh. `RemoteChangeWatcher` narrows that gap **without closing it behind the user's back**:
+every three minutes, and when the window comes back from the tray or from being minimised, it
+calls `CheckForChanges` on both services. That reads the same list the refresh reads, compares it
+with what is held (`RepoListChanges`, `ProfileListChanges`) and records the difference as
+`PendingChanges` — a sentence per change — while leaving the collection exactly as it was. The
+sidebar header draws a dot on its refresh button (beside the heading in a rail, where the button
+is not drawn), the tooltip says what the refresh would bring in, and any refresh clears it.
+
+- **Only the fields a refresh folds in count.** Anything else would be a dot the button cannot
+  clear. For profiles that includes the head revision, which the sidebar does not draw but the
+  drift notice and the overview quote.
+- **An answer from before a local change is thrown away.** The held list is snapshotted before the
+  request and compared again after it; if this machine created, renamed or saved something in
+  between, the check reports nothing rather than this client's own change as somebody else's.
+- **Profiles are checked for the repo they were last refreshed for** (`HeldRepoId`), not inferred
+  from the list — an empty list is both "no profiles" and "not read yet".
+- **Hidden or minimised, nothing is asked**, and a failed check is logged and nothing else: nobody
+  asked for it, so a network blip is not worth an error dialog.
+
 ## Names sort naturally
 
 `NaturalOrder.Comparer` is the one comparer behind every sort of a name a person wrote —

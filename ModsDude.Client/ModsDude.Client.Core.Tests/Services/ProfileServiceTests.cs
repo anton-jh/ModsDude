@@ -52,6 +52,102 @@ public class ProfileServiceTests
     }
 
 
+    [Fact]
+    public async Task A_check_before_any_refresh_asks_nothing()
+    {
+        var server = new FakeProfilesServer();
+        var service = new ProfileService(server, null!, null!);
+
+        await service.CheckForChanges(CancellationToken.None);
+
+        Assert.Equal(0, server.Reads);
+        Assert.Null(service.PendingChanges);
+    }
+
+    [Fact]
+    public async Task A_check_records_what_changed_and_leaves_the_list_alone()
+    {
+        var server = new FakeProfilesServer();
+        var service = new ProfileService(server, null!, null!);
+        server.Profiles.Add(Profile("Season 4", 3));
+        await service.RefreshProfiles(_repoId, CancellationToken.None);
+
+        server.Profiles[0] = server.Profiles[0] with { HeadRevision = 4 };
+        server.Profiles.Add(Profile("Season 5", 1));
+
+        var raised = 0;
+        service.PendingChangesChanged += (_, _) => raised++;
+
+        await service.CheckForChanges(CancellationToken.None);
+
+        Assert.Equal(["'Season 4' has a new revision.", "'Season 5' was added."], service.PendingChanges!.Lines);
+        Assert.Equal(1, raised);
+        Assert.Equal(["Season 4"], service.Profiles.Select(x => x.Name));
+        Assert.Equal(3, service.Profiles[0].HeadRevision);
+    }
+
+    [Fact]
+    public async Task A_refresh_brings_the_changes_in_and_clears_them()
+    {
+        var server = new FakeProfilesServer();
+        var service = new ProfileService(server, null!, null!);
+        await service.RefreshProfiles(_repoId, CancellationToken.None);
+
+        server.Profiles.Add(Profile("Season 5", 1));
+        await service.CheckForChanges(CancellationToken.None);
+
+        await service.RefreshProfiles(_repoId, CancellationToken.None);
+
+        Assert.Null(service.PendingChanges);
+        Assert.Equal(["Season 5"], service.Profiles.Select(x => x.Name));
+    }
+
+    [Fact]
+    public async Task A_check_that_finds_nothing_any_more_clears_what_an_earlier_one_found()
+    {
+        var server = new FakeProfilesServer();
+        var service = new ProfileService(server, null!, null!);
+        await service.RefreshProfiles(_repoId, CancellationToken.None);
+
+        server.Profiles.Add(Profile("Season 5", 1));
+        await service.CheckForChanges(CancellationToken.None);
+
+        server.Profiles.Clear();
+        await service.CheckForChanges(CancellationToken.None);
+
+        Assert.Null(service.PendingChanges);
+    }
+
+    [Fact]
+    public async Task A_check_is_thrown_away_when_this_machine_changed_the_list_while_it_was_out()
+    {
+        var server = new FakeProfilesServer();
+        var service = new ProfileService(server, null!, null!);
+        var season = Profile("Season 4", 3);
+        server.Profiles.Add(season);
+        await service.RefreshProfiles(_repoId, CancellationToken.None);
+
+        // A save lands on this machine between the request and the answer. The answer is from before
+        // it, so it would report this client's own revision as somebody else's - backwards.
+        server.DuringRead = () => service.NoteRevisionSaved(season.Id, 4);
+
+        await service.CheckForChanges(CancellationToken.None);
+
+        Assert.Null(service.PendingChanges);
+    }
+
+
+    private static ProfileDto Profile(string name, int head)
+    {
+        return new ProfileDto
+        {
+            Id = Guid.NewGuid(),
+            RepoId = _repoId,
+            Name = name,
+            HeadRevision = head
+        };
+    }
+
     /// <summary>
     /// No clients: nothing exercised here goes to the server, which is what makes this a test of the
     /// cache and not of the API.

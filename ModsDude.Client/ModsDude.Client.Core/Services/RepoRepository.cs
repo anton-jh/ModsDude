@@ -1,7 +1,9 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
@@ -33,6 +35,44 @@ public class RepoRepository(
     /// </remarks>
     public bool HasLoaded { get; private set; }
 
+    /// <summary>
+    /// What the last background check found on the server that <see cref="Repos"/> does not show
+    /// yet, or null where it found nothing. Cleared by any refresh, which is what brings it in.
+    /// </summary>
+    public RemoteChanges? PendingChanges { get; private set; }
+
+    /// <summary>Raised when <see cref="PendingChanges"/> is set or cleared.</summary>
+    public event EventHandler? PendingChangesChanged;
+
+
+    /// <summary>
+    /// Asks the server whether the list has changed, and records the answer in
+    /// <see cref="PendingChanges"/> without touching <see cref="Repos"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Discarded where the list moved while the question was out.</b> Creating, joining or
+    /// renaming a repo on this machine changes the list between the request and the answer, and
+    /// comparing an answer from before that with a list from after it would report this client's
+    /// own change as somebody else's.
+    /// </remarks>
+    public async Task CheckForChanges(CancellationToken cancellationToken)
+    {
+        // Nothing to compare against yet, and before sign-in there is nobody to ask for.
+        if (HasLoaded is false)
+        {
+            return;
+        }
+
+        var before = Snapshot();
+        var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
+
+        if (HasLoaded is false || before.SequenceEqual(Snapshot()) is false)
+        {
+            return;
+        }
+
+        SetPendingChanges(RepoListChanges.Between(before, reposFromApi));
+    }
 
     public async Task RefreshRepos(CancellationToken cancellationToken)
     {
@@ -66,6 +106,8 @@ public class RepoRepository(
         // Last, so that a listener woken by the collection changing above sees the list before it
         // sees the flag saying the list is complete.
         HasLoaded = true;
+
+        SetPendingChanges(null);
     }
 
     public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
@@ -135,6 +177,8 @@ public class RepoRepository(
         // rather than known to be none, and a notice reading the difference must not answer for the
         // account that just left.
         HasLoaded = false;
+
+        SetPendingChanges(null);
     }
 
     /// <summary>
@@ -193,6 +237,22 @@ public class RepoRepository(
     private Repo? FindRepo(Guid id)
     {
         return Repos.FirstOrDefault(x => x.Id == id);
+    }
+
+    private List<RepoListEntry> Snapshot()
+    {
+        return [.. Repos.Select(x => x.ToListEntry())];
+    }
+
+    private void SetPendingChanges(RemoteChanges? changes)
+    {
+        if (PendingChanges is null && changes is null)
+        {
+            return;
+        }
+
+        PendingChanges = changes;
+        PendingChangesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Remove(Repo repo)

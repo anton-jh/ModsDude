@@ -28,7 +28,8 @@
                               SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                               />
 
-                    <uc:SidebarHeader Grid.Row="1" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="Refresh repos"
+                    <uc:SidebarHeader Grid.Row="1" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshReposToolTip}"
+                                      HasPendingChanges="{Binding HasPendingRepoChanges}"
                                       AddCommand="{Binding CreateRepoCommand}"
                                       IsAddSelected="{Binding IsCreateRepoSelected}"
                                       IsAddEnabled="{Binding CreateRepoItem.IsAvailable}"

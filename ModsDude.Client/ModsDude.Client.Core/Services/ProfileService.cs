@@ -32,6 +32,53 @@ public class ProfileService(
 
     public ObservableCollection<ProfileDto> Profiles { get; } = [];
 
+    /// <summary>
+    /// Which repo <see cref="Profiles"/> was last refreshed for, or null before the first refresh.
+    /// </summary>
+    /// <remarks>
+    /// Not something the list can say about itself: a repo with no profiles is an empty list, and so
+    /// is a list nobody has filled yet.
+    /// </remarks>
+    public Guid? HeldRepoId { get; private set; }
+
+    /// <summary>
+    /// What the last background check found on the server that <see cref="Profiles"/> does not show
+    /// yet, or null where it found nothing. About <see cref="HeldRepoId"/>, and cleared by any
+    /// refresh, which is what brings it in.
+    /// </summary>
+    public RemoteChanges? PendingChanges { get; private set; }
+
+    /// <summary>Raised when <see cref="PendingChanges"/> is set or cleared.</summary>
+    public event EventHandler? PendingChangesChanged;
+
+
+    /// <summary>
+    /// Asks the server whether the held repo's profiles have changed, and records the answer in
+    /// <see cref="PendingChanges"/> without touching <see cref="Profiles"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Discarded where the list moved while the question was out</b> - a profile created, renamed or
+    /// saved on this machine in the meantime, or the list handed to another repo. Comparing an answer
+    /// from before that with a list from after it would report this client's own change as somebody
+    /// else's.
+    /// </remarks>
+    public async Task CheckForChanges(CancellationToken cancellationToken)
+    {
+        if (HeldRepoId is not Guid repoId)
+        {
+            return;
+        }
+
+        var before = Snapshot();
+        var profiles = await profileClient.GetProfilesV1Async(repoId, cancellationToken);
+
+        if (HeldRepoId != repoId || before.SequenceEqual(Snapshot()) is false)
+        {
+            return;
+        }
+
+        SetPendingChanges(ProfileListChanges.Between(before, profiles));
+    }
 
     public async Task RefreshProfiles(Guid repoId, CancellationToken cancellationToken)
     {
@@ -60,6 +107,9 @@ public class ProfileService(
                 Profiles.Add(dto);
             }
         }
+
+        HeldRepoId = repoId;
+        SetPendingChanges(null);
     }
 
     /// <summary>
@@ -69,6 +119,9 @@ public class ProfileService(
     public void ClearUserState()
     {
         Profiles.Clear();
+
+        HeldRepoId = null;
+        SetPendingChanges(null);
     }
 
     /// <summary>
@@ -413,6 +466,26 @@ public class ProfileService(
     private ProfileDto? FindProfile(Guid id)
     {
         return Profiles.FirstOrDefault(x => x.Id == id);
+    }
+
+    /// <summary>
+    /// Copies, because the entries are updated in place: a list of the same instances would always
+    /// equal itself however much they had changed.
+    /// </summary>
+    private List<ProfileDto> Snapshot()
+    {
+        return [.. Profiles.Select(x => x with { })];
+    }
+
+    private void SetPendingChanges(RemoteChanges? changes)
+    {
+        if (PendingChanges is null && changes is null)
+        {
+            return;
+        }
+
+        PendingChanges = changes;
+        PendingChangesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Apply(ProfileDto target, ProfileDto source)

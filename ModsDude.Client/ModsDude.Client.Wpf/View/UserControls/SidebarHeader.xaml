@@ -39,6 +39,36 @@
             </TextBlock.RenderTransform>
         </TextBlock>
 
+        <!-- The pending-changes dot, for a rail only: there the refresh button is collapsed, and this is the
+             one part of the header still drawn. Open, the dot is on the button itself, and two of them would
+             be one too many. Placed beside the heading by the code-behind, the same way the heading is. -->
+        <Ellipse x:Name="TitleDot"
+                 Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="3"
+                 Width="6" Height="6"
+                 Margin="0 0 0 14"
+                 HorizontalAlignment="Left"
+                 VerticalAlignment="Center"
+                 Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                 IsHitTestVisible="False">
+            <Ellipse.RenderTransform>
+                <TranslateTransform x:Name="TitleDotShift" X="60" />
+            </Ellipse.RenderTransform>
+            <Ellipse.Style>
+                <Style TargetType="Ellipse">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasPendingChanges, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True" />
+                                <Condition Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Ellipse.Style>
+        </Ellipse>
+
         <!-- Creating one of what the list below holds. It is a page like any other, so while that page
              is open the button is drawn the way a selected row is: the sidebar always says where you are,
              and this is the one place it would otherwise go quiet. The tooltip is the item's own, which
@@ -110,12 +140,33 @@
                     </Style.Triggers>
                 </Style>
             </Button.Style>
-            <TextBlock Text="{Binding ActionIcon, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                       FontFamily="Segoe Fluent Icons"
-                       FontSize="12"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"/>
+            <!-- With changes waiting on the server the glyph takes the accent and a dot sits on its corner, so
+                 the button reads as something to press rather than something that is always there. -->
+            <Grid>
+                <TextBlock Text="{Binding ActionIcon, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           FontFamily="Segoe Fluent Icons"
+                           FontSize="12"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasPendingChanges, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Ellipse Width="6" Height="6"
+                         Margin="0 -3 -3 0"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Top"
+                         Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                         IsHitTestVisible="False"
+                         Visibility="{Binding HasPendingChanges, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </Grid>
         </Button>
 
         <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3"

@@ -459,7 +459,8 @@
                                   ItemsSource="{Binding Path=MenuItems}"
                                   SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-                        <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="Refresh profiles"
+                        <uc:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
+                                          HasPendingChanges="{Binding HasPendingProfileChanges}"
                                           AddCommand="{Binding CreateProfileCommand}"
                                           IsAddSelected="{Binding IsCreateProfileSelected}"
                                           IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"

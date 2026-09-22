@@ -2,6 +2,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -30,6 +31,7 @@ public class Repo
         Name = repoMembershipDto.Repo.Name;
         Tag = repoMembershipDto.Repo.Tag;
         MembershipLevel = repoMembershipDto.MembershipLevel;
+        AdapterConfiguration = repoMembershipDto.Repo.AdapterConfiguration;
 
         Games = [];
 
@@ -54,6 +56,12 @@ public class Repo
     public ObservableCollection<Game> Games { get; }
     public IBaseGameAdapter Adapter { get; private set; }
     public GameIdentity Scope => Adapter.Scope;
+
+    /// <summary>
+    /// The base settings as the server last sent them. <see cref="Adapter"/> holds them parsed; this
+    /// is kept beside it only so a background check can tell whether they have changed since.
+    /// </summary>
+    internal string AdapterConfiguration { get; private set; }
 
     // TODO: Profiles
 
@@ -89,6 +97,7 @@ public class Repo
         }
 
         Adapter = Adapter.WithBaseSettings(dto.AdapterConfiguration);
+        AdapterConfiguration = dto.AdapterConfiguration;
         PropertyChanged?.Invoke(this, new(nameof(Adapter)));
 
         // The base settings carry the game discriminator, so editing them can move the repo to a
@@ -106,6 +115,11 @@ public class Repo
     public void Dispose()
     {
         _gamesSynchronizer.Dispose();
+    }
+
+    internal RepoListEntry ToListEntry()
+    {
+        return new(Id, Name, MembershipLevel, AdapterConfiguration);
     }
 
 

@@ -99,6 +99,7 @@ public partial class MainPageViewModel
         ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.GameName)));
 
         repoService.RepoCreated += OnRepoCreated;
+        repoService.PendingChangesChanged += OnPendingRepoChangesChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
         _syncStatus.Changed += OnSyncStatusChanged;
 
@@ -141,6 +142,17 @@ public partial class MainPageViewModel
     /// <summary>Carries the availability and the reason for the "+", so the trust rule stays where it was.</summary>
     public MenuItemViewModel CreateRepoItem => _createRepoMenuItem;
 
+    /// <summary>
+    /// Whether the server has repo changes the list does not show yet. Brought in by the refresh
+    /// button and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
+    /// </summary>
+    public bool HasPendingRepoChanges => _repoService.PendingChanges is not null;
+
+    /// <summary>The refresh button's tooltip, which says what pressing it would bring in when it knows.</summary>
+    public string RefreshReposToolTip => _repoService.PendingChanges is { } changes
+        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh to bring the changes in."
+        : "Refresh repos";
+
 
     protected override void Init()
     {
@@ -153,6 +165,7 @@ public partial class MainPageViewModel
 
         Account.PropertyChanged -= OnAccountChanged;
         _repoService.RepoCreated -= OnRepoCreated;
+        _repoService.PendingChangesChanged -= OnPendingRepoChangesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
         Repos.CollectionChanged -= OnReposChanged;
@@ -287,6 +300,12 @@ public partial class MainPageViewModel
         {
             NavManager.Selected = repo;
         }
+    }
+
+    private void OnPendingRepoChangesChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(HasPendingRepoChanges));
+        OnPropertyChanged(nameof(RefreshReposToolTip));
     }
 
     private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)

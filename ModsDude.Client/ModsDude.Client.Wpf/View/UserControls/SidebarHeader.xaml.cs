@@ -65,6 +65,25 @@ public partial class SidebarHeader : UserControl
 
 
     /// <summary>
+    /// Whether the server has changes the list below does not show yet. Drawn as a dot on the refresh
+    /// button, and beside the heading in a rail, where the button is not drawn at all; the tooltip is
+    /// the owner's to reword, in <see cref="ActionToolTip"/>.
+    /// </summary>
+    public static readonly DependencyProperty HasPendingChangesProperty =
+        DependencyProperty.Register(
+            nameof(HasPendingChanges),
+            typeof(bool),
+            typeof(SidebarHeader),
+            new PropertyMetadata(false));
+
+    public bool HasPendingChanges
+    {
+        get => (bool)GetValue(HasPendingChangesProperty);
+        set => SetValue(HasPendingChangesProperty, value);
+    }
+
+
+    /// <summary>
     /// The "create one" action, drawn as a "+" beside the refresh. Null draws no button at all, which
     /// is every header that has nothing to create.
     /// </summary>
@@ -158,7 +177,15 @@ public partial class SidebarHeader : UserControl
     {
         TitleText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
-        TitleShift.X = Math.Max(MinInset, (RailWidth() - TitleText.DesiredSize.Width) / 2);
+        var railWidth = RailWidth();
+
+        TitleShift.X = Math.Max(MinInset, (railWidth - TitleText.DesiredSize.Width) / 2);
+
+        // Just past the end of the word, or as far as the rail allows: a dot the rail cuts off is no dot,
+        // so it is pulled back over the last letter's shoulder instead.
+        TitleDotShift.X = Math.Min(
+            TitleShift.X + TitleText.DesiredSize.Width + 1,
+            railWidth - TitleDot.Width - 2);
     }
 
     private double RailWidth()

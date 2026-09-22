@@ -190,6 +190,7 @@ public partial class RepoPageViewModel
         Profiles = [];
         _profileService.ProfileCreated += OnProfileCreated;
         _profileService.ProfileUpdated += OnProfileUpdated;
+        _profileService.PendingChangesChanged += OnPendingProfileChangesChanged;
         _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
 
         NavManager = new(navigationLockService, modalService)
@@ -267,6 +268,17 @@ public partial class RepoPageViewModel
     /// </summary>
     public MenuItemViewModel CreateProfileItem => _createProfileMenuItem;
 
+    /// <summary>
+    /// Whether the server has profile changes the list does not show yet. Brought in by the refresh
+    /// button and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
+    /// </summary>
+    public bool HasPendingProfileChanges => PendingProfileChanges() is not null;
+
+    /// <summary>The refresh button's tooltip, which says what pressing it would bring in when it knows.</summary>
+    public string RefreshProfilesToolTip => PendingProfileChanges() is { } changes
+        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh to bring the changes in."
+        : "Refresh profiles";
+
 
     protected override void Init()
     {
@@ -277,6 +289,7 @@ public partial class RepoPageViewModel
     {
         _profileService.ProfileCreated -= OnProfileCreated;
         _profileService.ProfileUpdated -= OnProfileUpdated;
+        _profileService.PendingChangesChanged -= OnPendingProfileChangesChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _repo.PropertyChanged -= OnRepoChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
@@ -568,6 +581,19 @@ public partial class RepoPageViewModel
             profile.RefreshTitle();
         }
     }
+
+    private void OnPendingProfileChangesChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(HasPendingProfileChanges));
+        OnPropertyChanged(nameof(RefreshProfilesToolTip));
+    }
+
+    /// <summary>
+    /// The pending changes if they are this repo's. The service's list is handed from repo to repo, so
+    /// for the moment between opening this one and its profiles arriving, they are the last repo's.
+    /// </summary>
+    private RemoteChanges? PendingProfileChanges()
+        => _profileService.HeldRepoId == _repo.Id ? _profileService.PendingChanges : null;
 
     private ProfileItemViewModel? FindProfile(Guid profileId)
         => Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId);
