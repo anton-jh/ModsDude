@@ -50,6 +50,13 @@ public sealed class SavegameFlowService(
     /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
     /// </summary>
+    /// <param name="savegameName">What the dialog calls the save. Display text only - see <paramref name="renameTo"/>.</param>
+    /// <param name="renameTo">
+    /// What to write into the slot as the save's name before packing it, or null to leave the slot's
+    /// own name alone. Deliberately separate from <paramref name="savegameName"/>: a caller that is
+    /// showing a placeholder there because it does not actually know this savegame's name must not
+    /// have that placeholder land in the save file - see <c>RepoSavegamesPageViewModel.CheckInBlockingAsync</c>.
+    /// </param>
     /// <returns>
     /// The snapshot that was minted, or null where nothing was - the user backed out, the save had not
     /// changed, or they chose to look at the newer snapshot first.
@@ -59,7 +66,8 @@ public sealed class SavegameFlowService(
         Guid savegameId,
         string savegameName,
         string slotLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? renameTo = null)
     {
         var modal = new SavegameCheckInModalViewModel(
             savegameName, slotLabel, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId));
@@ -71,7 +79,7 @@ public sealed class SavegameFlowService(
             return SavegameCheckInOutcome.Cancelled;
         }
 
-        return await SendAsync(game, savegameId, savegameName, modal.TrimmedLabel, modal.KeepPlaying, force: false, cancellationToken);
+        return await SendAsync(game, savegameId, savegameName, modal.TrimmedLabel, modal.KeepPlaying, force: false, cancellationToken, renameTo);
     }
 
     /// <summary>
@@ -350,7 +358,8 @@ public sealed class SavegameFlowService(
         string? label,
         bool keepPlaying,
         bool force,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? renameTo = null)
     {
         try
         {
@@ -358,7 +367,7 @@ public sealed class SavegameFlowService(
             task.DeclareTransfers(TransferDirection.Upload);
 
             var snapshot = await savegames.CheckInAsync(
-                game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task));
+                game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task), renameTo);
 
             return SavegameCheckInOutcome.CheckedIn(snapshot, keepPlaying);
         }
@@ -380,7 +389,7 @@ public sealed class SavegameFlowService(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken);
+            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken, renameTo);
         }
         catch (UserFriendlyException exception)
         {

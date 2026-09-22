@@ -219,7 +219,20 @@ public interface ISavegameService : IHeldSavegames
     Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Hands a held savegame back, minting a snapshot from whatever is in its slot now.</summary>
-    Task<SavegameSnapshotDto> CheckInAsync(Game game, Guid savegameId, string? label, bool keepPlaying, bool force, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    /// <param name="savegameName">
+    /// What to rename the slot to before packing it, or null to leave the name as it is. Best-effort -
+    /// see <see cref="ILocalSavegameAdapter.RenameSavegame"/> - and null where the caller has no name
+    /// it is sure is right, since writing the wrong one is worse than leaving the old one standing.
+    /// </param>
+    Task<SavegameSnapshotDto> CheckInAsync(
+        Game game,
+        Guid savegameId,
+        string? label,
+        bool keepPlaying,
+        bool force,
+        CancellationToken ct,
+        IProgress<SavegameProgress>? progress = null,
+        string? savegameName = null);
 
     /// <summary>
     /// Puts a past savegame back in its profile's current slot, and lets go of the revision it was
@@ -720,6 +733,10 @@ public sealed class SavegameService(
     /// Keeps the save checked out and the slot as it is, rebased onto the snapshot just minted. For
     /// somebody who wants tonight's progress on the server and intends to carry on.
     /// </param>
+    /// <param name="savegameName">
+    /// What to rename the slot to before packing it, or null to leave the name as it is - see
+    /// <see cref="ILocalSavegameAdapter.RenameSavegame"/>.
+    /// </param>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
     public async Task<SavegameSnapshotDto> CheckInAsync(
         Game game,
@@ -728,7 +745,8 @@ public sealed class SavegameService(
         bool keepPlaying,
         bool force,
         CancellationToken ct,
-        IProgress<SavegameProgress>? progress = null)
+        IProgress<SavegameProgress>? progress = null,
+        string? savegameName = null)
     {
         var adapter = RequireAdapter(game);
         var binding = bindings.GetBinding(game.Identity, savegameId)
@@ -738,15 +756,40 @@ public sealed class SavegameService(
 
         var target = RequireTarget(game, adapter, binding.Slot);
         var slot = binding.Slot.Slot;
+
+        // A rename edits the bytes the game keeps beside the save, and Observe() cannot tell that
+        // apart from an evening played. So where a rename is asked for and there is a mod list play
+        // could be attributed to, real play is observed from a hash of what the slot held *before* the
+        // rename runs - and the rename's own effect on the hash never reaches Observe() at all.
+        // Skipped where there is no profile to attribute to: Observe() is inert for such a binding
+        // regardless of which hash it is given, so hashing the slot twice would buy nothing there.
+        if (savegameName is not null && binding.ProfileId is not null)
+        {
+            var beforeRename = await packer.HashSlotAsync(adapter, target, slot, ct);
+
+            binding = Observe(game.Identity, binding, beforeRename);
+        }
+
+        if (savegameName is not null)
+        {
+            TryRenameSavegame(adapter, target, slot, savegameName);
+        }
+
         var packed = await packer.PackAsync(adapter, target, slot, ct, progress);
 
-        // The last observation, and the packed hash is exactly what one would compute - the packer
-        // hashes what it writes - so it costs no second pass over the folder. Play since the previous
-        // look belongs to the revision this folder is on now, which is what the snapshot will name.
-        binding = Observe(game.Identity, binding, packed.ContentHash);
+        // The last observation. Where nothing above already took one, the packed hash is exactly what
+        // one would compute - the packer hashes what it writes - so this costs no second pass over the
+        // folder. Where a rename just ran, the gap between the hash taken above and this one is that
+        // edit and nothing a player did, so it is folded straight into the binding rather than run
+        // through Observe() a second time - which is precisely the false attribution this exists to
+        // avoid. Play since the previous look belongs to the revision this folder is on now, which is
+        // what the snapshot will name.
+        binding = savegameName is not null && binding.ProfileId is not null
+            ? binding with { LastObservedHash = packed.ContentHash }
+            : Observe(game.Identity, binding, packed.ContentHash);
 
         // Read from the slot these bytes came from, before the upload rather than after: the details
-        // describe the snapshot being minted.
+        // describe the snapshot being minted, and reading it now picks up the rename above.
         var details = await DescribeAsync(adapter, target, slot, ct);
 
         SavegameSnapshotDto snapshot;
@@ -893,6 +936,11 @@ public sealed class SavegameService(
         // one - and only publishing *to a profile* claims the mod folder. One with no mod list has no
         // such precondition, which is why the id goes in nullable.
         EnsureModFolderIsFree(game, savegameId, target?.ProfileId, name);
+
+        // Nothing has been observed for this savegame yet - there is no binding until the one written
+        // below - so there is no prior state a rename's own effect on the hash could be mistaken for.
+        // Safe to run before packing, unlike a check-in's.
+        TryRenameSavegame(adapter, savegameTarget, slot.Slot, name);
 
         var packed = await packer.PackAsync(adapter, savegameTarget, slot.Slot, ct, progress);
 
@@ -1552,6 +1600,28 @@ public sealed class SavegameService(
         {
             // The game holding a file open in a save that has just been checked in. Left where it is.
             logger.LogWarning(exception, "Could not clear slot {Slot} after checking in.", slot.Value);
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="name"/> into the slot before it is packed, so the game's own menu and the
+    /// repo agree on what a save is called.
+    /// </summary>
+    /// <remarks>
+    /// <b>Never allowed to fail the publish or the check-in it is part of.</b> Same treatment
+    /// <see cref="DescribeAsync"/> gives the details it reads off the same slot, and for the same
+    /// reason: a name is decoration next to the bytes, and <see cref="ILocalSavegameAdapter.RenameSavegame"/>
+    /// already logs why it could not write one before it gets here.
+    /// </remarks>
+    private void TryRenameSavegame(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string name)
+    {
+        try
+        {
+            adapter.RenameSavegame(target, slot, name);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Could not rename the savegame in slot {Slot}; it keeps its old name.", slot.Value);
         }
     }
 

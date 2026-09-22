@@ -225,4 +225,26 @@ public interface ILocalSavegameAdapter : IBaseSavegameAdapter
     /// for an adapter that has not thought about it - a save that carries too much still restores.
     /// </remarks>
     bool BelongsInPackedSave(string relativePath) => true;
+
+    /// <summary>
+    /// Writes <paramref name="name"/> into the slot as the name this game itself shows for the save,
+    /// where this game records one at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>In the slot, not only in the archive being packed.</b> The point is that the game's own menu
+    /// and the repo agree on what a save is called, and an edit that only reached the archive would let
+    /// the two drift apart forever - the slot is what the next launch, and the next pack, both read.
+    /// </para>
+    /// <para>
+    /// <b>Best-effort, and it must not throw.</b> A name is decoration next to the bytes: an adapter
+    /// that cannot place a name at all, that finds the slot already named this, or that meets a file
+    /// the game is holding open, all report false and change nothing on disk - the caller packs
+    /// whatever is there either way, and a publish or a check-in is not worth failing over a label.
+    /// Defaults to false for a game with no such file, or while nobody has taught this one where its
+    /// name lives.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether the slot's bytes changed. False covers both "already correct" and "could not write" - both mean nothing on disk moved.</returns>
+    bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name) => false;
 }

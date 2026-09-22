@@ -1203,8 +1203,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             // The savegame's name where the dialog wants a slot label, as CheckInBlockingAsync does:
             // the slot's own id is a folder name the player has never thought in, and what they are
-            // handing back is the save rather than the folder.
-            var outcome = await _flowService.CheckInAsync(game, row.Id, row.Name, row.Name, _lifetime);
+            // handing back is the save rather than the folder. row.Name is this savegame's own record,
+            // so it also stands as the name to write into the slot before it is packed.
+            var outcome = await _flowService.CheckInAsync(game, row.Id, row.Name, row.Name, _lifetime, renameTo: row.Name);
 
             if (outcome.WasDeferred)
             {
@@ -1586,7 +1587,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             blockingSavegameId,
             blocking?.Name ?? "that savegame",
             blocking?.Name ?? "the slot",
-            _lifetime);
+            _lifetime,
+            // Null rather than the placeholder above where this machine's own list does not have the
+            // row: a name only worth showing in a sentence is not one worth writing into the save.
+            renameTo: blocking?.Name);
 
         if (outcome.ReleasedTheSlot is false)
         {

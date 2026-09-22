@@ -5,6 +5,7 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using System.Globalization;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -149,6 +150,67 @@ public class FarmingSimulatorLocalSavegameAdapter(
     public bool BelongsInPackedSave(string relativePath)
     {
         return !_excludedFileNames.Contains(Path.GetFileName(relativePath), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="name"/> into the slot's career file as <c>settings/savegameName</c> -
+    /// the same element <see cref="ReadSlot"/> reads it back from.
+    /// </summary>
+    /// <remarks>
+    /// <b>Warns and moves on rather than throws.</b> The game may be holding the career file open, or
+    /// this save's layout may be one this adapter cannot parse at all - reading it takes the same
+    /// degrade-rather-than-throw view <see cref="ReadCareer"/> does. Either way a name is decoration
+    /// next to the bytes, and neither is worth failing a publish or a check-in over: the caller packs
+    /// whatever is on disk regardless, and the old name stands until a later attempt succeeds.
+    /// </remarks>
+    public bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name)
+    {
+        var careerFile = Path.Combine(GetSlotPath(target, slot), _careerSavegameFile);
+
+        if (File.Exists(careerFile) is false)
+        {
+            return false;
+        }
+
+        var document = ReadXml(careerFile, Log);
+
+        if (document.HasValue is false)
+        {
+            Log.LogWarning("Could not rename the savegame in slot {Slot}; its career file could not be read.", slot.Value);
+
+            return false;
+        }
+
+        var element = document.Value.Element("careerSavegame")?.Element("settings")?.Element("savegameName");
+
+        if (element is null || element.Value == name)
+        {
+            return false;
+        }
+
+        element.Value = name;
+
+        try
+        {
+            var writerSettings = new XmlWriterSettings
+            {
+                // No BOM: matched to what the game itself writes, as far as this adapter has been able
+                // to observe it - see docs/08-known-issues.md for how much of this file is unverified.
+                Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                Indent = true
+            };
+
+            using var writer = XmlWriter.Create(careerFile, writerSettings);
+            document.Value.Save(writer);
+
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Log.LogWarning(exception, "Could not rename the savegame in slot {Slot}; it keeps its old name for now.", slot.Value);
+
+            return false;
+        }
     }
 
 

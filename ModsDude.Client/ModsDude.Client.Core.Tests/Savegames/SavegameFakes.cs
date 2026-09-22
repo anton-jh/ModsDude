@@ -412,6 +412,42 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
     public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings) => this;
 
 
+    /// <summary>Every call this adapter received, in order - so a test can assert what was asked for.</summary>
+    public List<(SavegameTarget Target, SavegameSlotId Slot, string Name)> Renames { get; } = [];
+
+    /// <summary>What a locked career file looks like from the caller's side: attempted and refused.</summary>
+    public bool ThrowOnRename { get; set; }
+
+    /// <summary>
+    /// Writes the name into its own file beside the career file, mirroring the one real fact this
+    /// fake stands in for: a rename edits bytes in the slot, so packing it again afterwards produces a
+    /// different hash than packing it before.
+    /// </summary>
+    public bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name)
+    {
+        Renames.Add((target, slot, name));
+
+        if (ThrowOnRename)
+        {
+            throw new IOException("Simulated: the game is holding the career file open.");
+        }
+
+        var path = Path.Combine(GetSlotPath(target, slot), _nameFile);
+
+        if (File.Exists(path) && File.ReadAllText(path) == name)
+        {
+            return false;
+        }
+
+        Directory.CreateDirectory(GetSlotPath(target, slot));
+        File.WriteAllText(path, name);
+
+        return true;
+    }
+
+    private const string _nameFile = "name.txt";
+
+
     private static bool IsOccupied(SavegameTarget target, string slotId)
     {
         var path = Path.Combine(target.Path, slotId);

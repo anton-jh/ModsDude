@@ -913,6 +913,152 @@ public class SavegameServiceTests
         Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
     }
 
+    [Fact]
+    public async Task Publishing_writes_the_given_name_into_the_slot_before_packing()
+    {
+        using var harness = new Harness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+
+        await harness.Service.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None);
+
+        Assert.Equal("Season 5", Assert.Single(harness.Adapter.Renames).Name);
+    }
+
+    [Fact]
+    public async Task Checking_in_with_a_name_writes_it_into_the_slot_before_packing()
+    {
+        using var harness = new Harness();
+        var head = await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        var snapshot = await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            savegameName: "New name");
+
+        Assert.Equal("New name", Assert.Single(harness.Adapter.Renames).Name);
+
+        // The name is bytes like any other - writing it is what makes this check-in mint something at
+        // all, where an untouched slot would have skipped the upload entirely.
+        Assert.NotEqual(head.Number, snapshot.Number);
+    }
+
+    /// <summary>
+    /// A rename with nothing else in scope - null is left alone rather than asked for.
+    /// </summary>
+    [Fact]
+    public async Task Checking_in_with_no_name_leaves_the_slot_unrenamed()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+
+        Assert.Empty(harness.Adapter.Renames);
+    }
+
+    /// <summary>
+    /// A rename edits bytes in the slot exactly as an evening does, and an adapter that could not write
+    /// one - the game holding the career file open, say - must not turn that into a failed check-in.
+    /// See <see cref="ModsDude.Client.Core.GameAdapters.ILocalSavegameAdapter.RenameSavegame"/>.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_that_fails_does_not_fail_the_check_in()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.Adapter.ThrowOnRename = true;
+
+        var snapshot = await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            savegameName: "New name");
+
+        Assert.Single(harness.Adapter.Renames);
+        Assert.NotNull(snapshot);
+    }
+
+    /// <summary>
+    /// <b>The false attribution a rename must never cause.</b> Renaming a save necessarily edits the
+    /// bytes beside it, and a naive check-in would read that edit exactly as it reads an evening played:
+    /// a hash that no longer matches what was last observed. Here nothing at all is played - the slot
+    /// is checked out and immediately checked back in under a new name - so any revision recorded has
+    /// to be the fallback for unplayed play, never one implied by the rename.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_savegame_nobody_played_does_not_attribute_play_to_it()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
+
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            savegameName: "Renamed, never played");
+
+        // Still nothing played - the rename is the only edit there was - so the revision sent is the
+        // ordinary "never played" fallback: the folder's own, not one borrowed from the rename.
+        Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
+    }
+
+    /// <summary>
+    /// <b>The same false attribution, with a real evening in the mix.</b> Reproduces
+    /// <see cref="Play_either_side_of_an_apply_is_attributed_to_the_revision_it_ran_on"/>'s first half -
+    /// an evening on revision 4, then the profile's head moves to 1004 - but nothing is played after the
+    /// apply; only a rename happens at check-in. A check-in that let the rename reach the same
+    /// observation an evening does would overwrite the real attribution with 1004, the revision the
+    /// folder happens to be on now rather than the one anybody actually played on.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_at_check_in_does_not_overwrite_a_real_evenings_attribution()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        await harness.ApplyAsync(1004);
+
+        Assert.Equal(4, harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
+
+        // Only the name changes from here on - nobody played anything else.
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            savegameName: "Renamed after the apply");
+
+        Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
+    }
+
+    /// <summary>
+    /// A savegame that follows no mod list has nothing a rename could misattribute play to - Observe()
+    /// is inert for it regardless - so the rename still happens and the check-in still succeeds.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_savegame_with_no_profile_still_renames_it()
+    {
+        using var harness = new Harness();
+        harness.Server.FollowNoProfile();
+        await harness.SeedHeadAsync("a savegame", profileRevision: null);
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        await harness.Service.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            savegameName: "Renamed, no profile");
+
+        Assert.Equal("Renamed, no profile", Assert.Single(harness.Adapter.Renames).Name);
+    }
+
     /// <summary>
     /// <b>The hold limit counts per game, not per folder.</b> You play one save at a time; hosting one
     /// on the dedicated server while playing another in singleplayer would hold two of the group's

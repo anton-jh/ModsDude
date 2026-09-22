@@ -90,6 +90,13 @@ It is **written against the observed layout** — twenty `savegameN` folders, `c
 (a slot it cannot read is occupied and unnamed, never empty), but the names and the playtimes it
 produces are unverified.
 
+The write side shares the same risk: publishing or checking in a savegame rewrites
+`settings/savegameName` in place (`FarmingSimulatorLocalSavegameAdapter.RenameSavegame`) so the
+game's own menu agrees with what ModsDude calls the save. It degrades the same way - a career file it
+cannot parse, or one the game is holding open, costs the rename and nothing else - but the exact
+bytes it writes back (declaration, indentation, no BOM) are a best guess at what a real FS25 save
+looks like, unverified against the game the same way the reader is.
+
 Everything above it is built and used: pack and unpack, the checkout bindings in `LocalState`, the
 slot safety rules, the hold limit, play attribution and the whole interface.
 
