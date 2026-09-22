@@ -2693,6 +2693,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         _catalog.SetEnabled(ModSourceId.ForTarget(target), true);
 
+        // The repo registers every version this folder could hold, so with it left on, a mod the game
+        // removed from disk still shows on the left as if nothing had happened, and "Not in sources"
+        // - the filter that finds exactly what this folder no longer offers - selects nothing either.
+        // Coming here is coming to look at one folder, so it is switched off exactly as if the user
+        // had unticked it themselves, leaving that folder as the only enabled source.
+        _includeRegistered = false;
+
+        // The two filters that answer "what did the game do to this folder" from either side: what
+        // it added, which is on this computer and unregistered until a save imports it, and what it
+        // took away, which with the repo off above is exactly what this profile pins and the folder
+        // no longer does.
+        AvailableFilter = AvailableModFilter.New;
+        PinnedFilter = PinnedModFilter.NotInSources;
+
         // Only recomposes where the page is already up; during construction there is nothing to
         // recompose and the initial load reads the flag on its way through. A recompose rather than a
         // reload, because arriving here a second time must not throw away whatever the user has been
@@ -4095,6 +4109,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         RecountPinnedVisible();
         RemovalCount = _pendingRemovals.Count;
         PendingCount = Pinned.Count(x => x.IsPending);
+
+        // The right list's own filter can depend on facts that are not about the pinned rows at all -
+        // "Not in sources" reads _offeredMods, which a rescan or a source chip changes without a
+        // single row being added to or removed from Pinned, and a CollectionView does not re-run its
+        // filter over unchanged items on its own. Without this the count above updated - it reads
+        // PassesPinned directly - but the list on screen did not, until some other change flipped the
+        // filter chip and forced a refresh as a side effect.
+        PinnedView.Refresh();
 
         // The left list hides what the right one holds, so it re-filters whenever that changes -
         // which is also what keeps a mod off both sides at once.
