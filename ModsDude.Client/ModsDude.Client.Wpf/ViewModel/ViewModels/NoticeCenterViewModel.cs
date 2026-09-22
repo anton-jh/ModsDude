@@ -189,7 +189,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Raised at the end of every rebuild with everything that is live - after dismissals, before the
-    /// cap - on the UI thread. For the one listener that is not the column: Windows toasts, which say
+    /// cap, and including what the open editor suppresses from the column - on the UI thread. For the one listener that is not the column: Windows toasts, which say
     /// the same things to somebody the column cannot reach.
     /// </summary>
     public event EventHandler<IReadOnlyList<Notice>>? Refreshed;
@@ -516,21 +516,30 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
     private void Refresh()
     {
-        var drifted = _monitor.Drifted
-            .Where(x => x.Game.ActiveProfile is not ActiveProfile active || _suppressed.Contains(active) is false)
-            .ToList();
-
-        var built = NoticeBuilder.Build(drifted, _monitor.StoreCorruption, _environment)
+        var built = NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment)
             .Concat(_problems.Build())
             .Concat(_updates.ReadyVersion is string ready ? [UpdateNotice.For(ready)] : [])
             .ToList();
+
+        // What the open editor already shows, built on its own to learn the keys: notices are built per
+        // game, and it is whole games that are suppressed.
+        var suppressed = NoticeBuilder.Build(
+                [.. _monitor.Drifted.Where(x => x.Game.ActiveProfile is ActiveProfile active && _suppressed.Contains(active))],
+                [],
+                _environment)
+            .Select(x => x.Key)
+            .ToHashSet();
 
         // Forgotten before they are applied, so a problem waved away and then actually fixed leaves
         // nothing behind to silence the same problem next week.
         _dismissals.Retain(built.Select(x => x.Key));
 
-        var live = built
+        var undismissed = built
             .Where(x => x.CanDismiss is false || _dismissals.IsDismissed(x.Key, x.Signature) is false)
+            .ToList();
+
+        var live = undismissed
+            .Where(x => suppressed.Contains(x.Key) is false)
             .ToList();
 
         // News re-opens the column, and a rebuild of what is already on screen does not. Measured
@@ -546,7 +555,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             _seen.Add(notice.Key);
         }
 
-        _live = live;
+        _live = undismissed;
 
         CanDismissAll = live.Count(x => x.CanDismiss) > 1;
 
@@ -578,7 +587,10 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             IsCollapsed = false;
         }
 
-        Refreshed?.Invoke(this, live);
+        // Suppression included: it stands for somebody looking at the editor, and a window in the tray
+        // still has the editor as its page with nobody looking at it. Whether they are looking is the
+        // toasts' own question, and one they already ask.
+        Refreshed?.Invoke(this, undismissed);
     }
 
     /// <summary>
