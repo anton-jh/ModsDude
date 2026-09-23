@@ -208,8 +208,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(HasActions))]
     private ModRowActions? _actions;
 
+    /// <summary>
+    /// A newer version of this mod that a remote source has, or null. Set by the profile editor while
+    /// the source's chip is on; every other list leaves it alone.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRemoteOffer))]
+    private RemoteOfferViewModel? _remoteOffer;
+
 
     public bool HasStatus => Status is not ModDisplayStatus.None;
+
+    public bool HasRemoteOffer => RemoteOffer is not null;
 
     /// <summary>
     /// What the profile editor's draft has done to this mod, which is a different thing from

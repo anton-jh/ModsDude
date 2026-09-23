@@ -270,6 +270,37 @@
     </Style>
 
 
+    <!-- A newer version somewhere else - ModHub - on a mod's own row. The status chip's shape, since it
+         sits in the same row of chips, but outlined in the accent and clickable: it is the one chip
+         that goes somewhere, and it goes out of the app. Bound against RemoteOfferViewModel. -->
+    <Style x:Key="RemoteOfferChip" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="8 2" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Background"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                            BorderThickness="1"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="3">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
     <!-- The row of a list somebody is choosing from - a slot, in the dialogs that pick one - drawn the way
          the mod lists and the savegame log draw theirs: a full-width row with a hairline under it, the
          accent at low opacity and a bar down the left for the chosen one, and a lighter fill under the

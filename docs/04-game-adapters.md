@@ -51,6 +51,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 | --- | --- | --- |
 | Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
 | Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `SavegameTargets`, plus `GetSlots(target, ct)`, `GetSlotPath(target, slot)`, `CreateSlot` and `BelongsInPackedSave` |
+| Remote sources | `IRemoteModSourcesAdapter.Sources` — each an `IRemoteModSource` with a key, a name and `LookUpAsync(mods, ct)` | — |
 
 `IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
@@ -58,6 +59,13 @@ local adapter to find out. They sit on the **base** stage, not the catalogue sta
 the answer can depend on how a repo configured the adapter: for a scripted adapter, one script
 implements savegames and another does not. That is the same layering mistake as keying games
 on the adapter id, one stage further up; see [Game identity](#game-identity).
+
+**Remote sources** are places outside the machine that know of newer versions — ModHub, for Farming
+Simulator. Base-stage only, because which remote sources exist depends on the game a repo is about and on
+nothing about this machine. A remote source **only ever points**: it answers with a version and the page to
+download it from, never with bytes, so nothing it says can be pinned or imported. The file still arrives the
+ordinary way, into a folder a scan reads. A game with none leaves the capability out rather than answering
+with an empty list. See [09 — Mod catalog](09-mod-catalog.md#remote-sources-point-and-never-supply).
 
 The capability adapters mirror the same base-then-local shape: `IBaseModAdapter` can scan
 an arbitrary folder, and `WithLocalSettings` turns it into an `ILocalModAdapter` that
@@ -416,6 +424,7 @@ the only one that exists.
 | `FarmingSimulatorLocalSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
 | `FarmingSimulatorLocalModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
+| `FarmingSimulatorModHubSource` | The remote source ModHub, for FS25 only: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for FS22, the game has no remote source |
 | `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
 
 ### How a savegame is described
@@ -572,6 +581,11 @@ Worth understanding before you write an adapter that overrides ordering: **adapt
 client-side concept and the server has none.** `AdapterData.Configuration` is an opaque string
 the server never parses, and that opacity is exactly what lets a new game ship without a server
 deployment.
+
+**The one exception is ModHub.** The server crawls it so that clients need not, which puts knowledge of one
+game's website on the server — see [03 — Server](03-server.md#the-modhub-crawler). It is kept to its own
+project and endpoint, knows nothing about adapters, and does not change the rule above: the server still
+never parses a version string, and what ModHub's versions mean is decided by the client's comparer.
 
 So version comparison cannot happen inside `RegisterMod`. The client compares using its own
 adapter, works out where the new version belongs, and **sends the position with the

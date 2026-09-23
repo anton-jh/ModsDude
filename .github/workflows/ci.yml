@@ -40,6 +40,10 @@ jobs:
       - name: Domain tests
         run: dotnet test ModsDude.Server/ModsDude.Server.Domain.Tests/ModsDude.Server.Domain.Tests.csproj
 
+      # Against pages saved from ModHub, so nothing here reaches the site.
+      - name: ModHub parser tests
+        run: dotnet test ModsDude.Server/ModsDude.Server.ModHub.Tests/ModsDude.Server.ModHub.Tests.csproj
+
       # A database of the suite's own, because DatabaseFixture drops and recreates whatever it is
       # pointed at before every run.
       - name: Persistence tests

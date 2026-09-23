@@ -199,6 +199,16 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
 
     public bool HasSortCaption => SortCaption is not null;
 
+    /// <summary>
+    /// A newer version of this mod a remote source has, set by the page. Kept here for the same reason
+    /// as <see cref="Touch"/>: the item is replaced whenever the selector moves, and the offer is about
+    /// the mod, not about whichever version is selected.
+    /// </summary>
+    [ObservableProperty]
+    private RemoteOfferViewModel? _remoteOffer;
+
+    partial void OnRemoteOfferChanged(RemoteOfferViewModel? value) => Item.RemoteOffer = value;
+
     partial void OnTouchChanged(ProfileModTouch value) => Item.Touch = value;
 
     partial void OnTouchTooltipChanged(string? value) => Item.TouchTooltip = value;
@@ -469,6 +479,7 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
         item.OutlineStatus = true;
         item.Touch = Touch;
         item.TouchTooltip = TouchTooltip;
+        item.RemoteOffer = RemoteOffer;
 
         item.PropertyChanged += OnItemChanged;
 

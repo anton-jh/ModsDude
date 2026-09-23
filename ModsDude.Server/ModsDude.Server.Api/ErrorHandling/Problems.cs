@@ -330,6 +330,13 @@ public static class Problems
         Detail = $"The request carries {size} items; at most {maximum} are accepted at a time."
     };
 
+    public static CustomProblemDetails UnknownModHubGame(string game) => new()
+    {
+        Type = ProblemType.UnknownModHubGame,
+        Title = "Not a game ModHub is crawled for",
+        Detail = $"'{game}' is not one of the ModHub games this server keeps track of."
+    };
+
     public static CustomProblemDetails InvalidCursor(string cursor) => new()
     {
         Type = ProblemType.InvalidCursor,
@@ -570,5 +577,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "savegame-has-no-profile")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-has-no-profile")]
         SavegameHasNoProfile,
+
+        [EnumMember(Value = _typeBaseUri + "unknown-modhub-game")]
+        [JsonStringEnumMemberName(_typeBaseUri + "unknown-modhub-game")]
+        UnknownModHubGame,
     }
 }

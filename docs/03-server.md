@@ -8,9 +8,11 @@ ModsDude.Server.Application  Authorization primitives, ITimeService, IUnitOfWork
 ModsDude.Server.Domain       Entities and invariants. No framework references
 ModsDude.Server.Persistence  EF Core / PostgreSQL — DbContext, entity configuration, migrations
 ModsDude.Server.Storage      Azure Blob Storage — SAS issuance, image blobs
+ModsDude.Server.ModHub       Reading Farming Simulator's ModHub website — the paced client and its parser
 
 ModsDude.Server.Domain.Tests       xUnit over the domain. No infrastructure
 ModsDude.Server.Persistence.Tests  xUnit over a real PostgreSQL. See Tests, below
+ModsDude.Server.ModHub.Tests       xUnit over pages saved from ModHub. Never reaches the site
 ```
 
 The dependency direction is Api → Application → Domain, with Persistence and Storage
@@ -407,6 +409,34 @@ keeps no size and is tried again on the next start. It writes with `ExecuteUpdat
 `Updated`: the mod list's delta form is keyed on it, and restamping every old version would make the first
 delta after a deploy the size of the whole list.
 
+### The ModHub crawler
+
+**The one place the server knows about a particular game.** Everything else about games lives in client
+adapters; this exists so a client can ask "is there a newer version of this file on ModHub" without asking
+ModHub itself, and so every member asking costs ModHub nothing. It is kept to its own project
+(`ModsDude.Server.ModHub`), its own tables (`ModHubMods`, `ModHubCrawlStates`), `Api/ModHub/` and one
+endpoint.
+
+`ModHubCrawlerService` runs every `ModHub:PollInterval` per configured game, doing up to three things:
+
+- **Sweep** — read every page of ModHub's "latest" listing and fetch each mod page not yet stored. The first
+  sweep is the backfill (about 280 listing pages and 6,700 mod pages for FS25, two hours at one request a
+  second); after that one runs every `SweepInterval` to catch what polls missed. The next page is persisted
+  after each one, so a restart resumes.
+- **Poll** — "latest" is ordered by last activity, with a new or updated mod put back on top, so a poll reads
+  down until the listing resumes the previous poll's order and fetches everything above that point.
+  `ModHubListingChanges` in the domain decides where that is.
+- **Refresh** — re-read the `RefreshPerPoll` mods read longest ago. This catches the one thing order cannot
+  show (a mod updated again while already first) and is **how a removed mod is found**: ModHub answers a
+  missing mod with a 200 and an error heading, and its row is deleted rather than marked.
+
+**A page the parser does not recognise stops the run** and is logged as an error; nothing is concluded from
+it. A redesigned site must show up in the log, never as a listing that ended early or every mod removed. A
+single unreadable mod page is skipped with a warning, five in a row stop the run. Every request goes through
+one paced singleton (`RequestDelay`, one second) with the `UserAgent` from configuration.
+
+The site was tested at up to ~27 requests a second without any sign of throttling; the pace is politeness.
+
 ## Endpoint reference
 
 All routes are prefixed `api/v1`. All require authentication. "Level" is the repo membership
@@ -719,6 +749,18 @@ Guest label that would imply a scoping the route does not have. What is behind a
 store art, already public on the sites the mods come from, and it reveals nothing about who is in
 which repo. See [09 — Mod catalog](09-mod-catalog.md#what-authorized-means-for-a-global-address).
 
+### ModHub
+
+| Method | Route | Level | Notes |
+| --- | --- | --- | --- |
+| POST | `modhub/{game}/lookup` | Authenticated | Which of these file names ModHub has, at what version, with the page and CDN links. Up to 5,000 names, matched ignoring case and `.zip`. `{game}` is ModHub's own code (`fs2025`); one not in `ModHub:Games` is a `400` |
+
+Answered from what the crawler stored; nothing here reaches ModHub. **Names rather than a profile**,
+because a client asks about whatever it is looking at, and folders hold files the repo has never
+registered. `currentAsOf` is null until the first sweep has finished and been followed by a poll — until
+then the answer is missing most mods, and a client says so rather than presenting it as "nothing newer".
+Authenticated for the same reason as images: it is public data and says nothing about any repo.
+
 ## Configuration
 
 `appsettings.json` on the server:
@@ -730,6 +772,7 @@ which repo. See [09 — Mod catalog](09-mod-catalog.md#what-authorized-means-for
 | `EntraExternalId:*` | Instance, Domain, ClientId, Audience, Authority, and the token/authorization endpoints used by the Swagger UI |
 | `SwaggerAuthentication:ClientId` | Separate app registration for the Swagger UI |
 | `BlobReclamation:*` | `Enabled`, `Interval`, and `MinimumBlobAge` — the grace period an unreferenced blob must survive before the sweep may delete it |
+| `ModHub:*` | `Enabled`, `Games` (ModHub's codes; **set here, not defaulted in code** — the binder appends to a list default, which crawled every game twice), `UserAgent`, `RequestDelay`, `PollInterval`, `SweepInterval`, `PollPageLimit`, `RefreshPerPoll`. See [The ModHub crawler](#the-modhub-crawler) |
 
 ## Running locally
 
@@ -741,6 +784,10 @@ Requires a PostgreSQL instance matching `appsettings.Development.json`
 (`localhost:5432`, database `modsdude-dev`) and credentials with access to the
 `modsdudedev` storage account. Migrations apply on startup. Swagger UI is served in
 Development only.
+
+**A local API crawls ModHub too**, into whatever database it points at — the first run of a fresh one
+starts the two-hour backfill, resumable across restarts. Set `ModHub__Enabled=false` to stop it;
+`scripts/openapi.ps1` does, for the API it starts.
 
 ### Regenerating the client
 

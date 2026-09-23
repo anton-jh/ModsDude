@@ -29,7 +29,8 @@ out right; that slice is now closed end to end.
 | Profile → game sync | Working — content store, plan, execute, manifest, one folder at a time |
 | Drift | Detected at startup and on window activation, surfaced app-wide, re-appliable in one click |
 | Savegames | Working end to end — publish, check out, check in, force, keep playing, take a copy, discard. Packing, the checkout binding and slot safety on the client; savegame drift folded into the app-wide notice; repo and game pages with their dialogs. Publishing is reached from the repo's saves list |
-| Tests | Three projects: server domain, server persistence (needs PostgreSQL), client core |
+| ModHub | The server crawls FS25's ModHub; the profile editor links each mod to a newer version there |
+| Tests | Four projects: server domain, server persistence (needs PostgreSQL), ModHub parser, client core |
 | CI | Two jobs — Linux for the server and the OpenAPI diff, Windows for the client |
 | Deployment | None |
 
@@ -2492,6 +2493,33 @@ version nothing could compare, and a filter chip naming a set nobody acts on.
   says, and is affordable now that the set is known to be small — but it is a full file read for a
   question that may never be asked, so when to do it is its own decision. The correction above is to
   the claim that it is impossible, not to the behaviour.
+
+## Phase 16 — ModHub without the game
+
+Updating mods through the in-game ModHub means starting the game, updating, quitting to Save and Apply,
+and starting it again. The web version of ModHub needs none of that, if ModsDude can say what is newer
+there. So the server reads ModHub and every client asks the server.
+
+- [x] **A crawler on the server, for FS25.** `ModsDude.Server.ModHub` reads the public site, paced to one
+      request a second; `ModHubCrawlerService` sweeps the "latest" listing once as a backfill, polls its
+      top hourly, and re-reads the stalest mods a few at a time, which is also how removed mods go. Stored
+      in `ModHubMods`, resumable through `ModHubCrawlStates`. The one place the server knows a game; see
+      [03 — Server](03-server.md#the-modhub-crawler).
+- [x] **Checked it will not be throttled.** 310 requests up to ~27 a second, all answered, flat latency.
+- [x] **`POST modhub/{game}/lookup`**, by file name, with `currentAsOf` so a half-finished backfill is not
+      read as "nothing newer".
+- [x] **Remote sources as an adapter capability.** `IRemoteModSourcesAdapter`, base stage; the FS adapter
+      offers ModHub for FS25 and nothing for FS22.
+- [x] **A chip in the editor, and a link on the row.** An offer is not a version — it has no bytes — so it
+      never enters the version index and cannot be pinned; it is a chip on the mod's row that opens the
+      ModHub page and switches Downloads on. Once the file is scanned the link is replaced by the real
+      version. See [09 — Mod catalog](09-mod-catalog.md#remote-sources-point-and-never-supply).
+- [x] **Counted as updates on the right.** The Updates filter includes pinned mods with a ModHub link, and
+      the updates band says how many beside its own count, locked ones apart. The ModHub chip starts on.
+- [ ] **Download in the app.** The CDN link is already stored and served. Waiting on GIANTS' answer about
+      automated downloads; the shape would be a ModsDude-owned folder the file lands in, scanned like any
+      other, with Save fetching what the draft chose.
+- [ ] **A contact in the User-Agent**, once there is a ModsDude address to give.
 
 ## Deliberately not planned
 

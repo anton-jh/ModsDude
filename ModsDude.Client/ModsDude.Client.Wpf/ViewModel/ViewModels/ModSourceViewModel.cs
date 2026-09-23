@@ -34,13 +34,22 @@ public partial class ModSourceViewModel : ObservableObject
     private readonly bool _initialized;
 
 
-    public ModSourceViewModel(ModSourceStatus status, Action<ModSourceViewModel, bool> onEnabledChanged)
+    /// <param name="isBusy">
+    /// Whether what the chip counts is still being worked out - a remote source waiting on the server.
+    /// </param>
+    /// <param name="hasCount">
+    /// Whether there is anything to count yet. A remote source nobody has asked has no count at all, and
+    /// a zero on it would read as "nothing newer".
+    /// </param>
+    public ModSourceViewModel(ModSourceStatus status, Action<ModSourceViewModel, bool> onEnabledChanged, bool isBusy = false, bool hasCount = true)
     {
         _onEnabledChanged = onEnabledChanged;
 
         Source = status.Source;
         Error = status.Error;
         ModCount = status.ModCount;
+        IsBusy = isBusy;
+        HasCount = hasCount;
 
         _isEnabled = status.IsEnabled;
         _initialized = true;
@@ -73,8 +82,16 @@ public partial class ModSourceViewModel : ObservableObject
     /// </summary>
     public bool IsProfile => Source.Kind is ModSourceKind.Profile;
 
+    /// <summary>
+    /// Whether this chip is somewhere outside this machine, such as ModHub. It counts newer versions
+    /// it knows of rather than mods, and what it offers are links rather than versions.
+    /// </summary>
+    public bool IsRemote => Source.Kind is ModSourceKind.Remote;
+
     public string? Error { get; }
     public int ModCount { get; }
+    public bool IsBusy { get; }
+    public bool HasCount { get; }
 
     public bool HasFailed => Error is not null;
 
@@ -82,7 +99,7 @@ public partial class ModSourceViewModel : ObservableObject
     /// The number on the chip, and nothing else - the units are what the chip's own name is for, and
     /// at four chips wide there is no room to spell them twice.
     /// </summary>
-    public string ChipCountText => HasFailed ? "!" : ModCount.ToString("N0");
+    public string ChipCountText => HasFailed ? "!" : IsBusy ? "…" : HasCount ? ModCount.ToString("N0") : string.Empty;
 
     /// <summary>
     /// The whole of what the chip cannot fit: what kind of thing it is, where it is, and why it is
@@ -98,6 +115,7 @@ public partial class ModSourceViewModel : ObservableObject
                 ModSourceKind.Game => $"A mod folder this game reaches.\n{Path}",
                 ModSourceKind.Downloads => $"The system Downloads folder.\n{Path}",
                 ModSourceKind.Profile => $"What this profile pins. {Path}",
+                ModSourceKind.Remote => Path,
                 _ => $"Added for this session only.\n{Path}"
             };
 

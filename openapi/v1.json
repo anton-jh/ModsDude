@@ -463,6 +463,35 @@
           "Revoked"
         ]
       },
+      "LookUpModHubModsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "LookUpModHubModsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "currentAsOf": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "mods": {
+            "items": {
+              "$ref": "#/components/schemas/ModHubModDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "MakeSavegameCurrentResponse": {
         "additionalProperties": false,
         "properties": {
@@ -589,6 +618,35 @@
             "type": "string"
           },
           "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModHubModDto": {
+        "additionalProperties": false,
+        "properties": {
+          "downloadUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "modHubId": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pageUrl": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
             "type": "string"
           }
         },
@@ -764,7 +822,8 @@
           "https://server.modsdude.com/api/problems/invalid-mod-file-name",
           "https://server.modsdude.com/api/problems/savegame-current-conflict",
           "https://server.modsdude.com/api/problems/savegame-profile-not-paired",
-          "https://server.modsdude.com/api/problems/savegame-has-no-profile"
+          "https://server.modsdude.com/api/problems/savegame-has-no-profile",
+          "https://server.modsdude.com/api/problems/unknown-modhub-game"
         ],
         "type": "string",
         "x-enumNames": [
@@ -805,7 +864,8 @@
           "InvalidModFileName",
           "SavegameCurrentConflict",
           "SavegameProfileNotPaired",
-          "SavegameHasNoProfile"
+          "SavegameHasNoProfile",
+          "UnknownModHubGame"
         ]
       },
       "ProfileDependentDto": {
@@ -2095,6 +2155,74 @@
         ],
         "tags": [
           "Invites"
+        ]
+      }
+    },
+    "/api/v1/modhub/{game}/lookup": {
+      "post": {
+        "operationId": "LookUpModHubModsV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookUpModHubModsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookUpModHubModsResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "ModHub"
         ]
       }
     },

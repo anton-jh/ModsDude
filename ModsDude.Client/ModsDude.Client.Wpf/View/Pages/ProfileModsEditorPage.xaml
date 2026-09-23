@@ -822,7 +822,7 @@
                             <RadioButton GroupName="PinnedFilter"
                                          Style="{StaticResource FilterChip}"
                                          Content="Updates"
-                                         ToolTip="Mods the repo holds a newer version of"
+                                         ToolTip="Mods with a newer version - in the repo, in a folder being read, or online"
                                          IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
                             <RadioButton GroupName="PinnedFilter"
                                          Style="{StaticResource FilterChip}"
@@ -919,6 +919,19 @@
                                             ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
                                             Visibility="{Binding HasAmbiguousVersions, Converter={StaticResource BoolToVisibilityConverter}}"
                                             Command="{Binding ShowAmbiguousVersionsCommand}" />
+
+                                    <!-- Newer versions ModHub has, beside the ones here rather than
+                                         added into them: Update all cannot take one until its file
+                                         has been downloaded. A link to the Updates filter, where each
+                                         row carries its own link to the page. -->
+                                    <Button Padding="6 2"
+                                            Margin="8 0 0 0"
+                                            Style="{DynamicResource SubtleMenuButton}"
+                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                            Content="{Binding RemoteUpdatesText}"
+                                            ToolTip="Newer versions online, each linked from its mod's row. Download one, rescan Downloads, and it can be updated to like any other."
+                                            Visibility="{Binding HasRemoteUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Command="{Binding ShowRemoteUpdatesCommand}" />
                                 </StackPanel>
 
                                 <!-- A split button carrying the same split the sentence on the left

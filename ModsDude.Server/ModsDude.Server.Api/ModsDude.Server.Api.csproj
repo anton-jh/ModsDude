@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ModsDude.Server.Application\ModsDude.Server.Application.csproj" />
+    <ProjectReference Include="..\ModsDude.Server.ModHub\ModsDude.Server.ModHub.csproj" />
     <ProjectReference Include="..\ModsDude.Server.Persistence\ModsDude.Server.Persistence.csproj" />
     <ProjectReference Include="..\ModsDude.Server.Storage\ModsDude.Server.Storage.csproj" />
   </ItemGroup>

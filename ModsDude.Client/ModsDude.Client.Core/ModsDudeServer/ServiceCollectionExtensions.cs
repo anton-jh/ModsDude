@@ -37,6 +37,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IFilesClient, FilesClient>()
             .AddTypedClient<IFilesClient>((http, sp) => new FilesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 
+        services.AddHttpClient<IModHubClient, ModHubClient>()
+            .AddTypedClient<IModHubClient>((http, sp) => new ModHubClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+
         services.AddHttpClient<IImagesClient, ImagesClient>()
             .AddTypedClient<IImagesClient>((http, sp) => new ImagesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 

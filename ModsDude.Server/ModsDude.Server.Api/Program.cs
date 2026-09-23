@@ -6,11 +6,13 @@ using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Api.Maintenance;
+using ModsDude.Server.Api.ModHub;
 using ModsDude.Server.Api.Middleware.ErrorHandling;
 using ModsDude.Server.Api.Middleware.UserLoading;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.ModHub.Extensions;
 using ModsDude.Server.Storage.Extensions;
 using NSwag;
 using NSwag.AspNetCore;
@@ -99,6 +101,9 @@ builder.Services
     .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
 builder.Services.AddHostedService<BlobReclamationService>();
 builder.Services.AddHostedService<ModVersionSizeBackfillService>();
+
+builder.Services.AddModHub(builder.Configuration);
+builder.Services.AddHostedService<ModHubCrawlerService>();
 
 builder.Services
     .AddSingleton<ITimeService, TimeService>();

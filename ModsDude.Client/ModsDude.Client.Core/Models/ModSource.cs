@@ -62,7 +62,20 @@ public enum ModSourceKind
     /// view-scoped like an ad-hoc folder, added by picking a profile and gone when the page is.
     /// </para>
     /// </remarks>
-    Profile
+    Profile,
+
+    /// <summary>
+    /// Somewhere outside this machine that knows of newer versions - ModHub, for Farming Simulator.
+    /// Supplied by the game's adapter; see <see cref="GameAdapters.IRemoteModSourcesAdapter"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>It points and never supplies.</b> What it contributes is a link on a mod's row to where a newer
+    /// version can be downloaded, not a version the editor can pin: there are no bytes behind it. Once the
+    /// file is downloaded into a folder that is read, the version is an ordinary one and the link goes.
+    /// It starts switched on: what it reads is the ModsDude server, which the page reads anyway, not a
+    /// disk - the thing the other sources start off to protect.
+    /// </remarks>
+    Remote
 }
 
 /// <summary>
@@ -116,6 +129,12 @@ public readonly record struct ModSourceId
     /// is discriminator enough.
     /// </summary>
     public static ModSourceId ForProfile(Guid profileId) => new($"profile:{profileId:N}");
+
+    /// <summary>
+    /// A remote source the repo's adapter supplies, by the key the adapter gives it. One surface is
+    /// scoped to one repo and so to one adapter, so the key is discriminator enough.
+    /// </summary>
+    public static ModSourceId ForRemote(string key) => new($"remote:{key}");
 
     public static ModSourceId Parse(string s) => string.IsNullOrWhiteSpace(s)
         ? throw new FormatException("A mod source id cannot be empty.")

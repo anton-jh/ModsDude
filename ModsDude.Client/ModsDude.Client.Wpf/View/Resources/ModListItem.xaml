@@ -197,6 +197,25 @@
                          read as one row of chips. The words behind it are the tooltip. -->
                     <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
 
+                    <!-- A newer version somewhere else, and the way to it. First in the row of chips
+                         because it is the only one that asks for something to be done outside the
+                         app; see RemoteOfferViewModel. -->
+                    <Button Margin="0 0 8 0"
+                            Style="{StaticResource RemoteOfferChip}"
+                            Command="{Binding RemoteOffer.Open}"
+                            ToolTip="{Binding RemoteOffer.Tooltip}"
+                            Visibility="{Binding HasRemoteOffer, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding RemoteOffer.Text}"
+                                       Style="{DynamicResource CaptionTextBlockStyle}" />
+                            <TextBlock Margin="4 0 0 0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Text="&#xE8A7;"
+                                       FontFamily="{DynamicResource SymbolThemeFontFamily}" />
+                        </StackPanel>
+                    </Button>
+
                     <TextBlock Margin="0 0 8 0"
                                VerticalAlignment="Center"
                                Text="{Binding Detail}"

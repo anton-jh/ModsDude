@@ -2,6 +2,7 @@
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Invites;
+using ModsDude.Server.Domain.ModHub;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -24,6 +25,8 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Savegame> Savegames { get; init; }
     public required DbSet<SavegameSnapshot> SavegameSnapshots { get; init; }
     public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }
+    public required DbSet<ModHubMod> ModHubMods { get; init; }
+    public required DbSet<ModHubCrawlState> ModHubCrawlStates { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

@@ -2,11 +2,12 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Reflection;
 using System.Text.Json;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
-public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null) : IGameAdapter
+public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null, IModHubClient? modHubClient = null) : IGameAdapter
 {
     /// <summary>
     /// Handed down to the capability adapters, which read files somebody else wrote and degrade
@@ -14,6 +15,12 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null) :
     /// Optional, and null in a designer or a test that constructs an adapter directly.
     /// </summary>
     protected ILoggerFactory Loggers { get; } = loggerFactory ?? NullLoggerFactory.Instance;
+
+    /// <summary>
+    /// What ModHub is asked through - the ModsDude server's copy of it. Optional like
+    /// <see cref="Loggers"/>; without it the game simply has no remote source.
+    /// </summary>
+    protected IModHubClient? ModHub { get; } = modHubClient;
 
     public GameAdapterId Id { get; } = new("_farming_simulator", 1);
     public string DisplayName { get; } = "Farming Simulator";
@@ -32,7 +39,7 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null) :
 
         settings.EnsureValid();
 
-        return new FarmingSimulatorBaseGameAdapter(settings, Loggers);
+        return new FarmingSimulatorBaseGameAdapter(settings, Loggers, ModHub);
     }
 
     public IBaseGameAdapter WithBaseSettings(DynamicForm baseSettings)
@@ -44,21 +51,23 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null) :
 
         settings.EnsureValid();
 
-        return new FarmingSimulatorBaseGameAdapter(settings, Loggers);
+        return new FarmingSimulatorBaseGameAdapter(settings, Loggers, ModHub);
     }
 }
 
 public class FarmingSimulatorBaseGameAdapter(
     FarmingSimulatorBaseSettings settings,
-    ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorGameAdapter(loggerFactory), IBaseGameAdapter
+    ILoggerFactory? loggerFactory = null,
+    IModHubClient? modHubClient = null)
+    : FarmingSimulatorGameAdapter(loggerFactory, modHubClient), IBaseGameAdapter
 {
     // Instance rather than static, now that the adapters it builds are handed a logger: a static
     // list would close over whichever adapter happened to build it first and hand those loggers to
     // every other.
     private readonly List<object> _capabilities = [
         new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter(loggerFactory)),
-        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(loggerFactory))
+        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(loggerFactory)),
+        .. RemoteSources(settings, modHubClient)
         ];
 
 
@@ -95,6 +104,22 @@ public class FarmingSimulatorBaseGameAdapter(
         : DisplayName;
 
 
+    /// <summary>
+    /// ModHub, where the server crawls the repo's game - and nothing at all otherwise, so the capability
+    /// is absent rather than empty for a game ModHub is not read for.
+    /// </summary>
+    private static IEnumerable<object> RemoteSources(FarmingSimulatorBaseSettings settings, IModHubClient? client)
+    {
+        if (client is null || FarmingSimulatorModHubSource.GameFor(settings.GameVersion) is not string game)
+        {
+            yield break;
+        }
+
+        IRemoteModSource[] sources = [new FarmingSimulatorModHubSource(client, game)];
+
+        yield return new Func<IRemoteModSourcesAdapter>(() => new FarmingSimulatorRemoteModSourcesAdapter(sources));
+    }
+
     private static string? EnumTitle(FarmingSimulatorGameVersion version)
         => typeof(FarmingSimulatorGameVersion)
             .GetField(version.ToString())
@@ -129,7 +154,7 @@ public class FarmingSimulatorBaseGameAdapter(
             ?? throw new ArgumentException("Could not deserialize local settings");
         localSettings.EnsureValid();
 
-        return new FarmingSimulatorLocalGameAdapter(BaseSettings, localSettings, Loggers);
+        return new FarmingSimulatorLocalGameAdapter(BaseSettings, localSettings, Loggers, ModHub);
     }
 
     public ILocalGameAdapter WithLocalSettings(DynamicForm localSettings)
@@ -138,7 +163,7 @@ public class FarmingSimulatorBaseGameAdapter(
         {
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
-        return new FarmingSimulatorLocalGameAdapter(BaseSettings, settings, Loggers);
+        return new FarmingSimulatorLocalGameAdapter(BaseSettings, settings, Loggers, ModHub);
     }
 }
 
@@ -146,8 +171,9 @@ public class FarmingSimulatorBaseGameAdapter(
 public class FarmingSimulatorLocalGameAdapter(
     FarmingSimulatorBaseSettings baseSettings,
     FarmingSimulatorLocalSettings localSettings,
-    ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory), ILocalGameAdapter
+    ILoggerFactory? loggerFactory = null,
+    IModHubClient? modHubClient = null)
+    : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory, modHubClient), ILocalGameAdapter
 {
     // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
     private readonly List<object> _capabilities = [

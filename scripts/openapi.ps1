@@ -131,6 +131,9 @@ try {
 
         $env:ASPNETCORE_ENVIRONMENT = 'Development'
         $env:ASPNETCORE_URLS = $Url
+        # The document says nothing about the crawler, and an API started just to describe itself has
+        # no business reading somebody else's website - from CI least of all.
+        $env:ModHub__Enabled = 'false'
 
         Write-Host "Starting the API at $Url ..."
         # Started in the output directory because the content root defaults to the working directory,

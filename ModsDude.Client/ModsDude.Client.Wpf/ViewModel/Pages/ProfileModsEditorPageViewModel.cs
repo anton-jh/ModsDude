@@ -16,6 +16,7 @@ using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Data;
 
@@ -133,6 +134,24 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// catalog already holds every one of them and there is nothing to scan.
     /// </remarks>
     private readonly List<ProfileModSource> _profileSources = [];
+
+    /// <summary>
+    /// The places outside this machine the repo's game knows of - ModHub - each as a chip that starts
+    /// switched on. Empty for a game with none.
+    /// </summary>
+    /// <remarks>
+    /// Composed here like the profiles, and for a stronger reason: what they contribute is not versions
+    /// at all but a link on a mod's row, so nothing about them reaches the catalog, the version index or
+    /// the left list's membership. See <see cref="ModSourceKind.Remote"/>.
+    /// </remarks>
+    private readonly List<RemoteModSourceState> _remoteSources;
+
+    /// <summary>
+    /// The newer version each mod could be fetched at, from whichever enabled remote source answered
+    /// first, as the chip its rows wear. Recomputed from <see cref="_versionsByMod"/> whenever that is,
+    /// because an offer stops being one the moment the version it names is known here.
+    /// </summary>
+    private Dictionary<ModKey, RemoteOfferViewModel> _remoteOffers = [];
 
     /// <summary>
     /// Every version the enabled sources offer between them: what the repo has registered while its
@@ -327,6 +346,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // long as the checkboxes that recompose from it.
         _catalog = catalogFactory.Create(repo);
 
+        _remoteSources = [.. (repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [])
+            .Select(x => new RemoteModSourceState(x))];
+
         // An apply changes what is in a mod folder, which is what a scan of it was a picture of. Held from
         // here to Dispose: the page can be open while an apply is started from the profile bar, the drift
         // notice or its own save, and every one of them ends in the same event.
@@ -514,8 +536,30 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    [NotifyPropertyChangedFor(nameof(RemoteUpdatesText))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllUpdatesCommand))]
     private int _updateCount;
+
+    /// <summary>
+    /// How many pinned mods a remote source - ModHub - has a newer version of, leaving out the locked
+    /// ones. Counted apart from <see cref="UpdateCount"/> rather than into it, because <em>Update all</em>
+    /// cannot take them: there is no file here to move a pin to until somebody downloads one.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    [NotifyPropertyChangedFor(nameof(RemoteUpdatesText))]
+    [NotifyPropertyChangedFor(nameof(HasRemoteUpdates))]
+    private int _remoteUpdateCount;
+
+    /// <summary>
+    /// The locked ones, apart - the same split the band makes for updates here, and for the same reason:
+    /// a lock is a decision not to move, and a count that included them would be asking anyway.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateCountText))]
+    [NotifyPropertyChangedFor(nameof(RemoteUpdatesText))]
+    [NotifyPropertyChangedFor(nameof(HasRemoteUpdates))]
+    private int _remoteLockedUpdateCount;
 
     /// <summary>
     /// How many of those a save would have to import first, which is the other half of the band's
@@ -825,6 +869,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         {
             if (UpdateCount == 0)
             {
+                // "No updates available" beside "5 on ModHub" would contradict itself, so with remote
+                // ones beside it this says only what it checked here.
+                if (HasRemoteUpdates)
+                {
+                    return _hasReadAnyFolder ? "No updates here" : "No updates in this repo";
+                }
+
                 // Whether any folder has ever been read this session, not just right now - a folder
                 // switched back off after finding nothing was still looked at, and saying otherwise
                 // would claim less than the page actually knows.
@@ -840,6 +891,29 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 : text;
         }
     }
+
+    /// <summary>
+    /// The band's link to the updates a remote source has, beside the ones here: "5 more on ModHub · 2
+    /// locked". A link to the Updates filter, like the ambiguous count beside it, because each one is a
+    /// page to open rather than something a batch action can do.
+    /// </summary>
+    public string RemoteUpdatesText
+    {
+        get
+        {
+            var name = _remoteSources.Count == 1 ? _remoteSources[0].Remote.DisplayName : "online";
+
+            var text = RemoteUpdateCount == 0
+                ? $"{RemoteLockedUpdateCount} locked on {name}"
+                : UpdateCount > 0 ? $"{RemoteUpdateCount} more on {name}" : $"{RemoteUpdateCount} on {name}";
+
+            return RemoteUpdateCount > 0 && RemoteLockedUpdateCount > 0
+                ? $"{text} · {RemoteLockedUpdateCount} locked"
+                : text;
+        }
+    }
+
+    public bool HasRemoteUpdates => RemoteUpdateCount + RemoteLockedUpdateCount > 0;
 
     public string ApplyUpdatesText => ApplicableUpdateCount switch
     {
@@ -1865,6 +1939,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private void ShowAmbiguousVersions() => AvailableFilter = AvailableModFilter.Unordered;
 
     /// <summary>
+    /// The pinned mods a remote source has something newer of, which the Updates filter takes in along
+    /// with the ones here - each row's own link is how they are got.
+    /// </summary>
+    [RelayCommand]
+    private void ShowRemoteUpdates() => PinnedFilter = PinnedModFilter.Updates;
+
+    /// <summary>
     /// Carries why the mod is locked, because that is the part that decides the answer - and words
     /// the profile lock as being about this profile, which is the only scope it has.
     /// </summary>
@@ -2662,6 +2743,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 profile.IsEnabled = enabled;
             }
         }
+        else if (source.IsRemote)
+        {
+            if (_remoteSources.FirstOrDefault(x => x.Id == source.Source.Id) is RemoteModSourceState remote)
+            {
+                remote.IsEnabled = enabled;
+
+                // Switching it off and on again is how a lookup that failed, or that the server could
+                // not yet vouch for, is asked again. An answer that stood is kept: it is a page's worth
+                // old at most, and asking again would only cost a round trip.
+                if (enabled && (remote.Error is not null || remote.IsIncomplete))
+                {
+                    remote.Forget();
+                }
+            }
+
+            // Nothing in the catalog or the lists changes, only the links on the rows - so this is
+            // not a recompose.
+            RefreshRemoteOffers();
+
+            return;
+        }
         else
         {
             _catalog.SetEnabled(source.Source, enabled);
@@ -2672,6 +2774,206 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // catalog decides and nothing the user has: the draft, the selections and the removals all
         // survive it.
         _ = RecomposeAsync();
+    }
+
+    #endregion
+
+
+    #region Remote sources
+
+    private ModSourceViewModel CreateRemoteChip(RemoteModSourceState remote)
+    {
+        return new ModSourceViewModel(
+            new ModSourceStatus(remote.Source, remote.IsEnabled, remote.OfferCount, remote.Error),
+            OnSourceEnabledChanged,
+            isBusy: remote.IsEnabled && remote.IsLookingUp,
+            hasCount: remote.IsEnabled && remote.HasAnswered);
+    }
+
+    /// <summary>
+    /// Works the offers out again and puts them on every row and chip - for a lookup answering or a
+    /// chip being switched, where nothing else about the lists has changed.
+    /// </summary>
+    private void RefreshRemoteOffers()
+    {
+        ComputeRemoteOffers();
+
+        foreach (var row in Pinned)
+        {
+            row.RemoteOffer = _remoteOffers.GetValueOrDefault(row.ModId);
+        }
+
+        foreach (var row in _available)
+        {
+            row.RemoteOffer = _remoteOffers.GetValueOrDefault(row.ModId);
+        }
+
+        // The Updates filter and the band's count both read the links, so they are counted again - and
+        // the filtered view re-run, which a CollectionView does not do for a property it cannot see.
+        // Not a full Recount: that retires the bulk undo, and a lookup landing in the background is not
+        // something somebody did.
+        RecountRemoteUpdates();
+        PinnedView.Refresh();
+        RecountPinnedVisible();
+        PinnedSelection.Recount();
+    }
+
+    /// <summary>
+    /// Against the pinned rows, not the offers: an offer for a mod only in a folder is the left list's
+    /// business, and it is the profile's updates the band is about.
+    /// </summary>
+    private void RecountRemoteUpdates()
+    {
+        RemoteUpdateCount = Pinned.Count(x => x.RemoteOffer is not null && x.IsLocked is false);
+        RemoteLockedUpdateCount = Pinned.Count(x => x.RemoteOffer is not null && x.IsLocked);
+    }
+
+    /// <summary>
+    /// Which newer versions the enabled remote sources have of the mods known here, and asks them about
+    /// any mod they have not been asked about yet.
+    /// </summary>
+    /// <remarks>
+    /// <b>Every known mod, not only the pinned ones.</b> The left list is where somebody looks for
+    /// something to add, and a mod sitting in a folder at an old version is as worth a link as one
+    /// the profile already pins. Asked incrementally, so switching a folder on later asks only about
+    /// what it brought.
+    /// </remarks>
+    private void ComputeRemoteOffers()
+    {
+        var offers = new Dictionary<ModKey, RemoteOfferViewModel>();
+
+        foreach (var remote in _remoteSources)
+        {
+            remote.OfferCount = 0;
+
+            if (remote.IsEnabled is false)
+            {
+                continue;
+            }
+
+            var newer = RemoteModOffers.Newer(remote.Answers.Values, _versionsByMod, _repo.Adapter.VersionComparer);
+
+            remote.OfferCount = newer.Count;
+
+            foreach (var (modId, offer) in newer)
+            {
+                // The first enabled source to have something newer wins the row; a row has room for
+                // one link, and two sources disagreeing about the newest is not a question this asks.
+                offers.TryAdd(modId, new RemoteOfferViewModel(offer, remote.Remote.DisplayName, OpenRemoteOffer));
+            }
+
+            LookUpUnasked(remote);
+        }
+
+        _remoteOffers = offers;
+
+        RefreshRemoteChips();
+    }
+
+    /// <summary>
+    /// Replaces the remote chips in the row with ones that say what their source says now. Only those:
+    /// the rest are rebuilt by a recompose, which a lookup answering is not.
+    /// </summary>
+    private void RefreshRemoteChips()
+    {
+        for (var i = 0; i < Sources.Count; i++)
+        {
+            if (Sources[i].IsRemote && _remoteSources.FirstOrDefault(x => x.Id == Sources[i].Source.Id) is RemoteModSourceState remote)
+            {
+                Sources[i] = CreateRemoteChip(remote);
+            }
+        }
+    }
+
+    private void LookUpUnasked(RemoteModSourceState remote)
+    {
+        if (remote.IsLookingUp || remote.Error is not null)
+        {
+            return;
+        }
+
+        var unasked = _versionsByMod.Keys.Where(x => remote.Asked.Contains(x) is false).ToList();
+
+        if (unasked.Count == 0)
+        {
+            return;
+        }
+
+        remote.Asked.UnionWith(unasked);
+        remote.IsLookingUp = true;
+
+        _ = LookUpAsync(remote, unasked);
+    }
+
+    private async Task LookUpAsync(RemoteModSourceState remote, List<ModKey> mods)
+    {
+        try
+        {
+            var lookup = await remote.Remote.LookUpAsync(mods, _cancellation.Token);
+
+            foreach (var offer in lookup.Offers)
+            {
+                remote.Answers[offer.ModId] = offer;
+            }
+
+            remote.HasAnswered = true;
+            remote.CurrentAsOf = lookup.CurrentAsOf;
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating away mid-request.
+            return;
+        }
+        catch (Exception exception)
+        {
+            // On the chip rather than in a dialog: this is one optional source failing, which is what
+            // a red chip means everywhere else on the row. Its mods count as unasked again.
+            remote.Asked.ExceptWith(mods);
+            remote.Error = exception is ApiException api
+                ? $"The ModsDude server answered {api.StatusCode} when asked what {remote.Remote.DisplayName} has."
+                : $"The ModsDude server could not be asked what {remote.Remote.DisplayName} has.";
+        }
+        finally
+        {
+            remote.IsLookingUp = false;
+        }
+
+        await OnUiThreadAsync(RefreshRemoteOffers);
+    }
+
+    /// <summary>
+    /// Opens the page a newer version is downloaded from, and switches Downloads on - the file lands
+    /// there, and looking for it is the next thing anybody does.
+    /// </summary>
+    /// <remarks>
+    /// Switching the chip on is the same kind of exception the drift notice makes to "navigating reads
+    /// no disk": following the link is asking for that file specifically. A rescan once the download has
+    /// finished is still the user's, because nothing here can tell when it has.
+    /// </remarks>
+    private void OpenRemoteOffer(RemoteModOffer offer)
+    {
+        // The address came from the server; only ever hand the shell a web page.
+        if (Uri.TryCreate(offer.PageUrl, UriKind.Absolute, out var uri) is false
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            _ = _errorReporter.ShowAsync(exception, "opening the mod's page");
+
+            return;
+        }
+
+        if (Sources.FirstOrDefault(x => x.Source.Kind is ModSourceKind.Downloads) is { IsEnabled: false } downloads)
+        {
+            downloads.IsEnabled = true;
+        }
     }
 
     #endregion
@@ -3062,6 +3364,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             foreach (var row in Pinned)
             {
                 row.Rebase(VersionsFor(row.ModId), _versionsByMod.GetValueOrDefault(row.ModId));
+                row.RemoteOffer = _remoteOffers.GetValueOrDefault(row.ModId);
             }
 
             RebuildAvailable();
@@ -3109,6 +3412,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             Sources.Add(new ModSourceViewModel(
                 new ModSourceStatus(profile.Source, profile.IsEnabled, profile.Pins.Count, null),
                 OnSourceEnabledChanged));
+        }
+
+        // Last, because they are not part of the union the others make up: they put links on rows
+        // rather than rows in the list.
+        foreach (var remote in _remoteSources)
+        {
+            Sources.Add(CreateRemoteChip(remote));
         }
 
         HasEnabledFolders = snapshot.Sources.Any(x => x.IsEnabled);
@@ -3186,6 +3496,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 .Concat(_adopted)
                 .Concat(Pinned.Select(x => x.SelectedVersion.Version)),
             _repo.Adapter.VersionComparer);
+
+        // Here rather than beside it, because an offer is only an offer against what is known: a file
+        // that has just been downloaded and scanned has to take its link away in the same pass.
+        ComputeRemoteOffers();
     }
 
     /// <summary>
@@ -3244,6 +3558,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             row.Item.Sources = _showSources && row.SelectedVersion.Version.FoundIn.Count > 0
                 ? string.Join(", ", row.SelectedVersion.Version.FoundIn.Select(source => source.Source.Name))
                 : null;
+
+            row.RemoteOffer = _remoteOffers.GetValueOrDefault(modId);
 
             // A row built while the profile is being saved has to come up inert like the rest of
             // them - OnIsReadOnlyChanged only reaches the rows that existed when the flag moved.
@@ -3470,6 +3786,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _versionsByMod.GetValueOrDefault(selected.ModId),
             isPinned: true);
 
+        row.RemoteOffer = _remoteOffers.GetValueOrDefault(selected.ModId);
+
         row.PropertyChanged += OnPinnedRowChanged;
 
         return row;
@@ -3596,7 +3914,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         => row.Matches(SearchText)
         && PinnedFilter switch
         {
-            PinnedModFilter.Updates => row.HasUpdate,
+            PinnedModFilter.Updates => row.HasUpdate || row.RemoteOffer is not null,
             PinnedModFilter.Locked => row.IsLocked,
             PinnedModFilter.NotInSources => _offeredMods.Contains(row.ModId) is false,
             _ => true
@@ -4141,6 +4459,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         PendingUpdateCount = _updates.PendingCount;
         FreeUpdateCount = _updates.FreeCount;
 
+        RecountRemoteUpdates();
+
         // Last, because both of them count against the views this method has just re-filtered.
         AvailableSelection.Recount();
         PinnedSelection.Recount();
@@ -4262,7 +4582,10 @@ public enum PinnedModFilter
 {
     All,
 
-    /// <summary>A newer version exists, whether or not the repo holds it and whether or not the pin is free to move.</summary>
+    /// <summary>
+    /// A newer version exists, whether or not the repo holds it, whether or not the pin is free to move -
+    /// and whether it is here at all or only on a remote source such as ModHub.
+    /// </summary>
     Updates,
 
     Locked,
@@ -4316,4 +4639,86 @@ internal sealed class ProfileModSource
     public bool IsEnabled { get; set; } = true;
 
     public bool Locks(ModVersionIdentity identity) => _locked.Contains(identity);
+}
+
+/// <summary>
+/// A remote source - ModHub - as the editor holds it: whether its chip is on, what it has been asked,
+/// and what it answered.
+/// </summary>
+/// <remarks>
+/// Answers are kept by mod across chip toggles and recomposes, so switching a folder on asks only about
+/// the mods it brought and switching the chip off and on again asks nothing at all.
+/// </remarks>
+internal sealed class RemoteModSourceState(IRemoteModSource remote)
+{
+    public IRemoteModSource Remote { get; } = remote;
+    public ModSourceId Id { get; } = ModSourceId.ForRemote(remote.Key);
+
+    /// <summary>The chip's source, with what the source currently says as its tooltip.</summary>
+    public ModSource Source => new(Id, Remote.DisplayName, Describe(), ModSourceKind.Remote);
+
+    /// <summary>
+    /// <b>On from the start</b>, unlike every other source but the repo. The rule that sources start off
+    /// is about a page never reading a disk just because somebody navigated to it; this reads the ModsDude
+    /// server, which the page is reading anyway to load the profile, and a chip nobody knows to click is
+    /// updates nobody sees.
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
+
+    public bool IsLookingUp { get; set; }
+    public string? Error { get; set; }
+
+    /// <summary>Every mod this source has been asked about, answered or not.</summary>
+    public HashSet<ModKey> Asked { get; } = [];
+
+    /// <summary>What the source said it has, by mod - at whatever version, newer or not.</summary>
+    public Dictionary<ModKey, RemoteModOffer> Answers { get; } = [];
+
+    public bool HasAnswered { get; set; }
+    public DateTimeOffset? CurrentAsOf { get; set; }
+
+    /// <summary>How many rows carry a link from this source, which is what its chip counts.</summary>
+    public int OfferCount { get; set; }
+
+    /// <summary>
+    /// Whether the source answered without being able to vouch for the answer - the server still reading
+    /// ModHub for the first time - so it may be missing most of what the source has.
+    /// </summary>
+    public bool IsIncomplete => HasAnswered && CurrentAsOf is null;
+
+
+    public void Forget()
+    {
+        Asked.Clear();
+        Answers.Clear();
+        HasAnswered = false;
+        CurrentAsOf = null;
+        Error = null;
+    }
+
+
+    private string Describe()
+    {
+        var name = Remote.DisplayName;
+        var what = $"Newer versions {name} has of the mods here, as a link on each mod's row.";
+
+        if (IsEnabled is false)
+        {
+            return $"{what}\nSwitched off: no links are shown.";
+        }
+
+        if (HasAnswered is false && IsLookingUp is false)
+        {
+            return what;
+        }
+
+        if (HasAnswered is false)
+        {
+            return $"{what}\nAsking the ModsDude server…";
+        }
+
+        return CurrentAsOf is DateTimeOffset asOf
+            ? $"{what}\nAs of {asOf.LocalDateTime:g}."
+            : $"{what}\nThe server is still reading {name} for the first time, so this is missing most of what it has. Switch this off and on again later to ask again.";
+    }
 }
