@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Users;
 
@@ -277,7 +278,9 @@ public static class SavegameExtensions
                 x.BaseSnapshot,
                 x.CheckoutId)
             {
-                Details = x.Details.OrderBy(y => y.Position).ToList()
+                Details = x.Details.OrderBy(y => y.Position).ToList(),
+                DeletionScheduledFor = x.DeletionScheduledFor,
+                DeletionReason = x.DeletionReason
             })
             .ToListAsync(cancellationToken);
     }
@@ -318,7 +321,9 @@ public static class SavegameExtensions
                 x.BaseSnapshot,
                 x.CheckoutId)
             {
-                Details = x.Details.OrderBy(y => y.Position).ToList()
+                Details = x.Details.OrderBy(y => y.Position).ToList(),
+                DeletionScheduledFor = x.DeletionScheduledFor,
+                DeletionReason = x.DeletionReason
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -404,7 +409,9 @@ public static class SavegameExtensions
                 x.BaseSnapshot,
                 x.CheckoutId)
             {
-                Details = x.Details.OrderBy(y => y.Position).ToList()
+                Details = x.Details.OrderBy(y => y.Position).ToList(),
+                DeletionScheduledFor = x.DeletionScheduledFor,
+                DeletionReason = x.DeletionReason
             })
             .ToListAsync(cancellationToken);
 
@@ -445,30 +452,6 @@ public static class SavegameExtensions
         return rows
             .Select(x => new SavegameBlobAddress(x.RepoId, x.SavegameId, x.ContentHash))
             .ToHashSet();
-    }
-
-    /// <summary>
-    /// Every snapshot of one savegame, reduced to what the retention policy actually looks at: the
-    /// number, and whether somebody named it.
-    /// </summary>
-    /// <remarks>
-    /// A whole history rather than a window, because the policy's rules are about the set - the most
-    /// recent N of the unlabelled ones - and cannot be evaluated from a page of it. Two integers and
-    /// a boolean per snapshot is cheap enough to read all of even at the point where pruning starts
-    /// to matter.
-    /// </remarks>
-    public static async Task<IReadOnlyList<SavegameSnapshotRetention>> GetRetentionRowsAsync(
-        this DbSet<SavegameSnapshot> dbSet,
-        RepoId repoId, SavegameId savegameId,
-        CancellationToken cancellationToken)
-    {
-        var rows = await dbSet
-            .AsNoTracking()
-            .Where(x => x.RepoId == repoId && x.SavegameId == savegameId)
-            .Select(x => new { x.Number, x.Label })
-            .ToListAsync(cancellationToken);
-
-        return [.. rows.Select(x => new SavegameSnapshotRetention(x.Number, x.Label != null))];
     }
 
     /// <summary>
@@ -539,6 +522,12 @@ public record SavegameSnapshotRow(
     /// the owned collection's own loading, because nothing here materializes a snapshot.
     /// </summary>
     public IReadOnlyList<SavegameDetail> Details { get; init; } = [];
+
+    /// <summary>When retention will delete this snapshot, or <c>null</c> where it is not scheduled.</summary>
+    public DateOnly? DeletionScheduledFor { get; init; }
+
+    /// <inheritdoc cref="SavegameSnapshot.DeletionReason"/>
+    public DeletionReason? DeletionReason { get; init; }
 }
 
 

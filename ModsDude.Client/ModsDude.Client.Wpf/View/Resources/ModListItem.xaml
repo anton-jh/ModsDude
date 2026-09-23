@@ -89,6 +89,18 @@
                                     Orientation="Horizontal"
                                     HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
+                            <!-- Where retention has dated this version. Beside the size, since both
+                                 are facts about the file the repo keeps, and in the caution colour
+                                 because it is the one thing on the row that will change by itself. -->
+                            <TextBlock Margin="8 0 0 0"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding DeletionText}"
+                                       ToolTip="{Binding DeletionTooltip}"
+                                       ToolTipService.InitialShowDelay="300"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                       Visibility="{Binding HasDeletion, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                             <TextBlock Margin="8 0 0 0"
                                        VerticalAlignment="Center"
                                        Text="{Binding SizeText}"

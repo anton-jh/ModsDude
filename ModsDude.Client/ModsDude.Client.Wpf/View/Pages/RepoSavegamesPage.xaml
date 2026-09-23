@@ -47,6 +47,15 @@
                         <Run Text="·" />
                         <Run Text="{Binding AgoText, Mode=OneWay}" />
                     </TextBlock>
+
+                    <!-- Where retention has dated this snapshot. -->
+                    <TextBlock Margin="0 2 0 0"
+                               Text="{Binding DeletionText}"
+                               ToolTip="{Binding DeletionTooltip}"
+                               ToolTipService.InitialShowDelay="300"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Visibility="{Binding HasDeletion, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
 
                 <Border Grid.Column="2"
@@ -637,6 +646,20 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Text="{Binding RevisionText}"
                                            Visibility="{Binding HasRevision, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!-- The date, and here in the panel the reason too, since there is
+                                     room for it and a tooltip is easy to miss. -->
+                                <TextBlock Margin="0 2 0 0"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           Text="{Binding DeletionText}"
+                                           Visibility="{Binding HasDeletion, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <TextBlock Margin="0 2 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Style="{DynamicResource CaptionTextBlockStyle}"
+                                           Text="{Binding DeletionTooltip}"
+                                           Visibility="{Binding HasDeletion, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                 <!-- Whatever the adapter chose to record about this snapshot. Labels
                                      and values both come from it, so nothing here knows what a map

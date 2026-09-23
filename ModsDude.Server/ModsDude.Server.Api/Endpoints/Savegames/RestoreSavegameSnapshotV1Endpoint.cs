@@ -11,6 +11,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -60,6 +61,7 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -124,10 +126,7 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, sourceNumber, snapshot.Number));
         }
 
-        // A restore mints a snapshot like any other, so it can push the oldest one over the limit.
-        // The snapshot it copied forward is safe from that by being recent, and its bytes are safe
-        // regardless: the new head names the same blob.
-        await SavegamePruning.PruneAsync(dbContext, savegame, cancellationToken);
+        await CheckInSavegameV1Endpoint.ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
 
         return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
     }

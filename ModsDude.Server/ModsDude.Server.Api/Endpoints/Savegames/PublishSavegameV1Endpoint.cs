@@ -13,6 +13,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -79,6 +80,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         ISavegameStorageService savegameStorageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -205,6 +207,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        await CheckInSavegameV1Endpoint.ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
 
         return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
     }

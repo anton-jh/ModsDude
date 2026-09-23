@@ -14,6 +14,7 @@ using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -73,6 +74,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         ISavegameStorageService savegameStorageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -189,13 +191,29 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, snapshot.Number));
         }
 
-        // After the check-in is safely committed, never in the same transaction as it: a prune that
-        // fails must not take somebody's play down with it.
-        await SavegamePruning.PruneAsync(dbContext, savegame, cancellationToken);
+        await ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
 
         return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
     }
 
+
+    /// <summary>
+    /// After a snapshot is minted - by a check-in, a restore or a publish - and safely committed:
+    /// clears the deletion schedules it has made wrong. A new snapshot moves the savegame's window,
+    /// and the revision it was played on is now held, which can stop the whole profile winding down.
+    /// </summary>
+    internal static async Task ReleaseAfterNewSnapshotAsync(
+        RetentionUpkeep retentionUpkeep,
+        Savegame savegame,
+        CancellationToken cancellationToken)
+    {
+        await retentionUpkeep.ReleaseSavegameAsync(savegame.RepoId, savegame.Id, cancellationToken);
+
+        if (savegame.ProfileId is ProfileId profileId)
+        {
+            await retentionUpkeep.ReleaseProfileAsync(savegame.RepoId, profileId, cancellationToken);
+        }
+    }
 
     /// <summary>
     /// Ends the caller's own claim on the savegame as checked in, and returns it - or <c>null</c>

@@ -664,7 +664,8 @@ One immutable snapshot, keyed `(RepoId, SavegameId, Number)`.
 | `Number` | `SavegameSnapshotNumber(int)`. One-based, and **not contiguous** — see below |
 | `ProfileId`, `ProfileRevision` | What it was played on. Both null or both set, by check constraint; `ProfileId` is always the savegame's. FK is `Restrict` |
 | `ContentHash`, `SizeBytes` | SHA-256 of the packed save, and what it weighs |
-| `CreatedBy`, `Created`, `Label` | `Label` is optional, and is what exempts a snapshot from pruning |
+| `CreatedBy`, `Created`, `Label` | `Label` is optional |
+| `DeletionScheduledFor`, `DeletionReason` | Set by retention; see [Retention](#retention). The same pair sits on `ProfileRevision` and `ModVersion` |
 | `Origin` | `Created \| CheckedIn \| Forced \| Restored` |
 | `BaseSnapshot` | What the uploader was holding |
 | `CheckoutId` | The claim it was checked in against, or null for a publish |
@@ -728,15 +729,38 @@ anything. `DeleteProfileV1Endpoint` reports it; the database refuses it again un
 
 ### Retention
 
-`SavegameRetention.PlanPrune` keeps the last N snapshots (default 10), and never prunes the head or
-anything carrying a `Label` — labelling a snapshot is the gesture by which somebody keeps it.
+`Domain/Retention/RetentionPolicy.cs`. One rule for three histories — a savegame's snapshots, a
+profile's revisions and a mod's versions — differing only in the window, the grace period and what
+*holds* a row:
 
-Labelled snapshots are **exempt rather than counted**: the recency window is taken over the unlabelled
-ones. Otherwise naming your last two saves would silently leave you with two backups where the
-policy promised ten, the keeping gesture causing the loss.
+| History | Window | Grace | Held by |
+| --- | --- | --- | --- |
+| Savegame snapshots | 3 | 30 days | nothing |
+| Profile revisions | 3 | 14 days | a savegame snapshot played on it |
+| Mod versions | 2 | 14 days | a profile revision pinning it (any revision, not only heads) |
 
-Pruning a savegame's history is legitimate where pruning a profile's is not: a savegame snapshot is a
-backup, and an old profile revision has to stay *reproducible*.
+A row is scheduled for deletion for one of two reasons (`DeletionReason`):
+
+- **`OutsideWindow`** — not among the window's newest, and nothing holds it.
+- **`WindingDown`** — the history is down to the window or fewer rows, nothing holds *any* of them,
+  and it is not the newest. "Or fewer", so a history of two does not keep both forever while one of
+  three shrinks to one.
+
+So an idle history shrinks in two steps — first what newer rows replaced, then the window itself —
+and **always keeps its newest row**, which is also the head wherever there is one. Newest is by
+number for snapshots and revisions, and by the repo's arbitrated order (`SequenceNumber`) for mod
+versions. Labels earn nothing: a labelled row is kept or dropped like any other.
+
+A row carries `DeletionScheduledFor` (a date) and `DeletionReason`, set together or not at all by a
+check constraint. **A schedule stands only while its own reason does**: a row scheduled as winding
+down that is now outside the window instead is unscheduled and rescheduled from that day, so every
+row gets its full grace period under the rule that actually applies to it. The date is a date only;
+the deletion job's own time of day is the time. See [03 — Retention](03-server.md#retention).
+
+Deleting cascades one step a day: a snapshot deleted today lets its revision be scheduled tomorrow,
+and a revision deleted lets the versions it pinned be scheduled the day after. A savegame played on a
+revision keeps it, and a revision kept keeps what it pins, so a save that still exists stays
+reproducible.
 
 ## Savegame checkouts
 

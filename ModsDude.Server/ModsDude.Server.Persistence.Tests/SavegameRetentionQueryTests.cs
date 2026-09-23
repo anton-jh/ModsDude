@@ -9,64 +9,20 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 namespace ModsDude.Server.Persistence.Tests;
 
 /// <summary>
-/// What pruning reads before it decides, and what it leaves behind afterwards.
+/// What deleting snapshots leaves behind.
 /// </summary>
 /// <remarks>
-/// <see cref="SavegameRetention.PlanPrune"/> is pure and tested on its own; these are the two halves
-/// around it that only a database can answer - the read that turns rows into the policy's input, and
-/// the delete that carries the decision out. Pruning is the one operation here that destroys
-/// somebody's backups, so every property it relies on is worth pinning: that a labelled snapshot is
-/// reported as labelled, that the delete removes exactly what it names, that the gaps it leaves stay
-/// gaps, and that a blob two snapshots share survives one of them going.
+/// Which snapshots go is <see cref="Domain.Retention.RetentionPolicy"/>'s decision, tested on its own
+/// and through <see cref="RetentionSweeperTests"/>; this is the delete that carries it out. It is the
+/// one operation here that destroys somebody's backups, so every property it relies on is worth
+/// pinning: that the delete removes exactly what it names, that the gaps it leaves stay gaps, and that
+/// a blob two snapshots share survives one of them going.
 /// </remarks>
 [Collection(nameof(DatabaseCollection))]
 public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 {
     private static readonly UserId _author = new("author");
 
-
-    /// <summary>
-    /// <c>IsLabelled</c> is the entire exemption rule, derived from a nullable column after the round
-    /// trip. Reading it the wrong way round would prune exactly the snapshots somebody named to keep.
-    /// </summary>
-    [Fact]
-    public async Task A_snapshot_counts_as_labelled_exactly_when_somebody_named_it()
-    {
-        var (repoId, profileId) = await GivenARepoWithAProfile();
-        var savegameId = await GivenASavegame(repoId, profileId);
-
-        await GivenSnapshots(repoId, profileId, savegameId, (HashOf('1'), null), (HashOf('2'), "Before the harvest"), (HashOf('3'), null));
-
-        using var dbContext = fixture.CreateDbContext();
-
-        var rows = await dbContext.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
-
-        Assert.Equal(
-            [(1, false), (2, true), (3, false)],
-            rows.OrderBy(x => x.Number).Select(x => (x.Number.Value, x.IsLabelled)));
-    }
-
-    /// <summary>
-    /// The policy reasons about the whole set rather than a page of it, so the read is scoped by
-    /// savegame and nothing else. A predicate that lost its savegame clause would plan a prune of one
-    /// save from another save's history.
-    /// </summary>
-    [Fact]
-    public async Task Retention_rows_cover_one_savegame_entirely_and_no_other_savegame_at_all()
-    {
-        var (repoId, profileId) = await GivenARepoWithAProfile();
-        var mine = await GivenASavegame(repoId, profileId);
-        var theirs = await GivenASavegame(repoId, profileId);
-
-        await GivenSnapshots(repoId, profileId, mine, (HashOf('1'), null), (HashOf('2'), null));
-        await GivenSnapshots(repoId, profileId, theirs, (HashOf('3'), null), (HashOf('4'), null), (HashOf('5'), null));
-
-        using var dbContext = fixture.CreateDbContext();
-
-        var rows = await dbContext.SavegameSnapshots.GetRetentionRowsAsync(repoId, mine, CancellationToken.None);
-
-        Assert.Equal([1, 2], rows.Select(x => x.Number.Value).Order());
-    }
 
     [Fact]
     public async Task Pruning_removes_the_snapshots_it_names_and_leaves_the_rest()
@@ -85,10 +41,10 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await RemainingAsync(verification, repoId, savegameId);
 
         Assert.Equal(2, deleted);
-        Assert.Equal([2, 4], remaining.Select(x => x.Number.Value).Order());
+        Assert.Equal([2, 4], remaining.Order());
     }
 
     /// <summary>
@@ -114,9 +70,9 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await RemainingAsync(verification, repoId, savegameId);
 
-        Assert.Equal([1, 2], remaining.Select(x => x.Number.Value).Order());
+        Assert.Equal([1, 2], remaining.Order());
     }
 
     /// <summary>
@@ -146,10 +102,10 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
         using var verification = fixture.CreateDbContext();
 
         var savegame = await verification.Savegames.GetAsync(repoId, savegameId, CancellationToken.None);
-        var remaining = await verification.SavegameSnapshots.GetRetentionRowsAsync(repoId, savegameId, CancellationToken.None);
+        var remaining = await RemainingAsync(verification, repoId, savegameId);
 
         Assert.Equal(new SavegameSnapshotNumber(4), savegame!.HeadSnapshot);
-        Assert.Equal([3, 4], remaining.Select(x => x.Number.Value).Order());
+        Assert.Equal([3, 4], remaining.Order());
     }
 
     /// <summary>
@@ -241,6 +197,16 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
 
     private static string HashOf(char character) => new(character, ModImageHash.Length);
+
+    private static async Task<List<int>> RemainingAsync(DbContexts.ApplicationDbContext dbContext, RepoId repoId, SavegameId savegameId)
+    {
+        var numbers = await dbContext.SavegameSnapshots
+            .Where(x => x.RepoId == repoId && x.SavegameId == savegameId)
+            .Select(x => x.Number)
+            .ToListAsync(CancellationToken.None);
+
+        return [.. numbers.Select(x => x.Value)];
+    }
 
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenARepoWithAProfile()
     {

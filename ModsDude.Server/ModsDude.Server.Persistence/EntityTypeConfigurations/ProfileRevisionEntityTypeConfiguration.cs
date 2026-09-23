@@ -21,6 +21,8 @@ internal class ProfileRevisionEntityTypeConfiguration : IEntityTypeConfiguration
 
         builder.ComplexProperty(x => x.Changes);
 
+        builder.ConfigureDeletionSchedule(x => x.DeletionScheduledFor, x => x.DeletionReason);
+
         builder.OwnsMany(x => x.ModDependencies, modDependency =>
         {
             modDependency.WithOwner().HasForeignKey(

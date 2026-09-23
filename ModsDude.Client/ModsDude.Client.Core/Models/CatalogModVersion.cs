@@ -50,7 +50,9 @@ public record CatalogModVersion(
             ServerImages = [.. dto.Images.Select(ModImageReference.FromDto)],
             ContentHash = dto.ContentHash,
             SizeBytes = dto.SizeBytes,
-            SequenceNumber = dto.SequenceNumber
+            SequenceNumber = dto.SequenceNumber,
+            DeletionScheduledFor = dto.DeletionScheduledFor,
+            DeletionReason = dto.DeletionReason
         };
     }
 
@@ -96,6 +98,12 @@ public record CatalogModVersion(
 
     /// <summary>Where the repo orders this version among its siblings. Null until registered.</summary>
     public int? SequenceNumber { get; init; }
+
+    /// <summary>When the server's retention deletes this version, or null where it is not scheduled.</summary>
+    public DateOnly? DeletionScheduledFor { get; init; }
+
+    /// <summary>Why <see cref="DeletionScheduledFor"/> was set.</summary>
+    public DeletionReason? DeletionReason { get; init; }
 
     /// <summary>
     /// How many of the repo's profiles pin this version, in their newest revision and in an older one.

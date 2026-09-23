@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Retention;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -91,6 +92,12 @@ public sealed class SavegameTimelineEntryViewModel
 
     public int? ProfileRevision { get; private init; }
 
+    /// <summary>When retention deletes this snapshot, or null where it is not scheduled.</summary>
+    public string? DeletionText { get; private init; }
+
+    /// <summary>Why, and what would keep it.</summary>
+    public string? DeletionTooltip { get; private init; }
+
     /// <summary>The snapshot behind this row, or null for either of the two claim rows.</summary>
     public SavegameSnapshotDto? Snapshot { get; private init; }
 
@@ -119,6 +126,7 @@ public sealed class SavegameTimelineEntryViewModel
     public bool HasSize => SizeText is { Length: > 0 };
     public bool HasRevision => RevisionText is { Length: > 0 };
     public bool HasDetail => Detail is { Length: > 0 };
+    public bool HasDeletion => DeletionText is { Length: > 0 };
 
     /// <summary>
     /// What the adapter recorded about this snapshot, in its own order. Empty for a claim row, and for
@@ -144,7 +152,9 @@ public sealed class SavegameTimelineEntryViewModel
             SizeText = SavegameWording.Size(snapshot.SizeBytes),
             RevisionText = $"Played on revision {snapshot.ProfileRevision}",
             Details = [.. snapshot.Details],
-            ProfileRevision = snapshot.ProfileRevision
+            ProfileRevision = snapshot.ProfileRevision,
+            DeletionText = ScheduledDeletion.Describe(snapshot.DeletionScheduledFor),
+            DeletionTooltip = ScheduledDeletion.Explain(snapshot.DeletionReason, RetainedKind.Snapshot)
         };
     }
 

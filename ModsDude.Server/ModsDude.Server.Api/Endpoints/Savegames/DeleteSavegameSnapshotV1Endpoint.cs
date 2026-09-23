@@ -8,6 +8,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -35,7 +36,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <b>Rows only.</b> Several snapshots legitimately share one blob - the address is the content hash
 /// - so the bytes are left to the reclamation sweep, which asks whether anything still refers to the
 /// address. Deleting them here would mean re-asking that in this transaction and destroying
-/// somebody's save when the answer came out wrong. Same bargain as <see cref="SavegamePruning"/>.
+/// somebody's save when the answer came out wrong. Same bargain as <see cref="RetentionSweeper"/>.
 /// </para>
 /// </remarks>
 public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
@@ -52,6 +53,7 @@ public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -85,6 +87,9 @@ public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // One snapshot fewer can turn a history that was outside its window into one winding down.
+        await retentionUpkeep.ReleaseSavegameAsync(savegame.RepoId, savegame.Id, cancellationToken);
 
         return TypedResults.Ok();
     }

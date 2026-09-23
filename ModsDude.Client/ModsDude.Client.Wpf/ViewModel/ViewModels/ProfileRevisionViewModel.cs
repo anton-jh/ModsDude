@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Retention;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -55,6 +56,14 @@ public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool 
     };
 
     public string ModCountText => Revision.ModCount == 1 ? "1 mod" : $"{Revision.ModCount} mods";
+
+    /// <summary>When retention deletes this revision, or null where it is not scheduled.</summary>
+    public string? DeletionText => ScheduledDeletion.Describe(Revision.DeletionScheduledFor);
+
+    /// <summary>Why, and what would keep it.</summary>
+    public string? DeletionTooltip => ScheduledDeletion.Explain(Revision.DeletionReason, RetainedKind.Revision);
+
+    public bool HasDeletion => DeletionText is not null;
 
 
     private string DescribeChanges()

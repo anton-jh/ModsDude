@@ -12,6 +12,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -59,6 +60,7 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -132,6 +134,10 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
             // database is what makes it true rather than likely.
             return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, basedOn, revision.Number));
         }
+
+        // A new revision moves the profile's window, and pins versions that may have been scheduled.
+        await retentionUpkeep.ReleaseProfileAsync(profile.RepoId, profile.Id, cancellationToken);
+        await retentionUpkeep.ReleaseModsPinnedByAsync(profile.RepoId, profile.Id, revision.Number, cancellationToken);
 
         return TypedResults.Ok(await ProfileRevisionWrites.ToDtoAsync(dbContext, revision, cancellationToken));
     }

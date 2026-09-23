@@ -238,7 +238,9 @@ internal static class SavegameReads
             row.Origin,
             row.BaseSnapshot?.Value,
             row.CheckoutId?.Value,
-            [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))]);
+            [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))],
+            row.DeletionScheduledFor,
+            row.DeletionReason);
     }
 
     private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, DisplayName> names)

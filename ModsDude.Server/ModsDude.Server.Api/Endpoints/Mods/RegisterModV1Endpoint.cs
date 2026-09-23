@@ -10,6 +10,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -31,6 +32,7 @@ public class RegisterModV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -98,6 +100,9 @@ public class RegisterModV1Endpoint : IEndpoint
 
         dbContext.ModVersions.Add(modVersion);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // A new version moves the mod's window, which can take a version winding down out of it.
+        await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
 
         return TypedResults.Ok(ModDto.FromModel(modVersion));
     }

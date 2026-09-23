@@ -129,8 +129,9 @@ is in [02](02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more): an o
 is not reproducible is not worth keeping. It is listed here because it is the thing about
 revisions most likely to surprise somebody who came looking for a delete that used to work.
 Blobs are shared by content hash, so the storage cost is bounded by distinct files rather than by
-pins; if it ever does bite, the release valve is pruning old revisions on a policy, which
-[PLAN.md](PLAN.md#phase-45--profile-revisions) leaves unbuilt on purpose.
+pins, and retention now deletes revisions no savegame was played on once they fall out of a profile's
+newest three - which is what eventually lets an old version go. See
+[02 — Retention](02-domain-model.md#retention).
 
 ### Ordering by a value object works; comparing on one does not, and neither fails at build time
 

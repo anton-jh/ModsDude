@@ -9789,6 +9789,13 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("updated", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.DateTime Updated { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("deletionScheduledFor", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.DateOnly? DeletionScheduledFor { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("deletionReason", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+        public DeletionReason? DeletionReason { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -9847,6 +9854,18 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [System.Runtime.Serialization.EnumMember(Value = @"Full")]
         Full = 1,
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum DeletionReason
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"OutsideWindow")]
+        OutsideWindow = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"WindingDown")]
+        WindingDown = 1,
 
     }
 
@@ -10043,6 +10062,13 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("changes", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public ProfileRevisionChangesDto Changes { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("deletionScheduledFor", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.DateOnly? DeletionScheduledFor { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("deletionReason", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+        public DeletionReason? DeletionReason { get; set; } = default!;
 
     }
 
@@ -10319,6 +10345,13 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("details", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<SavegameDetailDto> Details { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("deletionScheduledFor", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.DateOnly? DeletionScheduledFor { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("deletionReason", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+        public DeletionReason? DeletionReason { get; set; } = default!;
 
     }
 

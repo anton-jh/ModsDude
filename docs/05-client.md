@@ -898,6 +898,11 @@ The old flat refusal is still there as the fallback, for a follow-up read that f
 empty because somebody else edited in between. Being told less beats being told nothing after a
 delete that visibly did not happen.
 
+A row the server's retention has dated says so - "To be deleted 7 October", in the caution colour,
+with the reason and what would keep it as a tooltip - on the saves timeline, in the profile history and
+on Repo ▸ Mods, all worded by `Core/Retention/ScheduledDeletion.cs`. See
+[02 — Retention](02-domain-model.md#retention).
+
 `ProfileHistoryPage` is where the list leads. Ticking revisions and pruning them is **Admin only**,
 below Restore and Save-as because it is the one action on that page that destroys rather than adds.
 A blocked prune opens `BlockedRevisionsModalViewModel`, which distinguishes the two reasons: the

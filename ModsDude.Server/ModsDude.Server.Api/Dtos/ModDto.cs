@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Retention;
 
 namespace ModsDude.Server.Api.Dtos;
 
@@ -23,7 +24,9 @@ public record ModDto(
     IEnumerable<ModAttributeDto> Attributes,
     IEnumerable<ModImageReferenceDto> Images,
     DateTimeOffset Created,
-    DateTimeOffset Updated)
+    DateTimeOffset Updated,
+    DateOnly? DeletionScheduledFor,
+    DeletionReason? DeletionReason)
 {
     public static ModDto FromModel(ModVersion model)
     {
@@ -40,6 +43,8 @@ public record ModDto(
             model.Attributes.Select(ModAttributeDto.FromModel),
             model.Images.OrderBy(x => x.Kind).ThenBy(x => x.Position).ThenBy(x => x.Rendition).Select(ModImageReferenceDto.FromModel),
             model.Created,
-            model.Updated);
+            model.Updated,
+            model.DeletionScheduledFor,
+            model.DeletionReason);
     }
 }

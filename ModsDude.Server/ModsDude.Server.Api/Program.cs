@@ -1,7 +1,10 @@
 using Asp.Versioning;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
@@ -12,6 +15,7 @@ using ModsDude.Server.Api.Middleware.UserLoading;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Retention;
 using ModsDude.Server.ModHub.Extensions;
 using ModsDude.Server.Storage.Extensions;
 using NSwag;
@@ -106,6 +110,22 @@ builder.Services.AddModHub(builder.Configuration);
 builder.Services.AddHostedService<ModHubCrawlerService>();
 
 builder.Services
+    .Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName))
+    .Configure<HangfireDashboardOptions>(builder.Configuration.GetSection(HangfireDashboardOptions.SectionName));
+builder.Services.AddScoped<RetentionSweeper>();
+builder.Services.AddScoped<RetentionUpkeep>();
+builder.Services.AddScoped<RetentionJobs>();
+
+// In the application's own database, under a schema of its own. Hangfire manages that schema itself,
+// outside the EF migrations, which is why the two never meet.
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("Database"))));
+builder.Services.AddHangfireServer();
+
+builder.Services
     .AddSingleton<ITimeService, TimeService>();
 
 builder.Services
@@ -127,6 +147,20 @@ var apiVersionSet = app.NewApiVersionSet()
 
 
 app.UseHttpsRedirection();
+
+var dashboard = app.Services.GetRequiredService<IOptions<HangfireDashboardOptions>>().Value;
+if (dashboard.IsConfigured)
+{
+    app.UseHangfireDashboard(dashboard.Path, new DashboardOptions
+    {
+        Authorization = [new BasicAuthDashboardFilter(dashboard.Username, dashboard.Password)],
+        DisplayStorageConnectionString = false
+    });
+}
+else
+{
+    app.Logger.LogInformation("The Hangfire dashboard has no username or password configured and is not mapped.");
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -193,5 +227,11 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+
+// After the migration, like everything else that reads the database at startup. Registering is
+// idempotent, so a changed time in configuration simply replaces the old one.
+RetentionJobs.Register(
+    app.Services.GetRequiredService<IRecurringJobManager>(),
+    app.Services.GetRequiredService<IOptions<RetentionOptions>>().Value);
 
 app.Run();

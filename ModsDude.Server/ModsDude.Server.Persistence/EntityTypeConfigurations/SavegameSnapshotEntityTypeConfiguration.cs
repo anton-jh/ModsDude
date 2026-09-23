@@ -74,5 +74,7 @@ internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.ToTable(x => x.HasCheckConstraint(
             "CK_SavegameSnapshots_ProfileAndRevisionAreSetTogether",
             "(\"ProfileId\" IS NULL) = (\"ProfileRevision\" IS NULL)"));
+
+        builder.ConfigureDeletionSchedule(x => x.DeletionScheduledFor, x => x.DeletionReason);
     }
 }

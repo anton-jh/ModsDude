@@ -9,6 +9,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -65,6 +66,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -144,6 +146,9 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
             new RepoId(repoId), profile.Id, deletable, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // Fewer revisions can turn a history that was outside its window into one winding down.
+        await retentionUpkeep.ReleaseProfileAsync(profile.RepoId, profile.Id, cancellationToken);
 
         return TypedResults.Ok(new PruneProfileRevisionsResponse(deleted, blocked));
     }

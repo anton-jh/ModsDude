@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 
 namespace ModsDude.Server.Domain.Mods;
 
@@ -56,6 +57,17 @@ public class ModVersion
 
     public required DateTimeOffset Created { get; init; }
     public required DateTimeOffset Updated { get; set; }
+
+    /// <summary>
+    /// When the retention job will delete this version, or <c>null</c> where it is not scheduled.
+    /// Written only by retention - see <see cref="RetentionPolicy"/> - and set together with
+    /// <see cref="DeletionReason"/>. Changing it moves <see cref="Updated"/>, so the delta form of the
+    /// mod list carries it to clients that already hold the version.
+    /// </summary>
+    public DateOnly? DeletionScheduledFor { get; private set; }
+
+    /// <summary>Why <see cref="DeletionScheduledFor"/> was set. The schedule stands only while this still holds.</summary>
+    public DeletionReason? DeletionReason { get; private set; }
 
 
     /// <summary>

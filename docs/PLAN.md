@@ -709,9 +709,8 @@ Still open:
 
       The comparison picker inherits the same bound: it offers the revisions that were read, so on
       a profile with hundreds of them the oldest are not yet reachable to compare against.
-- [ ] **Prune history on a policy** — keep the last N, anything labelled, and anything an
-      instance manifest references. Only worth building if storage ever actually bites; it is the
-      release valve for the deletion consequence above, not something to pre-emptively add.
+- [x] **Prune history on a policy.** Built in [Phase 17](#phase-17--retention), for revisions,
+      snapshots and mod versions at once, and without the label or manifest exemptions.
 
 ## Phase 5 — Fill in the shell
 
@@ -973,6 +972,7 @@ database error.
       reading the registrations.
 - [x] Keep the last N snapshots, default 10, configurable per repo. **The head is never pruned, and
       neither is anything carrying a `Label`** — labelling a snapshot is how somebody keeps it.
+      *Superseded by [Phase 17](#phase-17--retention): three newest, a 30-day grace, no label rule.*
 - [x] Pruning leaves gaps in the numbering. Numbers exist to be said out loud; nothing renumbers.
 
 ### Four verbs, and only one of them asks about a slot
@@ -1204,8 +1204,8 @@ mod question is last because it is the only one that can be deferred.
 Three things settled with it, and deliberately not built:
 
 - **Retention stays at ten for every repo.** Configurable-per-repo is a column, a migration and an
-  admin field for a number nobody has yet wanted to change. `SavegamePruning.PruneAsync` takes
-  `keep` as a parameter, so the day it becomes a setting it is one call site.
+  admin field for a number nobody has yet wanted to change. *Superseded by
+  [Phase 17](#phase-17--retention); the windows are constants on `RetentionPolicy`.*
 - **Mods-less repos get no implicit profile, and never will.** Superseded by
   [Phase 9](#phase-9--one-current-savegame-per-profile), which makes the savegame-to-profile
   relationship optional on both ends instead.
@@ -2520,6 +2520,32 @@ there. So the server reads ModHub and every client asks the server.
       automated downloads; the shape would be a ModsDude-owned folder the file lands in, scanned like any
       other, with Save fetching what the draft chose.
 - [ ] **A contact in the User-Agent**, once there is a ModsDude address to give.
+
+## Phase 17 — Retention
+
+Every history grew without bound: snapshots were trimmed to ten at check-in, and revisions and mod
+versions only ever went by hand. Now all three shrink on one policy, on a schedule people can see
+coming. The rule is in [02 — Retention](02-domain-model.md#retention), the jobs in
+[03 — Retention](03-server.md#retention).
+
+- [x] **One policy, three histories.** Snapshots keep 3 (30 days' grace), revisions 3 (14), mod
+      versions 2 (14). Outside the window and unheld goes first; a history down to its window with
+      nothing held winds down to its newest row. "Window or fewer", so two rows do not outlive three.
+- [x] **The reason is stored with the date**, and a schedule stands only while its reason does. A row
+      that changes reason is redated from that day rather than inheriting a date made for another rule.
+- [x] **Hangfire, daily.** Scheduling at 05:00, deletion at 06:00, Stockholm time; deletion re-checks
+      eligibility. Dashboard at `/hangfire` behind basic auth from configuration.
+- [x] **Check-in stops pruning.** `SavegameRetention` and `SavegamePruning` are gone.
+- [x] **Dates clear at once.** The writes that can make a row ineligible clear its schedule after
+      committing, so a row stops saying it will be deleted the moment something needs it.
+- [x] **Shown where the rows are.** Repo ▸ Saves (row and detail panel), Profile ▸ History and
+      Repo ▸ Mods say "To be deleted 7 October" in the caution colour, with the reason as a tooltip.
+
+Settled with it:
+
+- **Labels keep nothing.** A labelled snapshot or revision is dated like any other.
+- **Archived repos, profiles and savegames are pruned too.** Archiving is putting something away, not
+  asking for it to be kept.
 
 ## Deliberately not planned
 

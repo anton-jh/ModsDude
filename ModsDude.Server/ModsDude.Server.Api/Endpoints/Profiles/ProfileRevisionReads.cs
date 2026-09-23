@@ -91,7 +91,9 @@ internal static class ProfileRevisionReads
                 row.SourceProfileId?.Value,
                 row.SourceRevision?.Value,
                 row.ModCount,
-                new ProfileRevisionChangesDto(row.Added, row.Changed, row.Removed)))
+                new ProfileRevisionChangesDto(row.Added, row.Changed, row.Removed),
+                row.DeletionScheduledFor,
+                row.DeletionReason))
         ];
     }
 }

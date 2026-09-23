@@ -653,6 +653,8 @@ public sealed class ModCatalog : IDisposable
             ContentHash = dto?.ContentHash,
             SizeBytes = dto?.SizeBytes,
             SequenceNumber = dto?.SequenceNumber,
+            DeletionScheduledFor = dto?.DeletionScheduledFor,
+            DeletionReason = dto?.DeletionReason,
             Usage = usage
         };
     }

@@ -89,6 +89,15 @@
                                                 <Run Text="·" />
                                                 <Run Text="{Binding ModCountText, Mode=OneWay}" />
                                             </TextBlock>
+
+                                            <!-- Where retention has dated this revision. -->
+                                            <TextBlock Margin="0 2 0 0"
+                                                       Text="{Binding DeletionText}"
+                                                       ToolTip="{Binding DeletionTooltip}"
+                                                       ToolTipService.InitialShowDelay="300"
+                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                                       Visibility="{Binding HasDeletion, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
 
                                         <!-- Which one a sync would actually install. Without it the

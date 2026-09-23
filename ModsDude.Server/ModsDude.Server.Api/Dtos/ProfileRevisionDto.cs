@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Profiles;
+using ModsDude.Server.Domain.Retention;
 
 namespace ModsDude.Server.Api.Dtos;
 
@@ -26,7 +27,9 @@ public record ProfileRevisionDto(
     Guid? SourceProfileId,
     int? SourceRevision,
     int ModCount,
-    ProfileRevisionChangesDto Changes)
+    ProfileRevisionChangesDto Changes,
+    DateOnly? DeletionScheduledFor,
+    DeletionReason? DeletionReason)
 {
     public static ProfileRevisionDto FromModel(ProfileRevision revision, UserDto createdBy)
         => new(
@@ -40,7 +43,9 @@ public record ProfileRevisionDto(
             revision.SourceProfileId?.Value,
             revision.SourceRevision?.Value,
             revision.ModCount,
-            new ProfileRevisionChangesDto(revision.Changes.Added, revision.Changes.Changed, revision.Changes.Removed));
+            new ProfileRevisionChangesDto(revision.Changes.Added, revision.Changes.Changed, revision.Changes.Removed),
+            revision.DeletionScheduledFor,
+            revision.DeletionReason);
 }
 
 /// <summary>What a revision did to the one before it.</summary>

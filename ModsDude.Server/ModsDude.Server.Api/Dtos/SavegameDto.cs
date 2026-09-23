@@ -1,3 +1,4 @@
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
 
 namespace ModsDude.Server.Api.Dtos;
@@ -88,7 +89,9 @@ public record SavegameSnapshotDto(
     SavegameSnapshotOrigin Origin,
     int? BaseSnapshot,
     Guid? CheckoutId,
-    IEnumerable<SavegameDetailDto> Details);
+    IEnumerable<SavegameDetailDto> Details,
+    DateOnly? DeletionScheduledFor,
+    DeletionReason? DeletionReason);
 
 
 /// <summary>

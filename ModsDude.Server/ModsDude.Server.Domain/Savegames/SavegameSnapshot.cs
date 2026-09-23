@@ -2,6 +2,7 @@ using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Savegames;
@@ -30,7 +31,7 @@ public class SavegameSnapshot
 {
     /// <summary>
     /// A label is read by people scanning a history, not matched on, so this only has to stop
-    /// somebody pasting an essay into it. It is also the flag that exempts a snapshot from pruning.
+    /// somebody pasting an essay into it.
     /// </summary>
     public const int MaximumLabelLength = 100;
 
@@ -125,8 +126,7 @@ public class SavegameSnapshot
     public DateTime Created { get; private set; }
 
     /// <summary>
-    /// What somebody called this snapshot, or <c>null</c> where nobody named it. <b>A named snapshot is
-    /// never pruned</b> - labelling one is how a person keeps it.
+    /// What somebody called this snapshot, or <c>null</c> where nobody named it.
     /// </summary>
     public string? Label { get; private set; }
 
@@ -155,6 +155,16 @@ public class SavegameSnapshot
     /// snapshot is immutable, so the details of one are decided when it is minted and never after.
     /// </remarks>
     public IReadOnlyCollection<SavegameDetail> Details => _details;
+
+    /// <summary>
+    /// When the retention job will delete this snapshot, or <c>null</c> where it is not scheduled.
+    /// Written only by retention - see <see cref="RetentionPolicy"/> - and set together with
+    /// <see cref="DeletionReason"/>.
+    /// </summary>
+    public DateOnly? DeletionScheduledFor { get; private set; }
+
+    /// <summary>Why <see cref="DeletionScheduledFor"/> was set. The schedule stands only while this still holds.</summary>
+    public DeletionReason? DeletionReason { get; private set; }
 
     private readonly List<SavegameDetail> _details = [];
 }

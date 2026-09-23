@@ -10,6 +10,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -39,6 +40,7 @@ public class CreateProfileV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -107,6 +109,9 @@ public class CreateProfileV1Endpoint : IEndpoint
         dbContext.ProfileRevisions.Add(revision);
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // A branched profile pins what it copied, which may include versions that were scheduled.
+        await retentionUpkeep.ReleaseModsPinnedByAsync(profile.RepoId, profile.Id, revision.Number, cancellationToken);
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));
     }

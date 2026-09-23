@@ -331,6 +331,18 @@
           }
         ]
       },
+      "DeletionReason": {
+        "description": "",
+        "enum": [
+          "OutsideWindow",
+          "WindingDown"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "OutsideWindow",
+          "WindingDown"
+        ]
+      },
       "GetModDependenciesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -581,6 +593,19 @@
           },
           "created": {
             "format": "date-time",
+            "type": "string"
+          },
+          "deletionReason": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeletionReason"
+              }
+            ]
+          },
+          "deletionScheduledFor": {
+            "format": "date",
+            "nullable": true,
             "type": "string"
           },
           "description": {
@@ -974,6 +999,19 @@
           },
           "createdBy": {
             "$ref": "#/components/schemas/UserDto"
+          },
+          "deletionReason": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeletionReason"
+              }
+            ]
+          },
+          "deletionScheduledFor": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
           },
           "label": {
             "nullable": true,
@@ -1477,6 +1515,19 @@
           },
           "createdBy": {
             "$ref": "#/components/schemas/UserDto"
+          },
+          "deletionReason": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeletionReason"
+              }
+            ]
+          },
+          "deletionScheduledFor": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
           },
           "details": {
             "items": {

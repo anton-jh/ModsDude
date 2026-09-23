@@ -2,6 +2,7 @@
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -125,7 +126,11 @@ public static class ProfileRevisionExtensions
                 x.ModCount,
                 x.Changes.Added,
                 x.Changes.Changed,
-                x.Changes.Removed))
+                x.Changes.Removed)
+            {
+                DeletionScheduledFor = x.DeletionScheduledFor,
+                DeletionReason = x.DeletionReason
+            })
             .ToListAsync(cancellationToken);
     }
 
@@ -148,7 +153,11 @@ public static class ProfileRevisionExtensions
                 x.ModCount,
                 x.Changes.Added,
                 x.Changes.Changed,
-                x.Changes.Removed))
+                x.Changes.Removed)
+            {
+                DeletionScheduledFor = x.DeletionScheduledFor,
+                DeletionReason = x.DeletionReason
+            })
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -391,7 +400,14 @@ public record ProfileRevisionRow(
     int ModCount,
     int Added,
     int Changed,
-    int Removed);
+    int Removed)
+{
+    /// <summary>When retention will delete this revision, or <c>null</c> where it is not scheduled.</summary>
+    public DateOnly? DeletionScheduledFor { get; init; }
+
+    /// <inheritdoc cref="ProfileRevision.DeletionReason"/>
+    public DeletionReason? DeletionReason { get; init; }
+}
 
 
 /// <summary>

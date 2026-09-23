@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Retention;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
@@ -316,10 +317,23 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
     public bool HasUsage => ShowStatistics && UsageText is not null;
 
+    /// <summary>When the server's retention deletes this version, or null where it is not scheduled.</summary>
+    public string? DeletionText => ScheduledDeletion.Describe(Mod.DeletionScheduledFor);
+
+    /// <summary>Why, and what would keep it.</summary>
+    public string? DeletionTooltip => ScheduledDeletion.Explain(Mod.DeletionReason, RetainedKind.ModVersion);
+
+    /// <summary>
+    /// Said where the statistics are - the repo's own list. In the profile editor, adding the version
+    /// is itself what keeps it, so the date there would warn about something the save is about to undo.
+    /// </summary>
+    public bool HasDeletion => ShowStatistics && DeletionText is not null;
+
     partial void OnShowStatisticsChanged(bool value)
     {
         OnPropertyChanged(nameof(HasUsage));
         OnPropertyChanged(nameof(HasSize));
+        OnPropertyChanged(nameof(HasDeletion));
     }
 
     private static string Plural(int count, string noun)

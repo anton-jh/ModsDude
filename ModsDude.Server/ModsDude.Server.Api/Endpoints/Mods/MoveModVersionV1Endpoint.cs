@@ -11,6 +11,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -45,6 +46,7 @@ public class MoveModVersionV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -75,6 +77,10 @@ public class MoveModVersionV1Endpoint : IEndpoint
         if (ModVersionSequencer.CheckMoveChangesTheOrder(siblings, modVersion, after, before))
         {
             await ApplyMoveAsync(dbContext, unitOfWork, siblings, modVersion, after, before, timeService.Now(), cancellationToken);
+
+            // The order is what decides which versions are the latest, so a move can take one out
+            // of the window or into it.
+            await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
         }
 
         return TypedResults.Ok(new MoveModVersionResponse(siblings

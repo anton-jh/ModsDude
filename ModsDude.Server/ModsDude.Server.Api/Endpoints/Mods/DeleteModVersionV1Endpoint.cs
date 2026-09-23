@@ -9,6 +9,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -29,6 +30,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         IModStorageService storageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
@@ -66,6 +68,9 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         ModVersionSequencer.CloseGap(remaining, modVersion, timeService.Now());
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // One version fewer can turn a mod that was outside its window into one winding down.
+        await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
 
         // After the commit, never before it. A stranded blob is recoverable — the next import of the
         // same version adopts it, and the reclamation sweep collects it otherwise — whereas a

@@ -1,6 +1,7 @@
 using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Profiles;
@@ -144,6 +145,16 @@ public class ProfileRevision
     /// ordinary edit that happens to look like an old one.
     /// </summary>
     public RevisionNumber? SourceRevision { get; private set; }
+
+    /// <summary>
+    /// When the retention job will delete this revision, or <c>null</c> where it is not scheduled.
+    /// Written only by retention - see <see cref="RetentionPolicy"/> - and set together with
+    /// <see cref="DeletionReason"/>.
+    /// </summary>
+    public DateOnly? DeletionScheduledFor { get; private set; }
+
+    /// <summary>Why <see cref="DeletionScheduledFor"/> was set. The schedule stands only while this still holds.</summary>
+    public DeletionReason? DeletionReason { get; private set; }
 
 
     /// <summary>

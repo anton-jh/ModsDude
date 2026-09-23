@@ -82,7 +82,8 @@ HTTPS redirect
 Migrations are applied at startup, after the pipeline is built, by resolving
 `ApplicationDbContext` in a scope and calling `Database.Migrate()`.
 
-A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage). A
+A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage). The two daily
+retention jobs run in Hangfire, registered after the migration; see [Retention](#retention). A
 `ModVersionSizeBackfillService` runs once shortly after startup, filling in `SizeBytes` for versions
 registered before it existed - see [Mod sizes](#mod-sizes).
 
@@ -393,6 +394,51 @@ residue of deleted versions and repos. Two rules make it safe:
 
 A blob name that does not parse is reported, never deleted.
 
+### Retention
+
+Two daily [Hangfire](https://www.hangfire.io/) jobs, storing their state in the application's
+database under a `hangfire` schema of their own (outside the EF migrations). What they decide is
+`RetentionPolicy`, described in [02 — Retention](02-domain-model.md#retention);
+`Persistence/Retention/RetentionSweeper.cs` reads the histories and applies it.
+
+| Job | When (`Europe/Stockholm`) | Does |
+| --- | --- | --- |
+| `retention-schedule` | 05:00 | Dates every newly eligible row (today + grace), redates a row whose reason changed, clears a row no longer eligible, and leaves the rest alone |
+| `retention-delete` | 06:00 | Deletes rows dated today or earlier **that are still eligible for the reason they were dated for** |
+
+- **Deletion asks the policy again.** A schedule is only cleared eventually, and a deletion cannot be
+  taken back, so the date alone never decides.
+- **Deletion clears stale dates first.** Before deciding what is due, it clears every date whose
+  reason no longer holds. Otherwise tonight's deletions could shrink a history back into a stale
+  date's reason, and a rerun would act on it. With this, **both jobs are idempotent**, and
+  `RetentionUpkeep` only affects what the dates look like - a missed or failed clearing never
+  deletes anything.
+- **Rows only.** Snapshot and mod-version blobs fall out on the next reclamation pass. A deleted mod
+  version closes its gap in `SequenceNumber`, one at a time, exactly as the delete endpoint does.
+- **Repo by repo**, and a failure in one - a foreign key refusing a row something started holding
+  between the read and the delete, say - is logged and does not stop the rest.
+- **Not retried, never concurrent.** A failed run is tomorrow's to finish; retrying an hour later
+  would move the time of day a deletion date means.
+
+**Dates disappear as soon as a row stops being eligible.** `RetentionUpkeep` re-evaluates one history
+after the writes that can make a row ineligible, and clears stale schedules - it never makes new ones:
+
+| After | Re-evaluates |
+| --- | --- |
+| Check-in, restore snapshot, publish | The savegame, and its profile (the revision is now held) |
+| Delete snapshot | The savegame |
+| Save / restore revision | The profile, and the mods the new revision pins that have a version dated |
+| Create profile (incl. copy) | The mods its first revision pins that have a version dated |
+| Prune revisions | The profile |
+| Register, move or delete a mod version | The mod |
+
+A mod version's schedule moves its `Updated`, so the delta form of `GET .../mods` carries the date to
+clients that already hold the version.
+
+The dashboard is at `/hangfire`, behind basic auth from `HangfireDashboard:Username` and `:Password`.
+It is not mapped at all while either is empty, and the committed settings leave the password empty -
+set it through user secrets or `HangfireDashboard__Password`.
+
 ### Mod sizes
 
 `ModVersion.SizeBytes` is what lets a client say what an apply will download before it starts, and
@@ -661,9 +707,9 @@ holder-only** — `Discarded` means "the holder gave it back unplayed", and lett
 write that would put a sentence in the log its subject never said. Taking a save is what the
 check-out route is for, and it records `TakenOver`.
 
-Checking in and restoring both prune the history afterwards, in a separate commit so a failed prune
-cannot cost somebody their play. Pruning deletes **rows only**; the blobs fall out on the next
-reclamation pass, which is what makes it safe when two snapshots name one address.
+Checking in, restoring and publishing no longer prune anything. What goes is the daily retention
+jobs' decision - see [Retention](#retention); these only clear the schedules they have just made
+wrong, after their own commit, so a failure there cannot cost somebody their play.
 
 Reading is Guest throughout, including the claim log: somebody who plays a shared save without
 curating it is exactly the person who needs to see who has had it.
@@ -772,6 +818,8 @@ Authenticated for the same reason as images: it is public data and says nothing 
 | `EntraExternalId:*` | Instance, Domain, ClientId, Audience, Authority, and the token/authorization endpoints used by the Swagger UI |
 | `SwaggerAuthentication:ClientId` | Separate app registration for the Swagger UI |
 | `BlobReclamation:*` | `Enabled`, `Interval`, and `MinimumBlobAge` — the grace period an unreferenced blob must survive before the sweep may delete it |
+| `Retention:*` | `Enabled`, `TimeZone` (IANA, default `Europe/Stockholm`), `ScheduleCron`, `DeleteCron`. See [Retention](#retention) |
+| `HangfireDashboard:*` | `Path`, `Username`, `Password`. The dashboard is not mapped without both credentials |
 | `ModHub:*` | `Enabled`, `Games` (ModHub's codes; **set here, not defaulted in code** — the binder appends to a list default, which crawled every game twice), `UserAgent`, `RequestDelay`, `PollInterval`, `SweepInterval`, `PollPageLimit`, `RefreshPerPoll`. See [The ModHub crawler](#the-modhub-crawler) |
 
 ## Running locally
