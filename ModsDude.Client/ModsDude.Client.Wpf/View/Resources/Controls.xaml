@@ -368,6 +368,82 @@
     </Style>
 
 
+    <!-- The container for a row in a mod list somebody picks from - both of the profile editor's, and
+         the repo's own. It draws two different things that a plain list would draw as one: what is
+         *picked*, which is a property of the row and survives the search, and which row is *current*,
+         which is the framework's and is only a focus ring. Explorer draws the same distinction, and for
+         the same reason - the arrow keys have to be able to move without that meaning the set has
+         changed. -->
+    <Style x:Key="ModRow" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <!-- The accent at low opacity rather than a named fill: it reads as a
+                             selection in both themes, and it is the one colour on the row that
+                             cannot be confused with the hover state under it. -->
+                        <Border x:Name="Fill"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Opacity="0" />
+
+                        <Rectangle x:Name="Bar"
+                                   Width="3"
+                                   Margin="0 6"
+                                   RadiusX="1.5" RadiusY="1.5"
+                                   HorizontalAlignment="Left"
+                                   Visibility="Collapsed"
+                                   Fill="{DynamicResource AccentFillColorDefaultBrush}" />
+
+                        <ContentPresenter />
+
+                        <Border x:Name="Focus"
+                                BorderThickness="0"
+                                BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                            <Setter TargetName="Fill" Property="Opacity" Value="0.16" />
+                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A mod list with a selection, which has to behave the same wherever it is: taking mods out of
+         a profile is the same job as putting them in, and as picking versions to delete from a repo.
+         SelectionMode stays Single on purpose. The list's own selection is only ever the current
+         item - what is picked lives on the rows, because a list control drops from its selection
+         whatever the collection view filters out, and that would mean one more character in the
+         search box quietly discarding the set being assembled. See ListSelection. -->
+    <Style x:Key="ModList" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ModRow}" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
+        <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
+    </Style>
+
+    <!-- The strip under a mod list while something is picked. Absent at zero, so the list keeps its
+         height until there is something to say. -->
+    <Style x:Key="SelectionBar" TargetType="Border">
+        <Setter Property="Margin" Value="0 8 0 0" />
+        <Setter Property="Padding" Value="10 8" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+    </Style>
+
+
     <!-- What every sidebar is drawn on, open, collapsed or peeked: the card tint over the window's base
          colour, worked out once. Opaque because the peek lies over the page's content, and the same brush
          for the others so that the three cannot come out as different shades. The app is dark only; if it

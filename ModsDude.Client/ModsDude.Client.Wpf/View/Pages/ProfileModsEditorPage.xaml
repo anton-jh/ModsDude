@@ -128,71 +128,6 @@
             </Setter>
         </Style>
 
-        <!-- The container for a row in either list. It draws two different things that a plain list
-             would draw as one: what is *picked*, which is a property of the row and survives the
-             search, and which row is *current*, which is the framework's and is only a focus ring.
-             Explorer draws the same distinction, and for the same reason - the arrow keys have to be
-             able to move without that meaning the set has changed. -->
-        <Style x:Key="ModRow" TargetType="ListBoxItem">
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Grid>
-                            <!-- The accent at low opacity rather than a named fill: it reads as a
-                                 selection in both themes, and it is the one colour on the row that
-                                 cannot be confused with the hover state under it. -->
-                            <Border x:Name="Fill"
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                    Opacity="0" />
-
-                            <Rectangle x:Name="Bar"
-                                       Width="3"
-                                       Margin="0 6"
-                                       RadiusX="1.5" RadiusY="1.5"
-                                       HorizontalAlignment="Left"
-                                       Visibility="Collapsed"
-                                       Fill="{DynamicResource AccentFillColorDefaultBrush}" />
-
-                            <ContentPresenter />
-
-                            <Border x:Name="Focus"
-                                    BorderThickness="0"
-                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                <Setter TargetName="Fill" Property="Opacity" Value="0.16" />
-                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Both lists, which have to behave identically: taking mods out of a profile is the same
-             job as putting them in, seen from the other side.
-             SelectionMode stays Single on purpose. The list's own selection is only ever the current
-             item - what is picked lives on the rows, because a list control drops from its selection
-             whatever the collection view filters out, and that would mean one more character in the
-             search box quietly discarding the set being assembled. See ListSelection. -->
-        <Style x:Key="ModList" TargetType="ListBox">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="SelectionMode" Value="Single" />
-            <Setter Property="ItemContainerStyle" Value="{StaticResource ModRow}" />
-            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
-            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
-            <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
-            <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
-        </Style>
-
         <!-- The review of the draft. Rows there are read, and reverted one at a time, rather than
              picked - so nothing about a row is selectable or focusable, and the container is only a
              place for the shared row to sit. -->
@@ -222,15 +157,6 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
             <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
-        </Style>
-
-        <!-- The strip under a list while something is picked. Absent at zero, so the lists keep
-             their height until there is something to say. -->
-        <Style x:Key="SelectionBar" TargetType="Border">
-            <Setter Property="Margin" Value="0 8 0 0" />
-            <Setter Property="Padding" Value="10 8" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
         </Style>
 
     </Page.Resources>

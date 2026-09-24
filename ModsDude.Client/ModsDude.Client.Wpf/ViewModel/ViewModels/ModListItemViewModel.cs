@@ -185,6 +185,10 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [ObservableProperty]
     private bool _isPickable = true;
 
+    /// <summary>Why the checkbox cannot be clicked, said on the box itself. Null shows no tooltip.</summary>
+    [ObservableProperty]
+    private string? _pickRestriction;
+
     /// <summary>
     /// The sources the version was found in - the same mod is usually installed in several. Left
     /// unset where naming them would say nothing, such as a single enabled source.

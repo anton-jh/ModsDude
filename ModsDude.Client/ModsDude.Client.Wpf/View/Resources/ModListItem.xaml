@@ -41,6 +41,8 @@
                               VerticalAlignment="Center"
                               IsChecked="{Binding IsSelected, Mode=TwoWay}"
                               IsEnabled="{Binding IsPickable}"
+                              ToolTip="{Binding PickRestriction}"
+                              ToolTipService.ShowOnDisabled="True"
                               Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <Border Grid.Column="1"

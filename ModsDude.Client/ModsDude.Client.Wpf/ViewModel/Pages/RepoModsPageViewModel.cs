@@ -16,7 +16,8 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 
 /// <summary>
 /// The repo's mods: what it holds, searchable, and the few things that can be done to a version that
-/// is already registered - reorder a mod's versions, delete a version, delete a mod.
+/// is already registered - reorder a mod's versions, delete a version, delete a mod, and delete a
+/// picked set of unused versions in one go.
 /// </summary>
 /// <remarks>
 /// <b>Nothing is imported here.</b> Import and Manage were once one page that showed what the sources
@@ -34,6 +35,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly IErrorReporter _errorReporter;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModsClient _modsClient;
+    private readonly IBackgroundTaskReporter _backgroundTasks;
 
     private readonly CancellationTokenSource _cancellation = new();
     private readonly ModRowActions _rowActions;
@@ -49,7 +51,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         IModalService modalService,
         IErrorReporter errorReporter,
         ShellNavigationService shellNavigation,
-        IModsClient modsClient)
+        IModsClient modsClient,
+        IBackgroundTaskReporter backgroundTasks)
     {
         _repo = repo;
         _itemFactory = itemFactory;
@@ -57,6 +60,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         _errorReporter = errorReporter;
         _shellNavigation = shellNavigation;
         _modsClient = modsClient;
+        _backgroundTasks = backgroundTasks;
 
         // The page owns the catalog and disposes it. No source is ever switched on, so it reads the
         // repo and touches no disk.
@@ -71,6 +75,13 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         _rowActions = new ModRowActions(
             ReorderVersionsCommand, DeleteVersionCommand, DeleteModCommand, ModifyRestriction);
+
+        // Enter and a double click do nothing: deleting is the only thing a selection is for here,
+        // and it is not something a stray keypress should start.
+        Selection = new ModListSelection(
+            () => RepoView, () => _registered, _ => { }, "Delete", DescribeDelete, CanPick);
+
+        Selection.Changed += DeleteSelectedCommand.NotifyCanExecuteChanged;
 
         RepoName = repo.Name;
     }
@@ -87,6 +98,17 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     /// <summary>Why those are refused, shown on the page. Null where they are not.</summary>
     public string? ModifyRestriction { get; }
+
+    /// <summary>
+    /// The versions picked for deletion. Only unused ones can be picked - a delete of anything else
+    /// would be refused - so a selection here is always one the server should accept.
+    /// </summary>
+    public ModListSelection Selection { get; }
+
+    /// <summary>A batch delete is running. It reports to the progress strip, not to the page.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
+    private bool _isDeleting;
 
     /// <summary>The repo's mods, filtered by the search and the unused toggle.</summary>
     [ObservableProperty]
@@ -261,6 +283,170 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         await ReloadAfterServerChangeAsync();
     }
+
+    /// <summary>
+    /// Deletes the picked versions, one call each - except where every version of a mod is picked,
+    /// which deletes the mod in one call instead. The server refuses to take a mod's last version on
+    /// its own, and a mod with none is not something anything else could represent.
+    /// </summary>
+    /// <remarks>
+    /// Reports to the progress strip rather than the page, and on a token of its own rather than the
+    /// page's: the strip outlives the page, so leaving the page is not a reason to stop, and the
+    /// strip's Cancel is. Only unused versions can be picked, so a refusal here means a profile took
+    /// one up after the list was read - the refused ones are skipped and named at the end.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanDeleteSelected))]
+    private async Task DeleteSelected()
+    {
+        var picked = Selection.Picked().OfType<ModListItemViewModel>().ToList();
+
+        if (picked.Count == 0)
+        {
+            return;
+        }
+
+        var steps = PlanDelete(picked);
+        var wholeMods = steps.Count(x => x.WholeMod);
+
+        var confirmation = new ConfirmationDialogViewModel(
+            "Really?",
+            $"Delete {Versions(picked.Count)} from the repo?\n"
+                + (wholeMods == 0 ? "" : $"That is every version of {Mods(wholeMods)}, so {(wholeMods == 1 ? "the mod goes" : "the mods go")} too.\n")
+                + "The files go with them, and this cannot be undone.",
+            IconKind.Warning,
+            DescribeDelete(picked),
+            "Keep");
+
+        await _modalService.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return;
+        }
+
+        IsDeleting = true;
+
+        var refused = new List<string>();
+        Exception? failure = null;
+
+        using var stop = new CancellationTokenSource();
+
+        try
+        {
+            using var task = _backgroundTasks.Begin($"Deleting {Versions(picked.Count)} from '{RepoName}'", cancel: stop.Cancel);
+
+            var done = 0;
+
+            foreach (var step in steps)
+            {
+                task.Report(step.Row.Name, done, picked.Count);
+
+                try
+                {
+                    if (step.WholeMod)
+                    {
+                        await _modsClient.DeleteModV1Async(_repo.Id, step.Row.Id, stop.Token);
+                    }
+                    else
+                    {
+                        await _modsClient.DeleteModVersionV1Async(_repo.Id, step.Row.Id, step.Row.Version, stop.Token);
+                    }
+                }
+                catch (ApiException<CustomProblemDetails> exception)
+                    when (exception.Result.Type is ProblemType.ModInUse or ProblemType.CannotDeleteOnlyModVersion)
+                {
+                    refused.Add(step.WholeMod ? step.Row.Name : $"{step.Row.Name} {step.Row.Version}");
+                }
+
+                done += step.Versions;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled from the strip. What was deleted stays deleted; the reload below shows it.
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+
+        if (_cancellation.IsCancellationRequested)
+        {
+            // The page is gone, and its catalog with it. The next visit reads the repo afresh.
+            if (failure is not null)
+            {
+                _errorReporter.Record(failure, "deleting mod versions");
+            }
+
+            return;
+        }
+
+        await ReloadAfterServerChangeAsync();
+
+        if (failure is not null)
+        {
+            await _errorReporter.ShowAsync(failure, "deleting mod versions");
+        }
+        else if (refused.Count > 0)
+        {
+            await ShowRefusal("Some were kept",
+                "A profile started using these before they were deleted:\n" + string.Join("\n", refused));
+        }
+    }
+
+    [RelayCommand]
+    private void SelectAllShown() => Selection.SelectAllShown();
+
+    [RelayCommand]
+    private void ClearSelection() => Selection.ClearSelection();
+
+    [RelayCommand]
+    private void DeselectHidden() => Selection.DeselectHidden();
+
+    private bool CanDeleteSelected() => CanModify && IsDeleting is false && Selection.HasSelection;
+
+    /// <summary>One call a batch delete makes, and how many of the picked versions it takes.</summary>
+    private sealed record DeleteStep(ModListItemViewModel Row, int Versions, bool WholeMod);
+
+    private List<DeleteStep> PlanDelete(IReadOnlyList<ModListItemViewModel> picked)
+    {
+        var held = _registered
+            .GroupBy(x => x.Mod.ModId)
+            .ToDictionary(x => x.Key, x => x.Count());
+
+        var steps = new List<DeleteStep>();
+
+        foreach (var mod in picked.GroupBy(x => x.Mod.ModId))
+        {
+            var versions = mod.ToList();
+
+            if (versions.Count == held[mod.Key])
+            {
+                steps.Add(new DeleteStep(versions[0], versions.Count, WholeMod: true));
+            }
+            else
+            {
+                steps.AddRange(versions.Select(x => new DeleteStep(x, 1, WholeMod: false)));
+            }
+        }
+
+        return steps;
+    }
+
+    private static string DescribeDelete(IReadOnlyList<ISelectableRow> picked)
+        => $"Delete {Versions(picked.Count)}";
+
+    /// <summary>Only what a delete would be accepted for, and only for somebody allowed to delete.</summary>
+    private bool CanPick(ISelectableRow row)
+        => CanModify && row is ModListItemViewModel { Mod.IsUnused: true };
+
+    private static string Versions(int count) => count == 1 ? "1 version" : $"{count:N0} versions";
+
+    private static string Mods(int count) => count == 1 ? "1 mod" : $"{count:N0} mods";
 
     private Task ShowRefusal(string title, string message)
     {
@@ -443,11 +629,24 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         // A registered version has nothing to say about presence, and there is no draft to pick from.
         item.Status = ModDisplayStatus.None;
-        item.IsSelectable = false;
+        item.IsSelectable = CanModify;
+        item.IsPickable = CanPick(item);
+        item.PickRestriction = CanModify && item.IsPickable is false ? "In use, so it cannot be deleted" : null;
         item.ShowStatistics = true;
         item.Actions = _rowActions;
 
+        // The row's own checkbox writes the flag without going through a gesture.
+        item.PropertyChanged += OnRowPropertyChanged;
+
         return item;
+    }
+
+    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ModListItemViewModel.IsSelected))
+        {
+            Selection.Recount();
+        }
     }
 
     private bool Passes(ModListItemViewModel row)
@@ -477,6 +676,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     {
         RepoTotal = _registered.Count;
         RepoCount = _registered.Count(Passes);
+
+        Selection.Recount();
     }
 
 

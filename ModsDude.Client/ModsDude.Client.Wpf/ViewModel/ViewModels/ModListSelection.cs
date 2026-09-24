@@ -69,6 +69,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     private readonly Action<IReadOnlyList<ISelectableRow>> _activate;
     private readonly string _verb;
     private readonly Func<IReadOnlyList<ISelectableRow>, string>? _describe;
+    private readonly Func<ISelectableRow, bool> _canSelect;
 
     /// <summary>Where a shift-click measures from. Set by every gesture that is not a shift-click.</summary>
     private ISelectableRow? _anchor;
@@ -92,18 +93,25 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     /// one it holds is an update - and a button reading "Add 15 mods" over a selection that would
     /// move three pins is a label that lies about what pressing it does.
     /// </param>
+    /// <param name="canSelect">
+    /// Which rows may be picked at all, for a list where some rows are there to be seen and not acted
+    /// on - the repo's versions that a profile still uses. Every gesture passes over the others, and
+    /// the header's box counts without them, so "all shown" means all that can be. Null allows every row.
+    /// </param>
     public ModListSelection(
         Func<IEnumerable?> shown,
         Func<IReadOnlyList<ISelectableRow>> all,
         Action<IReadOnlyList<ISelectableRow>> activate,
         string verb,
-        Func<IReadOnlyList<ISelectableRow>, string>? describe = null)
+        Func<IReadOnlyList<ISelectableRow>, string>? describe = null,
+        Func<ISelectableRow, bool>? canSelect = null)
     {
         _shown = shown;
         _all = all;
         _activate = activate;
         _verb = verb;
         _describe = describe;
+        _canSelect = canSelect ?? (_ => true);
     }
 
 
@@ -177,7 +185,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
 
     public void Click(object? item)
     {
-        if (item is not ISelectableRow row)
+        if (item is not ISelectableRow row || _canSelect(row) is false)
         {
             return;
         }
@@ -193,7 +201,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
 
     public void Toggle(object? item)
     {
-        if (item is not ISelectableRow row)
+        if (item is not ISelectableRow row || _canSelect(row) is false)
         {
             return;
         }
@@ -207,7 +215,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
 
     public void ExtendTo(object? item)
     {
-        if (item is not ISelectableRow row)
+        if (item is not ISelectableRow row || _canSelect(row) is false)
         {
             return;
         }
@@ -238,7 +246,10 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
 
             for (var index = Math.Min(from, to); index <= Math.Max(from, to); index++)
             {
-                shown[index].IsSelected = true;
+                if (_canSelect(shown[index]))
+                {
+                    shown[index].IsSelected = true;
+                }
             }
 
             _anchor = shown[from];
@@ -257,7 +268,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     {
         InOneGesture(() =>
         {
-            foreach (var row in Rows())
+            foreach (var row in Rows().Where(_canSelect))
             {
                 row.IsSelected = true;
             }
@@ -310,6 +321,11 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
         // something off screen.
         if (item is ISelectableRow row && row.IsSelected is false)
         {
+            if (_canSelect(row) is false)
+            {
+                return;
+            }
+
             Click(row);
 
             picked = [row];
@@ -339,7 +355,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
         var shownCount = 0;
         var shownSelected = 0;
 
-        foreach (var row in Rows())
+        foreach (var row in Rows().Where(_canSelect))
         {
             shownCount++;
 

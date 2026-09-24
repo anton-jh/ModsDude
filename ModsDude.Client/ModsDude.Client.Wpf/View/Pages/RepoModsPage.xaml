@@ -7,13 +7,14 @@
       xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.Pages"
       xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
       xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+      xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=pvm:RepoModsPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoModsPage">
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto auto auto *">
+        <Grid RowDefinitions="auto auto auto auto auto * auto">
 
             <uc:PageTitle Grid.Row="0" Text="Mods" />
 
@@ -89,7 +90,22 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </Grid>
 
-            <Border Grid.Row="4"
+            <!-- Selecting every version shown that can be deleted. Only for somebody who may delete,
+                 and the one place that says why some rows have no box to tick. -->
+            <StackPanel Grid.Row="4"
+                        Margin="0 0 0 8"
+                        Orientation="Horizontal"
+                        Visibility="{Binding CanModify, Converter={StaticResource BoolToVisibilityConverter}}">
+                <CheckBox Margin="13 0 10 0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding Selection.AllShownSelected, Mode=TwoWay}"
+                          ToolTip="Select every version shown that can be deleted" />
+                <TextBlock VerticalAlignment="Center"
+                           Text="Versions in use cannot be selected."
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <Border Grid.Row="5"
                     CornerRadius="6"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -97,27 +113,21 @@
                 <Grid>
 
                     <!-- One row per mod version, rendered by the implicit ModListItemViewModel template
-                         in App.xaml. Virtualized with recycling: a repo can hold thousands. -->
-                    <ItemsControl ItemsSource="{Binding RepoView}"
-                                  VirtualizingStackPanel.IsVirtualizing="True"
-                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                  ScrollViewer.CanContentScroll="True">
-                        <ItemsControl.Template>
-                            <ControlTemplate TargetType="ItemsControl">
-                                <ScrollViewer CanContentScroll="True"
-                                              Focusable="False"
-                                              VerticalScrollBarVisibility="Auto"
-                                              HorizontalScrollBarVisibility="Disabled">
-                                    <ItemsPresenter />
-                                </ScrollViewer>
-                            </ControlTemplate>
-                        </ItemsControl.Template>
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <VirtualizingStackPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                         in App.xaml, with the profile editor's selection gestures. Virtualized with
+                         recycling: a repo can hold thousands. -->
+                    <ListBox Style="{StaticResource ModList}"
+                             ItemsSource="{Binding RepoView}"
+                             b:ListSelection.Controller="{Binding Selection}"
+                             ContextMenuService.IsEnabled="{Binding CanModify}">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Delete the selected versions" Command="{Binding DeleteSelectedCommand}" />
+                                <Separator />
+                                <MenuItem Header="Select everything shown" Command="{Binding SelectAllShownCommand}" />
+                                <MenuItem Header="Clear the selection" Command="{Binding ClearSelectionCommand}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
 
                     <TextBlock Text="Reading the repo…"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -168,6 +178,45 @@
                         </TextBlock.Style>
                     </TextBlock>
 
+                </Grid>
+            </Border>
+
+            <!-- Only while something is picked. What it deletes is everything selected, including
+                 rows the search is hiding - so it says how many those are and offers to put them down. -->
+            <Border Grid.Row="6"
+                    Style="{StaticResource SelectionBar}"
+                    Visibility="{Binding Selection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid ColumnDefinitions="auto * auto auto auto">
+
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="{Binding Selection.SelectedText}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Margin="8 0 0 0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Selection.HiddenText}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding Selection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Grid.Column="2"
+                            Margin="8 0 0 0"
+                            Content="{Binding Selection.DeselectHiddenText}"
+                            Command="{Binding DeselectHiddenCommand}"
+                            Visibility="{Binding Selection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Grid.Column="3"
+                            Margin="8 0 0 0"
+                            Content="Clear"
+                            Command="{Binding ClearSelectionCommand}" />
+
+                    <Button Grid.Column="4"
+                            Margin="8 0 0 0"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="{Binding Selection.ActionText}"
+                            Command="{Binding DeleteSelectedCommand}" />
                 </Grid>
             </Border>
         </Grid>
