@@ -45,6 +45,7 @@ public class ModSyncServiceTests
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
+        var fetchesBefore = fixture.Server.ModListFetches;
         var plan = await fixture.PlanAsync();
 
         Assert.False(plan.HasWork);
@@ -52,7 +53,90 @@ public class ModSyncServiceTests
 
         // Nothing to remove means the repo's mod list is never asked for, which at thousands of
         // registered versions is the difference between a re-apply being instant and being a fetch.
+        // Not even early: the folder already runs this profile, so there is no move to expect one of.
         Assert.Empty(plan.HashesToFetch);
+        Assert.Equal(fetchesBefore, fixture.Server.ModListFetches);
+    }
+
+    /// <summary>
+    /// The manifest already says which mod and version each file it describes is, so a folder of a
+    /// thousand archives the last apply left is planned without opening one of them.
+    /// </summary>
+    [Fact]
+    public async Task A_file_the_manifest_still_describes_is_not_opened_to_plan()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        fixture.Adapter.Opened.Clear();
+        fixture.Install("fs25_mine.zip", Mod("1.0.0", "mine"));
+
+        var plan = await fixture.PlanAsync();
+
+        // Only the file the manifest has never seen was read.
+        Assert.Equal(["fs25_mine.zip"], fixture.Adapter.Opened);
+
+        var kept = Assert.Single(plan.Items, x => x.Action is ModSyncAction.Keep);
+        Assert.Equal("fs25_a", kept.ModId.Value);
+        Assert.Equal("1.0.0", kept.InstalledVersion?.Value);
+        Assert.Contains(plan.Items, x => x.ModId.Value == "fs25_mine" && x.Action is ModSyncAction.Quarantine);
+    }
+
+    /// <summary>A file changed since the apply is not the file the manifest describes, so it is read again.</summary>
+    [Fact]
+    public async Task A_file_changed_since_the_manifest_is_opened_again()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        fixture.Adapter.Opened.Clear();
+        fixture.Install("fs25_a.zip", Mod("1.0.1", "the game updated this"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(["fs25_a.zip"], fixture.Adapter.Opened);
+
+        var replaced = Assert.Single(plan.Items);
+        Assert.Equal(ModSyncAction.Replace, replaced.Action);
+        Assert.Equal("1.0.1", replaced.InstalledVersion?.Value);
+    }
+
+    /// <summary>
+    /// Leaving one list for another almost always removes something, so the repo's mod list is asked
+    /// for alongside the rest of planning - once, and used, rather than fetched again after.
+    /// </summary>
+    [Fact]
+    public async Task Moving_a_folder_off_another_profile_asks_for_the_mod_list_once()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Server.Register("fs25_old", "1.0.0", Mod("1.0.0", "old"));
+        fixture.Install("fs25_old.zip", Mod("1.0.0", "old"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(1, fixture.Server.ModListFetches);
+        Assert.Contains(plan.Items, x => x.ModId.Value == "fs25_old" && x.Action is ModSyncAction.UninstallRecoverable);
+    }
+
+    /// <summary>
+    /// Asked for early and then not needed - nothing installed to remove - it is dropped without its
+    /// answer changing the plan or its failure surfacing anywhere.
+    /// </summary>
+    [Fact]
+    public async Task A_mod_list_asked_for_early_and_not_needed_changes_nothing()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(1, plan.InstallCount);
+        Assert.All(plan.Items, x => Assert.False(x.InstalledIsRecoverable));
     }
 
     [Fact]

@@ -59,6 +59,10 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
 
 
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
+        => ReadFolder(path, _ => false, cancellationToken);
+
+    /// <param name="skip">Files the caller already knows, left unopened. See <see cref="ILocalModAdapter.GetInstalledMods"/>.</param>
+    protected Task<IEnumerable<LocalMod>> ReadFolder(string path, Func<string, bool> skip, CancellationToken cancellationToken)
     {
         // Each file gets its own archive handle, so reading them in parallel is safe, and a mod
         // folder can hold well over a thousand archives. The degree of parallelism is capped
@@ -68,7 +72,7 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
         return Task.Run<IEnumerable<LocalMod>>(() =>
         {
             var files = Directory.EnumerateFiles(path)
-                .Where(IsCandidate)
+                .Where(x => IsCandidate(x) && skip(x) is false)
                 .ToList();
 
             var mods = new LocalMod?[files.Count];
@@ -372,9 +376,9 @@ public class FarmingSimulatorLocalModAdapter(
         "mods");
 
 
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken)
+    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
     {
-        return GetModsFromFolder(target.Path, cancellationToken);
+        return ReadFolder(target.Path, skip, cancellationToken);
     }
 
     /// <summary>

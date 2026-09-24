@@ -316,20 +316,20 @@ public class ModSyncPlannerTests
         Assert.All(reports, x => Assert.Equal(ModSyncPhase.Planning, x.Phase));
         Assert.All(reports, x => Assert.Equal(3, x.Total));
 
-        // The reports that announce a mod, as opposed to the byte counts of one being hashed - there
-        // is no manifest here, so every file is read and both kinds arrive.
-        var announcements = reports.Where(x => x.TotalBytes == 0).ToList();
+        // The one only wanted needs nothing read, so it is done before the first file is opened; the
+        // two installed are read, there being no manifest, and each is finished exactly once.
+        Assert.Equal(1, reports.First().Completed);
+        Assert.Equal(["fs25_a", "fs25_b"], reports.Where(x => x.ItemFinished).Select(x => x.Detail).Order());
 
-        // Reported before the work, so the name on screen is the one taking the time - which makes
-        // the counts the number already done.
-        Assert.Equal([0, 1, 2], announcements.Select(x => x.Completed));
-        Assert.Equal(3, announcements.Count);
+        // The count only moves forward, and ends at its own total.
+        Assert.Equal(reports.Select(x => x.Completed).Order(), reports.Select(x => x.Completed));
+        Assert.Equal(3, reports.Last().Completed);
     }
 
     /// <summary>
-    /// The archive that has to be read in full is the one stall planning has, and the tick that
-    /// announced it says nothing until it is over. Its bytes go out under the same name and count, so
-    /// the strip's row for that mod is the one that moves.
+    /// The archive that has to be read in full is the one stall planning has. Its bytes go out under
+    /// its own name, alongside whatever else is being read, so the strip's row for that mod is the
+    /// one that moves - and its last report closes that row.
     /// </summary>
     [Fact]
     public async Task A_file_that_has_to_be_hashed_reports_its_bytes_under_its_own_name()
@@ -348,17 +348,63 @@ public class ModSyncPlannerTests
             CancellationToken.None,
             new CollectingProgress(reports));
 
-        var announced = reports.First();
-        var last = reports.Last();
+        var named = reports.Where(x => x.Detail == "fs25_a").ToList();
 
-        Assert.Equal(0, announced.BytesTransferred);
-        Assert.Contains(reports, x => x.BytesTransferred > 0);
+        Assert.All(named, x => Assert.True(x.Concurrent));
+        Assert.Equal(0, named.First().BytesTransferred);
 
-        // Ends at the whole file, under the announcing report's own name and count.
-        Assert.Equal(installed.Size, last.BytesTransferred);
-        Assert.Equal(installed.Size, last.TotalBytes);
-        Assert.Equal(announced.Detail, last.Detail);
-        Assert.Equal(announced.Completed, last.Completed);
+        // Reaches the whole file, then finishes under the same name.
+        Assert.Equal(installed.Size, named.Where(x => x.ItemFinished is false).Last().BytesTransferred);
+        Assert.All(named.Where(x => x.ItemFinished is false), x => Assert.Equal(installed.Size, x.TotalBytes));
+        Assert.True(named.Last().ItemFinished);
+
+        // And the phase ends with a report that is not concurrent, so no row is left open.
+        Assert.False(reports.Last().Concurrent);
+    }
+
+    /// <summary>
+    /// A first sync, or a folder the user filled, reads every archive in it. One at a time left the
+    /// disk's queue and all but one core idle through the longest stretch planning has.
+    /// </summary>
+    [Fact]
+    public async Task Files_that_have_to_be_hashed_are_read_several_at_a_time()
+    {
+        using var folder = new TempDirectory("plan-parallel-hash");
+        var a = Install(folder, "fs25_a", "1.0.0", "a");
+        var b = Install(folder, "fs25_b", "1.0.0", "b");
+        var c = Install(folder, "fs25_c", "1.0.0", "c");
+
+        var inFlight = 0;
+        var overlapped = new TaskCompletionSource();
+
+        // Each read waits until another has started, so one at a time never finishes - bounded, so a
+        // regression fails on the assertion rather than hanging.
+        async Task<string> HashFile(string path, CancellationToken ct, IProgress<long>? bytes)
+        {
+            if (Interlocked.Increment(ref inFlight) > 1)
+            {
+                overlapped.TrySetResult();
+            }
+
+            await Task.WhenAny(overlapped.Task, Task.Delay(TimeSpan.FromSeconds(5), ct));
+            Interlocked.Decrement(ref inFlight);
+
+            return HashOf(File.ReadAllText(path));
+        }
+
+        var items = await Plan(
+            [Want("fs25_a", "1.0.0", "a"), Want("fs25_b", "1.0.0", "b")],
+            [a, b, c],
+            Registered("c"),
+            null,
+            HashFile);
+
+        Assert.True(overlapped.Task.IsCompleted);
+
+        // And the answers are the ones one at a time would have given.
+        Assert.Equal(ModSyncAction.Keep, items.Single(x => x.ModId.Value == "fs25_a").Action);
+        Assert.Equal(ModSyncAction.Keep, items.Single(x => x.ModId.Value == "fs25_b").Action);
+        Assert.Equal(ModSyncAction.UninstallRecoverable, items.Single(x => x.ModId.Value == "fs25_c").Action);
     }
 
     /// <summary>A mod the manifest answers for is never opened, so it has no bytes to report.</summary>

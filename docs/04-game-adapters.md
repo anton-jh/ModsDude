@@ -49,7 +49,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 
 | Capability | Base stage | Local stage |
 | --- | --- | --- |
-| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
+| Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, skip, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
 | Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `SavegameTargets`, plus `GetSlots(target, ct)`, `GetSlotPath(target, slot)`, `CreateSlot` and `BelongsInPackedSave` |
 | Remote sources | `IRemoteModSourcesAdapter.Sources` — each an `IRemoteModSource` with a key, a name and `LookUpAsync(mods, ct)` | — |
 
@@ -540,7 +540,9 @@ Several details in this code are load-bearing and worth preserving if you touch 
 3. Write the three adapter stages. The Farming Simulator trio is the template; the
    inheritance chain (`Local : Base : Catalogue`) is what makes the stage subtyping work.
 4. Implement `IBaseModAdapter.GetModsFromFolder` to produce `LocalMod` records, and
-   `ILocalModAdapter.GetInstalledMods` to point it at a target's actual mod folder.
+   `ILocalModAdapter.GetInstalledMods` to point it at a target's actual mod folder, leaving
+   unopened every file its `skip` predicate names — sync passes the ones its manifest already
+   describes.
    Respect the cancellation token — `ModCatalog` cancels the scan when the page goes away.
    Build every id through `ModKey.From` / `ModVersionKey.From`.
 5. Implement the write side — `ModTargets` and `GetModFilePath` — or sync has nowhere to put a

@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using System.Collections.Concurrent;
 
 namespace ModsDude.Client.Core.Sync;
 
@@ -10,6 +11,14 @@ namespace ModsDude.Client.Core.Sync;
 /// </summary>
 public static class ModSyncPlanner
 {
+    /// <summary>
+    /// How many files are hashed at once. More than one, because a first sync or a folder the user
+    /// filled reads every archive in it, and one at a time leaves the disk's queue and every core but
+    /// one idle; not many more, because it is disk bound and the rest of the app shares the pool.
+    /// </summary>
+    private const int _concurrentHashes = 4;
+
+
     /// <param name="registered">
     /// What the repo can reproduce, keyed by content rather than by version id. Recoverability is a
     /// property of the bytes: a file whose hash the repo holds can be fetched again whatever it
@@ -19,14 +28,14 @@ public static class ModSyncPlanner
     /// <param name="hashFile">
     /// How to read a file's content hash, and where to say how far through the file it has got.
     /// Injected so the planner stays testable, and so the fallback can be exercised for real rather
-    /// than mocked.
+    /// than mocked. Called for several files at once.
     /// </param>
     /// <param name="progress">
-    /// Where to say which mod is being looked at, for the strip. Optional, and the count is of mods
+    /// Where to say how planning is getting on, for the strip. Optional, and the count is of mods
     /// examined rather than of files hashed: most of them answer from the manifest without being
     /// opened, and a bar that only moved for the slow ones would stand still through the slowest
-    /// stretch there is. A file that does have to be opened reports its bytes under its mod's name,
-    /// so the one archive that takes minutes is a row with a bar rather than a tick that stands still.
+    /// stretch there is. Everything the manifest answers is counted at once; a file that does have to
+    /// be opened is a row of its own with its bytes, several at a time, the way fetching reports.
     /// </param>
     public static async Task<IReadOnlyList<ModSyncItem>> PlanAsync(
         IReadOnlyCollection<DesiredMod> desired,
@@ -61,41 +70,34 @@ public static class ModSyncPlanner
         // of honest.
         var matched = desired.Count(x => installedByMod.ContainsKey(x.ModId));
         var total = desired.Count + installed.Count - matched;
-        var examined = 0;
 
-        // Reported before the work rather than after, because the point of the name is to say what is
-        // taking the time while it is taking it. The count is therefore how many are already done.
-        void Examining(string what)
-            => progress?.Report(new ModSyncProgress(ModSyncPhase.Planning, examined++, total) { Detail = what });
+        // Every installed file is classified on its bytes, so every one needs a hash - and they are
+        // all worked out before anything is classified, so the ones that have to be read can be read
+        // side by side rather than one after another. A file is named for the mod it is wanted as,
+        // where it is wanted, which is the name the rest of the apply calls it by.
+        var wantedNames = new Dictionary<ModKey, string>();
 
-        // The same name and count as the report that announced the mod, so the strip keeps the one row
-        // it already opened for it and only its bytes move.
-        Task<string?> Resolve(InstalledMod have, string what)
+        foreach (var want in desired)
         {
-            var completed = examined - 1;
-
-            IProgress<long>? bytes = progress is null
-                ? null
-                : new InlineProgress<long>(read => progress.Report(
-                    new ModSyncProgress(ModSyncPhase.Planning, completed, total)
-                    {
-                        Detail = what,
-                        BytesTransferred = read,
-                        TotalBytes = have.Size
-                    }));
-
-            return ResolveHashAsync(have, recorded, hashFile, bytes, cancellationToken);
+            wantedNames.TryAdd(want.ModId, want.DisplayName ?? want.ModId.Value);
         }
+
+        var hashes = await ResolveHashesAsync(
+            [
+                .. installedByMod.Values.Select(x => (x, wantedNames.GetValueOrDefault(x.ModId) ?? x.DisplayName)),
+                .. duplicates.Select(x => (x, x.DisplayName))
+            ],
+            recorded,
+            hashFile,
+            total,
+            progress,
+            cancellationToken);
 
         var items = new List<ModSyncItem>();
 
         foreach (var want in desired)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var wantName = want.DisplayName ?? want.ModId.Value;
-
-            Examining(wantName);
 
             if (installedByMod.Remove(want.ModId, out var have) is false)
             {
@@ -114,7 +116,7 @@ public static class ModSyncPlanner
                 continue;
             }
 
-            var hash = await Resolve(have, wantName);
+            var hash = hashes[have.Path];
 
             // Compared on bytes, not on version id. GetInstalledMods reads the version out of the
             // mod's own metadata, so two different builds both calling themselves 1.0.0 are
@@ -147,9 +149,7 @@ public static class ModSyncPlanner
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            Examining(have.DisplayName);
-
-            var hash = await Resolve(have, have.DisplayName);
+            var hash = hashes[have.Path];
             var recoverable = registered.Holds(hash);
 
             items.Add(new ModSyncItem
@@ -185,33 +185,72 @@ public static class ModSyncPlanner
     }
 
     /// <summary>
-    /// The manifest's hash where the file is still the one it describes, and a fresh hash otherwise.
+    /// Every installed file's hash, by path: the manifest's where the file is still the one it
+    /// describes, and a fresh hash otherwise.
     /// </summary>
     /// <remarks>
     /// A file whose size and modification time match the manifest is the file the manifest describes,
     /// so its recorded hash is the answer and no archive is opened. Only a file that fails that check
     /// is read - which on a folder the user populated themselves, or a first sync, is all of them.
-    /// That is the honest cost of not knowing.
+    /// That is the honest cost of not knowing, and it is paid a few files at a time.
     /// </remarks>
-    private static async Task<string?> ResolveHashAsync(
-        InstalledMod installed,
+    private static async Task<IReadOnlyDictionary<string, string?>> ResolveHashesAsync(
+        IReadOnlyList<(InstalledMod Have, string Name)> installed,
         IReadOnlyDictionary<string, SyncManifestEntry> recorded,
+        Func<string, CancellationToken, IProgress<long>?, Task<string>> hashFile,
+        int total,
+        IProgress<ModSyncProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var hashes = new ConcurrentDictionary<string, string?>(StringComparer.Ordinal);
+        var unknown = new List<(InstalledMod Have, string Name)>();
+
+        foreach (var (have, name) in installed)
+        {
+            if (recorded.TryGetValue(Path.GetFileName(have.Path), out var entry) &&
+                entry.Size == have.Size &&
+                entry.ModifiedUtc == have.ModifiedUtc)
+            {
+                hashes[have.Path] = entry.ContentHash;
+            }
+            else
+            {
+                unknown.Add((have, name));
+            }
+        }
+
+        var run = new HashRun(total - unknown.Count, total, progress);
+
+        run.Begin();
+
+        await Parallel.ForEachAsync(
+            unknown,
+            new ParallelOptions { MaxDegreeOfParallelism = _concurrentHashes, CancellationToken = cancellationToken },
+            async (file, ct) =>
+            {
+                var (have, name) = file;
+
+                run.Report(name, 0, have.Size);
+
+                hashes[have.Path] = await HashAsync(have.Path, hashFile, run.BytesOf(name, have.Size), ct);
+
+                run.Finish(name);
+            });
+
+        run.End();
+
+        return hashes;
+    }
+
+    private static async Task<string?> HashAsync(
+        string path,
         Func<string, CancellationToken, IProgress<long>?, Task<string>> hashFile,
         IProgress<long>? bytesRead,
         CancellationToken cancellationToken)
     {
-        var name = Path.GetFileName(installed.Path);
-
-        if (recorded.TryGetValue(name, out var entry) &&
-            entry.Size == installed.Size &&
-            entry.ModifiedUtc == installed.ModifiedUtc)
-        {
-            return entry.ContentHash;
-        }
-
         try
         {
-            return await hashFile(installed.Path, cancellationToken, bytesRead);
+            return await hashFile(path, cancellationToken, bytesRead);
         }
         catch (Exception) when (cancellationToken.IsCancellationRequested is false)
         {
@@ -232,5 +271,68 @@ public static class ModSyncPlanner
         }
 
         return recorded;
+    }
+
+
+    /// <summary>
+    /// The planning half of the strip, told from several files at once. Serialised, so the count
+    /// only ever moves forward and a report never arrives out of the order it was made in.
+    /// </summary>
+    /// <param name="completed">What the manifest answered, and what is only being installed - done before anything is read.</param>
+    private sealed class HashRun(int completed, int total, IProgress<ModSyncProgress>? progress)
+    {
+        private readonly Lock _gate = new();
+
+        private int _completed = completed;
+
+
+        /// <summary>Everything that needed no reading, at once, before the first file is opened.</summary>
+        public void Begin() => Send(new ModSyncProgress(ModSyncPhase.Planning, _completed, total));
+
+        public void Report(string name, long bytesRead, long size)
+            => Send(new ModSyncProgress(ModSyncPhase.Planning, _completed, total)
+            {
+                Detail = name,
+                BytesTransferred = bytesRead,
+                TotalBytes = size,
+                Concurrent = true
+            });
+
+        /// <summary>
+        /// Null without a strip, so the hash takes its quicker path that reports nothing.
+        /// </summary>
+        public IProgress<long>? BytesOf(string name, long size)
+            => progress is null ? null : new InlineProgress<long>(read => Report(name, read, size));
+
+        public void Finish(string name)
+        {
+            lock (_gate)
+            {
+                _completed++;
+
+                progress?.Report(new ModSyncProgress(ModSyncPhase.Planning, _completed, total)
+                {
+                    Detail = name,
+                    Concurrent = true,
+                    ItemFinished = true
+                });
+            }
+        }
+
+        /// <summary>Not concurrent, so whatever rows are left are closed.</summary>
+        public void End() => Send(new ModSyncProgress(ModSyncPhase.Planning, _completed, total));
+
+        private void Send(ModSyncProgress value)
+        {
+            if (progress is null)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                progress.Report(value with { Completed = _completed });
+            }
+        }
     }
 }

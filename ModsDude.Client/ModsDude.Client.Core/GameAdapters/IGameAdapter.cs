@@ -108,7 +108,12 @@ public interface ILocalModAdapter : IBaseModAdapter
     /// </remarks>
     ModTargets ModTargets { get; }
 
-    Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken);
+    /// <param name="skip">
+    /// Files the caller already knows, by full path - left unopened and left out of the answer. Sync
+    /// passes the ones its manifest still describes, so planning opens only what has changed since
+    /// the last apply rather than every archive in the folder.
+    /// </param>
+    Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken);
 
     /// <summary>
     /// Where a mod version's file belongs, and what it is called. The write side of the adapter -

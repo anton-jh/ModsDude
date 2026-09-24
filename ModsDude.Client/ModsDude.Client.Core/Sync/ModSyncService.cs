@@ -163,6 +163,7 @@ public sealed class ModSyncService(
 
         IReadOnlyList<DesiredMod> desired = [];
         int? revision = null;
+        Task<(IReadOnlyList<DesiredMod> Mods, int Revision)>? desiredLoad = null;
 
         if (request.ClearAll)
         {
@@ -170,29 +171,88 @@ public sealed class ModSyncService(
         }
         else
         {
-            var targetRevision = ResolveTargetRevision(request);
-            var (mods, head) = await GetDesiredAsync(request, targetRevision, cancellationToken);
-
-            desired = mods;
-            revision = head;
+            desiredLoad = GetDesiredAsync(request, ResolveTargetRevision(request), cancellationToken);
         }
 
-        var installed = await GetInstalledAsync(request.Adapter, target, cancellationToken);
         var manifest = manifestStore.TryRead(request.TargetRef);
 
-        // Fetched only when something is actually going to be removed. It is the one input that
-        // needs the repo's mod list, and a re-apply that changes nothing should not pay for it.
-        var registered = NeedsRegisteredContent(desired, installed.Mods, manifest)
-            ? await GetRegisteredContentAsync(request.RepoId, cancellationToken)
-            : RegisteredContent.None;
+        // Started now, beside everything else, where the folder is about to change profile: then it is
+        // leaving one list for another and something is almost certainly removed, which is the one
+        // thing the repo's mod list is needed for. A re-apply of the profile the folder already runs
+        // does not start it - that is the apply that should cost nothing.
+        using var prefetchCancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var prefetch = manifest?.ProfileId != request.ProfileId
+            ? GetRegisteredContentAsync(request.RepoId, prefetchCancel.Token)
+            : null;
+        var prefetchUsed = false;
 
-        var items = await ModSyncPlanner.PlanAsync(
-            desired, installed.Mods, registered, manifest, null, cancellationToken, progress);
+        try
+        {
+            // Off the caller's thread, because the part of the scan the manifest cannot answer opens
+            // archives, and alongside the request for the mod list, because neither needs the other.
+            var installedScan = Task.Run(() => GetInstalledAsync(request.Adapter, target, manifest, cancellationToken), cancellationToken);
+
+            await Task.WhenAll(desiredLoad ?? Task.CompletedTask, installedScan);
+
+            var installed = await installedScan;
+
+            if (desiredLoad is not null)
+            {
+                (desired, revision) = await desiredLoad;
+            }
+
+            // Needed only when something is actually going to be removed. It is the one input that
+            // needs the repo's mod list, and a re-apply that changes nothing should not pay for it.
+            RegisteredContent registered;
+
+            if (NeedsRegisteredContent(desired, installed.Mods, manifest))
+            {
+                prefetchUsed = true;
+                registered = await (prefetch ?? GetRegisteredContentAsync(request.RepoId, cancellationToken));
+            }
+            else
+            {
+                registered = RegisteredContent.None;
+            }
+
+            var items = await ModSyncPlanner.PlanAsync(
+                desired, installed.Mods, registered, manifest, null, cancellationToken, progress);
+
+            return BuildPlan(request, revision, installed.UnmanagedFileNames, items);
+        }
+        finally
+        {
+            if (prefetch is not null && prefetchUsed is false)
+            {
+                // Nothing removed after all, or the plan failed before it got that far. Stopped and
+                // awaited either way, so its failure is not left to surface as an unobserved one.
+                prefetchCancel.Cancel();
+
+                try
+                {
+                    await prefetch;
+                }
+                catch (Exception)
+                {
+                    // Its answer is not wanted, so neither is its failure.
+                }
+            }
+        }
+    }
+
+    private ModSyncPlan BuildPlan(
+        ModSyncRequest request,
+        int? revision,
+        IReadOnlyList<string> unmanagedFileNames,
+        IReadOnlyList<ModSyncItem> items)
+    {
+        var target = request.Target;
+        var modFolder = target.Path;
 
         var servingStore = storeProvider.GetStoreServing(modFolder);
         var allStores = storeProvider.GetAllStores();
 
-        items = [.. items, .. FindBlockingFiles(items, installed.UnmanagedFileNames, target, request.Adapter)];
+        items = [.. items, .. FindBlockingFiles(items, unmanagedFileNames, target, request.Adapter)];
 
         return new ModSyncPlan
         {
@@ -204,7 +264,7 @@ public sealed class ModSyncService(
             Target = target,
             Items = items,
             Materialization = DecideMaterialization(modFolder, servingStore, request.Adapter),
-            UnmanagedFileNames = installed.UnmanagedFileNames,
+            UnmanagedFileNames = unmanagedFileNames,
             HashesToFetch = [.. items
                 .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
                 .Select(x => x.DesiredHash)
@@ -986,14 +1046,47 @@ public sealed class ModSyncService(
         })], response.Revision);
     }
 
+    /// <remarks>
+    /// <b>A file the manifest still describes is not opened.</b> Its size and modification time are
+    /// what the last apply left, so it is the file that apply installed - the same check the planner
+    /// trusts the recorded hash on - and the manifest already says which mod and version it is. Only
+    /// the rest go to the adapter, which on an ordinary activation is none of them rather than the
+    /// thousand archives the folder holds.
+    /// </remarks>
     private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(
         ILocalModAdapter adapter,
         ModTarget target,
+        SyncManifest? manifest,
         CancellationToken cancellationToken)
     {
-        var found = await adapter.GetInstalledMods(target, cancellationToken);
         var mods = new List<InstalledMod>();
         var recognised = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var recorded = (manifest?.Entries ?? []).ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in Directory.EnumerateFiles(target.Path))
+        {
+            var info = new FileInfo(file);
+
+            if (recorded.TryGetValue(info.Name, out var entry) is false ||
+                entry.Size != info.Length ||
+                entry.ModifiedUtc != info.LastWriteTimeUtc)
+            {
+                continue;
+            }
+
+            known.Add(file);
+            recognised.Add(info.Name);
+            mods.Add(new InstalledMod(
+                ModKey.From(entry.ModId),
+                ModVersionKey.From(entry.VersionId),
+                file,
+                entry.DisplayName ?? entry.ModId,
+                info.Length,
+                info.LastWriteTimeUtc));
+        }
+
+        var found = await adapter.GetInstalledMods(target, known.Contains, cancellationToken);
 
         foreach (var mod in found)
         {

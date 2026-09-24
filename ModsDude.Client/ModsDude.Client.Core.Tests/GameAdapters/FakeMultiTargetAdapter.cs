@@ -172,8 +172,8 @@ internal sealed class FakeMultiTargetModAdapter(FakeMultiTargetSettings settings
         .Select(x => new ModTarget(x.Key, x.DisplayName, x.ModFolder!)));
 
 
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken)
-        => GetModsFromFolder(target.Path, cancellationToken);
+    public async Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
+        => (await GetModsFromFolder(target.Path, cancellationToken)).Where(x => skip(x.FilePath) is false);
 
     public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
         => Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");

@@ -370,7 +370,10 @@ what is about to happen to their files before it happens.
 - **Desired**: the mod dependencies of the profile being activated — a set of
   `(modId, versionId, contentHash)`.
 - **Actual**: the result of `ILocalModAdapter.GetInstalledMods` for the target being synced —
-  `(modId, versionId)` with file paths.
+  `(modId, versionId)` with file paths. A file whose size and mtime still match the
+  [manifest](#detecting-it-cheaply) is taken from the manifest instead and never opened, so an
+  ordinary activation reads none of the folder's archives; only files the manifest does not
+  describe go to the adapter.
 - **Stored**: which hashes each store on the machine holds — the serving store first, but the
   others matter too, both for installing and for deciding whether an uninstall needs to keep
   anything.

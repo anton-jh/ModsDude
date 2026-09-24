@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -25,6 +26,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     public Guid ProfileId { get; } = Guid.NewGuid();
 
     private int _downloadLinksMinted;
+    private int _modListFetches;
 
     public int DownloadLinksMinted => Volatile.Read(ref _downloadLinksMinted);
 
@@ -125,8 +127,15 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         });
     }
 
+    /// <summary>How many times the repo's mod list was asked for - the fetch a re-apply should never pay for.</summary>
+    public int ModListFetches => Volatile.Read(ref _modListFetches);
+
     public Task<GetModsResponse> GetModsV1Async(Guid repoId, DateTime? updatedAfter = null, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(new GetModsResponse { Mods = [.. _registered], NextCursor = null });
+    {
+        Interlocked.Increment(ref _modListFetches);
+
+        return Task.FromResult(new GetModsResponse { Mods = [.. _registered], NextCursor = null });
+    }
 
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
     {
@@ -205,15 +214,24 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
     public bool SupportsHardlinks { get; } = supportsHardlinks;
 
 
-    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, CancellationToken cancellationToken)
-        => GetModsFromFolder(target.Path, cancellationToken);
+    /// <summary>Every file the adapter has opened, by name - which is what a scan costs.</summary>
+    public ConcurrentBag<string> Opened { get; } = [];
+
+
+    public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
+        => Read(target.Path, skip);
 
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
+        => Read(path, _ => false);
+
+    private Task<IEnumerable<LocalMod>> Read(string path, Func<string, bool> skip)
     {
         var mods = new List<LocalMod>();
 
-        foreach (var file in Directory.EnumerateFiles(path, "*.zip"))
+        foreach (var file in Directory.EnumerateFiles(path, "*.zip").Where(x => skip(x) is false))
         {
+            Opened.Add(Path.GetFileName(file));
+
             var content = File.ReadAllText(file);
 
             if (SyncTestContent.TryReadVersion(content) is not string version)
