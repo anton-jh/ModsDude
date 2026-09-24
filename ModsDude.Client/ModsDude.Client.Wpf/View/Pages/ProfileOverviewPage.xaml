@@ -108,17 +108,35 @@
 
                             <!-- The Saves list's own flows for this profile's savegame. Publish is always
                                  here; Check in and Check out only where there is a current savegame, and
-                                 greyed with the reason in the tooltip where this machine cannot do them. -->
+                                 greyed with the reason in the tooltip where this machine cannot do them.
+                                 Whichever of the two the Saves row would lead with comes first and
+                                 accented, so each pair is drawn twice and one of them is shown. -->
                             <StackPanel Orientation="Horizontal"
                                         Margin="0 12 0 0"
                                         Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Button Content="Check in"
+                                        Style="{DynamicResource AccentButtonStyle}"
+                                        MinWidth="110"
+                                        ToolTip="{Binding CheckInToolTip}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Command="{Binding CheckInCommand}"
+                                        Visibility="{Binding ChecksInAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                 <Button Content="{Binding CheckOutLabel}"
                                         Style="{DynamicResource AccentButtonStyle}"
                                         MinWidth="110"
                                         ToolTip="{Binding CheckOutToolTip}"
                                         ToolTipService.ShowOnDisabled="True"
                                         Command="{Binding CheckOutCommand}"
-                                        Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <Button Content="{Binding CheckOutLabel}"
+                                        Margin="8 0 0 0"
+                                        MinWidth="110"
+                                        ToolTip="{Binding CheckOutToolTip}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Command="{Binding CheckOutCommand}"
+                                        Visibility="{Binding ChecksInAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                 <Button Content="Check in"
                                         Margin="8 0 0 0"
@@ -126,7 +144,7 @@
                                         ToolTip="{Binding CheckInToolTip}"
                                         ToolTipService.ShowOnDisabled="True"
                                         Command="{Binding CheckInCommand}"
-                                        Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                 <Button Content="Publish a save"
                                         MinWidth="110"

@@ -172,6 +172,14 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// </summary>
     public bool HasCurrent => Current is not null;
 
+    /// <summary>
+    /// Which of the two leads, the way the Saves row decides it: Check in where the save is yours and
+    /// here to hand back, Check out otherwise - so the card always has one obvious thing to do.
+    /// </summary>
+    public bool ChecksInAsPrimary => Current is { CanCheckIn: true };
+
+    public bool ChecksOutAsPrimary => Current is { CanCheckIn: false };
+
     public string CheckOutLabel => Current?.CheckOutLabel ?? "Check out";
 
     public string PublishToolTip =>
@@ -461,6 +469,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             _flowService.Offer(_repo, current, _flowService.ReadHost(_repo), NameOf);
         }
 
+        OnPropertyChanged(nameof(ChecksInAsPrimary));
+        OnPropertyChanged(nameof(ChecksOutAsPrimary));
         OnPropertyChanged(nameof(CheckOutLabel));
         OnPropertyChanged(nameof(CheckOutToolTip));
         OnPropertyChanged(nameof(CheckInToolTip));
