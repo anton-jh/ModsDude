@@ -41,7 +41,19 @@ public sealed record RegisteredContent(IReadOnlySet<string> Hashes)
 {
     public static RegisteredContent None { get; } = new(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// What the repo calls each content, by hash - the mod's title as it was imported. The profile's
+    /// dependencies carry no names, and a file the manifest answers for is never opened to read one,
+    /// so without this a plan names most of its mods by id.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
+
     public bool Holds(string? hash) => hash is not null && Hashes.Contains(hash);
+
+    public string? NameOf(string? hash)
+        => hash is not null && Names.TryGetValue(hash, out var name) && string.IsNullOrWhiteSpace(name) is false
+            ? name
+            : null;
 }
 
 

@@ -177,9 +177,10 @@ public sealed class ModSyncService(
         var manifest = manifestStore.TryRead(request.TargetRef);
 
         // Started now, beside everything else, where the folder is about to change profile: then it is
-        // leaving one list for another and something is almost certainly removed, which is the one
-        // thing the repo's mod list is needed for. A re-apply of the profile the folder already runs
-        // does not start it - that is the apply that should cost nothing.
+        // leaving one list for another and something is almost certainly removed, which is what the
+        // repo's mod list is needed for - and whatever it is taking on is named from it. A re-apply of
+        // the profile the folder already runs does not start it - that is the apply that should cost
+        // nothing.
         using var prefetchCancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var prefetch = manifest?.ProfileId != request.ProfileId
             ? GetRegisteredContentAsync(request.RepoId, prefetchCancel.Token)
@@ -210,6 +211,22 @@ public sealed class ModSyncService(
                 prefetchUsed = true;
                 registered = await (prefetch ?? GetRegisteredContentAsync(request.RepoId, cancellationToken));
             }
+            else if (prefetch is not null)
+            {
+                // Nothing to classify with it, but it is already on its way and it is where the mods
+                // being installed get their titles from. Names only, so the plan is otherwise exactly
+                // what it would have been without it - and a list that failed to arrive costs names.
+                prefetchUsed = true;
+
+                try
+                {
+                    registered = RegisteredContent.None with { Names = (await prefetch).Names };
+                }
+                catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+                {
+                    registered = RegisteredContent.None;
+                }
+            }
             else
             {
                 registered = RegisteredContent.None;
@@ -224,8 +241,8 @@ public sealed class ModSyncService(
         {
             if (prefetch is not null && prefetchUsed is false)
             {
-                // Nothing removed after all, or the plan failed before it got that far. Stopped and
-                // awaited either way, so its failure is not left to surface as an unobserved one.
+                // The plan failed before it got that far. Stopped and awaited, so its failure is not
+                // left to surface as an unobserved one.
                 prefetchCancel.Cancel();
 
                 try
@@ -1195,6 +1212,7 @@ public sealed class ModSyncService(
     private async Task<RegisteredContent> GetRegisteredContentAsync(Guid repoId, CancellationToken cancellationToken)
     {
         var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         string? cursor = null;
 
         do
@@ -1204,13 +1222,14 @@ public sealed class ModSyncService(
             foreach (var mod in page.Mods)
             {
                 hashes.Add(mod.ContentHash);
+                names.TryAdd(mod.ContentHash, mod.DisplayName);
             }
 
             cursor = page.NextCursor;
         }
         while (string.IsNullOrEmpty(cursor) is false);
 
-        return new RegisteredContent(hashes);
+        return new RegisteredContent(hashes) { Names = names };
     }
 
     /// <summary>

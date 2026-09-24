@@ -139,6 +139,49 @@ public class ModSyncServiceTests
         Assert.All(plan.Items, x => Assert.False(x.InstalledIsRecoverable));
     }
 
+    /// <summary>
+    /// The profile's dependencies carry no names, and a file the manifest answers for is never opened
+    /// to read one. The repo's mod list has the titles, and moving a folder onto a profile asks for it
+    /// anyway - so what is taken on and what is taken off are both named by title rather than by id.
+    /// </summary>
+    [Fact]
+    public async Task Moving_a_folder_onto_a_profile_names_its_mods_by_the_repos_titles()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_old", "1.0.0", Mod("1.0.0", "old"), title: "Old Tractor");
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        // The same folder, now wanted by another profile: the old mod comes off, a new one goes on.
+        fixture.Server.Unpin("fs25_old");
+        fixture.Server.Pin("fs25_new", "1.0.0", Mod("1.0.0", "new"), title: "New Tractor");
+        fixture.WriteManifestForAnotherProfile();
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal("New Tractor", plan.Items.Single(x => x.Action is ModSyncAction.Install).DisplayName);
+        Assert.Equal("Old Tractor", plan.Items.Single(x => x.Action is ModSyncAction.UninstallRecoverable).DisplayName);
+    }
+
+    /// <summary>
+    /// And the title goes into the manifest with the file, so a re-apply that never asks for the list
+    /// still has it.
+    /// </summary>
+    [Fact]
+    public async Task A_title_the_repo_gave_is_kept_for_a_re_apply_that_does_not_ask_for_the_list()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"), title: "A Tractor");
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        var fetchesBefore = fixture.Server.ModListFetches;
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(fetchesBefore, fixture.Server.ModListFetches);
+        Assert.Equal("A Tractor", Assert.Single(plan.Items).DisplayName);
+    }
+
     [Fact]
     public async Task A_hash_another_disk_already_holds_is_copied_across_rather_than_downloaded()
     {
@@ -1228,6 +1271,22 @@ public class ModSyncServiceTests
 
         /// <summary>What this folder's own manifest says it is running - the list it is leaving.</summary>
         public void WriteManifest(string hash) => WriteManifest(Target, Folder.Path, hash);
+
+        /// <summary>
+        /// The manifest as it stands, rewritten as another profile's and without the names an older
+        /// client never recorded - so the next plan moves the folder off it, and any title it shows
+        /// came from the repo rather than from here.
+        /// </summary>
+        public void WriteManifestForAnotherProfile()
+        {
+            var manifest = Manifests.TryRead(Target)!;
+
+            Manifests.Write(manifest with
+            {
+                ProfileId = Guid.NewGuid(),
+                Entries = [.. manifest.Entries.Select(x => x with { DisplayName = null })]
+            });
+        }
 
         /// <summary>What the game's other folder is running, which no sweep may take back.</summary>
         public void WriteSecondTargetManifest(string hash) => WriteManifest(SecondTarget, _second.Path, hash);

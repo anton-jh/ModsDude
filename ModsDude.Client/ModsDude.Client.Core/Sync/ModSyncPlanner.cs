@@ -23,7 +23,8 @@ public static class ModSyncPlanner
     /// What the repo can reproduce, keyed by content rather than by version id. Recoverability is a
     /// property of the bytes: a file whose hash the repo holds can be fetched again whatever it
     /// calls itself, and a file wearing a registered version id while containing something else
-    /// cannot. Only consulted for files that are about to be removed.
+    /// cannot. Only consulted for files that are about to be removed - and, where it carries them,
+    /// for the titles every item is named by, ahead of whatever the file or the manifest said.
     /// </param>
     /// <param name="hashFile">
     /// How to read a file's content hash, and where to say how far through the file it has got.
@@ -105,7 +106,7 @@ public static class ModSyncPlanner
                 {
                     Action = ModSyncAction.Install,
                     ModId = want.ModId,
-                    DisplayName = want.DisplayName ?? want.ModId.Value,
+                    DisplayName = registered.NameOf(want.ContentHash) ?? want.DisplayName ?? want.ModId.Value,
                     DesiredVersion = want.VersionId,
                     DesiredHash = want.ContentHash,
                     DesiredSize = want.SizeBytes,
@@ -131,7 +132,7 @@ public static class ModSyncPlanner
                     ? (IsMisnamed(have.Path, want.FileName) ? ModSyncAction.Rename : ModSyncAction.Keep)
                     : ModSyncAction.Replace,
                 ModId = want.ModId,
-                DisplayName = want.DisplayName ?? have.DisplayName,
+                DisplayName = registered.NameOf(want.ContentHash) ?? want.DisplayName ?? have.DisplayName,
                 DesiredVersion = want.VersionId,
                 DesiredHash = want.ContentHash,
                 DesiredSize = want.SizeBytes,
@@ -156,7 +157,7 @@ public static class ModSyncPlanner
             {
                 Action = recoverable ? ModSyncAction.UninstallRecoverable : ModSyncAction.Quarantine,
                 ModId = have.ModId,
-                DisplayName = have.DisplayName,
+                DisplayName = registered.NameOf(hash) ?? have.DisplayName,
                 InstalledVersion = have.VersionId,
                 InstalledPath = have.Path,
                 InstalledHash = hash,
