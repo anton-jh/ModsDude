@@ -121,6 +121,13 @@ public partial class AccountViewModel : ObservableObject
         return modal.Result;
     }
 
+    /// <summary>
+    /// Asks the server again for the tag and colour, where the round trip at sign-in did not get them -
+    /// which is what happens when the server was not answering yet.
+    /// </summary>
+    public Task RefreshIdentityIfMissingAsync()
+        => Tag is null ? RefreshIdentityAsync() : Task.CompletedTask;
+
     private void OnAccountChanged(object? sender, SignedInAccount account)
     {
         DisplayName = Describe(account);

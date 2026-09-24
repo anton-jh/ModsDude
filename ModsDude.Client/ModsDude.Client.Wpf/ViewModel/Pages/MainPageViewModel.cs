@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -31,6 +32,8 @@ public partial class MainPageViewModel
     private readonly MenuItemViewModel _createRepoMenuItem;
 
     private readonly ProfileSyncStatusService _syncStatus;
+    private readonly ConnectionRetry _connection;
+    private readonly CancellationTokenSource _disposed = new();
 
     private bool _selectionRestored;
 
@@ -48,10 +51,12 @@ public partial class MainPageViewModel
         IDialogService dialogService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
-        ProfileSyncStatusService syncStatus)
+        ProfileSyncStatusService syncStatus,
+        ConnectionRetry connection)
     {
         Account = account;
         _syncStatus = syncStatus;
+        _connection = connection;
 
         _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
             .WithIcon(MenuIcons.CreateRepo);
@@ -156,11 +161,14 @@ public partial class MainPageViewModel
 
     protected override void Init()
     {
-        LoadReposCommand.Execute(null);
+        LoadInitialRepos();
     }
 
     public void Dispose()
     {
+        // Stops the first load retrying for a shell nobody is looking at any more.
+        _disposed.Cancel();
+
         _shellNavigationService.Unregister(this);
 
         Account.PropertyChanged -= OnAccountChanged;
@@ -207,6 +215,25 @@ public partial class MainPageViewModel
     }
 
 
+    /// <summary>
+    /// The first load, retried until the server answers - see <see cref="ConnectionRetry"/>.
+    /// </summary>
+    /// <remarks>
+    /// Async void for the same reason the command's own Execute rethrows: a failure that waiting will
+    /// not fix still reaches the error dialog on the UI thread, as it did before this retried at all.
+    /// </remarks>
+    private async void LoadInitialRepos()
+    {
+        // Skipped where the refresh button already got the list in while this was waiting.
+        var attempt = (CancellationToken _) => _repoService.HasLoaded ? Task.CompletedTask : LoadReposCommand.ExecuteAsync(null);
+
+        if (await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token))
+        {
+            // Asked for alongside the list and missing for the same reason, and nothing else asks again.
+            await Account.RefreshIdentityIfMissingAsync();
+        }
+    }
+
     [RelayCommand]
     private void CreateRepo()
     {
@@ -219,6 +246,10 @@ public partial class MainPageViewModel
         await _repoService.RefreshRepos(cancellationToken);
 
         RestoreLastSelectedRepo();
+
+        // The refresh button got through while the first load was waiting out its interval, so that
+        // wait is only keeping a notice up about a list that is already here.
+        _connection.RetryNow();
     }
 
     /// <summary>

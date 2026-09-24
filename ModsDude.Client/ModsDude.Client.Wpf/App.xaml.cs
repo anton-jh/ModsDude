@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
@@ -137,15 +138,16 @@ public partial class App : Application
         TidyStoresInBackground();
 
         var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
+        var connection = _serviceProvider.GetRequiredService<ConnectionRetry>();
 
         if (background)
         {
-            await SignInWithoutInterruptingAsync(authentication, window);
+            await SignInWithoutInterruptingAsync(authentication, connection, window);
 
             return;
         }
 
-        await authentication.Get(default);
+        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
     }
 
 
@@ -162,11 +164,12 @@ public partial class App : Application
     /// <para>
     /// <b>A failure is not a reason to open a browser.</b> Logon is exactly when the network is not up
     /// yet, which arrives here as an exception rather than as "needs the user" - so it is logged, and the
-    /// full sign-in waits for the window like the interactive case does. Nothing is retried on a timer:
-    /// the next thing that needs the account, opening the window, is the retry.
+    /// full sign-in waits for the window like the interactive case does. Nothing is retried on a timer
+    /// while the window is closed: the next thing that needs the account, opening the window, is the
+    /// retry - and from there it is retried like any other start.
     /// </para>
     /// </remarks>
-    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, MainWindow window)
+    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, ConnectionRetry connection, MainWindow window)
     {
         try
         {
@@ -183,7 +186,7 @@ public partial class App : Application
 
         await window.WaitUntilShownAsync();
 
-        await authentication.Get(default);
+        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
     }
 
     /// <summary>
@@ -370,6 +373,12 @@ public partial class App : Application
 
         // Asks whether the sidebar's lists are behind the server, and only says so - see the class.
         services.AddSingleton<RemoteChangeWatcher>();
+
+        // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
+        // library's own way of saying so, which Core cannot see.
+        services.AddSingleton(sp => new ConnectionRetry(
+            sp.GetRequiredService<ILogger<ConnectionRetry>>(),
+            alsoConnectionFailure: AuthenticationService.IsUnreachable));
 
         // Windows notifications: the toolkit behind one seam, and the object that decides when the
         // window's own notices and toasts are worth sending through it.

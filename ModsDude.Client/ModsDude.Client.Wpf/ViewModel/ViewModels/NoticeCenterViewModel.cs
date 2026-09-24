@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Savegames;
@@ -62,6 +63,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly DismissalLedger _dismissals;
     private readonly BackgroundProblemSource _problems;
     private readonly IUpdateStatus _updates;
+    private readonly ConnectionRetry _connection;
     private readonly ILogger _logger;
 
     /// <summary>The one place a notice is suppressed: the drifted profile's own mod list editor.</summary>
@@ -93,6 +95,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         DismissalLedger dismissals,
         BackgroundProblemSource problems,
         IUpdateStatus updates,
+        ConnectionRetry connection,
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;
@@ -106,6 +109,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals = dismissals;
         _problems = problems;
         _updates = updates;
+        _connection = connection;
         _logger = logger;
 
         _monitor.Changed += OnDriftChanged;
@@ -128,6 +132,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals.Changed += OnRedrawNeeded;
         _problems.Changed += OnRedrawNeeded;
         _updates.Changed += OnRedrawNeeded;
+        _connection.Changed += OnRedrawNeeded;
     }
 
 
@@ -284,6 +289,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals.Changed -= OnRedrawNeeded;
         _problems.Changed -= OnRedrawNeeded;
         _updates.Changed -= OnRedrawNeeded;
+        _connection.Changed -= OnRedrawNeeded;
     }
 
 
@@ -380,6 +386,11 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
             case NoticeActionKind.RestartToUpdate:
                 await _updates.RestartAsync();
+
+                break;
+
+            case NoticeActionKind.RetryConnection:
+                _connection.RetryNow();
 
                 break;
         }
@@ -516,7 +527,10 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
     private void Refresh()
     {
-        var built = NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment)
+        // First, because while it is up everything below it is working from a repo list that has not
+        // arrived.
+        var built = _connection.Build()
+            .Concat(NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment))
             .Concat(_problems.Build())
             .Concat(_updates.ReadyVersion is string ready ? [UpdateNotice.For(ready)] : [])
             .ToList();

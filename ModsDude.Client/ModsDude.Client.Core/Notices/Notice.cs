@@ -57,7 +57,10 @@ public enum NoticeActionKind
     OpenLog,
 
     /// <summary>Restart into the version that has already been downloaded.</summary>
-    RestartToUpdate
+    RestartToUpdate,
+
+    /// <summary>Stop waiting and try reaching the server again now.</summary>
+    RetryConnection
 }
 
 

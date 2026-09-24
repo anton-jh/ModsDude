@@ -120,6 +120,15 @@ public class AuthenticationService : IAccessTokenAccessor
     }
 
 
+    /// <summary>
+    /// Whether the sign-in library is saying the identity provider did not answer, in its own words
+    /// rather than as the socket error underneath - which <see cref="Core.Connectivity.ConnectionFailure"/>
+    /// already recognises wherever it is wrapped.
+    /// </summary>
+    public static bool IsUnreachable(Exception exception)
+        => exception is MsalServiceException { ErrorCode: MsalError.RequestTimeout or MsalError.ServiceNotAvailable };
+
+
     private async Task<AuthenticationResult> AcquireAsync(CancellationToken cancellationToken)
     {
         var account = await FindCurrentAccountAsync();
