@@ -1026,6 +1026,12 @@
           "origin": {
             "$ref": "#/components/schemas/ProfileRevisionOrigin"
           },
+          "playedOn": {
+            "items": {
+              "$ref": "#/components/schemas/SavegameSnapshotRefDto"
+            },
+            "type": "array"
+          },
           "profileId": {
             "format": "guid",
             "type": "string"

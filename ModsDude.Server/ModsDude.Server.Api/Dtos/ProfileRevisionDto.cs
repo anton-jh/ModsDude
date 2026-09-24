@@ -16,6 +16,11 @@ namespace ModsDude.Server.Api.Dtos;
 /// It is what lets the history say "restored from 3" rather than showing a rollback as an ordinary
 /// edit that happens to match an old one.
 /// </param>
+/// <param name="PlayedOn">
+/// The savegame snapshots recorded as played on this revision. Any at all and it cannot be pruned -
+/// a save whose mod list is gone is not restorable - so the history can say so before anybody asks,
+/// rather than only in the refusal afterwards.
+/// </param>
 public record ProfileRevisionDto(
     Guid RepoId,
     Guid ProfileId,
@@ -29,8 +34,12 @@ public record ProfileRevisionDto(
     int ModCount,
     ProfileRevisionChangesDto Changes,
     DateOnly? DeletionScheduledFor,
-    DeletionReason? DeletionReason)
+    DeletionReason? DeletionReason,
+    IEnumerable<SavegameSnapshotRefDto> PlayedOn)
 {
+    /// <summary>
+    /// A revision that has just been written, which nothing can have been played on yet.
+    /// </summary>
     public static ProfileRevisionDto FromModel(ProfileRevision revision, UserDto createdBy)
         => new(
             revision.RepoId.Value,
@@ -45,7 +54,8 @@ public record ProfileRevisionDto(
             revision.ModCount,
             new ProfileRevisionChangesDto(revision.Changes.Added, revision.Changes.Changed, revision.Changes.Removed),
             revision.DeletionScheduledFor,
-            revision.DeletionReason);
+            revision.DeletionReason,
+            []);
 }
 
 /// <summary>What a revision did to the one before it.</summary>

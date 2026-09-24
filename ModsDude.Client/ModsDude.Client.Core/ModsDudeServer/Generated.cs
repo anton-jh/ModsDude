@@ -10082,6 +10082,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
         public ProfileRevisionOrigin Origin { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("playedOn", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<SavegameSnapshotRefDto> PlayedOn { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("profileId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Guid ProfileId { get; set; } = default!;
 

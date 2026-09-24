@@ -12,7 +12,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// to render a line: a profile holds one to two thousand mods, and a history page renders tens of
 /// these at once.
 /// </remarks>
-public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool isHead) : ObservableObject
+public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool isHead) : ObservableObject, ISelectableRow
 {
     public ProfileRevisionDto Revision { get; } = revision;
 
@@ -22,13 +22,59 @@ public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool 
     public bool IsHead { get; } = isHead;
 
     /// <summary>
-    /// Whether this row is selected for pruning. Never the head: it is what the profile pins, and a
-    /// checkbox that can only ever be refused is worse than no checkbox.
+    /// Picked in the history. Any row can be, the head included: a click has to highlight what it
+    /// landed on, and what one pick means is showing that revision. Deleting is narrower - see
+    /// <see cref="CanPrune"/> - and the page only ever deletes the picked rows that pass it.
     /// </summary>
-    public bool CanPrune => IsHead is false;
-
     [ObservableProperty]
-    private bool _isMarkedForPruning;
+    private bool _isSelected;
+
+    /// <summary>The savegame snapshots played on this revision, each of which keeps it.</summary>
+    public IReadOnlyList<SavegameSnapshotRefDto> PlayedOn { get; } = [.. revision.PlayedOn ?? []];
+
+    public bool IsPlayedOn => PlayedOn.Count > 0;
+
+    /// <summary>
+    /// Whether pruning would delete this revision. The same two rules the server refuses by, so a
+    /// row the page offers is one the server takes - short of a savegame played on it in between,
+    /// which the prune's own answer still names.
+    /// </summary>
+    public bool CanPrune => IsHead is false && IsPlayedOn is false;
+
+    /// <summary>Why pruning keeps this revision, or null where it would not.</summary>
+    public string? KeptBecause => IsHead
+        ? "The current list cannot be deleted. Edit the profile to change what it pins."
+        : IsPlayedOn
+            ? $"Cannot be deleted while a savegame snapshot was played on it: {PlayedOnList}. Delete those snapshots first."
+            : null;
+
+    public string PlayedOnText => PlayedOn.Count == 1
+        ? "Played on"
+        : $"Played on ×{PlayedOn.Count}";
+
+    public string PlayedOnTooltip => $"Savegame snapshots played on this revision: {PlayedOnList}.";
+
+    /// <summary>
+    /// A glyph for how the revision came about, so a restore or a copy stands out in a column of
+    /// ordinary edits without reading every summary.
+    /// </summary>
+    public string OriginGlyph => Revision.Origin switch
+    {
+        ProfileRevisionOrigin.Created => "",
+        ProfileRevisionOrigin.Copied => "",
+        ProfileRevisionOrigin.Restored => "",
+        _ => ""
+    };
+
+    public string OriginTooltip => Revision.Origin switch
+    {
+        ProfileRevisionOrigin.Created => "Created",
+        ProfileRevisionOrigin.Copied => "Copied",
+        ProfileRevisionOrigin.Restored => "Restored",
+        _ => "Saved"
+    };
+
+    private string PlayedOnList => string.Join(", ", PlayedOn.Select(x => $"{x.SavegameName} · snapshot {x.Number}"));
 
     public string Title => Revision.Label is { Length: > 0 } label
         ? $"{Number}. {label}"

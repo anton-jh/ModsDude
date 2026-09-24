@@ -93,6 +93,17 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         Mods = [];
         Changes = [];
         ComparisonTargets = [];
+
+        // The profile editor's selection, over a list with no search: what is shown is everything.
+        // Enter and a double click have nothing to do here beyond the pick they already made.
+        Selection = new ModListSelection(
+            shown: () => Revisions,
+            all: () => Revisions,
+            activate: _ => { },
+            verb: "Delete",
+            describe: DescribeDelete);
+
+        Selection.Changed += OnSelectionChanged;
     }
 
 
@@ -102,6 +113,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     public bool CanEdit { get; }
 
     public ObservableCollection<ProfileRevisionViewModel> Revisions { get; }
+
+    /// <summary>
+    /// The picked revisions. One pick is a revision to read, which is what <see cref="Selected"/>
+    /// follows; several are a set to delete, and the right-hand pane says what deleting it would do.
+    /// </summary>
+    public ModListSelection Selection { get; }
 
     /// <summary>What the selected revision pinned.</summary>
     public ObservableCollection<PinnedModViewModel> Mods { get; }
@@ -114,6 +131,11 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     /// </summary>
     public ObservableCollection<ProfileRevisionViewModel> ComparisonTargets { get; }
 
+    /// <summary>
+    /// The revision the right-hand pane shows: the picked one while exactly one is picked, and none
+    /// otherwise. Set from <see cref="Selection"/> rather than bound to the list, so that the pane
+    /// and the highlight can never disagree about which revision is meant.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
@@ -143,6 +165,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private ProfileRevisionViewModel? _comparedWith;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsNothing))]
     private bool _isLoading = true;
 
     [ObservableProperty]
@@ -158,6 +181,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveAsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PruneCommand))]
     private bool _isWorking;
 
     /// <summary>
@@ -209,29 +233,78 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     /// </summary>
     public bool CanPrune { get; }
 
+    /// <summary>The pane's own state while several revisions are picked.</summary>
+    public bool ShowsSeveral => Selection.SelectedCount > 1;
+
+    /// <summary>The pane's own state while nothing is picked, once there is something to pick.</summary>
+    public bool ShowsNothing => Selection.SelectedCount == 0 && IsLoading is false;
+
+    public string SeveralTitle => $"{Selection.SelectedCount} revisions selected";
+
+    public bool ShowsSelectionBar => CanPrune && Selection.HasSelection;
+
+    public bool ShowsRevisionActions => CanEdit && HasSelection;
+
     /// <summary>
-    /// How many rows are ticked. Counted rather than derived on demand, because the footer that reads
-    /// it is bound and the rows change one at a time.
+    /// What deleting the picked set would actually do, for an admin - or, for anybody else, how to
+    /// get back to reading one.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasMarkedRevisions))]
-    [NotifyPropertyChangedFor(nameof(PruneText))]
-    [NotifyCanExecuteChangedFor(nameof(PruneCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ClearMarksCommand))]
-    private int _markedCount;
+    public string SeveralText => CanPrune
+        ? DeletableCount switch
+        {
+            0 => "None of them can be deleted.",
+            1 => "1 of them can be deleted.",
+            var count when count == Selection.SelectedCount => $"All {count} can be deleted.",
+            var count => $"{count} of them can be deleted."
+        }
+        : "Pick a single revision to see what it pinned and what it changed.";
 
+    /// <summary>
+    /// Which of the picked revisions a delete would leave, and why - so the count on the button is
+    /// never a surprise. Null where it would delete every one of them.
+    /// </summary>
+    public string? KeptText
+    {
+        get
+        {
+            var picked = Picked();
+            var head = picked.Any(x => x.IsHead);
+            var played = picked.Count(x => x.IsHead is false && x.IsPlayedOn);
 
-    public bool HasMarkedRevisions => MarkedCount > 0;
+            var parts = new List<string>();
 
-    public string PruneText => MarkedCount == 1
-        ? "Delete 1 revision"
-        : $"Delete {MarkedCount} revisions";
+            if (head)
+            {
+                parts.Add(picked.Count == 1 ? "The current revision cannot be deleted." : "The current revision is kept.");
+            }
+
+            if (played > 0)
+            {
+                parts.Add(picked.Count == 1
+                    ? "A savegame snapshot was played on it, so it is kept."
+                    : played == 1
+                        ? "1 was played on a savegame snapshot and is kept."
+                        : $"{played} were played on savegame snapshots and are kept.");
+            }
+
+            return parts.Count == 0 ? null : string.Join(" ", parts);
+        }
+    }
+
+    public bool HasKept => KeptText is not null;
+
+    private int DeletableCount => Picked().Count(x => x.CanPrune);
 
 
     /// <summary>
-    /// Deletes the ticked revisions, and says what it could not.
+    /// Deletes the picked revisions that can go, and says what it could not.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Only the picked rows that pass <see cref="ProfileRevisionViewModel.CanPrune"/> are sent. The
+    /// rest are part of the selection because a click has to highlight what it lands on, not because
+    /// anybody asked for them to go - and the bar has already said they stay.
+    /// </para>
     /// <para>
     /// One request for the whole selection: the server deletes what it can and names what it cannot,
     /// so a hundred revisions blocked by one savegame comes back as an answer rather than as a
@@ -247,7 +320,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     [RelayCommand(CanExecute = nameof(CanPruneNow))]
     private async Task Prune(CancellationToken cancellationToken)
     {
-        var marked = Revisions.Where(x => x.IsMarkedForPruning).Select(x => x.Number).ToList();
+        var marked = Picked().Where(x => x.CanPrune).Select(x => x.Number).ToList();
 
         if (marked.Count == 0)
         {
@@ -303,46 +376,74 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasMarkedRevisions))]
-    private void ClearMarks()
+    [RelayCommand]
+    private void SelectAll() => Selection.SelectAllShown();
+
+    [RelayCommand]
+    private void ClearSelection() => Selection.ClearSelection();
+
+    /// <summary>
+    /// Picks every revision that can be deleted and nothing else - the header's box picks every row,
+    /// the current one included, which is the list's gesture rather than the pruning one.
+    /// </summary>
+    [RelayCommand]
+    private void SelectDeletable()
     {
-        foreach (var revision in Revisions)
+        Selection.ClearSelection();
+
+        foreach (var revision in Revisions.Where(x => x.CanPrune))
         {
-            revision.IsMarkedForPruning = false;
+            revision.IsSelected = true;
         }
 
-        RecountMarked();
+        Selection.Recount();
+    }
+
+
+    private bool CanPruneNow() => CanPrune && IsWorking is false && DeletableCount > 0;
+
+    private List<ProfileRevisionViewModel> Picked() => [.. Selection.Picked().OfType<ProfileRevisionViewModel>()];
+
+    private string DescribeDelete(IReadOnlyList<ISelectableRow> picked)
+    {
+        var count = picked.OfType<ProfileRevisionViewModel>().Count(x => x.CanPrune);
+
+        return count switch
+        {
+            0 => "Nothing to delete",
+            1 => "Delete 1 revision",
+            _ => $"Delete {count} revisions"
+        };
     }
 
     /// <summary>
-    /// Ticks every revision that can be pruned, which is every one but the head. What is actually
-    /// deletable is narrower - a savegame may hold one - but that is the server's to say, and
-    /// guessing at it here would be a second copy of a rule that has to agree with the server's.
+    /// A row's own checkbox moves its flag without a gesture, so the counts are redone here. A
+    /// gesture's own writes land here too, and the selection ignores those until it recounts once.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanPruneAny))]
-    private void MarkAllOlder()
-    {
-        foreach (var revision in Revisions)
-        {
-            revision.IsMarkedForPruning = revision.CanPrune;
-        }
-
-        RecountMarked();
-    }
-
-
-    private bool CanPruneNow() => CanPrune && IsWorking is false && HasMarkedRevisions;
-
-    private bool CanPruneAny() => CanPrune && IsWorking is false;
-
-    private void RecountMarked() => MarkedCount = Revisions.Count(x => x.IsMarkedForPruning);
-
     private void OnRevisionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ProfileRevisionViewModel.IsMarkedForPruning))
+        if (e.PropertyName == nameof(ProfileRevisionViewModel.IsSelected))
         {
-            RecountMarked();
+            Selection.Recount();
         }
+    }
+
+    private void OnSelectionChanged()
+    {
+        var picked = Picked();
+
+        Selected = picked.Count == 1 ? picked[0] : null;
+
+        OnPropertyChanged(nameof(ShowsSeveral));
+        OnPropertyChanged(nameof(ShowsNothing));
+        OnPropertyChanged(nameof(SeveralTitle));
+        OnPropertyChanged(nameof(SeveralText));
+        OnPropertyChanged(nameof(ShowsSelectionBar));
+        OnPropertyChanged(nameof(ShowsRevisionActions));
+        OnPropertyChanged(nameof(KeptText));
+        OnPropertyChanged(nameof(HasKept));
+
+        PruneCommand.NotifyCanExecuteChanged();
     }
 
     private Task<bool> GoToSavegameAsync(Guid savegameId)
@@ -550,22 +651,25 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         {
             var row = new ProfileRevisionViewModel(revision, revision.Number == history.HeadRevision);
 
-            // The footer counts ticks, and the rows are ticked one at a time by a binding that has
-            // nothing else to tell anybody.
+            // A row's checkbox writes its flag without going through the selection.
             row.PropertyChanged += OnRevisionChanged;
 
             Revisions.Add(row);
         }
 
-        // The rows are new, so nothing is ticked - including after a prune, where the marks that are
-        // gone were the whole point.
-        RecountMarked();
-
         HasMore = history.HasMore;
 
-        // Assigning this is what loads the mod list, so it happens after the rows exist rather than
-        // as part of building them.
-        Selected = Revisions.FirstOrDefault(x => x.Number == wanted) ?? Revisions.FirstOrDefault();
+        // The rows are new, so nothing is picked - including after a prune, where the picks that are
+        // gone were the whole point. Picking one is what loads its mod list, so it happens after the
+        // rows exist rather than as part of building them.
+        if ((Revisions.FirstOrDefault(x => x.Number == wanted) ?? Revisions.FirstOrDefault()) is { } arrival)
+        {
+            Selection.Click(arrival);
+        }
+        else
+        {
+            Selection.Recount();
+        }
     }
 
     /// <summary>

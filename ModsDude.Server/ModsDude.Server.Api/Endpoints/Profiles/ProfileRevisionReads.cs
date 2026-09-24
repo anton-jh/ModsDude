@@ -21,6 +21,8 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// The authors are resolved in a second query rather than joined. A page of revisions has a handful
 /// of distinct authors between them, and the join would have to produce a nullable value object
 /// inside a projection, which is exactly the kind of expression a provider declines to translate.
+/// The savegame snapshots played on each revision the same way: one query for the page, and one
+/// for the names of the handful of savegames they belong to.
 /// </para>
 /// </remarks>
 internal static class ProfileRevisionReads
@@ -78,6 +80,14 @@ internal static class ProfileRevisionReads
             [.. rows.Select(x => x.CreatedBy).Distinct()],
             cancellationToken);
 
+        var played = await dbContext.SavegameSnapshots.GetDependentSavegameSnapshotsAsync(
+            repoId, profileId, [.. rows.Select(x => x.Number)], cancellationToken);
+
+        var savegameNames = await dbContext.Savegames.GetNamesAsync(
+            repoId, [.. played.Select(x => x.SavegameId).Distinct()], cancellationToken);
+
+        var playedByRevision = played.ToLookup(x => x.Revision);
+
         return
         [
             .. rows.Select(row => new ProfileRevisionDto(
@@ -93,7 +103,11 @@ internal static class ProfileRevisionReads
                 row.ModCount,
                 new ProfileRevisionChangesDto(row.Added, row.Changed, row.Removed),
                 row.DeletionScheduledFor,
-                row.DeletionReason))
+                row.DeletionReason,
+                [.. playedByRevision[row.Number].Select(x => new SavegameSnapshotRefDto(
+                    x.SavegameId.Value,
+                    savegameNames.TryGetValue(x.SavegameId, out var savegame) ? savegame.Value : x.SavegameId.Value.ToString(),
+                    x.Number.Value))]))
         ];
     }
 }
