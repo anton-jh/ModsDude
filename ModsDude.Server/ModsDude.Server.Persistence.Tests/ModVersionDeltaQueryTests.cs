@@ -106,6 +106,7 @@ public class ModVersionDeltaQueryTests(DatabaseFixture fixture)
                 Description = "",
                 FileName = $"{version.ModId}.zip",
                 ContentHash = version.VersionId,
+                SizeBytes = 1024,
                 Locked = false,
                 Attributes = [],
                 Created = _early,

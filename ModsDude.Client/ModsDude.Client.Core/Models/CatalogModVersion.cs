@@ -90,10 +90,7 @@ public record CatalogModVersion(
     /// <summary>The registered file's hash, and null until it is registered.</summary>
     public string? ContentHash { get; init; }
 
-    /// <summary>
-    /// How big the registered file is. Null until registered, and for a version the server has not
-    /// recorded a size for yet - an unknown size, which is not the same as an empty file.
-    /// </summary>
+    /// <summary>How big the registered file is, and null until it is registered.</summary>
     public long? SizeBytes { get; init; }
 
     /// <summary>Where the repo orders this version among its siblings. Null until registered.</summary>

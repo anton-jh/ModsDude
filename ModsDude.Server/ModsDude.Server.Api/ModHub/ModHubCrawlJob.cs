@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ModsDude.Server.Application.Dependencies;
@@ -16,7 +18,7 @@ namespace ModsDude.Server.Api.ModHub;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every tick does up to three things per game, in this order:
+/// A Hangfire recurring job. Every run does up to three things per game, in this order:
 /// </para>
 /// <list type="bullet">
 /// <item><b>Sweep</b> - read every page of the "latest" listing and fetch each mod not yet stored. The
@@ -33,16 +35,14 @@ namespace ModsDude.Server.Api.ModHub;
 /// redesigned site has to show up as an error in the log, never as every mod gone.
 /// </para>
 /// </remarks>
-public class ModHubCrawlerService(
+public class ModHubCrawlJob(
     IServiceScopeFactory scopeFactory,
     IModHubSite site,
     ITimeService timeService,
     IOptions<ModHubOptions> options,
-    ILogger<ModHubCrawlerService> logger)
-    : BackgroundService
+    ILogger<ModHubCrawlJob> logger)
 {
-    /// <summary>Long enough to stay off the startup path, like the other maintenance jobs.</summary>
-    private static readonly TimeSpan _startupDelay = TimeSpan.FromSeconds(30);
+    public const string JobId = "modhub-crawl";
 
     /// <summary>
     /// How many mod pages in a row may fail to parse before the run is taken to be reading a site that
@@ -51,46 +51,82 @@ public class ModHubCrawlerService(
     private const int _unreadableModsInARow = 5;
 
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Registers the job, or removes it when the crawler is disabled or has nothing to crawl.
+    /// Idempotent, like <see cref="Maintenance.RetentionJobs.Register"/>.
+    /// </summary>
+    public static void Register(IRecurringJobManager recurringJobs, ModHubOptions options, ILogger logger)
     {
-        if (options.Value.Enabled is false)
+        if (options.Enabled is false)
         {
+            recurringJobs.RemoveIfExists(JobId);
             logger.LogInformation("The ModHub crawler is disabled; stored ModHub data will not change.");
             return;
         }
 
-        if (options.Value.Games.Count == 0)
+        if (options.Games.Count == 0)
         {
+            recurringJobs.RemoveIfExists(JobId);
             logger.LogWarning("The ModHub crawler has no games configured (ModHub:Games); nothing will be crawled.");
             return;
         }
 
-        try
+        recurringJobs.AddOrUpdate<ModHubCrawlJob>(JobId, x => x.CrawlAsync(null!, CancellationToken.None), options.PollCron);
+    }
+
+
+    /// <summary>
+    /// One run over every configured game. A shutdown partway through is Hangfire's to requeue, and a
+    /// sweep in progress resumes from its persisted page.
+    /// </summary>
+    /// <remarks>
+    /// Not retried: a failure is logged per game, and the next run is never far off. Not guarded by
+    /// <see cref="DisableConcurrentExecutionAttribute"/> either, because the PostgreSQL storage gives
+    /// up a distributed lock after ten minutes and a backfill takes hours; a run that finds another one
+    /// processing skips instead.
+    /// </remarks>
+    [AutomaticRetry(Attempts = 0)]
+    public async Task CrawlAsync(PerformContext context, CancellationToken cancellationToken)
+    {
+        // Checked here as well as at registration: removing the recurring job leaves one already
+        // queued - or requeued after a shutdown mid-crawl - to run.
+        if (options.Value.Enabled is false)
         {
-            await Task.Delay(_startupDelay, stoppingToken);
-
-            while (true)
-            {
-                foreach (var game in options.Value.Games.Distinct())
-                {
-                    await RunGuardedAsync(game, stoppingToken);
-                }
-
-                await Task.Delay(options.Value.PollInterval, stoppingToken);
-            }
+            logger.LogInformation("The ModHub crawler is disabled; skipping this run.");
+            return;
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+
+        if (IsAnotherRunProcessing(context))
         {
-            // Shutting down. A sweep in progress resumes from its persisted page.
+            logger.LogInformation("The previous ModHub crawl is still running; skipping this one.");
+            return;
+        }
+
+        foreach (var game in options.Value.Games.Distinct())
+        {
+            await CrawlGuardedAsync(game, cancellationToken);
         }
     }
 
 
-    private async Task RunGuardedAsync(string game, CancellationToken cancellationToken)
+    /// <summary>
+    /// Whether some other run of this job is in the Processing state. That state outlives a crashed
+    /// server until Hangfire requeues its job, which then resumes the crawl, so skipping meanwhile is
+    /// still right.
+    /// </summary>
+    private static bool IsAnotherRunProcessing(PerformContext context)
+    {
+        var monitoring = context.Storage.GetMonitoringApi();
+
+        return monitoring.ProcessingJobs(0, (int)monitoring.ProcessingCount())
+            .Any(x => x.Key != context.BackgroundJob.Id && x.Value.Job?.Type == typeof(ModHubCrawlJob));
+    }
+
+    private async Task CrawlGuardedAsync(string game, CancellationToken cancellationToken)
     {
         try
         {
-            await RunAsync(game, cancellationToken);
+            await CrawlGameAsync(game, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -111,7 +147,7 @@ public class ModHubCrawlerService(
         }
     }
 
-    private async Task RunAsync(string game, CancellationToken cancellationToken)
+    private async Task CrawlGameAsync(string game, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();

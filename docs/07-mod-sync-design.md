@@ -27,7 +27,7 @@ bytes on every profile switch is not viable; at ~40 MB average that is 40–80 G
 | Piece | Where |
 | --- | --- |
 | `ModVersion.ContentHash` | On the entity, on `ModDto`, and on `ModDependencyDto` |
-| `ModVersion.SizeBytes` | The same three places. Nullable - unknown, not zero - and what the plan confirmation adds up into "N mods to download, X MB" |
+| `ModVersion.SizeBytes` | The same three places. Required, and what the plan confirmation adds up into "N mods to download, X MB" |
 | Download link endpoint | `POST files/createModDownloadLink`, Guest level |
 | Local content store | `Client.Core/Sync/ContentStore.cs`, one per volume via `ContentStoreProvider` |
 | Reconciliation engine | `ModSyncPlanner` plans, `ModSyncService` executes |
@@ -1249,7 +1249,7 @@ otherwise had reason to open.
 
 | What the page did | Where it is |
 | --- | --- |
-| The plan, before anything moves | `ProfileApplyService.ConfirmPlanAsync` — the reconciler's own plan, a block per folder, in one dialog, headed by what it will download - a count and a size, from `PlannedDownloads`. Distinct by content across every folder, and net of what another disk's store already holds, since that is copied and not fetched. A size the repo does not have is said to be unknown rather than added as zero |
+| The plan, before anything moves | `ProfileApplyService.ConfirmPlanAsync` — the reconciler's own plan, a block per folder, in one dialog, headed by what it will download - a count and a size, from `PlannedDownloads`. Distinct by content across every folder, and net of what another disk's store already holds, since that is copied and not fetched. |
 | The unrecognised-files confirmation | The same place, and asked even where the caller waived the first |
 | Per-mod progress, and Stop | The background-task strip, which is what the apply reports to anyway |
 | Drift status, and Re-check | The app-level notice, and the folder lines on the repo's Overview |

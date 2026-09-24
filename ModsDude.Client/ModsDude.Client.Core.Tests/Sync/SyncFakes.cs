@@ -37,9 +37,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     /// What the repo says the file is called. Defaults to the name the id alone produces, which is
     /// what a repo whose mods were imported from lower-cased folders holds.
     /// </param>
-    public void Pin(string modId, string version, string content, bool locked = false, string? fileName = null, bool recordSize = true)
+    public void Pin(string modId, string version, string content, bool locked = false, string? fileName = null)
     {
-        Register(modId, version, content, locked, fileName, recordSize);
+        Register(modId, version, content, locked, fileName);
 
         _dependencies.Add(new ModDependencyDto
         {
@@ -47,7 +47,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             ModVersionId = version,
             FileName = fileName ?? $"{modId}.zip",
             ContentHash = SyncTestContent.HashOf(content),
-            SizeBytes = recordSize ? SyncTestContent.Bytes(content).Length : null,
+            SizeBytes = SyncTestContent.Bytes(content).Length,
             Locked = locked
         });
     }
@@ -74,7 +74,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
         => _dependencies.RemoveAll(x => x.ModId == modId);
 
     /// <summary>Registers a version without pinning it - what the repo can reproduce but does not want here.</summary>
-    public void Register(string modId, string version, string content, bool locked = false, string? fileName = null, bool recordSize = true)
+    public void Register(string modId, string version, string content, bool locked = false, string? fileName = null)
     {
         var hash = SyncTestContent.HashOf(content);
 
@@ -87,7 +87,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             Description = "",
             FileName = fileName ?? $"{modId}.zip",
             ContentHash = hash,
-            SizeBytes = recordSize ? SyncTestContent.Bytes(content).Length : null,
+            SizeBytes = SyncTestContent.Bytes(content).Length,
             Locked = locked,
             Attributes = [],
             Images = [],

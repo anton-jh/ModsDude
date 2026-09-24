@@ -19,7 +19,7 @@ public record ModDto(
     string Description,
     string FileName,
     string ContentHash,
-    long? SizeBytes,
+    long SizeBytes,
     bool Locked,
     IEnumerable<ModAttributeDto> Attributes,
     IEnumerable<ModImageReferenceDto> Images,

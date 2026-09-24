@@ -110,6 +110,7 @@ public class ReclamationQueryTests(DatabaseFixture fixture)
                     Description = "",
                     FileName = $"{version.ModId}.zip",
                     ContentHash = version.VersionId,
+                    SizeBytes = 1024,
                     Locked = false,
                     Attributes = [],
                     Created = _timestamp,

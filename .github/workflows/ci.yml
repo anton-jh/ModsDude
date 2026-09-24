@@ -52,11 +52,9 @@ jobs:
         run: dotnet test ModsDude.Server/ModsDude.Server.Persistence.Tests/ModsDude.Server.Persistence.Tests.csproj
 
       # Fails when the server describes something the checked-in document does not — which is the only
-      # warning anyone gets that ModsDude.Client.Core's Generated.cs is behind the API. The script
-      # starts the API itself, and the API migrates a database at startup, so it gets one.
+      # warning anyone gets that ModsDude.Client.Core's Generated.cs is behind the API. The document is
+      # written by the build without starting the API, so this needs no database.
       - name: OpenAPI document is current
-        env:
-          ConnectionStrings__Database: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=modsdude-openapi
         run: pwsh scripts/openapi.ps1
 
   client:

@@ -376,7 +376,7 @@ public static class ProfileRevisionExtensions
 
 
 /// <summary>One mod as a revision pins it, with the content hash sync needs to fetch the file.</summary>
-public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long? SizeBytes, bool Locked, DateTime Added)
+public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long SizeBytes, bool Locked, DateTime Added)
 {
     public ProfileModPin ToPin() => new(ModId, VersionId, Locked);
 }

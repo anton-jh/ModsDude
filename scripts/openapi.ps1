@@ -8,27 +8,26 @@
     document describes — a route, a DTO field, a problem type, a status code — and commit the result
     alongside the change. CI runs it without -Update, which fails the build when the two disagree.
 
-    The API has to be running to emit the document, and it migrates a database at startup, so this
-    builds it, starts it against whatever ConnectionStrings__Database says, waits for the document to
-    answer, and stops it again.
+    Nothing is started. The build writes the document from the assembly
+    (Microsoft.Extensions.ApiDescription.Server), running the app's entry point against a server that
+    never listens; Program.cs recognises that and skips everything that reaches outside the process -
+    the database, storage and Hangfire. So this needs no database and cannot touch real data. The build
+    goes to a directory of its own, so an API already running from the usual output does not lock it.
 
     The document is rewritten into a canonical form before it is written or compared — object keys in
     ordinal order, two-space indentation, LF line endings, no BOM — so that the file records what the
     API says rather than which machine asked it.
 
+    Generated.cs is regenerated from the checked-in document afterwards, not from a server:
+    'nswag run nswag-config.nswag' in ModsDude.Client.Core.
+
 .PARAMETER Update
     Write the document instead of verifying it.
-
-.PARAMETER UseRunningServer
-    Do not build or start anything; fetch from an API that is already running at -Url.
 #>
 [CmdletBinding()]
 param(
     [switch]$Update,
-    [switch]$UseRunningServer,
-    [string]$Url = 'http://localhost:5267',
-    [string]$Configuration = 'Debug',
-    [int]$TimeoutSeconds = 120
+    [string]$Configuration = 'Debug'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +36,6 @@ Set-StrictMode -Version Latest
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repositoryRoot 'ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj'
 $documentPath = Join-Path $repositoryRoot 'openapi/v1.json'
-$documentUrl = "$($Url.TrimEnd('/'))/swagger/v1/swagger.json"
 
 
 function ConvertTo-CanonicalJson([string]$json) {
@@ -99,56 +97,34 @@ function Write-CanonicalElement($Element, $Writer) {
     }
 }
 
-function Get-Document([string]$address, [int]$timeoutSeconds) {
-    $deadline = (Get-Date).AddSeconds($timeoutSeconds)
-
-    while ((Get-Date) -lt $deadline) {
-        try {
-            return (Invoke-WebRequest -Uri $address -UseBasicParsing -TimeoutSec 10).Content
-        }
-        catch {
-            Start-Sleep -Seconds 2
-        }
-    }
-
-    throw "The API did not serve '$address' within $timeoutSeconds seconds."
-}
-
-
-$server = $null
+# A directory of its own for everything the build writes: an API already running from the usual
+# output holds its assemblies open, and the document itself belongs to this run alone.
+$workPath = Join-Path ([System.IO.Path]::GetTempPath()) "modsdude-openapi-$([System.Guid]::NewGuid().ToString('N'))"
+$outputPath = Join-Path $workPath 'bin'
+$generatedPath = Join-Path $workPath 'document'
 
 try {
-    if (-not $UseRunningServer) {
-        Write-Host "Building $projectPath ..."
-        dotnet build $projectPath --configuration $Configuration --nologo
-        if ($LASTEXITCODE -ne 0) {
-            throw 'The API did not build.'
-        }
+    # Development because that is where the storage account is named. Storage is never called while
+    # the document is written, but its client is still registered, and has to be: the registrations are
+    # how the document tells a service parameter from a request body.
+    $env:ASPNETCORE_ENVIRONMENT = 'Development'
 
-        # The built assembly rather than 'dotnet run': run launches the app as a child process, and
-        # stopping the launcher would leave the API listening.
-        $assemblyPath = Join-Path $repositoryRoot "ModsDude.Server/ModsDude.Server.Api/bin/$Configuration/net10.0/ModsDude.Server.Api.dll"
-
-        $env:ASPNETCORE_ENVIRONMENT = 'Development'
-        $env:ASPNETCORE_URLS = $Url
-        # The document says nothing about the crawler, and an API started just to describe itself has
-        # no business reading somebody else's website - from CI least of all.
-        $env:ModHub__Enabled = 'false'
-
-        Write-Host "Starting the API at $Url ..."
-        # Started in the output directory because the content root defaults to the working directory,
-        # and that is where the appsettings files were copied to. Environment variables still win over
-        # them, which is how CI points the API at its own database.
-        $server = Start-Process -FilePath 'dotnet' -ArgumentList $assemblyPath -PassThru -NoNewWindow `
-            -WorkingDirectory (Split-Path -Parent $assemblyPath)
+    Write-Host "Building $projectPath and writing its document ..."
+    dotnet build $projectPath --configuration $Configuration --nologo --output $outputPath `
+        -p:OpenApiGenerateDocumentsOnBuild=true "-p:OpenApiDocumentsDirectory=$generatedPath"
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The API did not build, or its document could not be written.'
     }
 
-    $canonical = ConvertTo-CanonicalJson (Get-Document $documentUrl $TimeoutSeconds)
+    $generated = @(Get-ChildItem -Path $generatedPath -Filter '*.json')
+    if ($generated.Count -ne 1) {
+        throw "Expected the build to write one document to $generatedPath, found $($generated.Count)."
+    }
+
+    $canonical = ConvertTo-CanonicalJson ([System.IO.File]::ReadAllText($generated[0].FullName))
 }
 finally {
-    if ($null -ne $server -and -not $server.HasExited) {
-        Stop-Process -Id $server.Id -Force
-    }
+    Remove-Item -Recurse -Force -Path $workPath -ErrorAction SilentlyContinue
 }
 
 if ($Update) {
@@ -169,7 +145,7 @@ if (-not (Test-Path $documentPath)) {
 $checkedIn = [System.IO.File]::ReadAllText($documentPath) -replace "`r`n", "`n"
 
 if ($checkedIn -ceq $canonical) {
-    Write-Host "$documentPath matches the running API."
+    Write-Host "$documentPath matches the API."
     exit 0
 }
 
@@ -183,7 +159,7 @@ Compare-Object ($checkedIn -split "`n") ($canonical -split "`n") | Select-Object
 Write-Error @"
 The OpenAPI document does not match the API. The server has changed and the checked-in document — and
 therefore the generated client — has not caught up. Run 'pwsh scripts/openapi.ps1 -Update', regenerate
-ModsDude.Client.Core's Generated.cs against the API, and commit both.
-The document the API served was written to $actualPath.
+ModsDude.Client.Core's Generated.cs from it (nswag run nswag-config.nswag), and commit both.
+The document the build wrote was copied to $actualPath.
 "@
 exit 1

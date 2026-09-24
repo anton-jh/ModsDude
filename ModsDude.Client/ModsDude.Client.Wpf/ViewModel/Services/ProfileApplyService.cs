@@ -796,15 +796,7 @@ public sealed class ProfileApplyService(
 
         var mods = downloads.Count == 1 ? "1 mod" : $"{downloads.Count} mods";
 
-        if (downloads.IsComplete)
-        {
-            return $"{mods} to download, {ByteSize.Describe(downloads.KnownBytes)} in total.";
-        }
-
-        // A lower bound, said as one: a size the repo could not give is not a size of nothing.
-        return downloads.KnownBytes == 0
-            ? $"{mods} to download. The repo does not know how big they are."
-            : $"{mods} to download, at least {ByteSize.Describe(downloads.KnownBytes)} - {downloads.UnknownCount} of unknown size.";
+        return $"{mods} to download, {ByteSize.Describe(downloads.Bytes)} in total.";
     }
 
     /// <summary>One folder's block of the plan dialog: where it is, and what would happen there.</summary>

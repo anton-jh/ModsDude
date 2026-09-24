@@ -30,8 +30,11 @@ public class ModHubOptions
     /// </summary>
     public TimeSpan RequestDelay { get; set; } = TimeSpan.FromSeconds(1);
 
-    /// <summary>How often the top of the listing is checked for new and updated mods.</summary>
-    public TimeSpan PollInterval { get; set; } = TimeSpan.FromHours(1);
+    /// <summary>
+    /// When the crawl runs, in UTC: each run checks the top of the listing for new and updated mods, and
+    /// sweeps or refreshes as needed. A run still going when the next is due makes that one a no-op.
+    /// </summary>
+    public string PollCron { get; set; } = "0 * * * *";
 
     /// <summary>
     /// How often every listing page is read to find mods a poll missed. The first sweep of a game is

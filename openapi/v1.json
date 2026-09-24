@@ -558,7 +558,6 @@
           },
           "sizeBytes": {
             "format": "int64",
-            "nullable": true,
             "type": "integer"
           }
         },
@@ -635,7 +634,6 @@
           },
           "sizeBytes": {
             "format": "int64",
-            "nullable": true,
             "type": "integer"
           },
           "updated": {
@@ -6414,7 +6412,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5267"
+      "url": "/"
     }
   ],
   "x-generator": "NSwag v14.6.2.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))"

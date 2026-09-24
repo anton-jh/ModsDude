@@ -270,6 +270,7 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
         Description = "",
         FileName = $"{modId.Value}.zip",
         ContentHash = modId.Value,
+        SizeBytes = 1024,
         Locked = false,
         Attributes = [],
         Created = _timestamp,

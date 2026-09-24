@@ -19,12 +19,8 @@ public sealed record DesiredMod(ModKey ModId, ModVersionKey VersionId, string Co
     /// </summary>
     public ModFileName? FileName { get; init; }
 
-    /// <summary>
-    /// How big the registered file is, for saying what an apply will download before it starts. Null
-    /// where the repo does not know - a version registered before sizes were recorded, until the server
-    /// backfills it - which is reported as unknown rather than counted as nothing.
-    /// </summary>
-    public long? SizeBytes { get; init; }
+    /// <summary>How big the registered file is, for saying what an apply will download before it starts.</summary>
+    public long SizeBytes { get; init; }
 }
 
 /// <summary>One mod file the adapter found in the mod folder.</summary>
@@ -96,7 +92,7 @@ public sealed record ModSyncItem
     public ModVersionKey? DesiredVersion { get; init; }
     public string? DesiredHash { get; init; }
 
-    /// <summary>The registered size of <see cref="DesiredHash"/>, where the repo knows it.</summary>
+    /// <summary>The registered size of <see cref="DesiredHash"/>. Set wherever that is.</summary>
     public long? DesiredSize { get; init; }
 
     /// <summary>
@@ -315,19 +311,11 @@ public sealed record ModSyncResult(bool Completed, IReadOnlyList<ModSyncFailure>
 /// The mods an apply has to download, and how much that is.
 /// </summary>
 /// <param name="Count">How many files. Distinct by content: two mods sharing bytes are fetched once.</param>
-/// <param name="KnownBytes">
-/// The sum of the sizes the repo could give. A lower bound while <paramref name="UnknownCount"/> is
-/// above zero.
-/// </param>
-/// <param name="UnknownCount">How many of them the repo has no size for.</param>
-public sealed record PlannedDownloads(int Count, long KnownBytes, int UnknownCount)
+public sealed record PlannedDownloads(int Count, long Bytes)
 {
-    public static PlannedDownloads None { get; } = new(0, 0, 0);
+    public static PlannedDownloads None { get; } = new(0, 0);
 
     public bool IsAny => Count > 0;
-
-    /// <summary>Whether <see cref="KnownBytes"/> is the whole of it.</summary>
-    public bool IsComplete => UnknownCount == 0;
 
     /// <summary>
     /// Everything that will come off the network: what the fetch phase would fetch, less what another
@@ -343,7 +331,7 @@ public sealed record PlannedDownloads(int Count, long KnownBytes, int UnknownCou
     /// </summary>
     public static PlannedDownloads Across(IEnumerable<ModSyncPlan> plans)
     {
-        var sizes = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+        var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var plan in plans)
         {
@@ -353,14 +341,12 @@ public sealed record PlannedDownloads(int Count, long KnownBytes, int UnknownCou
 
             foreach (var item in plan.Items.Where(x => x.DesiredHash is not null && wanted.Contains(x.DesiredHash)))
             {
-                // One folder may know a size that another does not, so a known one is never
-                // overwritten by an unknown one.
-                sizes[item.DesiredHash!] = item.DesiredSize ?? sizes.GetValueOrDefault(item.DesiredHash!);
+                sizes[item.DesiredHash!] = item.DesiredSize.GetValueOrDefault();
             }
         }
 
         return sizes.Count == 0
             ? None
-            : new PlannedDownloads(sizes.Count, sizes.Values.Sum(x => x ?? 0), sizes.Values.Count(x => x is null));
+            : new PlannedDownloads(sizes.Count, sizes.Values.Sum());
     }
 }

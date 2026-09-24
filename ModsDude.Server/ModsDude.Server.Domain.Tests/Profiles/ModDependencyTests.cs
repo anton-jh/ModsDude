@@ -60,6 +60,7 @@ public class ModDependencyTests
         Description = "",
         FileName = $"{_modId.Value}.zip",
         ContentHash = versionId,
+        SizeBytes = 1024,
         Locked = locked,
         Attributes = [],
         Created = default,

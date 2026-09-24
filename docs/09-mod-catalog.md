@@ -767,9 +767,8 @@ one the whole repo shares.
 
 **The row and the header carry the repo's numbers.** Each row shows the size of its file beside the
 version chip and how many profiles use it (see below); a line under the title adds the whole repo up as versions,
-mods and bytes (it does not narrow with the search, unlike the count beside it). The size comes from `ModDto.SizeBytes`, which is nullable - a version registered before
-sizes were recorded is *unknown*, and the header says how many are uncounted rather than quietly
-totalling a lower bound. The same numbers are turned on for this page only (`ShowStatistics`): in the
+mods and bytes (it does not narrow with the search, unlike the count beside it). The size comes from `ModDto.SizeBytes`, which every registered version has.
+The same numbers are turned on for this page only (`ShowStatistics`): in the
 profile editor the row is about what the draft pins, not about the repo's other profiles.
 
 Two things this needed, and both now exist:

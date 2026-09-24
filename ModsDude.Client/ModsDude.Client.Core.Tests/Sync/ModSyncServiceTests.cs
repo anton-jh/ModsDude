@@ -90,8 +90,7 @@ public class ModSyncServiceTests
 
         var expected = SyncTestContent.Bytes(Mod("1.0.0", "a")).Length + SyncTestContent.Bytes(Mod("2.0.0", "b")).Length;
 
-        Assert.Equal(new PlannedDownloads(2, expected, 0), plan.Downloads);
-        Assert.True(plan.Downloads.IsComplete);
+        Assert.Equal(new PlannedDownloads(2, expected), plan.Downloads);
     }
 
     /// <summary>
@@ -114,26 +113,7 @@ public class ModSyncServiceTests
 
         Assert.Equal(2, plan.HashesToFetch.Count);
         Assert.Equal(1, plan.Downloads.Count);
-        Assert.Equal(SyncTestContent.Bytes(Mod("2.0.0", "b")).Length, plan.Downloads.KnownBytes);
-    }
-
-    /// <summary>
-    /// A size the repo does not have is unknown, not zero - a total that quietly left a mod out would be
-    /// wrong in the reassuring direction.
-    /// </summary>
-    [Fact]
-    public async Task A_mod_the_repo_has_no_size_for_is_counted_but_reported_as_unknown()
-    {
-        using var fixture = new SyncFixture();
-        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
-        fixture.Server.Pin("fs25_b", "2.0.0", Mod("2.0.0", "b"), recordSize: false);
-
-        var plan = await fixture.PlanAsync();
-
-        Assert.Equal(
-            new PlannedDownloads(2, SyncTestContent.Bytes(Mod("1.0.0", "a")).Length, 1),
-            plan.Downloads);
-        Assert.False(plan.Downloads.IsComplete);
+        Assert.Equal(SyncTestContent.Bytes(Mod("2.0.0", "b")).Length, plan.Downloads.Bytes);
     }
 
     [Fact]

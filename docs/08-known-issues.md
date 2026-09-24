@@ -209,7 +209,7 @@ nothing would still need it created by hand.
 ### The API is reached over plain HTTP on localhost
 
 `Program.cs` calls `UseHttpsRedirection()` while the client's configured base URL is
-`http://localhost:5267`, which is also what `scripts/openapi.ps1` drives.
+`http://localhost:5267`.
 
 ### Invite codes are stored in the clear
 

@@ -423,6 +423,7 @@ public class ModVersionSequencerTests
         Description = "",
         FileName = $"{_modId.Value}.zip",
         ContentHash = versionId,
+        SizeBytes = 1024,
         Locked = false,
         Attributes = [],
         Created = default,

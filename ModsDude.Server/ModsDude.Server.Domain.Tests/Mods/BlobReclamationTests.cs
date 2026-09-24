@@ -272,6 +272,62 @@ public class BlobReclamationTests
         Assert.Equal([name], plan.Unrecognised);
     }
 
+    [Fact]
+    public void A_plan_counts_every_blob_it_scanned()
+    {
+        var plan = BlobReclamation.PlanModSweep(
+            [Old($"{_repoId}/a_mod/1.0.0"), Old($"{_repoId}/b_mod/1.0.0"), New($"{_repoId}/c_mod/1.0.0"), Old("stray.txt")],
+            Registered(("a_mod", "1.0.0")),
+            _cutoff);
+
+        Assert.Equal(4, plan.Scanned);
+    }
+
+    /// <summary>
+    /// The case the check exists for: a container measured against a database it does not belong to,
+    /// where nothing is registered and so everything reads as garbage.
+    /// </summary>
+    [Fact]
+    public void A_plan_that_would_empty_its_container_is_implausible()
+    {
+        var plan = BlobReclamation.PlanModSweep(Mods(100), Registered(), _cutoff);
+
+        Assert.True(plan.IsImplausible(0.5));
+    }
+
+    [Fact]
+    public void A_plan_reclaiming_no_more_than_the_share_is_plausible()
+    {
+        var registered = Registered([.. Enumerable.Range(0, 50).Select(x => ($"mod_{x}", "1.0.0"))]);
+
+        var plan = BlobReclamation.PlanModSweep(Mods(100), registered, _cutoff);
+
+        Assert.Equal(50, plan.Reclaimable.Count);
+        Assert.False(plan.IsImplausible(0.5));
+    }
+
+    /// <summary>
+    /// A handful of savegames, most of them orphaned by one deleted save, is not a reason to stop.
+    /// </summary>
+    [Fact]
+    public void A_small_container_is_never_implausible()
+    {
+        var plan = BlobReclamation.PlanModSweep(Mods(BlobReclamation.ImplausibleFloor - 1), Registered(), _cutoff);
+
+        Assert.False(plan.IsImplausible(0.5));
+    }
+
+    [Fact]
+    public void A_share_of_one_turns_the_check_off()
+    {
+        var plan = BlobReclamation.PlanModSweep(Mods(100), Registered(), _cutoff);
+
+        Assert.False(plan.IsImplausible(1));
+    }
+
+
+    private static StoredBlob[] Mods(int count)
+        => [.. Enumerable.Range(0, count).Select(x => Old($"{_repoId}/mod_{x}/1.0.0"))];
 
     private static StoredBlob Old(string name) => new(name, _cutoff.AddMinutes(-1));
     private static StoredBlob New(string name) => new(name, _cutoff.AddMinutes(1));

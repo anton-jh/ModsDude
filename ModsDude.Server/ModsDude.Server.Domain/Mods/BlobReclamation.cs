@@ -35,10 +35,31 @@ public readonly record struct SavegameBlobAddress(RepoId RepoId, SavegameId Save
 /// understand is a name it cannot prove is garbage — and reported so that a change to the storage
 /// layout shows up as a number rather than as silence.
 /// </param>
+/// <param name="Scanned">How many blobs the listing held, whatever became of them.</param>
 public record ReclamationPlan(
     IReadOnlyList<StoredBlob> Reclaimable,
     IReadOnlyList<StoredBlob> Retained,
-    IReadOnlyList<string> Unrecognised);
+    IReadOnlyList<string> Unrecognised,
+    int Scanned)
+{
+    /// <summary>
+    /// Whether the plan would reclaim so much of its container that the likelier explanation is a
+    /// database that is not the one the container belongs to - a reset dev database, a restore from the
+    /// wrong day, a connection string pointing elsewhere - than that most of it really is garbage. To
+    /// the sweep, a container measured against the wrong registrations looks like nothing but orphans.
+    /// </summary>
+    /// <param name="maxShare">
+    /// The largest share of <see cref="Scanned"/> a plan may reclaim. 1 turns the check off, since a
+    /// plan can never reclaim more than it scanned.
+    /// </param>
+    /// <remarks>
+    /// Never implausible below <see cref="BlobReclamation.ImplausibleFloor"/> blobs, so a small
+    /// container - a handful of savegames, most of them orphaned by one deleted save - can still be
+    /// swept.
+    /// </remarks>
+    public bool IsImplausible(double maxShare)
+        => Reclaimable.Count >= BlobReclamation.ImplausibleFloor && Reclaimable.Count > Scanned * maxShare;
+}
 
 /// <summary>
 /// Decides which stored blobs are garbage. Pure, and separate from storage on purpose: the decision
@@ -63,6 +84,12 @@ public record ReclamationPlan(
 /// </remarks>
 public static class BlobReclamation
 {
+    /// <summary>
+    /// The fewest reclaimable blobs a plan needs before it can be judged implausible; see
+    /// <see cref="ReclamationPlan.IsImplausible"/>.
+    /// </summary>
+    public const int ImplausibleFloor = 20;
+
     /// <param name="cutoff">
     /// Blobs last modified at or before this instant may be judged; anything newer is retained
     /// whatever the registrations say.
@@ -178,9 +205,12 @@ public static class BlobReclamation
         var reclaimable = new List<StoredBlob>();
         var retained = new List<StoredBlob>();
         var unrecognised = new List<string>();
+        var scanned = 0;
 
         foreach (var blob in stored)
         {
+            scanned++;
+
             switch (isReferenced(blob.Name))
             {
                 case null:
@@ -200,6 +230,6 @@ public static class BlobReclamation
             }
         }
 
-        return new ReclamationPlan(reclaimable, retained, unrecognised);
+        return new ReclamationPlan(reclaimable, retained, unrecognised, scanned);
     }
 }

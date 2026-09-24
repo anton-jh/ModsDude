@@ -247,9 +247,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         if (statistics is { ModCount: > 0 })
         {
-            parts.Add(statistics.IsSizeComplete
-                ? ByteSize.Describe(statistics.KnownBytes)
-                : $"{ByteSize.Describe(statistics.KnownBytes)} and {statistics.UnknownSizeCount} without a recorded size");
+            parts.Add(ByteSize.Describe(statistics.Bytes));
         }
 
         parts.Add($"revision {_profile.HeadRevision}");

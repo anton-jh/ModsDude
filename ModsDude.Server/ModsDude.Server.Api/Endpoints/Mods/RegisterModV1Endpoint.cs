@@ -57,9 +57,7 @@ public class RegisterModV1Endpoint : IEndpoint
         // Metadata is never written for a file nobody has: the blob has to be there first. Its size is read
         // off it while asking, rather than being taken from the request - nothing the client says about
         // the bytes can be checked, and this is the one place they are looked at.
-        var size = await storageService.GetModSize(new RepoId(repoId), modId, versionId, cancellationToken);
-
-        if (size is null)
+        if (await storageService.GetModSize(new RepoId(repoId), modId, versionId, cancellationToken) is not long size)
         {
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), modId, versionId));
         }

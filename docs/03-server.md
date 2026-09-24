@@ -82,10 +82,12 @@ HTTPS redirect
 Migrations are applied at startup, after the pipeline is built, by resolving
 `ApplicationDbContext` in a scope and calling `Database.Migrate()`.
 
-A `BlobReclamationService` hosted service runs alongside; see [Storage](#storage). The two daily
-retention jobs run in Hangfire, registered after the migration; see [Retention](#retention). A
-`ModVersionSizeBackfillService` runs once shortly after startup, filling in `SizeBytes` for versions
-registered before it existed - see [Mod sizes](#mod-sizes).
+Every background job runs in [Hangfire](https://www.hangfire.io/) and is registered after the
+migration: the two retention jobs (see [Retention](#retention)), blob reclamation (see
+[Blob reclamation](#blob-reclamation)) and the ModHub crawl (see [The ModHub crawler](#the-modhub-crawler)).
+Registering is idempotent, and a job that is disabled in configuration is removed rather than left
+behind. The PostgreSQL storage uses a sliding invisibility timeout, because a ModHub backfill runs for
+hours and a fixed timeout would hand it to a second worker after thirty minutes.
 
 ### Authentication
 
@@ -384,15 +386,22 @@ to, not whether a snapshot still exists.
 
 ### Blob reclamation
 
-`BlobReclamationService` is a hosted service sweeping orphaned blobs — import orphans, and the
-residue of deleted versions and repos. Two rules make it safe:
+`BlobReclamationJob` is a daily Hangfire job (`BlobReclamation:Cron`, 04:00 UTC) sweeping orphaned
+blobs — import orphans, and the residue of deleted versions and repos. Not retried, and **a missed
+occurrence is skipped rather than caught up at startup**: the sweep only runs at its scheduled time,
+so a crash loop cannot become a delete loop. Four rules make it safe:
 
 - **List blobs before reading registrations, never the reverse.** A registration written between
   the two reads is then already covered by a blob the listing had.
 - **Ignore anything younger than a grace period** well past the upload SAS lifetime. An import
   uploads and then registers; a sweep that did not wait would delete the bytes in between.
-
-A blob name that does not parse is reported, never deleted.
+- **A blob name that does not parse is reported, never deleted.**
+- **A sweep that would empty most of a container deletes nothing anywhere.** Measured against a
+  database that is not the one the storage account belongs to — a reset dev database pointed at the
+  shared `modsdudedev` account, say — every blob reads as an orphan. So all three containers are
+  planned before any is touched, and if one would lose more than `MaxReclaimableShare` (half) of
+  its blobs, and at least 20 of them, the job logs an error per container and fails. A genuine
+  large clean-up, such as the residue of a deleted repo, goes through by raising the share for one run.
 
 ### Retention
 
@@ -447,13 +456,9 @@ what the Mods page adds up into a repo's size. It is read from the blob's proper
 checked - and it travels on `ModDto` and on `ModDependencyDto`, the latter because sync reads a
 profile's dependencies and nothing else.
 
-Versions registered before it existed have no size. **`null` means unknown, and stays null on the wire**:
-a client that treated it as zero would report an apply as free that is not. `ModVersionSizeBackfillService`
-fills them in once, twenty seconds after startup, from a single container listing (one request per five
-thousand blobs, against one per version for a property read). A version whose blob is not in the listing
-keeps no size and is tried again on the next start. It writes with `ExecuteUpdate` and does **not** touch
-`Updated`: the mod list's delta form is keyed on it, and restamping every old version would make the first
-delta after a deploy the size of the whole list.
+It is required. Versions registered before it existed were filled in by a one-off backfill, removed once
+it had run; the migration that made the column `NOT NULL` has no default, so a version still without a
+size stops it rather than turning into a zero that reads as an empty file.
 
 ### The ModHub crawler
 
@@ -463,7 +468,11 @@ ModHub itself, and so every member asking costs ModHub nothing. It is kept to it
 (`ModsDude.Server.ModHub`), its own tables (`ModHubMods`, `ModHubCrawlStates`), `Api/ModHub/` and one
 endpoint.
 
-`ModHubCrawlerService` runs every `ModHub:PollInterval` per configured game, doing up to three things:
+`ModHubCrawlJob` is a Hangfire recurring job on `ModHub:PollCron` (hourly, UTC), removed when the crawler is
+disabled or has no games. A run that finds another one still processing - a backfill takes hours - skips
+rather than waits: `DisableConcurrentExecution` cannot guard it, because the PostgreSQL storage gives up a
+distributed lock after ten minutes. A shutdown mid-run is Hangfire's to requeue, and the requeued run resumes
+from the persisted sweep page. Each run does up to three things per configured game:
 
 - **Sweep** — read every page of ModHub's "latest" listing and fetch each mod page not yet stored. The first
   sweep is the backfill (about 280 listing pages and 6,700 mod pages for FS25, two hours at one request a
@@ -817,10 +826,10 @@ Authenticated for the same reason as images: it is public data and says nothing 
 | `Storage:StorageAccountName` | Azure Storage account name; the URL is derived |
 | `EntraExternalId:*` | Instance, Domain, ClientId, Audience, Authority, and the token/authorization endpoints used by the Swagger UI |
 | `SwaggerAuthentication:ClientId` | Separate app registration for the Swagger UI |
-| `BlobReclamation:*` | `Enabled`, `Interval`, and `MinimumBlobAge` — the grace period an unreferenced blob must survive before the sweep may delete it |
+| `BlobReclamation:*` | `Enabled`, `Cron` (UTC), `MinimumBlobAge` — the grace period an unreferenced blob must survive before the sweep may delete it — and `MaxReclaimableShare`, past which a sweep refuses to delete anything. See [Blob reclamation](#blob-reclamation) |
 | `Retention:*` | `Enabled`, `TimeZone` (IANA, default `Europe/Stockholm`), `ScheduleCron`, `DeleteCron`. See [Retention](#retention) |
 | `HangfireDashboard:*` | `Path`, `Username`, `Password`. The dashboard is not mapped without both credentials |
-| `ModHub:*` | `Enabled`, `Games` (ModHub's codes; **set here, not defaulted in code** — the binder appends to a list default, which crawled every game twice), `UserAgent`, `RequestDelay`, `PollInterval`, `SweepInterval`, `PollPageLimit`, `RefreshPerPoll`. See [The ModHub crawler](#the-modhub-crawler) |
+| `ModHub:*` | `Enabled`, `Games` (ModHub's codes; **set here, not defaulted in code** — the binder appends to a list default, which crawled every game twice), `UserAgent`, `RequestDelay`, `PollCron` (UTC), `SweepInterval`, `PollPageLimit`, `RefreshPerPoll`. See [The ModHub crawler](#the-modhub-crawler) |
 
 ## Running locally
 
@@ -834,34 +843,35 @@ Requires a PostgreSQL instance matching `appsettings.Development.json`
 Development only.
 
 **A local API crawls ModHub too**, into whatever database it points at — the first run of a fresh one
-starts the two-hour backfill, resumable across restarts. Set `ModHub__Enabled=false` to stop it;
-`scripts/openapi.ps1` does, for the API it starts.
+starts the two-hour backfill, resumable across restarts. Set `ModHub__Enabled=false` to stop it.
 
 ### Regenerating the client
 
-The typed client is generated from the **running** API:
-
-1. Start the API (it must be reachable at `http://localhost:5267`).
-2. Run the NSwag configuration at `ModsDude.Client/ModsDude.Client.Core/nswag-config.nswag`.
-
-Output goes to `ModsDude.Client.Core/ModsDudeServer/Generated.cs`. The generated clients
-derive from `ModsDudeClientBase`, which attaches the bearer token by calling
-`IAccessTokenAccessor.Get` for every request. Each generated client also hardcodes a localhost
-`BaseUrl`; since the file is regenerated wholesale, the configured one is applied in
-`AddModsDudeClient` instead of being edited in.
-
-**Then update the checked-in OpenAPI document.** `openapi/v1.json` exists so that a server change
-the generated client has not caught up with shows as a diff rather than as nothing at all:
+Nothing has to be running. After changing anything the API describes:
 
 ```bash
-pwsh scripts/openapi.ps1 -Update     # rewrite it
+pwsh scripts/openapi.ps1 -Update     # rewrite openapi/v1.json
 pwsh scripts/openapi.ps1             # verify it — what CI runs
 ```
 
-The script builds and starts the API itself (it migrates a database at startup, so it needs a
-connection string), fetches the document, and rewrites it into a canonical form — keys in ordinal
-order, two-space indentation, LF, no BOM — so the file records what the API says rather than
-which machine asked it. Commit it alongside the change.
+then run the NSwag configuration at `ModsDude.Client/ModsDude.Client.Core/nswag-config.nswag`
+(`nswag run nswag-config.nswag` in that folder), which reads the checked-in document. Commit both.
+`openapi/v1.json` exists so that a server change the generated client has not caught up with shows as
+a diff rather than as nothing at all.
+
+**The document is written by the build, not fetched from a running API.** The script builds the API
+into a directory of its own (so an API already running does not lock it) with
+`Microsoft.Extensions.ApiDescription.Server` switched on, which runs `Program`'s entry point against a
+server that never listens. `Program.cs` recognises that (`isDescribingOnly`) and skips everything that
+reaches outside the process: no migration, no storage containers, no Hangfire. Describing the API
+needs no database and cannot touch real data. The document is then rewritten into a canonical form —
+keys in ordinal order, two-space indentation, LF, no BOM — so the file records what the API says
+rather than which machine asked it.
+
+Its one server is `/`, relative, since a build has no request to take a host from; the generated
+clients default `BaseUrl` to that, and `AddModsDudeClient` sets the configured one on every client.
+The generated clients derive from `ModsDudeClientBase`, which attaches the bearer token by calling
+`IAccessTokenAccessor.Get` for every request.
 
 Note the limit of this check: it fails when the *document* is behind the server, which is the
 only warning anyone gets that `Generated.cs` is behind too. Nothing compares the generated client

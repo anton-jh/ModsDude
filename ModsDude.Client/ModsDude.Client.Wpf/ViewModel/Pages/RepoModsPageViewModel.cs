@@ -417,11 +417,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         IsLoading = false;
     }
 
-    /// <summary>
-    /// The whole repo in a phrase: how many mods, and how many bytes they add up to. A version the
-    /// server has no size for is said to be uncounted rather than added as zero, so the total is never
-    /// quietly wrong in the reassuring direction.
-    /// </summary>
+    /// <summary>The whole repo in a phrase: how many mods, and how many bytes they add up to.</summary>
     private static IReadOnlyList<string> DescribeRepo(IReadOnlyList<ModListItemViewModel> rows)
     {
         if (rows.Count == 0)
@@ -430,16 +426,14 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
 
         var mods = rows.Select(x => x.Mod.ModId).Distinct().Count();
-        var known = rows.Sum(x => x.Mod.SizeBytes ?? 0);
-        var unknown = rows.Count(x => x.Mod.SizeBytes is null);
+        // Every row here is registered, and a registered version always has a size.
+        var bytes = rows.Sum(x => x.Mod.SizeBytes.GetValueOrDefault());
 
         return
         [
             rows.Count == 1 ? "1 version" : $"{rows.Count:N0} versions",
             mods == 1 ? "1 mod" : $"{mods:N0} mods",
-            unknown == 0
-                ? $"{ByteSize.Describe(known)} in all"
-                : $"{ByteSize.Describe(known)} in all, and {unknown:N0} without a recorded size"
+            $"{ByteSize.Describe(bytes)} in all"
         ];
     }
 

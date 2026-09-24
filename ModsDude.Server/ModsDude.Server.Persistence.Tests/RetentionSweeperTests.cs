@@ -475,6 +475,7 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
             Description = "",
             FileName = $"{_modId.Value}.zip",
             ContentHash = versionId,
+            SizeBytes = 1024,
             Locked = false,
             Attributes = [],
             Created = _now.AddDays(-100),

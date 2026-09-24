@@ -103,8 +103,8 @@ because that is where WPF builds.
 
 ## Regenerating the typed API client
 
-Start the server, then run `ModsDude.Client/ModsDude.Client.Core/nswag-config.nswag`.
-**Then update the checked-in OpenAPI document**, or CI will fail:
+Nothing has to be running. Rewrite the checked-in OpenAPI document (CI fails when it is behind),
+then generate the client from it by running `ModsDude.Client/ModsDude.Client.Core/nswag-config.nswag`:
 
 ```bash
 pwsh scripts/openapi.ps1 -Update

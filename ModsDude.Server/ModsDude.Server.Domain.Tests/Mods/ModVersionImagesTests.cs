@@ -136,6 +136,7 @@ public class ModVersionImagesTests
         Description = "",
         FileName = $"{_modId.Value}.zip",
         ContentHash = _hash,
+        SizeBytes = 1024,
         Locked = false,
         Attributes = [],
         Created = _registered,
