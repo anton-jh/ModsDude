@@ -2980,7 +2980,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>
-    /// Switches on one of a game's mod folders, for a page opened <i>at</i> that folder rather
+    /// Makes one of a game's mod folders the only source, for a page opened <i>at</i> that folder rather
     /// than merely opened - which today means arriving from the drift notice.
     /// </summary>
     /// <remarks>
@@ -2993,7 +2993,23 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     public void ScanTarget(ModTargetRef target)
     {
-        _catalog.SetEnabled(ModSourceId.ForTarget(target), true);
+        var targetId = ModSourceId.ForTarget(target);
+
+        // On a page that was already open, whatever the user had ticked since is still on - and every
+        // one of those would put rows on the left that are not this folder's. Switched off rather than
+        // removed, so ticking one back on is instant. The remote chips are left alone: they put links
+        // on rows, not rows in the list.
+        foreach (var source in _catalog.GetSources().Where(x => x.Id != targetId))
+        {
+            _catalog.SetEnabled(source, false);
+        }
+
+        foreach (var profile in _profileSources)
+        {
+            profile.IsEnabled = false;
+        }
+
+        _catalog.SetEnabled(targetId, true);
 
         // The repo registers every version this folder could hold, so with it left on, a mod the game
         // removed from disk still shows on the left as if nothing had happened, and "Not in sources"
