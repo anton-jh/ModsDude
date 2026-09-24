@@ -174,6 +174,45 @@ public class NoticeBuilderTests
     }
 
     /// <summary>
+    /// A warning naming a person is the only kind anybody reads, and once they have it the copies have
+    /// already forked - so the sentence is about which check-in wins, not about a fork still to come.
+    /// </summary>
+    [Fact]
+    public void A_save_taken_over_names_who_took_it_and_what_checking_in_costs()
+    {
+        var notice = Assert.Single(Build(Entry(
+            DriftReport.For(DriftStatus.InSync) with
+            {
+                SavegameDrift = [Save("one", SavegameDriftKind.TakenOver) with
+                {
+                    TakenBy = new SavegameClaimHolder("bob", "Bob", DateTime.UtcNow.AddHours(-2))
+                }]
+            })));
+
+        Assert.Equal(NoticeSeverity.Critical, notice.Severity);
+        Assert.Equal("'one' was taken over by Bob", notice.Headline);
+        Assert.Contains("Bob checked 'one' out on", notice.Body);
+        Assert.Contains("whoever checks in second has to force it", notice.Body);
+    }
+
+    /// <summary>
+    /// Taken and let go again: there is nobody to name, and nothing has been checked in over this
+    /// machine's copy, so the card says the claim is gone and that checking in still works.
+    /// </summary>
+    [Fact]
+    public void A_save_taken_over_and_let_go_says_the_claim_is_gone()
+    {
+        var notice = Assert.Single(Build(Entry(
+            DriftReport.For(DriftStatus.InSync) with
+            {
+                SavegameDrift = [Save("one", SavegameDriftKind.TakenOver)]
+            })));
+
+        Assert.Equal("'one' is no longer checked out to you", notice.Headline);
+        Assert.Contains("Checking in from here still works", notice.Body);
+    }
+
+    /// <summary>
     /// The one savegame problem a re-apply actually fixes, with the number it will install on the
     /// button rather than a latest the apply table refuses.
     /// </summary>

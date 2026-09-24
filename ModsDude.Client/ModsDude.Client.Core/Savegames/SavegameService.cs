@@ -213,7 +213,11 @@ public interface ISavegameService : IHeldSavegames
     /// Where to say which stage the bytes are in and how far through it they are. The same
     /// parameter, with the same meaning, on every verb below that moves a save.
     /// </param>
-    Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    /// <returns>
+    /// Whoever held the claim until this took it, or null where nobody else did. Taking a save from
+    /// somebody is allowed; the caller says so, naming them.
+    /// </returns>
+    Task<SavegameClaimHolder?> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Writes a named snapshot into a slot without claiming anything.</summary>
     Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
@@ -405,7 +409,7 @@ public sealed class SavegameService(
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     ILogger<SavegameService> logger,
-    ISavegameHeadSnapshots? headSnapshots = null)
+    ISavegameSightings? sightings = null)
     : ISavegameService
 {
     private const int _bufferSize = 64 * 1024;
@@ -630,7 +634,7 @@ public sealed class SavegameService(
     /// The slot holds play nobody has checked in, or this game already holds a savegame that
     /// claims its mod folder.
     /// </exception>
-    public async Task CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
+    public async Task<SavegameClaimHolder?> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
@@ -646,7 +650,9 @@ public sealed class SavegameService(
 
         await EnsureWritable(game, adapter, target, slot, savegame.Name, ct);
 
-        await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
+        var claim = await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
+
+        sightings?.RecordOwnClaim(savegame.RepoId, savegame.Id, claim.Checkout);
 
         await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 
@@ -673,6 +679,10 @@ public sealed class SavegameService(
             LastObservedHash = head.ContentHash,
             LastPlayedRevision = null
         });
+
+        return claim.TakenFrom is SavegameCheckoutDto takenFrom
+            ? new SavegameClaimHolder(takenFrom.User.Id, takenFrom.User.DisplayName, takenFrom.TakenAt)
+            : null;
     }
 
     /// <summary>
@@ -1144,7 +1154,8 @@ public sealed class SavegameService(
             }
 
             var slot = slots.FirstOrDefault(x => x.Ref.Addresses(binding.Slot));
-            var head = headSnapshots?.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
+            var head = sightings?.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
+            var claim = sightings?.GetClaim(binding.RepoId, binding.SavegameId);
 
             // This folder's own manifest, not an average of the game's: what a held save was played
             // against is what the folder it sits in was applied to, and with several targets the
@@ -1163,7 +1174,8 @@ public sealed class SavegameService(
                 currentHash,
                 head,
                 manifest?.ProfileId,
-                manifest?.ProfileRevision);
+                manifest?.ProfileRevision,
+                claim);
 
             drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
             {
@@ -1177,7 +1189,8 @@ public sealed class SavegameService(
                 // both halves and the rule answers kinds rather than reasons.
                 RunsOnAnotherProfile = binding.ProfileId is not null
                     && manifest?.ProfileId is not null
-                    && binding.ProfileId != manifest.ProfileId
+                    && binding.ProfileId != manifest.ProfileId,
+                TakenBy = kind is SavegameDriftKind.TakenOver ? claim?.Holder : null
             }));
         }
 

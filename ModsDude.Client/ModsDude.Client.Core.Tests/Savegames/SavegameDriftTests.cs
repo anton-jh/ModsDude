@@ -9,7 +9,7 @@ using ModsDude.Client.Core.Tests.Sync;
 namespace ModsDude.Client.Core.Tests.Savegames;
 
 /// <summary>
-/// The three drift states, both as the pure rule and as the check that runs on a real disk.
+/// The drift states, both as the pure rule and as the check that runs on a real disk.
 /// </summary>
 public class SavegameDriftTests
 {
@@ -97,6 +97,51 @@ public class SavegameDriftTests
     {
         Assert.Empty(SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 4, _profileId, 6));
         Assert.Empty(SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 3, _profileId, 6));
+    }
+
+    /// <summary>
+    /// The moment somebody else takes the claim there are two copies of one save, whether or not
+    /// either side has played - so it is reported before anybody checks in, not after.
+    /// </summary>
+    [Fact]
+    public void A_claim_somebody_else_holds_is_a_takeover()
+    {
+        var kinds = SavegameDriftRules.Classify(Binding(), "aaaa", headSnapshot: 4, _profileId, 6, Claim("bob"));
+
+        Assert.Equal([SavegameDriftKind.TakenOver], kinds);
+    }
+
+    /// <summary>
+    /// The binding here is a claim this machine took, and the only way it ends while the binding stands
+    /// is somebody taking it. Letting it go afterwards does not give it back.
+    /// </summary>
+    [Fact]
+    public void A_claim_nobody_holds_is_a_takeover_that_was_let_go()
+    {
+        var kinds = SavegameDriftRules.Classify(Binding(), "aaaa", headSnapshot: 4, _profileId, 6, new SavegameClaimSighting(null, IsYours: false));
+
+        Assert.Equal([SavegameDriftKind.TakenOver], kinds);
+    }
+
+    /// <summary>
+    /// Yours on another machine is still yours - a claim is the person's, not the disk's.
+    /// </summary>
+    [Fact]
+    public void A_claim_of_your_own_is_not_a_takeover()
+    {
+        Assert.Empty(SavegameDriftRules.Classify(Binding(), "aaaa", headSnapshot: 4, _profileId, 6, Claim("me", isYours: true)));
+    }
+
+    /// <summary>
+    /// Checked in by the other side is the same event gone one step further, and saying both would be
+    /// one takeover told twice.
+    /// </summary>
+    [Fact]
+    public void A_takeover_that_has_since_been_checked_in_is_said_once()
+    {
+        var kinds = SavegameDriftRules.Classify(Binding(snapshot: 4), "aaaa", headSnapshot: 5, _profileId, 6, Claim("bob"));
+
+        Assert.Equal([SavegameDriftKind.TakenOverAndCheckedIn], kinds);
     }
 
     /// <summary>
@@ -199,13 +244,28 @@ public class SavegameDriftTests
         using var harness = new DriftHarness();
 
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
-        harness.Heads.Set(_savegameId, 4);
+        harness.Sightings.Set(_savegameId, 4);
 
         var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.TakenOverAndCheckedIn, drift.Kind);
         Assert.Equal(3, drift.HeldSnapshot);
         Assert.Equal(4, drift.HeadSnapshot);
+    }
+
+    [Fact]
+    public async Task A_claim_the_client_saw_somebody_else_holding_is_reported_naming_them()
+    {
+        using var harness = new DriftHarness();
+
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
+        harness.Sightings.Set(_savegameId, 3);
+        harness.Sightings.SetClaim(_savegameId, Claim("bob"));
+
+        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+
+        Assert.Equal(SavegameDriftKind.TakenOver, drift.Kind);
+        Assert.Equal("Bob", drift.TakenBy?.DisplayName);
     }
 
     /// <summary>
@@ -314,6 +374,11 @@ public class SavegameDriftTests
     };
 
 
+    private static SavegameClaimSighting Claim(string userId, bool isYours = false) => new(
+        new SavegameClaimHolder(userId, isYours ? "Me" : "Bob", DateTime.UtcNow.AddHours(-2)),
+        isYours);
+
+
     /// <summary>The drift check over a real slot folder, a real packer and real local state.</summary>
     private sealed class DriftHarness : IDisposable
     {
@@ -355,12 +420,12 @@ public class SavegameDriftTests
                 _manifestStore,
                 new FakeSlotRecycleBin(),
                 NullLogger<SavegameService>.Instance,
-                Heads);
+                Sightings);
         }
 
 
         public FakeSavegameServer Server { get; } = new();
-        public FakeSavegameHeadSnapshots Heads { get; } = new();
+        public FakeSavegameSightings Sightings { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameService Service { get; }

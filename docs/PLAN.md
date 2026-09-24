@@ -954,7 +954,11 @@ database error.
       held until it ends, and the row says when it was taken.*
 - [x] **Taking it anyway is allowed.** It closes the previous row as `TakenOver` and warns naming
       who holds it and since when. The checkout is the social half; the base-snapshot check is the
-      mechanical one, and only the second is a guarantee.
+      mechanical one, and only the second is a guarantee. *The client ignored `TakenFrom` until
+      2026-09-24. Now whoever takes it is asked first, naming the holder, and whoever had it gets a
+      `TakenOver` drift card. A background watch reads the lists of repos holding a save here, so
+      they don't need to open the repo to find out - see
+      [10 — Taking a save from somebody](10-savegame-profile-binding.md#taking-a-save-from-somebody).*
 - [x] **The log is never pruned with the snapshots.** The rows are tiny and outlive the blobs, so
       history can still say that a snapshot existed and was pruned.
 

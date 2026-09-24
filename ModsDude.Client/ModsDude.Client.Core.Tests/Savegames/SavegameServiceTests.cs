@@ -65,6 +65,47 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// Taking a save from somebody is allowed, and the server says whose it was so the caller can
+    /// name them - and until the next list read, the claim just taken is recorded as this user's, so a
+    /// drift check in between cannot report the check-out as their own save having been taken over.
+    /// </summary>
+    [Fact]
+    public async Task Checking_out_a_save_somebody_else_holds_says_whose_it_was_and_records_the_claim_as_yours()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        var since = DateTime.UtcNow.AddHours(-3);
+        harness.Server.HeldBySomebodyElse = new SavegameCheckoutDto
+        {
+            Id = Guid.NewGuid(),
+            RepoId = harness.Server.RepoId,
+            SavegameId = harness.Server.SavegameId,
+            User = new UserDto { Id = "bob", DisplayName = "Bob", Tag = "0001" },
+            TakenAt = since,
+            EndedAt = DateTime.UtcNow,
+            EndedReason = SavegameCheckoutEndReason.TakenOver,
+            Status = SavegameCheckoutStatus.Ended
+        };
+        harness.Sightings.SetClaim(harness.Server.SavegameId, new SavegameClaimSighting(
+            new SavegameClaimHolder("bob", "Bob", since), IsYours: false));
+
+        var takenFrom = await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(new SavegameClaimHolder("bob", "Bob", since), takenFrom);
+        Assert.True(harness.Sightings.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
+    }
+
+    [Fact]
+    public async Task Checking_out_a_save_nobody_holds_took_it_from_nobody()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        Assert.Null(await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None));
+    }
+
+    /// <summary>
     /// The refusal that is the point of the whole safety check. The slot holds an evening that exists
     /// nowhere else, and the remedy is to check that savegame in - which is an action, not a warning.
     /// </summary>
@@ -1429,7 +1470,7 @@ public class SavegameServiceTests
                 ManifestStore,
                 RecycleBin,
                 NullLogger<SavegameService>.Instance,
-                Heads);
+                Sightings);
         }
 
 
@@ -1439,7 +1480,7 @@ public class SavegameServiceTests
         public FakeSavegameServer Server { get; } = new();
         public FakeSavegameUploader Uploader { get; }
         public FakeSlotRecycleBin RecycleBin { get; } = new();
-        public FakeSavegameHeadSnapshots Heads { get; } = new();
+        public FakeSavegameSightings Sightings { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameBindingStore Bindings { get; }

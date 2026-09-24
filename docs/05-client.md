@@ -712,6 +712,11 @@ is not drawn), the tooltip says what the refresh would bring in, and any refresh
 - **Hidden or minimised, nothing is asked**, and a failed check is logged and nothing else: nobody
   asked for it, so a network blip is not worth an error dialog.
 
+`SavegameClaimWatcher` is its sibling for the savegames this machine holds, and differs on exactly that
+point: it asks whether the window is in sight or not, because what it finds is a takeover notice, and
+the person it is for is usually playing. See
+[10 — Taking a save from somebody](10-savegame-profile-binding.md#taking-a-save-from-somebody).
+
 ## Names sort naturally
 
 `NaturalOrder.Comparer` is the one comparer behind every sort of a name a person wrote —
@@ -948,9 +953,9 @@ synchronizer never mapped is one it would never remove, and restoring the profil
 
 A savegame has no page of its own, so `TrySelectSavegameAsync` takes the user to the list it is in:
 the saves page for a live one, the Archive with the row picked out for an archived one. Which list
-is asked of the server rather than guessed - the head-snapshot cache would have been free, but it is
-populated as a side effect of the saves page having been visited, so on a fresh window every
-savegame would look archived.
+is asked of the server rather than guessed - the savegame sighting cache would have been free, but it
+only knows the savegames whose list the saves page or the claim watch has read, so on a fresh window
+most savegames would look archived.
 
 `Delete profile` and `Delete repo` are gone from the pages that had them — those buttons archive
 now. The one place a permanent delete exists is the archive, which is what makes it a second

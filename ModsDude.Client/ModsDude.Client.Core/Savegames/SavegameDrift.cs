@@ -4,7 +4,7 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// The three ways a savegame this machine is holding can have stopped agreeing with the server.
+/// The ways a savegame this machine is holding can have stopped agreeing with the server.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,6 +32,17 @@ public enum SavegameDriftKind
     /// head. A check-in from here is a fork, and will be refused unless it is forced.
     /// </summary>
     TakenOverAndCheckedIn,
+
+    /// <summary>
+    /// Somebody else holds the claim now - or took it and let it go - and has checked nothing in yet.
+    /// The copy here and theirs are already two versions of the same save: whoever checks in second
+    /// has to force it, and overwrites the other's play.
+    /// </summary>
+    /// <remarks>
+    /// <b>Never reported beside <see cref="TakenOverAndCheckedIn"/>.</b> That one is this state after
+    /// the other side has checked in, and saying both would be one event told twice.
+    /// </remarks>
+    TakenOver,
 
     /// <summary>
     /// The folder is not on the mod list this save runs on - the game was applied to a different
@@ -103,29 +114,58 @@ public sealed record SavegameDrift(
     /// design refuses.
     /// </remarks>
     public bool RunsOnAnotherProfile { get; init; }
+
+    /// <summary>
+    /// Who holds the claim now, for <see cref="SavegameDriftKind.TakenOver"/>. Null there where
+    /// nobody does - it was taken and let go - and null for every other kind.
+    /// </summary>
+    public SavegameClaimHolder? TakenBy { get; init; }
 }
 
 
+/// <summary>Somebody holding a savegame's claim, as the savegame list named them.</summary>
+public sealed record SavegameClaimHolder(string UserId, string DisplayName, DateTime TakenAt);
+
+
 /// <summary>
-/// Which snapshot a savegame's head is at, for the savegames this client happens to know about.
+/// Who held a savegame's claim when this client last read it from the server.
+/// </summary>
+/// <param name="Holder">Whoever held it, or null where nobody did.</param>
+/// <param name="IsYours">Whether that was the signed-in user - on this machine or any other.</param>
+public sealed record SavegameClaimSighting(SavegameClaimHolder? Holder, bool IsYours);
+
+
+/// <summary>
+/// Which snapshot a savegame's head is at, and who holds its claim, for the savegames this client
+/// happens to know about.
 /// </summary>
 /// <remarks>
 /// Deliberately partial, and deliberately <b>not</b> a client call - the same bargain
 /// <see cref="Sync.IProfileRevisions"/> strikes for profiles, and for the same reason. The answer is
-/// there for the repo whose savegame list the user has loaded and absent for the rest, because the
-/// alternative is a network round trip per held savegame on every window activation, in a check
-/// whose entire point is that it works offline and costs a directory listing.
+/// there for the repo whose savegame list the user has loaded, and for the repos this machine holds a
+/// save in once the claim watch has read theirs, and absent for the rest - because the alternative is
+/// a network round trip per held savegame on every window activation, in a check whose entire point
+/// is that it works offline and costs a directory listing.
 /// </remarks>
-public interface ISavegameHeadSnapshots
+public interface ISavegameSightings
 {
     /// <summary>The savegame's head snapshot, or null where this client has not been told.</summary>
     int? GetHeadSnapshot(Guid repoId, Guid savegameId);
+
+    /// <summary>Who holds the savegame's claim, or null where this client has not been told.</summary>
+    SavegameClaimSighting? GetClaim(Guid repoId, Guid savegameId);
+
+    /// <summary>
+    /// Records the claim the signed-in user has just taken, so the sighting from before it cannot
+    /// report their own check-out as a takeover.
+    /// </summary>
+    void RecordOwnClaim(Guid repoId, Guid savegameId, ModsDudeServer.Generated.SavegameCheckoutDto checkout);
 }
 
 
 /// <summary>
-/// Which of the three drift states a held savegame is in, decided from the binding, the slot's
-/// current hash, the server's head and the revision the mod folder is on.
+/// Which drift states a held savegame is in, decided from the binding, the slot's current hash, the
+/// server's head and claim, and the revision the mod folder is on.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -156,12 +196,17 @@ public static class SavegameDriftRules
     /// merely on another revision of the same list, it is on another list.
     /// </param>
     /// <param name="appliedRevision">Which revision of it, from the manifest.</param>
+    /// <param name="claim">
+    /// Who the server last said holds the claim, or null where nobody asked - which, like an unasked
+    /// head, says nothing.
+    /// </param>
     public static IReadOnlyList<SavegameDriftKind> Classify(
         SavegameCheckoutBinding binding,
         string? currentContentHash,
         int? headSnapshot,
         Guid? appliedProfileId,
-        int? appliedRevision)
+        int? appliedRevision,
+        SavegameClaimSighting? claim = null)
     {
         var kinds = new List<SavegameDriftKind>();
 
@@ -179,6 +224,13 @@ public static class SavegameDriftRules
         if (headSnapshot is int head && head > binding.Snapshot)
         {
             kinds.Add(SavegameDriftKind.TakenOverAndCheckedIn);
+        }
+        // Nobody holding it counts too: this machine's binding is a claim it took, and the only way
+        // that claim ends while the binding stands is somebody taking it - and then, here, letting
+        // it go again without checking anything in.
+        else if (claim is { IsYours: false })
+        {
+            kinds.Add(SavegameDriftKind.TakenOver);
         }
 
         if (HasMovedOffItsModList(binding, appliedProfileId, appliedRevision))

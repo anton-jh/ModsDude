@@ -44,6 +44,7 @@ public partial class App : Application
     private TrayService? _tray;
     private DriftBackstop? _backstop;
     private RemoteChangeWatcher? _remoteChanges;
+    private SavegameClaimWatcher? _claimWatcher;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -255,6 +256,9 @@ public partial class App : Application
         _backstop = _serviceProvider.GetRequiredService<DriftBackstop>();
         _backstop.Start();
 
+        _claimWatcher = _serviceProvider.GetRequiredService<SavegameClaimWatcher>();
+        _claimWatcher.Start();
+
         _serviceProvider.GetRequiredService<AppUpdater>().Start();
 
         return trayUp;
@@ -267,6 +271,7 @@ public partial class App : Application
 
         _backstop?.Dispose();
         _remoteChanges?.Dispose();
+        _claimWatcher?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();
 
@@ -373,6 +378,9 @@ public partial class App : Application
 
         // Asks whether the sidebar's lists are behind the server, and only says so - see the class.
         services.AddSingleton<RemoteChangeWatcher>();
+
+        // Asks who holds the savegames checked out here, so a takeover reaches the notice - see the class.
+        services.AddSingleton<SavegameClaimWatcher>();
 
         // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
         // library's own way of saying so, which Core cannot see.
@@ -538,11 +546,13 @@ public partial class App : Application
         // still works before anything has been loaded at all.
         services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<ProfileService>());
 
-        // The savegame counterpart, populated as a side effect of the Saves page having read a list.
-        // Registered under both names for the same reason: the page records into it, the drift check
-        // reads it, and they have to be the one object.
-        services.AddSingleton<SavegameHeadSnapshotCache>();
-        services.AddSingleton<ISavegameHeadSnapshots>(sp => sp.GetRequiredService<SavegameHeadSnapshotCache>());
+        // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
+        // page, or the claim watch reading the lists of whatever this machine holds. Registered under
+        // both names for the same reason: those record into it, the drift check reads it, and they
+        // have to be the one object.
+        services.AddSingleton<SavegameSightingCache>();
+        services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<SavegameSightingCache>());
+        services.AddSingleton<SavegameClaimWatch>();
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

@@ -308,7 +308,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     public string CheckOutToolTip => CheckOutBlockedReason
         ?? (IsHeldByMe
             ? "Writes the newest snapshot into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
-            : "Takes the claim and writes it into a slot. Nobody else can take it until you check it in.");
+            : Holder is SavegameCheckoutDto holder
+                ? $"{holder.User.DisplayName} has it. Checking it out takes it from them, and they will be told."
+                : "Takes the claim and writes it into a slot, so everybody else can see you have it until you check it in.");
 
     /// <summary>
     /// Never a refusal: the button is only there when the save is yours and on this machine, which is

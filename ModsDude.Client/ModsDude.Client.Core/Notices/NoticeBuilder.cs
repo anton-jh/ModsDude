@@ -3,6 +3,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
+using System.Globalization;
 
 namespace ModsDude.Client.Core.Notices;
 
@@ -333,7 +334,9 @@ public static class NoticeBuilder
         {
             SavegameDriftKind.UncheckedInPlay => $"{save} holds play that exists nowhere else",
             SavegameDriftKind.TakenOverAndCheckedIn => $"{save} has been checked in by somebody else",
-            _ => $"{save} is on the wrong mod list"
+            SavegameDriftKind.TakenOver when first.TakenBy is SavegameClaimHolder holder => $"{save} was taken over by {holder.DisplayName}",
+            SavegameDriftKind.TakenOver => $"{save} is no longer checked out to you",
+            _ =>$"{save} is on the wrong mod list"
         };
 
         var actions = new List<NoticeAction>
@@ -380,6 +383,19 @@ public static class NoticeBuilder
             $"{save} has been checked in by somebody else - they are on snapshot {drift.HeadSnapshot}, this "
                 + $"machine is holding snapshot {drift.HeldSnapshot}. Checking in from here forks it, and will "
                 + "be refused unless you force it.",
+
+        // Once somebody else has it there are two copies of one save, whether or not either side has
+        // played yet - so the sentence is about which check-in wins, not about a fork still to come.
+        SavegameDriftKind.TakenOver when drift.TakenBy is SavegameClaimHolder holder =>
+            $"{holder.DisplayName} checked {save} out on {holder.TakenAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}, "
+                + $"so the claim is theirs now. The copy here and theirs are two versions of the same save: whoever "
+                + "checks in second has to force it, and that overwrites the other's play.",
+
+        // Taken and then let go again without a check-in: nobody holds it, and the head is still the
+        // snapshot held here, so nothing has been lost yet and a check-in from here goes through.
+        SavegameDriftKind.TakenOver =>
+            $"Somebody took {save} over and has since let it go without checking anything in, so this machine "
+                + "no longer holds the claim. Checking in from here still works.",
 
         // Two sentences for one kind, because the rule reaches it two ways and only one of them is
         // about numbers. Against another profile entirely, putting the two revisions side by side

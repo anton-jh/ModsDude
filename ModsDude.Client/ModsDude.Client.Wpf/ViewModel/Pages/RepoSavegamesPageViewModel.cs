@@ -41,7 +41,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly SavegameHeadSnapshotCache _headSnapshots;
+    private readonly SavegameSightingCache _sightings;
     private readonly ISavegameService _savegameService;
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
@@ -76,7 +76,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Repo repo,
         ISavegamesClient savegamesClient,
         ISavegameService savegameService,
-        SavegameHeadSnapshotCache headSnapshots,
+        SavegameSightingCache sightings,
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         CurrentUserService currentUserService,
@@ -100,7 +100,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _savegamesClient = savegamesClient;
         _savegameService = savegameService;
-        _headSnapshots = headSnapshots;
+        _sightings = sightings;
         _bindingStore = bindingStore;
         _profileService = profileService;
         _currentUserService = currentUserService;
@@ -737,10 +737,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private void Publish(IReadOnlyList<SavegameDto> savegames, Guid? select = null)
     {
         // Every path that renders a savegame list goes through here, which is why the drift check's
-        // "somebody took this over and checked in" is fed from this one place rather than from each
-        // fetch. It answers nothing for a repo whose list nobody has opened - deliberately, since the
-        // alternative is a round trip per held save on every window activation.
-        _headSnapshots.Record(_repo.Id, savegames);
+        // "somebody took this over" is fed from this one place rather than from each fetch. The claim
+        // watch feeds it too, for the repos this machine holds a save in, whether or not this page is
+        // open.
+        _sightings.Record(_repo.Id, savegames, _currentUserId);
 
         var wanted = select ?? Selected?.Id;
 
@@ -1503,7 +1503,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// The destructive step is local and comes first, the claim is social and wants to be fast, and the
     /// mod question is last because it is the only one that can be deferred. This is that order.
     /// </summary>
-    private async Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
+    /// <param name="agreedToTakeFrom">
+    /// Whose claim the user has already agreed to take, on the way round a refused slot - so coming back
+    /// here does not ask them the same question twice.
+    /// </param>
+    private async Task StartAsync(
+        SavegameListItemViewModel row,
+        int snapshotNumber,
+        SavegameCheckOutMode mode,
+        string? agreedToTakeFrom = null)
     {
         if (row.Savegame.Head is null || snapshotNumber <= 0)
         {
@@ -1521,6 +1529,23 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 $"A savegame has to be written into an installation of the game. Use 'Connect game' in {_repo.Name} first."));
 
             return;
+        }
+
+        // Taking a save from somebody is allowed, and is decided on a screen naming them - before the
+        // slot question, because this is the one that decides whether there is a check-out at all. A
+        // copy takes nothing from anybody, and a claim of your own is not somebody else's.
+        var takingFrom = mode is SavegameCheckOutMode.CheckOut && row.IsHeldByMe is false ? row.Holder : null;
+
+        if (takingFrom is not null && takingFrom.User.Id != agreedToTakeFrom)
+        {
+            var confirmation = ConfirmTakeOver(row.Name, takingFrom);
+
+            await _modalService.Show(confirmation);
+
+            if (confirmation.Result is false)
+            {
+                return;
+            }
         }
 
         IsWorking = true;
@@ -1541,7 +1566,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             if (modal.CheckInFirstSavegameId is Guid blocking)
             {
-                await CheckInBlockingAsync(game, blocking, row, snapshotNumber, mode);
+                await CheckInBlockingAsync(game, blocking, row, snapshotNumber, mode, takingFrom?.User.Id);
 
                 return;
             }
@@ -1551,7 +1576,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            await ExecuteAsync(row, snapshotNumber, mode, game, slot);
+            await ExecuteAsync(row, snapshotNumber, mode, game, slot, takingFrom?.User.Id);
         }
         catch (OperationCanceledException)
         {
@@ -1578,7 +1603,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Guid blockingSavegameId,
         SavegameListItemViewModel row,
         int snapshotNumber,
-        SavegameCheckOutMode mode)
+        SavegameCheckOutMode mode,
+        string? agreedToTakeFrom)
     {
         var blocking = Savegames.FirstOrDefault(x => x.Id == blockingSavegameId);
 
@@ -1607,8 +1633,32 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         if (Savegames.FirstOrDefault(x => x.Id == row.Id) is SavegameListItemViewModel refreshed)
         {
-            await StartAsync(refreshed, snapshotNumber, mode);
+            await StartAsync(refreshed, snapshotNumber, mode, agreedToTakeFrom);
         }
+    }
+
+    /// <summary>
+    /// The question asked before taking a save somebody else has checked out.
+    /// </summary>
+    /// <remarks>
+    /// <b>A warning that names the person, and says what it costs.</b> Taking it is always allowed - the
+    /// claim is advisory - so this is not a refusal in disguise; but the moment it is taken there are
+    /// two copies of one save, and whoever checks in second overwrites the other. That is the sentence
+    /// worth reading before the click rather than after it.
+    /// </remarks>
+    private static ConfirmationDialogViewModel ConfirmTakeOver(string savegameName, SavegameCheckoutDto holder)
+    {
+        var name = holder.User.DisplayName;
+
+        return new ConfirmationDialogViewModel(
+            $"{name} has '{savegameName}' checked out",
+            $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Checking it out takes it from them, "
+                + "and their ModsDude will tell them.\n\n"
+                + "If they are playing it, you will each have a copy of the same save: whoever checks in second has "
+                + "to force it, and that overwrites the other's play.",
+            IconKind.Warning,
+            $"Take it from {name}",
+            "Leave it with them");
     }
 
     private async Task ExecuteAsync(
@@ -1616,7 +1666,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         int snapshotNumber,
         SavegameCheckOutMode mode,
         Game game,
-        SavegameSlotOptionViewModel slot)
+        SavegameSlotOptionViewModel slot,
+        string? agreedToTakeFrom)
     {
         // Downloading and unpacking a save is the slow half of both verbs, and both are safe to walk
         // away from - the claim, where there is one, is taken before the bytes move.
@@ -1657,9 +1708,26 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         task.Report("Taking the claim");
 
-        await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime, new SavegameStripProgress(task));
+        var takenFrom = await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime, new SavegameStripProgress(task));
 
-        _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'.");
+        if (takenFrom is null)
+        {
+            _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'.");
+        }
+        else if (takenFrom.UserId == agreedToTakeFrom)
+        {
+            _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'. {takenFrom.DisplayName} no longer has it, " +
+                         "and their ModsDude will tell them.");
+        }
+        else
+        {
+            // The list this page showed was behind the server: somebody took the save after it was read,
+            // so the question above was never asked about them. The server's answer is what says so, and
+            // the claim is taken by now - all that is left is to say whose it was.
+            _toasts.Show($"{takenFrom.DisplayName} had '{row.Name}' checked out since {SavegameWording.Exactly(takenFrom.TakenAt)} - " +
+                         $"this list did not show it yet. It is yours now, in '{game.Name}', and their ModsDude will tell them.",
+                         ToastSeverity.Warning);
+        }
 
         await ApplyProfileAsync(game, savegame);
 

@@ -54,6 +54,15 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// <summary>Every check-in the client sent, so a test can read what it based itself on.</summary>
     public List<CheckInSavegameRequest> CheckIns { get; } = [];
 
+    /// <summary>The claim a check-out closes, as the server would name it. Null is nobody holding it.</summary>
+    public SavegameCheckoutDto? HeldBySomebodyElse { get; set; }
+
+    /// <summary>The open claim the savegame list reports. Null is nobody holding it.</summary>
+    public SavegameCheckoutDto? ListedCheckout { get; set; }
+
+    /// <summary>How many times the savegame list was read.</summary>
+    public int ListReads { get; private set; }
+
     public List<PublishSavegameRequest> Publishes { get; } = [];
 
     /// <summary>The snapshots this savegame has, oldest first.</summary>
@@ -109,7 +118,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     {
         CheckoutsTaken++;
 
-        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Checkout() });
+        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Checkout(), TakenFrom = HeldBySomebodyElse });
     }
 
     public Task DiscardSavegameCheckoutV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
@@ -245,7 +254,11 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// <summary>How many times a savegame was put back in its profile's slot.</summary>
     public int MadeCurrent { get; private set; }
     public Task<ICollection<SavegameDto>> GetSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+    {
+        ListReads++;
+
+        return Task.FromResult<ICollection<SavegameDto>>([_savegame with { Checkout = ListedCheckout }]);
+    }
     public Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(Guid repoId, Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
@@ -465,16 +478,29 @@ internal sealed class FakeSavegameAdapters(ILocalSavegameAdapter? adapter) : ILo
 }
 
 
-/// <summary>What this client has been told the heads are. Empty is "not asked", never "unchanged".</summary>
-internal sealed class FakeSavegameHeadSnapshots : ISavegameHeadSnapshots
+/// <summary>
+/// What this client has been told the heads and claims are. Empty is "not asked", never "unchanged".
+/// </summary>
+internal sealed class FakeSavegameSightings : ISavegameSightings
 {
     private readonly Dictionary<Guid, int> _heads = [];
+    private readonly Dictionary<Guid, SavegameClaimSighting> _claims = [];
 
 
     public void Set(Guid savegameId, int headSnapshot) => _heads[savegameId] = headSnapshot;
 
+    public void SetClaim(Guid savegameId, SavegameClaimSighting claim) => _claims[savegameId] = claim;
+
     public int? GetHeadSnapshot(Guid repoId, Guid savegameId)
         => _heads.TryGetValue(savegameId, out var head) ? head : null;
+
+    public SavegameClaimSighting? GetClaim(Guid repoId, Guid savegameId)
+        => _claims.TryGetValue(savegameId, out var claim) ? claim : null;
+
+    public void RecordOwnClaim(Guid repoId, Guid savegameId, SavegameCheckoutDto checkout)
+        => _claims[savegameId] = new SavegameClaimSighting(
+            new SavegameClaimHolder(checkout.User.Id, checkout.User.DisplayName, checkout.TakenAt),
+            IsYours: true);
 }
 
 

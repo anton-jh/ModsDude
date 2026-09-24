@@ -698,6 +698,32 @@ at all, since revision 6 of 'Season 4' and revision 6 of 'Vanilla' are different
 an integer. Neither names `SavegameDrift.PlayedRevision`: that is what the save was checked out
 against, it belongs to play attribution, and it is not what the comparison used.
 
+### Taking a save from somebody
+
+The claim is advisory, so taking a save somebody else has checked out is always allowed. Both people
+are told:
+
+- **Whoever takes it** is asked first, before the check-out dialog. The question names the holder
+  and since when: *"Bob has 'Riverbend' checked out"*, with *Take it from Bob* and *Leave it with them*.
+  It comes before the slot question because it decides whether there is a check-out at all. Take a
+  copy and *Check out again* on your own claim do not ask. If the list was behind the server and the
+  check-out's `TakenFrom` names somebody the question never asked about, a warning toast says whose
+  it was.
+- **Whoever had it** gets a Critical `SavegameDriftKind.TakenOver` card: *"'Riverbend' was taken over
+  by Bob"*. Once somebody else has it there are already two copies of one save, whether or not
+  either side has played, so the sentence is about which check-in wins: whoever checks in second has
+  to force it, and that overwrites the other's play. A claim that was taken and then let go again
+  (nobody holds it, head unchanged) is the same kind with nobody to name. It is never reported beside
+  `TakenOverAndCheckedIn`, which is the same event one step further.
+
+The drift check stays offline. It reads who holds the claim from `ISavegameSightings`, which the
+Saves page fills whenever it reads a list, and which `SavegameClaimWatch` fills for every repo this
+machine holds a save in. `SavegameClaimWatcher` runs that every three minutes (the first look 20 s
+after the repos load), **whether or not the window is in sight**: the person who most needs to hear is
+the one playing the save, with ModsDude behind the game, and the notice becomes a Windows toast
+exactly then. With nothing held it asks nothing. A check-out records the claim it took into the same
+cache straight away, so a list read before it cannot report somebody's own check-out as a takeover.
+
 ### Check-out dialog
 
 Three sections — mods, slot, revision — each absent when it has nothing to say. **There is no
