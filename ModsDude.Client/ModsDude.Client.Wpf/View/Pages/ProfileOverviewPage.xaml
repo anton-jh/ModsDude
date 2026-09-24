@@ -106,6 +106,48 @@
                                        Text="{Binding ArchivedWarning}"
                                        Visibility="{Binding HasArchivedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
 
+                            <!-- The Saves list's own flows for this profile's savegame. Publish is always
+                                 here; Check in and Check out only where there is a current savegame, and
+                                 greyed with the reason in the tooltip where this machine cannot do them. -->
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0 12 0 0"
+                                        Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Button Content="{Binding CheckOutLabel}"
+                                        Style="{DynamicResource AccentButtonStyle}"
+                                        MinWidth="110"
+                                        ToolTip="{Binding CheckOutToolTip}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Command="{Binding CheckOutCommand}"
+                                        Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <Button Content="Check in"
+                                        Margin="8 0 0 0"
+                                        MinWidth="110"
+                                        ToolTip="{Binding CheckInToolTip}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Command="{Binding CheckInCommand}"
+                                        Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <Button Content="Publish a save"
+                                        MinWidth="110"
+                                        ToolTip="{Binding PublishToolTip}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Command="{Binding PublishCommand}">
+                                    <Button.Style>
+                                        <!-- Beside the other two where they are there, and first where
+                                             it is the only one. -->
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="Margin" Value="8 0 0 0" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasCurrent}" Value="False">
+                                                    <Setter Property="Margin" Value="0" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+
                             <Button Margin="0 8 0 0"
                                     HorizontalAlignment="Left"
                                     Style="{DynamicResource SubtleMenuButton}"

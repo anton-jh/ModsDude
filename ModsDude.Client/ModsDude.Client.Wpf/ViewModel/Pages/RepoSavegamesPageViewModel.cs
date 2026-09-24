@@ -8,7 +8,6 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
-using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -49,24 +48,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly ProfileApplyService _applyService;
     private readonly DriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
-    private readonly SyncManifestStore _manifestStore;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
-    private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly IBackgroundProblemReporter _problems;
     private readonly IToastService _toasts;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
 
-    /// <summary>
-    /// Whether a locked pin moved between two revisions of one profile, keyed by the pair. One check-out
-    /// dialog and one row chip ask the same question about the same pair, and it costs two reads.
-    /// </summary>
-    private readonly Dictionary<(Guid ProfileId, int From, int To), bool> _lockedDrift = [];
-
-    private const string _unseenProfileName = "A profile you cannot see";
+    private const string _unseenProfileName = SavegameFlowService.UnseenProfileName;
 
     private IReadOnlyList<SavegameDto> _fetched = [];
     private string? _currentUserId;
@@ -83,19 +74,15 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         ProfileApplyService applyService,
         DriftMonitor driftMonitor,
         SavegameFlowService flowService,
-        SyncManifestStore manifestStore,
         ShellNavigationService shellNavigation,
         IModalService modalService,
         IErrorReporter errorReporter,
-        IBackgroundTaskReporter backgroundTasks,
         IBackgroundProblemReporter problems,
         IToastService toasts,
         bool showPastSavegames = false)
     {
-        _backgroundTasks = backgroundTasks;
         _problems = problems;
         _toasts = toasts;
-        _manifestStore = manifestStore;
         _showPastSavegames = showPastSavegames;
         _repo = repo;
         _savegamesClient = savegamesClient;
@@ -364,72 +351,18 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// no sidebar of installations to go looking through for it.
     /// </para>
     /// <para>
-    /// <b>The slot is still what it is about</b>, so it is asked for first: the same flat slot list
-    /// across every savegame folder the game reaches, filtered to the ones ModsDude has no copy of.
-    /// Everything after that - the name, the mod list, the revision this first snapshot declares - is
-    /// the publish dialog's, unchanged.
+    /// <b>The flow is <see cref="SavegameFlowService.PublishAsync"/>'s</b>, because a profile's Overview
+    /// offers the same publish, opened on that profile.
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private async Task PublishSave()
     {
-        if (_repo.Games.FirstOrDefault() is not Game game)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                "No game is connected here",
-                $"Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from. Use 'Connect game' in {_repo.Name} first."));
-
-            return;
-        }
-
         IsWorking = true;
 
         try
         {
-            var slots = await ReadPublishableSlotsAsync(game, _lifetime);
-
-            if (slots.Count == 0)
-            {
-                await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                    "There is nothing here to publish",
-                    "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in this list."));
-
-                return;
-            }
-
-            var picker = new SavegameSlotPickerModalViewModel(_repo.Name, slots);
-
-            await _modalService.Show(picker);
-
-            if (picker.Result is not SavegameSlotOptionViewModel chosen)
-            {
-                return;
-            }
-
-            var published = await _flowService.PublishAsync(game, _repo, chosen.Ref, chosen.Label, _lifetime);
-
-            if (published is null)
-            {
-                return;
-            }
-
-            // Two endings, because the slot is in a different state in each and the sentence is the
-            // only thing that says which. A publish that handed the save back emptied the folder.
-            _toasts.Show(published.KeptPlaying
-                ? $"'{published.Savegame.Name}' is in {_repo.Name}, and checked out to you. " +
-                  "The save has not moved - check it in when you want somebody else to be able to take it."
-                : $"'{published.Savegame.Name}' is in {_repo.Name} and is anybody's to take. The local copy went to the " +
-                  "Recycle Bin - check it out again once the game is on that mod list.");
-
-            await ReloadAsync(published.Savegame.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "publishing a savegame");
+            await _flowService.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id), _lifetime);
         }
         finally
         {
@@ -440,33 +373,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     // Member, like checking in and archiving: it writes to the repo, and everybody in it sees the
     // result.
     private bool CanPublish() => IsMember && IsWorking is false;
-
-    /// <summary>
-    /// The slots holding bytes ModsDude has no copy of, which are the only ones a publish can be
-    /// about.
-    /// </summary>
-    /// <remarks>
-    /// An empty slot has nothing to publish, and a slot holding a checked-out save is checked in
-    /// rather than published a second time under a new name - so both are absent from the picker
-    /// rather than present and refused.
-    /// </remarks>
-    private async Task<IReadOnlyList<SavegameSlotOptionViewModel>> ReadPublishableSlotsAsync(
-        Game game, CancellationToken cancellationToken)
-    {
-        var options = new List<SavegameSlotOptionViewModel>();
-
-        foreach (var slot in await _savegameService.GetSlotsAsync(game, cancellationToken))
-        {
-            var availability = await _savegameService.ClassifySlotAsync(game, slot.Ref, cancellationToken);
-
-            if (availability is SavegameSlotAvailability.Unrecognised)
-            {
-                options.Add(new SavegameSlotOptionViewModel(slot, availability));
-            }
-        }
-
-        return options;
-    }
 
     /// <summary>
     /// Checks out the selected entry's snapshot. Where that is not the head it is a restore first -
@@ -763,7 +669,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // One read of the game's folder state for the whole list, rather than one per row: a
         // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
         // parses of it.
-        var host = ReadHost();
+        var host = _flowService.ReadHost(_repo);
 
         foreach (var savegame in InListOrder(shown))
         {
@@ -789,7 +695,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // this same list.
         foreach (var row in Savegames)
         {
-            Offer(row, host);
+            _flowService.Offer(_repo, row, host, NameOfHeld);
         }
 
         IsEmpty = Savegames.Count == 0;
@@ -878,101 +784,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The game this repo's rows act on, with what it is holding and what its mod folder was last
-    /// synced to - the two facts <see cref="SavegameRowRules.Describe"/> needs. Null where nothing
-    /// is connected here.
-    /// </summary>
-    /// <remarks>
-    /// <b>One, not a list to choose from.</b> A game is keyed by its identity and a repo is about one
-    /// game, so there is nothing to rank - the ranking this replaced picked whichever installation
-    /// would accept a check-out, then whichever followed the save's profile, then the first.
-    /// </remarks>
-    private SavegameHost? ReadHost()
-    {
-        if (_repo.Games.FirstOrDefault() is not Game game)
-        {
-            return null;
-        }
-
-        var manifest = _manifestStore.TryReadAgreed(game.TargetRefs);
-
-        return new SavegameHost(
-            game,
-            _bindingStore.GetBindings(game.Identity),
-            // Once for the list rather than once per row: it hydrates the adapter to read the
-            // folders the settings still name, and twenty rows must not cost twenty of those.
-            _savegameService.GetUnreachableHolds(game).Select(x => x.SavegameId).ToHashSet(),
-            manifest?.ProfileId,
-            manifest?.ProfileRevision);
-    }
-
-    /// <summary>
-    /// Tells a row what its two buttons can do, and where the local copy of the save is.
-    /// </summary>
-    /// <remarks>
-    /// <b>Two questions, still.</b> Whether the game would accept a check-out and whether it is
-    /// already holding this save are different facts - a claim taken on the desktop is still yours on
-    /// the laptop, and there is nothing here to check in - so they are answered separately even now
-    /// that both are about the same installation.
-    /// </remarks>
-    private void Offer(SavegameListItemViewModel row, SavegameHost? host)
-    {
-        if (host is null)
-        {
-            // Nothing connected: no buttons work, and the row says so rather than the rule doing it.
-            // Whether there is a game to act on is not a fact about this savegame.
-            row.SetHeldHere(null);
-            row.SetOffer(null, null);
-
-            return;
-        }
-
-        row.SetHeldHere(FindHold(row.Id, host));
-
-        var offer = SavegameRowRules.Describe(
-            row.Id,
-            row.Savegame.ProfileId,
-            FindProfile(row.Savegame.ProfileId)?.HeadRevision,
-            row.PinnedRevision,
-            host.Held,
-            host.AppliedProfileId,
-            host.AppliedRevision);
-
-        row.SetOffer(offer, offer.CanCheckOut ? null : NameOfHeld(offer.BlockingSavegameId));
-    }
-
-    /// <summary>
-    /// Where the local copy of one savegame is sitting, or null where this machine holds none.
-    /// </summary>
-    /// <remarks>
-    /// <b>The slot list, folded into the row it is about.</b> A game's holds used to be a page of
-    /// their own keyed by slot; they are a line and up to two buttons on the savegame's own row now,
-    /// which is the list somebody is looking at when they finish an evening.
-    /// </remarks>
-    private SavegameHoldHere? FindHold(Guid savegameId, SavegameHost host)
-    {
-        // Written out rather than FirstOrDefault because a binding is a struct: the default is a
-        // fully-formed one with a blank slot reference, and a row handed that would offer to
-        // disconnect a hold that does not exist.
-        foreach (var binding in host.Held)
-        {
-            if (binding.SavegameId != savegameId)
-            {
-                continue;
-            }
-
-            return new SavegameHoldHere(
-                host.Game,
-                binding.Slot,
-                _savegameService.DescribeFolder(host.Game, binding.Slot.Target),
-                host.UnreachableHolds.Contains(savegameId),
-                _savegameService.DescribeSlotNumber(host.Game, binding.Slot));
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// What a savegame in the way is called. Read off this list, which is where the refusal has to
     /// point anyway - and null for one the toggle is hiding or the repo will not show, where the
     /// refusal stands without the name.
@@ -1029,40 +840,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             row.SetRevisionDrift(
                 behind,
-                await LockedPinMovedAsync(profile.Id, played, profile.HeadRevision));
+                await _flowService.LockedPinMovedAsync(_repo.Id, profile.Id, played, profile.HeadRevision, _lifetime));
         }
-    }
-
-    /// <summary>
-    /// Whether any locked pin moved between two revisions. An unlocked mod at a different version is
-    /// untidy; a locked map at a different version is a damaged save, and only the second is worth
-    /// colouring a chip for.
-    /// </summary>
-    private async Task<bool> LockedPinMovedAsync(Guid profileId, int from, int to)
-    {
-        if (_lockedDrift.TryGetValue((profileId, from, to), out var cached))
-        {
-            return cached;
-        }
-
-        bool moved;
-
-        try
-        {
-            var comparison = await _profileService.CompareRevisions(_repo.Id, profileId, from, to, _lifetime);
-
-            moved = comparison.Changes.Any(x => x.VersionMoved && (x.FromLocked || x.ToLocked || x.Version.Locked));
-        }
-        catch (ApiException)
-        {
-            // The count is still true and still worth showing; only the colour is unknown, and the
-            // quiet answer is the right one to guess when it is.
-            moved = false;
-        }
-
-        _lockedDrift[(profileId, from, to)] = moved;
-
-        return moved;
     }
 
     private async Task AnnotateUnpublishedPlayAsync(IReadOnlyList<SavegameListItemViewModel> rows)
@@ -1201,41 +980,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            // The savegame's name where the dialog wants a slot label, as CheckInBlockingAsync does:
-            // the slot's own id is a folder name the player has never thought in, and what they are
-            // handing back is the save rather than the folder. row.Name is this savegame's own record,
-            // so it also stands as the name to write into the slot before it is packed.
-            var outcome = await _flowService.CheckInAsync(game, row.Id, row.Name, row.Name, _lifetime, renameTo: row.Name);
-
-            if (outcome.WasDeferred)
-            {
-                _toasts.Show($"Left as it is. Your copy of '{row.Name}' is still in its slot and still yours.");
-
-                return;
-            }
-
-            if (outcome.Succeeded is false)
-            {
-                return;
-            }
-
-            _toasts.Show(outcome.KeptPlaying
-                ? $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server. The save is still in '{game.Name}' and still yours."
-                : $"Snapshot {outcome.Snapshot!.Number} of '{row.Name}' is on the server, and the save is anybody's to take.");
-
-            await _driftMonitor.CheckAsync();
-            await ReloadAsync(row.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away mid-upload. The check-in either landed or it did not, and the next read
-            // of this page says which - there is no page left to say it on now.
-        }
-        catch (Exception exception)
-        {
-            // The rows raise plain events rather than running commands, so a failure here has no
-            // command to carry it to the global handler and has to reach the user itself.
-            await _errorReporter.ShowAsync(exception, "checking a savegame in");
+            await _flowService.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime);
         }
         finally
         {
@@ -1500,529 +1245,22 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The destructive step is local and comes first, the claim is social and wants to be fast, and the
-    /// mod question is last because it is the only one that can be deferred. This is that order.
+    /// The check-out dialog and everything after it, which is <see cref="SavegameFlowService.CheckOutAsync"/>'s
+    /// - a profile's Overview offers the same check-out for its own savegame.
     /// </summary>
-    /// <param name="agreedToTakeFrom">
-    /// Whose claim the user has already agreed to take, on the way round a refused slot - so coming back
-    /// here does not ask them the same question twice.
-    /// </param>
-    private async Task StartAsync(
-        SavegameListItemViewModel row,
-        int snapshotNumber,
-        SavegameCheckOutMode mode,
-        string? agreedToTakeFrom = null)
+    private async Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
     {
-        if (row.Savegame.Head is null || snapshotNumber <= 0)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                $"'{row.Name}' has no snapshot yet",
-                "Nothing has been checked in for this savegame, so there is nothing to write into a slot."));
-
-            return;
-        }
-
-        if (_repo.Games.FirstOrDefault() is not Game game)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
-                "No game is connected here",
-                $"A savegame has to be written into an installation of the game. Use 'Connect game' in {_repo.Name} first."));
-
-            return;
-        }
-
-        // Taking a save from somebody is allowed, and is decided on a screen naming them - before the
-        // slot question, because this is the one that decides whether there is a check-out at all. A
-        // copy takes nothing from anybody, and a claim of your own is not somebody else's.
-        var takingFrom = mode is SavegameCheckOutMode.CheckOut && row.IsHeldByMe is false ? row.Holder : null;
-
-        if (takingFrom is not null && takingFrom.User.Id != agreedToTakeFrom)
-        {
-            var confirmation = ConfirmTakeOver(row.Name, takingFrom);
-
-            await _modalService.Show(confirmation);
-
-            if (confirmation.Result is false)
-            {
-                return;
-            }
-        }
-
         IsWorking = true;
 
         try
         {
-            var context = await BuildContextAsync(row, game, mode, _lifetime);
-
-            var modal = new SavegameCheckOutModalViewModel(
-                mode,
-                row.Name,
-                row.ProfileName,
-                snapshotNumber,
-                row.Savegame.Head.Number,
-                context);
-
-            await _modalService.Show(modal);
-
-            if (modal.CheckInFirstSavegameId is Guid blocking)
-            {
-                await CheckInBlockingAsync(game, blocking, row, snapshotNumber, mode, takingFrom?.User.Id);
-
-                return;
-            }
-
-            if (modal.Result is not SavegameSlotOptionViewModel slot)
-            {
-                return;
-            }
-
-            await ExecuteAsync(row, snapshotNumber, mode, game, slot, takingFrom?.User.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away. Nothing was written, and there is no page left to say so on.
-        }
-        catch (Exception exception)
-        {
-            // The rows raise plain events rather than running commands, so a failure here has no
-            // command to carry it to the global handler and has to reach the user itself.
-            await _errorReporter.ShowAsync(exception, "checking a savegame out");
+            await _flowService.CheckOutAsync(
+                _repo, row.Savegame, snapshotNumber, mode, _currentUserId, NameOfHeld, () => ReloadAsync(row.Id), _lifetime);
         }
         finally
         {
             IsWorking = false;
         }
-    }
-
-    /// <summary>
-    /// The way out of a refused slot: check the savegame occupying it in, then offer this dialog again
-    /// with the slot free. One action rather than a warning, per docs/PLAN.md#slot-safety.
-    /// </summary>
-    private async Task CheckInBlockingAsync(
-        Game game,
-        Guid blockingSavegameId,
-        SavegameListItemViewModel row,
-        int snapshotNumber,
-        SavegameCheckOutMode mode,
-        string? agreedToTakeFrom)
-    {
-        var blocking = Savegames.FirstOrDefault(x => x.Id == blockingSavegameId);
-
-        var outcome = await _flowService.CheckInAsync(
-            game,
-            blockingSavegameId,
-            blocking?.Name ?? "that savegame",
-            blocking?.Name ?? "the slot",
-            _lifetime,
-            // Null rather than the placeholder above where this machine's own list does not have the
-            // row: a name only worth showing in a sentence is not one worth writing into the save.
-            renameTo: blocking?.Name);
-
-        if (outcome.ReleasedTheSlot is false)
-        {
-            _toasts.Show(
-                outcome.WasDeferred
-                    ? "That savegame was left checked out, so its slot is still taken."
-                    : "That savegame is still checked out, so its slot is still taken.",
-                ToastSeverity.Warning);
-
-            return;
-        }
-
-        await ReloadAsync(row.Id);
-
-        if (Savegames.FirstOrDefault(x => x.Id == row.Id) is SavegameListItemViewModel refreshed)
-        {
-            await StartAsync(refreshed, snapshotNumber, mode, agreedToTakeFrom);
-        }
-    }
-
-    /// <summary>
-    /// The question asked before taking a save somebody else has checked out.
-    /// </summary>
-    /// <remarks>
-    /// <b>A warning that names the person, and says what it costs.</b> Taking it is always allowed - the
-    /// claim is advisory - so this is not a refusal in disguise; but the moment it is taken there are
-    /// two copies of one save, and whoever checks in second overwrites the other. That is the sentence
-    /// worth reading before the click rather than after it.
-    /// </remarks>
-    private static ConfirmationDialogViewModel ConfirmTakeOver(string savegameName, SavegameCheckoutDto holder)
-    {
-        var name = holder.User.DisplayName;
-
-        return new ConfirmationDialogViewModel(
-            $"{name} has '{savegameName}' checked out",
-            $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Checking it out takes it from them, "
-                + "and their ModsDude will tell them.\n\n"
-                + "If they are playing it, you will each have a copy of the same save: whoever checks in second has "
-                + "to force it, and that overwrites the other's play.",
-            IconKind.Warning,
-            $"Take it from {name}",
-            "Leave it with them");
-    }
-
-    private async Task ExecuteAsync(
-        SavegameListItemViewModel row,
-        int snapshotNumber,
-        SavegameCheckOutMode mode,
-        Game game,
-        SavegameSlotOptionViewModel slot,
-        string? agreedToTakeFrom)
-    {
-        // Downloading and unpacking a save is the slow half of both verbs, and both are safe to walk
-        // away from - the claim, where there is one, is taken before the bytes move.
-        using var task = _backgroundTasks.Begin(
-            mode is SavegameCheckOutMode.TakeCopy
-                ? $"Copying '{row.Name}' into '{game.Name}'"
-                : $"Checking '{row.Name}' out into '{game.Name}'",
-            $"Snapshot {snapshotNumber}");
-
-        task.DeclareTransfers(TransferDirection.Download);
-
-        if (mode is SavegameCheckOutMode.TakeCopy)
-        {
-            await _savegameService.TakeCopyAsync(
-                game, row.Savegame, snapshotNumber, slot.Ref, _lifetime, new SavegameStripProgress(task));
-
-            _toasts.Show($"Snapshot {snapshotNumber} of '{row.Name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
-                         "and this machine holds no claim on it - the slot is an ordinary save of your own now.");
-
-            return;
-        }
-
-        var savegame = row.Savegame;
-
-        // Restoring copies forward, so an old snapshot becomes the head and the check-out that follows
-        // has no stale base to reason about. Nothing in between is deleted.
-        if (snapshotNumber != savegame.Head?.Number)
-        {
-            task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
-
-            await _savegamesClient.RestoreSavegameSnapshotV1Async(
-                _repo.Id, savegame.Id, snapshotNumber, new RestoreSavegameSnapshotRequest(), _lifetime);
-
-            var refreshed = await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime);
-
-            savegame = refreshed.FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
-        }
-
-        task.Report("Taking the claim");
-
-        var takenFrom = await _savegameService.CheckOutAsync(game, savegame, slot.Ref, _lifetime, new SavegameStripProgress(task));
-
-        if (takenFrom is null)
-        {
-            _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'.");
-        }
-        else if (takenFrom.UserId == agreedToTakeFrom)
-        {
-            _toasts.Show($"'{row.Name}' is checked out to you, in '{game.Name}'. {takenFrom.DisplayName} no longer has it, " +
-                         "and their ModsDude will tell them.");
-        }
-        else
-        {
-            // The list this page showed was behind the server: somebody took the save after it was read,
-            // so the question above was never asked about them. The server's answer is what says so, and
-            // the claim is taken by now - all that is left is to say whose it was.
-            _toasts.Show($"{takenFrom.DisplayName} had '{row.Name}' checked out since {SavegameWording.Exactly(takenFrom.TakenAt)} - " +
-                         $"this list did not show it yet. It is yours now, in '{game.Name}', and their ModsDude will tell them.",
-                         ToastSeverity.Warning);
-        }
-
-        await ApplyProfileAsync(game, savegame);
-
-        await ReloadAsync(row.Id);
-    }
-
-    /// <summary>
-    /// The mod half, last and separately. Checking out a save derives and applies its profile where the
-    /// adapter has mods, and is simply "write the slot" where it does not - and a user who wanders off
-    /// after the claim still holds the save and has it on disk.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Which revision is not decided here.</b> The binding was written a moment ago and carries what
-    /// this savegame runs on - head for the profile's current savegame, its own pinned revision for a past
-    /// one - and every apply resolves it from there. Working it out a second time in this method is how
-    /// the check-out comes to install a different list from the one the drift check then expects.
-    /// </para>
-    /// <para>
-    /// <b>And it is the ordinary activation, which it did not use to be.</b> This method planned,
-    /// asked about unrecognised mods itself and executed the plans in its own loop - so it was the
-    /// last place in the app that applied without going through the two verbs, and its <em>Review</em>
-    /// answer was a third way of saying "left drifted deliberately": it declined the apply and wrote
-    /// the intent down anyway. Declining is declining. What keeps the state visible is the savegame
-    /// half of the drift check, which is exactly the thing that fires here - the save this machine now
-    /// holds follows a mod list the folder is not on.
-    /// </para>
-    /// </remarks>
-    private async Task ApplyProfileAsync(Game game, SavegameDto savegame)
-    {
-        if (_repo.Adapter.CanSupportMods is false)
-        {
-            return;
-        }
-
-        if (FindProfile(savegame.ProfileId) is not ProfileDto profile)
-        {
-            return;
-        }
-
-        // An activation: the game is being put on the mod list the save this machine just took
-        // follows. The service refuses, discloses, records and works, in that order - including its
-        // own naming of any files nothing else has a copy of.
-        var outcome = await _applyService.ActivateAsync(
-            _repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, _lifetime);
-
-        _toasts.Show(outcome.Message, outcome.ToastSeverity);
-
-        await _driftMonitor.CheckAsync();
-
-        if (outcome.Status is ProfileApplyStatus.Declined)
-        {
-            await OfferModListReviewAsync(game, profile);
-        }
-    }
-
-    /// <summary>
-    /// The way out of a declined apply: open the profile's mod list with the folder that stopped it
-    /// already scanned.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The reason somebody declines here is nearly always the same one - the folder holds mods the
-    /// repo has never seen, and they would rather import them than have them recycled. That is the
-    /// editor's job and this is the page it is on, so the offer is worth making rather than leaving
-    /// them to find it.
-    /// </para>
-    /// <para>
-    /// <b>A second, small question rather than a third button on the first.</b> Folding it into the
-    /// service's own disclosure would mean either a three-way dialog or this page listing the same
-    /// files a second time - and the plan is only re-read on this path, which is the uncommon one.
-    /// Nothing is recorded either way: the user said no to the apply.
-    /// </para>
-    /// </remarks>
-    private async Task OfferModListReviewAsync(Game game, ProfileDto profile)
-    {
-        // The first folder with something unrecognised in it, since that is the one whose contents
-        // the user is about to read. A decline for any other reason finds none and asks nothing.
-        // On the strip because planning reads and hashes the mod folder - see ModSyncService.PlanAsync -
-        // and this one runs between two dialogs, where a still window reads as the app having stopped.
-        using var task = _backgroundTasks.Begin($"Checking what '{profile.Name}' would change");
-
-        var plans = await _applyService.TryPlanAsync(
-            _repo, game, profile.Id, profile.Name, revision: null, _lifetime, ProfileApplyService.Report(task, null));
-
-        if (plans.FirstOrDefault(x => x.Unrecognised.Count > 0) is not ModSyncPlan plan)
-        {
-            return;
-        }
-
-        var choice = new ConfirmationDialogViewModel(
-            $"Open '{profile.Name}'s mod list?",
-            $"{plan.Unrecognised.Count} mods in the mod folder are not in this repo, and applying is what moves them to "
-                + "the Recycle Bin. The mod list is where they get imported instead - and until something is applied, "
-                + "the save you just took is on a mod list the folder is not on.",
-            IconKind.Question,
-            "Review - opens the mod list with this folder scanned",
-            "Not now");
-
-        await _modalService.Show(choice);
-
-        if (choice.Result)
-        {
-            await _shellNavigation.GoToProfileModsAsync(_repo.Id, profile.Id, plan.TargetRef);
-        }
-    }
-
-    /// <summary>
-    /// Everything the dialog needs about one game: its slots and their safety, what the mod folder
-    /// would have to do, and how far the save's revision is from the profile's.
-    /// </summary>
-    private async Task<SavegameCheckOutContext> BuildContextAsync(
-        SavegameListItemViewModel row,
-        Game game,
-        SavegameCheckOutMode mode,
-        CancellationToken cancellationToken)
-    {
-        var slots = await _savegameService.GetSlotsAsync(game, cancellationToken);
-        var options = new List<SavegameSlotOptionViewModel>();
-
-        foreach (var slot in slots)
-        {
-            var availability = await _savegameService.ClassifySlotAsync(game, slot.Ref, cancellationToken);
-            var binding = _bindingStore.GetBindingForSlot(game.Identity, slot.Ref);
-
-            options.Add(new SavegameSlotOptionViewModel(
-                slot,
-                availability,
-                binding?.SavegameId,
-                binding is SavegameCheckoutBinding held
-                    ? Savegames.FirstOrDefault(x => x.Id == held.SavegameId)?.Name
-                    : null));
-        }
-
-        var suggested = await _savegameService.SuggestSlotAsync(game, row.Id, cancellationToken);
-        var hint = _bindingStore.GetSlotHint(game.Identity, row.Id);
-
-        return new SavegameCheckOutContext(
-            options,
-            suggested,
-            DescribeSuggestion(options, suggested, hint),
-            mode is SavegameCheckOutMode.CheckOut
-                ? await BuildModsSummaryAsync(row, game, cancellationToken)
-                : null,
-            await BuildRevisionNoteAsync(row),
-            // Absent for a copy, which applies nothing: the slot is written and the mod folder is left
-            // exactly as it was, so there is no list the save is about to run on.
-            mode is SavegameCheckOutMode.CheckOut ? DescribeRunsOn(row) : null);
-    }
-
-    /// <summary>
-    /// Which revision the folder will be on afterwards, in one line.
-    /// </summary>
-    /// <remarks>
-    /// <b>Worth showing even for a current savegame</b>, where the number can differ from the one the
-    /// savegame was last played on whenever anybody has edited the profile since - and that is precisely
-    /// the case where somebody wants to have seen the number before the evening rather than after it.
-    /// </remarks>
-    private string? DescribeRunsOn(SavegameListItemViewModel row)
-    {
-        if (row.PinnedRevision is int pinned)
-        {
-            return $"This savegame stays on rev {pinned}. Playing it does not move it forward.";
-        }
-
-        return FindProfile(row.Savegame.ProfileId) is ProfileDto profile
-            ? $"Will run on {profile.Name} rev {profile.HeadRevision}."
-            : null;
-    }
-
-    /// <summary>
-    /// Why the pre-selection is what it is, said plainly - and nothing at all in the ordinary case,
-    /// where the slot this save was last in is free and the sentence would only be noise.
-    /// </summary>
-    private static string? DescribeSuggestion(
-        IReadOnlyList<SavegameSlotOptionViewModel> options,
-        SavegameSlotRef? suggested,
-        SavegameSlotRef? hint)
-    {
-        if (suggested is null)
-        {
-            return options.Count == 0
-                ? "This game reports no savegame slots at all."
-                : "Every slot has something in it, so there is nothing to pre-select. Pick the one to write over - anything ModsDude has a copy of can be put back.";
-        }
-
-        if (hint is not SavegameSlotRef remembered || remembered.Addresses(suggested.Value))
-        {
-            return null;
-        }
-
-        var taken = options.FirstOrDefault(x => x.Ref.Addresses(remembered));
-
-        // Gone covers the folder having gone as well as the slot: a target somebody took out of the
-        // settings takes every slot in it with it, and "the slot this save was last in is gone" is
-        // the same sentence for both.
-        return taken is null
-            ? "The slot this save was last in is gone, so the first free one is picked instead."
-            : $"The slot this save was last in now holds '{taken.Label}', so the first free one is picked instead.";
-    }
-
-    /// <summary>
-    /// What the mod folder would have to do. Null where the adapter has no mods or the folder cannot be
-    /// read - the section is absent rather than saying nothing at length.
-    /// </summary>
-    private async Task<SavegameModsSummary?> BuildModsSummaryAsync(
-        SavegameListItemViewModel row,
-        Game game,
-        CancellationToken cancellationToken)
-    {
-        if (_repo.Adapter.CanSupportMods is false || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
-        {
-            return null;
-        }
-
-        // Named rather than resolved from the game: nothing is holding this savegame yet, so the
-        // game has no opinion about it - and the plan shown here has to be the plan that runs.
-        // On the strip for the same reason the apply's own planning is: this reads and hashes the mod
-        // folder, and it runs while somebody is waiting for the check-out dialog to open.
-        using var task = _backgroundTasks.Begin($"Checking what '{row.Name}' would need");
-
-        var plans = await _applyService.TryPlanAsync(
-            _repo,
-            game,
-            profile.Id,
-            profile.Name,
-            SavegameService.TargetRevisionOf(row.Savegame),
-            cancellationToken,
-            ProfileApplyService.Report(task, null));
-
-        if (plans.Count == 0)
-        {
-            return null;
-        }
-
-        // Summed across the folders, because what is being previewed is what checking this savegame
-        // out does to the game - which is every folder it reaches.
-        if (plans.Any(x => x.HasWork) is false)
-        {
-            return new SavegameModsSummary(true, "Mods are already correct.", [], null);
-        }
-
-        var parts = new List<string>();
-        var installs = plans.Sum(x => x.InstallCount);
-        var replaces = plans.Sum(x => x.ReplaceCount);
-        var uninstalls = plans.Sum(x => x.UninstallCount);
-        var renames = plans.Sum(x => x.RenameCount);
-        var unrecognised = plans.Sum(x => x.Unrecognised.Count);
-
-        if (installs > 0) parts.Add($"{installs} to install");
-        if (replaces > 0) parts.Add($"{replaces} to replace");
-        if (uninstalls > 0) parts.Add($"{uninstalls} to uninstall");
-        if (renames > 0) parts.Add($"{renames} to rename");
-
-        // A rename leaves the bytes alone, so a locked mod being renamed is not a mod changing
-        // under a savegame and is not worth warning about.
-        var locked = plans
-            .SelectMany(x => x.Items)
-            .Where(x => x.Locked && x.Action is not (ModSyncAction.Keep or ModSyncAction.Rename))
-            .Select(x => $"'{x.DisplayName}'")
-            .Distinct()
-            .ToList();
-
-        return new SavegameModsSummary(
-            false,
-            string.Join(", ", parts) + $" · {plans.Sum(x => x.KeepCount)} already correct.",
-            locked,
-            unrecognised > 0
-                ? $"{unrecognised} mods in the folder are not in the repo. You are asked about those separately, before anything moves."
-                : null);
-    }
-
-    /// <summary>
-    /// Which revision the save was last played on against the one the profile is now at. Absent where
-    /// they are the same, which is the common case and the one worth saying nothing about.
-    /// </summary>
-    private async Task<SavegameRevisionNote?> BuildRevisionNoteAsync(SavegameListItemViewModel row)
-    {
-        if (row.Savegame.Head is not SavegameSnapshotDto head ||
-            head.ProfileRevision is not int played ||
-            FindProfile(row.Savegame.ProfileId) is not ProfileDto profile ||
-            profile.HeadRevision <= played)
-        {
-            return null;
-        }
-
-        var moved = await LockedPinMovedAsync(profile.Id, played, profile.HeadRevision);
-
-        var text = $"Last played on revision {played}; {profile.Name} is now at {profile.HeadRevision}.";
-
-        return new SavegameRevisionNote(
-            moved
-                ? text + " A locked mod moved between them, and hosting this save on it may damage it."
-                : text,
-            moved);
     }
 
     /// <summary>
@@ -2034,23 +1272,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         => profileId is Guid id
             ? _profileService.Profiles.FirstOrDefault(x => x.Id == id && x.RepoId == _repo.Id)
             : null;
-
-
-    /// <summary>
-    /// The game this repo's rows act on, with the two things their buttons turn on: what it is
-    /// holding, and which revision of which profile its mod folder was last made to match.
-    /// </summary>
-    /// <param name="UnreachableHolds">
-    /// The savegames held in a folder the settings no longer name, read once for the whole list. They
-    /// are still held and still claimed, and nothing that touches the bytes works on them - see
-    /// <see cref="ISavegameService.GetUnreachableHolds"/>.
-    /// </param>
-    private sealed record SavegameHost(
-        Game Game,
-        IReadOnlyList<SavegameCheckoutBinding> Held,
-        IReadOnlySet<Guid> UnreachableHolds,
-        Guid? AppliedProfileId,
-        int? AppliedRevision);
 
 
     public class Factory(IServiceProvider serviceProvider)

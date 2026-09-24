@@ -772,6 +772,12 @@ list with the toggle on.
 The archived-current case stated with its three ways out: *"**Season 4** is this profile's current
 savegame and is archived. Un-archive it, delete it, or publish a new savegame."*
 
+Three actions under it, for members: **Publish** on every profile, opening the publish dialog on this
+profile; **Check out** and **Check in** only where there is a current savegame. They are the savegames
+list's own flows (`SavegameFlowService`), enabled by the same row rules, and greyed with the reason as a
+tooltip where this machine cannot do them. An archived current savegame is not checked out from here
+either, since the savegames list does not show it.
+
 ## Consequences elsewhere
 
 `SavegameSnapshot`'s foreign key onto `ProfileRevision` is `Restrict`, and
