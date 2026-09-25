@@ -107,7 +107,15 @@ public interface IHeldSavegames
     /// </remarks>
     Task ObserveAsync(ModTargetRef target, CancellationToken ct);
 
-    /// <inheritdoc cref="SavegameHoldRules.RequiredRevision"/>
+    /// <summary>
+    /// Which revision this game's mod folder has to be on for one profile, or null where head is the
+    /// answer: a held savegame's revision first, then the one the game itself is pinned to.
+    /// </summary>
+    /// <remarks>
+    /// <inheritdoc cref="SavegameHoldRules.RequiredRevision" path="/remarks"/>
+    /// A held savegame wins over the game's own pin because the apply table refuses any other revision
+    /// while it is held; the two only disagree for as long as that savegame is out.
+    /// </remarks>
     int? GetRequiredRevision(GameIdentity game, Guid profileId);
 
     /// <inheritdoc cref="SavegameHoldRules.DecideApply"/>
@@ -488,7 +496,8 @@ public sealed class SavegameService(
             : null;
 
     public int? GetRequiredRevision(GameIdentity game, Guid profileId)
-        => SavegameHoldRules.RequiredRevision(bindings.GetBindings(game), profileId);
+        => SavegameHoldRules.RequiredRevision(bindings.GetBindings(game), profileId)
+            ?? bindings.GetPinnedRevision(game, profileId);
 
     public SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision)
         => SavegameHoldRules.DecideApply(bindings.GetBindings(game), profileId, revision);

@@ -206,9 +206,13 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void SetActiveProfile(Game game, ActiveProfile? activeProfile)
+    /// <param name="pinnedRevision">
+    /// The revision to hold the game on, or null - nearly always - to follow head. See
+    /// <see cref="PersistedGame.PinnedRevision"/>.
+    /// </param>
+    public void SetActiveProfile(Game game, ActiveProfile? activeProfile, int? pinnedRevision = null)
     {
-        game.SetActiveProfile(activeProfile);
+        game.SetActiveProfile(activeProfile, pinnedRevision);
         _store.Save();
 
         // A folder that was in sync with one profile is drifted from another the moment it is pointed

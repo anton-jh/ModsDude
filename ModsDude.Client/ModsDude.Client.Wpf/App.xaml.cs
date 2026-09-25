@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
+using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Exceptions;
@@ -45,6 +46,7 @@ public partial class App : Application
     private DriftBackstop? _backstop;
     private RemoteChangeWatcher? _remoteChanges;
     private SavegameClaimWatcher? _claimWatcher;
+    private FriendActivityWatcher? _friendWatcher;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -259,6 +261,9 @@ public partial class App : Application
         _claimWatcher = _serviceProvider.GetRequiredService<SavegameClaimWatcher>();
         _claimWatcher.Start();
 
+        _friendWatcher = _serviceProvider.GetRequiredService<FriendActivityWatcher>();
+        _friendWatcher.Start();
+
         _serviceProvider.GetRequiredService<AppUpdater>().Start();
 
         return trayUp;
@@ -272,6 +277,7 @@ public partial class App : Application
         _backstop?.Dispose();
         _remoteChanges?.Dispose();
         _claimWatcher?.Dispose();
+        _friendWatcher?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();
 
@@ -382,6 +388,9 @@ public partial class App : Application
         // Asks who holds the savegames checked out here, so a takeover reaches the notice - see the class.
         services.AddSingleton<SavegameClaimWatcher>();
 
+        // Reads what friends are on, so a switch or a check-out reaches the column - see the class.
+        services.AddSingleton<FriendActivityWatcher>();
+
         // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
         // library's own way of saying so, which Core cannot see.
         services.AddSingleton(sp => new ConnectionRetry(
@@ -434,6 +443,8 @@ public partial class App : Application
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
         services.AddSingleton<RepoArchivePageViewModel.Factory>();
         services.AddFactory<ArchivePageViewModel>();
+        services.AddFactory<HomePageViewModel>();
+        services.AddSingleton<FriendActivityListViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();
         services.AddTransient<NavigationManager>();
@@ -446,6 +457,15 @@ public partial class App : Application
         // One notice for the whole app, and one way in to it from outside the sidebar.
         services.AddSingleton<ShellNavigationService>();
         services.AddSingleton<ProfileApplyService>();
+
+        // What friends are on: the report every activation makes, the one read every surface draws from,
+        // and the one gesture that follows them. See FriendActivityService.
+        services.AddSingleton<GameActivityReporter>();
+        services.AddSingleton<IFriendActivitySeen, StateStoreFriendActivitySeen>();
+        services.AddSingleton<FriendActivityService>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<FriendActivityService>());
+        services.AddSingleton<IFriendActivityEnvironment, FriendActivityEnvironment>();
+        services.AddSingleton<FriendFollowService>();
 
         // Where the profile a game follows stands against its folders, asked once for the sidebar rows,
         // the repo entries and the header rather than three times with three chances to disagree.

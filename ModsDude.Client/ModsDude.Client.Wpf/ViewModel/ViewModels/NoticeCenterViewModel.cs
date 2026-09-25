@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Activity;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
@@ -64,6 +65,9 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly BackgroundProblemSource _problems;
     private readonly IUpdateStatus _updates;
     private readonly ConnectionRetry _connection;
+    private readonly FriendActivityService _friends;
+    private readonly IFriendActivityEnvironment _friendEnvironment;
+    private readonly FriendFollowService _follow;
     private readonly ILogger _logger;
 
     /// <summary>The one place a notice is suppressed: the drifted profile's own mod list editor.</summary>
@@ -96,6 +100,9 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         BackgroundProblemSource problems,
         IUpdateStatus updates,
         ConnectionRetry connection,
+        FriendActivityService friends,
+        IFriendActivityEnvironment friendEnvironment,
+        FriendFollowService follow,
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;
@@ -110,6 +117,9 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _problems = problems;
         _updates = updates;
         _connection = connection;
+        _friends = friends;
+        _friendEnvironment = friendEnvironment;
+        _follow = follow;
         _logger = logger;
 
         _monitor.Changed += OnDriftChanged;
@@ -133,6 +143,9 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _problems.Changed += OnRedrawNeeded;
         _updates.Changed += OnRedrawNeeded;
         _connection.Changed += OnRedrawNeeded;
+
+        // A friend switching is news the drift check knows nothing about, so it redraws on its own.
+        _friends.Changed += OnRedrawNeeded;
     }
 
 
@@ -290,6 +303,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _problems.Changed -= OnRedrawNeeded;
         _updates.Changed -= OnRedrawNeeded;
         _connection.Changed -= OnRedrawNeeded;
+        _friends.Changed -= OnRedrawNeeded;
     }
 
 
@@ -393,6 +407,11 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
                 _connection.RetryNow();
 
                 break;
+
+            case NoticeActionKind.UseProfile:
+                await UseProfileAsync(notice, card);
+
+                break;
         }
     }
 
@@ -477,6 +496,27 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     }
 
 
+    /// <summary>
+    /// Puts this game on what the friend the card names is on, through the one gesture Home and the
+    /// overview use too.
+    /// </summary>
+    private async Task UseProfileAsync(Notice notice, NoticeViewModel? card)
+    {
+        if (_friends.News.FirstOrDefault(x => FriendActivityRules.NoticeKey(x) == notice.Key) is not { } activity)
+        {
+            card?.ReportStatus("They have moved on since - look on Home for what they are on now.");
+
+            return;
+        }
+
+        card?.ReportStatus("Switching...");
+
+        var (message, _) = await _follow.FollowAsync(activity, CancellationToken.None);
+
+        card?.ReportStatus(message);
+    }
+
+
     private void OnDriftChanged(object? sender, EventArgs e) => Post(Refresh);
 
     private void OnRedrawNeeded(object? sender, EventArgs e) => Post(Refresh);
@@ -533,6 +573,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             .Concat(NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment))
             .Concat(_problems.Build())
             .Concat(_updates.ReadyVersion is string ready ? [UpdateNotice.For(ready)] : [])
+            // Last: somebody else's evening is worth a card, never more than what is wrong here.
+            .Concat(FriendActivityRules.BuildNotices(_friends.News, _friendEnvironment))
             .ToList();
 
         // What the open editor already shows, built on its own to learn the keys: notices are built per

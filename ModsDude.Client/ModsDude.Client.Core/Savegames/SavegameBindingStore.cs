@@ -92,6 +92,22 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
 
 
     /// <summary>
+    /// The revision this game is held on by its own intent rather than by a savegame, where it follows
+    /// <paramref name="profileId"/> - see <see cref="PersistedGame.PinnedRevision"/>.
+    /// </summary>
+    /// <remarks>
+    /// Read here, beside the bindings, because it answers the same question they do - which revision
+    /// the folder has to be on - and is kept in the same record under the same save.
+    /// </remarks>
+    public int? GetPinnedRevision(GameIdentity game, Guid profileId)
+    {
+        return state.Find(game) is PersistedGame persisted && persisted.ActiveProfile?.ProfileId == profileId
+            ? persisted.PinnedRevision
+            : null;
+    }
+
+
+    /// <summary>
     /// What this game holds for one savegame, or null where it holds none.
     /// </summary>
     /// <remarks>

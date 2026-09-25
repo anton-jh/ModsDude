@@ -63,6 +63,17 @@ public class LocalState
     public ClientSettings Settings { get; init; } = new();
 
     /// <summary>
+    /// The newest friend activity each account has already been told about, by user id - so starting
+    /// the app announces what happened while it was closed, and not the whole of last week again.
+    /// </summary>
+    /// <remarks>
+    /// Server time, as the server stamped the activity, rather than this machine's clock: the two are
+    /// only ever compared with each other, and a clock running fast here would otherwise swallow news.
+    /// An additive field, so it is not a version bump - a state without it reads as an empty map.
+    /// </remarks>
+    public Dictionary<string, DateTime> FriendActivitySeenUntil { get; init; } = [];
+
+    /// <summary>
     /// The games on this machine, keyed by which game each one is an installation of.
     /// </summary>
     /// <remarks>

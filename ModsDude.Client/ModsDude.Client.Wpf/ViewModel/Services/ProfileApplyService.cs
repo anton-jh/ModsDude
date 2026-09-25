@@ -1,7 +1,9 @@
+using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -137,7 +139,8 @@ public sealed class ProfileApplyService(
     Lazy<IModalService> modalService,
     IDialogService dialogs,
     IBackgroundTaskReporter backgroundTasks,
-    IResourceLeases leases)
+    IResourceLeases leases,
+    GameActivityReporter activity)
 {
     /// <summary>
     /// The folder the user last chose to keep unrecognised files in, so the second apply of a session
@@ -248,6 +251,15 @@ public sealed class ProfileApplyService(
     /// wanted the work without the decision wants <see cref="ApplyAsync"/>.
     /// </remarks>
     /// <inheritdoc cref="ApplyAsync" path="/param"/>
+    /// <param name="pinRevision">
+    /// Make <paramref name="revision"/> the game's standing intent rather than a one-off - see
+    /// <see cref="PersistedGame.PinnedRevision"/>. Only following a friend who is on a past savegame
+    /// does this; every other activation leaves the game on head, and clears a pin it had.
+    /// </param>
+    /// <param name="checkedOutSavegame">
+    /// The savegame whose check-out this activation is part of, so friends hear about the check-out
+    /// rather than about a re-apply of a profile the game may already have been on.
+    /// </param>
     public Task<ProfileApplyOutcome> ActivateAsync(
         Repo repo,
         Game game,
@@ -256,8 +268,13 @@ public sealed class ProfileApplyService(
         bool confirmPlan,
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken,
-        int? revision = null)
-        => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: true);
+        int? revision = null,
+        bool pinRevision = false,
+        Guid? checkedOutSavegame = null)
+        => RunAsync(
+            repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: true,
+            pinned: pinRevision ? revision : null,
+            checkedOutSavegame);
 
     /// <summary>
     /// Makes every folder this game reaches match the profile. Records nothing: whatever is being
@@ -286,7 +303,7 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken,
         int? revision = null)
-        => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: false);
+        => RunAsync(repo, game, profileId, profileName, confirmPlan, progress, cancellationToken, revision, activate: false, pinned: null, checkedOutSavegame: null);
 
     /// <summary>
     /// Takes the game off its profile, so ModsDude stops keeping its mod folders in step with one - the
@@ -343,6 +360,7 @@ public sealed class ProfileApplyService(
         if (clearMods is false)
         {
             games.SetActiveProfile(game, null);
+            activity.ReportCleared(game.Identity);
 
             return new ProfileApplyOutcome(
                 game,
@@ -372,6 +390,7 @@ public sealed class ProfileApplyService(
             // Nothing to plan against, so nothing to ask about - but the decision to stop following a
             // profile was made, and stands. The folders simply could not be reached to be cleared.
             games.SetActiveProfile(game, null);
+            activity.ReportCleared(game.Identity);
 
             return new ProfileApplyOutcome(
                 game,
@@ -392,6 +411,7 @@ public sealed class ProfileApplyService(
         }
 
         games.SetActiveProfile(game, null);
+        activity.ReportCleared(game.Identity);
 
         var outcomes = new List<ProfileApplyOutcome>();
 
@@ -443,7 +463,9 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken,
         int? revision,
-        bool activate)
+        bool activate,
+        int? pinned,
+        Guid? checkedOutSavegame)
     {
         using var lease = leases.TryAcquireExclusive(
             TargetRefs(repo, game).Select(ResourceKeys.Target),
@@ -504,7 +526,7 @@ public sealed class ProfileApplyService(
             // the game means to follow this profile and the notice says so until a folder can be
             // reached. This is the whole of "a failed apply does not retract the activation",
             // reached before any work was possible at all.
-            return Record(activate, repo, game, profileId, new ProfileApplyOutcome(
+            return Record(activate, repo, game, profileId, pinned, checkedOutSavegame, new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
                 $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be."));
@@ -528,7 +550,7 @@ public sealed class ProfileApplyService(
 
         // Before the work, and only after every way of saying no has been offered. Everything below
         // is work, and work failing leaves this standing.
-        RecordIntent(activate, repo, game, profileId);
+        RecordIntent(activate, repo, game, profileId, pinned, checkedOutSavegame);
 
         // One folder at a time, each with its own answer. A failure here is per folder by design -
         // the dedicated server being locked mid-session must not stop the client being put right -
@@ -587,24 +609,49 @@ public sealed class ProfileApplyService(
     /// Writes down which profile this game follows, where the gesture was an activation.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Skipped where it would write what is already there: <c>SetActiveProfile</c> saves the whole of
     /// local state and wakes the drift check, and re-applying the profile a game already follows is
-    /// the commonest gesture in the app.
+    /// the commonest gesture in the app. The pin is part of the intent, so an activation that only
+    /// moves the game between head and a pinned revision of the same profile is still a write.
+    /// </para>
+    /// <para>
+    /// <b>Friends are told here too</b>, at the same moment and for the same reason: this is where the
+    /// decision stands, whatever the folders go on to do. Every gesture is reported, a re-apply
+    /// included - the lists sort on who has been playing lately - and only a change of profile or a
+    /// check-out is reported as one.
+    /// </para>
     /// </remarks>
-    private void RecordIntent(bool activate, Repo repo, Game game, Guid profileId)
+    private void RecordIntent(bool activate, Repo repo, Game game, Guid profileId, int? pinned, Guid? checkedOutSavegame)
     {
         var intent = new ActiveProfile(repo.Id, profileId);
+        var changed = activate && (game.ActiveProfile != intent || game.PinnedRevision != pinned);
 
-        if (activate && game.ActiveProfile != intent)
+        if (changed)
         {
-            games.SetActiveProfile(game, intent);
+            games.SetActiveProfile(game, intent, pinned);
         }
+
+        var kind = checkedOutSavegame is not null ? GameActivityKind.SavegameCheckedOut
+            : changed ? GameActivityKind.Activated
+            : GameActivityKind.Reapplied;
+
+        // What the game is held on now, never the revision the gesture happened to name: the savegame
+        // list names head's number to prepare for a current savegame, and reporting that would pin
+        // anybody following to a revision nothing holds.
+        activity.Report(
+            game.Identity,
+            repo.Id,
+            profileId,
+            heldSavegames.GetRequiredRevision(game.Identity, profileId),
+            kind,
+            checkedOutSavegame);
     }
 
     /// <inheritdoc cref="RecordIntent"/>
-    private ProfileApplyOutcome Record(bool activate, Repo repo, Game game, Guid profileId, ProfileApplyOutcome outcome)
+    private ProfileApplyOutcome Record(bool activate, Repo repo, Game game, Guid profileId, int? pinned, Guid? checkedOutSavegame, ProfileApplyOutcome outcome)
     {
-        RecordIntent(activate, repo, game, profileId);
+        RecordIntent(activate, repo, game, profileId, pinned, checkedOutSavegame);
 
         return outcome with { Activated = activate };
     }
@@ -881,9 +928,16 @@ public sealed class ProfileApplyService(
             return $" revision {named}";
         }
 
-        return heldSavegames.GetRequiredRevision(game.Identity, profileId) is int held
-            ? $" revision {held}, which is what the savegame checked out there runs on"
-            : "";
+        if (heldSavegames.GetRequiredRevision(game.Identity, profileId) is not int held)
+        {
+            return "";
+        }
+
+        // The game's own pin only counts where no savegame is doing the pinning - the one that is
+        // held is the better reason to give, and the two agree while it is.
+        return heldSavegames.FindProfileHold(game.Identity) is null && game.PinnedRevision == held
+            ? $" revision {held}, which is where this game is held"
+            : $" revision {held}, which is what the savegame checked out there runs on";
     }
 
     /// <summary>

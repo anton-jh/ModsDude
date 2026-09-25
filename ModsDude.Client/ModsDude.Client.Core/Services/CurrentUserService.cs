@@ -14,7 +14,7 @@ namespace ModsDude.Client.Core.Services;
 /// </remarks>
 public class CurrentUserService(IUsersClient usersClient)
 {
-    public Task<CurrentUserDto> Get(CancellationToken cancellationToken)
+    public virtual Task<CurrentUserDto> Get(CancellationToken cancellationToken)
     {
         return usersClient.GetCurrentUserV1Async(cancellationToken);
     }

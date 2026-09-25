@@ -41,6 +41,9 @@ public class Game
     public string SerializedLocalSettings => PersistedModel.AdapterLocalSettings;
     public ActiveProfile? ActiveProfile => PersistedModel.ActiveProfile;
 
+    /// <inheritdoc cref="PersistedGame.PinnedRevision"/>
+    public int? PinnedRevision => PersistedModel.PinnedRevision;
+
     /// <inheritdoc cref="PersistedGame.Targets"/>
     public IReadOnlyList<PersistedModTarget> Targets => PersistedModel.Targets;
 
@@ -79,10 +82,12 @@ public class Game
         PropertyChanged?.Invoke(this, new(nameof(Targets)));
     }
 
-    internal void SetActiveProfile(ActiveProfile? activeProfile)
+    internal void SetActiveProfile(ActiveProfile? activeProfile, int? pinnedRevision = null)
     {
         PersistedModel.ActiveProfile = activeProfile;
+        PersistedModel.PinnedRevision = activeProfile is null ? null : pinnedRevision;
 
         PropertyChanged?.Invoke(this, new(nameof(ActiveProfile)));
+        PropertyChanged?.Invoke(this, new(nameof(PinnedRevision)));
     }
 }

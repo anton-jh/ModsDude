@@ -164,6 +164,39 @@ public class SavegameServiceTests
     }
 
     /// <summary>
+    /// A game following a friend onto a past savegame is held on that revision by its own intent, with
+    /// no savegame of its own to say so - and the apply and the drift check have to read it all the same.
+    /// </summary>
+    [Fact]
+    public void A_game_pinned_by_its_own_intent_requires_that_revision()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+
+        harness.Game.PersistedModel.PinnedRevision = 3;
+
+        Assert.Equal(3, harness.Service.GetRequiredRevision(harness.Game.Identity, harness.ProfileId));
+        Assert.Null(harness.Service.GetRequiredRevision(harness.Game.Identity, Guid.NewGuid()));
+    }
+
+    /// <summary>
+    /// A held past savegame outranks the game's own pin: the apply table refuses anything else while
+    /// it is out, so it is the revision the folder actually has to be on.
+    /// </summary>
+    [Fact]
+    public async Task A_held_past_savegame_outranks_the_games_own_pin()
+    {
+        using var harness = new Harness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
+
+        harness.Server.Supersede();
+        harness.Game.PersistedModel.PinnedRevision = 2;
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(4, harness.Service.GetRequiredRevision(harness.Game.Identity, harness.ProfileId));
+    }
+
+    /// <summary>
     /// A past savegame's revision does not move, so checking one out is what makes its game hold a
     /// mod folder pinned to that revision. Recorded on the binding rather than worked out later:
     /// asking the server whether this is still its profile's current savegame is a network call in an apply

@@ -51,6 +51,7 @@ public partial class MainPageViewModel
         IDialogService dialogService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
+        IFactory<HomePageViewModel> homePageViewModelFactory,
         ProfileSyncStatusService syncStatus,
         ConnectionRetry connection)
     {
@@ -62,7 +63,7 @@ public partial class MainPageViewModel
             .WithIcon(MenuIcons.CreateRepo);
 
         MenuItems = [
-            new MenuItemViewModel("Home", () => new ExamplePageViewModel("ModsDude", "Home")).WithIcon(MenuIcons.Home),
+            new MenuItemViewModel("Home", homePageViewModelFactory.Create).WithIcon(MenuIcons.Home),
             new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create).WithIcon(MenuIcons.JoinRepo),
             // Above Settings, because it is a place repos went rather than a preference. A repo
             // archived by any admin leaves every member's sidebar, so this is where somebody looks

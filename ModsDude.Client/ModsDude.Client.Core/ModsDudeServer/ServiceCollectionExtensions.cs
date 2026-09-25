@@ -43,6 +43,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IImagesClient, ImagesClient>()
             .AddTypedClient<IImagesClient>((http, sp) => new ImagesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
 
+        services.AddHttpClient<IActivityClient, ActivityClient>()
+            .AddTypedClient<IActivityClient>((http, sp) => new ActivityClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+
         return services;
     }
 }

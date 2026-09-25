@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -33,10 +35,13 @@ public sealed class ToastNotifier(
     ToastCenterViewModel appToasts,
     INoticeEnvironment environment,
     ClientSettingsRepository settings,
+    FriendActivityService friends,
+    IFriendActivityEnvironment friendEnvironment,
     ISystemToasts system)
 {
     private const string _driftGroup = "drift";
     private const string _appGroup = "app";
+    private const string _friendsGroup = "friends";
     private const string _noticeArgument = "notice";
     private const string _openArgument = "action";
 
@@ -47,6 +52,7 @@ public sealed class ToastNotifier(
     {
         notices.Refreshed += OnNoticesRefreshed;
         appToasts.Announced += OnAppToast;
+        friends.Announced += OnFriendNews;
         system.Activated += OnActivated;
 
         // Once somebody is looking at the window, what it told them while they were not is either on
@@ -113,6 +119,40 @@ public sealed class ToastNotifier(
                 // The same words are the same toast: the window collapses a repeated card the same way.
                 Tag: message.GetHashCode().ToString("x"),
                 new Dictionary<string, string> { [_openArgument] = "open" }));
+        });
+    }
+
+    /// <summary>
+    /// A friend switched profile or checked out a savegame. One toast per friend per game, each
+    /// replacing the last about the same one - what they are on now is the news.
+    /// </summary>
+    /// <remarks>
+    /// Clicking opens the window on the column, where the card offers to follow them: the rule above
+    /// holds here too, and a toast never changes a mod folder by itself.
+    /// </remarks>
+    private void OnFriendNews(object? sender, IReadOnlyList<GameActivityDto> news)
+    {
+        if (Enabled is false)
+        {
+            return;
+        }
+
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            if (WindowInFront)
+            {
+                return;
+            }
+
+            foreach (var activity in news)
+            {
+                system.Show(new SystemToast(
+                    FriendActivityRules.Headline(activity),
+                    FriendActivityRules.Describe(activity, friendEnvironment),
+                    _friendsGroup,
+                    Tag: FriendActivityRules.NoticeKey(activity).GetHashCode().ToString("x"),
+                    new Dictionary<string, string> { [_openArgument] = "open" }));
+            }
         });
     }
 

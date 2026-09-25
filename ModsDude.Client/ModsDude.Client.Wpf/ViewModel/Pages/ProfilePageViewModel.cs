@@ -234,7 +234,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public ProfileActivationKind ActivationKind => ProfileActivation.Describe(
         ConnectedGame?.ActiveProfile,
-        new ActiveProfile(_repo.Id, _profile.Id));
+        new ActiveProfile(_repo.Id, _profile.Id),
+        ConnectedGame?.PinnedRevision);
+
+    /// <summary>Whether the game follows this profile at all, head or pinned.</summary>
+    private bool IsFollowed => ConnectedGame?.ActiveProfile == new ActiveProfile(_repo.Id, _profile.Id);
 
     public string ActivationLabel => ProfileActivation.Label(ActivationKind);
 
@@ -297,6 +301,11 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
                 return "";
             }
 
+            if (IsFollowed && game.PinnedRevision is int pinned)
+            {
+                return $"'{game.Name}' is held on revision {pinned} of this profile, following a friend. Activating moves it to the latest.";
+            }
+
             return ActivationKind is ProfileActivationKind.Apply
                 ? $"'{game.Name}' already follows this profile. Applying it again makes the mod folder match."
                 : $"'{game.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
@@ -353,7 +362,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     /// Whether the game follows this profile, which is the only state in which deactivating it is
     /// offered from here. Another profile's page has nothing to say about a game it does not follow.
     /// </summary>
-    public bool HasDeactivation => ConnectedGame is not null && ActivationKind is ProfileActivationKind.Apply;
+    public bool HasDeactivation => IsFollowed;
 
     /// <summary>
     /// What the two ways of deactivating do, or why neither can be used right now. One sentence for the

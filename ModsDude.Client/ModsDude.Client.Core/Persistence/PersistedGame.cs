@@ -51,6 +51,24 @@ public class PersistedGame
     public ActiveProfile? ActiveProfile { get; set; }
 
     /// <summary>
+    /// The revision of <see cref="ActiveProfile"/> this game is held on, or null - nearly always -
+    /// where it follows head.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Part of the intent, and written with it.</b> Set only by following a friend who is on a past
+    /// savegame: joining them means being on the revision their save runs on, and nothing held here
+    /// says so - the savegame is on their machine. Every other activation clears it, so the ordinary
+    /// way back to head is activating the profile again.
+    /// </para>
+    /// <para>
+    /// Beside <see cref="ActiveProfile"/> rather than inside it, because that is compared for equality
+    /// everywhere as "is this game on this profile", and a pinned game is still on its profile.
+    /// </para>
+    /// </remarks>
+    public int? PinnedRevision { get; set; }
+
+    /// <summary>
     /// The savegames this game currently holds, one per occupied slot. Underivable once somebody
     /// has played, so it is persisted rather than worked out - see
     /// <see cref="SavegameCheckoutBinding"/>.

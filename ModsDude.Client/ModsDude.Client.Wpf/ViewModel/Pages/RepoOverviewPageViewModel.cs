@@ -43,7 +43,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         GameRepository gameRepository,
         ProfileApplyService applyService,
-        IToastService toasts)
+        IToastService toasts,
+        FriendActivityListViewModel.Factory friendsFactory)
     {
         _repo = repo;
         _profileService = profileService;
@@ -54,6 +55,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _gameRepository = gameRepository;
         _applyService = applyService;
         _toasts = toasts;
+
+        Friends = friendsFactory.Create(repo.Id);
 
         Games = [];
 
@@ -78,6 +81,9 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     public string RepoName => _repo.Name;
     public string Game => _repo.Adapter.DisplayName;
     public ObservableCollection<GameOverviewViewModel> Games { get; }
+
+    /// <summary>Who else in this repo is on which of its profiles, most recently active first.</summary>
+    public FriendActivityListViewModel Friends { get; }
 
     public string MembershipSummary => _repo.MembershipLevel switch
     {
@@ -111,6 +117,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _driftMonitor.Changed -= OnDriftChanged;
         _bindingStore.BindingsChanged -= OnBindingsChanged;
         _gameRepository.GameChanged -= OnGameChanged;
+
+        Friends.Dispose();
     }
 
 
@@ -162,6 +170,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     protected override async Task InitAsync()
     {
+        // First and on its own: it says its own failure on the card, and the member count below it
+        // must not wait on it or be lost to it.
+        _ = Friends.RefreshAsync();
+
         // Reading the member list needs Member, so for a guest there is simply nothing to say.
         if (_repo.MembershipLevel < RepoMembershipLevel.Member)
         {
@@ -254,7 +266,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         }
 
         return _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is ProfileDto profile
-            ? $"Set to '{profile.Name}'"
+            ? $"Set to '{profile.Name}'{(game.PinnedRevision is int pinned ? $" rev {pinned}" : "")}"
             : "Set to a profile that no longer exists";
     }
 

@@ -700,8 +700,11 @@ public sealed class SavegameFlowService(
         // An activation: the game is being put on the mod list the save this machine just took
         // follows. The service refuses, discloses, records and works, in that order - including its
         // own naming of any files nothing else has a copy of.
+        // Named as a check-out so friends hear about it as one, even where the game was already on
+        // this profile and nothing about the activation itself is news.
         var outcome = await applyService.ActivateAsync(
-            repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, cancellationToken);
+            repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, cancellationToken,
+            checkedOutSavegame: savegame.Id);
 
         toasts.Show(outcome.Message, outcome.ToastSeverity);
 

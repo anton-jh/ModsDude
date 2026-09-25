@@ -60,7 +60,10 @@ public enum NoticeActionKind
     RestartToUpdate,
 
     /// <summary>Stop waiting and try reaching the server again now.</summary>
-    RetryConnection
+    RetryConnection,
+
+    /// <summary>Put this game on the profile a friend is on, at their revision where they are held on one.</summary>
+    UseProfile
 }
 
 
@@ -95,6 +98,9 @@ public sealed record NoticeSubject(GameIdentity Game, string GameName)
     public Guid? ProfileId { get; init; }
     public string? ProfileName { get; init; }
     public Guid? SavegameId { get; init; }
+
+    /// <summary>A specific revision of the profile, where the notice is about one rather than about head.</summary>
+    public int? Revision { get; init; }
 }
 
 

@@ -1,0 +1,31 @@
+<Page x:Class="ModsDude.Client.Wpf.View.Pages.HomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=pvm:HomePageViewModel, IsDesignTimeCreatable=False}"
+      Title="HomePage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical">
+
+                <uc:PageTitle Text="Home" />
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16">
+                    <GroupBox Header="What your friends are on" Padding="0 16 0 16">
+                        <uc:FriendActivityList DataContext="{Binding Friends}" />
+                    </GroupBox>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Page>

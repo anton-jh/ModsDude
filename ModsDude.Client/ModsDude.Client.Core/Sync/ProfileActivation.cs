@@ -32,8 +32,13 @@ public enum ProfileActivationKind
 /// </summary>
 public static class ProfileActivation
 {
-    public static ProfileActivationKind Describe(ActiveProfile? current, ActiveProfile target)
-        => current == target ? ProfileActivationKind.Apply : ProfileActivationKind.Activate;
+    /// <param name="pinnedRevision">
+    /// The revision the game is held on by its own intent - see
+    /// <see cref="Persistence.PersistedGame.PinnedRevision"/>. A game pinned to a past revision of this
+    /// very profile is still somewhere activating moves it from: onto head.
+    /// </param>
+    public static ProfileActivationKind Describe(ActiveProfile? current, ActiveProfile target, int? pinnedRevision = null)
+        => current == target && pinnedRevision is null ? ProfileActivationKind.Apply : ProfileActivationKind.Activate;
 
     /// <param name="pinnedRevision">
     /// The revision a past savegame checked out here holds the mod folder to, from

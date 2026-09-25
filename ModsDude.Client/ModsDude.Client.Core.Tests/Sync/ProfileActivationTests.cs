@@ -28,6 +28,18 @@ public class ProfileActivationTests
         Assert.Equal("Activate", ProfileActivation.Label(ProfileActivation.Describe(current, target)));
     }
 
+    /// <summary>
+    /// A game held on a past revision of this very profile - following a friend onto their savegame -
+    /// still has somewhere to be moved: onto head. That is the one way back, so it is an activation.
+    /// </summary>
+    [Fact]
+    public void A_game_pinned_to_the_profile_is_being_moved_to_head()
+    {
+        var target = new ActiveProfile(_repoId, _profileId);
+
+        Assert.Equal(ProfileActivationKind.Activate, ProfileActivation.Describe(target, target, pinnedRevision: 4));
+    }
+
     [Fact]
     public void A_game_on_nothing_is_being_moved_too()
     {

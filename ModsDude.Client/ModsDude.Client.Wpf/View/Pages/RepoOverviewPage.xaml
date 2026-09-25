@@ -168,6 +168,17 @@
                     </GroupBox>
                 </Border>
 
+                <!-- Who else is on which of this repo's profiles. The same list Home draws, limited to
+                     this repo; somebody on another repo's profile is not playing this one. -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0">
+                    <GroupBox Header="Members' profiles" Padding="0 16 0 16">
+                        <uc:FriendActivityList DataContext="{Binding Friends}" />
+                    </GroupBox>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Border>
