@@ -443,6 +443,24 @@
         <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
     </Style>
 
+    <!-- The title and cards of a page with little in it, held to a column in the middle of the window.
+         The app is mostly used fullscreen, where a card stretched edge to edge had its content in the
+         left quarter and anything right-aligned in it at the far side of the screen. Stretch rather
+         than Center, so the cards fill the column instead of shrinking to their content: WPF centres a
+         stretched element its MaxWidth stops from stretching. Pages that need the room - the mod
+         lists, the saves, the history - do not use it. -->
+    <Style x:Key="PageColumn" TargetType="FrameworkElement">
+        <Setter Property="MaxWidth" Value="1000" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- The buttons under a PageColumn, starting at the column's left edge. The margin is the page
+         border's padding, so that the two columns are the same width and so start in the same place. -->
+    <Style x:Key="PageActions" TargetType="StackPanel" BasedOn="{StaticResource PageColumn}">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Margin" Value="32 24" />
+    </Style>
+
 
     <!-- What every sidebar is drawn on, open, collapsed or peeked: the card tint over the window's base
          colour, worked out once. Opaque because the peek lies over the page's content, and the same brush

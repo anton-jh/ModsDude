@@ -14,7 +14,7 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <uc:PageTitle Text="Connect game" />
 
@@ -40,8 +40,8 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" >
-            <Button Grid.Column="0" Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
+            <Button Grid.Column="0" Width="250" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
         </StackPanel>
 

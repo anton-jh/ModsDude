@@ -14,7 +14,7 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <StackPanel Orientation="Vertical" >
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <uc:PageTitle Text="Create profile" />
 
@@ -24,10 +24,10 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" >
+        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
             <Button Content="Save" Command="{Binding Path=SubmitCommand}"
                     Style="{DynamicResource AccentButtonStyle}"
-                    Width="250" Margin="32 24" />
+                    Width="250" />
         </StackPanel>
 
     </Grid>

@@ -13,7 +13,7 @@
     <Grid RowDefinitions="*, auto">
 
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-            <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <uc:PageTitle Text="Configure game" />
 
@@ -38,11 +38,11 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" >
-            <Button Width="250" Margin="32 24 4 24" Style="{DynamicResource AccentButtonStyle}"
+        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
+            <Button Width="250" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
 
-            <Button Width="250" Margin="4 24 32 24"
+            <Button Width="250" Margin="8 0 0 0"
                     ToolTip="ModsDude stops managing this installation. Nothing on disk is changed or removed."
                     Content="Disconnect game" Command="{Binding Path=DeleteCommand}" />
         </StackPanel>
