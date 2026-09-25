@@ -343,6 +343,68 @@
           "WindingDown"
         ]
       },
+      "GameActivityDto": {
+        "additionalProperties": false,
+        "properties": {
+          "changedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "game": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GameActivityKind"
+          },
+          "pinnedRevision": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "profileName": {
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "savegameName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "touchedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "type": "object"
+      },
+      "GameActivityKind": {
+        "description": "",
+        "enum": [
+          "Activated",
+          "Reapplied",
+          "SavegameCheckedOut"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Activated",
+          "Reapplied",
+          "SavegameCheckedOut"
+        ]
+      },
       "GetModDependenciesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1139,6 +1201,36 @@
         },
         "type": "object"
       },
+      "RecordGameActivityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GameActivityKind"
+          },
+          "pinnedRevision": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "profileId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RedeemInviteRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1711,6 +1803,151 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/activity": {
+      "delete": {
+        "operationId": "ClearGameActivityV1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "game",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Activity"
+        ]
+      },
+      "get": {
+        "operationId": "GetGameActivityV1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repoId",
+            "schema": {
+              "format": "guid",
+              "nullable": true,
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GameActivityDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Activity"
+        ]
+      },
+      "put": {
+        "operationId": "RecordGameActivityV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordGameActivityRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
     "/api/v1/files/createModDownloadLink": {
       "post": {
         "operationId": "CreateModDownloadLinkV1",

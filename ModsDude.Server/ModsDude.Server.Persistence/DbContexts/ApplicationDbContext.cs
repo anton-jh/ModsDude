@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain;
+using ModsDude.Server.Domain.Activity;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.ModHub;
 using ModsDude.Server.Domain.Mods;
@@ -27,6 +28,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }
     public required DbSet<ModHubMod> ModHubMods { get; init; }
     public required DbSet<ModHubCrawlState> ModHubCrawlStates { get; init; }
+    public required DbSet<GameActivity> GameActivities { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
