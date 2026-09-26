@@ -53,6 +53,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly IErrorReporter _errorReporter;
     private readonly IBackgroundProblemReporter _problems;
     private readonly IToastService _toasts;
+    private readonly IUserAvatarFactory _avatarFactory;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -79,10 +80,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         IBackgroundProblemReporter problems,
         IToastService toasts,
+        IUserAvatarFactory avatarFactory,
         bool showPastSavegames = false)
     {
         _problems = problems;
         _toasts = toasts;
+        _avatarFactory = avatarFactory;
         _showPastSavegames = showPastSavegames;
         _repo = repo;
         _savegamesClient = savegamesClient;
@@ -678,7 +681,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 FindProfile(savegame.ProfileId)?.Name ?? _unseenProfileName,
                 _currentUserId,
                 IsMember,
-                ambiguous.Contains(savegame.Checkout?.User.Id ?? ""));
+                ambiguous.Contains(savegame.Checkout?.User.Id ?? ""),
+                savegame.Checkout?.User is UserDto holder ? _avatarFactory.Create(holder) : null);
 
             row.CheckOutRequested += OnCheckOutRequested;
             row.CheckInRequested += OnCheckInRequested;

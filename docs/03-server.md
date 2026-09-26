@@ -106,21 +106,19 @@ same tenant, using a separate `SwaggerAuthentication:ClientId`.
 request:
 
 1. No authenticated identity or no `sub` claim → pass through untouched.
-2. User row exists → re-read the `name` claim, and write if it changed or if `LastSeen` is
-   more than an hour stale.
+2. User row exists → write `LastSeen` if it is more than an hour stale. Nothing else.
 3. User row does not exist → provision it from `sub` + the `name` claim.
 
 There is no signup endpoint; **first authenticated request is the signup**.
 
-The display name is stored verbatim, with `"Unnamed user"` standing in for a missing or blank
-claim. Nothing resolves it against other users, because nothing needs it to be unique: the
-identity is `sub`, and the only lookup anybody does is by invite code. That is also why it is
-re-read on every request rather than frozen at provisioning — a rename at the identity provider
-propagates here, and there is no other user's name it could be in the way of.
-
-Rows still carrying a `" (2)"` suffix from the era when the name *was* unique repair themselves
-on their owner's next request. The migration deliberately does not rewrite them: it could not
-tell a resolved collision from somebody whose name genuinely ends that way.
+The `name` claim **seeds** the display name and is never read again: from then on the name is the
+user's own, changed with `PUT users/me/display-name`. Entra External ID has no self-service page
+for editing a profile, so a name that kept following the claim would be one nobody could change.
+`DisplayName.FromClaim` never refuses — control characters are dropped, anything over 32
+characters is cut, and a blank claim becomes `"Unnamed user"` — while a typed name goes through
+`DisplayName.TryParse` and is refused with `invalid-display-name`. Nothing resolves a name against
+other users, because nothing needs it to be unique: the identity is `sub`, and the only lookup
+anybody does is by invite code.
 
 Nothing here can reach another user's row: the insert carries this subject as its key, and a
 subject that turns out to have been provisioned by a concurrent request is detached rather than
@@ -268,7 +266,7 @@ Notable configuration:
 - Entity extension methods in `Persistence/Extensions/EntityExtensions/` provide the small
   query vocabulary the endpoints use — `GetAsync`, `GetVersionsOfModAsync`, `GetVersionsAsync`,
   `GetLatestVersionOfEachAsync`, `GetPinsAsync`, `GetDependencyRowsAsync`, `GetHistoryAsync`,
-  `GetRowAsync`, `GetModUsageAsync`, `GetDisplayNamesAsync`, `CheckNameIsTaken`, `GetByCodeAsync`.
+  `GetRowAsync`, `GetModUsageAsync`, `GetNameplatesAsync`, `CheckNameIsTaken`, `GetByCodeAsync`.
 
   **Every query lives here, including the ones only one endpoint issues.** A LINQ expression a
   provider cannot translate is a runtime failure on a page rather than a build error, and the
@@ -346,6 +344,13 @@ bytes.** The client uploads and downloads straight to blob storage.
 dedupe across versions, mods and repos work at all. These the API *does* handle bytes for —
 they are small and fetched in bulk, which inverts the trade-off that sends mod files over a SAS.
 See [09 — Mod catalog](09-mod-catalog.md#serving-them-back).
+
+**Profile pictures live here too.** A picture is the same kind of thing — small, immutable at its
+address, cached forever by every client that draws it — so it takes the same upload, the same
+hash check and the same client cache rather than a container of its own. The reclamation sweep
+counts `User.AvatarHash` as a reference alongside mod versions' images, and the gap between
+uploading a picture and `PUT users/me/avatar` is covered by `MinimumBlobAge` exactly as an import's
+gap between upload and registration is.
 
 Blob storage has no batch existence call, so `CheckWhichExist` is a bounded parallel fan-out; the
 batch is a batch to the *client*, which is where the round trips that matter are.
@@ -503,6 +508,17 @@ level required.
 | --- | --- | --- | --- |
 | GET | `users` | — | Every user who shares at least one repo with the caller, **excluding the caller** |
 | GET | `users/me` | — | The caller's own `CurrentUserDto` — `UserDto` plus `IsTrusted`. The only route that returns either: `users` deliberately leaves the caller out, the client cannot derive its `Tag` from the token, and whether somebody may create repos is not their teammates' business |
+| PUT | `users/me/display-name` | — | Renames the caller. Trimmed, 1–32 characters, no control characters; otherwise `invalid-display-name`. Answers with the new `CurrentUserDto` |
+| PUT | `users/me/avatar` | — | `{ hash }` — points the caller's picture at an image already uploaded through `POST images/{hash}`. Refused as `invalid-hash` or, where nothing is stored there, `file-not-found`. The client crops and encodes it; the server has no image stack |
+| DELETE | `users/me/avatar` | — | Back to the initial. The blob stays until the reclamation sweep finds nothing points at it |
+
+Every `UserDto` carries `AvatarHash`. The lists that name people by id — revision authors,
+savegame snapshots and claims — resolve it with the name in one `GetNameplatesAsync` query.
+
+There is **no password route**. The password belongs to Entra, which offers no change-while-signed-in
+page; the client sends the user to its sign-in page, where **Forgot password?** resets it by emailed
+code. That needs self-service password reset enabled on the tenant — email one-time passcode as an
+authentication method, and **Show self-service password reset** in the sign-in page's company branding.
 
 There is **no user search**. Looking somebody up by name would make every guessable name
 reachable by a stranger and let a person be added to a repo without agreeing to it; joining goes

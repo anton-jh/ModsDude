@@ -123,7 +123,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
             [.. played.Select(x => x.SavegameId).Concat(checkouts.Select(x => x.SavegameId)).Distinct()],
             cancellationToken);
 
-        var holderNames = await dbContext.Users.GetDisplayNamesAsync(
+        var holderNames = await dbContext.Users.GetNameplatesAsync(
             [.. checkouts.Select(x => x.HeldBy).Distinct()], cancellationToken);
 
         string NameOf(SavegameId savegameId)

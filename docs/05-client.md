@@ -58,7 +58,7 @@ lifetimes worth knowing:
 | --- | --- | --- |
 | `MainWindow`, `MainWindowViewModel` | Singleton | The shell |
 | `RepoRepository`, `ProfileService`, `MembershipService`, `InviteService`, `GameRepository`, `ClientSettingsRepository`, `LastSelectionRepository`, `StateStore` | Singleton | They hold the app's live collections and the persisted state |
-| `IModImageProvider`, `ModImageCache`, `IModImageStore`, `IModImagerySource` | Singleton | So decoded thumbnails survive navigating away and back, and one disk cache serves the machine |
+| `IModImageProvider`, `ModImageCache`, `IModImageStore`, `IModImagerySource`, `IUserAvatarFactory` | Singleton | So decoded thumbnails and profile pictures survive navigating away and back, and one disk cache serves the machine |
 | `ModImagePublisher` | Singleton, and registered as both `IModImagePublisher` and `IModImageBackfill` | One object, two roles: publishing at import and backfilling on demand |
 | `NavigationLockService` | Singleton | One global "there are unsaved changes" flag |
 | `NavigationManager` | **Transient** | Each nesting level owns its own |
@@ -233,7 +233,8 @@ with a consequence somebody can see are counted into a shell notice.
 | `ModImageProvider` — unreadable cache entry, or a cache write that failed | `Debug` | — |
 | `ModListItemViewModel` — a row's imagery could not be resolved | `Warning` | `ImageDisplay` |
 | `LazyLoad` — a deferred load threw | `Warning` | `DeferredLoad` |
-| `AccountViewModel` — the identity fetch behind the tag and avatar colour | `Debug` | — |
+| `AccountViewModel` — the identity fetch behind the stored name, picture, tag and avatar colour | `Debug` | — |
+| `AccountPageViewModel` — a picked file that is not a picture it can read (the user is told in a toast) | `Information` | — |
 
 The `Debug` rows are the ones that cost nothing: a re-decode, or a label that was already correct.
 They stay out of the notice deliberately, and a mod that simply ships no pictures has to be
@@ -768,8 +769,8 @@ redirect. `Get()` tries silent acquisition first and falls back to interactive o
 `MsalUiRequiredException`.
 
 **There is no signing out.** Every surface in the client is a server call, so a signed-out
-app has nothing to show and no page to show it on. The only account control is
-`SwitchUser()`, surfaced as the sidebar's **Switch user** button: it prompts with
+app has nothing to show and no page to show it on. What there is instead is
+`SwitchUser()`, on the **Account** page the sidebar's account card opens: it prompts with
 `Prompt.SelectAccount` and, *only once that sign-in has succeeded*, removes every other
 account from the token cache. Cancelling the prompt is therefore free — the current user is
 still signed in, because nothing was cleared on the way in.
@@ -783,15 +784,36 @@ rebuilds bound state.
 Two things listen. `AccountViewModel` — a singleton, because the shell it is drawn in is what
 the switch replaces — shows the name and owns the command, and asks the same
 discard-your-changes question a navigation would if `NavigationLockService` holds a lock.
-The name it shows is the token's `name` claim — free, instant, and exactly what the server
-stores, because the server keeps that claim and rewrites nothing. MSAL's `IAccount.Username` is
-the account's *identifier at the provider*, which for this CIAM tenant is an email address and
-not a name anybody chose, so it is never shown. What the round trip to `CurrentUserService` →
-`GET users/me` is for is the **tag** and the avatar colour built from it, which are derived from
-the subject id on the server and cannot be worked out here. The avatar is held back until that
+The name it paints first is the token's `name` claim — free and instant, and right until the user
+first renames themselves, since the server only seeded its name from that claim. MSAL's
+`IAccount.Username` is the account's *identifier at the provider*, which for this CIAM tenant is
+the email address they sign in with; it is shown on the Account page as that, never as a name.
+The round trip to `CurrentUserService` → `GET users/me` brings the stored name, the picture, and
+the **tag** and the avatar colour built from it, which are derived from the subject id on the
+server and cannot be worked out here. `Apply(CurrentUserDto)` takes that answer, and the Account
+page calls it with the answer to every change it makes. The avatar is held back until the first
 answer arrives rather than drawn in a colour about to change, and the tag itself is only in the
 tooltip: there is one user in this panel, so there is nobody to tell them apart from. A failed
-fetch is swallowed — the name is already up and correct, what is missing is decoration.
+fetch is swallowed — a name is already up, what is missing is decoration.
+
+**The Account page** (`AccountPageViewModel`) edits what the user owns in this system and points
+at what they do not:
+
+- **Name** — validated against the server's rules as it is typed, then `PUT users/me/display-name`.
+- **Picture** — picked with a file dialog, cut to its centred square, shrunk to at most 256 px and
+  encoded as WebP by `AvatarPicture` (a few KB whatever was picked), uploaded through the image
+  store if the server does not already hold it, then `PUT users/me/avatar`. `UserAccountService`
+  puts the bytes in the local image cache so this machine never downloads what it just made.
+- **Password** — `AuthenticationService.ResetPassword()` opens the sign-in page with the email
+  filled in and `Prompt.ForceLogin`, where **Forgot password?** resets it by emailed code. Entra
+  External ID has no change-password page for a signed-in user; this is the change it offers.
+  Signing in as somebody else on that page is a switch, handled as one.
+- **Switch user**, as above.
+
+Everyone else's picture arrives on their `UserDto` as `AvatarHash`. `IUserAvatarFactory` turns a
+user into an `AvatarViewModel` — colour and initial at once, the picture filled in when
+`IModImageProvider` has it — and the `UserAvatar` control draws it, clipped to a circle, in the
+sidebar, the member list, friend activity and the savegame holder badge.
 `MainWindowViewModel` treats signing in and switching as one transition: it disposes the
 current page, clears every `IUserScopedState`, and builds a fresh `MainPageViewModel`.
 
@@ -1085,7 +1107,8 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | Page | Status | What it does |
 | --- | --- | --- |
 | `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
-| `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account panel with **Switch user** |
+| `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account card that opens **Account** |
+| `AccountPage` | Working | Name, picture, password reset through the sign-in page, and **Switch user** |
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |

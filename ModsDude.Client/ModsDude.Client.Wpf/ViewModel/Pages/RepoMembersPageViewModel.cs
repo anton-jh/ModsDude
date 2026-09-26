@@ -29,6 +29,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IUserAvatarFactory _avatarFactory;
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
     private IReadOnlyList<RepoInviteDto> _fetchedInvites = [];
@@ -43,7 +44,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         CurrentUserService currentUserService,
         NavigationLockService navigationLockService,
         IModalService modalService,
-        IErrorReporter errorReporter)
+        IErrorReporter errorReporter,
+        IUserAvatarFactory avatarFactory)
     {
         _repo = repo;
         _membershipService = membershipService;
@@ -53,6 +55,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _errorReporter = errorReporter;
+        _avatarFactory = avatarFactory;
 
         Members = [];
         Invites = [];
@@ -289,6 +292,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         {
             var row = new RepoMemberViewModel(
                 member,
+                _avatarFactory.Create(member.User),
                 _repo.MembershipLevel,
                 isOnlyAdmin: member.MembershipLevel is RepoMembershipLevel.Admin && adminCount == 1,
                 isAmbiguous: ambiguous.Contains(member.User.Id),

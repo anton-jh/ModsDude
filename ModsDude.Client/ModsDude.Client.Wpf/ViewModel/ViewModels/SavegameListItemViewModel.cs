@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
-using ModsDude.Client.Core.Users;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -86,18 +85,23 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Whether somebody else holding a save in this same list is called the same thing. It is the
     /// list that decides that, not the person, so it arrives from outside.
     /// </param>
+    /// <param name="holderAvatar">
+    /// How whoever holds it is drawn. Only a list that draws the holder needs one.
+    /// </param>
     public SavegameListItemViewModel(
         SavegameDto savegame,
         string profileName,
         string? currentUserId,
         bool isMember,
-        bool isAmbiguous)
+        bool isAmbiguous,
+        AvatarViewModel? holderAvatar = null)
     {
         Savegame = savegame;
         ProfileName = profileName;
         _currentUserId = currentUserId;
         IsMember = isMember;
         ShowHolderTag = isAmbiguous;
+        HolderAvatar = holderAvatar;
 
         // Recorded here because the row's two actions need it and because it is what the binding will
         // carry a moment later - two answers to "which list does this savegame run on" is how a row comes
@@ -412,8 +416,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool ShowHolderTag { get; }
 
     public string? HolderTag => Holder?.User.Tag;
-    public string? HolderColor => Holder is SavegameCheckoutDto held ? UserDisplay.ColorFor(held.User.Tag) : null;
-    public string? HolderInitial => Holder is SavegameCheckoutDto held ? UserDisplay.InitialFor(held.User.DisplayName) : null;
+    public AvatarViewModel? HolderAvatar { get; }
     public bool HasHolder => Holder is not null;
 
 

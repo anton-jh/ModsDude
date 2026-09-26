@@ -31,8 +31,8 @@ internal static class SavegameReads
     /// foreign key holding that user in place, so a name that cannot be resolved falls back to the
     /// id rather than dropping the row out of the history.
     /// </summary>
-    public static UserDto Describe(UserId userId, DisplayName? displayName)
-        => new(userId.Value, displayName?.Value ?? userId.Value, UserTag.For(userId));
+    public static UserDto Describe(UserId userId, UserNameplate? nameplate)
+        => new(userId.Value, nameplate?.DisplayName.Value ?? userId.Value, UserTag.For(userId), nameplate?.AvatarHash);
 
 
     /// <summary>
@@ -214,15 +214,15 @@ internal static class SavegameReads
     }
 
 
-    private static Task<Dictionary<UserId, DisplayName>> GetNamesAsync(
+    private static Task<Dictionary<UserId, UserNameplate>> GetNamesAsync(
         ApplicationDbContext dbContext,
         IEnumerable<UserId> userIds,
         CancellationToken cancellationToken)
     {
-        return dbContext.Users.GetDisplayNamesAsync([.. userIds.Distinct()], cancellationToken);
+        return dbContext.Users.GetNameplatesAsync([.. userIds.Distinct()], cancellationToken);
     }
 
-    private static SavegameSnapshotDto ToDto(RepoId repoId, SavegameSnapshotRow row, IReadOnlyDictionary<UserId, DisplayName> names)
+    private static SavegameSnapshotDto ToDto(RepoId repoId, SavegameSnapshotRow row, IReadOnlyDictionary<UserId, UserNameplate> names)
     {
         return new SavegameSnapshotDto(
             repoId.Value,
@@ -243,7 +243,7 @@ internal static class SavegameReads
             row.DeletionReason);
     }
 
-    private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, DisplayName> names)
+    private static SavegameCheckoutDto ToDto(SavegameCheckout checkout, IReadOnlyDictionary<UserId, UserNameplate> names)
     {
         return SavegameCheckoutDto.FromModel(
             checkout,

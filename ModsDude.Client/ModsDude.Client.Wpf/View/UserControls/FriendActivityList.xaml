@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
+             xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:FriendActivityListViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="640">
@@ -37,14 +38,10 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
-                                        <Border Grid.Column="0"
-                                                Width="32" Height="32" CornerRadius="16"
-                                                VerticalAlignment="Top" Margin="0 2 12 0"
-                                                Background="{Binding AvatarColor}">
-                                            <TextBlock Text="{Binding Initial}"
-                                                       Foreground="White" FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </Border>
+                                        <local:UserAvatar Grid.Column="0"
+                                                          Width="32" Height="32"
+                                                          VerticalAlignment="Top" Margin="0 2 12 0"
+                                                          DataContext="{Binding Avatar}" />
 
                                         <StackPanel Grid.Column="1" Orientation="Vertical">
                                             <StackPanel Orientation="Horizontal">

@@ -19,7 +19,8 @@ content store, the uninstall rules, drift — lives in
    tag and the avatar colour it cannot derive itself — see [05](05-client.md#authentication).
 5. `MainPage.Init` runs `LoadReposCommand` → `GET api/v1/repos`.
 6. **Server side, on that first request:** `UserLoadingMiddleware` finds no `User` row for
-   the `sub` claim and provisions one from `sub` plus the `name` claim, stored verbatim.
+   the `sub` claim and provisions one from `sub` plus the `name` claim, which seeds the display
+   name and is never read again — the name is the user's to change from the Account page.
    There is no signup step — the first authenticated call *is* the signup. Nothing is resolved
    against other users: display names are not unique, and a second person of the same name keeps
    it. See [03 — Server](03-server.md#user-provisioning).
@@ -29,7 +30,7 @@ content store, the uninstall rules, drift — lives in
 There is no sign-out, so this is the whole of the account story after the first launch. A
 shared PC is the case it exists for: two people, one machine, one set of game folders.
 
-1. Sidebar footer → **Switch user**. If something holds the navigation lock, the same
+1. Sidebar footer → **Account** → **Switch user**. If something holds the navigation lock, the same
    discard-your-changes dialog a navigation would raise comes up first, and **Stay** ends it
    here.
 2. `AuthenticationService.SwitchUser` runs `AcquireTokenInteractive` with

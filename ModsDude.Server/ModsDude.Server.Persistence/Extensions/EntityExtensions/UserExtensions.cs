@@ -20,7 +20,7 @@ public static class UserExtensions
     }
 
     /// <summary>
-    /// What the named users are called, for a list that has ids and needs names - a profile's
+    /// How the named users are drawn, for a list that has ids and needs names and pictures - a profile's
     /// history, where a page of revisions has a handful of distinct authors between them.
     /// </summary>
     /// <remarks>
@@ -28,7 +28,7 @@ public static class UserExtensions
     /// object inside a projection and a provider declines to translate that. An id with no row is
     /// simply absent: the caller falls back to the id rather than dropping the row it belongs to.
     /// </remarks>
-    public static async Task<Dictionary<UserId, DisplayName>> GetDisplayNamesAsync(
+    public static async Task<Dictionary<UserId, UserNameplate>> GetNameplatesAsync(
         this DbSet<User> dbSet,
         IReadOnlyCollection<UserId> userIds,
         CancellationToken cancellationToken)
@@ -40,9 +40,9 @@ public static class UserExtensions
 
         var rows = await dbSet
             .Where(x => userIds.Contains(x.Id))
-            .Select(x => new { x.Id, x.DisplayName })
+            .Select(x => new { x.Id, x.DisplayName, x.AvatarHash })
             .ToListAsync(cancellationToken);
 
-        return rows.ToDictionary(x => x.Id, x => x.DisplayName);
+        return rows.ToDictionary(x => x.Id, x => new UserNameplate(x.DisplayName, x.AvatarHash));
     }
 }

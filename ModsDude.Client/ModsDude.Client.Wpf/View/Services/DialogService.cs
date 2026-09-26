@@ -27,4 +27,18 @@ public class DialogService : IDialogService
             return null;
         }
     }
+
+    public string? PickImage()
+    {
+        var openFileDialog = new OpenFileDialog()
+        {
+            Title = "Pick a picture",
+            Filter = "Pictures|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.tif;*.tiff|All files|*.*",
+            Multiselect = false
+        };
+
+        return openFileDialog.ShowDialog() == true
+            ? openFileDialog.FileName
+            : null;
+    }
 }

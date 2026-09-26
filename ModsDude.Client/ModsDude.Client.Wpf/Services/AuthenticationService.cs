@@ -119,6 +119,44 @@ public class AuthenticationService : IAccessTokenAccessor
         return Adopt(result);
     }
 
+    /// <summary>
+    /// Opens the sign-in page on the current account, where "Forgot password?" is the way to a new
+    /// password: the identity provider has no page for changing one while signed in, and a reset by
+    /// emailed code is the change it offers.
+    /// </summary>
+    /// <remarks>
+    /// Finishing the page signs in again, which for the same account changes nothing here. Somebody
+    /// who signs in as a different account on it has switched user, and is treated exactly as
+    /// <see cref="SwitchUser"/> would treat them.
+    /// </remarks>
+    /// <returns>False where the user closed the page without finishing it.</returns>
+    public async Task<bool> ResetPassword(CancellationToken cancellationToken)
+    {
+        if (CurrentAccount is not SignedInAccount current)
+        {
+            return false;
+        }
+
+        await EnsureTokenCacheAsync();
+
+        AuthenticationResult result;
+
+        try
+        {
+            result = await AcquireTokenInteractive(cancellationToken, current.Email);
+        }
+        catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
+        {
+            return false;
+        }
+
+        await ForgetOtherAccountsAsync(result.Account);
+
+        Adopt(result);
+
+        return true;
+    }
+
 
     /// <summary>
     /// Whether the sign-in library is saying the identity provider did not answer, in its own words
@@ -147,11 +185,19 @@ public class AuthenticationService : IAccessTokenAccessor
         return await AcquireTokenInteractive(cancellationToken);
     }
 
-    private Task<AuthenticationResult> AcquireTokenInteractive(CancellationToken cancellationToken)
+    /// <param name="loginHint">
+    /// Where set, the sign-in page opens on that account's password rather than on a choice of
+    /// accounts, and asks for it even where a session would have let it skip the page.
+    /// </param>
+    private Task<AuthenticationResult> AcquireTokenInteractive(CancellationToken cancellationToken, string? loginHint = null)
     {
-        return _client
-                    .AcquireTokenInteractive(_scopes)
-                    .WithPrompt(Prompt.SelectAccount)
+        var builder = _client.AcquireTokenInteractive(_scopes);
+
+        builder = loginHint is null
+            ? builder.WithPrompt(Prompt.SelectAccount)
+            : builder.WithLoginHint(loginHint).WithPrompt(Prompt.ForceLogin);
+
+        return builder
                     .WithSystemWebViewOptions(new SystemWebViewOptions
                     {
                         HtmlMessageSuccess = """
@@ -223,7 +269,7 @@ public class AuthenticationService : IAccessTokenAccessor
     /// <returns>True where this is a different user from the one signed in a moment ago.</returns>
     private bool Adopt(AuthenticationResult result)
     {
-        var adopted = new SignedInAccount(Identify(result.Account), Describe(result));
+        var adopted = new SignedInAccount(Identify(result.Account), Describe(result), result.Account.Username);
 
         // Get() runs on every outgoing request, so the common case here is the same account again.
         if (CurrentAccount?.Id == adopted.Id)
@@ -282,10 +328,10 @@ public class AuthenticationService : IAccessTokenAccessor
     /// address they sign in with, not a name anybody chose.
     /// </summary>
     /// <remarks>
-    /// This is the same claim the server derives its stored username from, so it is the right thing
-    /// to paint immediately and identical to the authoritative answer unless that name was already
-    /// taken. <see cref="ViewModel.ViewModels.AccountViewModel"/> replaces it with the server's once
-    /// that has been asked for.
+    /// This is the claim the server seeded its stored name from, so it is the right thing to paint
+    /// immediately and the same as the stored name until the user first renames themselves.
+    /// <see cref="ViewModel.ViewModels.AccountViewModel"/> replaces it with the server's once that has
+    /// been asked for.
     /// </remarks>
     private static string Describe(AuthenticationResult result)
     {

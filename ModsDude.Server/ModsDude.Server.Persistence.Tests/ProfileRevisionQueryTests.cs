@@ -222,9 +222,9 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        var names = await verification.Users.GetDisplayNamesAsync([userId, new UserId("nobody")], CancellationToken.None);
+        var names = await verification.Users.GetNameplatesAsync([userId, new UserId("nobody")], CancellationToken.None);
 
-        Assert.Equal("Anton", names[userId].Value);
+        Assert.Equal("Anton", names[userId].DisplayName.Value);
 
         // An id with no row is absent rather than an error: the history falls back to the id, which
         // is what the migrated revisions recorded as their author.

@@ -289,18 +289,13 @@
 
                                             <!-- Whoever holds it, drawn the same way they are drawn in the
                                                  member list. An identity, not a warning. -->
-                                            <Border Width="28" Height="28"
-                                                    Margin="0 0 10 0"
-                                                    CornerRadius="14"
-                                                    VerticalAlignment="Top"
-                                                    Background="{Binding HolderColor}"
-                                                    ToolTip="{Binding HolderTag}"
-                                                    Visibility="{Binding HasHolder, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <TextBlock Text="{Binding HolderInitial}"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           Foreground="White"
-                                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
-                                            </Border>
+                                            <Grid Margin="0 0 10 0"
+                                                  VerticalAlignment="Top"
+                                                  ToolTip="{Binding HolderTag}"
+                                                  Visibility="{Binding HasHolder, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <uc:UserAvatar Width="28" Height="28"
+                                                               DataContext="{Binding HolderAvatar}" />
+                                            </Grid>
                                         </StackPanel>
 
                                         <!-- Past rows are dimmed as well as indented: the profile has moved on

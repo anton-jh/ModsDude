@@ -404,6 +404,13 @@ public static class Problems
         Detail = detail
     };
 
+    public static CustomProblemDetails InvalidDisplayName(string detail) => new()
+    {
+        Type = ProblemType.InvalidDisplayName,
+        Title = "Not a usable name",
+        Detail = detail
+    };
+
     /// <summary>
     /// A savegame follows the profile, or a snapshot of one was played on a revision of it. Either
     /// makes the profile undeletable - the same bargain as a pinned mod version one aggregate down,
@@ -581,5 +588,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "unknown-modhub-game")]
         [JsonStringEnumMemberName(_typeBaseUri + "unknown-modhub-game")]
         UnknownModHubGame,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-display-name")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-display-name")]
+        InvalidDisplayName,
     }
 }

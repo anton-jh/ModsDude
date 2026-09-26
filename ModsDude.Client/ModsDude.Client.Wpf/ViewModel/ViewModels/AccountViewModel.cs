@@ -1,16 +1,17 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Services;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
 /// <summary>
-/// Who is signed in, and the one control over it. Switching is the whole feature - there is no
-/// signing out, because an account is the only state in which the app has anything to show.
+/// Who is signed in: the sidebar's account card, and the state the account page edits. Switching is
+/// the only thing it does to the account itself - there is no signing out, because an account is the
+/// only state in which the app has anything to show.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,10 +20,11 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// leak waiting for its first user.
 /// </para>
 /// <para>
-/// The name comes from the token and is already right - the server stores what the identity provider
-/// says and rewrites nothing. What the round trip is for is the tag and the avatar colour built from
-/// it, which are worked out from the subject id on the server and are what tell this user apart from
-/// the next person of the same name.
+/// The name painted first is the token's, which is only right until the user renames themselves -
+/// the server seeds its name from that claim once and keeps whatever the user chose after. The
+/// round trip brings the stored name, the picture, and the tag and avatar colour, which are worked
+/// out from the subject id on the server and are what tell this user apart from the next person of
+/// the same name.
 /// </para>
 /// </remarks>
 public partial class AccountViewModel : ObservableObject
@@ -30,6 +32,7 @@ public partial class AccountViewModel : ObservableObject
     private readonly AuthenticationService _authenticationService;
     private readonly CurrentUserService _currentUserService;
     private readonly NavigationLockService _navigationLockService;
+    private readonly IUserAvatarFactory _avatarFactory;
     private readonly Lazy<IModalService> _modalService;
     private readonly ILogger<AccountViewModel> _logger;
 
@@ -38,12 +41,14 @@ public partial class AccountViewModel : ObservableObject
         AuthenticationService authenticationService,
         CurrentUserService currentUserService,
         NavigationLockService navigationLockService,
+        IUserAvatarFactory avatarFactory,
         Lazy<IModalService> modalService,
         ILogger<AccountViewModel> logger)
     {
         _authenticationService = authenticationService;
         _currentUserService = currentUserService;
         _navigationLockService = navigationLockService;
+        _avatarFactory = avatarFactory;
         _modalService = modalService;
         _logger = logger;
 
@@ -60,7 +65,12 @@ public partial class AccountViewModel : ObservableObject
     }
 
 
+    /// <summary>Raised by the card's Account button. The shell owns navigation, so it does the opening.</summary>
+    public event EventHandler? OpenRequested;
+
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Description))]
     private string _displayName;
 
     /// <summary>
@@ -72,22 +82,53 @@ public partial class AccountViewModel : ObservableObject
 
     /// <summary>Four digits. Not drawn beside the name here - there is only ever one user in this panel.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasAvatar))]
     [NotifyPropertyChangedFor(nameof(Description))]
     private string? _tag;
 
+    /// <summary>Null until the server has answered, so nothing is drawn in a colour that is about to change.</summary>
     [ObservableProperty]
-    private string _avatarColor = "#00000000";
+    [NotifyPropertyChangedFor(nameof(HasAvatar))]
+    private AvatarViewModel? _avatar;
 
+    /// <summary>Whether a picture is set - as opposed to loaded, which is <see cref="AvatarViewModel.HasImage"/>.</summary>
     [ObservableProperty]
-    private string _initial = "";
+    private bool _hasPicture;
 
-    /// <summary>False until the server has answered, so nothing is drawn in a colour that is about to change.</summary>
-    public bool HasAvatar => Tag is not null;
+    public bool HasAvatar => Avatar is not null;
+
+    /// <summary>The address they sign in with. Only the identity provider knows it; the server never sees it.</summary>
+    public string? Email => _authenticationService.CurrentAccount?.Email;
 
     /// <summary>Name and tag together, for the tooltip - the one place a user can read their own tag.</summary>
     public string Description => Tag is null ? DisplayName : $"{DisplayName} {Tag}";
 
+
+    /// <summary>
+    /// Takes the server's answer as the account's - after sign-in, and after every change the
+    /// account page makes, each of which answers with the user as they now are.
+    /// </summary>
+    public void Apply(CurrentUserDto user)
+    {
+        DisplayName = user.DisplayName;
+        Avatar = _avatarFactory.Create(user);
+        HasPicture = user.AvatarHash is not null;
+        IsTrusted = user.IsTrusted;
+        Tag = user.Tag;
+    }
+
+    /// <summary>
+    /// Asks the server again for the tag and colour, where the round trip at sign-in did not get them -
+    /// which is what happens when the server was not answering yet.
+    /// </summary>
+    public Task RefreshIdentityIfMissingAsync()
+        => Tag is null ? RefreshIdentityAsync() : Task.CompletedTask;
+
+
+    [RelayCommand]
+    private void Open()
+    {
+        OpenRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     [RelayCommand]
     private async Task SwitchUser(CancellationToken cancellationToken)
@@ -121,18 +162,14 @@ public partial class AccountViewModel : ObservableObject
         return modal.Result;
     }
 
-    /// <summary>
-    /// Asks the server again for the tag and colour, where the round trip at sign-in did not get them -
-    /// which is what happens when the server was not answering yet.
-    /// </summary>
-    public Task RefreshIdentityIfMissingAsync()
-        => Tag is null ? RefreshIdentityAsync() : Task.CompletedTask;
-
     private void OnAccountChanged(object? sender, SignedInAccount account)
     {
         DisplayName = Describe(account);
         Tag = null;
+        Avatar = null;
+        HasPicture = false;
         IsTrusted = null;
+        OnPropertyChanged(nameof(Email));
 
         _ = RefreshIdentityAsync();
     }
@@ -141,27 +178,16 @@ public partial class AccountViewModel : ObservableObject
     {
         try
         {
-            var user = await _currentUserService.Get(CancellationToken.None);
-
-            DisplayName = user.DisplayName;
-            AvatarColor = UserDisplay.ColorFor(user.Tag);
-            Initial = UserDisplay.InitialFor(user.DisplayName);
-            IsTrusted = user.IsTrusted;
-            Tag = user.Tag;
+            Apply(await _currentUserService.Get(CancellationToken.None));
         }
         catch (Exception exception)
         {
-            // Swallowed on purpose. The name is already on screen and is the one the server has;
-            // what is missing is decoration, and a label is not worth the app's error modal on the
-            // way in. It stays out of the background-problem notice for the same reason, and lands
-            // in the log so that a tag which never arrives can still be accounted for.
-            _logger.LogDebug(exception, "Could not fetch the signed-in user's identity; tag and avatar colour stay unset.");
+            // Swallowed on purpose. A name is already on screen; what is missing is decoration, and
+            // a label is not worth the app's error modal on the way in. It stays out of the
+            // background-problem notice for the same reason, and lands in the log so that a tag which
+            // never arrives can still be accounted for.
+            _logger.LogDebug(exception, "Could not fetch the signed-in user's identity; tag and avatar stay unset.");
         }
-    }
-
-    partial void OnDisplayNameChanged(string value)
-    {
-        OnPropertyChanged(nameof(Description));
     }
 
     private static string Describe(SignedInAccount? account)

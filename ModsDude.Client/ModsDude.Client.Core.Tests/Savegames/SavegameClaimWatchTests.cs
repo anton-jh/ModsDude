@@ -135,5 +135,14 @@ public class SavegameClaimWatchTests
 
         public Task<CurrentUserDto> GetCurrentUserV1Async(CancellationToken cancellationToken = default)
             => Task.FromResult(new CurrentUserDto { Id = Harness.Me, DisplayName = "Me", Tag = "0002" });
+
+        public Task<CurrentUserDto> SetDisplayNameV1Async(SetDisplayNameRequest request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<CurrentUserDto> SetAvatarV1Async(SetAvatarRequest request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<CurrentUserDto> RemoveAvatarV1Async(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }
