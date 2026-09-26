@@ -4,13 +4,13 @@ using ModsDude.Client.Core.Savegames;
 namespace ModsDude.Client.Core.Tests.Savegames;
 
 /// <summary>
-/// What a savegame row's two buttons can do, and the sentence the one that cannot carries.
+/// Whether a savegame row's check-out is offered, whether it activates the profile first, and the sentence it carries where it is not.
 /// </summary>
 /// <remarks>
 /// The point of every case here is that the refusal arrives <em>before</em> the click. The engine
 /// refuses all of it anyway - that is the backstop - so what is being asserted is that the button was
 /// never offered, and that what it says instead names the thing that would clear it. A mod folder on
-/// the wrong list is the exception: check-out stays offered and activates the profile first.
+/// the wrong list is the exception: check-out stays offered and asks to activate the profile first.
 /// </remarks>
 public class SavegameRowRulesTests
 {
@@ -30,8 +30,8 @@ public class SavegameRowRulesTests
         var offer = Describe(head: 1004, appliedRevision: 1004);
 
         Assert.True(offer.CanCheckOut);
-        Assert.True(offer.CanApply);
-        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.False(offer.ActivatesFirst);
+        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, null));
     }
 
     /// <summary>
@@ -48,11 +48,8 @@ public class SavegameRowRulesTests
         Assert.True(offer.CanCheckOut);
         Assert.True(offer.ActivatesFirst);
         Assert.Equal(SavegameRowBlock.ModFolderElsewhere, offer.CheckOut);
-        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, null));
         Assert.Equal("'Old-school'", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
-
-        // Applying is the way out of it, so it is not blocked by the thing it clears.
-        Assert.True(offer.CanApply);
     }
 
     [Fact]
@@ -89,23 +86,22 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// Checked before anything about the folder, because no apply clears it - and it holds even where
+    /// Checked before anything about the folder, because no activation clears it - and it holds even where
     /// the folder is already exactly right, since the limit is one savegame claiming a mod folder
     /// rather than one revision.
     /// </summary>
     [Fact]
-    public void Another_savegame_holding_the_mod_folder_blocks_both_actions()
+    public void Another_savegame_holding_the_mod_folder_blocks_check_out()
     {
         var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId)]);
 
         Assert.False(offer.CanCheckOut);
         Assert.False(offer.ActivatesFirst);
-        Assert.False(offer.CanApply);
         Assert.Equal(_otherSavegameId, offer.BlockingSavegameId);
 
         Assert.Equal(
             "'Riverbend' is checked out here",
-            SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, "Riverbend"));
+            SavegameRowRules.Explain(offer.CheckOut, "Riverbend"));
     }
 
     /// <summary>The refusal stands without the name, for a savegame the list is not showing.</summary>
@@ -116,7 +112,7 @@ public class SavegameRowRulesTests
 
         Assert.Equal(
             "Another savegame is checked out here",
-            SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+            SavegameRowRules.Explain(offer.CheckOut, null));
     }
 
     /// <summary>
@@ -130,19 +126,17 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// A savegame following no mod list claims no folder, so nothing about the folder can be wrong for it -
-    /// and there is no profile to apply, which is the one case where the two buttons disagree.
+    /// A savegame following no mod list claims no folder, so nothing about the folder can be wrong for it.
     /// </summary>
     [Fact]
-    public void A_savegame_with_no_mod_list_can_always_be_checked_out_and_never_applied()
+    public void A_savegame_with_no_mod_list_can_always_be_checked_out_and_activates_nothing()
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
             held: [], appliedProfileId: null, appliedRevision: null);
 
         Assert.True(offer.CanCheckOut);
-        Assert.False(offer.CanApply);
-        Assert.Equal("This save follows no mod list", SavegameRowRules.Explain(offer.Apply, "Old-school", null, null));
+        Assert.False(offer.ActivatesFirst);
     }
 
     /// <summary>
@@ -155,7 +149,7 @@ public class SavegameRowRulesTests
         var offer = Describe(null, null, _otherProfileId, 9);
 
         Assert.True(offer.CanCheckOut);
-        Assert.False(offer.CanApply);
+        Assert.False(offer.ActivatesFirst);
     }
 
     /// <summary>

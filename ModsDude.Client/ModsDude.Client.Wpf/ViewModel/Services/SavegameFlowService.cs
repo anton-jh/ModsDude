@@ -488,8 +488,7 @@ public sealed class SavegameFlowService(
         // After the take-over question and before the slot one: whether there is a check-out at all
         // is decided first, and the slot dialog's mod summary should describe the folder as it will
         // be rather than as it was.
-        if (mode is SavegameCheckOutMode.CheckOut
-            && await ActivateFirstAsync(repo, game, savegame, changed, cancellationToken) is false)
+        if (await ActivateFirstAsync(repo, game, savegame, mode, changed, cancellationToken) is false)
         {
             return;
         }
@@ -548,24 +547,33 @@ public sealed class SavegameFlowService(
 
     /// <summary>
     /// Where the mod folder is not on the revision this savegame runs on, asks to activate its profile
-    /// and does - the same activation the row's Apply profile runs.
+    /// and does.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Asked rather than refused.</b> The button used to be disabled with "Apply X first" on it, which
-    /// named a click the user always had to make next anyway. The question is the part worth keeping:
-    /// an activation can move and recycle mods, so it is said before it happens.
+    /// <b>Asked rather than refused.</b> Check out used to be disabled with "Apply X first" on it, beside
+    /// an Apply profile button - a click the user always had to make next anyway. The question is the
+    /// part worth keeping: an activation can move and recycle mods, so it is said before it happens.
+    /// </para>
+    /// <para>
+    /// <b>A copy may decline it and go ahead.</b> A check-out holds the save against this folder, so the
+    /// folder has to be right; a copy claims nothing and is an ordinary save of the user's own
+    /// afterwards, so writing it next to whatever the folder has now is theirs to choose.
     /// </para>
     /// <para>
     /// <b>The same rule the row drew its button from</b>, read again rather than passed in: the Overview
     /// and the Saves list both come here, and the folder may have moved since either drew itself.
     /// </para>
     /// </remarks>
-    /// <returns>Whether the check-out should carry on - nothing needed doing, or the activation finished.</returns>
+    /// <returns>
+    /// Whether to carry on - nothing needed doing, the activation finished, or a copy was told to leave
+    /// the folder alone.
+    /// </returns>
     private async Task<bool> ActivateFirstAsync(
         Repo repo,
         Game game,
         SavegameDto savegame,
+        SavegameCheckOutMode mode,
         Func<Task> changed,
         CancellationToken cancellationToken)
     {
@@ -588,15 +596,30 @@ public sealed class SavegameFlowService(
 
         var list = SavegameRowRules.DescribeActivation(profile.Name, pinned);
 
-        var confirmation = new ConfirmationDialogViewModel(
-            $"Activate {list} first?",
-            $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
-                + $"Checking it out activates {list} first, then asks which slot to write the save into.",
-            IconKind.Question,
-            "OK",
-            "Cancel");
+        var confirmation = mode is SavegameCheckOutMode.TakeCopy
+            ? new ConfirmationDialogViewModel(
+                $"Activate {list} first?",
+                $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
+                    + $"Activating it first puts the mods the copy was saved with in place. Leaving it writes the copy "
+                    + "next to whatever mods the folder has now, which the game may not load it with.",
+                IconKind.Question,
+                "Activate it, then take the copy",
+                "Cancel",
+                "Leave the mods as they are")
+            : new ConfirmationDialogViewModel(
+                $"Activate {list} first?",
+                $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
+                    + $"Checking it out activates {list} first, then asks which slot to write the save into.",
+                IconKind.Question,
+                "Activate it, then check out",
+                "Cancel");
 
         await modalService.Value.Show(confirmation);
+
+        if (confirmation.ChoseAlternative)
+        {
+            return true;
+        }
 
         if (confirmation.Result is false)
         {

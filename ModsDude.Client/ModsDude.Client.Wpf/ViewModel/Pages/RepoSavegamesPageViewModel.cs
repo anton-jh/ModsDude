@@ -45,7 +45,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly SavegameBindingStore _bindingStore;
     private readonly ProfileService _profileService;
     private readonly CurrentUserService _currentUserService;
-    private readonly ProfileApplyService _applyService;
     private readonly DriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
     private readonly ShellNavigationService _shellNavigation;
@@ -71,7 +70,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         SavegameBindingStore bindingStore,
         ProfileService profileService,
         CurrentUserService currentUserService,
-        ProfileApplyService applyService,
         DriftMonitor driftMonitor,
         SavegameFlowService flowService,
         ShellNavigationService shellNavigation,
@@ -91,7 +89,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         _bindingStore = bindingStore;
         _profileService = profileService;
         _currentUserService = currentUserService;
-        _applyService = applyService;
         _driftMonitor = driftMonitor;
         _flowService = flowService;
         _shellNavigation = shellNavigation;
@@ -685,7 +682,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             row.DiscardRequested += OnDiscardRequested;
             row.DisconnectRequested += OnDisconnectRequested;
             row.TakeCopyRequested += OnTakeCopyRequested;
-            row.ApplyProfileRequested += OnApplyProfileRequested;
             row.MakeCurrentRequested += OnMakeCurrentRequested;
 
             Savegames.Add(row);
@@ -746,7 +742,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             row.DiscardRequested -= OnDiscardRequested;
             row.DisconnectRequested -= OnDisconnectRequested;
             row.TakeCopyRequested -= OnTakeCopyRequested;
-            row.ApplyProfileRequested -= OnApplyProfileRequested;
             row.MakeCurrentRequested -= OnMakeCurrentRequested;
         }
 
@@ -1185,63 +1180,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             : "it stays playable, and its mod list stops moving";
 
         return $"'{incumbent.Name}' is {row.ProfileName}'s current savegame. This swaps them: {moves} '{incumbent.Name}' becomes past - {stays}.";
-    }
-
-    /// <summary>
-    /// The row's other action: puts the mod folder on the list this savegame runs on - the same
-    /// activation the one beside it asks to run first where the folder is elsewhere.
-    /// </summary>
-    /// <remarks>
-    /// <b>It names the revision.</b> Nothing is holding this savegame yet, so an apply that let the
-    /// game decide would install head - correct for a current savegame and wrong for a past one,
-    /// whose check-out a moment later would leave the folder drifted against the revision it just
-    /// pinned.
-    /// </remarks>
-    private async void OnApplyProfileRequested(object? sender, EventArgs e)
-    {
-        if (sender is not SavegameListItemViewModel row
-            || _repo.Games.FirstOrDefault() is not Game game
-            || FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
-        {
-            return;
-        }
-
-        IsWorking = true;
-
-        try
-        {
-            // An activation: this savegame follows a mod list and the game is being put on it, so
-            // the intent is what the service records before it touches a file.
-            var outcome = await _applyService.ActivateAsync(
-                _repo,
-                game,
-                profile.Id,
-                profile.Name,
-                confirmPlan: false,
-                progress: null,
-                _lifetime,
-                revision: row.PinnedRevision ?? profile.HeadRevision);
-
-            _toasts.Show(outcome.Message, outcome.ToastSeverity);
-
-            await _driftMonitor.CheckAsync();
-
-            // The folder moved, so every row's answer to "can this be checked out here" has moved
-            // with it - not just this one's.
-            await ReloadAsync(row.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "applying a profile");
-        }
-        finally
-        {
-            IsWorking = false;
-        }
     }
 
     /// <summary>

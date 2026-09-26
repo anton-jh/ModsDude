@@ -2,12 +2,18 @@
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
+/// <param name="alternativeText">
+/// A third answer, drawn between the two, for a question with a second way to go ahead - null for the
+/// ordinary yes-or-no. Choosing it leaves <see cref="Result"/> false and sets <see cref="ChoseAlternative"/>,
+/// so a caller that never offers one reads the dialog exactly as before.
+/// </param>
 public partial class ConfirmationDialogViewModel(
     string title,
     string message,
     IconKind icon,
     string yesText = "Yes",
-    string noText = "No")
+    string noText = "No",
+    string? alternativeText = null)
     : ModalViewModel
 {
     public string Title { get; } = title;
@@ -15,8 +21,14 @@ public partial class ConfirmationDialogViewModel(
     public IconKind Icon { get; } = icon;
     public string YesText { get; } = yesText;
     public string NoText { get; } = noText;
+    public string? AlternativeText { get; } = alternativeText;
+
+    public bool HasAlternative => AlternativeText is not null;
 
     public bool Result { get; private set; }
+
+    /// <summary>Whether the answer was <see cref="AlternativeText"/>.</summary>
+    public bool ChoseAlternative { get; private set; }
 
     /// <summary>
     /// Whether this dialog is telling rather than asking, and so has one button instead of two.
@@ -42,6 +54,14 @@ public partial class ConfirmationDialogViewModel(
     public void SetNo()
     {
         Result = false;
+        Done = true;
+    }
+
+    [RelayCommand]
+    public void SetAlternative()
+    {
+        Result = false;
+        ChoseAlternative = true;
         Done = true;
     }
 

@@ -3,14 +3,14 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// Why one of a savegame's two actions - <em>Apply profile</em> and <em>Check out</em> - is not on
-/// offer against a particular game installation.
+/// What stands between a savegame and <em>Check out</em> against a particular game installation.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every value but <see cref="ModFolderElsewhere"/> is a sentence a disabled button carries instead of working.
+/// <see cref="AnotherSavegameIsHeld"/> is a sentence a disabled button carries instead of working;
+/// <see cref="ModFolderElsewhere"/> is a question the button asks before it works.
 /// <see cref="SavegameHoldRules"/>, <see cref="SavegameService.CheckOutAsync"/> and the sync engine
-/// already refuse all of it; those are the backstops nothing gets past, and this is the half that
+/// already refuse the first; those are the backstops nothing gets past, and this is the half that
 /// makes the refusal arrive before the click rather than after it.
 /// </para>
 /// <para>
@@ -26,58 +26,49 @@ public enum SavegameRowBlock
     None,
 
     /// <summary>
-    /// <em>Apply profile</em> only: this savegame follows no mod list, so there is no profile to apply and
-    /// nothing about the mod folder is its to constrain.
-    /// </summary>
-    NoModList,
-
-    /// <summary>
-    /// <em>Check out</em> only: the mod folder is not on the revision this savegame runs on. The one
-    /// value that does not disable its button - checking out activates the profile first, after
-    /// asking - see <see cref="SavegameRowOffer.ActivatesFirst"/>.
+    /// The mod folder is not on the revision this savegame runs on. Not a refusal: checking out, or
+    /// taking a copy, asks to activate the profile first - see <see cref="SavegameRowOffer.ActivatesFirst"/>.
     /// </summary>
     ModFolderElsewhere,
 
     /// <summary>
-    /// Another savegame with a profile already claims this game's mod folder. It blocks both
-    /// actions, and applying anything does not clear it - checking that savegame in does.
+    /// Another savegame with a profile already claims this game's mod folder. No activation clears
+    /// it - checking that savegame in does.
     /// </summary>
     AnotherSavegameIsHeld
 }
 
 
-/// <summary>What a savegame's two actions can do on one game, and why not where they cannot.</summary>
+/// <summary>What checking a savegame out can do on one game, and why not where it cannot.</summary>
 /// <param name="BlockingSavegameId">
 /// The savegame already holding the mod folder, so a caller with the list can name it. Empty unless
 /// the block is <see cref="SavegameRowBlock.AnotherSavegameIsHeld"/>.
 /// </param>
 /// <param name="PinnedRevision">
-/// The revision a past savegame runs on, carried through so the refusal can name it. Null for a current
-/// savegame, whose refusal names the profile alone - it follows whatever the profile says now, and a
-/// number there would be one the user has no reason to have heard of.
+/// The revision a past savegame runs on, carried through so the activation can name it. Null for a
+/// current savegame, whose activation names the profile alone - it follows whatever the profile says
+/// now, and a number there would be one the user has no reason to have heard of.
 /// </param>
 public sealed record SavegameRowOffer(
     SavegameRowBlock CheckOut,
-    SavegameRowBlock Apply,
     Guid BlockingSavegameId,
     int? PinnedRevision)
 {
     public bool CanCheckOut => CheckOut is SavegameRowBlock.None or SavegameRowBlock.ModFolderElsewhere;
-    public bool CanApply => Apply is SavegameRowBlock.None;
 
     /// <summary>
-    /// Whether checking out has to activate the profile first, because the mod folder is not on the
-    /// revision this savegame runs on. Asked about before it happens rather than refused: the apply
-    /// is the obvious next step, and a disabled button pointing at the one beside it was a click
-    /// the user always had to make anyway.
+    /// Whether the profile has to be activated before this savegame is played here, because the mod
+    /// folder is not on the revision it runs on. Asked about rather than refused: the activation is
+    /// the obvious next step, and a disabled button pointing at another one was a click the user
+    /// always had to make anyway.
     /// </summary>
     public bool ActivatesFirst => CheckOut is SavegameRowBlock.ModFolderElsewhere;
 }
 
 
 /// <summary>
-/// Which of a savegame row's two actions are on offer against one game, and the words for the one
-/// that is not.
+/// Whether a savegame row's check-out is on offer against one game, whether it activates the profile
+/// first, and the words for where it is not.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -86,10 +77,9 @@ public sealed record SavegameRowOffer(
 /// whether a savegame can be taken here and now is one function with one copy.
 /// </para>
 /// <para>
-/// <b>Two actions, not one.</b> Checking a save out never syncs mods - see
-/// docs/10-savegame-profile-binding.md#two-actions-not-one - so the row cannot fold the apply into the
-/// claim. What it can do is notice the folder is not right and say which activation would make it so -
-/// which the check-out asks about, and runs, before it takes anything.
+/// <b>The claim never syncs mods on its own</b> - see docs/10-savegame-profile-binding.md#activating-before-the-claim.
+/// What this does is notice the folder is not right and say which activation would make it so, which
+/// the check-out and the copy ask about, and run, before they write anything.
 /// </para>
 /// </remarks>
 public static class SavegameRowRules
@@ -123,25 +113,21 @@ public static class SavegameRowRules
         Guid? appliedProfileId,
         int? appliedRevision)
     {
-        // Ahead of everything about the folder, because no apply clears it and because it holds even
-        // where the folder is already exactly right: the limit is one savegame claiming a mod folder,
-        // and the way past it is checking that one in.
+        // Ahead of everything about the folder, because no activation clears it and because it holds
+        // even where the folder is already exactly right: the limit is one savegame claiming a mod
+        // folder, and the way past it is checking that one in.
         if (SavegameHoldRules.FindConflictingHold(held, savegameId) is SavegameCheckoutBinding blocking)
         {
-            return new SavegameRowOffer(
-                SavegameRowBlock.AnotherSavegameIsHeld,
-                SavegameRowBlock.AnotherSavegameIsHeld,
-                blocking.SavegameId,
-                pinnedRevision);
+            return new SavegameRowOffer(SavegameRowBlock.AnotherSavegameIsHeld, blocking.SavegameId, pinnedRevision);
         }
 
-        // Past that check, an apply of this savegame's own profile is always allowed, so
+        // Past that check, activating this savegame's own profile is always allowed, so
         // SavegameHoldRules.DecideApply is not asked a second time: the only hold it could still find
         // is this savegame's own - checking out something already held here moves it between slots -
         // and a savegame never refuses the revision it itself pins.
         if (profileId is not Guid profile || headRevision is not int head)
         {
-            return new SavegameRowOffer(SavegameRowBlock.None, SavegameRowBlock.NoModList, Guid.Empty, null);
+            return new SavegameRowOffer(SavegameRowBlock.None, Guid.Empty, null);
         }
 
         // Head for a current savegame, its own revision for a past one - the check-out table in
@@ -149,12 +135,13 @@ public static class SavegameRowRules
         var required = pinnedRevision ?? head;
 
         return appliedProfileId == profile && appliedRevision == required
-            ? new SavegameRowOffer(SavegameRowBlock.None, SavegameRowBlock.None, Guid.Empty, pinnedRevision)
-            : new SavegameRowOffer(SavegameRowBlock.ModFolderElsewhere, SavegameRowBlock.None, Guid.Empty, pinnedRevision);
+            ? new SavegameRowOffer(SavegameRowBlock.None, Guid.Empty, pinnedRevision)
+            : new SavegameRowOffer(SavegameRowBlock.ModFolderElsewhere, Guid.Empty, pinnedRevision);
     }
 
     /// <summary>
-    /// The disabled button's own explanation, which is the only place the refusal is ever said.
+    /// The disabled button's own explanation, which is the only place the refusal is ever said. Null
+    /// where the button is not disabled.
     /// </summary>
     /// <remarks>
     /// Separate from <see cref="Describe"/> the way <see cref="Sync.ProfileActivation.Label"/> is
@@ -165,17 +152,10 @@ public static class SavegameRowRules
     /// What the savegame holding the folder is called, where the caller could find out. A row that
     /// could not is still refused, and says so without the name.
     /// </param>
-    public static string? Explain(
-        SavegameRowBlock block,
-        string profileName,
-        int? pinnedRevision,
-        string? blockingSavegameName)
+    public static string? Explain(SavegameRowBlock block, string? blockingSavegameName)
     {
         return block switch
         {
-            SavegameRowBlock.NoModList => "This save follows no mod list",
-
-            // Not a refusal: the button stays enabled and asks - see ExplainActivation.
             SavegameRowBlock.AnotherSavegameIsHeld => blockingSavegameName is { Length: > 0 } name
                 ? $"'{name}' is checked out here"
                 : "Another savegame is checked out here",
@@ -185,7 +165,7 @@ public static class SavegameRowRules
     }
 
     /// <summary>
-    /// Which list a check-out would activate first, where <see cref="SavegameRowOffer.ActivatesFirst"/>.
+    /// Which list would be activated first, where <see cref="SavegameRowOffer.ActivatesFirst"/>.
     /// </summary>
     /// <remarks>
     /// The number only where the savegame pins one. A current savegame follows its profile, so naming a

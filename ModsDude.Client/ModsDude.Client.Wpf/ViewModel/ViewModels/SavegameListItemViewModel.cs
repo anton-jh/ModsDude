@@ -99,7 +99,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         IsMember = isMember;
         ShowHolderTag = isAmbiguous;
 
-        // Recorded here because the row's two actions need it and because it is what the binding will
+        // Recorded here because the row's actions need it and because it is what the binding will
         // carry a moment later - two answers to "which list does this savegame run on" is how a row comes
         // to describe a different apply from the one that runs.
         PinnedRevision = SavegameService.TargetRevisionOf(savegame);
@@ -116,7 +116,6 @@ public partial class SavegameListItemViewModel : ObservableObject
     public event EventHandler? DiscardRequested;
     public event EventHandler? DisconnectRequested;
     public event EventHandler? TakeCopyRequested;
-    public event EventHandler? ApplyProfileRequested;
     public event EventHandler? MakeCurrentRequested;
 
 
@@ -159,14 +158,6 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public bool CanCheckOut => IsMember && _offer?.CanCheckOut is true;
 
-    /// <summary>
-    /// Whether putting the mod folder on this savegame's list is on offer.
-    /// </summary>
-    /// <remarks>
-    /// <b>Not gated on membership.</b> It writes nothing anybody else can see, and a guest who can take a
-    /// copy has every reason to want the mod folder on the list that copy was played on.
-    /// </remarks>
-    public bool CanApplyProfile => _offer?.CanApply is true;
 
     /// <summary>
     /// Whether this savegame can be put back in its profile's current slot.
@@ -279,25 +270,17 @@ public partial class SavegameListItemViewModel : ObservableObject
     public string CheckOutLabel => IsHeldByMe ? "Check out again" : "Check out";
 
     public string? CheckOutBlockedReason => _offer is SavegameRowOffer offer
-        ? SavegameRowRules.Explain(offer.CheckOut, ProfileName, offer.PinnedRevision, _blockingSavegameName)
-        : _notConnected;
-
-    public string? ApplyBlockedReason => _offer is SavegameRowOffer offer
-        ? SavegameRowRules.Explain(offer.Apply, ProfileName, offer.PinnedRevision, _blockingSavegameName)
+        ? SavegameRowRules.Explain(offer.CheckOut, _blockingSavegameName)
         : _notConnected;
 
     /// <summary>
-    /// What the row says under its buttons: the check-out refusal, which is the one somebody is
-    /// acting on. Applying is the way out of it, so its own refusal is only worth a line where it is
-    /// the one that differs - which is a savegame following no mod list, where there is nothing to apply.
+    /// What the row says under its buttons: why Check out is greyed out, where it is.
     /// </summary>
     /// <remarks>
-    /// A guest is never offered check-out, so its refusal is not what they are acting on - and "Apply X
-    /// first" beside a button they do not have is a line about nothing they can do.
+    /// A guest is never offered check-out, so its refusal is not what they are acting on - and a
+    /// sentence beside a button they do not have is a line about nothing they can do.
     /// </remarks>
-    public string? BlockedReason => IsMember
-        ? CheckOutBlockedReason ?? ApplyBlockedReason
-        : ApplyBlockedReason;
+    public string? BlockedReason => IsMember ? CheckOutBlockedReason : null;
 
     public bool IsBlocked => BlockedReason is not null;
 
@@ -314,6 +297,14 @@ public partial class SavegameListItemViewModel : ObservableObject
             : Holder is SavegameCheckoutDto holder
                 ? $"{holder.User.DisplayName} has it. Checking it out takes it from them, and they will be told."
                 : "Takes the claim and writes it into a slot, so everybody else can see you have it until you check it in.");
+
+    /// <summary>
+    /// What Take a copy does, and - where the mod folder is elsewhere - that it will ask whether to
+    /// activate the profile, since the copy claims nothing and the mods are the only thing it can change.
+    /// </summary>
+    public string TakeCopyToolTip => _offer is { ActivatesFirst: true } offer
+        ? $"Writes it into a slot and claims nothing. The mod folder is not on {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)}, so you are asked whether to activate it first."
+        : "Writes it into a slot and claims nothing. Whoever holds it keeps holding it.";
 
     /// <summary>
     /// Never a refusal: the button is only there when the save is yours and on this machine, which is
@@ -372,10 +363,6 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     public bool HasUnreachableHoldNote => UnreachableHoldNote is not null;
 
-    public string ApplyToolTip => ApplyBlockedReason
-        ?? (PinnedRevision is int revision
-            ? $"Puts this game's mod folder on '{ProfileName}' revision {revision}, which is what this savegame runs on."
-            : $"Puts this game's mod folder on '{ProfileName}', which is what this savegame runs on.");
 
     public ObservableCollection<SavegameChip> Chips { get; }
 
@@ -456,14 +443,6 @@ public partial class SavegameListItemViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanDisconnect))]
     private void Disconnect() => DisconnectRequested?.Invoke(this, EventArgs.Empty);
 
-    /// <summary>
-    /// The other half of the pair. Two actions rather than one because checking a save out never
-    /// syncs mods: a plan that would quarantine files the repo has never seen has to be shown before
-    /// anything is written, and folding it into a claim is how that disclosure gets skipped. See
-    /// docs/10-savegame-profile-binding.md#two-actions-not-one.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanApplyProfile))]
-    private void ApplyProfile() => ApplyProfileRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
     /// Puts this savegame back in its profile's current slot, displacing whichever one is there.
@@ -563,16 +542,13 @@ public partial class SavegameListItemViewModel : ObservableObject
         _blockingSavegameName = blockingSavegameName;
 
         OnPropertyChanged(nameof(CanCheckOut));
-        OnPropertyChanged(nameof(CanApplyProfile));
         OnPropertyChanged(nameof(CheckOutBlockedReason));
-        OnPropertyChanged(nameof(ApplyBlockedReason));
         OnPropertyChanged(nameof(BlockedReason));
         OnPropertyChanged(nameof(IsBlocked));
         OnPropertyChanged(nameof(CheckOutToolTip));
-        OnPropertyChanged(nameof(ApplyToolTip));
+        OnPropertyChanged(nameof(TakeCopyToolTip));
 
         CheckOutCommand.NotifyCanExecuteChanged();
-        ApplyProfileCommand.NotifyCanExecuteChanged();
     }
 
     /// <param name="lockedPinMoved">

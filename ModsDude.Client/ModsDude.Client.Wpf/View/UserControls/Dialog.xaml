@@ -52,31 +52,39 @@
             <Border Grid.Row="1"
                     Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
 
-                <Grid Grid.Row="1" ColumnDefinitions="* *">
+                <!-- A uniform grid because it leaves collapsed buttons out of the count: one answer
+                     takes the whole width, two share it. Three are stacked instead - each is a
+                     phrase rather than a word, and a third of this dialog does not fit one. -->
+                <UniformGrid Margin="20 24">
+                    <UniformGrid.Style>
+                        <Style TargetType="UniformGrid">
+                            <Setter Property="Rows" Value="1" />
+                            <Setter Property="Columns" Value="0" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasAlternative}" Value="True">
+                                    <Setter Property="Rows" Value="0" />
+                                    <Setter Property="Columns" Value="1" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </UniformGrid.Style>
 
-                    <!-- The affirmative, stretched across both columns where there is nothing to
-                         choose between: a dialog that says "Ok" on both buttons is reporting rather
-                         than asking, and the second button exists only to be read twice. -->
-                    <Button Grid.Column="0"
+                    <!-- The affirmative, alone where there is nothing to choose between: a dialog
+                         that says "Ok" on both buttons is reporting rather than asking, and the second
+                         button exists only to be read twice. -->
+                    <Button Margin="4"
                             Content="{Binding YesText}"
                             HorizontalAlignment="Stretch"
-                            Command="{Binding SetYesCommand}">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
-                                <Setter Property="Margin" Value="24 24 4 24" />
-                                <Setter Property="Grid.ColumnSpan" Value="1" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasOneAnswer}" Value="True">
-                                        <Setter Property="Margin" Value="24 24 24 24" />
-                                        <Setter Property="Grid.ColumnSpan" Value="2" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{Binding SetYesCommand}" />
 
-                    <Button Grid.Column="1"
-                            Margin="4 24 24 24"
+                    <Button Margin="4"
+                            Content="{Binding AlternativeText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SetAlternativeCommand}"
+                            Visibility="{Binding HasAlternative, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Margin="4"
                             Content="{Binding NoText}"
                             HorizontalAlignment="Stretch"
                             Command="{Binding SetNoCommand}">
@@ -92,7 +100,7 @@
                         </Button.Style>
                     </Button>
 
-                </Grid>
+                </UniformGrid>
             </Border>
         </Grid>
     </Border>

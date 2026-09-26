@@ -375,9 +375,9 @@
                                                        Text="{Binding UnreachableHoldNote}"
                                                        Visibility="{Binding HasUnreachableHoldNote, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                            <!-- Why Check out is greyed out, and which apply would
-                                                 clear it. Tertiary rather than caution: nothing is
-                                                 wrong here, the folder is simply somewhere else. -->
+                                            <!-- Why Check out is greyed out, where it is. Tertiary
+                                                 rather than caution: nothing is wrong with the save,
+                                                 another one simply has the mod folder. -->
                                             <TextBlock Margin="0 2 0 0"
                                                        TextWrapping="Wrap"
                                                        Style="{DynamicResource CaptionTextBlockStyle}"
@@ -386,15 +386,13 @@
                                                        Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
 
-                                        <!-- Two actions, never one: checking a save out does not sync
-                                             mods, so the apply that makes the folder right is its own
-                                             button with its own dialog. Neither of the first two is offered to a guest -
+                                        <!-- No Apply profile button: where the mod folder is not on the
+                                             list the save runs on, Check out and Take a copy each ask
+                                             to activate it first. Check out is not offered to a guest -
                                              a control leading to a refusal is worse than one never
-                                             offered - and each carries its own reason when disabled. Apply profile
-                                             is not one of them: it writes nothing anybody else can see, and a guest
-                                             taking a copy wants the mod folder on the list it was played on.
+                                             offered - and carries its own reason when disabled.
 
-                                             An accent primary and three ordinary buttons, which is the
+                                             An accent primary and ordinary buttons, which is the
                                              pairing the snapshot footer already uses. Not SubtleMenuButton:
                                              that one is transparent until hovered, which is right for the
                                              page's own menu verbs - Rename, Archive, Refresh - where the
@@ -460,15 +458,9 @@
                                                     Visibility="{Binding ChecksOutAsSecondary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                             <Button Margin="0 4 0 0"
-                                                    Content="Apply profile"
-                                                    HorizontalAlignment="Stretch"
-                                                    ToolTip="{Binding ApplyToolTip}"
-                                                    Command="{Binding ApplyProfileCommand}" />
-
-                                            <Button Margin="0 4 0 0"
                                                     Content="Take a copy"
                                                     HorizontalAlignment="Stretch"
-                                                    ToolTip="Writes it into a slot and claims nothing. Whoever holds it keeps holding it."
+                                                    ToolTip="{Binding TakeCopyToolTip}"
                                                     Command="{Binding TakeCopyCommand}" />
 
                                             <!-- Only on a past savegame, and the other end of the swap a

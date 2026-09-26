@@ -289,9 +289,9 @@ public sealed class ProfileApplyService(
     /// </param>
     /// <param name="revision">
     /// Which revision to install, or null - nearly always - to let the game decide, per
-    /// <see cref="TryPlanAsync"/>. Named by the savegame list's <em>Apply profile</em>, which is
-    /// preparing the folder for a savegame nothing is holding yet: a past one runs on its own revision,
-    /// and letting the game decide would install head and leave the check-out that follows
+    /// <see cref="TryPlanAsync"/>. Named by the activation a savegame check-out or copy runs first,
+    /// which is preparing the folder for a savegame nothing is holding yet: a past one runs on its own
+    /// revision, and letting the game decide would install head and leave the check-out that follows
     /// immediately drifted.
     /// </param>
     public Task<ProfileApplyOutcome> ApplyAsync(
