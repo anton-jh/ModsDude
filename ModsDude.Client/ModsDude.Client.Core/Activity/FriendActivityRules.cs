@@ -70,6 +70,20 @@ public static class FriendActivityRules
             : FollowAvailability.Available;
     }
 
+    /// <summary>
+    /// Whether a change is worth a card or a toast.
+    /// </summary>
+    /// <remarks>
+    /// <b>A friend switching onto what this game is already on tells nobody anything.</b> They have come
+    /// to where this user already is, and there is nothing to follow. Measured the way
+    /// <see cref="CanFollow"/> measures it, so a friend held on a revision this game is not on still
+    /// counts. A check-out is always news: it names the savegame they are playing, which the profile
+    /// alone does not. Home and a repo's overview still list the friend - this is only about announcing.
+    /// </remarks>
+    public static bool IsWorthAnnouncing(GameActivityDto activity, IFriendActivityEnvironment environment)
+        => activity.Kind is GameActivityKind.SavegameCheckedOut
+            || environment.CanFollow(activity) is not FollowAvailability.AlreadyOn;
+
     /// <summary>The game identity as the client parses it, or null where the report named something unreadable.</summary>
     public static GameIdentity? ParseGame(string game)
     {
@@ -135,6 +149,11 @@ public static class FriendActivityRules
     /// Info, because nothing here is wrong: it is somebody else's evening, offered in case this user
     /// wants to join it.
     /// </para>
+    /// <para>
+    /// Only what <see cref="IsWorthAnnouncing"/> passes. Asked on every build, so a card held back
+    /// because this game was already there comes up once it has moved elsewhere - at which point the
+    /// friend is somewhere this user is not, and the card has a follow button to offer.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<Notice> BuildNotices(IEnumerable<GameActivityDto> news, IFriendActivityEnvironment environment)
     {
@@ -142,6 +161,11 @@ public static class FriendActivityRules
 
         foreach (var activity in news.OrderByDescending(x => x.ChangedAt))
         {
+            if (IsWorthAnnouncing(activity, environment) is false)
+            {
+                continue;
+            }
+
             var availability = environment.CanFollow(activity);
             var game = ParseGame(activity.Game);
 
