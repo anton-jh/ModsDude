@@ -162,7 +162,7 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
                 Author = desc.Element("author")?.Value.Trim(),
                 Locked = DeclaresMaps(desc),
                 Icon = GetIcon(zip, path, desc),
-                Images = GetImages(zip, path)
+                Images = GetImages(zip, path, desc)
             };
 
         return maybeLocalMod.HasValue ? maybeLocalMod.Value : null;
@@ -276,10 +276,38 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
     }
 
     /// <summary>
-    /// The store images - the ones the in-game shop shows. A mod ships anywhere from none of them
-    /// (script mods) to a few dozen (vehicle packs).
+    /// The pictures that show what the mod is. For a map that is the preview each map declares - the
+    /// one the game's map selection shows. For anything else it is the store images, the ones the
+    /// in-game shop shows: anywhere from none of them (script mods) to a few dozen (vehicle packs).
     /// </summary>
-    private static IReadOnlyList<ModImage> GetImages(ZipArchive zip, string modPath)
+    /// <remarks>
+    /// A map's store images are the wrong answer rather than a thin one. A map ships a store image for
+    /// every placeable, fence and decorative foliage it adds - well over a hundred on a large one - and
+    /// none of them looks like the map.
+    /// </remarks>
+    private static IReadOnlyList<ModImage> GetImages(ZipArchive zip, string modPath, XElement desc)
+    {
+        return DeclaresMaps(desc)
+            ? GetMapPreviews(zip, modPath, desc)
+            : GetStoreImages(zip, modPath);
+    }
+
+    /// <summary>
+    /// Resolved like the mod icon, because maps get the declared extension wrong the same way. A map
+    /// that declares no preview, or one the archive does not hold, gets none, and the details dialog
+    /// draws the icon instead.
+    /// </summary>
+    private static IReadOnlyList<ModImage> GetMapPreviews(ZipArchive zip, string modPath, XElement desc)
+    {
+        return desc.Element("maps")!.Elements("map")
+            .Select(x => FindImageEntry(zip, x.Element("iconFilename")?.Value))
+            .OfType<ZipArchiveEntry>()
+            .DistinctBy(x => x.FullName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => CreateImage(modPath, x))
+            .ToList();
+    }
+
+    private static IReadOnlyList<ModImage> GetStoreImages(ZipArchive zip, string modPath)
     {
         return zip.Entries
             .Where(x => x.Name.StartsWith("store_", StringComparison.OrdinalIgnoreCase) && IsImage(x.Name))

@@ -126,6 +126,44 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         Assert.Equal("hurr durr", mod.Version.Value);
     }
 
+
+    [Fact]
+    public async Task A_mod_without_maps_shows_its_store_images()
+    {
+        WriteMod("FS25_Plough", "1.0.0", [], files: ["store_plough.dds", "textures/diffuse.dds", "vehicles/store_cart.dds"]);
+
+        var mod = await ScanOne();
+
+        Assert.Equal(["store_plough.dds", "store_cart.dds"], mod.Images.Select(x => x.Name));
+    }
+
+    /// <summary>
+    /// A map ships a store image for every placeable, fence and decorative plant it adds, and none of
+    /// them looks like the map. Its preview does.
+    /// </summary>
+    [Fact]
+    public async Task A_map_shows_its_preview_rather_than_its_store_images()
+    {
+        WriteMod("FS25_BigMap", "1.0.0.0", ["bigMap"],
+            mapPreview: "maps/ui/preview.png",
+            files: ["maps/ui/preview.dds", "foliage/store_flowerBlue.dds", "placeables/store_fence.dds"]);
+
+        var mod = await ScanOne();
+
+        Assert.Equal(["preview.dds"], mod.Images.Select(x => x.Name));
+    }
+
+    [Fact]
+    public async Task A_map_without_a_preview_shows_no_images()
+    {
+        WriteMod("FS25_BigMap", "1.0.0.0", ["bigMap"], files: ["placeables/store_fence.dds"]);
+
+        var mod = await ScanOne();
+
+        Assert.Empty(mod.Images);
+    }
+
+
     private async Task<LocalMod> ScanOne()
     {
         return Assert.Single(await Scan());
@@ -138,10 +176,16 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         return [.. mods];
     }
 
-    private void WriteMod(string id, string version, string[] maps, bool writeEmptyMapsElement = false)
+    private void WriteMod(
+        string id, string version, string[] maps,
+        bool writeEmptyMapsElement = false,
+        string? mapPreview = null,
+        string[]? files = null)
     {
+        var previewElement = mapPreview is null ? "" : $"<iconFilename>{mapPreview}</iconFilename>";
+
         var mapsElement = maps.Length > 0 || writeEmptyMapsElement
-            ? $"<maps>{string.Concat(maps.Select(x => $"<map id=\"{x}\" className=\"{x}\" filename=\"maps/{x}.xml\" />"))}</maps>"
+            ? $"<maps>{string.Concat(maps.Select(x => $"<map id=\"{x}\" className=\"{x}\" filename=\"maps/{x}.xml\">{previewElement}</map>"))}</maps>"
             : string.Empty;
 
         var modDesc = $"""
@@ -157,8 +201,16 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
 
         using var file = File.Create(Path.Combine(_folder, $"{id}.zip"));
         using var archive = new ZipArchive(file, ZipArchiveMode.Create);
-        using var entry = archive.CreateEntry("modDesc.xml").Open();
 
-        entry.Write(Encoding.UTF8.GetBytes(modDesc));
+        using (var entry = archive.CreateEntry("modDesc.xml").Open())
+        {
+            entry.Write(Encoding.UTF8.GetBytes(modDesc));
+        }
+
+        foreach (var name in files ?? [])
+        {
+            using var entry = archive.CreateEntry(name).Open();
+            entry.Write([0x00]);
+        }
     }
 }

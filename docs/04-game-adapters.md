@@ -498,7 +498,7 @@ a mod, which is a determination and equally silent. Only an archive that will no
 the catalog — and even then the scan skips it rather than letting one bad archive take a thousand
 good ones down.
 | `modDesc/iconFilename`, or any `icon_*` image | `Icon` |
-| Any `store_*` image | `Images` |
+| For a map, each `modDesc/maps/map/iconFilename` preview; otherwise any `store_*` image | `Images` |
 
 Several details in this code are load-bearing and worth preserving if you touch it:
 
