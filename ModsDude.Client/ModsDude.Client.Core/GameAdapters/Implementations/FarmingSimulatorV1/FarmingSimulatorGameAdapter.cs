@@ -65,8 +65,8 @@ public class FarmingSimulatorBaseGameAdapter(
     // list would close over whichever adapter happened to build it first and hand those loggers to
     // every other.
     private readonly List<object> _capabilities = [
-        new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter(loggerFactory)),
-        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(loggerFactory)),
+        new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter(RequireGameVersion(settings), loggerFactory)),
+        new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(RequireGameVersion(settings), loggerFactory)),
         .. RemoteSources(settings, modHubClient)
         ];
 
@@ -82,11 +82,7 @@ public class FarmingSimulatorBaseGameAdapter(
     /// interchangeable sync targets, so the adapter id alone would offer an FS22 folder to an FS25
     /// repo.
     /// </summary>
-    public GameIdentity Scope => new(Id.Id, BaseSettings.GameVersion switch
-    {
-        { } gameVersion => gameVersion.ToString().ToLowerInvariant(),
-        null => throw new InvalidOperationException("Base settings without a game version cannot produce a game identity.")
-    });
+    public GameIdentity Scope => new(Id.Id, RequireGameVersion(BaseSettings).ToString().ToLowerInvariant());
 
     /// <summary>
     /// The particular game rather than the adapter, so a sidebar grouping repos by game puts the FS22
@@ -120,6 +116,10 @@ public class FarmingSimulatorBaseGameAdapter(
         yield return new Func<IRemoteModSourcesAdapter>(() => new FarmingSimulatorRemoteModSourcesAdapter(sources));
     }
 
+    protected static FarmingSimulatorGameVersion RequireGameVersion(FarmingSimulatorBaseSettings settings)
+        => settings.GameVersion
+            ?? throw new InvalidOperationException("Base settings without a game version cannot say which game they are for.");
+
     private static string? EnumTitle(FarmingSimulatorGameVersion version)
         => typeof(FarmingSimulatorGameVersion)
             .GetField(version.ToString())
@@ -129,12 +129,7 @@ public class FarmingSimulatorBaseGameAdapter(
 
     public DynamicForm DeserializeLocalSettings(string serializedLocalSettings)
     {
-        var settings = JsonSerializer.Deserialize<FarmingSimulatorLocalSettings>(serializedLocalSettings)
-            ?? throw new ArgumentException("Cannot deserialize local settings");
-
-        settings.EnsureValid();
-
-        return settings;
+        return FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings);
     }
 
     public Func<T>? GetBaseCapabilityAdapterFactory<T>()
@@ -144,26 +139,29 @@ public class FarmingSimulatorBaseGameAdapter(
 
     public DynamicForm GetLocalSettingsTemplate()
     {
-        return FarmingSimulatorLocalSettings.CreateTemplate(BaseSettings.GameVersion
-            ?? throw new InvalidOperationException("Base settings without a game version cannot produce a local settings template."));
+        return new FarmingSimulatorLocalSettings();
     }
 
     public ILocalGameAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var localSettings = JsonSerializer.Deserialize<FarmingSimulatorLocalSettings>(serializedLocalSettings)
-            ?? throw new ArgumentException("Could not deserialize local settings");
-        localSettings.EnsureValid();
-
-        return new FarmingSimulatorLocalGameAdapter(BaseSettings, localSettings, Loggers, ModHub);
+        return WithLocalSettings(FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings));
     }
 
+    /// <exception cref="Exceptions.UserFriendlyException">
+    /// The game has not made its data folder on this machine yet. Found here rather than when a
+    /// capability is first asked for, so connecting a game that is not installed is refused outright.
+    /// </exception>
     public ILocalGameAdapter WithLocalSettings(DynamicForm localSettings)
     {
         if (localSettings is not FarmingSimulatorLocalSettings settings)
         {
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
-        return new FarmingSimulatorLocalGameAdapter(BaseSettings, settings, Loggers, ModHub);
+
+        var gameVersion = RequireGameVersion(BaseSettings);
+        var gameDataFolder = FarmingSimulatorGameDataFolder.Require(gameVersion);
+
+        return new FarmingSimulatorLocalGameAdapter(BaseSettings, settings, gameDataFolder, Loggers, ModHub);
     }
 }
 
@@ -171,14 +169,15 @@ public class FarmingSimulatorBaseGameAdapter(
 public class FarmingSimulatorLocalGameAdapter(
     FarmingSimulatorBaseSettings baseSettings,
     FarmingSimulatorLocalSettings localSettings,
+    string gameDataFolder,
     ILoggerFactory? loggerFactory = null,
     IModHubClient? modHubClient = null)
     : FarmingSimulatorBaseGameAdapter(baseSettings, loggerFactory, modHubClient), ILocalGameAdapter
 {
     // Typed as Func<TCapability> rather than Func<object>, which is what the lookup matches on.
     private readonly List<object> _capabilities = [
-        new Func<ILocalModAdapter>(() => new FarmingSimulatorLocalModAdapter(localSettings, loggerFactory)),
-        new Func<ILocalSavegameAdapter>(() => new FarmingSimulatorLocalSavegameAdapter(localSettings, loggerFactory))
+        new Func<ILocalModAdapter>(() => new FarmingSimulatorLocalModAdapter(RequireGameVersion(baseSettings), gameDataFolder, loggerFactory)),
+        new Func<ILocalSavegameAdapter>(() => new FarmingSimulatorLocalSavegameAdapter(RequireGameVersion(baseSettings), gameDataFolder, loggerFactory))
         ];
 
 

@@ -171,7 +171,7 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
 
     private async Task<IReadOnlyList<LocalMod>> Scan()
     {
-        var mods = await new FarmingSimulatorBaseModAdapter().GetModsFromFolder(_folder, CancellationToken.None);
+        var mods = await new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25).GetModsFromFolder(_folder, CancellationToken.None);
 
         return [.. mods];
     }

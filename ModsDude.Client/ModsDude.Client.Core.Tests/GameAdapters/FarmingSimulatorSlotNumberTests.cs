@@ -70,7 +70,7 @@ public class FarmingSimulatorSlotNumberTests : IDisposable
 
 
     private FarmingSimulatorLocalSavegameAdapter Adapter()
-        => new(new FarmingSimulatorLocalSettings { GameDataFolder = _gameData.Path });
+        => new(FarmingSimulatorGameVersion.Fs25, _gameData.Path);
 
     public void Dispose() => _gameData.Dispose();
 }

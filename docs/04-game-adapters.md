@@ -28,8 +28,9 @@ The reason for the split is the repo/machine divide from
 - **Base settings** are stored on the server in `Repo.AdapterData.Configuration` and are the
   same for every member. Things the group agrees on — for Farming Simulator, the `GameVersion`
   the repo targets, which is also what its [game identity](#game-identity) keys on.
-- **Local settings** are per-machine and never leave it. For Farming Simulator, the path
-  to the game data folder.
+- **Local settings** are per-machine and never leave it. Farming Simulator has none: its game
+  data folder follows from the `GameVersion` (`Documents\My Games\FarmingSimulator{year}`), so
+  there is nothing for a machine to decide.
 
 You can go from any stage to the next, and each stage is a subtype of the previous
 (`ILocalGameAdapter : IBaseGameAdapter : IGameAdapter`), so a local adapter still
@@ -371,12 +372,12 @@ answer is `DynamicForm`: a settings class that describes itself through attribut
 the WPF layer renders generically via `DynamicFormEditor`.
 
 ```csharp
-public class FarmingSimulatorLocalSettings : DynamicForm<FarmingSimulatorLocalSettings>
+public class ExampleLocalSettings : DynamicForm<ExampleLocalSettings>
 {
     [Required, CanBeModified, Title("Game data folder"), FolderPath]
     public string? GameDataFolder { get; set; }
 
-    protected override IEnumerable<DynamicFormValidationError<FarmingSimulatorLocalSettings>> PerformValidation()
+    protected override IEnumerable<DynamicFormValidationError<ExampleLocalSettings>> PerformValidation()
     {
         if (!Directory.Exists(GameDataFolder))
         {
@@ -385,6 +386,9 @@ public class FarmingSimulatorLocalSettings : DynamicForm<FarmingSimulatorLocalSe
     }
 }
 ```
+
+A form can also have no fields at all, which is what `FarmingSimulatorLocalSettings` is: the
+connect and configure pages say there is nothing to fill in rather than showing an empty box.
 
 | Attribute | Effect |
 | --- | --- |
@@ -421,7 +425,7 @@ the only one that exists.
 | `FarmingSimulatorBaseGameAdapter` | + base settings, exposes base capability factories |
 | `FarmingSimulatorLocalGameAdapter` | + local settings, exposes local capability factories |
 | `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [game identity](#game-identity) |
-| `FarmingSimulatorLocalSettings` | `GameDataFolder`, auto-detected for the repo's `GameVersion` |
+| `FarmingSimulatorLocalSettings` | No fields. The game data folder is found by `FarmingSimulatorGameDataFolder` from the repo's `GameVersion`, trying both spellings the installer has used; hydrating a local adapter throws a `UserFriendlyException` while neither exists |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
 | `FarmingSimulatorLocalModAdapter` | `{GameDataFolder}/mods` — scans it, and answers where a mod file belongs in it |
 | `FarmingSimulatorModHubSource` | The remote source ModHub, for FS25 only: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for FS22, the game has no remote source |

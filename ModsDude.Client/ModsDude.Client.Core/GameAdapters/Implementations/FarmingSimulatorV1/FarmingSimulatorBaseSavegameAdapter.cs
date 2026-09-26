@@ -11,7 +11,10 @@ using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
-public class FarmingSimulatorBaseSavegameAdapter(ILoggerFactory? loggerFactory = null) : IBaseSavegameAdapter
+public class FarmingSimulatorBaseSavegameAdapter(
+    FarmingSimulatorGameVersion gameVersion,
+    ILoggerFactory? loggerFactory = null)
+    : IBaseSavegameAdapter
 {
     /// <summary>
     /// Everything here degrades rather than throws, so a slot that reads as unnamed and
@@ -32,27 +35,30 @@ public class FarmingSimulatorBaseSavegameAdapter(ILoggerFactory? loggerFactory =
 
     public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var localSettings = FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings);
-        localSettings.EnsureValid();
-        return new FarmingSimulatorLocalSavegameAdapter(localSettings, Loggers);
+        return WithLocalSettings(FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings));
     }
 
+    /// <exception cref="UserFriendlyException">The game has not made its data folder on this machine yet.</exception>
     public ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings)
     {
-        if (localSettings is not FarmingSimulatorLocalSettings settings)
+        if (localSettings is not FarmingSimulatorLocalSettings)
         {
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
-        settings.EnsureValid();
-        return new FarmingSimulatorLocalSavegameAdapter(settings, Loggers);
+
+        return new FarmingSimulatorLocalSavegameAdapter(gameVersion, FarmingSimulatorGameDataFolder.Require(gameVersion), Loggers);
     }
 }
 
 
+/// <param name="gameDataFolder">
+/// Where the game keeps its saves, one folder per slot; see <see cref="FarmingSimulatorGameDataFolder"/>.
+/// </param>
 public class FarmingSimulatorLocalSavegameAdapter(
-    FarmingSimulatorLocalSettings localSettings,
+    FarmingSimulatorGameVersion gameVersion,
+    string gameDataFolder,
     ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseSavegameAdapter(loggerFactory), ILocalSavegameAdapter
+    : FarmingSimulatorBaseSavegameAdapter(gameVersion, loggerFactory), ILocalSavegameAdapter
 {
     /// <summary>
     /// The game offers this many slots and no more. A number about one game, which is exactly why it
@@ -80,10 +86,6 @@ public class FarmingSimulatorLocalSavegameAdapter(
     private static readonly string[] _excludedFileNames = ["screenshot.png"];
 
 
-    private string GameDataFolder => localSettings.GameDataFolder
-        ?? throw new InvalidOperationException("Local settings carry no game data folder.");
-
-
     /// <summary>
     /// The savegame half of the one target the mod adapter names, under the same key.
     /// </summary>
@@ -94,7 +96,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
     /// something.
     /// </remarks>
     public SavegameTargets SavegameTargets => new(
-        new SavegameTarget(FarmingSimulatorTarget.Key, null, GameDataFolder));
+        new SavegameTarget(FarmingSimulatorTarget.Key, null, gameDataFolder));
 
 
     public string GetSlotPath(SavegameTarget target, SavegameSlotId slot)
