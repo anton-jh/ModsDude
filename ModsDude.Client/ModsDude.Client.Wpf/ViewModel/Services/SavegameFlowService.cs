@@ -485,6 +485,15 @@ public sealed class SavegameFlowService(
             }
         }
 
+        // After the take-over question and before the slot one: whether there is a check-out at all
+        // is decided first, and the slot dialog's mod summary should describe the folder as it will
+        // be rather than as it was.
+        if (mode is SavegameCheckOutMode.CheckOut
+            && await ActivateFirstAsync(repo, game, savegame, changed, cancellationToken) is false)
+        {
+            return;
+        }
+
         var context = await BuildCheckOutContextAsync(repo, savegame, game, mode, nameOf, cancellationToken);
 
         var modal = new SavegameCheckOutModalViewModel(
@@ -535,6 +544,85 @@ public sealed class SavegameFlowService(
             IconKind.Warning,
             $"Take it from {name}",
             "Leave it with them");
+    }
+
+    /// <summary>
+    /// Where the mod folder is not on the revision this savegame runs on, asks to activate its profile
+    /// and does - the same activation the row's Apply profile runs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Asked rather than refused.</b> The button used to be disabled with "Apply X first" on it, which
+    /// named a click the user always had to make next anyway. The question is the part worth keeping:
+    /// an activation can move and recycle mods, so it is said before it happens.
+    /// </para>
+    /// <para>
+    /// <b>The same rule the row drew its button from</b>, read again rather than passed in: the Overview
+    /// and the Saves list both come here, and the folder may have moved since either drew itself.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether the check-out should carry on - nothing needed doing, or the activation finished.</returns>
+    private async Task<bool> ActivateFirstAsync(
+        Repo repo,
+        Game game,
+        SavegameDto savegame,
+        Func<Task> changed,
+        CancellationToken cancellationToken)
+    {
+        if (repo.Adapter.CanSupportMods is false
+            || FindProfile(repo, savegame.ProfileId) is not ProfileDto profile
+            || ReadHost(repo) is not SavegameHost host)
+        {
+            return true;
+        }
+
+        var pinned = SavegameService.TargetRevisionOf(savegame);
+
+        var offer = SavegameRowRules.Describe(
+            savegame.Id, profile.Id, profile.HeadRevision, pinned, host.Held, host.AppliedProfileId, host.AppliedRevision);
+
+        if (offer.ActivatesFirst is false)
+        {
+            return true;
+        }
+
+        var list = SavegameRowRules.DescribeActivation(profile.Name, pinned);
+
+        var confirmation = new ConfirmationDialogViewModel(
+            $"Activate {list} first?",
+            $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
+                + $"Checking it out activates {list} first, then asks which slot to write the save into.",
+            IconKind.Question,
+            "OK",
+            "Cancel");
+
+        await modalService.Value.Show(confirmation);
+
+        if (confirmation.Result is false)
+        {
+            return false;
+        }
+
+        // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
+        // head - wrong for a past savegame, whose check-out would then leave the folder drifted.
+        var outcome = await applyService.ActivateAsync(
+            repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, cancellationToken,
+            revision: pinned ?? profile.HeadRevision);
+
+        await driftMonitor.CheckAsync();
+
+        // The folder moved, so every row's answer about it has too - including where the check-out
+        // is abandoned at the slot dialog that follows.
+        await changed();
+
+        if (outcome.Succeeded is false)
+        {
+            toasts.Show(outcome.Message, outcome.ToastSeverity);
+
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

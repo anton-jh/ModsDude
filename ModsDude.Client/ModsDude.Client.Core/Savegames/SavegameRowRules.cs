@@ -8,7 +8,7 @@ namespace ModsDude.Client.Core.Savegames;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every value here is a sentence a disabled button carries instead of working.
+/// Every value but <see cref="ModFolderElsewhere"/> is a sentence a disabled button carries instead of working.
 /// <see cref="SavegameHoldRules"/>, <see cref="SavegameService.CheckOutAsync"/> and the sync engine
 /// already refuse all of it; those are the backstops nothing gets past, and this is the half that
 /// makes the refusal arrive before the click rather than after it.
@@ -32,8 +32,9 @@ public enum SavegameRowBlock
     NoModList,
 
     /// <summary>
-    /// <em>Check out</em> only: the mod folder is not on the revision this savegame runs on. Applying the
-    /// profile is what clears it, which is why the two actions sit next to each other.
+    /// <em>Check out</em> only: the mod folder is not on the revision this savegame runs on. The one
+    /// value that does not disable its button - checking out activates the profile first, after
+    /// asking - see <see cref="SavegameRowOffer.ActivatesFirst"/>.
     /// </summary>
     ModFolderElsewhere,
 
@@ -61,8 +62,16 @@ public sealed record SavegameRowOffer(
     Guid BlockingSavegameId,
     int? PinnedRevision)
 {
-    public bool CanCheckOut => CheckOut is SavegameRowBlock.None;
+    public bool CanCheckOut => CheckOut is SavegameRowBlock.None or SavegameRowBlock.ModFolderElsewhere;
     public bool CanApply => Apply is SavegameRowBlock.None;
+
+    /// <summary>
+    /// Whether checking out has to activate the profile first, because the mod folder is not on the
+    /// revision this savegame runs on. Asked about before it happens rather than refused: the apply
+    /// is the obvious next step, and a disabled button pointing at the one beside it was a click
+    /// the user always had to make anyway.
+    /// </summary>
+    public bool ActivatesFirst => CheckOut is SavegameRowBlock.ModFolderElsewhere;
 }
 
 
@@ -79,8 +88,8 @@ public sealed record SavegameRowOffer(
 /// <para>
 /// <b>Two actions, not one.</b> Checking a save out never syncs mods - see
 /// docs/10-savegame-profile-binding.md#two-actions-not-one - so the row cannot fold the apply into the
-/// claim. What it can do is refuse the claim until the folder is right and say which apply would make
-/// it so, which is what this answers.
+/// claim. What it can do is notice the folder is not right and say which activation would make it so -
+/// which the check-out asks about, and runs, before it takes anything.
 /// </para>
 /// </remarks>
 public static class SavegameRowRules
@@ -166,13 +175,7 @@ public static class SavegameRowRules
         {
             SavegameRowBlock.NoModList => "This save follows no mod list",
 
-            // The number only where the savegame pins one. A current savegame follows its profile, so naming
-            // a revision it happens to be at right now would be a number to memorise rather than a
-            // thing to do.
-            SavegameRowBlock.ModFolderElsewhere => pinnedRevision is int revision
-                ? $"Apply {profileName} rev {revision} first"
-                : $"Apply {profileName} first",
-
+            // Not a refusal: the button stays enabled and asks - see ExplainActivation.
             SavegameRowBlock.AnotherSavegameIsHeld => blockingSavegameName is { Length: > 0 } name
                 ? $"'{name}' is checked out here"
                 : "Another savegame is checked out here",
@@ -180,4 +183,16 @@ public static class SavegameRowRules
             _ => null
         };
     }
+
+    /// <summary>
+    /// Which list a check-out would activate first, where <see cref="SavegameRowOffer.ActivatesFirst"/>.
+    /// </summary>
+    /// <remarks>
+    /// The number only where the savegame pins one. A current savegame follows its profile, so naming a
+    /// revision it happens to be at right now would be a number to memorise rather than a thing to know.
+    /// </remarks>
+    public static string DescribeActivation(string profileName, int? pinnedRevision)
+        => pinnedRevision is int revision
+            ? $"'{profileName}' rev {revision}"
+            : $"'{profileName}'";
 }

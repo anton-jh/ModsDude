@@ -613,21 +613,27 @@ Two buttons, `Apply profile` and `Check out`, with the disabled reason carrying 
 
 | Situation | Check out reads |
 | --- | --- |
-| Past savegame, folder elsewhere | *Apply Old-school rev 4 first* |
-| Current savegame, game on another profile | *Apply Old-school first* |
 | Another savegame **with a profile** held here | *'Riverbend' is checked out here* |
 | The game is not connected on this machine | *This game is not connected here* |
 
-**Apply profile** is refused by only two of those. A held savegame blocks it as well, since no apply
-clears that one; the folder being elsewhere is the thing it is *for*. Its own case is a savegame with no
+**A folder on the wrong list does not disable Check out - it asks.** Where the mod folder is not on
+the revision the savegame runs on (a past savegame with the folder elsewhere, or a current one on a
+game following another profile), the button stays enabled and its tooltip says which list it will
+activate. Clicking it opens an OK/Cancel question - *Activate 'Old-school' rev 4 first?* - and OK
+runs the same activation Apply profile does before the slot dialog opens. An activation that does not
+finish (declined, refused, unreachable) stops the check-out there, with its own toast. A copy applies
+nothing, so it never asks.
+
+**Apply profile** is refused by only two situations. A held savegame blocks it as well, since no apply
+clears that one, and the game not being connected; the folder being elsewhere is the thing it is *for*. Its own case is a savegame with no
 mod list: *This save follows no mod list*. It names the revision it would install, so the apply a past
 savegame needs is the apply that runs — letting the game decide resolves to head, which is correct
 for a current savegame and wrong for the one this button exists to prepare for.
 
 **Apply profile is open to a Guest.** It writes nothing anybody else can see, and a guest who can
 take a copy wants the mod folder on the list that copy was played on. Check out stays Member, so a
-guest's row carries only the reason for Apply - "Apply X first" beside a button they do not have
-would be a line about nothing they can do.
+guest's row carries only the reason for Apply - a check-out refusal beside a button they do not
+have would be a line about nothing they can do.
 
 **There is nothing to choose between.** A game is keyed by its identity and a repo is about one
 game, so both buttons act on the one this repo offers, and the last row is the absence of it rather

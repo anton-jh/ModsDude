@@ -1188,8 +1188,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The row's other action: puts the mod folder on the list this savegame runs on, which is what
-    /// enables the one beside it.
+    /// The row's other action: puts the mod folder on the list this savegame runs on - the same
+    /// activation the one beside it asks to run first where the folder is elsewhere.
     /// </summary>
     /// <remarks>
     /// <b>It names the revision.</b> Nothing is holding this savegame yet, so an apply that let the

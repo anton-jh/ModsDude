@@ -9,7 +9,8 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 /// <remarks>
 /// The point of every case here is that the refusal arrives <em>before</em> the click. The engine
 /// refuses all of it anyway - that is the backstop - so what is being asserted is that the button was
-/// never offered, and that what it says instead names the thing that would clear it.
+/// never offered, and that what it says instead names the thing that would clear it. A mod folder on
+/// the wrong list is the exception: check-out stays offered and activates the profile first.
 /// </remarks>
 public class SavegameRowRulesTests
 {
@@ -39,46 +40,52 @@ public class SavegameRowRulesTests
     /// number there would be one to memorise rather than a thing to do.
     /// </summary>
     [Fact]
-    public void A_current_savegame_on_a_stale_folder_asks_for_the_profile_by_name()
+    public void A_current_savegame_on_a_stale_folder_activates_the_profile_by_name_first()
     {
         var offer = Describe(head: 1004, appliedRevision: 1000);
 
-        Assert.False(offer.CanCheckOut);
+        // Offered, not refused: the check-out asks, then activates, then carries on.
+        Assert.True(offer.CanCheckOut);
+        Assert.True(offer.ActivatesFirst);
         Assert.Equal(SavegameRowBlock.ModFolderElsewhere, offer.CheckOut);
-        Assert.Equal("Apply Old-school first", SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.Equal("'Old-school'", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
 
         // Applying is the way out of it, so it is not blocked by the thing it clears.
         Assert.True(offer.CanApply);
     }
 
     [Fact]
-    public void A_current_savegame_on_an_game_following_another_profile_asks_for_the_profile_by_name()
+    public void A_current_savegame_on_an_game_following_another_profile_activates_it_first()
     {
         var offer = Describe(1004, null, _otherProfileId, 1004);
 
-        Assert.Equal(SavegameRowBlock.ModFolderElsewhere, offer.CheckOut);
-        Assert.Equal("Apply Old-school first", SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.True(offer.CanCheckOut);
+        Assert.True(offer.ActivatesFirst);
     }
 
     /// <summary>
-    /// A past savegame runs on one revision only, so the refusal names it: applying the profile's latest
-    /// is what the apply table refuses, and a sentence saying "apply Old-school first" would send
-    /// somebody at a button that does the wrong thing.
+    /// A past savegame runs on one revision only, so the activation names it: the profile's latest is
+    /// what the apply table refuses, and a question naming only "Old-school" would describe an
+    /// activation that does the wrong thing.
     /// </summary>
     [Fact]
     public void A_past_savegame_names_the_revision_it_runs_on()
     {
         var offer = Describe(head: 1004, pinned: 4, appliedRevision: 1004);
 
-        Assert.Equal(SavegameRowBlock.ModFolderElsewhere, offer.CheckOut);
+        Assert.True(offer.ActivatesFirst);
         Assert.Equal(4, offer.PinnedRevision);
-        Assert.Equal("Apply Old-school rev 4 first", SavegameRowRules.Explain(offer.CheckOut, "Old-school", offer.PinnedRevision, null));
+        Assert.Equal("'Old-school' rev 4", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
     }
 
     [Fact]
     public void A_past_savegame_on_a_folder_already_at_its_revision_is_one_click()
     {
-        Assert.True(Describe(head: 1004, pinned: 4, appliedRevision: 4).CanCheckOut);
+        var offer = Describe(head: 1004, pinned: 4, appliedRevision: 4);
+
+        Assert.True(offer.CanCheckOut);
+        Assert.False(offer.ActivatesFirst);
     }
 
     /// <summary>
@@ -92,6 +99,7 @@ public class SavegameRowRulesTests
         var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId)]);
 
         Assert.False(offer.CanCheckOut);
+        Assert.False(offer.ActivatesFirst);
         Assert.False(offer.CanApply);
         Assert.Equal(_otherSavegameId, offer.BlockingSavegameId);
 
@@ -154,9 +162,9 @@ public class SavegameRowRulesTests
     /// A folder nothing has ever synced is not where any savegame needs it, whatever the numbers say.
     /// </summary>
     [Fact]
-    public void A_folder_that_has_never_been_synced_is_not_ready()
+    public void A_folder_that_has_never_been_synced_is_activated_first()
     {
-        Assert.False(Describe(1004, null, null, null).CanCheckOut);
+        Assert.True(Describe(1004, null, null, null).ActivatesFirst);
     }
 
 

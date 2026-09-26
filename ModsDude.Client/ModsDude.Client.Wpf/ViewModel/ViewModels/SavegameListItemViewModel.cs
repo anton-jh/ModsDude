@@ -306,6 +306,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
     /// </summary>
     public string CheckOutToolTip => CheckOutBlockedReason
+        ?? (_offer is { ActivatesFirst: true } offer
+            ? $"The mod folder is not on what this savegame runs on, so checking it out activates {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first. You are asked before anything changes."
+            : null)
         ?? (IsHeldByMe
             ? "Writes the newest snapshot into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
             : Holder is SavegameCheckoutDto holder
