@@ -29,18 +29,9 @@
                     <Run Text="on this machine. It is configured once and offered under every repo about that game." />
                 </TextBlock>
 
-                <!-- An adapter that finds its folders itself has nothing to ask, so the page says
-                     that instead of showing an empty box. -->
-                <TextBlock Margin="0 0 0 16"
-                           TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Visibility="{Binding LocalSettingsEditor.HasFields, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                           Text="There is nothing to fill in - ModsDude finds the game's folders by itself." />
-
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding LocalSettingsEditor.HasFields, Converter={StaticResource BoolToVisibilityConverter}}">
+                        Padding="16">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
                         <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>

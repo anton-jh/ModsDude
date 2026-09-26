@@ -68,6 +68,19 @@ public sealed class SavegameFlowService(
     private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>
+    /// The heading for a refusal because the repo's game is not connected - which, for a game that
+    /// connects by itself, can only mean it is not installed here.
+    /// </summary>
+    private static string NotConnectedTitle(Repo repo) => GameRepository.ConnectsAutomatically(repo.Adapter)
+        ? $"{repo.Adapter.GameDisplayName} was not found on this machine"
+        : "No game is connected here";
+
+    /// <summary>What to do about <see cref="NotConnectedTitle"/>.</summary>
+    private static string HowToConnect(Repo repo) => GameRepository.ConnectsAutomatically(repo.Adapter)
+        ? "Launch it once so it creates its data folder, then try again."
+        : $"Use 'Connect game' in {repo.Name} first.";
+
+    /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
     /// </summary>
     /// <param name="savegameName">What the dialog calls the save. Display text only - see <paramref name="renameTo"/>.</param>
@@ -458,8 +471,8 @@ public sealed class SavegameFlowService(
         if (repo.Games.FirstOrDefault() is not Game game)
         {
             await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
-                "No game is connected here",
-                $"A savegame has to be written into an installation of the game. Use 'Connect game' in {repo.Name} first."));
+                NotConnectedTitle(repo),
+                $"A savegame has to be written into an installation of the game. {HowToConnect(repo)}"));
 
             return;
         }
@@ -1106,8 +1119,8 @@ public sealed class SavegameFlowService(
         if (repo.Games.FirstOrDefault() is not Game game)
         {
             await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
-                "No game is connected here",
-                $"Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from. Use 'Connect game' in {repo.Name} first."));
+                NotConnectedTitle(repo),
+                $"Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from. {HowToConnect(repo)}"));
 
             return;
         }

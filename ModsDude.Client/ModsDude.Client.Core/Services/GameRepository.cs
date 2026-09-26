@@ -137,6 +137,44 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     }
 
     /// <summary>
+    /// Whether this adapter's game is connected without asking anybody anything - true where its
+    /// local settings form has no fields, so there is nothing a connect page could ask.
+    /// </summary>
+    /// <remarks>
+    /// Such a game has no Connect game or Configure game entry either, and nothing to disconnect:
+    /// connecting only writes the game down and touches nothing on disk, and a game that follows no
+    /// profile does nothing at all, so there is no state a user would choose over "connected".
+    /// </remarks>
+    public static bool ConnectsAutomatically(IBaseGameAdapter baseAdapter)
+    {
+        return baseAdapter.GetLocalSettingsTemplate().HasFields() is false;
+    }
+
+    /// <summary>
+    /// The game this adapter is configured for, connecting it first where it
+    /// <see cref="ConnectsAutomatically">connects automatically</see> and is not connected yet. Null
+    /// for an adapter that has settings to ask for and is not connected.
+    /// </summary>
+    /// <exception cref="UserFriendlyException">
+    /// The game cannot be connected yet - for Farming Simulator, most likely because it has never
+    /// been launched on this machine - or one of its folders already belongs to another game.
+    /// </exception>
+    public Game? ConnectAutomatically(IBaseGameAdapter baseAdapter)
+    {
+        if (Find(baseAdapter.Scope) is Game existing)
+        {
+            return existing;
+        }
+
+        if (ConnectsAutomatically(baseAdapter) is false)
+        {
+            return null;
+        }
+
+        return Create(baseAdapter, baseAdapter.GetLocalSettingsTemplate());
+    }
+
+    /// <summary>
     /// Connects the game the adapter is configured for, as this machine has it.
     /// </summary>
     /// <remarks>

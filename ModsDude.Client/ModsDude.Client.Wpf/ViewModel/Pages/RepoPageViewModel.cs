@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -98,9 +99,20 @@ public partial class RepoPageViewModel
         ProfileSyncStatusService syncStatus,
         ProfileService profileService,
         LastSelectionRepository lastSelectionRepository,
+        GameRepository gameRepository,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
+        // A game installed since the repo list was last read is picked up on opening the repo rather
+        // than on the next refresh. Quietly where it is still not there: the overview says so.
+        try
+        {
+            gameRepository.ConnectAutomatically(repo.Adapter);
+        }
+        catch (UserFriendlyException)
+        {
+        }
+
         _repo = repo;
         _savegamesClient = savegamesClient;
         _syncStatus = syncStatus;
@@ -203,8 +215,10 @@ public partial class RepoPageViewModel
         RefreshGameEntry();
 
         // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
-        // that fixes that beats landing on an overview describing it.
-        if (ConnectedGame() is null)
+        // that fixes that beats landing on an overview describing it - where there is anything to
+        // do about it here. A game that connects by itself has no connect page, and the overview is
+        // where it says it was not found.
+        if (ConnectedGame() is null && ConnectsAutomatically() is false)
         {
             NavManager.Selected = _connectGameMenuItem;
         }
@@ -258,7 +272,9 @@ public partial class RepoPageViewModel
     /// Whether the header offers to connect a game: only while none is, and not on the page that does
     /// it.
     /// </summary>
-    public bool ShowConnectGame => ConnectedGame() is null && ReferenceEquals(NavManager.Selected, _connectGameMenuItem) is false;
+    public bool ShowConnectGame => ConnectedGame() is null
+        && ConnectsAutomatically() is false
+        && ReferenceEquals(NavManager.Selected, _connectGameMenuItem) is false;
 
     /// <summary>Whether the Create profile page is showing, for the "+" to draw as selected.</summary>
     public bool IsCreateProfileSelected => ReferenceEquals(NavManager.Selected, _createProfileMenuItem);
@@ -319,7 +335,7 @@ public partial class RepoPageViewModel
     [RelayCommand]
     private void ConnectGame()
     {
-        if (ConnectedGame() is null)
+        if (ConnectedGame() is null && ConnectsAutomatically() is false)
         {
             NavManager.Selected = _connectGameMenuItem;
         }
@@ -617,9 +633,17 @@ public partial class RepoPageViewModel
     /// </remarks>
     private Game? ConnectedGame() => _repo.Games.FirstOrDefault();
 
+    /// <inheritdoc cref="GameRepository.ConnectsAutomatically"/>
+    /// <remarks>
+    /// Asked of the adapter each time rather than kept, since the adapter is replaced whenever the
+    /// repo's base settings are.
+    /// </remarks>
+    private bool ConnectsAutomatically() => GameRepository.ConnectsAutomatically(_repo.Adapter);
+
     /// <summary>
-    /// Puts exactly one of the two bottom entries in the menu: the connected game's settings, or the
-    /// invitation to connect one.
+    /// Puts at most one of the two bottom entries in the menu: the connected game's settings, or the
+    /// invitation to connect one - and neither for a game that connects by itself, which has nothing
+    /// to connect with and nothing to configure.
     /// </summary>
     /// <remarks>
     /// Absent rather than closed, the same way the Saves entry is for an adapter with no savegames:
@@ -628,6 +652,19 @@ public partial class RepoPageViewModel
     /// </remarks>
     private void RefreshGameEntry()
     {
+        if (ConnectsAutomatically())
+        {
+            if (ReferenceEquals(NavManager.Selected, _connectGameMenuItem) || ReferenceEquals(NavManager.Selected, _gameMenuItem))
+            {
+                NavManager.Selected = _overviewMenuItem;
+            }
+
+            MenuItems.Remove(_connectGameMenuItem);
+            MenuItems.Remove(_gameMenuItem);
+
+            return;
+        }
+
         var game = ConnectedGame();
 
         var wanted = game is null ? _connectGameMenuItem : _gameMenuItem;

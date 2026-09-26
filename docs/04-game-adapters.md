@@ -387,8 +387,10 @@ public class ExampleLocalSettings : DynamicForm<ExampleLocalSettings>
 }
 ```
 
-A form can also have no fields at all, which is what `FarmingSimulatorLocalSettings` is: the
-connect and configure pages say there is nothing to fill in rather than showing an empty box.
+A local settings form can also have no fields at all, which is what `FarmingSimulatorLocalSettings`
+is. Such a game is connected automatically (`GameRepository.ConnectsAutomatically` /
+`ConnectAutomatically`) as soon as its adapter can be hydrated, and has no Connect game or Configure
+game page — see [05 — Client](05-client.md).
 
 | Attribute | Effect |
 | --- | --- |
