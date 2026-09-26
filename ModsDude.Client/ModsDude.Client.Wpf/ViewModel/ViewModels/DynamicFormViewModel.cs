@@ -36,12 +36,6 @@ public partial class DynamicFormViewModel
 
     public List<DynamicFormFieldViewModel> Fields { get; }
 
-    /// <summary>
-    /// False for an adapter that works everything out for itself, whose form a page would otherwise
-    /// show as an empty box.
-    /// </summary>
-    public bool HasFields => Fields.Count > 0;
-
     public bool IsValid => _form.Validate().Length == 0;
 
     public event EventHandler? Modified;

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
@@ -105,7 +106,10 @@ public class RepoRepository(
             }
         }
 
-        RefreshGameTargets();
+        foreach (var repo in Repos)
+        {
+            CatchUpGame(repo);
+        }
 
         // Last, so that a listener woken by the collection changing above sees the list before it
         // sees the flag saying the list is complete.
@@ -115,31 +119,36 @@ public class RepoRepository(
     }
 
     /// <summary>
-    /// Catches every game this account's repos serve up with folders that moved while the app was
-    /// not looking - see <see cref="GameRepository.RefreshTargets"/>. Here because this is the first
-    /// moment there are adapters to ask, and it comes round again on every refresh.
+    /// Brings the game a repo is about up to date with this machine: connects it where it
+    /// <see cref="GameRepository.ConnectsAutomatically">connects automatically</see> and has turned up
+    /// since the last look, and otherwise catches its folders up with wherever they have moved - see
+    /// <see cref="GameRepository.RefreshTargets"/>. Here because this is the first moment there are
+    /// adapters to ask, and it comes round again on every refresh.
     /// </summary>
     /// <remarks>
-    /// Best-effort: a game that cannot be asked right now keeps the folders it had, and the next
-    /// apply refreshes again and says why if it still cannot.
+    /// Best-effort: a game that cannot be connected or asked right now stays as it was. Not being
+    /// installed is the ordinary reason, and the repo's Overview says so; anything else is logged.
     /// </remarks>
-    private void RefreshGameTargets()
+    private void CatchUpGame(Repo repo)
     {
-        foreach (var repo in Repos)
+        try
         {
-            if (gameRepository.Find(repo.Scope) is not Game game)
-            {
-                continue;
-            }
-
-            try
+            if (gameRepository.Find(repo.Scope) is Game game)
             {
                 gameRepository.RefreshTargets(game, repo.Adapter);
             }
-            catch (Exception exception)
+            else
             {
-                logger.LogWarning(exception, "Could not check whether the folders of game {Game} have moved.", game.Identity);
+                gameRepository.ConnectAutomatically(repo.Adapter);
             }
+        }
+        catch (UserFriendlyException exception)
+        {
+            logger.LogInformation("Left the game of repo {Repo} as it was: {Reason}", repo.Id, exception.DeveloperMessage);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not bring the game of repo {Repo} up to date with this machine.", repo.Id);
         }
     }
 
@@ -157,11 +166,16 @@ public class RepoRepository(
         var repo = await repoClient.CreateRepoV1Async(request, cancellationToken);
 
         // The creator is the repo's first Admin, so the response carries everything the list needs.
-        Repos.Add(MapRepoModel(new RepoMembershipDto()
+        var created = MapRepoModel(new RepoMembershipDto()
         {
             Repo = repo,
             MembershipLevel = RepoMembershipLevel.Admin
-        }));
+        });
+
+        Repos.Add(created);
+
+        // Before the shell navigates to it, so it opens with its game already there.
+        CatchUpGame(created);
 
         RepoCreated?.Invoke(repo.Id);
     }
@@ -178,7 +192,10 @@ public class RepoRepository(
             return;
         }
 
-        Repos.Add(MapRepoModel(membership));
+        var joined = MapRepoModel(membership);
+
+        Repos.Add(joined);
+        CatchUpGame(joined);
         RepoCreated?.Invoke(membership.Repo.Id);
     }
 

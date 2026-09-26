@@ -46,10 +46,19 @@
                     <GroupBox Header="This machine" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="No game on this machine is connected to this repo yet. Use 'Connect game' to point one at its mod folder." />
+                            <StackPanel Orientation="Vertical"
+                                        Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="{Binding NoGameText}" />
+
+                                <!-- Only for a game that connects by itself: one with settings is connected
+                                     from its own page, which the sidebar already offers. -->
+                                <Button Margin="0 12 0 0" HorizontalAlignment="Left"
+                                        Visibility="{Binding ConnectsAutomatically, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Content="Check again"
+                                        Command="{Binding CheckForGameCommand}" />
+                            </StackPanel>
 
                             <ItemsControl ItemsSource="{Binding Games}"
                                           Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">

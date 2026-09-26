@@ -77,11 +77,9 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     /// this menu is about the repo and is the same for everybody in it; this one is the only local
     /// thing there, and the settings on it are the only settings in the app nobody else ever sees.
     /// </remarks>
-    public string Summary => LocalSettingsEditor.HasFields
-        ? $"Where '{GameName}' is installed on this machine. These settings belong to this machine alone - " +
-          $"nobody else in '{RepoName}' sees them, and changing them changes nothing in the repo."
-        : $"'{GameName}' on this machine. ModsDude finds its folders by itself, so there is nothing to set here - " +
-          $"only disconnecting it, which changes nothing in '{RepoName}'.";
+    public string Summary =>
+        $"Where '{GameName}' is installed on this machine. These settings belong to this machine alone - " +
+        $"nobody else in '{RepoName}' sees them, and changing them changes nothing in the repo.";
 
     public bool IsValid => LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
@@ -142,13 +140,11 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     /// <summary>
     /// Checked across every game, since two of them can name the same folder and only one
     /// can own it - and across this one's own targets. Only asked of settings that are valid in their
-    /// own right - the adapter refuses to hydrate anything else. Not asked of a form with no fields,
-    /// which has nothing to save and would only hydrate an adapter that throws when the game has gone
-    /// missing - leaving a page whose one remaining use is disconnecting it unable to open.
+    /// own right - the adapter refuses to hydrate anything else.
     /// </summary>
     private FolderClaim? FindFolderConflict()
     {
-        return LocalSettingsEditor.HasFields && LocalSettingsEditor.IsValid
+        return LocalSettingsEditor.IsValid
             ? _gameRepository.FindFolderConflict(_repo.Adapter, LocalSettingsEditor.ExtractResults(), _subject.Identity)
             : null;
     }

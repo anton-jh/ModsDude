@@ -397,7 +397,11 @@ re-checking it.
 **There is no list of games beside it, and exactly one of the two bottom entries is present.** A
 game is keyed by its identity and a repo is about one game, so a repo offers at most one — which
 made a list under a "Games" heading a list that is always empty or always one long. It is *Game
-configuration* when one is connected on this machine and *Connect game* when none is.
+configuration* when one is connected on this machine and *Connect game* when none is — and neither
+for a game whose adapter has no local settings (Farming Simulator). That game is connected
+automatically when the repo list loads, when a repo is created or joined, and when a repo is opened,
+so there is nothing to connect with and nothing to configure or disconnect. While it is not installed,
+the Overview says so and offers *Check again*.
 
 ### The shell around a page
 
@@ -1112,7 +1116,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
 | `JoinRepoPage` | Working | Paste an invite code. The only way into somebody else's repo |
-| `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when this machine has no game for it |
+| `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when this machine has no game for it and the game has settings to ask for; otherwise connects it automatically |
 | `RepoOverviewPage` | Working | Where this machine stands: the game, which profile it follows, what it is holding, a line per folder it reaches with that folder's drift, and Re-check. Plus the profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, archive repo |
 | `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |

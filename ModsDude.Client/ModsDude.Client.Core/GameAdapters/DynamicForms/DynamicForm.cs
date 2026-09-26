@@ -17,6 +17,15 @@ public abstract class DynamicForm
     }
 
 
+    /// <summary>
+    /// Whether there is anything on this form for somebody to fill in. A method rather than a
+    /// property, since every public property of a form is one of its fields.
+    /// </summary>
+    public bool HasFields()
+    {
+        return GetType().GetProperties().Length > 0;
+    }
+
     public static string GetFieldTitle(PropertyInfo property)
     {
         return property.GetCustomAttribute<TitleAttribute>()?.Text ?? property.Name;

@@ -29,8 +29,7 @@
                      it reaches falls out of them, and its name comes from the adapter. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding LocalSettingsEditor.HasFields, Converter={StaticResource BoolToVisibilityConverter}}">
+                        Padding="16">
                     <GroupBox Header="Folders" Padding="0 16 0 16">
                         <uc:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>
@@ -40,11 +39,10 @@
         </Border>
 
         <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
-            <Button Width="250" Margin="0 0 8 0" Style="{DynamicResource AccentButtonStyle}"
-                    Visibility="{Binding LocalSettingsEditor.HasFields, Converter={StaticResource BoolToVisibilityConverter}}"
+            <Button Width="250" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
 
-            <Button Width="250"
+            <Button Width="250" Margin="8 0 0 0"
                     ToolTip="ModsDude stops managing this installation. Nothing on disk is changed or removed."
                     Content="Disconnect game" Command="{Binding Path=DeleteCommand}" />
         </StackPanel>

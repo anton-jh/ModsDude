@@ -102,6 +102,19 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     public bool HasGames => Games.Count > 0;
     public bool HasNoGames => Games.Count == 0;
 
+    /// <summary>
+    /// What the machine section says while no game is connected. For a game that connects by
+    /// itself that can only mean it is not installed here, so it says that rather than pointing at a
+    /// Connect game entry the sidebar does not have.
+    /// </summary>
+    public string NoGameText => ConnectsAutomatically
+        ? $"{_repo.Adapter.GameDisplayName} was not found on this machine. It creates its data folder the first time it is launched - " +
+          "launch it once, then check again."
+        : "No game on this machine is connected to this repo yet. Use 'Connect game' to point one at its mod folder.";
+
+    /// <summary>Whether <see cref="CheckForGameCommand"/> has anything to do while no game is connected.</summary>
+    public bool ConnectsAutomatically => GameRepository.ConnectsAutomatically(_repo.Adapter);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMemberSummary))]
     private string? _memberSummary;
@@ -121,6 +134,16 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         Friends.Dispose();
     }
 
+
+    /// <summary>
+    /// Looks for the game again, for somebody who has just launched it for the first time. Where it
+    /// is still not there, the reason is shown as an error rather than nothing happening.
+    /// </summary>
+    [RelayCommand]
+    private void CheckForGame()
+    {
+        _gameRepository.ConnectAutomatically(_repo.Adapter);
+    }
 
     /// <summary>
     /// Stops the game following its profile and leaves the mod folders exactly as they are.
