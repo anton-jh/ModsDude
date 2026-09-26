@@ -91,7 +91,7 @@ public class FriendActivityRulesTests
     public void A_notice_offers_to_follow_only_where_it_would_change_something()
     {
         var available = Assert.Single(FriendActivityRules.BuildNotices([Row(pinned: 4)], new Environment(FollowAvailability.Available)));
-        var alreadyOn = Assert.Single(FriendActivityRules.BuildNotices([Row()], new Environment(FollowAvailability.AlreadyOn)));
+        var alreadyOn = Assert.Single(FriendActivityRules.BuildNotices([Row(kind: GameActivityKind.SavegameCheckedOut)], new Environment(FollowAvailability.AlreadyOn)));
 
         var action = Assert.Single(available.Actions);
         Assert.Equal(NoticeActionKind.UseProfile, action.Kind);
@@ -100,6 +100,34 @@ public class FriendActivityRulesTests
         Assert.Empty(alreadyOn.Actions);
         Assert.Equal("You are on this too.", alreadyOn.Footnote);
         Assert.Equal(NoticeSeverity.Info, alreadyOn.Severity);
+    }
+
+    /// <summary>
+    /// A friend who switched onto what this game is already on has come to where this user is, and
+    /// there is nothing to tell them.
+    /// </summary>
+    [Fact]
+    public void A_switch_onto_what_this_game_is_already_on_is_not_announced()
+    {
+        var alreadyOn = new Environment(FollowAvailability.AlreadyOn);
+
+        Assert.False(FriendActivityRules.IsWorthAnnouncing(Row(), alreadyOn));
+        Assert.Empty(FriendActivityRules.BuildNotices([Row()], alreadyOn));
+    }
+
+    [Fact]
+    public void A_switch_this_game_is_not_on_is_announced()
+    {
+        Assert.True(FriendActivityRules.IsWorthAnnouncing(Row(), new Environment(FollowAvailability.Available)));
+        Assert.True(FriendActivityRules.IsWorthAnnouncing(Row(), new Environment(FollowAvailability.NotConnected)));
+    }
+
+    /// <summary>A check-out names the savegame they are playing, which being on the profile does not.</summary>
+    [Fact]
+    public void A_check_out_is_announced_even_onto_what_this_game_is_on()
+    {
+        Assert.True(FriendActivityRules.IsWorthAnnouncing(
+            Row(kind: GameActivityKind.SavegameCheckedOut), new Environment(FollowAvailability.AlreadyOn)));
     }
 
 

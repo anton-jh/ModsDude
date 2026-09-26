@@ -124,7 +124,8 @@ public sealed class ToastNotifier(
 
     /// <summary>
     /// A friend switched profile or checked out a savegame. One toast per friend per game, each
-    /// replacing the last about the same one - what they are on now is the news.
+    /// replacing the last about the same one - what they are on now is the news. Not where this game
+    /// is already on it: see <see cref="FriendActivityRules.IsWorthAnnouncing"/>.
     /// </summary>
     /// <remarks>
     /// Clicking opens the window on the column, where the card offers to follow them: the rule above
@@ -144,7 +145,7 @@ public sealed class ToastNotifier(
                 return;
             }
 
-            foreach (var activity in news)
+            foreach (var activity in news.Where(x => FriendActivityRules.IsWorthAnnouncing(x, friendEnvironment)))
             {
                 system.Show(new SystemToast(
                     FriendActivityRules.Headline(activity),
