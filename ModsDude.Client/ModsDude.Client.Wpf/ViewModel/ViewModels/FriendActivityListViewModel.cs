@@ -18,7 +18,7 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </summary>
 public sealed partial class FriendActivityRowViewModel : ObservableObject
 {
-    public FriendActivityRowViewModel(GameActivityDto activity, IFriendActivityEnvironment environment, bool showTag)
+    public FriendActivityRowViewModel(GameActivityDto activity, IFriendActivityEnvironment environment, AvatarViewModel avatar, bool showTag)
     {
         Model = activity;
 
@@ -26,8 +26,7 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
 
         Name = activity.User.DisplayName;
         Tag = showTag ? $"#{activity.User.Tag}" : null;
-        Initial = UserDisplay.InitialFor(activity.User.DisplayName);
-        AvatarColor = UserDisplay.ColorFor(activity.User.Tag);
+        Avatar = avatar;
 
         var repo = environment.DescribeRepo(activity.RepoId);
         var revision = activity.PinnedRevision is int pinned ? $"rev {pinned}" : null;
@@ -60,8 +59,7 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
 
     public bool HasTag => Tag is not null;
 
-    public string Initial { get; }
-    public string AvatarColor { get; }
+    public AvatarViewModel Avatar { get; }
 
     public string Profile { get; }
 
@@ -113,6 +111,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 {
     private readonly FriendActivityService _friends;
     private readonly IFriendActivityEnvironment _environment;
+    private readonly IUserAvatarFactory _avatarFactory;
     private readonly FriendFollowService _follow;
     private readonly GameRepository _games;
     private readonly IToastService _toasts;
@@ -124,6 +123,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     public FriendActivityListViewModel(
         FriendActivityService friends,
         IFriendActivityEnvironment environment,
+        IUserAvatarFactory avatarFactory,
         FriendFollowService follow,
         GameRepository games,
         IToastService toasts,
@@ -132,6 +132,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     {
         _friends = friends;
         _environment = environment;
+        _avatarFactory = avatarFactory;
         _follow = follow;
         _games = games;
         _toasts = toasts;
@@ -224,7 +225,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
             .GroupBy(x => x.Game)
             .Select(x => new FriendActivityGroupViewModel(
                 _environment.DescribeGame(x.Key),
-                [.. x.Select(row => new FriendActivityRowViewModel(row, _environment, ambiguous.Contains(row.User.Id)))]))
+                [.. x.Select(row => new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id)))]))
             .ToList();
 
         Groups.Clear();
@@ -250,6 +251,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
             => new(
                 serviceProvider.GetRequiredService<FriendActivityService>(),
                 serviceProvider.GetRequiredService<IFriendActivityEnvironment>(),
+                serviceProvider.GetRequiredService<IUserAvatarFactory>(),
                 serviceProvider.GetRequiredService<FriendFollowService>(),
                 serviceProvider.GetRequiredService<GameRepository>(),
                 serviceProvider.GetRequiredService<IToastService>(),

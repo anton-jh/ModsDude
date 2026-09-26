@@ -39,11 +39,12 @@ public class GetUsersV1Endpoint : IEndpoint
             .Select(x => new
             {
                 x.Id,
-                x.DisplayName
+                x.DisplayName,
+                x.AvatarHash
             })
             .ToListAsync(cancellationToken);
 
-        var dtos = otherUsers.Select(x => new UserDto(x.Id.Value, x.DisplayName.Value, UserTag.For(x.Id)));
+        var dtos = otherUsers.Select(x => new UserDto(x.Id.Value, x.DisplayName.Value, UserTag.For(x.Id), x.AvatarHash));
 
         return TypedResults.Ok(dtos);
     }

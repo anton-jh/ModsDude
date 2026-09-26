@@ -98,7 +98,7 @@ internal static class ProfileRevisionWrites
     {
         var author = await dbContext.Users.GetAsync(revision.CreatedBy, cancellationToken);
 
-        return ProfileRevisionDto.FromModel(revision, ProfileRevisionReads.Describe(revision.CreatedBy, author?.DisplayName));
+        return ProfileRevisionDto.FromModel(revision, ProfileRevisionReads.Describe(revision.CreatedBy, author is null ? null : UserNameplate.Of(author)));
     }
 
 

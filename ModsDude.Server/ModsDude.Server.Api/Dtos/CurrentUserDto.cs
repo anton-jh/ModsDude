@@ -12,10 +12,10 @@ namespace ModsDude.Server.Api.Dtos;
 /// teammates' business. Here it exists so a client can say why the option is closed instead of
 /// letting the user fill in a form that can only be refused.
 /// </remarks>
-public record CurrentUserDto(string Id, string DisplayName, string Tag, bool IsTrusted)
+public record CurrentUserDto(string Id, string DisplayName, string Tag, string? AvatarHash, bool IsTrusted)
 {
     public static CurrentUserDto FromModel(User user)
     {
-        return new(user.Id.Value, user.DisplayName.Value, UserTag.For(user.Id), user.IsTrusted);
+        return new(user.Id.Value, user.DisplayName.Value, UserTag.For(user.Id), user.AvatarHash, user.IsTrusted);
     }
 }

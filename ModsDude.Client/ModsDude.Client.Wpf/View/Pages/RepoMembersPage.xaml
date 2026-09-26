@@ -37,13 +37,9 @@
 
                                                 <!-- Theirs everywhere, and the same colour as their tag.
                                                      Always drawn: it is an avatar, not a warning. -->
-                                                <Border Width="28" Height="28" CornerRadius="14"
-                                                        VerticalAlignment="Center"
-                                                        Background="{Binding AvatarColor}">
-                                                    <TextBlock Text="{Binding Initial}"
-                                                               Foreground="White" FontWeight="SemiBold"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
+                                                <uc:UserAvatar Width="28" Height="28"
+                                                               VerticalAlignment="Center"
+                                                               DataContext="{Binding Avatar}" />
 
                                                 <StackPanel Orientation="Horizontal" Width="212" Margin="12 0 0 0"
                                                             VerticalAlignment="Center">

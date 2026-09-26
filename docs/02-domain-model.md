@@ -14,8 +14,9 @@ and ASP.NET binds them through `StronglyTypedIdModelBinder`.
 | Field | Notes |
 | --- | --- |
 | `Id` | `UserId(string)` — the `sub` claim from Entra. Not a Guid we mint |
-| `DisplayName` | The `name` claim, verbatim. **Not unique** — re-read from the token on every request, so a rename at the identity provider propagates |
-| `Created`, `LastSeen`, `ProfileLastUpdated` | `LastSeen` is refreshed at most once an hour |
+| `DisplayName` | Seeded from the `name` claim at provisioning, then **the user's own** — changed from the account page, never re-read from the token (the identity provider has no page for editing it). **Not unique**. At most 32 characters when typed; a longer claim is cut to fit |
+| `AvatarHash` | The address of their picture in the image store, or null for their initial on their tag's colour. Shares `mod-images` with mod art — see [03](03-server.md#image-blobs) |
+| `Created`, `LastSeen`, `ProfileLastUpdated` | `LastSeen` is refreshed at most once an hour; `ProfileLastUpdated` is stamped by a rename or a picture change |
 | `IsTrusted` | Gates repo creation. Private setter — **there is no code path that sets it to true** |
 
 Users are **auto-provisioned**. There is no registration endpoint; `UserLoadingMiddleware`

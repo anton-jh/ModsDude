@@ -31,6 +31,12 @@ public partial class MainPageViewModel
     /// </summary>
     private readonly MenuItemViewModel _createRepoMenuItem;
 
+    /// <summary>
+    /// The account page, reached from the account card at the foot of the sidebar rather than from the menu:
+    /// it is about who is using the app, not a place in it. An entry for the same reason Create repo is one.
+    /// </summary>
+    private readonly MenuItemViewModel _accountMenuItem;
+
     private readonly ProfileSyncStatusService _syncStatus;
     private readonly ConnectionRetry _connection;
     private readonly CancellationTokenSource _disposed = new();
@@ -44,6 +50,7 @@ public partial class MainPageViewModel
         RepoPageViewModel.Factory repoPageViewModelFactory,
         JoinRepoPageViewModel.Factory joinRepoPageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
+        IFactory<AccountPageViewModel> accountPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
         NavigationLockService navigationLockService,
         ShellNavigationService shellNavigationService,
@@ -62,6 +69,8 @@ public partial class MainPageViewModel
         _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
             .WithIcon(MenuIcons.CreateRepo);
 
+        _accountMenuItem = new MenuItemViewModel("Account", accountPageViewModelFactory.Create);
+
         MenuItems = [
             new MenuItemViewModel("Home", homePageViewModelFactory.Create).WithIcon(MenuIcons.Home),
             new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create).WithIcon(MenuIcons.JoinRepo),
@@ -76,6 +85,7 @@ public partial class MainPageViewModel
         // in the database. It arrives with the account's own record a moment after sign-in, so the
         // entry starts open and closes only once the answer is actually no.
         Account.PropertyChanged += OnAccountChanged;
+        Account.OpenRequested += OnAccountOpenRequested;
         ApplyTrust();
 
         Repos = [];
@@ -145,6 +155,9 @@ public partial class MainPageViewModel
     /// <summary>Whether the Create repo page is showing, for the "+" to draw as selected.</summary>
     public bool IsCreateRepoSelected => ReferenceEquals(NavManager.Selected, _createRepoMenuItem);
 
+    /// <summary>Whether the account page is showing, for the card's button to draw as selected.</summary>
+    public bool IsAccountSelected => ReferenceEquals(NavManager.Selected, _accountMenuItem);
+
     /// <summary>Carries the availability and the reason for the "+", so the trust rule stays where it was.</summary>
     public MenuItemViewModel CreateRepoItem => _createRepoMenuItem;
 
@@ -173,6 +186,7 @@ public partial class MainPageViewModel
         _shellNavigationService.Unregister(this);
 
         Account.PropertyChanged -= OnAccountChanged;
+        Account.OpenRequested -= OnAccountOpenRequested;
         _repoService.RepoCreated -= OnRepoCreated;
         _repoService.PendingChangesChanged -= OnPendingRepoChangesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
@@ -241,6 +255,11 @@ public partial class MainPageViewModel
         NavManager.Selected = _createRepoMenuItem;
     }
 
+    private void OnAccountOpenRequested(object? sender, EventArgs e)
+    {
+        NavManager.Selected = _accountMenuItem;
+    }
+
     [RelayCommand]
     private async Task LoadRepos(CancellationToken cancellationToken)
     {
@@ -286,6 +305,7 @@ public partial class MainPageViewModel
         if (e.PropertyName == nameof(NavigationManager.Selected))
         {
             OnPropertyChanged(nameof(IsCreateRepoSelected));
+            OnPropertyChanged(nameof(IsAccountSelected));
         }
 
         if (e.PropertyName == nameof(NavigationManager.Selected) &&

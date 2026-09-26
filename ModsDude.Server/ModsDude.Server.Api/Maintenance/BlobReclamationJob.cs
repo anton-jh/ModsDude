@@ -161,6 +161,16 @@ public class BlobReclamationJob(
             .ToListAsync(cancellationToken))
             .ToHashSet(StringComparer.Ordinal);
 
+        // Profile pictures live in the same store. The moment between uploading one and pointing the
+        // user at it is the same hazard as an import between upload and registration, and the same
+        // minimum age covers it.
+        referenced.UnionWith(await dbContext.Users
+            .AsNoTracking()
+            .Where(x => x.AvatarHash != null)
+            .Select(x => x.AvatarHash!)
+            .Distinct()
+            .ToListAsync(cancellationToken));
+
         return new ContainerSweep("mod-images", BlobReclamation.PlanImageSweep(stored, referenced, cutoff), imageStorage.DeleteStoredBlob);
     }
 

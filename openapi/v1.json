@@ -322,6 +322,10 @@
       "CurrentUserDto": {
         "additionalProperties": false,
         "properties": {
+          "avatarHash": {
+            "nullable": true,
+            "type": "string"
+          },
           "displayName": {
             "type": "string"
           },
@@ -936,7 +940,8 @@
           "https://server.modsdude.com/api/problems/savegame-current-conflict",
           "https://server.modsdude.com/api/problems/savegame-profile-not-paired",
           "https://server.modsdude.com/api/problems/savegame-has-no-profile",
-          "https://server.modsdude.com/api/problems/unknown-modhub-game"
+          "https://server.modsdude.com/api/problems/unknown-modhub-game",
+          "https://server.modsdude.com/api/problems/invalid-display-name"
         ],
         "type": "string",
         "x-enumNames": [
@@ -978,7 +983,8 @@
           "SavegameCurrentConflict",
           "SavegameProfileNotPaired",
           "SavegameHasNoProfile",
-          "UnknownModHubGame"
+          "UnknownModHubGame",
+          "InvalidDisplayName"
         ]
       },
       "ProfileDependentDto": {
@@ -1728,6 +1734,24 @@
         },
         "type": "object"
       },
+      "SetAvatarRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SetDisplayNameRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetModVersionImagesRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1794,6 +1818,10 @@
       "UserDto": {
         "additionalProperties": false,
         "properties": {
+          "avatarHash": {
+            "nullable": true,
+            "type": "string"
+          },
           "displayName": {
             "type": "string"
           },
@@ -6654,6 +6682,153 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CurrentUserDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/avatar": {
+      "delete": {
+        "operationId": "RemoveAvatarV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      },
+      "put": {
+        "operationId": "SetAvatarV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAvatarRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/display-name": {
+      "put": {
+        "operationId": "SetDisplayNameV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDisplayNameRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
                 }
               }
             },

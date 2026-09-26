@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 
@@ -27,6 +26,7 @@ public partial class RepoMemberViewModel : ObservableObject
     /// <param name="isSelf">Whether this row is the signed-in user, which changes what removing means.</param>
     public RepoMemberViewModel(
         RepoMemberDto member,
+        AvatarViewModel avatar,
         RepoMembershipLevel viewerLevel,
         bool isOnlyAdmin,
         bool isAmbiguous,
@@ -36,8 +36,7 @@ public partial class RepoMemberViewModel : ObservableObject
         DisplayName = member.User.DisplayName;
         Tag = member.User.Tag;
         ShowTag = isAmbiguous;
-        AvatarColor = UserDisplay.ColorFor(member.User.Tag);
-        Initial = UserDisplay.InitialFor(member.User.DisplayName);
+        Avatar = avatar;
         IsOnlyAdmin = isOnlyAdmin;
         IsSelf = isSelf;
 
@@ -90,9 +89,8 @@ public partial class RepoMemberViewModel : ObservableObject
     public string Tag { get; }
     public bool ShowTag { get; }
 
-    /// <summary>Hex, bound straight onto a brush. Always drawn - it is an avatar, not a warning.</summary>
-    public string AvatarColor { get; }
-    public string Initial { get; }
+    /// <summary>Always drawn - it is an avatar, not a warning.</summary>
+    public AvatarViewModel Avatar { get; }
 
     public bool IsOnlyAdmin { get; }
     public bool IsSelf { get; }

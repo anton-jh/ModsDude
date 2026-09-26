@@ -187,7 +187,9 @@ makes cross-repo dedupe work, and it leaves no repo in the address.
 This is a decision rather than an oversight, and it is argued in
 [09](09-mod-catalog.md#what-authorized-means-for-a-global-address): what is behind an address is
 mod store art, already public on the sites the mods come from, and it reveals nothing about who
-is in which repo. It is listed here because it is the one place where the server's
+is in which repo. Profile pictures share the store, which widens that a little: a picture is not
+public, but its address is a SHA-256 of its bytes and is only handed out in the `UserDto` of
+somebody who shares a repo with the caller, so reaching one still means being shown it. It is listed here because it is the one place where the server's
 repo-scoped-by-primary-key posture does not hold, and anyone reasoning about access control
 should know that rather than discover it.
 

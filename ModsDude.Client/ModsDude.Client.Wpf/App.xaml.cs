@@ -425,6 +425,7 @@ public partial class App : Application
         services.AddFactory<MainPageViewModel>();
         services.AddFactory<CreateRepoPageViewModel>();
         services.AddFactory<SettingsPageViewModel>();
+        services.AddFactory<AccountPageViewModel>();
         services.AddSingleton<RepoAdminPageViewModel.Factory>();
         services.AddSingleton<RepoOverviewPageViewModel.Factory>();
         services.AddSingleton<RepoMembersPageViewModel.Factory>();
@@ -531,6 +532,9 @@ public partial class App : Application
         services.AddSingleton<IModImageStore, ModImageStore>();
         services.AddSingleton<IModImagerySource, ModImagerySource>();
 
+        // Profile pictures are addresses in the same store, drawn through the same provider.
+        services.AddSingleton<IUserAvatarFactory, UserAvatarFactory>();
+
         // Both faces of one object: the import track fires it and forgets, and a row about to draw
         // a registered version with no imagery waits for what came back.
         services.AddSingleton<ModImagePublisher>();
@@ -542,6 +546,7 @@ public partial class App : Application
         services.AddSingleton<MembershipService>();
         services.AddSingleton<InviteService>();
         services.AddSingleton<CurrentUserService>();
+        services.AddSingleton<UserAccountService>();
         services.AddSingleton<GameRepository>();
 
         // Sync's store eviction has to spare what other games are running, and the game list

@@ -27,16 +27,15 @@ public class UserLoadingMiddleware(
         }
 
         var userId = new UserId(subClaim.Value);
-        var displayName = GetDisplayName(context.User);
         var existingUser = await dbContext.Users.FindAsync(userId);
 
         if (existingUser is not null)
         {
-            await RefreshUserAsync(existingUser, displayName);
+            await TouchUserAsync(existingUser);
         }
         else
         {
-            await ProvisionUserAsync(userId, displayName, context.RequestAborted);
+            await ProvisionUserAsync(userId, GetDisplayName(context.User), context.RequestAborted);
         }
 
         await next(context);
@@ -44,26 +43,19 @@ public class UserLoadingMiddleware(
 
 
     /// <summary>
-    /// The name belongs to the identity provider, so it is re-read on every request rather than
-    /// frozen at provisioning: somebody who renames themselves there is renamed here, and their
-    /// teammates see it. Nothing has to be resolved for them first - the name is not unique, so
-    /// there is no other user it can be in the way of.
+    /// Only <see cref="User.LastSeen"/>, and only once per <see cref="_lastSeenResolution"/>. The
+    /// name claim is <i>not</i> read again: it seeded the name at provisioning and the name is the
+    /// user's own from then on - see <see cref="DisplayName"/>.
     /// </summary>
-    /// <remarks>
-    /// A rename writes immediately; an unchanged name rides the <see cref="User.LastSeen"/> throttle,
-    /// because that write is the only reason to touch the row at all.
-    /// </remarks>
-    private async Task RefreshUserAsync(User user, DisplayName displayName)
+    private async Task TouchUserAsync(User user)
     {
         var now = timeService.Now();
-        var isRenamed = user.DisplayName != displayName;
 
-        if (!isRenamed && now - user.LastSeen <= _lastSeenResolution)
+        if (now - user.LastSeen <= _lastSeenResolution)
         {
             return;
         }
 
-        user.DisplayName = displayName;
         user.LastSeen = now;
 
         await dbContext.SaveChangesAsync();

@@ -61,8 +61,8 @@ internal static class ProfileRevisionReads
     /// foreign key holding that user in place, so a name that cannot be resolved falls back to the
     /// id rather than dropping the revision out of the history.
     /// </summary>
-    public static UserDto Describe(UserId userId, DisplayName? displayName)
-        => new(userId.Value, displayName?.Value ?? userId.Value, UserTag.For(userId));
+    public static UserDto Describe(UserId userId, UserNameplate? nameplate)
+        => new(userId.Value, nameplate?.DisplayName.Value ?? userId.Value, UserTag.For(userId), nameplate?.AvatarHash);
 
 
     private static async Task<List<ProfileRevisionDto>> ToDtosAsync(
@@ -76,7 +76,7 @@ internal static class ProfileRevisionReads
             return [];
         }
 
-        var names = await dbContext.Users.GetDisplayNamesAsync(
+        var names = await dbContext.Users.GetNameplatesAsync(
             [.. rows.Select(x => x.CreatedBy).Distinct()],
             cancellationToken);
 
