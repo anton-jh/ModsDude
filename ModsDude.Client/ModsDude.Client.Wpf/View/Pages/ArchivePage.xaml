@@ -82,10 +82,10 @@
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
         <Grid RowDefinitions="auto *">
 
-            <uc:PageTitle Grid.Row="0" Text="Archive" />
+            <uc:PageTitle Grid.Row="0" Text="Archive" Style="{StaticResource PageColumn}" />
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                <StackPanel>
+                <StackPanel Style="{StaticResource PageColumn}">
 
                     <ItemsControl ItemsSource="{Binding Repos}"
                                   ItemTemplate="{StaticResource ArchivedRow}" />

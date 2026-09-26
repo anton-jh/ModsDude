@@ -70,16 +70,16 @@
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
         <Grid RowDefinitions="auto auto *">
 
-            <uc:PageTitle Grid.Row="0" Text="Archive" />
+            <uc:PageTitle Grid.Row="0" Text="Archive" Style="{StaticResource PageColumn}" />
 
-            <TextBlock Grid.Row="1"
+            <TextBlock Grid.Row="1" Style="{StaticResource PageColumn}"
                        Margin="0 0 0 16"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Profiles and savegames that have been put away. They still exist and anything pointing at them still does - they are out of the lists, and they no longer hold their names." />
 
             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                <StackPanel>
+                <StackPanel Style="{StaticResource PageColumn}">
 
                     <TextBlock Text="Profiles"
                                Margin="0 0 0 8"

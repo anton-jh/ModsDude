@@ -14,7 +14,7 @@
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <uc:PageTitle Text="Members" />
 
