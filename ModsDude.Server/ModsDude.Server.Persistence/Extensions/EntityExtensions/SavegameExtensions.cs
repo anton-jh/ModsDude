@@ -203,6 +203,44 @@ public static class SavegameExtensions
     }
 
     /// <summary>
+    /// The open claims that hold revisions of a profile - one row per claim, naming the profile and
+    /// the lowest revision it holds. Every revision at or above that one is held; see
+    /// <see cref="SavegameCheckout.HoldsFromRevision"/>.
+    /// </summary>
+    /// <param name="only">One profile, or <c>null</c> for every profile in the repo.</param>
+    /// <remarks>
+    /// Joined to the savegame for its profile rather than recording the profile on the claim: nothing
+    /// moves a save between profiles, so the savegame's is the claim's, and one place saying it cannot
+    /// disagree with another.
+    /// </remarks>
+    public static async Task<List<CheckoutRevisionHold>> GetCheckoutRevisionHoldsAsync(
+        this DbSet<SavegameCheckout> dbSet,
+        DbSet<Savegame> savegames,
+        RepoId repoId, ProfileId? only,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .AsNoTracking()
+            .Where(x => x.RepoId == repoId && x.EndedAt == null && x.HoldsFromRevision != null)
+            .Join(
+                savegames.Where(x => x.RepoId == repoId && x.ProfileId != null),
+                x => x.SavegameId,
+                x => x.Id,
+                (checkout, savegame) => new
+                {
+                    savegame.ProfileId,
+                    checkout.SavegameId,
+                    checkout.UserId,
+                    checkout.TakenAt,
+                    checkout.HoldsFromRevision
+                })
+            .Where(x => only == null || x.ProfileId == only)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(x => new CheckoutRevisionHold(x.ProfileId!.Value, x.SavegameId, x.UserId, x.TakenAt, x.HoldsFromRevision!.Value))];
+    }
+
+    /// <summary>
     /// One savegame's claims, newest first, windowed by offset - the other half of the timeline a
     /// savegame's detail pane renders.
     /// </summary>
@@ -535,4 +573,16 @@ public record SavegameSnapshotRow(
 public readonly record struct SavegameSnapshotTotals(int Count, long Bytes)
 {
     public static SavegameSnapshotTotals None => default;
+}
+
+
+/// <summary>One open claim, and the revisions of its savegame's profile it keeps from being deleted.</summary>
+public record CheckoutRevisionHold(
+    ProfileId ProfileId,
+    SavegameId SavegameId,
+    UserId HeldBy,
+    DateTime TakenAt,
+    RevisionNumber HoldsFromRevision)
+{
+    public bool Holds(RevisionNumber revision) => revision.Value >= HoldsFromRevision.Value;
 }

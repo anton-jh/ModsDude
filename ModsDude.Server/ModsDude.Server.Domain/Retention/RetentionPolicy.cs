@@ -34,7 +34,7 @@ public readonly record struct RetentionRule(int Window, int GraceDays);
 /// <param name="Order">Higher is newer. Unique within the history.</param>
 /// <param name="IsHeld">
 /// Whether something outside the history needs this row - a savegame snapshot played on a profile
-/// revision, a profile revision pinning a mod version. A held row is never scheduled, and a history
+/// revision, an open checkout that may be playing on it, a profile revision pinning a mod version. A held row is never scheduled, and a history
 /// with any held row never winds down.
 /// </param>
 public readonly record struct RetentionCandidate<TKey>(TKey Key, long Order, bool IsHeld);

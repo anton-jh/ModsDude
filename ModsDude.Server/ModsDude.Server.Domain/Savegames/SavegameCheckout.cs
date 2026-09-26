@@ -1,3 +1,4 @@
+using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 
@@ -27,6 +28,11 @@ namespace ModsDude.Server.Domain.Savegames;
 /// is taken until it ends. What a reader needs is who took it and when, which is <see cref="TakenAt"/>;
 /// whether that is long enough ago to take it over is theirs to judge, and taking it over is always allowed.
 /// </para>
+/// <para>
+/// <b>An open claim holds profile revisions.</b> The play it will record has not been checked in, so
+/// no snapshot names the revision it ran on yet - and a check-in naming a revision that has since been
+/// pruned is refused, forced or not. See <see cref="HoldsFromRevision"/>.
+/// </para>
 /// </remarks>
 public class SavegameCheckout
 {
@@ -37,12 +43,14 @@ public class SavegameCheckout
         RepoId repoId,
         SavegameId savegameId,
         UserId userId,
-        DateTime takenAt)
+        DateTime takenAt,
+        RevisionNumber? holdsFromRevision = null)
     {
         RepoId = repoId;
         SavegameId = savegameId;
         UserId = userId;
         TakenAt = takenAt;
+        HoldsFromRevision = holdsFromRevision;
     }
 
 
@@ -55,6 +63,26 @@ public class SavegameCheckout
     public UserId UserId { get; private set; }
 
     public DateTime TakenAt { get; private set; }
+
+    /// <summary>
+    /// While this claim is open, this revision of the savegame's profile and every later one are kept
+    /// from being deleted. <c>null</c> for a save that follows no mod list, which holds nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A floor, not one revision</b>, because the server never learns which revision the folder is
+    /// on until the check-in says so. What it does know is where play can start: the revision of the
+    /// snapshot that was taken, which a past save is applied to exactly and a current one is at or
+    /// below - a current save follows its profile's head, and a head only moves forward. Every
+    /// revision played until the check-in is at or above it.
+    /// </para>
+    /// <para>
+    /// Recorded when the claim is taken rather than read off the savegame's head later, because the
+    /// head can move under an open claim - a forced check-in by somebody else - and the revision this
+    /// claim's play started on does not move with it.
+    /// </para>
+    /// </remarks>
+    public RevisionNumber? HoldsFromRevision { get; private set; }
 
     /// <summary>Null while this is the open row - which is what "open" means.</summary>
     public DateTime? EndedAt { get; private set; }

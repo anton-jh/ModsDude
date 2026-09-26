@@ -15,9 +15,11 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// on.
 /// </para>
 /// <para>
-/// <b>Two reasons, and only one of them is work.</b> The head cannot be pruned at all - it is what
+/// <b>Three reasons, and only one of them is work.</b> The head cannot be pruned at all - it is what
 /// the profile pins - so that row is an explanation and nothing more. A revision a savegame was
 /// played on can be freed, by deleting that savegame snapshot, which is why those rows carry links.
+/// A revision a checked-out save may be playing on frees itself once the save is checked in; its
+/// links say whose save it is, because asking them is the only thing to do sooner.
 /// </para>
 /// </remarks>
 public partial class BlockedRevisionsModalViewModel : ModalViewModel
@@ -84,13 +86,27 @@ public sealed class BlockedRevisionViewModel
         Revision = dto.Revision;
         IsHead = dto.Reason is BlockedRevisionReason.IsHead;
 
-        Savegames = [.. dto.Savegames.Select(x => new SavegameSnapshotLinkViewModel(x, goTo))];
+        // Claims first: while one stands, deleting the snapshots below would not free the revision.
+        var checkouts = (dto.Checkouts ?? []).ToList();
+        var snapshots = (dto.Savegames ?? []).ToList();
 
-        Reason = IsHead
-            ? "This is the profile's current revision. Editing the profile is what replaces it; it can never be deleted on its own."
-            : Savegames.Count == 1
+        Savegames =
+        [
+            .. checkouts.Select(x => SavegameSnapshotLinkViewModel.ForCheckout(x, goTo)),
+            .. snapshots.Select(x => new SavegameSnapshotLinkViewModel(x, goTo))
+        ];
+
+        Reason = dto.Reason switch
+        {
+            BlockedRevisionReason.IsHead
+                => "This is the profile's current revision. Editing the profile is what replaces it; it can never be deleted on its own.",
+            BlockedRevisionReason.CheckedOut => checkouts.Count == 1
+                ? "A savegame is checked out and may be playing on it. It can go once that save is checked in."
+                : $"{checkouts.Count} savegames are checked out and may be playing on it. It can go once they are checked in.",
+            _ => snapshots.Count == 1
                 ? "A savegame snapshot was played on it. Delete that snapshot first, and this revision can go."
-                : $"{Savegames.Count} savegame snapshots were played on it. Delete those first, and this revision can go.";
+                : $"{snapshots.Count} savegame snapshots were played on it. Delete those first, and this revision can go."
+        };
     }
 
 
@@ -108,7 +124,7 @@ public sealed class BlockedRevisionViewModel
 }
 
 
-/// <summary>One savegame snapshot, as a link into the repo's saves list.</summary>
+/// <summary>One savegame snapshot, or one checked-out save, as a link into the repo's saves list.</summary>
 public partial class SavegameSnapshotLinkViewModel
 {
     private readonly Guid _savegameId;
@@ -122,6 +138,19 @@ public partial class SavegameSnapshotLinkViewModel
 
         Label = $"{dto.SavegameName} · snapshot {dto.Number}";
     }
+
+    private SavegameSnapshotLinkViewModel(Guid savegameId, string label, Action<Guid> goTo)
+    {
+        _savegameId = savegameId;
+        _goTo = goTo;
+
+        Label = label;
+    }
+
+
+    /// <summary>A save somebody has checked out, named with who has it - they are who to ask.</summary>
+    public static SavegameSnapshotLinkViewModel ForCheckout(CheckedOutSavegameRefDto dto, Action<Guid> goTo)
+        => new(dto.SavegameId, $"{dto.SavegameName} · checked out by {dto.HeldBy.DisplayName}", goTo);
 
 
     public string Label { get; }

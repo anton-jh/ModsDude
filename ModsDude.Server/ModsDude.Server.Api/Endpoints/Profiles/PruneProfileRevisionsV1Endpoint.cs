@@ -7,6 +7,7 @@ using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
@@ -40,6 +41,11 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// revision was played on a savegame would make pruning a hundred revisions an exercise in
 /// bisection. What comes back names the savegame snapshots holding each refused revision, so the
 /// next step is a link rather than a guess.
+/// </para>
+/// <para>
+/// <b>A checked-out save holds revisions too.</b> Its play has not been checked in, so no snapshot
+/// names the revision it is on yet - but the check-in will, and is refused if that revision has gone.
+/// Each open claim holds its revision and every later one; see <c>SavegameCheckout.HoldsFromRevision</c>.
 /// </para>
 /// </remarks>
 public class PruneProfileRevisionsV1Endpoint : IEndpoint
@@ -107,8 +113,21 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
         var played = await dbContext.SavegameSnapshots.GetDependentSavegameSnapshotsAsync(
             new RepoId(repoId), profile.Id, requested, cancellationToken);
 
+        // Claims are few - one per savegame at most - so every one on the profile is read and matched
+        // per revision here rather than asked about revision by revision.
+        var checkouts = await dbContext.SavegameCheckouts.GetCheckoutRevisionHoldsAsync(
+            dbContext.Savegames, new RepoId(repoId), profile.Id, cancellationToken);
+
         var savegameNames = await dbContext.Savegames.GetNamesAsync(
-            new RepoId(repoId), [.. played.Select(x => x.SavegameId).Distinct()], cancellationToken);
+            new RepoId(repoId),
+            [.. played.Select(x => x.SavegameId).Concat(checkouts.Select(x => x.SavegameId)).Distinct()],
+            cancellationToken);
+
+        var holderNames = await dbContext.Users.GetDisplayNamesAsync(
+            [.. checkouts.Select(x => x.HeldBy).Distinct()], cancellationToken);
+
+        string NameOf(SavegameId savegameId)
+            => savegameNames.TryGetValue(savegameId, out var name) ? name.Value : savegameId.Value.ToString();
 
         var playedByRevision = played.ToLookup(x => x.Revision);
 
@@ -122,19 +141,26 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
 
             if (revision == profile.HeadRevision)
             {
-                blocked.Add(new BlockedRevisionDto(revision.Value, BlockedRevisionReason.IsHead, []));
+                blocked.Add(new BlockedRevisionDto(revision.Value, BlockedRevisionReason.IsHead, [], []));
                 continue;
             }
 
-            if (playedByRevision[revision].Any())
+            var holding = checkouts.Where(x => x.Holds(revision)).ToList();
+
+            if (holding.Count > 0 || playedByRevision[revision].Any())
             {
                 blocked.Add(new BlockedRevisionDto(
                     revision.Value,
-                    BlockedRevisionReason.PlayedOn,
+                    holding.Count > 0 ? BlockedRevisionReason.CheckedOut : BlockedRevisionReason.PlayedOn,
                     [.. playedByRevision[revision].Select(x => new SavegameSnapshotRefDto(
                         x.SavegameId.Value,
-                        savegameNames.TryGetValue(x.SavegameId, out var name) ? name.Value : x.SavegameId.Value.ToString(),
-                        x.Number.Value))]));
+                        NameOf(x.SavegameId),
+                        x.Number.Value))],
+                    [.. holding.Select(x => new CheckedOutSavegameRefDto(
+                        x.SavegameId.Value,
+                        NameOf(x.SavegameId),
+                        ProfileRevisionReads.Describe(x.HeldBy, holderNames.TryGetValue(x.HeldBy, out var holder) ? holder : null),
+                        x.TakenAt))]));
 
                 continue;
             }

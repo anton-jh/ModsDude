@@ -5,6 +5,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Persistence.Retention;
 
@@ -106,12 +107,22 @@ internal static class RetentionHistories
             .Select(x => (x.ProfileId!.Value, x.ProfileRevision!.Value))
             .ToHashSet();
 
+        // An open claim is play that no snapshot names yet. Deleting a revision under it would leave
+        // the check-in naming a revision that no longer exists, which is refused, forced or not.
+        var checkedOut = (await dbContext.SavegameCheckouts.GetCheckoutRevisionHoldsAsync(dbContext.Savegames, repoId, only, cancellationToken))
+            .ToLookup(x => x.ProfileId);
+
         return rows
             .GroupBy(x => x.ProfileId)
             .ToDictionary(
                 x => x.Key,
                 x => Build(
-                    x.Select(y => (y.Number, (long)y.Number.Value, played.Contains((y.ProfileId, y.Number)), y.DeletionScheduledFor, y.DeletionReason)),
+                    x.Select(y => (
+                        y.Number,
+                        (long)y.Number.Value,
+                        played.Contains((y.ProfileId, y.Number)) || checkedOut[y.ProfileId].Any(hold => hold.Holds(y.Number)),
+                        y.DeletionScheduledFor,
+                        y.DeletionReason)),
                     RetentionPolicy.ProfileRevisions,
                     heads.TryGetValue(x.Key, out var head) ? head : null));
     }

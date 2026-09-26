@@ -9630,6 +9630,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     public partial record BlockedRevisionDto
     {
 
+        [Newtonsoft.Json.JsonProperty("checkouts", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<CheckedOutSavegameRefDto> Checkouts { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("reason", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
         public BlockedRevisionReason Reason { get; set; } = default!;
@@ -9651,6 +9654,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [System.Runtime.Serialization.EnumMember(Value = @"PlayedOn")]
         PlayedOn = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"CheckedOut")]
+        CheckedOut = 2,
 
     }
 
@@ -9708,6 +9714,24 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("takenFrom", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public SavegameCheckoutDto? TakenFrom { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial record CheckedOutSavegameRefDto
+    {
+
+        [Newtonsoft.Json.JsonProperty("heldBy", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public UserDto HeldBy { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("savegameId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Guid SavegameId { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("savegameName", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string SavegameName { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("takenAt", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.DateTime TakenAt { get; set; } = default!;
 
     }
 

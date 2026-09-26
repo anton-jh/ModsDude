@@ -165,7 +165,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // The snapshot carries no CheckoutId even though a claim is opened beside it. CheckoutId
         // names the claim a snapshot was checked in *against*, and this claim starts here rather
         // than ending here - the play it will eventually record has not happened yet.
-        var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now);
+        var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now, profileRevision);
 
         // Two writes rather than one, and the order is the point: the outgoing savegame has to leave
         // the profile's slot before the new one takes it, or the one-current-savegame index refuses

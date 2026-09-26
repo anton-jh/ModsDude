@@ -244,6 +244,102 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
         Assert.All(await RevisionSchedulesAsync(repoId, profileId), x => Assert.Null(x.Schedule));
     }
 
+    /// <summary>
+    /// The play under an open claim is named by no snapshot until it is checked in, and the check-in
+    /// is refused if the revision it names has gone. So the claim holds its revision and every later
+    /// one - and nothing older.
+    /// </summary>
+    [Fact]
+    public async Task An_open_checkout_holds_its_revision_and_every_later_one()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 5);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+        await GivenACheckout(repoId, savegameId, holdsFrom: new RevisionNumber(3));
+
+        await ScheduleAsync(_today);
+
+        Assert.Equal(
+            [(1, null), (2, Scheduled(14, DeletionReason.OutsideWindow)), (3, null), (4, null), (5, null), (6, null)],
+            await RevisionSchedulesAsync(repoId, profileId));
+    }
+
+    [Fact]
+    public async Task An_ended_checkout_holds_nothing()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 5);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+        await GivenACheckout(repoId, savegameId, holdsFrom: new RevisionNumber(2), ended: true);
+
+        await ScheduleAsync(_today);
+
+        Assert.Equal(
+            [(1, null), (2, Scheduled(14, DeletionReason.OutsideWindow)), (3, Scheduled(14, DeletionReason.OutsideWindow)), (4, null), (5, null), (6, null)],
+            await RevisionSchedulesAsync(repoId, profileId));
+    }
+
+    /// <summary>
+    /// The case that lost play: revisions scheduled while nobody had the save, then a check-out before
+    /// they came due. Nothing cleared the dates, and the deletion job still has to keep them.
+    /// </summary>
+    [Fact]
+    public async Task A_checkout_taken_after_scheduling_keeps_its_revisions_from_being_deleted()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 5);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+
+        await ScheduleAsync(_today);
+        await GivenACheckout(repoId, savegameId, holdsFrom: new RevisionNumber(2));
+        await DeleteAsync(_today.AddDays(14));
+
+        Assert.Equal(
+            [(1, null), (2, null), (3, null), (4, null), (5, null), (6, null)],
+            await RevisionSchedulesAsync(repoId, profileId));
+    }
+
+    [Fact]
+    public async Task Taking_a_checkout_unschedules_the_revisions_it_holds_at_once()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 5);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+
+        await ScheduleAsync(_today);
+        await GivenACheckout(repoId, savegameId, holdsFrom: new RevisionNumber(3));
+        await ReleaseProfileAsync(repoId, profileId);
+
+        Assert.Equal(
+            [(1, null), (2, Scheduled(14, DeletionReason.OutsideWindow)), (3, null), (4, null), (5, null), (6, null)],
+            await RevisionSchedulesAsync(repoId, profileId));
+    }
+
+    /// <summary>A claim on another profile's savegame says nothing about this one's revisions.</summary>
+    [Fact]
+    public async Task A_checkout_holds_only_its_own_profiles_revisions()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 5);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+
+        var otherProfileId = await GivenAProfile(repoId);
+        var otherSavegameId = await GivenASavegame(repoId, otherProfileId);
+        await GivenSnapshots(repoId, otherSavegameId, 1, playedOn: new RevisionNumber(1));
+        await GivenACheckout(repoId, otherSavegameId, holdsFrom: new RevisionNumber(1));
+
+        await ScheduleAsync(_today);
+
+        Assert.Equal(
+            [(1, null), (2, Scheduled(14, DeletionReason.OutsideWindow)), (3, Scheduled(14, DeletionReason.OutsideWindow)), (4, null), (5, null), (6, null)],
+            await RevisionSchedulesAsync(repoId, profileId));
+    }
+
 
     [Fact]
     public async Task Mod_versions_older_than_the_newest_two_are_scheduled_and_the_row_moves_in_the_delta_feed()
@@ -378,10 +474,22 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
 
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenARepoWithAProfile()
     {
+        RepoId repoId;
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            repoId = GivenARepo(dbContext).Id;
+            await dbContext.SaveChangesAsync();
+        }
+
+        return (repoId, await GivenAProfile(repoId));
+    }
+
+    private async Task<ProfileId> GivenAProfile(RepoId repoId)
+    {
         using var dbContext = fixture.CreateDbContext();
 
-        var repo = GivenARepo(dbContext);
-        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
         var revision = profile.CreateRevision([], [], _author, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created);
 
         dbContext.Profiles.Add(profile);
@@ -389,7 +497,7 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
 
         await dbContext.SaveChangesAsync();
 
-        return (repo.Id, profile.Id);
+        return profile.Id;
     }
 
     private static Repo GivenARepo(ApplicationDbContext dbContext)
@@ -457,6 +565,22 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
 
             await dbContext.SaveChangesAsync();
         }
+    }
+
+    private async Task GivenACheckout(RepoId repoId, SavegameId savegameId, RevisionNumber holdsFrom, bool ended = false)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        var checkout = new SavegameCheckout(repoId, savegameId, _author, DateTime.UtcNow, holdsFrom);
+
+        if (ended)
+        {
+            checkout.End(DateTime.UtcNow, SavegameCheckoutEndReason.CheckedIn);
+        }
+
+        dbContext.SavegameCheckouts.Add(checkout);
+
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<RepoId> GivenAModWithVersions(params string[] versionIds)

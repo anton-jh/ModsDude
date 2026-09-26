@@ -4,6 +4,12 @@
       "BlockedRevisionDto": {
         "additionalProperties": false,
         "properties": {
+          "checkouts": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedOutSavegameRefDto"
+            },
+            "type": "array"
+          },
           "reason": {
             "$ref": "#/components/schemas/BlockedRevisionReason"
           },
@@ -24,12 +30,14 @@
         "description": "",
         "enum": [
           "IsHead",
-          "PlayedOn"
+          "PlayedOn",
+          "CheckedOut"
         ],
         "type": "string",
         "x-enumNames": [
           "IsHead",
-          "PlayedOn"
+          "PlayedOn",
+          "CheckedOut"
         ]
       },
       "CheckImagesExistRequest": {
@@ -105,6 +113,26 @@
                 "$ref": "#/components/schemas/SavegameCheckoutDto"
               }
             ]
+          }
+        },
+        "type": "object"
+      },
+      "CheckedOutSavegameRefDto": {
+        "additionalProperties": false,
+        "properties": {
+          "heldBy": {
+            "$ref": "#/components/schemas/UserDto"
+          },
+          "savegameId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegameName": {
+            "type": "string"
+          },
+          "takenAt": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "type": "object"

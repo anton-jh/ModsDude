@@ -6,11 +6,13 @@ using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
+using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -58,6 +60,7 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -97,7 +100,13 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
                 takenFrom = existing;
             }
 
-            checkout = new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now);
+            // The head is what is about to be written into the slot, so its revision is where this
+            // claim's play starts - see SavegameCheckout.HoldsFromRevision.
+            var head = savegame.ProfileId is null
+                ? null
+                : await dbContext.SavegameSnapshots.GetRowAsync(savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
+
+            checkout = new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now, head?.ProfileRevision);
             dbContext.SavegameCheckouts.Add(checkout);
         }
 
@@ -112,6 +121,12 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
             // is not a state the log can represent, so the loser is told to look again - what they
             // would see has changed since they decided.
             return TypedResults.BadRequest(Problems.SavegameCheckoutConflict(savegame.Id));
+        }
+
+        if (savegame.ProfileId is ProfileId profileId && checkout != existing)
+        {
+            // The claim now holds revisions, so any of them shown as due to go stops saying so.
+            await retentionUpkeep.ReleaseProfileAsync(savegame.RepoId, profileId, cancellationToken);
         }
 
         return TypedResults.Ok(new CheckOutSavegameResponse(
