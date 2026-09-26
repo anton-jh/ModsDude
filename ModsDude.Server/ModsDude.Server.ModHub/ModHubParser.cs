@@ -22,9 +22,9 @@ public static partial class ModHubParser
 
     /// <summary>
     /// The ids of a "latest" listing page in order, from the grid only - the featured mods at the top
-    /// of the first page are not part of the order. Empty past the last page.
+    /// of the first page are not part of the order, and neither are the paid DLCs ModHub mixes into it.
     /// </summary>
-    public static IReadOnlyList<int> ParseLatestPage(string html)
+    public static ModHubListingPage ParseLatestPage(string html)
     {
         using var document = _parser.ParseDocument(html);
 
@@ -34,17 +34,22 @@ public static partial class ModHubParser
             throw new ModHubUnreadableException("A listing page has no search box; it does not look like a ModHub listing.");
         }
 
+        var items = document.QuerySelectorAll("div.mod-item");
         var ids = new List<int>();
 
-        foreach (var item in document.QuerySelectorAll("div.mod-item"))
+        foreach (var item in items)
         {
-            var href = item.QuerySelector("a[href*='mod_id=']")?.GetAttribute("href")
-                ?? throw new ModHubUnreadableException("A listed mod has no link to its page.");
-
-            ids.Add(ParseModId(href));
+            if (item.QuerySelector("a[href*='mod_id=']")?.GetAttribute("href") is { } href)
+            {
+                ids.Add(ParseModId(href));
+            }
+            else if (item.QuerySelector("a[href*='dlc-detail.php']") is null)
+            {
+                throw new ModHubUnreadableException("A listed item links to neither a mod nor a DLC.");
+            }
         }
 
-        return ids;
+        return new ModHubListingPage(ids, IsPastEnd: items.Length == 0);
     }
 
     /// <summary>What a mod page says, or null where it is ModHub's "mod not found" page.</summary>

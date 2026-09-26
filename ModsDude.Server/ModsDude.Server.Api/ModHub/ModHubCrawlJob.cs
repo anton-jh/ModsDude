@@ -185,7 +185,8 @@ public class ModHubCrawlJob(
 
         while (true)
         {
-            var ids = await ReadListingPageAsync(run.Game, page, cancellationToken);
+            var listingPage = await ReadListingPageAsync(run.Game, page, cancellationToken);
+            var ids = listingPage.ModIds;
 
             // The first sweep has no previous poll to take a head from. Recording the top as it stood
             // when the sweep began is what lets the first poll catch what changed during a long one.
@@ -194,7 +195,7 @@ public class ModHubCrawlJob(
                 run.State.HeadModIds = [.. ids];
             }
 
-            if (ids.Count == 0)
+            if (listingPage.IsPastEnd)
             {
                 run.State.SweepNextPage = null;
                 run.State.SweepCompletedAt = timeService.Now();
@@ -228,13 +229,13 @@ public class ModHubCrawlJob(
 
         for (var page = 0; page < options.Value.PollPageLimit; page++)
         {
-            var ids = await ReadListingPageAsync(run.Game, page, cancellationToken);
+            var listingPage = await ReadListingPageAsync(run.Game, page, cancellationToken);
 
-            firstPage ??= [.. ids];
-            listing.AddRange(ids);
+            firstPage ??= [.. listingPage.ModIds];
+            listing.AddRange(listingPage.ModIds);
             boundary = ModHubListingChanges.FindBoundary(listing, run.State.HeadModIds);
 
-            if (boundary is not null || ids.Count == 0)
+            if (boundary is not null || listingPage.IsPastEnd)
             {
                 break;
             }
@@ -280,13 +281,13 @@ public class ModHubCrawlJob(
     /// A listing page, where the first page being empty is taken to be a site that has changed rather
     /// than a listing with nothing in it - ModHub always has mods.
     /// </summary>
-    private async Task<IReadOnlyList<int>> ReadListingPageAsync(string game, int page, CancellationToken cancellationToken)
+    private async Task<ModHubListingPage> ReadListingPageAsync(string game, int page, CancellationToken cancellationToken)
     {
-        var ids = await site.GetLatestPage(game, page, cancellationToken);
+        var listingPage = await site.GetLatestPage(game, page, cancellationToken);
 
-        return page == 0 && ids.Count == 0
+        return page == 0 && listingPage.IsPastEnd
             ? throw new ModHubUnreadableException($"The first page of the {game} listing has no mods on it.")
-            : ids;
+            : listingPage;
     }
 
     /// <summary>

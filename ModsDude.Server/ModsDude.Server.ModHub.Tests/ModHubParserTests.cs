@@ -11,7 +11,7 @@ public class ModHubParserTests
     [Fact]
     public void A_listing_page_yields_the_grid_in_order()
     {
-        var ids = ModHubParser.ParseLatestPage(Fixture("latest-page-0.html"));
+        var ids = ModHubParser.ParseLatestPage(Fixture("latest-page-0.html")).ModIds;
 
         Assert.Equal(24, ids.Count);
         Assert.Equal([371282, 370866, 372928], ids.Take(3));
@@ -21,7 +21,7 @@ public class ModHubParserTests
     [Fact]
     public void The_featured_mods_above_the_grid_are_not_part_of_the_order()
     {
-        var ids = ModHubParser.ParseLatestPage(Fixture("latest-page-0.html"));
+        var ids = ModHubParser.ParseLatestPage(Fixture("latest-page-0.html")).ModIds;
 
         Assert.DoesNotContain(302491, ids);
         Assert.DoesNotContain(325826, ids);
@@ -31,7 +31,38 @@ public class ModHubParserTests
     [Fact]
     public void A_page_past_the_end_of_the_listing_is_empty()
     {
-        Assert.Empty(ModHubParser.ParseLatestPage(Fixture("latest-past-end.html")));
+        var page = ModHubParser.ParseLatestPage(Fixture("latest-past-end.html"));
+
+        Assert.Empty(page.ModIds);
+        Assert.True(page.IsPastEnd);
+    }
+
+    [Fact]
+    public void The_paid_DLCs_mixed_into_the_grid_are_left_out()
+    {
+        var page = ModHubParser.ParseLatestPage(Fixture("latest-with-dlcs.html"));
+
+        Assert.Equal(17, page.ModIds.Count);
+        Assert.Equal([368361, 318936, 368502], page.ModIds.Take(3));
+        Assert.Equal(364237, page.ModIds[^1]);
+        Assert.False(page.IsPastEnd);
+    }
+
+    [Fact]
+    public void A_page_of_nothing_but_DLCs_is_not_past_the_end()
+    {
+        var page = ModHubParser.ParseLatestPage(Fixture("latest-with-dlcs.html").Replace("mod.php?mod_id=", "dlc-detail.php?dlc_id="));
+
+        Assert.Empty(page.ModIds);
+        Assert.False(page.IsPastEnd);
+    }
+
+    [Fact]
+    public void A_listed_item_linking_to_neither_a_mod_nor_a_DLC_is_unreadable()
+    {
+        var html = Fixture("latest-with-dlcs.html").Replace("dlc-detail.php?dlc_id=fs25vredo", "bundle.php?id=fs25vredo");
+
+        Assert.Throws<ModHubUnreadableException>(() => ModHubParser.ParseLatestPage(html));
     }
 
     [Fact]

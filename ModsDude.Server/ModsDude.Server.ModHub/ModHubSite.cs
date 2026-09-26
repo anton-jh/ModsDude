@@ -18,7 +18,7 @@ internal sealed class ModHubSite(IHttpClientFactory httpClientFactory, IOptions<
     private Stopwatch? _sinceLastRequest;
 
 
-    public async Task<IReadOnlyList<int>> GetLatestPage(string game, int page, CancellationToken cancellationToken)
+    public async Task<ModHubListingPage> GetLatestPage(string game, int page, CancellationToken cancellationToken)
     {
         var html = await GetAsync($"mods.php?title={Uri.EscapeDataString(game)}&filter=latest&page={page}", cancellationToken);
 

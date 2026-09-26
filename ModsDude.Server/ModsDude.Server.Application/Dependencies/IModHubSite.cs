@@ -13,11 +13,8 @@ namespace ModsDude.Server.Application.Dependencies;
 /// </remarks>
 public interface IModHubSite
 {
-    /// <summary>
-    /// The mod ids on one page of the "latest" listing, in order, featured mods excluded. Empty past
-    /// the last page.
-    /// </summary>
-    Task<IReadOnlyList<int>> GetLatestPage(string game, int page, CancellationToken cancellationToken);
+    /// <summary>One page of the "latest" listing: its mod ids in order, and whether it is past the end.</summary>
+    Task<ModHubListingPage> GetLatestPage(string game, int page, CancellationToken cancellationToken);
 
     /// <summary>A mod's page, or null where ModHub says it has no such mod.</summary>
     Task<ModHubModDetails?> GetMod(string game, int modHubId, CancellationToken cancellationToken);
