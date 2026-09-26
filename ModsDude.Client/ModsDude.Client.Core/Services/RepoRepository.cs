@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
@@ -10,7 +11,8 @@ namespace ModsDude.Client.Core.Services;
 public class RepoRepository(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
-    GameRepository gameRepository)
+    GameRepository gameRepository,
+    ILogger<RepoRepository> logger)
     : IUserScopedState
 {
     public delegate void RepoCreatedEventHandler(Guid repoId);
@@ -103,11 +105,42 @@ public class RepoRepository(
             }
         }
 
+        RefreshGameTargets();
+
         // Last, so that a listener woken by the collection changing above sees the list before it
         // sees the flag saying the list is complete.
         HasLoaded = true;
 
         SetPendingChanges(null);
+    }
+
+    /// <summary>
+    /// Catches every game this account's repos serve up with folders that moved while the app was
+    /// not looking - see <see cref="GameRepository.RefreshTargets"/>. Here because this is the first
+    /// moment there are adapters to ask, and it comes round again on every refresh.
+    /// </summary>
+    /// <remarks>
+    /// Best-effort: a game that cannot be asked right now keeps the folders it had, and the next
+    /// apply refreshes again and says why if it still cannot.
+    /// </remarks>
+    private void RefreshGameTargets()
+    {
+        foreach (var repo in Repos)
+        {
+            if (gameRepository.Find(repo.Scope) is not Game game)
+            {
+                continue;
+            }
+
+            try
+            {
+                gameRepository.RefreshTargets(game, repo.Adapter);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Could not check whether the folders of game {Game} have moved.", game.Identity);
+            }
+        }
     }
 
     public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)

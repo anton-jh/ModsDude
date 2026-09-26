@@ -387,8 +387,8 @@ public class FarmingSimulatorBaseModAdapter(
 
 
 /// <param name="gameDataFolder">
-/// Where the game keeps its saves; see <see cref="FarmingSimulatorGameDataFolder"/>. The mods are in
-/// a folder inside it.
+/// Where the game keeps its saves and settings; see <see cref="FarmingSimulatorGameDataFolder"/>. The
+/// mods are in a folder inside it unless those settings say otherwise.
 /// </param>
 public class FarmingSimulatorLocalModAdapter(
     FarmingSimulatorGameVersion gameVersion,
@@ -406,7 +406,14 @@ public class FarmingSimulatorLocalModAdapter(
     /// </remarks>
     public ModTargets ModTargets => new(new ModTarget(FarmingSimulatorTarget.Key, null, ModFolder));
 
-    private string ModFolder => Path.Combine(gameDataFolder, "mods");
+    /// <summary>
+    /// Read from the game's own settings the first time it is asked for, and then kept for as long
+    /// as this adapter lives - which is one piece of work, since a game is re-hydrated for each.
+    /// </summary>
+    /// <exception cref="UserFriendlyException">The game's settings file is there and cannot be read.</exception>
+    private string ModFolder => _modFolder ??= FarmingSimulatorGameDataFolder.FindModsFolder(gameDataFolder);
+
+    private string? _modFolder;
 
 
     public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)

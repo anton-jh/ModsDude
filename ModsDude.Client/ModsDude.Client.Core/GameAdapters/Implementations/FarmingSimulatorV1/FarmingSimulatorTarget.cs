@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 /// <para>
 /// <b>One key, two capability adapters.</b> The mod half files its manifest under it and the
 /// savegame half files its bindings under it, and they mean the same target: the saves in this
-/// game's data folder were played against the mods in the <c>mods</c> folder beside them. Two
+/// game's data folder were played against the mods in the folder the game loads them from. Two
 /// constants would be two things to keep in step, and a machine whose halves disagreed would
 /// attribute nobody's evening to anything.
 /// </para>

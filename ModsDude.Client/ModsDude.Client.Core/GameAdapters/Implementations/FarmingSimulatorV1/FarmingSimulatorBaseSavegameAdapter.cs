@@ -90,8 +90,9 @@ public class FarmingSimulatorLocalSavegameAdapter(
     /// The savegame half of the one target the mod adapter names, under the same key.
     /// </summary>
     /// <remarks>
-    /// The saves sit in the game data folder and the mods in a <c>mods</c> folder inside it, so this
-    /// game's pairing is not a coincidence of configuration - it is the installation. Never named:
+    /// The saves sit in the game data folder and are played against whichever mods folder the game
+    /// loads - see <see cref="FarmingSimulatorGameDataFolder.FindModsFolder"/> - so the pairing is
+    /// the game's own rather than anything configured here. Never named:
     /// there is one, and a game with one savegame folder does not have a savegame folder called
     /// something.
     /// </remarks>

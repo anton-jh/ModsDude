@@ -183,6 +183,10 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress = null,
         bool clearAll = false)
     {
+        // First, so that the manifest this apply writes names the same folder the drift check will
+        // go on to look in.
+        games.RefreshTargets(game, repo.Adapter);
+
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
             return [];

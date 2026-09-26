@@ -1,6 +1,8 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
@@ -23,7 +25,7 @@ public class FarmingSimulatorLocalSettings : DynamicForm<FarmingSimulatorLocalSe
 }
 
 /// <summary>
-/// Where a Farming Simulator game keeps its saves and, in a <c>mods</c> folder inside, its mods.
+/// Where a Farming Simulator game keeps its saves and settings, and where it loads mods from.
 /// </summary>
 public static class FarmingSimulatorGameDataFolder
 {
@@ -47,6 +49,65 @@ public static class FarmingSimulatorGameDataFolder
             "The game creates it the first time it is launched, so start it once and try again.");
     }
 
+
+    /// <summary>
+    /// Where the game loads mods from: the <c>mods</c> folder inside its data folder, unless the
+    /// player has pointed it elsewhere with <c>modsDirectoryOverride</c> in <c>gameSettings.xml</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read every time rather than remembered: an override switched on or off between two launches
+    /// moves the folder the game reads, and a sync into the one it stopped reading would install
+    /// mods nobody sees.
+    /// </para>
+    /// <para>
+    /// <b>No file is an answer; an unreadable one is not.</b> A game that has never saved its settings
+    /// has no override, so a missing file means the default folder. A file that is there but will not
+    /// parse - half-written by the game, say - is refused rather than read as "no override", because
+    /// guessing wrong repoints the game at a folder full of different mods.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="UserFriendlyException"><c>gameSettings.xml</c> is there and cannot be read.</exception>
+    public static string FindModsFolder(string gameDataFolder)
+    {
+        var defaultFolder = Path.Join(gameDataFolder, "mods");
+        var settingsFile = Path.Join(gameDataFolder, _gameSettingsFile);
+
+        if (File.Exists(settingsFile) is false)
+        {
+            return defaultFolder;
+        }
+
+        try
+        {
+            // Shared with the game, which may well have it open.
+            using var stream = new FileStream(settingsFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var element = XDocument.Load(stream).Root?.Element("modsDirectoryOverride");
+
+            if (element is null || (bool?)element.Attribute("active") is not true)
+            {
+                return defaultFolder;
+            }
+
+            var directory = (string?)element.Attribute("directory");
+
+            // Switched on with nowhere to go, which the game can only treat as off.
+            return string.IsNullOrWhiteSpace(directory)
+                ? defaultFolder
+                : Path.GetFullPath(directory, gameDataFolder);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException or FormatException or ArgumentException or NotSupportedException)
+        {
+            throw new UserFriendlyException(
+                "Could not read the game's settings",
+                $"ModsDude reads {settingsFile} to find out whether the game loads its mods from somewhere other than {defaultFolder}, " +
+                "and it could not be read. If the game is running, try again once it has finished saving.",
+                exception);
+        }
+    }
+
+
+    private const string _gameSettingsFile = "gameSettings.xml";
 
     private static IEnumerable<string> Candidates(FarmingSimulatorGameVersion gameVersion)
     {
