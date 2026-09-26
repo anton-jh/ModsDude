@@ -138,7 +138,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     private string CareerFilePath => Path.Combine(_gameData.Path, Slot.Value, "careerSavegame.xml");
 
     private FarmingSimulatorLocalSavegameAdapter Adapter()
-        => new(new FarmingSimulatorLocalSettings { GameDataFolder = _gameData.Path });
+        => new(FarmingSimulatorGameVersion.Fs25, _gameData.Path);
 
     private SavegameTarget Target() => Adapter().SavegameTargets.Single();
 

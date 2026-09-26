@@ -206,6 +206,39 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Writes down the folders the adapter says this game reaches now, where they are not the ones
+    /// already written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For an adapter whose folders move without anybody touching its settings here - Farming
+    /// Simulator reads its mod folder out of the game's own settings file. <see cref="Game.Targets"/> is
+    /// what the drift check, the file watchers and folder claims read, none of them with an adapter to
+    /// ask, so a folder that moved underneath them would be watched in the old place while an apply
+    /// wrote to the new one.
+    /// </para>
+    /// <para>
+    /// A no-op, with nothing saved or raised, when nothing moved - which is nearly always, so it is
+    /// cheap enough to call before every apply and on every load of the repo list.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="UserFriendlyException">
+    /// The adapter cannot be hydrated, or a folder it now reaches already belongs to another game.
+    /// </exception>
+    public void RefreshTargets(Game game, IBaseGameAdapter baseAdapter)
+    {
+        var localSettings = game.GetLocalSettings(baseAdapter);
+        var targets = GetTargets(baseAdapter, localSettings);
+
+        if (targets.SequenceEqual(game.Targets))
+        {
+            return;
+        }
+
+        Update(game, baseAdapter, localSettings);
+    }
+
     /// <param name="pinnedRevision">
     /// The revision to hold the game on, or null - nearly always - to follow head. See
     /// <see cref="PersistedGame.PinnedRevision"/>.

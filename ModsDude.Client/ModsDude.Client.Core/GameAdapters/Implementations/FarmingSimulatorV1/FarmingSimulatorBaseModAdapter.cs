@@ -11,7 +11,10 @@ using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
-public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null) : IBaseModAdapter
+public class FarmingSimulatorBaseModAdapter(
+    FarmingSimulatorGameVersion gameVersion,
+    ILoggerFactory? loggerFactory = null)
+    : IBaseModAdapter
 {
     private static readonly string[] _imageExtensions = [".dds", ".png", ".jpg", ".jpeg"];
 
@@ -367,27 +370,31 @@ public class FarmingSimulatorBaseModAdapter(ILoggerFactory? loggerFactory = null
 
     public ILocalModAdapter WithLocalSettings(string serializedLocalSettings)
     {
-        var localSettings = FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings);
-        localSettings.EnsureValid();
-        return new FarmingSimulatorLocalModAdapter(localSettings, Loggers);
+        return WithLocalSettings(FarmingSimulatorLocalSettings.Deserialize(serializedLocalSettings));
     }
 
+    /// <exception cref="UserFriendlyException">The game has not made its data folder on this machine yet.</exception>
     public ILocalModAdapter WithLocalSettings(DynamicForm localSettings)
     {
-        if (localSettings is not FarmingSimulatorLocalSettings settings)
+        if (localSettings is not FarmingSimulatorLocalSettings)
         {
             throw new IncorrectGameAdapterSettingsTypeException<FarmingSimulatorLocalSettings>(localSettings);
         }
-        settings.EnsureValid();
-        return new FarmingSimulatorLocalModAdapter(settings, Loggers);
+
+        return new FarmingSimulatorLocalModAdapter(gameVersion, FarmingSimulatorGameDataFolder.Require(gameVersion), Loggers);
     }
 }
 
 
+/// <param name="gameDataFolder">
+/// Where the game keeps its saves and settings; see <see cref="FarmingSimulatorGameDataFolder"/>. The
+/// mods are in a folder inside it unless those settings say otherwise.
+/// </param>
 public class FarmingSimulatorLocalModAdapter(
-    FarmingSimulatorLocalSettings localSettings,
+    FarmingSimulatorGameVersion gameVersion,
+    string gameDataFolder,
     ILoggerFactory? loggerFactory = null)
-    : FarmingSimulatorBaseModAdapter(loggerFactory), ILocalModAdapter
+    : FarmingSimulatorBaseModAdapter(gameVersion, loggerFactory), ILocalModAdapter
 {
     /// <summary>
     /// The one target, and the key that ends up in its manifest's filename. Never shown: a game with
@@ -399,9 +406,14 @@ public class FarmingSimulatorLocalModAdapter(
     /// </remarks>
     public ModTargets ModTargets => new(new ModTarget(FarmingSimulatorTarget.Key, null, ModFolder));
 
-    private string ModFolder => Path.Combine(
-        localSettings.GameDataFolder ?? throw new InvalidOperationException("Local settings carry no game data folder."),
-        "mods");
+    /// <summary>
+    /// Read from the game's own settings the first time it is asked for, and then kept for as long
+    /// as this adapter lives - which is one piece of work, since a game is re-hydrated for each.
+    /// </summary>
+    /// <exception cref="UserFriendlyException">The game's settings file is there and cannot be read.</exception>
+    private string ModFolder => _modFolder ??= FarmingSimulatorGameDataFolder.FindModsFolder(gameDataFolder);
+
+    private string? _modFolder;
 
 
     public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
