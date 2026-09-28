@@ -8,7 +8,7 @@ namespace ModsDude.Client.Wpf.Services;
 /// <summary>
 /// Asks the server now and then whether the repo list, or the open repo's profile list, has changed
 /// since it was read - and only asks. The answer lands on the services as pending changes, the
-/// sidebar puts a dot on its refresh button, and the lists change when somebody presses it.
+/// sidebar puts a dot on its refresh control, and the lists change when somebody uses it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,7 +18,7 @@ namespace ModsDude.Client.Wpf.Services;
 /// </para>
 /// <para>
 /// <b>Failures are logged and nothing else.</b> Nobody asked for this check, so a network blip is
-/// not worth an error dialog; the next tick asks again, and the refresh button still says what it
+/// not worth an error dialog; the next tick asks again, and the refresh control still says what it
 /// always said.
 /// </para>
 /// <para>

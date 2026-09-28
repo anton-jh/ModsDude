@@ -93,7 +93,7 @@ public partial class MainPageViewModel
         _welcomeMenuItem = new MenuItemViewModel("Welcome", () => new WelcomePageViewModel(_joinRepoMenuItem, _createRepoMenuItem, Open));
 
         // Everything the repo list leads to that is not a repo. The sidebar holds nothing but the
-        // list, so these are behind the "⋯" on its header rather than rows above it.
+        // list, so these are behind the "⋯" at its top rather than rows above it.
         HeaderMenuItems = [
             _joinRepoMenuItem,
             _createRepoMenuItem,
@@ -150,7 +150,7 @@ public partial class MainPageViewModel
 
     public NavigationManager NavManager { get; }
 
-    /// <summary>The entries behind the "⋯" on the repo list's header.</summary>
+    /// <summary>The entries behind the "⋯" at the top of the repo list, under Refresh.</summary>
     public IReadOnlyList<MenuItemViewModel> HeaderMenuItems { get; }
 
     public ObservableCollection<MenuItemViewModel> Repos { get; }
@@ -180,15 +180,18 @@ public partial class MainPageViewModel
     public bool IsSettingsSelected => ReferenceEquals(NavManager.Selected, _settingsMenuItem);
 
     /// <summary>
-    /// Whether the server has repo changes the list does not show yet. Brought in by the refresh
-    /// button and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
+    /// Whether the server has repo changes the list does not show yet. Brought in by the menu's
+    /// Refresh and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
     /// </summary>
     public bool HasPendingRepoChanges => _repoService.PendingChanges is not null;
 
-    /// <summary>The refresh button's tooltip, which says what pressing it would bring in when it knows.</summary>
-    public string RefreshReposToolTip => _repoService.PendingChanges is { } changes
-        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh to bring the changes in."
-        : "Refresh repos";
+    /// <summary>What the menu's Refresh would bring in, drawn under it. Null while the server has said nothing.</summary>
+    public string? PendingRepoChangesText => _repoService.PendingChanges?.Describe();
+
+    /// <summary>The "⋯"'s tooltip, which says what is waiting when something is.</summary>
+    public string MenuToolTip => _repoService.PendingChanges is { } changes
+        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh from this menu to bring the changes in."
+        : "Refresh, join, create and archived repos";
 
 
     protected override void Init()
@@ -257,7 +260,7 @@ public partial class MainPageViewModel
     /// </remarks>
     private async void LoadInitialRepos()
     {
-        // Skipped where the refresh button already got the list in while this was waiting.
+        // Skipped where Refresh already got the list in while this was waiting.
         var attempt = (CancellationToken _) => _repoService.HasLoaded ? Task.CompletedTask : LoadReposCommand.ExecuteAsync(null);
 
         if (await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token))
@@ -292,7 +295,7 @@ public partial class MainPageViewModel
 
         SelectLandingPage();
 
-        // The refresh button got through while the first load was waiting out its interval, so that
+        // Refresh got through while the first load was waiting out its interval, so that
         // wait is only keeping a notice up about a list that is already here.
         _connection.RetryNow();
     }
@@ -301,7 +304,7 @@ public partial class MainPageViewModel
     /// Where the app opens: the repo last open, else the first one the sidebar lists, else Welcome.
     /// </summary>
     /// <remarks>
-    /// Only on the first load. The refresh button runs the same command, and jumping the user back to
+    /// Only on the first load. Refresh runs the same command, and jumping the user back to
     /// where they were an hour ago because they asked for fresh data would be its own bug. Nor where
     /// something was chosen while the list was still on its way.
     /// </remarks>
@@ -414,7 +417,8 @@ public partial class MainPageViewModel
     private void OnPendingRepoChangesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(HasPendingRepoChanges));
-        OnPropertyChanged(nameof(RefreshReposToolTip));
+        OnPropertyChanged(nameof(PendingRepoChangesText));
+        OnPropertyChanged(nameof(MenuToolTip));
     }
 
     private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)

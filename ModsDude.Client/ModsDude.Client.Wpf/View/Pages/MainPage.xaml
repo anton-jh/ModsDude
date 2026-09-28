@@ -21,15 +21,18 @@
         <uc:SidebarShell.SidebarTemplate>
             <DataTemplate>
                 <!-- The repos and nothing above them: every other place the shell leads to is behind the
-                     header's "⋯", or the account card's gear. -->
+                     "⋯", or the account card's gear. No "Repos" heading - the sidebar holds nothing else,
+                     and the games the list is grouped by are the headings. -->
                 <Grid x:Name="SidebarRoot" RowDefinitions="auto * auto">
 
-                    <uc:SidebarHeader Grid.Row="0" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshReposToolTip}"
-                                      HasPendingChanges="{Binding HasPendingRepoChanges}"
-                                      MenuItems="{Binding HeaderMenuItems}"
-                                      MenuCommand="{Binding OpenCommand}"
-                                      IsMenuSelected="{Binding IsHeaderMenuSelected}"
-                                      MenuToolTip="Join, create and archived repos" />
+                    <uc:SidebarMenu Grid.Row="0"
+                                    Items="{Binding HeaderMenuItems}"
+                                    Command="{Binding OpenCommand}"
+                                    IsSelected="{Binding IsHeaderMenuSelected}"
+                                    MenuToolTip="{Binding MenuToolTip}"
+                                    RefreshCommand="{Binding LoadReposCommand}"
+                                    HasPendingChanges="{Binding HasPendingRepoChanges}"
+                                    PendingChangesText="{Binding PendingRepoChangesText}" />
 
                     <!-- Grouped by game rather than one flat column: a local installation belongs to a game, so two
                          repos for different games have nothing in common that the sidebar was saying they

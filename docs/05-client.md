@@ -477,8 +477,11 @@ the page opens - and the button is drawn as selected while it is open. It keeps 
 button is disabled with the reason as its tooltip.
 
 **The top level is the repo list and nothing else.** There are no fixed rows above it. *Join repo*,
-*Create repo* and *Archived repos* are behind a "⋯" on the list's header, drawn as selected while one of
-them is open; Create repo is greyed out in that menu with its reason, the way the "+" was. *Settings* is
+*Create repo* and *Archived repos* are behind a "⋯" at the top of the list, drawn as selected while one
+of them is open; Create repo is greyed out in that menu with its reason, the way the "+" was. The menu's
+first entry is *Refresh*. There is no "Repos" heading - the game headings the list is grouped by say
+what it holds - and the "⋯" sits in the rows' picture column, so it is at the same x in a rail as open
+and is the one control a rail keeps above the tiles. *Settings* is
 the gear on the account card, beside *Account*, because both are about the user rather than places in
 the app. There is no Home page: friend activity is on each repo's overview, one repo at a time.
 
@@ -728,8 +731,9 @@ every three minutes, and when the window comes back from the tray or from being 
 calls `CheckForChanges` on both services. That reads the same list the refresh reads, compares it
 with what is held (`RepoListChanges`, `ProfileListChanges`) and records the difference as
 `PendingChanges` — a sentence per change — while leaving the collection exactly as it was. The
-sidebar header draws a dot on its refresh button (beside the heading in a rail, where the button
-is not drawn), the tooltip says what the refresh would bring in, and any refresh clears it.
+Profiles header draws a dot on its refresh button (beside the heading in a rail, where the button
+is not drawn); the repo list draws it on its "⋯", whose Refresh entry lists the changes. The tooltip
+says what the refresh would bring in, and any refresh clears it.
 
 - **Only the fields a refresh folds in count.** Anything else would be a dot the button cannot
   clear. For profiles that includes the head revision, which the sidebar does not draw but the
@@ -1136,7 +1140,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | Page | Status | What it does |
 | --- | --- | --- |
 | `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
-| `MainPage` | Working | Shell: the repo list, with Join repo, Create repo and Archived repos behind its header's "⋯", and the account card with **Settings** (the gear) and **Account** |
+| `MainPage` | Working | Shell: the repo list, with Refresh, Join repo, Create repo and Archived repos behind the "⋯" at its top, and the account card with **Settings** (the gear) and **Account** |
 | `WelcomePage` | Working | Where the app lands with no repo to open: a short introduction and the two ways in, Join and Create |
 | `AccountPage` | Working | Name, picture, password reset through the sign-in page, and **Switch user** |
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
