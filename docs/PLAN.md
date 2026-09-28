@@ -1175,6 +1175,11 @@ mod question is last because it is the only one that can be deferred.
 
       *Not started. `DriftNotificationViewModel` reports unchecked-in play and carries only
       OpenModList, Reapply and Dismiss.*
+
+      *The prompt half is in: closing the game after playing a checked-out save brings a Windows
+      toast, "Check in 'Big Valley'", whose click opens the save's notice (`PlaySessionWatch`), and the
+      mid-play "holds play" toast is held back until then. The check-in button on the notice itself
+      is still to do.*
 - [ ] **Reachable from both ends**, as activation is:
 
       | From | Fixed | Chosen |

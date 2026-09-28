@@ -37,6 +37,9 @@ public static class NoticeBuilder
     private const string SignatureSeparator = "|~|";
 
 
+    /// <summary>The key of the notice about one held savegame, for whatever needs to point at it from outside.</summary>
+    public static string SavegameKey(Guid savegameId) => $"save/{savegameId}";
+
     public static IReadOnlyList<Notice> Build(
         IReadOnlyList<TargetDrift> drifted,
         IReadOnlyList<CorruptedBlob> corruption,
@@ -358,7 +361,7 @@ public static class NoticeBuilder
         }
 
         return Make(
-            $"save/{first.SavegameId}",
+            SavegameKey(first.SavegameId),
             NoticeSeverity.Critical,
             headline,
             string.Join(' ', kinds.Select(x => DescribeSavegame(x, save))),

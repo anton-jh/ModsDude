@@ -46,6 +46,7 @@ public partial class App : Application
     private DriftBackstop? _backstop;
     private RemoteChangeWatcher? _remoteChanges;
     private SavegameClaimWatcher? _claimWatcher;
+    private PlaySessionWatcher? _playSessionWatcher;
     private FriendActivityWatcher? _friendWatcher;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -261,6 +262,9 @@ public partial class App : Application
         _claimWatcher = _serviceProvider.GetRequiredService<SavegameClaimWatcher>();
         _claimWatcher.Start();
 
+        _playSessionWatcher = _serviceProvider.GetRequiredService<PlaySessionWatcher>();
+        _playSessionWatcher.Start();
+
         _friendWatcher = _serviceProvider.GetRequiredService<FriendActivityWatcher>();
         _friendWatcher.Start();
 
@@ -277,6 +281,7 @@ public partial class App : Application
         _backstop?.Dispose();
         _remoteChanges?.Dispose();
         _claimWatcher?.Dispose();
+        _playSessionWatcher?.Dispose();
         _friendWatcher?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();
@@ -387,6 +392,9 @@ public partial class App : Application
 
         // Asks who holds the savegames checked out here, so a takeover reaches the notice - see the class.
         services.AddSingleton<SavegameClaimWatcher>();
+
+        // Notices a game closing after a checked-out savegame was played in it - see the class.
+        services.AddSingleton<PlaySessionWatcher>();
 
         // Reads what friends are on, so a switch or a check-out reaches the column - see the class.
         services.AddSingleton<FriendActivityWatcher>();
@@ -578,6 +586,12 @@ public partial class App : Application
         services.AddSingleton<SavegameSightingCache>();
         services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<SavegameSightingCache>());
         services.AddSingleton<SavegameClaimWatch>();
+
+        // Which processes are which game comes off the repos' adapters, for the same reason the
+        // savegame adapters do: a game does not carry the base settings that hydrate one.
+        services.AddSingleton<IGameProcessNames, RepoGameProcessNames>();
+        services.AddSingleton<IGameProcesses, SystemGameProcesses>();
+        services.AddSingleton<PlaySessionWatch>();
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));

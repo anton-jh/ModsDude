@@ -1351,5 +1351,8 @@ Two consequences of the strip outliving the page, both of which were missing:
 - **No partial sync.** Sync makes the folder match the profile. There is no "install just
   these three".
 - **No sync of anything but mods.** Savegames are a separate capability and a later phase.
-- **No detection of a running game.** Worth adding — writing a mod folder while the game has
-  it open will fail confusingly — but it is a nicety, not a blocker.
+- **No detection of a running game before an apply.** Worth adding — writing a mod folder while the
+  game has it open will fail confusingly — but it is a nicety, not a blocker. The means now exists:
+  adapters name their game's processes (`IBaseGameAdapter.ProcessNames`), which the savegame
+  check-in reminder uses — see [05 — Client](05-client.md#running-in-the-background). Sync does not
+  ask it yet.

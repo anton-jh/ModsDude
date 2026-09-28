@@ -1,7 +1,9 @@
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using System.Windows;
 
@@ -37,9 +39,12 @@ public sealed class ToastNotifier(
     ClientSettingsRepository settings,
     FriendActivityService friends,
     IFriendActivityEnvironment friendEnvironment,
+    DriftMonitor monitor,
+    PlaySessionWatch sessions,
     ISystemToasts system)
 {
     private const string _driftGroup = "drift";
+    private const string _reminderGroup = "reminder";
     private const string _appGroup = "app";
     private const string _friendsGroup = "friends";
     private const string _noticeArgument = "notice";
@@ -53,6 +58,7 @@ public sealed class ToastNotifier(
         notices.Refreshed += OnNoticesRefreshed;
         appToasts.Announced += OnAppToast;
         friends.Announced += OnFriendNews;
+        sessions.Played += OnPlayed;
         system.Activated += OnActivated;
 
         // Once somebody is looking at the window, what it told them while they were not is either on
@@ -77,7 +83,13 @@ public sealed class ToastNotifier(
     {
         // Asked even when switched off, so that turning it on later does not announce everything that
         // has been true for a week as if it had just happened.
-        var toast = _planner.Observe(live, environment.ReposLoaded, WindowInFront || Enabled is false);
+        var drifted = monitor.Drifted;
+
+        var toast = _planner.Observe(
+            live,
+            environment.ReposLoaded,
+            WindowInFront || Enabled is false,
+            holdBack: x => DriftToastPlanner.IsPlayInProgress(x, drifted, sessions.IsRunning));
 
         if (toast is null)
         {
@@ -93,6 +105,37 @@ public sealed class ToastNotifier(
             toast.NoticeKey is string key
                 ? new Dictionary<string, string> { [_noticeArgument] = key }
                 : new Dictionary<string, string> { [_openArgument] = "open" }));
+    }
+
+    /// <summary>
+    /// A game closed with checked-out savegames played in it: one reminder per savegame, each taking
+    /// the place of the last one about it, and clicking it opens that save's notice - where check-in is.
+    /// </summary>
+    /// <remarks>
+    /// Invoked rather than queued, so the planner has heard about it before the drift check the game
+    /// closing sets off can put the same notice up as news.
+    /// </remarks>
+    private void OnPlayed(object? sender, IReadOnlyList<PlayedSavegame> played)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            foreach (var save in played)
+            {
+                var toast = _planner.Remind(save);
+
+                if (Enabled is false || WindowInFront)
+                {
+                    continue;
+                }
+
+                system.Show(new SystemToast(
+                    toast.Title,
+                    toast.Body,
+                    _reminderGroup,
+                    Tag: save.SavegameId.ToString("N"),
+                    new Dictionary<string, string> { [_noticeArgument] = toast.NoticeKey! }));
+            }
+        });
     }
 
     /// <summary>

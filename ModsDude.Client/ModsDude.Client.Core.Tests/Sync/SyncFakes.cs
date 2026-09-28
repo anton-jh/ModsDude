@@ -374,6 +374,10 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
     public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<SavegameDrift>>([.. _drift]);
 
+    /// <summary>Nothing: what a held slot reads as is <c>SavegameService</c>'s and is exercised there.</summary>
+    public Task<IReadOnlyList<HeldSlotReading>> ReadHeldAsync(GameIdentity game, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<HeldSlotReading>>([]);
+
     /// <summary>Records that a save held in one of this game's folders has drifted.</summary>
     public void Drifted(SavegameSlotRef slot)
         => _drift.Add(new SavegameDrift(Guid.NewGuid(), Guid.NewGuid(), slot, SavegameDriftKind.UncheckedInPlay));

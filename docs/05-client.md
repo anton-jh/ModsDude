@@ -129,6 +129,20 @@ does not lose it. Clicking, or the **Open** button, only opens: the window, and 
 notice the page it points at (``NoticeCenterViewModel.OpenAsync``); nothing is ever applied from a toast.
 ``Notifications`` in ``BackgroundSettings`` switches all of it off.
 
+**Closing the game after playing a checked-out savegame brings a reminder to check it in**
+(``PlaySessionWatch`` in Core, polled every ten seconds by ``PlaySessionWatcher``). Each adapter names its
+game's processes (``IBaseGameAdapter.ProcessNames`` - Farming Simulator's launcher and ``…Game`` exe), and
+they are looked for only while that game holds a savegame, so a machine with nothing checked out asks for no
+process list. The held slots are hashed when the game is first seen running and again when it is gone; a save
+counts when its bytes differ from both the session's start and the check-out - so an evening in another save,
+or a *keep playing* check-in halfway through, is not reminded about. A game already running when the app
+started, and a save checked out mid-session, are measured from the check-out. One toast per savegame, whose
+click opens the save's notice (``save/{id}``), where check-in is; ``DriftToastPlanner.Remind`` counts that
+notice as announced so the drift check the closing sets off does not repeat it. **While the game runs**, a
+savegame notice saying nothing but unchecked-in play is held back from the digest
+(``DriftToastPlanner.IsPlayInProgress``) - it would land on top of the evening it describes. A takeover or the
+wrong mod list is still announced mid-game.
+
 **Windows will not show an unpackaged app's toasts without a Start Menu shortcut** naming its exe and carrying
 its app ID - the toast is accepted, recorded in history and never drawn, with no error. The toolkit's own
 registry-only registration is not enough, so ``WindowsToasts.Register`` claims the identity itself

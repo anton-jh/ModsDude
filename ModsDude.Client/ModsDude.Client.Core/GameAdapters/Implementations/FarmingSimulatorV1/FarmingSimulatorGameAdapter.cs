@@ -99,6 +99,14 @@ public class FarmingSimulatorBaseGameAdapter(
         ? EnumTitle(version) ?? DisplayName
         : DisplayName;
 
+    /// <summary>
+    /// The launcher, <c>FarmingSimulator2025.exe</c>, and the game it starts from <c>x64</c>,
+    /// <c>FarmingSimulator2025Game.exe</c> - named after the year the enum is numbered by.
+    /// </summary>
+    public IReadOnlyList<string> ProcessNames => BaseSettings.GameVersion is FarmingSimulatorGameVersion version
+        ? [$"FarmingSimulator{(int)version}", $"FarmingSimulator{(int)version}Game"]
+        : [];
+
 
     /// <summary>
     /// ModHub, where the server crawls the repo's game - and nothing at all otherwise, so the capability

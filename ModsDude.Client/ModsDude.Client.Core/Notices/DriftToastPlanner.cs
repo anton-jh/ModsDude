@@ -1,3 +1,7 @@
+using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Sync;
+
 namespace ModsDude.Client.Core.Notices;
 
 /// <summary>
@@ -43,6 +47,12 @@ public sealed record DriftToast(string Title, string Body, string? NoticeKey);
 /// in memory only: an unresolved problem is mentioned once per run of the app, which after a start at
 /// sign-in is the reminder the user would want.
 /// </para>
+/// <para>
+/// <b>Play in progress is held back.</b> A savegame being played gains unchecked-in play the first
+/// time the game saves, and a toast saying so would land on top of the game in the middle of the
+/// evening it describes. It is neither announced nor counted as seen while that game runs; the
+/// reminder when the game closes - see <see cref="Remind"/> - says it instead.
+/// </para>
 /// </remarks>
 public sealed class DriftToastPlanner
 {
@@ -53,6 +63,9 @@ public sealed class DriftToastPlanner
     private const string UnreachablePrefix = "unreachable/";
 
     private HashSet<string> _known = [];
+
+    /// <summary>Notices a reminder has already spoken for, before they are up to be seen.</summary>
+    private readonly HashSet<string> _reminded = [];
 
 
     /// <summary>
@@ -65,14 +78,29 @@ public sealed class DriftToastPlanner
     /// own start-up.
     /// </param>
     /// <param name="windowInFront">Whether the user is looking at the window right now.</param>
-    public DriftToast? Observe(IReadOnlyList<Notice> live, bool reposLoaded, bool windowInFront)
+    /// <param name="holdBack">
+    /// Notices to say nothing about yet, and not to count as seen either - see
+    /// <see cref="IsPlayInProgress"/>. Once this stops holding one back it is news like any other.
+    /// </param>
+    public DriftToast? Observe(
+        IReadOnlyList<Notice> live,
+        bool reposLoaded,
+        bool windowInFront,
+        Func<Notice, bool>? holdBack = null)
     {
-        var eligible = live.Where(x => IsEligible(x, reposLoaded)).ToList();
+        var eligible = live
+            .Where(x => IsEligible(x, reposLoaded))
+            .Where(x => holdBack?.Invoke(x) is not true)
+            .ToList();
 
-        var fresh = eligible.Any(x => _known.Contains(x.Key) is false);
+        var fresh = eligible.Any(x => _known.Contains(x.Key) is false && _reminded.Contains(x.Key) is false);
 
         // Replaced rather than added to: a key that left has to be able to be news again.
         _known = [.. eligible.Select(x => x.Key)];
+
+        // A reminder's notice is known from the first time it is actually up, and like any other
+        // from then on.
+        _reminded.ExceptWith(_known);
 
         if (fresh is false || windowInFront)
         {
@@ -80,6 +108,55 @@ public sealed class DriftToastPlanner
         }
 
         return Describe(eligible);
+    }
+
+    /// <summary>
+    /// The reminder for a checked-out savegame played in a session that has just ended.
+    /// </summary>
+    /// <remarks>
+    /// Its notice counts as announced from here on, so the drift check that follows the game closing
+    /// does not say the same thing a second time in the digest - even where that check is the first
+    /// to find the notice at all, because the game's last save was written as it closed.
+    /// </remarks>
+    public DriftToast Remind(PlayedSavegame played)
+    {
+        _reminded.Add(played.NoticeKey);
+
+        var save = played.SlotDisplayName is { Length: > 0 } name ? $"'{name}'" : "the savegame you have checked out";
+
+        return new DriftToast(
+            $"Check in {save}",
+            $"You played {save} in {played.GameName}. Until it is checked in, that play exists only on this machine.",
+            played.NoticeKey);
+    }
+
+    /// <summary>
+    /// Whether a notice says nothing but that a savegame is being played in a game that is running
+    /// right now - the one thing worth holding back until it closes.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nothing but.</b> A save taken over by somebody else, or sitting on the wrong mod list, is
+    /// worth hearing about mid-game - the second is exactly what damages it - so a notice saying
+    /// either of those as well is not held back.
+    /// </remarks>
+    public static bool IsPlayInProgress(
+        Notice notice,
+        IReadOnlyList<TargetDrift> drifted,
+        Func<GameIdentity, bool> isRunning)
+    {
+        if (notice.Subject is not { SavegameId: Guid savegameId } subject
+            || notice.Key != NoticeBuilder.SavegameKey(savegameId)
+            || isRunning(subject.Game) is false)
+        {
+            return false;
+        }
+
+        var kinds = drifted
+            .SelectMany(x => x.Report.SavegameDrift)
+            .Where(x => x.SavegameId == savegameId)
+            .ToList();
+
+        return kinds.Count > 0 && kinds.All(x => x.Kind is SavegameDriftKind.UncheckedInPlay);
     }
 
 

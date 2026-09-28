@@ -1,4 +1,6 @@
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Tests.Notices;
 
@@ -185,5 +187,99 @@ public class DriftToastPlannerTests
 
         Assert.True(cut!.Body.Length <= DriftToastPlanner.MaxBodyLength + 3);
         Assert.EndsWith("...", cut.Body);
+    }
+
+
+    private static readonly Guid _savegameId = Guid.NewGuid();
+
+    private static Notice SaveNotice() => Make(NoticeBuilder.SavegameKey(_savegameId), NoticeSeverity.Critical, "'My farm' holds play") with
+    {
+        Subject = new NoticeSubject(Keys.Game(), "FS25") { SavegameId = _savegameId }
+    };
+
+    private static IReadOnlyList<TargetDrift> SaveDrift(params SavegameDriftKind[] kinds) =>
+    [
+        new TargetDrift(
+            new DriftCandidate(Keys.Game(), "FS25", [], null),
+            null,
+            DriftReport.For(DriftStatus.NoActiveProfile) with
+            {
+                SavegameDrift = [.. kinds.Select(x => new SavegameDrift(Guid.NewGuid(), _savegameId, Keys.Slot("savegame1"), x))]
+            },
+            null)
+    ];
+
+    private static PlayedSavegame Played(string? name = "My farm")
+        => new(Keys.Game(), "Farming Simulator 25", Guid.NewGuid(), _savegameId, name);
+
+
+    [Fact]
+    public void Play_in_a_running_game_is_held_back()
+    {
+        Assert.True(DriftToastPlanner.IsPlayInProgress(SaveNotice(), SaveDrift(SavegameDriftKind.UncheckedInPlay), _ => true));
+    }
+
+    [Fact]
+    public void Play_is_not_held_back_once_the_game_has_closed()
+    {
+        Assert.False(DriftToastPlanner.IsPlayInProgress(SaveNotice(), SaveDrift(SavegameDriftKind.UncheckedInPlay), _ => false));
+    }
+
+    /// <summary>The wrong mod list is what damages a save, and that is worth hearing mid-game.</summary>
+    [Theory]
+    [InlineData(SavegameDriftKind.PlayedOnAnotherModList)]
+    [InlineData(SavegameDriftKind.TakenOver)]
+    [InlineData(SavegameDriftKind.TakenOverAndCheckedIn)]
+    public void A_save_with_more_to_say_than_play_is_not_held_back(SavegameDriftKind other)
+    {
+        Assert.False(DriftToastPlanner.IsPlayInProgress(SaveNotice(), SaveDrift(SavegameDriftKind.UncheckedInPlay, other), _ => true));
+    }
+
+    [Fact]
+    public void A_held_back_notice_is_news_once_it_stops_being_held_back()
+    {
+        var planner = new DriftToastPlanner();
+
+        Assert.Null(planner.Observe([SaveNotice()], true, false, holdBack: _ => true));
+        Assert.NotNull(planner.Observe([SaveNotice()], true, false));
+    }
+
+    [Fact]
+    public void The_reminder_points_at_the_saves_notice_and_names_it()
+    {
+        var toast = new DriftToastPlanner().Remind(Played());
+
+        Assert.Equal("Check in 'My farm'", toast.Title);
+        Assert.Contains("Farming Simulator 25", toast.Body);
+        Assert.Equal(NoticeBuilder.SavegameKey(_savegameId), toast.NoticeKey);
+    }
+
+    [Fact]
+    public void A_save_the_game_has_no_name_for_is_still_reminded_about()
+    {
+        Assert.Equal("Check in the savegame you have checked out", new DriftToastPlanner().Remind(Played(name: null)).Title);
+    }
+
+    /// <summary>The drift check after the game closes finds what the reminder already said.</summary>
+    [Fact]
+    public void A_notice_the_reminder_spoke_for_is_not_announced_again()
+    {
+        var planner = new DriftToastPlanner();
+
+        planner.Remind(Played());
+
+        Assert.Null(planner.Observe([SaveNotice()], true, false));
+    }
+
+    [Fact]
+    public void A_reminded_notice_that_went_away_and_came_back_is_news_again()
+    {
+        var planner = new DriftToastPlanner();
+
+        planner.Remind(Played());
+        planner.Observe([SaveNotice()], true, false);
+        planner.Observe([], true, false);
+
+        Assert.NotNull(planner.Observe([SaveNotice()], true, false));
     }
 }

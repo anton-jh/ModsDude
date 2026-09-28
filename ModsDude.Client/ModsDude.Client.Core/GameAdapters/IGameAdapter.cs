@@ -59,6 +59,19 @@ public interface IBaseGameAdapter : IGameAdapter
     /// </remarks>
     GameIdentity Scope => new(Id.Id);
 
+    /// <summary>
+    /// The names of the processes that are this game running, without <c>.exe</c> - any one of them
+    /// alive is the game being played.
+    /// </summary>
+    /// <remarks>
+    /// What lets the client notice somebody stopping play, which is the moment a checked-out savegame
+    /// is worth a reminder to check it in. Every process a launch passes through belongs here - a
+    /// launcher that stays up beside the game as well as the game itself - so that the hand-over from
+    /// one to the other never reads as the game having closed. Empty, the default, is a game whose
+    /// sessions nobody can see; nothing about it is then reminded of, which is the answer from before.
+    /// </remarks>
+    IReadOnlyList<string> ProcessNames => [];
+
     DynamicForm GetLocalSettingsTemplate();
     DynamicForm DeserializeLocalSettings(string serializedLocalSettings);
     Func<T>? GetBaseCapabilityAdapterFactory<T>();

@@ -143,7 +143,27 @@ public interface IHeldSavegames
     /// </para>
     /// </remarks>
     Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct);
+
+    /// <summary>
+    /// Every savegame this game holds, with its slot hashed now - the bytes a play session is
+    /// measured by.
+    /// </summary>
+    /// <remarks>
+    /// The same reading <see cref="CheckDriftAsync"/> classifies, and it leaves out the same holds: one
+    /// whose target the adapter no longer offers. A slot that is empty or could not be read comes back
+    /// with no hash, which says nothing rather than saying it moved.
+    /// </remarks>
+    Task<IReadOnlyList<HeldSlotReading>> ReadHeldAsync(GameIdentity game, CancellationToken ct);
 }
+
+
+/// <summary>One held savegame's slot, as it was read just now.</summary>
+/// <param name="CurrentHash">The slot's bytes hashed, or null where it is empty or could not be read.</param>
+/// <param name="SlotDisplayName">What the game calls the save in that slot, where it could be read.</param>
+public sealed record HeldSlotReading(
+    SavegameCheckoutBinding Binding,
+    string? CurrentHash,
+    string? SlotDisplayName);
 
 
 /// <summary>
@@ -1121,6 +1141,48 @@ public sealed class SavegameService(
 
     public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
     {
+        var drift = new List<SavegameDrift>();
+
+        foreach (var (binding, currentHash, slotDisplayName) in await ReadHeldAsync(game, ct))
+        {
+            var head = sightings?.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
+            var claim = sightings?.GetClaim(binding.RepoId, binding.SavegameId);
+
+            // This folder's own manifest, not an average of the game's: what a held save was played
+            // against is what the folder it sits in was applied to, and with several targets the
+            // others are answering about somebody else's evening.
+            var manifest = manifestStore.TryRead(new ModTargetRef(game, binding.Slot.Target));
+
+            var kinds = SavegameDriftRules.Classify(
+                binding,
+                currentHash,
+                head,
+                manifest?.ProfileId,
+                manifest?.ProfileRevision,
+                claim);
+
+            drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
+            {
+                SlotDisplayName = slotDisplayName,
+                HeldSnapshot = binding.Snapshot,
+                HeadSnapshot = head,
+                PlayedRevision = binding.ProfileRevision,
+                AppliedRevision = manifest?.ProfileRevision,
+                TargetRevision = binding.TargetRevision,
+                // Computed here rather than reported by the rule, because the caller already holds
+                // both halves and the rule answers kinds rather than reasons.
+                RunsOnAnotherProfile = binding.ProfileId is not null
+                    && manifest?.ProfileId is not null
+                    && binding.ProfileId != manifest.ProfileId,
+                TakenBy = kind is SavegameDriftKind.TakenOver ? claim?.Holder : null
+            }));
+        }
+
+        return drift;
+    }
+
+    public async Task<IReadOnlyList<HeldSlotReading>> ReadHeldAsync(GameIdentity game, CancellationToken ct)
+    {
         var held = bindings.GetBindings(game);
 
         // The overwhelmingly common answer, and it costs one list read: a slot is occupied by
@@ -1141,7 +1203,7 @@ public sealed class SavegameService(
         // one or two in one folder and listing twenty slots twice for them is a directory pass with
         // nothing to show for it.
         var slotsByTarget = new Dictionary<TargetKey, IReadOnlyList<GameSavegameSlot>>();
-        var drift = new List<SavegameDrift>();
+        var readings = new List<HeldSlotReading>();
 
         foreach (var binding in held)
         {
@@ -1163,13 +1225,6 @@ public sealed class SavegameService(
             }
 
             var slot = slots.FirstOrDefault(x => x.Ref.Addresses(binding.Slot));
-            var head = sightings?.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
-            var claim = sightings?.GetClaim(binding.RepoId, binding.SavegameId);
-
-            // This folder's own manifest, not an average of the game's: what a held save was played
-            // against is what the folder it sits in was applied to, and with several targets the
-            // others are answering about somebody else's evening.
-            var manifest = manifestStore.TryRead(new ModTargetRef(game, binding.Slot.Target));
 
             // One hash per held savegame, and only where the folder is still there. A slot the user
             // deleted from inside the game has no contents to have moved, and hashing a missing
@@ -1178,32 +1233,10 @@ public sealed class SavegameService(
                 ? await HashOrNothing(adapter, savegameTarget, binding.Slot.Slot, ct)
                 : null;
 
-            var kinds = SavegameDriftRules.Classify(
-                binding,
-                currentHash,
-                head,
-                manifest?.ProfileId,
-                manifest?.ProfileRevision,
-                claim);
-
-            drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
-            {
-                SlotDisplayName = slot?.DisplayName,
-                HeldSnapshot = binding.Snapshot,
-                HeadSnapshot = head,
-                PlayedRevision = binding.ProfileRevision,
-                AppliedRevision = manifest?.ProfileRevision,
-                TargetRevision = binding.TargetRevision,
-                // Computed here rather than reported by the rule, because the caller already holds
-                // both halves and the rule answers kinds rather than reasons.
-                RunsOnAnotherProfile = binding.ProfileId is not null
-                    && manifest?.ProfileId is not null
-                    && binding.ProfileId != manifest.ProfileId,
-                TakenBy = kind is SavegameDriftKind.TakenOver ? claim?.Holder : null
-            }));
+            readings.Add(new HeldSlotReading(binding, currentHash, slot?.DisplayName));
         }
 
-        return drift;
+        return readings;
     }
 
 
