@@ -303,7 +303,13 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
             if (parent is not null)
             {
+                var cancelBefore = _shown?.CancelOwner;
+
                 parent.Children.Add(task);
+
+                // A step of a gesture that has no Cancel of its own brings one to a page already on
+                // screen - where the last step's may have been a moment ago, doing something else.
+                GuardIfCancelMoved(cancelBefore);
             }
             else
             {
@@ -383,13 +389,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
                 }
             }
 
-            // Whatever Cancel now sits under the pointer got there without being asked - a
-            // neighbouring page, or the next step of a gesture whose own has none - which is why it
-            // is dead for a moment.
-            if (_shown?.CancelOwner is { } cancelAfter && ReferenceEquals(cancelAfter, cancelBefore) is false)
-            {
-                _cancelGuardFrom = Stopwatch.GetTimestamp();
-            }
+            GuardIfCancelMoved(cancelBefore);
         }
 
         // Only where this flow still points at it. A task ended from somewhere else leaves the flow
@@ -400,6 +400,23 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         }
 
         Publish(immediate: true);
+    }
+
+    /// <summary>
+    /// Deadens Cancel for a moment where the one on screen now belongs to a different task than
+    /// <paramref name="before"/>. Under the lock.
+    /// </summary>
+    /// <remarks>
+    /// Whatever Cancel sits under the pointer got there without being asked - a neighbouring page, or
+    /// the next step of a gesture whose own has none - and a click aimed at the one before must not
+    /// land on it.
+    /// </remarks>
+    private void GuardIfCancelMoved(RunningTask? before)
+    {
+        if (_shown?.CancelOwner is { } after && ReferenceEquals(after, before) is false)
+        {
+            _cancelGuardFrom = Stopwatch.GetTimestamp();
+        }
     }
 
     /// <summary>The nearest of this task and its ancestors that has not ended. Under the lock.</summary>
