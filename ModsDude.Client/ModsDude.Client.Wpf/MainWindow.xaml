@@ -32,10 +32,13 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
+        <!-- Nothing in this grid keeps a gap from the top edge. The window's own background is the
+             title bar's colour, so a strip of it under the caption reads as more title bar - one the
+             native minimise, maximise and close buttons stop short of, which looks like their bottom
+             was cut off. -->
         <Frame Grid.Column="0"
                Content="{Binding Path=CurrentPage}"
-               NavigationUIVisibility="Hidden"
-               Margin="0 12 0 0"/>
+               NavigationUIVisibility="Hidden" />
 
         <!-- Along the top edge, and about the present rather than the past: the two notices in the
              bottom corner both report something that has already happened and both offer a way to
@@ -218,7 +221,6 @@
         <Border Grid.Column="0"
                 HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Width="420"
-                Margin="0 12 0 0"
                 Padding="12"
                 Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
                 BorderThickness="1 0 0 0"
@@ -470,8 +472,7 @@
         <Button Grid.Column="1"
                 Width="34"
                 ToolTip="Show notices"
-                Command="{Binding Notices.ToggleCollapsedCommand}"
-                Margin="0 12 0 0">
+                Command="{Binding Notices.ToggleCollapsedCommand}">
 
             <!-- Its own template rather than the theme's. A Fluent Button lays its content out in a
                  padded, centred, corner-rounded box, which leaves the stripe floating in the middle
@@ -595,8 +596,7 @@
 
         <Grid Grid.Column="0" Grid.ColumnSpan="2"
               Background="{DynamicResource SmokeFillColorDefaultBrush}"
-              Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-              Margin="0 12 0 0">
+              Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}">
 
             <ContentControl Content="{Binding Modal}"
                             HorizontalAlignment="Center"
