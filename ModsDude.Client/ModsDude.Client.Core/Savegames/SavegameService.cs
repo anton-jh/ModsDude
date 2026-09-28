@@ -184,6 +184,21 @@ public sealed record HeldSlotReading(
 public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision);
 
 
+/// <summary>What a check-in minted, and whether the local copy it was meant to hand back is still there.</summary>
+/// <param name="LocalCopyLeftBehind">
+/// The claim was released and the binding cleared, but the slot's folder could not be moved to the
+/// Recycle Bin - see <see cref="SavegameService.Recycle"/>. Never true where the save was kept.
+/// </param>
+public sealed record SavegameCheckInResult(SavegameSnapshotDto Snapshot, bool LocalCopyLeftBehind);
+
+
+/// <summary>What a publish created, and whether the local copy it was meant to hand back is still there.</summary>
+/// <param name="LocalCopyLeftBehind">
+/// The same as <see cref="SavegameCheckInResult.LocalCopyLeftBehind"/>. Never true where the save was kept.
+/// </param>
+public sealed record SavegamePublishResult(SavegameDto Savegame, bool LocalCopyLeftBehind);
+
+
 /// <summary>
 /// The four verbs of a savegame - publish, check out, check in, discard - plus the slot questions the
 /// picker asks before any of them.
@@ -256,7 +271,7 @@ public interface ISavegameService : IHeldSavegames
     /// see <see cref="ILocalSavegameAdapter.RenameSavegame"/> - and null where the caller has no name
     /// it is sure is right, since writing the wrong one is worse than leaving the old one standing.
     /// </param>
-    Task<SavegameSnapshotDto> CheckInAsync(
+    Task<SavegameCheckInResult> CheckInAsync(
         Game game,
         Guid savegameId,
         string? label,
@@ -306,7 +321,7 @@ public interface ISavegameService : IHeldSavegames
     /// Whether to stay holding the save afterwards. False hands it straight back, which is what
     /// publishing to a mod list this game is not on has to do - see <see cref="SavegameService.PublishAsync"/>.
     /// </param>
-    Task<SavegameDto> PublishAsync(
+    Task<SavegamePublishResult> PublishAsync(
         Game game,
         Guid repoId,
         SavegameSlotRef slot,
@@ -318,7 +333,11 @@ public interface ISavegameService : IHeldSavegames
         IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Gives a savegame back without minting a snapshot - taken by mistake, never played.</summary>
-    Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct);
+    /// <returns>
+    /// Whether the local copy reached the Recycle Bin. False where it is still in its slot, as a
+    /// folder nothing tracks - the claim is released either way.
+    /// </returns>
+    Task<bool> DiscardAsync(Game game, Guid savegameId, CancellationToken ct);
 
     /// <summary>
     /// Cuts every local tie to a savegame: this machine stops claiming to hold it, and stops
@@ -777,7 +796,7 @@ public sealed class SavegameService(
     /// <see cref="ILocalSavegameAdapter.RenameSavegame"/>.
     /// </param>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
-    public async Task<SavegameSnapshotDto> CheckInAsync(
+    public async Task<SavegameCheckInResult> CheckInAsync(
         Game game,
         Guid savegameId,
         string? label,
@@ -877,16 +896,15 @@ public sealed class SavegameService(
                 LastPlayedRevision = null
             });
 
-            return snapshot;
+            return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: false);
         }
 
         // Only now. The binding goes first so that a failure to recycle cannot leave a slot claimed
         // by a savegame that is no longer checked out - the folder left behind reads as unrecognised,
         // which needs a confirmation to displace, and that is the safe way round.
         bindings.ClearBinding(game.Identity, savegameId);
-        Recycle(adapter, target, slot);
 
-        return snapshot;
+        return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: Recycle(adapter, target, slot) is false);
     }
 
     /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
@@ -955,7 +973,7 @@ public sealed class SavegameService(
     /// <exception cref="UserFriendlyException">
     /// The game already holds a savegame that claims its mod folder.
     /// </exception>
-    public async Task<SavegameDto> PublishAsync(
+    public async Task<SavegamePublishResult> PublishAsync(
         Game game,
         Guid repoId,
         SavegameSlotRef slot,
@@ -1042,10 +1060,12 @@ public sealed class SavegameService(
             // the claim somebody else is waiting on, forget the binding, recycle the copy. Reused
             // rather than repeated - "publish and hand back" is a publish followed by exactly the
             // give-it-back verb, and two copies of that order would eventually disagree about it.
-            await DiscardAsync(game, savegameId, ct);
+            var recycled = await DiscardAsync(game, savegameId, ct);
+
+            return new SavegamePublishResult(savegame, LocalCopyLeftBehind: recycled is false);
         }
 
-        return savegame;
+        return new SavegamePublishResult(savegame, LocalCopyLeftBehind: false);
     }
 
     /// <summary>
@@ -1057,7 +1077,7 @@ public sealed class SavegameService(
     /// explicit "I never played this".
     /// </remarks>
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
-    public async Task DiscardAsync(Game game, Guid savegameId, CancellationToken ct)
+    public async Task<bool> DiscardAsync(Game game, Guid savegameId, CancellationToken ct)
     {
         var adapter = RequireAdapter(game);
         var binding = bindings.GetBinding(game.Identity, savegameId)
@@ -1077,7 +1097,8 @@ public sealed class SavegameService(
         await savegamesClient.DiscardSavegameCheckoutV1Async(binding.RepoId, savegameId, ct);
 
         bindings.ClearBinding(game.Identity, savegameId);
-        Recycle(adapter, target, binding.Slot.Slot);
+
+        return Recycle(adapter, target, binding.Slot.Slot);
     }
 
     public async Task ObserveAsync(ModTargetRef target, CancellationToken ct)
@@ -1634,27 +1655,50 @@ public sealed class SavegameService(
     /// Sends a slot's folder to the Recycle Bin.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>A failure here is not an error.</b> The bytes are on the server by the time this runs, and
     /// the binding is already gone, so a folder left behind reads as an unrecognised slot - which
     /// needs a confirmation to displace and goes to the bin when it is. Deleting it outright instead
     /// would be the one thing the uninstall rules never permit, and failing the check-in over it
     /// would report a hand-back that plainly succeeded as broken.
+    /// </para>
+    /// <para>
+    /// <b>But it is reported.</b> The shell says no by returning, not by throwing, so a refusal used to
+    /// pass in silence and the caller went on to tell the user their copy was in the Recycle Bin while
+    /// it sat in the slot. The answer goes back up so the sentence can be true.
+    /// </para>
+    /// <para>
+    /// A volume with no Recycle Bin is not asked at all: there the shell's only way to "recycle" is to
+    /// delete, and a copy left in the slot is recoverable where a deleted one is not.
+    /// </para>
     /// </remarks>
-    private void Recycle(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
+    /// <returns>Whether the folder is gone - recycled, or never there to begin with.</returns>
+    private bool Recycle(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
     {
         try
         {
             var path = adapter.GetSlotPath(target, slot);
 
-            if (Directory.Exists(path))
+            if (Directory.Exists(path) is false)
             {
-                recycleBin.TryRecycle(path);
+                return true;
             }
+
+            if (recycleBin.IsAvailableFor(path) && recycleBin.TryRecycle(path) && Directory.Exists(path) is false)
+            {
+                return true;
+            }
+
+            logger.LogWarning("Could not move slot {Slot} to the Recycle Bin after handing it back; it is still at {Path}.", slot.Value, path);
+
+            return false;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The game holding a file open in a save that has just been checked in. Left where it is.
-            logger.LogWarning(exception, "Could not clear slot {Slot} after checking in.", slot.Value);
+            logger.LogWarning(exception, "Could not clear slot {Slot} after handing it back.", slot.Value);
+
+            return false;
         }
     }
 

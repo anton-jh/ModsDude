@@ -68,6 +68,18 @@ public sealed class SavegameFlowService(
     private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>
+    /// What a hand-back says where the claim went back but the folder would not go to the Recycle Bin.
+    /// </summary>
+    /// <remarks>
+    /// Said, because every other ending of these verbs promises the Recycle Bin, and the slot picker is
+    /// otherwise where somebody finds out it was not true. Deleting it is safe to suggest: nothing is
+    /// handed back until the bytes are on the server.
+    /// </remarks>
+    private static string LeftBehind(string slot)
+        => $"Your copy could not be moved to the Recycle Bin, so it is still in {slot} - an ordinary save ModsDude " +
+           "no longer tracks. Delete it yourself, or keep it as a save of your own.";
+
+    /// <summary>
     /// The heading for a refusal because the repo's game is not connected - which, for a game that
     /// connects by itself, can only mean it is not installed here.
     /// </summary>
@@ -152,7 +164,12 @@ public sealed class SavegameFlowService(
 
         using var task = backgroundTasks.Begin($"Giving '{savegameName}' back", "Releasing the claim, then recycling the local copy");
 
-        await savegames.DiscardAsync(game, savegameId, cancellationToken);
+        var recycled = await savegames.DiscardAsync(game, savegameId, cancellationToken);
+
+        toasts.Show(recycled
+            ? $"'{savegameName}' was given back without a snapshot. The local copy is in the Recycle Bin."
+            : $"'{savegameName}' was given back without a snapshot. {LeftBehind(slot)}",
+            recycled ? ToastSeverity.Info : ToastSeverity.Warning);
 
         return true;
     }
@@ -233,6 +250,9 @@ public sealed class SavegameFlowService(
             // the slot's own id is a folder name the player has never thought in, and what they are
             // handing back is the save rather than the folder. It is this savegame's own record, so it
             // also stands as the name to write into the slot before it is packed.
+            // The slot is named now, while the binding that knows it is still there.
+            var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
+
             var outcome = await CheckInAsync(game, savegameId, savegameName, savegameName, cancellationToken, renameTo: savegameName);
 
             if (outcome.WasDeferred)
@@ -247,9 +267,18 @@ public sealed class SavegameFlowService(
                 return;
             }
 
-            toasts.Show(outcome.KeptPlaying
-                ? $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and still yours."
-                : $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take.");
+            if (outcome.LocalCopyLeftBehind)
+            {
+                toasts.Show(
+                    $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take. {LeftBehind(slot)}",
+                    ToastSeverity.Warning);
+            }
+            else
+            {
+                toasts.Show(outcome.KeptPlaying
+                    ? $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and still yours."
+                    : $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take.");
+            }
 
             await driftMonitor.CheckAsync();
             await changed();
@@ -699,6 +728,14 @@ public sealed class SavegameFlowService(
                 ToastSeverity.Warning);
 
             return;
+        }
+
+        if (outcome.LocalCopyLeftBehind)
+        {
+            // The slot is no longer claimed but not empty either, so the dialog about to open again
+            // offers it as an unrecognised save - which needs saying, or it reads as the check-in
+            // having done nothing.
+            toasts.Show(LeftBehind(blockingName is null ? "its slot" : $"'{blockingName}'s slot"), ToastSeverity.Warning);
         }
 
         await changed();
@@ -1154,13 +1191,24 @@ public sealed class SavegameFlowService(
                 return;
             }
 
-            // Two endings, because the slot is in a different state in each and the sentence is the
-            // only thing that says which. A publish that handed the save back emptied the folder.
-            toasts.Show(outcome.KeptPlaying
-                ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you. " +
-                  "The save has not moved - check it in when you want somebody else to be able to take it."
-                : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the " +
-                  "Recycle Bin - check it out again once the game is on that mod list.");
+            // Three endings, because the slot is in a different state in each and the sentence is the
+            // only thing that says which. A publish that handed the save back emptied the folder -
+            // unless the Recycle Bin refused it, which is the one that has to be said out loud.
+            if (outcome.LocalCopyLeftBehind)
+            {
+                toasts.Show(
+                    $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. " +
+                    LeftBehind(SavegameSlotWording.Named(savegames.DescribeSlotNumber(game, chosen.Ref), outcome.Savegame.Name)),
+                    ToastSeverity.Warning);
+            }
+            else
+            {
+                toasts.Show(outcome.KeptPlaying
+                    ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you. " +
+                      "The save has not moved - check it in when you want somebody else to be able to take it."
+                    : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the " +
+                      "Recycle Bin - check it out again once the game is on that mod list.");
+            }
 
             await published(outcome.Savegame.Id);
         }
@@ -1263,11 +1311,11 @@ public sealed class SavegameFlowService(
 
         task.DeclareTransfers(TransferDirection.Upload);
 
-        var savegame = await savegames.PublishAsync(
+        var result = await savegames.PublishAsync(
             game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken,
             new SavegameStripProgress(task));
 
-        return new SavegamePublishOutcome(savegame, keepPlaying);
+        return new SavegamePublishOutcome(result.Savegame, keepPlaying, result.LocalCopyLeftBehind);
     }
 
     /// <summary>
@@ -1393,10 +1441,10 @@ public sealed class SavegameFlowService(
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
             task.DeclareTransfers(TransferDirection.Upload);
 
-            var snapshot = await savegames.CheckInAsync(
+            var result = await savegames.CheckInAsync(
                 game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task), renameTo);
 
-            return SavegameCheckInOutcome.CheckedIn(snapshot, keepPlaying);
+            return SavegameCheckInOutcome.CheckedIn(result.Snapshot, keepPlaying, result.LocalCopyLeftBehind);
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
@@ -1453,22 +1501,26 @@ public sealed record SavegameHost(
 /// savegame anybody can take, and a caller that said "checked out to you" over it would be describing
 /// the state this dialog just took away.
 /// </remarks>
-public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlaying);
+public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlaying, bool LocalCopyLeftBehind);
 
 
 /// <summary>
 /// What a check-in ended up doing. Three outcomes rather than a nullable snapshot, because "you backed
 /// out" and "you chose to look at theirs first" leave the caller with different things to say.
 /// </summary>
-public sealed record SavegameCheckInOutcome(SavegameSnapshotDto? Snapshot, bool KeptPlaying, bool WasDeferred)
+/// <param name="LocalCopyLeftBehind">
+/// Handed back, but the slot's folder could not be moved to the Recycle Bin - see
+/// <see cref="SavegameCheckInResult.LocalCopyLeftBehind"/>.
+/// </param>
+public sealed record SavegameCheckInOutcome(SavegameSnapshotDto? Snapshot, bool KeptPlaying, bool WasDeferred, bool LocalCopyLeftBehind = false)
 {
     public static SavegameCheckInOutcome Cancelled { get; } = new(null, false, false);
 
     /// <summary>The base was stale and the user chose to look at the newer snapshot first.</summary>
     public static SavegameCheckInOutcome Deferred { get; } = new(null, false, true);
 
-    public static SavegameCheckInOutcome CheckedIn(SavegameSnapshotDto snapshot, bool keptPlaying)
-        => new(snapshot, keptPlaying, false);
+    public static SavegameCheckInOutcome CheckedIn(SavegameSnapshotDto snapshot, bool keptPlaying, bool localCopyLeftBehind)
+        => new(snapshot, keptPlaying, false, localCopyLeftBehind);
 
     public bool Succeeded => Snapshot is not null;
 

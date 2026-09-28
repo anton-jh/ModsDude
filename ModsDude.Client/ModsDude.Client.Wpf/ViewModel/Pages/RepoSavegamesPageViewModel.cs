@@ -1076,8 +1076,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            _toasts.Show($"'{row.Name}' was given back without a snapshot. The local copy is in the Recycle Bin.");
-
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
         }

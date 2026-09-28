@@ -232,7 +232,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
-        var savegame = await harness.Service.PublishAsync(
+        var (savegame, _) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None);
 
         Assert.Equal(4, Assert.Single(harness.Server.Publishes).ProfileRevision);
@@ -414,7 +414,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
+        var (snapshot, _) = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal(head.Number + 1, snapshot.Number);
@@ -548,7 +548,7 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
 
-        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
+        var (snapshot, _) = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
 
         Assert.Equal(SavegameSnapshotOrigin.Forced, snapshot.Origin);
         Assert.Equal(head.Number, snapshot.BaseSnapshot);
@@ -569,7 +569,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        var (snapshot, _) = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
         var binding = harness.Service.GetBinding(harness.Game, harness.Server.SavegameId);
 
@@ -615,7 +615,7 @@ public class SavegameServiceTests
 
         var snapshotsBefore = harness.Server.Snapshots.Count;
 
-        await harness.Service.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None);
+        Assert.True(await harness.Service.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
@@ -635,7 +635,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
-        var savegame = await harness.Service.PublishAsync(
+        var (savegame, _) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", "the beginning", harness.Target(), keepPlaying: true, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
@@ -675,7 +675,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
-        var savegame = await harness.Service.PublishAsync(
+        var (savegame, leftBehind) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
         // The savegame is real and the snapshot was minted: this is a publish, not a cancelled one.
@@ -686,10 +686,73 @@ public class SavegameServiceTests
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Null(harness.Service.GetBinding(harness.Game, savegame.Id));
         Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
+        Assert.False(leftBehind);
 
         // Which is what leaves the mod folder free for the next savegame, rather than spoken for by
         // one that is no longer here.
         Assert.True(harness.Service.DecideApply(harness.Game.Identity, Guid.NewGuid(), null).IsAllowed);
+    }
+
+    /// <summary>
+    /// The shell refuses by returning rather than throwing, so this used to pass in silence while the
+    /// caller told the user their copy was in the Recycle Bin. The hand-back itself still stands - the
+    /// bytes are on the server and the claim is released - but the answer says the folder stayed.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_without_keeping_it_says_so_when_the_recycle_bin_refuses_the_local_copy()
+    {
+        using var harness = new Harness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.RecycleBin.Refuses = true;
+
+        var (savegame, leftBehind) = await harness.Service.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.True(leftBehind);
+
+        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        Assert.Null(harness.Service.GetBinding(harness.Game, savegame.Id));
+
+        // Left exactly as it was, and read as a save nothing tracks - which needs a confirmation to
+        // displace, the safe way round.
+        Assert.Equal("a brand new savegame", harness.ReadSlotFile(_slot1));
+        Assert.Equal(SavegameSlotAvailability.Unrecognised, await harness.Service.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Checking_in_says_so_when_the_recycle_bin_refuses_the_local_copy()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        harness.RecycleBin.Refuses = true;
+
+        var result = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+
+        Assert.True(result.LocalCopyLeftBehind);
+        Assert.Null(harness.Service.GetBinding(harness.Game, harness.Server.SavegameId));
+        Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
+    }
+
+    [Fact]
+    public async Task Discarding_says_so_when_the_recycle_bin_refuses_the_local_copy()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.RecycleBin.Refuses = true;
+
+        Assert.False(await harness.Service.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
+
+        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        Assert.Null(harness.Service.GetBinding(harness.Game, harness.Server.SavegameId));
+        Assert.True(Directory.Exists(harness.SlotPath(_slot1)));
     }
 
     /// <summary>
@@ -731,7 +794,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot2, "an unmanaged savegame");
 
-        var savegame = await harness.Service.PublishAsync(
+        var (savegame, _) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot2, "Scratch", null, target: null, keepPlaying: true, CancellationToken.None);
 
         var request = Assert.Single(harness.Server.Publishes);
@@ -1008,7 +1071,7 @@ public class SavegameServiceTests
 
         await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        var snapshot = await harness.Service.CheckInAsync(
+        var (snapshot, _) = await harness.Service.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
             savegameName: "New name");
 
@@ -1050,7 +1113,7 @@ public class SavegameServiceTests
 
         harness.Adapter.ThrowOnRename = true;
 
-        var snapshot = await harness.Service.CheckInAsync(
+        var (snapshot, _) = await harness.Service.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
             savegameName: "New name");
 
@@ -1438,7 +1501,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var snapshot = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        var (snapshot, _) = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
 
         var rebased = harness.Binding(harness.Server.SavegameId);
 

@@ -512,12 +512,18 @@ internal sealed class FakeSlotRecycleBin(bool available = true) : IRecycleBin
 {
     public List<string> Recycled { get; } = [];
 
+    /// <summary>
+    /// Says no the way the shell does - by returning, with the folder left where it was - as it does
+    /// when something in the slot is held open.
+    /// </summary>
+    public bool Refuses { get; set; }
+
 
     public bool IsAvailableFor(string path) => available;
 
     public bool TryRecycle(string path)
     {
-        if (available is false)
+        if (available is false || Refuses)
         {
             return false;
         }
