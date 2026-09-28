@@ -1154,7 +1154,7 @@
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
 
-            <Grid ColumnDefinitions="auto auto auto * auto">
+            <Grid ColumnDefinitions="auto auto auto *">
 
                 <!-- Split button: the primary action is one click, and the variant costs opening the
                      dropdown. A checkbox would be persistent visible state, and one left ticked turns
@@ -1266,11 +1266,6 @@
                                Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
-
-                <Button Grid.Column="4" Margin="4 24 32 24"
-                        Content="Stop saving"
-                        Command="{Binding StopSavingCommand}"
-                        Visibility="{Binding IsSaving, Converter={StaticResource BoolToVisibilityConverter}}" />
             </Grid>
 
         </StackPanel>

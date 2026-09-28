@@ -697,7 +697,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     [NotifyCanExecuteChangedFor(nameof(SaveOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(DiscardChangesCommand))]
-    [NotifyCanExecuteChangedFor(nameof(StopSavingCommand))]
     private bool _isSaving;
 
     /// <summary>
@@ -2290,18 +2289,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     private bool CanSaveOnly() => CanSave() && WillApply;
-
-    /// <summary>
-    /// Stops the save this page is watching. The same act as the strip's own Cancel, because it is
-    /// the same cancellation source - and it works from either side of a navigation.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanStopSaving))]
-    private void StopSaving()
-    {
-        _saveService.Find(_profile.Id)?.Cancel?.Invoke();
-    }
-
-    private bool CanStopSaving() => IsSaving;
 
     /// <summary>
     /// The onboarding case: a profile nothing is using yet. Naming the game because here that
