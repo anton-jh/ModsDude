@@ -5,8 +5,8 @@ namespace ModsDude.Client.Core.Models;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Free-form, because the games are.</b> Farming Simulator has a map, a difficulty and a money
-/// balance; another game has a seed, a chapter and a death count; a third has none of it. Modelling
+/// <b>Free-form, because the games are.</b> Farming Simulator has a map, a difficulty and a
+/// playtime; another game has a seed, a chapter and a death count; a third has none of it. Modelling
 /// any of that as columns would mean either a schema with a hole in it for every game nobody wrote
 /// yet, or an adapter contract that grows a field per game. The adapter decides what is worth
 /// saying and what to call it, and everything above simply renders the list.
@@ -30,7 +30,7 @@ namespace ModsDude.Client.Core.Models;
 /// use the same id for the same idea, and equally free not to.
 /// </param>
 /// <param name="Label">What to print beside the value. Prose, and safe to change.</param>
-/// <param name="Value">Already formatted. The adapter knows what a playtime or a money balance means.</param>
+/// <param name="Value">Already formatted. The adapter knows what a playtime or a difficulty means.</param>
 public record SavegameDetail(string Id, string Label, string Value)
 {
     /// <summary>
@@ -43,7 +43,6 @@ public record SavegameDetail(string Id, string Label, string Value)
         public const string LastPlayed = "last-played";
         public const string Started = "started";
         public const string Playtime = "playtime";
-        public const string Money = "money";
         public const string Difficulty = "difficulty";
         public const string Multiplayer = "multiplayer";
     }
