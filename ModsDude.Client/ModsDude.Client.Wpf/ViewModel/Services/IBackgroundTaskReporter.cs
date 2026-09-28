@@ -46,6 +46,12 @@ public interface IBackgroundTaskReporter
     /// the moment somebody uses the very freedom this strip exists to give them, the Cancel they had
     /// is gone and the work is unstoppable. The strip outlives the page, which makes it the only
     /// honest place to put it.
+    /// <para>
+    /// <b>Begun while another is open in the same async flow, it is a step of that one</b> - drawn on
+    /// its page, under its title and its Cancel, rather than as a page of its own. Nothing is passed
+    /// for it: a service that reports its own work nests under whatever gesture called it, and has a
+    /// page to itself when nothing did.
+    /// </para>
     /// </remarks>
     IBackgroundTask Begin(string title, string? detail = null, Action? cancel = null);
 }

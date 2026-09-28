@@ -310,9 +310,10 @@ public sealed class ProfileSaveService(
 
         run.Cancel = stop.Cancel;
 
-        // The gesture's own entry, above the import's and the apply's. It is what makes a save
-        // visible - and stoppable - once the page that started it has been navigated away from,
-        // which is the half that was missing: the strip outlives the page and the page does not.
+        // The gesture's own entry, which the import and the apply begun inside it are drawn as steps
+        // of. It is what makes a save visible - and stoppable - once the page that started it has
+        // been navigated away from, which is the half that was missing: the strip outlives the page
+        // and the page does not.
         using var task = backgroundTasks.Begin($"Saving '{request.ProfileName}'", cancel: stop.Cancel);
 
         run.Strip = task;
