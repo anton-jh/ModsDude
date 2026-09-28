@@ -61,6 +61,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     private IReadOnlyList<SavegameDto> _fetched = [];
     private string? _currentUserId;
+    private Guid? _selectOnArrival;
 
 
     public RepoSavegamesPageViewModel(
@@ -319,9 +320,53 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
     protected override void OnInitCompleted()
     {
-        Publish(_fetched);
+        var select = _selectOnArrival;
+        _selectOnArrival = null;
+
+        if (select is Guid savegameId)
+        {
+            // Still loading, so turning the toggle on republishes nothing - the publish below draws it.
+            RevealIfPast(savegameId);
+        }
+
+        Publish(_fetched, select);
 
         IsLoading = false;
+    }
+
+    /// <summary>
+    /// Which savegame to arrive with selected, for a page opened by a link about one of them.
+    /// </summary>
+    public void SelectOnArrival(Guid? savegameId) => _selectOnArrival = savegameId;
+
+    /// <summary>
+    /// Selects one savegame on a page already open, for a link arriving while the user is on it.
+    /// </summary>
+    public void Select(Guid savegameId)
+    {
+        if (IsLoading)
+        {
+            _selectOnArrival = savegameId;
+
+            return;
+        }
+
+        RevealIfPast(savegameId);
+
+        Selected = Savegames.FirstOrDefault(x => x.Id == savegameId) ?? Selected;
+    }
+
+    /// <summary>
+    /// Turns past savegames on where the one being linked to is one of them - a held save pinned to an
+    /// old revision often is - since a link landing on a list that hides its row lands on the first row
+    /// instead, which is the confusion the link exists to prevent.
+    /// </summary>
+    private void RevealIfPast(Guid savegameId)
+    {
+        if (_fetched.FirstOrDefault(x => x.Id == savegameId)?.SupersededAt is not null)
+        {
+            ShowPastSavegames = true;
+        }
     }
 
     public void Dispose()
@@ -1222,7 +1267,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         /// Whether to arrive with the toggle already on. Set by a link from a profile, whose count of
         /// past savegames is only worth clicking if it lands on a list that shows them.
         /// </param>
-        public RepoSavegamesPageViewModel Create(Repo repo, bool showPastSavegames = false)
-            => ActivatorUtilities.CreateInstance<RepoSavegamesPageViewModel>(serviceProvider, repo, showPastSavegames);
+        /// <param name="select">The savegame to arrive with selected - see <see cref="SelectOnArrival"/>.</param>
+        public RepoSavegamesPageViewModel Create(Repo repo, bool showPastSavegames = false, Guid? select = null)
+        {
+            var page = ActivatorUtilities.CreateInstance<RepoSavegamesPageViewModel>(serviceProvider, repo, showPastSavegames);
+            page.SelectOnArrival(select);
+
+            return page;
+        }
     }
 }
