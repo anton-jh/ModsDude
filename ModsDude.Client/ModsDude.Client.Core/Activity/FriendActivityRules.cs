@@ -33,7 +33,7 @@ public interface IFriendActivityEnvironment
 
 
 /// <summary>
-/// The rules for drawing a friend's game and for following them onto it, in one place for Home, a
+/// The rules for drawing a friend's game and for following them onto it, in one place for a
 /// repo's overview and the notice column.
 /// </summary>
 public static class FriendActivityRules
@@ -78,7 +78,7 @@ public static class FriendActivityRules
     /// to where this user already is, and there is nothing to follow. Measured the way
     /// <see cref="CanFollow"/> measures it, so a friend held on a revision this game is not on still
     /// counts. A check-out is always news: it names the savegame they are playing, which the profile
-    /// alone does not. Home and a repo's overview still list the friend - this is only about announcing.
+    /// alone does not. A repo's overview still lists the friend - this is only about announcing.
     /// </remarks>
     public static bool IsWorthAnnouncing(GameActivityDto activity, IFriendActivityEnvironment environment)
         => activity.Kind is GameActivityKind.SavegameCheckedOut

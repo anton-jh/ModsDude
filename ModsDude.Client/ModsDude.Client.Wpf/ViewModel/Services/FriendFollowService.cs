@@ -9,7 +9,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Services;
 
 /// <summary>
 /// Puts this machine's game on what a friend is on - the one gesture behind every "Use this
-/// profile" button, on Home, on a repo's overview and on a notice.
+/// profile" button, on a repo's overview and on a notice.
 /// </summary>
 /// <remarks>
 /// <para>

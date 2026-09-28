@@ -177,8 +177,8 @@
                     </GroupBox>
                 </Border>
 
-                <!-- Who else is on which of this repo's profiles. The same list Home draws, limited to
-                     this repo; somebody on another repo's profile is not playing this one. -->
+                <!-- Who else is on which of this repo's profiles. Only this repo's: somebody on
+                     another repo's profile is not playing this one. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16"

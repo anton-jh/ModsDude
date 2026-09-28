@@ -9,8 +9,7 @@
              d:DataContext="{d:DesignInstance Type=vm:FriendActivityListViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="640">
 
-    <!-- Who is on what, most recently active first. The same control on Home, grouped by game, and on a
-         repo's overview, where the one game needs no heading. -->
+    <!-- Who is on which of one repo's profiles, most recently active first. -->
     <StackPanel Orientation="Vertical">
 
         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -18,76 +17,62 @@
                    Visibility="{Binding HasRows, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                    Text="{Binding EmptyText}" />
 
-        <ItemsControl ItemsSource="{Binding Groups}">
+        <ItemsControl ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="{x:Type vm:FriendActivityGroupViewModel}">
-                    <StackPanel Orientation="Vertical" Margin="0 0 0 12">
+                <DataTemplate DataType="{x:Type vm:FriendActivityRowViewModel}">
+                    <Grid Margin="0 0 0 12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                        <TextBlock FontWeight="SemiBold" Margin="0 0 0 8"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Visibility="{Binding DataContext.ShowGroupTitles, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                   Text="{Binding Title}" />
+                        <local:UserAvatar Grid.Column="0"
+                                          Width="32" Height="32"
+                                          VerticalAlignment="Top" Margin="0 2 12 0"
+                                          DataContext="{Binding Avatar}" />
 
-                        <ItemsControl ItemsSource="{Binding Rows}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:FriendActivityRowViewModel}">
-                                    <Grid Margin="0 0 0 12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="1" Orientation="Vertical">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Text="{Binding Name}" />
+                                <TextBlock Margin="6 0 0 0" FontFamily="Consolas"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Visibility="{Binding HasTag, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Text="{Binding Tag}" />
+                                <TextBlock Margin="8 0 0 0"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Text="{Binding ProfileLine}" />
+                            </StackPanel>
 
-                                        <local:UserAvatar Grid.Column="0"
-                                                          Width="32" Height="32"
-                                                          VerticalAlignment="Top" Margin="0 2 12 0"
-                                                          DataContext="{Binding Avatar}" />
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasProfileDetail, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="{Binding ProfileDetail}" />
 
-                                        <StackPanel Grid.Column="1" Orientation="Vertical">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                           Text="{Binding Name}" />
-                                                <TextBlock Margin="6 0 0 0" FontFamily="Consolas"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Visibility="{Binding HasTag, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                           Text="{Binding Tag}" />
-                                                <TextBlock Margin="8 0 0 0"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding ProfileLine}" />
-                                            </StackPanel>
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding Summary}" />
+                        </StackPanel>
 
-                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Visibility="{Binding HasProfileDetail, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Text="{Binding ProfileDetail}" />
-
-                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding Summary}" />
-                                        </StackPanel>
-
-                                        <!-- The button where following would change something, and the
-                                             reason in its place where it would not. -->
-                                        <StackPanel Grid.Column="2" Orientation="Vertical" Margin="12 0 0 0"
-                                                    VerticalAlignment="Center">
-                                            <Button Style="{DynamicResource AccentButtonStyle}"
-                                                    Content="{Binding FollowLabel}"
-                                                    Command="{Binding DataContext.FollowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    IsEnabled="{Binding IsIdle}"
-                                                    Visibility="{Binding CanFollow, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                            <TextBlock MaxWidth="220" TextWrapping="Wrap" TextAlignment="Right"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Visibility="{Binding HasFollowBlocked, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Text="{Binding FollowBlocked}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                        <!-- The button where following would change something, and the
+                             reason in its place where it would not. -->
+                        <StackPanel Grid.Column="2" Orientation="Vertical" Margin="12 0 0 0"
+                                    VerticalAlignment="Center">
+                            <Button Style="{DynamicResource AccentButtonStyle}"
+                                    Content="{Binding FollowLabel}"
+                                    Command="{Binding DataContext.FollowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    IsEnabled="{Binding IsIdle}"
+                                    Visibility="{Binding CanFollow, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <TextBlock MaxWidth="220" TextWrapping="Wrap" TextAlignment="Right"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding HasFollowBlocked, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="{Binding FollowBlocked}" />
+                        </StackPanel>
+                    </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

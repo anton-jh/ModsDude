@@ -21,7 +21,6 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 internal static class MenuIcons
 {
     // Top level
-    public const string Home = "\xE80F";
     public const string CreateRepo = "\xE710";
     public const string JoinRepo = "\xE71B";
     public const string Archive = "\xE7B8";

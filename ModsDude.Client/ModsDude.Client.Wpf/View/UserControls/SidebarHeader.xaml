@@ -5,11 +5,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
              xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
+             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance Type=local:SidebarHeader, IsDesignTimeCreatable=True}">
 
-    <Grid ColumnDefinitions="* auto auto" Margin="0 32 0 0">
+    <Grid ColumnDefinitions="* auto auto auto" Margin="0 32 0 0">
         <Grid.RowDefinitions>
             <!-- As tall as the buttons make it, whether or not they are drawn: a rail collapses them, and the rows
                  under this must not move up when it does. -->
@@ -25,7 +26,7 @@
              to where a rail would centre it. The code-behind works that out once; it is the same open as
              collapsed, so opening the sidebar changes nothing about it. -->
         <TextBlock x:Name="TitleText"
-                   Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="3"
+                   Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="4"
                    Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}"
                    Margin="0 0 0 4"
                    HorizontalAlignment="Left"
@@ -43,7 +44,7 @@
              one part of the header still drawn. Open, the dot is on the button itself, and two of them would
              be one too many. Placed beside the heading by the code-behind, the same way the heading is. -->
         <Ellipse x:Name="TitleDot"
-                 Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="3"
+                 Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="4"
                  Width="6" Height="6"
                  Margin="0 0 0 14"
                  HorizontalAlignment="Left"
@@ -120,7 +121,89 @@
             </Button>
         </Border>
 
-        <Button Grid.Column="2" Grid.Row="0"
+        <!-- The other places the list is the way into - joining one, the ones gone to the archive - behind
+             one button rather than as rows of their own above it. Drawn selected while one of them is open,
+             for the reason the "+" is. A menu rather than a navigation, so it leaves a peek where it is;
+             choosing an entry is what goes somewhere, and that goes to a page that has no rail. -->
+        <Grid Grid.Column="2" Grid.Row="0"
+              Margin="4 0 0 4"
+              VerticalAlignment="Center">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MenuItems, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Border CornerRadius="4">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMenuSelected, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <ToggleButton x:Name="MenuButton"
+                              Style="{StaticResource SubtleIconToggleButton}"
+                              Width="26" Height="26"
+                              FontSize="12"
+                              Content="&#xE712;"
+                              ToolTip="{Binding MenuToolTip, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              ToolTipService.InitialShowDelay="200" />
+            </Border>
+
+            <Popup IsOpen="{Binding IsChecked, ElementName=MenuButton, Mode=TwoWay}"
+                   PlacementTarget="{Binding ElementName=MenuButton}"
+                   Placement="Bottom"
+                   VerticalOffset="4"
+                   StaysOpen="False"
+                   AllowsTransparency="True">
+
+                <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        Padding="4"
+                        ButtonBase.Click="OnMenuEntryClick">
+                    <!-- The list and the click are wired in the code-behind: a popup is a window of its own,
+                         and a binding looking for this control from in here has no tree to climb. -->
+                    <ItemsControl x:Name="MenuList" Width="200">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:MenuItemViewModel}">
+                                <!-- The entry's own availability and reason, as a sidebar row would draw them. -->
+                                <Button Style="{DynamicResource SubtleMenuButton}"
+                                        IsEnabled="{Binding IsAvailable}"
+                                        ToolTip="{Binding UnavailableReason}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        ToolTipService.InitialShowDelay="200">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Icon}"
+                                                   Width="16"
+                                                   FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                   FontSize="14"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Title}"
+                                                   Margin="10 0 0 0"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
+        </Grid>
+
+        <Button Grid.Column="3" Grid.Row="0"
                 Margin="4 0 16 4"
                 VerticalAlignment="Center"
                 Command="{Binding Command, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -169,7 +252,7 @@
             </Grid>
         </Button>
 
-        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3"
+        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="4"
                    Foreground="{DynamicResource DividerStrokeColorDefaultBrush}"
                    Margin="4 4" />
 

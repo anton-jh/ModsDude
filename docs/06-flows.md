@@ -54,7 +54,7 @@ list.
 
 ## Creating a repo
 
-1. Sidebar → **Create repo**. `CreateRepoPageViewModel` lists adapters from
+1. Sidebar → "⋯" on the repo list → **Create repo** (or the button on Welcome). `CreateRepoPageViewModel` lists adapters from
    `IGameAdapterIndex.GetAllLatest()` — latest compatibility version per adapter id.
 2. Picking an adapter yields `GetBaseSettingsTemplate()`, a `DynamicForm` rendered by
    `DynamicFormEditor`. Editing it raises `Modified`, which takes the navigation lock, so

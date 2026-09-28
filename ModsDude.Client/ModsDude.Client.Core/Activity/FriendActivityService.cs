@@ -9,7 +9,7 @@ namespace ModsDude.Client.Core.Activity;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One read for every surface.</b> Home, a repo's overview and the notice column all draw from
+/// <b>One read for every surface.</b> A repo's overview and the notice column both draw from
 /// <see cref="Rows"/>, which is every repo at once; a repo's overview filters it rather than asking
 /// the server a question of its own, so two pages open one after the other never disagree.
 /// </para>

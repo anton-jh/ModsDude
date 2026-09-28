@@ -39,8 +39,8 @@
             <DataTemplate DataType="{x:Type pvm:ExamplePageViewModel}">
                 <p:ExamplePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:HomePageViewModel}">
-                <p:HomePage />
+            <DataTemplate DataType="{x:Type pvm:WelcomePageViewModel}">
+                <p:WelcomePage />
             </DataTemplate>
             <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
                 <p:RepoAdminPage />

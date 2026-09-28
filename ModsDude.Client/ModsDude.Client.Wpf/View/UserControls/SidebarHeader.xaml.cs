@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using ModsDude.Client.Wpf.ViewModel.ViewModels;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -146,6 +148,68 @@ public partial class SidebarHeader : UserControl
 
 
     /// <summary>
+    /// The entries behind the "⋯", drawn as a menu of their own titles and icons. Null draws no button at
+    /// all, which is every header whose list is the only way anywhere.
+    /// </summary>
+    public static readonly DependencyProperty MenuItemsProperty =
+        DependencyProperty.Register(
+            nameof(MenuItems),
+            typeof(IEnumerable<MenuItemViewModel>),
+            typeof(SidebarHeader),
+            new PropertyMetadata(null));
+
+    public IEnumerable<MenuItemViewModel>? MenuItems
+    {
+        get => (IEnumerable<MenuItemViewModel>?)GetValue(MenuItemsProperty);
+        set => SetValue(MenuItemsProperty, value);
+    }
+
+
+    /// <summary>Run with the entry chosen from the "⋯" menu.</summary>
+    public static readonly DependencyProperty MenuCommandProperty =
+        DependencyProperty.Register(
+            nameof(MenuCommand),
+            typeof(ICommand),
+            typeof(SidebarHeader),
+            new PropertyMetadata(null));
+
+    public ICommand? MenuCommand
+    {
+        get => (ICommand?)GetValue(MenuCommandProperty);
+        set => SetValue(MenuCommandProperty, value);
+    }
+
+
+    /// <summary>Whether the page showing is one of the menu's.</summary>
+    public static readonly DependencyProperty IsMenuSelectedProperty =
+        DependencyProperty.Register(
+            nameof(IsMenuSelected),
+            typeof(bool),
+            typeof(SidebarHeader),
+            new PropertyMetadata(false));
+
+    public bool IsMenuSelected
+    {
+        get => (bool)GetValue(IsMenuSelectedProperty);
+        set => SetValue(IsMenuSelectedProperty, value);
+    }
+
+
+    public static readonly DependencyProperty MenuToolTipProperty =
+        DependencyProperty.Register(
+            nameof(MenuToolTip),
+            typeof(string),
+            typeof(SidebarHeader),
+            new PropertyMetadata("More"));
+
+    public string MenuToolTip
+    {
+        get => (string)GetValue(MenuToolTipProperty);
+        set => SetValue(MenuToolTipProperty, value);
+    }
+
+
+    /// <summary>
     /// Never closer to the left edge than this, for a heading too wide to be centred in a rail. A rail cuts
     /// off what does not fit, and a few pixels of margin is what keeps the start of the word readable.
     /// </summary>
@@ -159,8 +223,24 @@ public partial class SidebarHeader : UserControl
     {
         InitializeComponent();
 
+        MenuList.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(MenuItems)) { Source = this });
+
         Loaded += (_, _) => PositionTitle();
         IsVisibleChanged += (_, _) => PositionTitle();
+    }
+
+
+    /// <summary>Runs the chosen entry and puts the menu away.</summary>
+    private void OnMenuEntryClick(object sender, RoutedEventArgs e)
+    {
+        MenuButton.IsChecked = false;
+
+        if (e.OriginalSource is FrameworkElement { DataContext: MenuItemViewModel entry }
+            && MenuCommand is { } command
+            && command.CanExecute(entry))
+        {
+            command.Execute(entry);
+        }
     }
 
 

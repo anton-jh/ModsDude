@@ -452,7 +452,6 @@ public partial class App : Application
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
         services.AddSingleton<RepoArchivePageViewModel.Factory>();
         services.AddFactory<ArchivePageViewModel>();
-        services.AddFactory<HomePageViewModel>();
         services.AddSingleton<FriendActivityListViewModel.Factory>();
 
         services.AddSingleton<NavigationLockService>();

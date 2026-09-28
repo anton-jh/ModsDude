@@ -385,7 +385,7 @@ The app is a sidebar app, nested up to three levels deep:
 
 ```
 MainWindow
-└─ MainPage                    Home │ Join repo │ Archive │ Settings │ ...repos      (+ Create repo)
+└─ MainPage                    ...repos      (⋯ Join repo │ Create repo │ Archived repos)  (card: ⚙ Settings │ Account)
    └─ RepoPage                 header │ Overview │ Admin │ Members │ Mods │ Saves │ Archive │ (Game configuration | Connect game) │ ...profiles      (+ Create profile)
       ├─ RepoModsPage          (one page — the catalog)
       ├─ RepoSavegamesPage     (one page — the saves, their history, and what this machine holds)
@@ -471,10 +471,21 @@ list takes off either side, and moves with it. A repo or a profile is a plain sq
 letter, at every width; on the profile the game follows - or a repo whose game has drifted - the
 letter is replaced by the status.
 
-**A "+" is a page that is not in a list.** *Create repo* and *Create profile* are acts on the list under
-their header, so they are a "+" on it rather than a row in the menu above it. They are still menu
-entries - selecting one is how the page opens - and the button is drawn as selected while it is open.
-They keep the rule they had: the button is disabled with the reason as its tooltip.
+**A "+" is a page that is not in a list.** *Create profile* is an act on the list under its header, so
+it is a "+" on it rather than a row in the menu above it. It is still a menu entry - selecting it is how
+the page opens - and the button is drawn as selected while it is open. It keeps the rule it had: the
+button is disabled with the reason as its tooltip.
+
+**The top level is the repo list and nothing else.** There are no fixed rows above it. *Join repo*,
+*Create repo* and *Archived repos* are behind a "⋯" on the list's header, drawn as selected while one of
+them is open; Create repo is greyed out in that menu with its reason, the way the "+" was. *Settings* is
+the gear on the account card, beside *Account*, because both are about the user rather than places in
+the app. There is no Home page: friend activity is on each repo's overview, one repo at a time.
+
+**Where the app lands.** Nothing is shown until the first repo load. Then it opens the repo last open,
+or the first repo in the list, or **Welcome** when there is none - the page for a first sign-in, offering
+Join and Create. Welcome is also what comes back when the page goes blank because the open repo left the
+list (archived, or left).
 
 **Repos and profiles get two lines.** Their names are the one thing here that is not ours to keep short,
 so their rows are two lines tall whether or not the name needs them, and end in an ellipsis on the
@@ -650,7 +661,7 @@ care which game or which repo a file belongs to — a Farming Simulator archive 
 archive are both just bytes at an address. Keeping the configuration out of the games' and the
 repos' settings is what stops the "same thing configured in several places, then drifting"
 problem from reappearing. `LocalState.Settings` was the first genuinely global client setting;
-`SettingsPage`, reached from the top-level sidebar, is where it is edited.
+`SettingsPage`, reached from the gear on the sidebar's account card, is where it is edited.
 
 The same page is where the stores are **managed**, not only configured: it reports what each one
 holds and what emptying it would actually reclaim, and offers a sweep and an empty per store plus
@@ -1125,7 +1136,8 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | Page | Status | What it does |
 | --- | --- | --- |
 | `LoginPage` | Working | Shown until the first sign-in completes, and never returned to — there is no signing out |
-| `MainPage` | Working | Shell: Home, Create repo, Join repo, Settings, the repo list, and the account card that opens **Account** |
+| `MainPage` | Working | Shell: the repo list, with Join repo, Create repo and Archived repos behind its header's "⋯", and the account card with **Settings** (the gear) and **Account** |
+| `WelcomePage` | Working | Where the app lands with no repo to open: a short introduction and the two ways in, Join and Create |
 | `AccountPage` | Working | Name, picture, password reset through the sign-in page, and **Switch user** |
 | `SettingsPage` | Working | Machine-wide settings — per-volume content stores and their assignments, the image cache, the usage/sweep/empty controls for both, and **Verify store**: a cancellable pass that re-hashes every blob against its address, drops what no longer matches, and names the mod folders left needing a re-apply |
 | `CreateRepoPage` | Working | Name + adapter picker + base settings dynamic form |
@@ -1133,7 +1145,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `RepoPage` | Working | Repo shell. Auto-selects "Connect game" when this machine has no game for it and the game has settings to ask for; otherwise connects it automatically |
 | `RepoOverviewPage` | Working | Where this machine stands: the game, which profile it follows, what it is holding, a line per folder it reaches with that folder's drift, and Re-check. Plus the profiles at a glance |
 | `RepoAdminPage` | Working | Rename repo, edit base settings, archive repo |
-| `ArchivePage` | Working | Top level. The archived repos this user is a member of, with restore and permanent delete |
+| `ArchivePage` | Working | *Archived repos* behind the repo list's "⋯". The archived repos this user is a member of, with restore and permanent delete |
 | `RepoArchivePage` | Working | Under a repo. Its archived profiles and savegames, same two actions. Readable by anybody, actionable by an admin |
 | `RepoMembersPage` | Working | Member list with avatars, level changes behind a Save button, Leave on your own row, and the repo's invites - create, copy, revoke, and their join counts |
 | `RepoModsPage` | Working | The repo's mods as one list: search, an "unused only" filter, per-row reorder and delete. Nothing is imported here - that is the profile mod list editor's job. Browsing is open to a guest; the writing actions are refused with a reason |
@@ -1147,7 +1159,7 @@ real service and has no placeholder left in it, not that anyone has clicked ever
 | `ProfileModsPage` | Working | The same **Mods** entry as a guest sees it: the pinned list, read-only, in the shared list row — name opens the details dialog, and the end of the row says whether the pin is locked and whether the repo still has the version |
 | `ProfileHistoryPage` | Working | The profile's revisions on the left; on the right, either what the selected one pinned or what changed between it and another. Restore and Save as… for a member; readable by a guest |
 | `EditProfilePage` | Working | Rename or delete a profile |
-| `ExamplePage` | — | The placeholder. Still the Home page's content |
+| `ExamplePage` | — | The placeholder |
 
 Dialogs and shared views:
 

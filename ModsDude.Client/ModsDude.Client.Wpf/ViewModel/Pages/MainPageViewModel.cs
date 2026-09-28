@@ -12,7 +12,9 @@ using ModsDude.Shared.GenericFactories;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Data;
+using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
 public partial class MainPageViewModel
@@ -25,17 +27,29 @@ public partial class MainPageViewModel
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
     /// <summary>
-    /// Create repo, reached from the "+" on the repo list's header rather than from the menu: it is an act
-    /// on that list, not a place. Still an entry, so that selecting it opens the page and the header
-    /// can draw the button as selected.
+    /// Create repo, one of <see cref="HeaderMenuItems"/>. Held on its own as well, because whether it is
+    /// open to this account is decided here and the Welcome page offers it too.
     /// </summary>
     private readonly MenuItemViewModel _createRepoMenuItem;
 
+    /// <summary>Join repo, one of <see cref="HeaderMenuItems"/>, and offered by the Welcome page.</summary>
+    private readonly MenuItemViewModel _joinRepoMenuItem;
+
     /// <summary>
-    /// The account page, reached from the account card at the foot of the sidebar rather than from the menu:
-    /// it is about who is using the app, not a place in it. An entry for the same reason Create repo is one.
+    /// The account page, reached from the account card at the foot of the sidebar: it is about who is
+    /// using the app, not a place in it. Still an entry, so that selecting it opens the page the way
+    /// every other way somewhere does.
     /// </summary>
     private readonly MenuItemViewModel _accountMenuItem;
+
+    /// <summary>Settings, reached from the gear on the account card for the same reason as the account page.</summary>
+    private readonly MenuItemViewModel _settingsMenuItem;
+
+    /// <summary>
+    /// What the page shows when there is no repo to show: no repos yet, or the open one just went away.
+    /// Not in any list - nobody navigates to it, it is where the app lands.
+    /// </summary>
+    private readonly MenuItemViewModel _welcomeMenuItem;
 
     private readonly ProfileSyncStatusService _syncStatus;
     private readonly ConnectionRetry _connection;
@@ -58,7 +72,6 @@ public partial class MainPageViewModel
         IDialogService dialogService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
-        IFactory<HomePageViewModel> homePageViewModelFactory,
         ProfileSyncStatusService syncStatus,
         ConnectionRetry connection)
     {
@@ -69,16 +82,24 @@ public partial class MainPageViewModel
         _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
             .WithIcon(MenuIcons.CreateRepo);
 
+        _joinRepoMenuItem = new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create)
+            .WithIcon(MenuIcons.JoinRepo);
+
         _accountMenuItem = new MenuItemViewModel("Account", accountPageViewModelFactory.Create);
 
-        MenuItems = [
-            new MenuItemViewModel("Home", homePageViewModelFactory.Create).WithIcon(MenuIcons.Home),
-            new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create).WithIcon(MenuIcons.JoinRepo),
-            // Above Settings, because it is a place repos went rather than a preference. A repo
-            // archived by any admin leaves every member's sidebar, so this is where somebody looks
-            // when one they were using is suddenly not there.
-            new MenuItemViewModel("Archive", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive),
-            new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create).WithIcon(MenuIcons.Settings)
+        _settingsMenuItem = new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
+            .WithIcon(MenuIcons.Settings);
+
+        _welcomeMenuItem = new MenuItemViewModel("Welcome", () => new WelcomePageViewModel(_joinRepoMenuItem, _createRepoMenuItem, Open));
+
+        // Everything the repo list leads to that is not a repo. The sidebar holds nothing but the
+        // list, so these are behind the "⋯" on its header rather than rows above it.
+        HeaderMenuItems = [
+            _joinRepoMenuItem,
+            _createRepoMenuItem,
+            // A repo archived by any admin leaves every member's sidebar, so this is where somebody
+            // looks when one they were using is suddenly not there.
+            new MenuItemViewModel("Archived repos", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive)
         ];
 
         // Not a membership level: creating repos is gated on User.IsTrusted, a flag granted by hand
@@ -90,10 +111,9 @@ public partial class MainPageViewModel
 
         Repos = [];
 
-        NavManager = new(navigationLockService, modalService)
-        {
-            Selected = MenuItems.First()
-        };
+        // Nothing until the repo list is in: the first load decides between the last repo and the
+        // Welcome page, and showing either before then would be showing a guess.
+        NavManager = new(navigationLockService, modalService);
 
         _repoService = repoService;
         _lastSelectionRepository = lastSelectionRepository;
@@ -130,7 +150,8 @@ public partial class MainPageViewModel
 
     public NavigationManager NavManager { get; }
 
-    public ObservableCollection<MenuItemViewModel> MenuItems { get; }
+    /// <summary>The entries behind the "⋯" on the repo list's header.</summary>
+    public IReadOnlyList<MenuItemViewModel> HeaderMenuItems { get; }
 
     public ObservableCollection<MenuItemViewModel> Repos { get; }
 
@@ -152,14 +173,11 @@ public partial class MainPageViewModel
     /// </summary>
     public bool IsSidebarCollapsed => NavManager.CurrentPage is RepoPageViewModel;
 
-    /// <summary>Whether the Create repo page is showing, for the "+" to draw as selected.</summary>
-    public bool IsCreateRepoSelected => ReferenceEquals(NavManager.Selected, _createRepoMenuItem);
+    /// <summary>Whether one of the header menu's pages is showing, for the "⋯" to draw as selected.</summary>
+    public bool IsHeaderMenuSelected => NavManager.Selected is { } selected && HeaderMenuItems.Contains(selected);
 
-    /// <summary>Whether the account page is showing, for the card's button to draw as selected.</summary>
-    public bool IsAccountSelected => ReferenceEquals(NavManager.Selected, _accountMenuItem);
-
-    /// <summary>Carries the availability and the reason for the "+", so the trust rule stays where it was.</summary>
-    public MenuItemViewModel CreateRepoItem => _createRepoMenuItem;
+    /// <summary>Whether the settings page is showing, for the card's gear to draw as selected.</summary>
+    public bool IsSettingsSelected => ReferenceEquals(NavManager.Selected, _settingsMenuItem);
 
     /// <summary>
     /// Whether the server has repo changes the list does not show yet. Brought in by the refresh
@@ -249,10 +267,17 @@ public partial class MainPageViewModel
         }
     }
 
+    /// <summary>Opens a page that is not a row in the repo list - one from the header's menu, say.</summary>
     [RelayCommand]
-    private void CreateRepo()
+    private void Open(MenuItemViewModel entry)
     {
-        NavManager.Selected = _createRepoMenuItem;
+        NavManager.Selected = entry;
+    }
+
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        NavManager.Selected = _settingsMenuItem;
     }
 
     private void OnAccountOpenRequested(object? sender, EventArgs e)
@@ -265,7 +290,7 @@ public partial class MainPageViewModel
     {
         await _repoService.RefreshRepos(cancellationToken);
 
-        RestoreLastSelectedRepo();
+        SelectLandingPage();
 
         // The refresh button got through while the first load was waiting out its interval, so that
         // wait is only keeping a notice up about a list that is already here.
@@ -273,10 +298,14 @@ public partial class MainPageViewModel
     }
 
     /// <summary>
-    /// Only on the first load. The refresh button runs the same command, and jumping the user back to
-    /// where they were an hour ago because they asked for fresh data would be its own bug.
+    /// Where the app opens: the repo last open, else the first one the sidebar lists, else Welcome.
     /// </summary>
-    private void RestoreLastSelectedRepo()
+    /// <remarks>
+    /// Only on the first load. The refresh button runs the same command, and jumping the user back to
+    /// where they were an hour ago because they asked for fresh data would be its own bug. Nor where
+    /// something was chosen while the list was still on its way.
+    /// </remarks>
+    private void SelectLandingPage()
     {
         if (_selectionRestored)
         {
@@ -285,14 +314,37 @@ public partial class MainPageViewModel
 
         _selectionRestored = true;
 
-        var entries = Repos.OfType<RepoItemViewModel>().ToList();
-
-        if (_lastSelectionRepository.GetLastRepo(entries.Select(x => x.Id)) is not Guid repoId)
+        if (NavManager.Selected is not null)
         {
             return;
         }
 
-        NavManager.Selected = entries.First(x => x.Id == repoId);
+        var entries = Repos.OfType<RepoItemViewModel>().ToList();
+
+        // First as drawn, which is first in the first game's group - and groups come in the order of
+        // their first repo, so that is the head of the list.
+        NavManager.Selected = _lastSelectionRepository.GetLastRepo(entries.Select(x => x.Id)) is Guid repoId
+            ? entries.First(x => x.Id == repoId)
+            : entries.FirstOrDefault() ?? _welcomeMenuItem;
+    }
+
+    /// <summary>
+    /// Puts Welcome up where the page has gone blank - which is the open repo leaving the list, archived or
+    /// left, and the repo list letting go of it as its row went.
+    /// </summary>
+    /// <remarks>
+    /// Looked at once the dispatcher is idle rather than at once, because every navigation passes through
+    /// nothing on its way to the next page, and only a nothing still there afterwards is a blank page.
+    /// </remarks>
+    private void FallBackToWelcome()
+    {
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (_disposed.IsCancellationRequested is false && NavManager.Selected is null && NavManager.CurrentPage is null)
+            {
+                NavManager.Selected = _welcomeMenuItem;
+            }
+        }, DispatcherPriority.ApplicationIdle);
     }
 
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
@@ -304,8 +356,13 @@ public partial class MainPageViewModel
 
         if (e.PropertyName == nameof(NavigationManager.Selected))
         {
-            OnPropertyChanged(nameof(IsCreateRepoSelected));
-            OnPropertyChanged(nameof(IsAccountSelected));
+            OnPropertyChanged(nameof(IsHeaderMenuSelected));
+            OnPropertyChanged(nameof(IsSettingsSelected));
+        }
+
+        if (e.PropertyName == nameof(NavigationManager.CurrentPage) && NavManager.CurrentPage is null && _selectionRestored)
+        {
+            FallBackToWelcome();
         }
 
         if (e.PropertyName == nameof(NavigationManager.Selected) &&

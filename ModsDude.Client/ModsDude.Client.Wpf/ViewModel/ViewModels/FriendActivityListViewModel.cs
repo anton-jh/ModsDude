@@ -28,11 +28,8 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
         Tag = showTag ? $"#{activity.User.Tag}" : null;
         Avatar = avatar;
 
-        var repo = environment.DescribeRepo(activity.RepoId);
-        var revision = activity.PinnedRevision is int pinned ? $"rev {pinned}" : null;
-
         Profile = activity.ProfileName;
-        ProfileDetail = string.Join(" · ", new[] { repo, revision }.OfType<string>());
+        ProfileDetail = activity.PinnedRevision is int pinned ? $"rev {pinned}" : "";
 
         var what = activity.Kind is GameActivityKind.SavegameCheckedOut
             ? $"Checked out {(activity.SavegameName is string save ? $"'{save}'" : "a savegame")} {SavegameWording.Ago(activity.ChangedAt)}"
@@ -65,7 +62,10 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
 
     public string ProfileLine => $"on '{Profile}'";
 
-    /// <summary>The repo, and the revision where they are held on one. Head goes unsaid.</summary>
+    /// <summary>
+    /// The revision where they are held on one. Head goes unsaid, and so does the repo: the list is
+    /// one repo's.
+    /// </summary>
     public string ProfileDetail { get; }
 
     public bool HasProfileDetail => ProfileDetail.Length > 0;
@@ -89,18 +89,14 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
 }
 
 
-/// <summary>One game's friends, under the game's name.</summary>
-public sealed record FriendActivityGroupViewModel(string Title, IReadOnlyList<FriendActivityRowViewModel> Rows);
-
-
 /// <summary>
-/// The friends list, for Home - every game, grouped - and for a repo's overview - that repo only.
+/// The friends list on a repo's overview: who else is on which of that repo's profiles.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Drawn from <see cref="FriendActivityService"/>, never fetched here.</b> Opening a page asks it
-/// to read again, and every page showing it redraws when any of them - or the watcher - does. So Home
-/// and an overview opened a minute apart cannot disagree about what Alex is on.
+/// to read again, and every page showing it redraws when any of them - or the watcher - does. So two
+/// overviews opened a minute apart cannot disagree about what Alex is on.
 /// </para>
 /// <para>
 /// Redrawn too when a game here changes, because whether the button is offered depends on what this
@@ -116,10 +112,9 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     private readonly GameRepository _games;
     private readonly IToastService _toasts;
     private readonly ILogger _logger;
-    private readonly Guid? _onlyRepo;
+    private readonly Guid _repoId;
 
 
-    /// <param name="onlyRepo">One repo's friends, or everybody's where null.</param>
     public FriendActivityListViewModel(
         FriendActivityService friends,
         IFriendActivityEnvironment environment,
@@ -128,7 +123,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         GameRepository games,
         IToastService toasts,
         ILogger<FriendActivityListViewModel> logger,
-        Guid? onlyRepo)
+        Guid repoId)
     {
         _friends = friends;
         _environment = environment;
@@ -137,7 +132,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         _games = games;
         _toasts = toasts;
         _logger = logger;
-        _onlyRepo = onlyRepo;
+        _repoId = repoId;
 
         _friends.Changed += OnChanged;
         _games.GameChanged += OnChanged;
@@ -146,21 +141,16 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     }
 
 
-    public ObservableCollection<FriendActivityGroupViewModel> Groups { get; } = [];
+    public ObservableCollection<FriendActivityRowViewModel> Rows { get; } = [];
 
-    /// <summary>Whether the groups are worth a heading each - on Home, not on one repo's overview.</summary>
-    public bool ShowGroupTitles => _onlyRepo is null;
-
-    public bool HasRows => Groups.Count > 0;
+    public bool HasRows => Rows.Count > 0;
 
     /// <summary>What an empty list says, once it is known to be empty rather than not yet read.</summary>
     public string? EmptyText => HasRows
         ? null
         : !_friends.HasLoaded
             ? CouldNotRead ? "Could not reach the server to see what your friends are on." : "Looking..."
-            : _onlyRepo is null
-                ? "Nobody you share a repo with has activated a profile in the last week."
-                : "Nobody else in this repo has activated one of its profiles in the last week.";
+            : "Nobody else in this repo has activated one of its profiles in the last week.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyText))]
@@ -213,26 +203,18 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 
     private void Rebuild()
     {
+        // Rows arrive most recently active first, which is the order they are drawn in.
         var rows = _friends.Rows
-            .Where(x => _onlyRepo is null || x.RepoId == _onlyRepo)
+            .Where(x => x.RepoId == _repoId)
             .ToList();
 
         var ambiguous = UserDisplay.FindAmbiguous(rows.Select(x => x.User).DistinctBy(x => x.Id));
 
-        // Rows arrive most recently active first, and a group is ordered by its most recent row - so
-        // the game somebody is playing right now is the one at the top.
-        var groups = rows
-            .GroupBy(x => x.Game)
-            .Select(x => new FriendActivityGroupViewModel(
-                _environment.DescribeGame(x.Key),
-                [.. x.Select(row => new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id)))]))
-            .ToList();
+        Rows.Clear();
 
-        Groups.Clear();
-
-        foreach (var group in groups)
+        foreach (var row in rows)
         {
-            Groups.Add(group);
+            Rows.Add(new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id)));
         }
 
         if (_friends.HasLoaded)
@@ -247,7 +229,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 
     public sealed class Factory(IServiceProvider serviceProvider)
     {
-        public FriendActivityListViewModel Create(Guid? onlyRepo)
+        public FriendActivityListViewModel Create(Guid repoId)
             => new(
                 serviceProvider.GetRequiredService<FriendActivityService>(),
                 serviceProvider.GetRequiredService<IFriendActivityEnvironment>(),
@@ -256,6 +238,6 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
                 serviceProvider.GetRequiredService<GameRepository>(),
                 serviceProvider.GetRequiredService<IToastService>(),
                 serviceProvider.GetRequiredService<ILogger<FriendActivityListViewModel>>(),
-                onlyRepo);
+                repoId);
     }
 }

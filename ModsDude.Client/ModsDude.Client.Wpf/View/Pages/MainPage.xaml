@@ -20,26 +20,22 @@
 
         <uc:SidebarShell.SidebarTemplate>
             <DataTemplate>
-                <Grid RowDefinitions="auto auto * auto">
+                <!-- The repos and nothing above them: every other place the shell leads to is behind the
+                     header's "⋯", or the account card's gear. -->
+                <Grid x:Name="SidebarRoot" RowDefinitions="auto * auto">
 
-                    <ListView Grid.Row="0"
-                              Style="{StaticResource SidebarList}"
-                              ItemsSource="{Binding Path=MenuItems}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                              />
-
-                    <uc:SidebarHeader Grid.Row="1" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshReposToolTip}"
+                    <uc:SidebarHeader Grid.Row="0" Title="Repos" Command="{Binding LoadReposCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshReposToolTip}"
                                       HasPendingChanges="{Binding HasPendingRepoChanges}"
-                                      AddCommand="{Binding CreateRepoCommand}"
-                                      IsAddSelected="{Binding IsCreateRepoSelected}"
-                                      IsAddEnabled="{Binding CreateRepoItem.IsAvailable}"
-                                      AddToolTip="{Binding CreateRepoItem.ToolTip}" />
+                                      MenuItems="{Binding HeaderMenuItems}"
+                                      MenuCommand="{Binding OpenCommand}"
+                                      IsMenuSelected="{Binding IsHeaderMenuSelected}"
+                                      MenuToolTip="Join, create and archived repos" />
 
                     <!-- Grouped by game rather than one flat column: a local installation belongs to a game, so two
                          repos for different games have nothing in common that the sidebar was saying they
                          did. ReposView is the same entries with one heading per game - see
                          MainPageViewModel.ReposView for why it groups and deliberately does not sort. -->
-                    <ListView Grid.Row="2"
+                    <ListView Grid.Row="1"
                               Style="{StaticResource SidebarList}"
                               ItemsSource="{Binding Path=ReposView}"
                               SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
@@ -50,9 +46,10 @@
                     </ListView>
 
                     <!-- Who you are, and the way to the account page - name, picture, password and switching
-                         user. There is no signing out: it has no state worth reaching. In a rail it is the
-                         avatar alone, with who it is in a tooltip; the rest is a hover away. -->
-                    <Border Grid.Row="3"
+                         user - and to this machine's settings. There is no signing out: it has no state worth
+                         reaching. In a rail it is the avatar alone, with who it is in a tooltip; the rest is a
+                         hover away. -->
+                    <Border Grid.Row="2"
                             DataContext="{Binding Account}"
                             CornerRadius="4"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
@@ -88,9 +85,9 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <StackPanel Orientation="Horizontal" Margin="0 4 0 0">
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
+                            <Grid ColumnDefinitions="auto * auto" Margin="0 4 0 0">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
                                                 <Setter Property="HorizontalAlignment" Value="Center" />
@@ -98,17 +95,19 @@
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </StackPanel.Style>
+                                </Grid.Style>
 
                                 <!-- What their teammates see beside their name. Held back until the server
                                      has answered, rather than drawn in a colour about to change. -->
-                                <Grid VerticalAlignment="Center"
+                                <Grid Grid.Column="0"
+                                      VerticalAlignment="Center"
                                       Visibility="{Binding HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <uc:UserAvatar Width="24" Height="24" FontSize="12"
                                                    DataContext="{Binding Avatar}" />
                                 </Grid>
 
-                                <TextBlock Text="{Binding DisplayName}"
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DisplayName}"
                                            Margin="8 0 0 0"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"
@@ -124,7 +123,45 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                            </StackPanel>
+
+                                <!-- This machine's settings. On the card because they are the user's own
+                                     rather than a place in the app, like the account page below. Drawn
+                                     selected while open, as the header's buttons are. The command is the
+                                     shell's, which owns navigation; the card's own context is the account. -->
+                                <Border Grid.Column="2"
+                                        Margin="8 0 0 0"
+                                        CornerRadius="4"
+                                        VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsSettingsSelected, ElementName=SidebarRoot}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Button Width="28" Height="28"
+                                            FontSize="14"
+                                            Content="&#xE713;"
+                                            ToolTip="Settings"
+                                            ToolTipService.InitialShowDelay="200"
+                                            Command="{Binding DataContext.OpenSettingsCommand, ElementName=SidebarRoot}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.IsSettingsSelected, ElementName=SidebarRoot}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </Border>
+                            </Grid>
 
                             <Button Content="Account"
                                     Margin="0 12 0 0"

@@ -497,14 +497,14 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
 
     /// <summary>
-    /// Puts this game on what the friend the card names is on, through the one gesture Home and the
-    /// overview use too.
+    /// Puts this game on what the friend the card names is on, through the one gesture a repo's
+    /// overview uses too.
     /// </summary>
     private async Task UseProfileAsync(Notice notice, NoticeViewModel? card)
     {
         if (_friends.News.FirstOrDefault(x => FriendActivityRules.NoticeKey(x) == notice.Key) is not { } activity)
         {
-            card?.ReportStatus("They have moved on since - look on Home for what they are on now.");
+            card?.ReportStatus("They have moved on since - look on the repo's overview for what they are on now.");
 
             return;
         }
