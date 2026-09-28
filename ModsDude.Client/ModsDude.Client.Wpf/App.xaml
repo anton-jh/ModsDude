@@ -211,21 +211,24 @@
                 <GroupStyle.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel Margin="0 8 0 2">
-                            <!-- Hidden rather than collapsed in a rail: the heading keeps its height, so
-                                 the rows under it sit where they do at full width, and what is left is the
-                                 rule - which is what still says that a new run of repos begins here. -->
-                            <TextBlock Text="{Binding Name}"
-                                       Margin="16 0 16 4"
-                                       FontSize="11"
+                            <!-- The group's Name is the whole GameHeading, not a string. In a rail it is the
+                                 game's short name, centred over the rule, since the full one does not fit -
+                                 same font and line, so the heading keeps its height and the rows under it
+                                 sit where they do at full width. -->
+                            <TextBlock FontSize="11"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
                                        Opacity="0.7"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding Name.Name}" />
+                                        <Setter Property="Margin" Value="16 0 16 4" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
-                                                <Setter Property="Visibility" Value="Hidden" />
+                                                <Setter Property="Text" Value="{Binding Name.ShortName}" />
+                                                <Setter Property="Margin" Value="4 0 4 4" />
+                                                <Setter Property="TextAlignment" Value="Center" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>

@@ -24,6 +24,7 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null, I
 
     public GameAdapterId Id { get; } = new("_farming_simulator", 1);
     public string DisplayName { get; } = "Farming Simulator";
+    public string ShortName { get; } = "FS";
     public string Description { get; } = "For Farming Simulator 22 and 25.";
 
 
@@ -98,6 +99,18 @@ public class FarmingSimulatorBaseGameAdapter(
     public string GameDisplayName => BaseSettings.GameVersion is FarmingSimulatorGameVersion version
         ? EnumTitle(version) ?? DisplayName
         : DisplayName;
+
+    /// <summary>
+    /// What players call each game for short. Spelled out per version rather than worked out from the
+    /// enum's number, which is the release year because the executables and folders are named by it -
+    /// that it ends in the same digits as the name is a coincidence of this series.
+    /// </summary>
+    public string GameShortName => BaseSettings.GameVersion switch
+    {
+        FarmingSimulatorGameVersion.Fs22 => "FS22",
+        FarmingSimulatorGameVersion.Fs25 => "FS25",
+        _ => ShortName
+    };
 
     /// <summary>
     /// The launcher, <c>FarmingSimulator2025.exe</c>, and the game it starts from <c>x64</c>,

@@ -132,7 +132,7 @@ public partial class MainPageViewModel
         // offer disjoint game lists and nothing that works in one works in the other; running
         // them together in one alphabetical column made that invisible.
         ReposView = CollectionViewSource.GetDefaultView(Repos);
-        ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.GameName)));
+        ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.Game)));
 
         repoService.RepoCreated += OnRepoCreated;
         repoService.PendingChangesChanged += OnPendingRepoChangesChanged;

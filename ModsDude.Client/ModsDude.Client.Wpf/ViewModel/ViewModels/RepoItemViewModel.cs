@@ -46,7 +46,7 @@ public class RepoItemViewModel
     /// FS25 one, since that would orphan every game on every member's machine - so an entry never
     /// moves between groups and there is nothing for the grouping to have to react to.
     /// </remarks>
-    public string GameName => _repo.Adapter.GameDisplayName;
+    public GameHeading Game => new(_repo.Adapter.GameDisplayName, _repo.Adapter.GameShortName);
 
 
     /// <summary>
@@ -73,3 +73,13 @@ public class RepoItemViewModel
         Tag = isAmbiguous ? _repo.Tag : null;
     }
 }
+
+/// <summary>
+/// The heading over one game's repos in the sidebar: its name while the sidebar is open, and its short
+/// name in a rail, where the name does not fit.
+/// </summary>
+/// <remarks>
+/// A record because it is the grouping key itself - the view groups by equality, so two repos for the
+/// same game build two equal headings and land in one group, as they did when this was a bare name.
+/// </remarks>
+public sealed record GameHeading(string Name, string ShortName);

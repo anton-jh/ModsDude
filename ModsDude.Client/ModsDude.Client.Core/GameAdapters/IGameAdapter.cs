@@ -8,6 +8,14 @@ public interface IGameAdapter
 {
     GameAdapterId Id { get; }
     string DisplayName { get; }
+
+    /// <summary>
+    /// <see cref="DisplayName"/> in a handful of characters, for where there is no room for the whole
+    /// of it - the heading over a game's repos while the sidebar is a rail. The abbreviation players
+    /// already use for the game, rather than a truncation of its name.
+    /// </summary>
+    string ShortName { get; }
+
     string Description { get; }
 
     /// <summary>
@@ -45,6 +53,13 @@ public interface IBaseGameAdapter : IGameAdapter
     /// is the whole reason this is not just <see cref="IGameAdapter.DisplayName"/>.
     /// </remarks>
     string GameDisplayName => DisplayName;
+
+    /// <summary>
+    /// <see cref="GameDisplayName"/> in a handful of characters, as <see cref="IGameAdapter.ShortName"/>
+    /// is to <see cref="IGameAdapter.DisplayName"/>. An adapter serving several games names the
+    /// particular one here too, or two groups the open sidebar tells apart would read the same in a rail.
+    /// </summary>
+    string GameShortName => ShortName;
 
     /// <summary>
     /// The identity of the game these base settings configure the adapter for. An adapter serving

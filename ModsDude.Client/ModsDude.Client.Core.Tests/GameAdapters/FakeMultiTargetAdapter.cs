@@ -26,6 +26,7 @@ internal class FakeMultiTargetGameAdapter : IGameAdapter
 {
     public GameAdapterId Id { get; } = new("_fake_multi_target", 1);
     public string DisplayName => "Multi-target test game";
+    public string ShortName => "MT";
     public string Description => "Three optional targets, for exercising what Farming Simulator cannot.";
 
 

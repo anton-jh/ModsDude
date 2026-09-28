@@ -480,7 +480,8 @@ button is disabled with the reason as its tooltip.
 *Create repo* and *Archived repos* are behind a "⋯" at the top of the list, drawn as selected while one
 of them is open; Create repo is greyed out in that menu with its reason, the way the "+" was. The menu's
 first entry is *Refresh*. There is no "Repos" heading - the game headings the list is grouped by say
-what it holds - and the "⋯" sits in the rows' picture column, so it is at the same x in a rail as open
+what it holds; in a rail each reads as the game's short name (`Adapter.GameShortName`, *FS25*), which
+every adapter has to declare - and the "⋯" sits in the rows' picture column, so it is at the same x in a rail as open
 and is the one control a rail keeps above the tiles. *Settings* is
 the gear on the account card, beside *Account*, because both are about the user rather than places in
 the app. There is no Home page: friend activity is on each repo's overview, one repo at a time.
