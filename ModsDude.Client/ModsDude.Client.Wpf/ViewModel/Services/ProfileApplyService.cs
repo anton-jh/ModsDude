@@ -25,6 +25,13 @@ public enum ProfileApplyStatus
     Declined,
 
     /// <summary>
+    /// Cancelled while planning or part way through the work. Not <see cref="Declined"/>: nothing was
+    /// said about the plan itself, so a caller that reads a decline as "not with these files" - and
+    /// offers a way round them - has no reason to here.
+    /// </summary>
+    Stopped,
+
+    /// <summary>
     /// A savegame checked out on the game follows another mod list. Not a "not now" like
     /// <see cref="Unavailable"/> - nothing about waiting changes it, and the way out is to check that
     /// savegame in.
@@ -62,10 +69,10 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     public bool Succeeded => Status is ProfileApplyStatus.Applied or ProfileApplyStatus.AlreadyMatched or ProfileApplyStatus.Deactivated;
 
     /// <summary>
-    /// How loudly to say <see cref="Message"/>. Declining is the user's own answer, so it is worded
-    /// like a success; everything else left the folder as it was or only part done.
+    /// How loudly to say <see cref="Message"/>. Declining and stopping are the user's own answers, so
+    /// they are worded like a success; everything else left the folder as it was or only part done.
     /// </summary>
-    public ToastSeverity ToastSeverity => Succeeded || Status is ProfileApplyStatus.Declined
+    public ToastSeverity ToastSeverity => Succeeded || Status is ProfileApplyStatus.Declined or ProfileApplyStatus.Stopped
         ? ToastSeverity.Info
         : ToastSeverity.Warning;
 
@@ -386,7 +393,7 @@ public sealed class ProfileApplyService(
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"'{game.Name}' was stopped before anything changed.");
         }
 
         if (plans.Count == 0)
@@ -521,7 +528,7 @@ public sealed class ProfileApplyService(
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was stopped before anything changed.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"'{game.Name}' was stopped before anything changed.");
         }
 
         if (plans.Count == 0)
@@ -672,9 +679,10 @@ public sealed class ProfileApplyService(
     /// <para>
     /// <b>Three statuses never reach here.</b> The lease is claimed for the whole gesture before
     /// anything is planned, a savegame's refusal is decided once for the game, and declining is one
-    /// answer to one confirmation covering every folder - so the only way a fold can see
-    /// <see cref="ProfileApplyStatus.Declined"/> now is a cancellation part way through the work, which
-    /// is genuinely per folder. A partly-declined activation stopped being representable when the
+    /// answer to one confirmation covering every folder - so a fold never sees
+    /// <see cref="ProfileApplyStatus.Declined"/>. What it can see is
+    /// <see cref="ProfileApplyStatus.Stopped"/>, a cancellation part way through the work, which is
+    /// genuinely per folder. A partly-declined activation stopped being representable when the
     /// confirmation moved, and a partly-busy one when the claim did.
     /// </para>
     /// </remarks>
@@ -767,7 +775,7 @@ public sealed class ProfileApplyService(
         }
         catch (OperationCanceledException)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"{where} was stopped part way.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"{where} was stopped part way.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
