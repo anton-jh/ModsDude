@@ -24,6 +24,7 @@ public class AuthenticationService : IAccessTokenAccessor
     private static readonly string[] _scopes = ["api://modsdude-server/act_as_user", "openid", "offline_access"];
     private readonly IPublicClientApplication _client;
     private bool _tokenCacheConfigured = false;
+    private CancellationTokenSource? _prompt;
 
 
     public AuthenticationService()
@@ -94,20 +95,14 @@ public class AuthenticationService : IAccessTokenAccessor
     /// Prompts for an account and signs in as whoever is picked.
     /// </summary>
     /// <returns>
-    /// False where the user cancelled the prompt, or picked the account they were already on. Either
-    /// way nothing changed and no event was raised.
+    /// False where the user cancelled the prompt, asked for another before finishing it, or picked the
+    /// account they were already on. Either way nothing changed and no event was raised.
     /// </returns>
     public async Task<bool> SwitchUser(CancellationToken cancellationToken)
     {
         await EnsureTokenCacheAsync();
 
-        AuthenticationResult result;
-
-        try
-        {
-            result = await AcquireTokenInteractive(cancellationToken);
-        }
-        catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
+        if (await PromptAsync(cancellationToken) is not AuthenticationResult result)
         {
             return false;
         }
@@ -129,7 +124,7 @@ public class AuthenticationService : IAccessTokenAccessor
     /// who signs in as a different account on it has switched user, and is treated exactly as
     /// <see cref="SwitchUser"/> would treat them.
     /// </remarks>
-    /// <returns>False where the user closed the page without finishing it.</returns>
+    /// <returns>False where the user closed the page, or asked for another, without finishing it.</returns>
     public async Task<bool> ResetPassword(CancellationToken cancellationToken)
     {
         if (CurrentAccount is not SignedInAccount current)
@@ -139,13 +134,7 @@ public class AuthenticationService : IAccessTokenAccessor
 
         await EnsureTokenCacheAsync();
 
-        AuthenticationResult result;
-
-        try
-        {
-            result = await AcquireTokenInteractive(cancellationToken, current.Email);
-        }
-        catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
+        if (await PromptAsync(cancellationToken, current.Email) is not AuthenticationResult result)
         {
             return false;
         }
@@ -183,6 +172,45 @@ public class AuthenticationService : IAccessTokenAccessor
         }
 
         return await AcquireTokenInteractive(cancellationToken);
+    }
+
+    /// <summary>
+    /// A sign-in page the user asked for, which replaces any such page still open.
+    /// </summary>
+    /// <remarks>
+    /// A browser tab closed without finishing never answers, so the attempt behind it would wait
+    /// forever - and one finished much later would still sign somebody in, long after the user gave up
+    /// on it. Asking again is how the user says they gave up, so that is what ends the old attempt. A
+    /// tab finished after being replaced reaches a listener that is no longer there.
+    /// </remarks>
+    /// <returns>Null where the user closed the page, or asked for a new one before finishing it.</returns>
+    private async Task<AuthenticationResult?> PromptAsync(CancellationToken cancellationToken, string? loginHint = null)
+    {
+        // Called from the UI thread and resumed on it, so the one open prompt is never raced.
+        using var prompt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _prompt?.Cancel();
+        _prompt = prompt;
+
+        try
+        {
+            return await AcquireTokenInteractive(prompt.Token, loginHint);
+        }
+        catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested is false)
+        {
+            return null;
+        }
+        finally
+        {
+            if (_prompt == prompt)
+            {
+                _prompt = null;
+            }
+        }
     }
 
     /// <param name="loginHint">

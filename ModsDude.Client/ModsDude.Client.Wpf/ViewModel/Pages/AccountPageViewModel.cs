@@ -152,7 +152,9 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    [RelayCommand]
+    // Never greyed out while running, for the same reason as switching user: a closed tab never
+    // answers, and asking again replaces it.
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ResetPassword(CancellationToken cancellationToken)
     {
         if (await _authenticationService.ResetPassword(cancellationToken))

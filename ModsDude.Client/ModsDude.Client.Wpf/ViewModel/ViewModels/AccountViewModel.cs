@@ -130,7 +130,9 @@ public partial class AccountViewModel : ObservableObject
         OpenRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    [RelayCommand]
+    // Never greyed out while running: a sign-in tab closed without finishing never answers, and
+    // clicking again is how the user gets a new one - which ends the old attempt.
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task SwitchUser(CancellationToken cancellationToken)
     {
         // Everything built from the current account is thrown away by the switch, so an editor
