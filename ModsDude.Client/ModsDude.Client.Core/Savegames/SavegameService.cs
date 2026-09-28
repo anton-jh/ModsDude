@@ -187,7 +187,7 @@ public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision
 /// <summary>What a check-in minted, and whether the local copy it was meant to hand back is still there.</summary>
 /// <param name="LocalCopyLeftBehind">
 /// The claim was released and the binding cleared, but the slot's folder could not be moved to the
-/// Recycle Bin - see <see cref="SavegameService.Recycle"/>. Never true where the save was kept.
+/// Recycle Bin - see <see cref="SavegameService.RecycleAsync"/>. Never true where the save was kept.
 /// </param>
 public sealed record SavegameCheckInResult(SavegameSnapshotDto Snapshot, bool LocalCopyLeftBehind);
 
@@ -463,6 +463,14 @@ public sealed class SavegameService(
 
     /// <summary>One page is every snapshot any savegame is ever going to have; retention keeps ten.</summary>
     private const int _snapshotPageSize = 200;
+
+
+    /// <summary>
+    /// How long to wait before each further attempt at recycling a handed-back slot - see
+    /// <see cref="RecycleAsync"/>. Settable so tests do not sit through them.
+    /// </summary>
+    internal IReadOnlyList<TimeSpan> RecycleRetryDelays { get; init; } =
+        [TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(750), TimeSpan.FromSeconds(2)];
 
 
     /// <summary>
@@ -904,7 +912,7 @@ public sealed class SavegameService(
         // which needs a confirmation to displace, and that is the safe way round.
         bindings.ClearBinding(game.Identity, savegameId);
 
-        return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: Recycle(adapter, target, slot) is false);
+        return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: await RecycleAsync(adapter, target, slot) is false);
     }
 
     /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
@@ -1098,7 +1106,7 @@ public sealed class SavegameService(
 
         bindings.ClearBinding(game.Identity, savegameId);
 
-        return Recycle(adapter, target, binding.Slot.Slot);
+        return await RecycleAsync(adapter, target, binding.Slot.Slot);
     }
 
     public async Task ObserveAsync(ModTargetRef target, CancellationToken ct)
@@ -1671,25 +1679,52 @@ public sealed class SavegameService(
     /// A volume with no Recycle Bin is not asked at all: there the shell's only way to "recycle" is to
     /// delete, and a copy left in the slot is recoverable where a deleted one is not.
     /// </para>
+    /// <para>
+    /// <b>Asked again, briefly, before giving up.</b> Moving a folder fails while anything holds a file
+    /// inside it, and the slot has just been renamed and packed - which is exactly what a virus scanner
+    /// or the search indexer wakes up to read. Those let go within a second or two; a game with the
+    /// save open does not, and there the attempts run out and the answer is the same as before.
+    /// Not cancellable: the claim is already handed back, and a hand-back that stopped halfway through
+    /// its last step would have nobody left to say where the copy went.
+    /// </para>
     /// </remarks>
     /// <returns>Whether the folder is gone - recycled, or never there to begin with.</returns>
-    private bool Recycle(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
+    private async Task<bool> RecycleAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
     {
         try
         {
             var path = adapter.GetSlotPath(target, slot);
 
-            if (Directory.Exists(path) is false)
+            for (var attempt = 0; ; attempt++)
             {
-                return true;
+                if (Directory.Exists(path) is false)
+                {
+                    return true;
+                }
+
+                if (recycleBin.IsAvailableFor(path) is false)
+                {
+                    logger.LogWarning("Slot {Slot} was not recycled: {Path} is on a volume with no Recycle Bin.", slot.Value, path);
+
+                    return false;
+                }
+
+                if (recycleBin.TryRecycle(path) && Directory.Exists(path) is false)
+                {
+                    return true;
+                }
+
+                if (attempt == RecycleRetryDelays.Count)
+                {
+                    break;
+                }
+
+                await Task.Delay(RecycleRetryDelays[attempt], CancellationToken.None);
             }
 
-            if (recycleBin.IsAvailableFor(path) && recycleBin.TryRecycle(path) && Directory.Exists(path) is false)
-            {
-                return true;
-            }
-
-            logger.LogWarning("Could not move slot {Slot} to the Recycle Bin after handing it back; it is still at {Path}.", slot.Value, path);
+            logger.LogWarning(
+                "Could not move slot {Slot} to the Recycle Bin after handing it back, in {Attempts} attempts; it is still at {Path}.",
+                slot.Value, RecycleRetryDelays.Count + 1, path);
 
             return false;
         }

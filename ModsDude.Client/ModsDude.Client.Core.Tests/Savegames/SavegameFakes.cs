@@ -518,13 +518,28 @@ internal sealed class FakeSlotRecycleBin(bool available = true) : IRecycleBin
     /// </summary>
     public bool Refuses { get; set; }
 
+    /// <summary>Refuses this many times and then gives way, as a scanner reading a fresh file does.</summary>
+    public int RefusesFirst { get; set; }
+
+    /// <summary>Every time it was asked, including the refusals.</summary>
+    public int Attempts { get; private set; }
+
 
     public bool IsAvailableFor(string path) => available;
 
     public bool TryRecycle(string path)
     {
+        Attempts++;
+
         if (available is false || Refuses)
         {
+            return false;
+        }
+
+        if (RefusesFirst > 0)
+        {
+            RefusesFirst--;
+
             return false;
         }
 

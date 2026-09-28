@@ -106,6 +106,16 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
             var result = SHFileOperationW(ref operation);
 
+            // The shell's code is the only clue to why - a sharing violation, access denied, a path
+            // it will not take - and nothing is shown to anybody with the error UI switched off, so
+            // it is written down here or nowhere.
+            if (result != 0 || operation.AnyOperationsAborted != 0)
+            {
+                logger.LogWarning(
+                    "The shell would not recycle {Path}: SHFileOperation returned 0x{Result:X} (aborted: {Aborted}).",
+                    path, result, operation.AnyOperationsAborted != 0);
+            }
+
             // Aborted covers the user declining a permanent delete, which is a refusal to lose the
             // file rather than an error - and is handled the same way, by quarantining it.
             return result == 0 && operation.AnyOperationsAborted == 0 && File.Exists(path) is false;

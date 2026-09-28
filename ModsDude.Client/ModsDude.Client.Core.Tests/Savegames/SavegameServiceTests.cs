@@ -710,6 +710,7 @@ public class SavegameServiceTests
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
         Assert.True(leftBehind);
+        Assert.Equal(4, harness.RecycleBin.Attempts);
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Null(harness.Service.GetBinding(harness.Game, savegame.Id));
@@ -718,6 +719,27 @@ public class SavegameServiceTests
         // displace, the safe way round.
         Assert.Equal("a brand new savegame", harness.ReadSlotFile(_slot1));
         Assert.Equal(SavegameSlotAvailability.Unrecognised, await harness.Service.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A slot that was renamed and packed a moment ago is what a scanner or the indexer wakes up to
+    /// read, and the move fails while they hold it. They let go; a refusal the first time is not the
+    /// answer.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_without_keeping_it_asks_the_recycle_bin_again_when_it_refuses_at_first()
+    {
+        using var harness = new Harness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.RecycleBin.RefusesFirst = 2;
+
+        var (_, leftBehind) = await harness.Service.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.False(leftBehind);
+        Assert.Equal(3, harness.RecycleBin.Attempts);
+        Assert.False(Directory.Exists(harness.SlotPath(_slot1)));
     }
 
     [Fact]
@@ -1566,7 +1588,10 @@ public class SavegameServiceTests
                 ManifestStore,
                 RecycleBin,
                 NullLogger<SavegameService>.Instance,
-                Sightings);
+                Sightings)
+            {
+                RecycleRetryDelays = [TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero]
+            };
         }
 
 
