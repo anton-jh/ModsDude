@@ -693,6 +693,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // open.
         _sightings.Record(_repo.Id, savegames, _currentUserId);
 
+        // Kept here for the same reason: the toggle redraws from it, and the held-save names and the
+        // incumbent a make-current displaces are read off it - so a reload has to replace it, or all of
+        // those go on answering about the list as it was when the page opened.
+        _fetched = savegames;
+
         var wanted = select ?? Selected?.Id;
 
         ClearRows();
