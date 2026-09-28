@@ -57,7 +57,68 @@ public partial class MainWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
 
         Closing += OnClosing;
+
+        SizeChanged += (_, _) => KeepOnScreenWhenMaximized();
+        StateChanged += (_, _) => KeepOnScreenWhenMaximized();
     }
+
+
+    /// <summary>
+    /// Pulls the content back inside the screen while the window is maximised.
+    /// </summary>
+    /// <remarks>
+    /// Windows maximises a window so that its frame hangs off the screen and only the client area shows.
+    /// With <c>WindowChrome</c> there is no frame - the client area is the whole window - so the same
+    /// overhang takes the top of the title bar and the edges of everything else with it. The overhang is
+    /// measured against the monitor's work area rather than assumed from a system metric, so it is right
+    /// on whichever monitor and at whichever scale the window is maximised on.
+    /// </remarks>
+    private void KeepOnScreenWhenMaximized()
+    {
+        var inset = new Thickness(0);
+
+        if (WindowState is WindowState.Maximized
+            && new WindowInteropHelper(this).Handle is var hwnd and not 0
+            && GetWindowRect(hwnd, out var window)
+            && MonitorFromWindow(hwnd, _monitorDefaultToNearest) is var monitor and not 0)
+        {
+            var info = new MonitorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
+
+            if (GetMonitorInfo(monitor, ref info))
+            {
+                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                var work = info.WorkArea;
+
+                inset = new Thickness(
+                    Math.Max(0, work.Left - window.Left) / dpi.DpiScaleX,
+                    Math.Max(0, work.Top - window.Top) / dpi.DpiScaleY,
+                    Math.Max(0, window.Right - work.Right) / dpi.DpiScaleX,
+                    Math.Max(0, window.Bottom - work.Bottom) / dpi.DpiScaleY);
+            }
+        }
+
+        Root.Margin = inset;
+    }
+
+    private const int _monitorDefaultToNearest = 2;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect WorkArea;
+        public int Flags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
 
     /// <summary>

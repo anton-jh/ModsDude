@@ -17,7 +17,22 @@
         WindowState="Maximized"
         FontSize="14">
 
-    <Grid>
+    <!-- The title bar is ours - see WindowTitleBar. A caption height of zero hands the whole client area to
+         WPF, and the bar tells Windows which of its pixels are caption. The one-pixel glass frame is what
+         keeps Windows' shadow and rounded corners on a window with no frame of its own. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      GlassFrameThickness="0 0 0 1"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <!-- Margined by the code-behind while maximised: a window without a frame still gets maximised as if it
+         had one, so its outer edge hangs off every side of the screen by the frame's width. -->
+    <Grid x:Name="Root" RowDefinitions="auto *">
+
+    <uc:WindowTitleBar Grid.Row="0" />
+
+    <Grid Grid.Row="1">
         <!-- The rail is a real column of the window, so the content area genuinely ends where it
              begins and nothing is ever drawn underneath it. It is Auto and collapses to nothing
              while there is nothing to say, which is most of the time.
@@ -32,10 +47,6 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Nothing in this grid keeps a gap from the top edge. The window's own background is the
-             title bar's colour, so a strip of it under the caption reads as more title bar - one the
-             native minimise, maximise and close buttons stop short of, which looks like their bottom
-             was cut off. -->
         <Frame Grid.Column="0"
                Content="{Binding Path=CurrentPage}"
                NavigationUIVisibility="Hidden" />
@@ -609,6 +620,8 @@
              lets any page or service use it without knowing where it is drawn. -->
         <uc:ToastHost Grid.Column="0" Grid.ColumnSpan="2"
                       DataContext="{Binding Toasts}" />
+    </Grid>
+
     </Grid>
 
 </Window>
