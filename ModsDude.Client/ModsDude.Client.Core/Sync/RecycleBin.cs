@@ -108,10 +108,12 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
             // The shell's code is the only clue to why - a sharing violation, access denied, a path
             // it will not take - and nothing is shown to anybody with the error UI switched off, so
-            // it is written down here or nowhere.
+            // it is written down here or nowhere. Information rather than a warning: a refusal is
+            // not yet a failure, since every caller has a next step - the savegame hand-back asks
+            // again, mod sync quarantines instead - and each warns for itself when that runs out.
             if (result != 0 || operation.AnyOperationsAborted != 0)
             {
-                logger.LogWarning(
+                logger.LogInformation(
                     "The shell would not recycle {Path}: SHFileOperation returned 0x{Result:X} (aborted: {Aborted}).",
                     path, result, operation.AnyOperationsAborted != 0);
             }
