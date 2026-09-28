@@ -16,6 +16,12 @@ namespace ModsDude.Server.Api.Dtos;
 /// The profile this save follows, or <c>null</c> where it follows none. Decided when the save was
 /// published and never after, so it agrees with every snapshot's own profile by construction.
 /// </param>
+/// <param name="ProfileName">
+/// What <paramref name="ProfileId"/> is called now, read with the savegame rather than stored on it, so
+/// a rename shows on the next read. Null exactly when <paramref name="ProfileId"/> is. Carried because
+/// the repo's profile list holds live profiles only, and a savegame following an archived one still
+/// needs a name for its row.
+/// </param>
 /// <param name="SupersededAt">
 /// When the profile stopped following this savegame, or <c>null</c> while it still does. Null for a
 /// savegame with no profile too, which is neither current nor past - the client reads the pair, not
@@ -41,6 +47,7 @@ public record SavegameDto(
     Guid RepoId,
     string Name,
     Guid? ProfileId,
+    string? ProfileName,
     DateTime Created,
     SavegameSnapshotDto? Head,
     SavegameCheckoutDto? Checkout,

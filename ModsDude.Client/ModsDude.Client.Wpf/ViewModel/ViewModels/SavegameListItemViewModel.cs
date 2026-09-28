@@ -76,11 +76,6 @@ public partial class SavegameListItemViewModel : ObservableObject
     private const string _notConnected = "This game is not connected here";
 
 
-    /// <param name="profileName">
-    /// The profile this save follows. An attribute of the savegame rather than its parent, which is
-    /// exactly why this list is one repo-level list with a profile column rather than a list per
-    /// profile.
-    /// </param>
     /// <param name="isAmbiguous">
     /// Whether somebody else holding a save in this same list is called the same thing. It is the
     /// list that decides that, not the person, so it arrives from outside.
@@ -90,14 +85,12 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </param>
     public SavegameListItemViewModel(
         SavegameDto savegame,
-        string profileName,
         string? currentUserId,
         bool isMember,
         bool isAmbiguous,
         AvatarViewModel? holderAvatar = null)
     {
         Savegame = savegame;
-        ProfileName = profileName;
         _currentUserId = currentUserId;
         IsMember = isMember;
         ShowHolderTag = isAmbiguous;
@@ -127,7 +120,13 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     public Guid Id => Savegame.Id;
     public string Name => Savegame.Name;
-    public string ProfileName { get; }
+
+    /// <summary>
+    /// The profile this save follows. An attribute of the savegame rather than its parent, which is
+    /// exactly why the Saves page is one repo-level list with a profile column rather than a list per
+    /// profile.
+    /// </summary>
+    public string ProfileName => SavegameWording.ProfileOf(Savegame);
 
     /// <summary>Refused for a Guest, and therefore never offered - a picker leading to a refusal is worse than one never offered.</summary>
     public bool IsMember { get; }
@@ -595,7 +594,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         }
         else
         {
-            Chips.Add(new SavegameChip("No mod list", SavegameChipTone.Neutral));
+            Chips.Add(new SavegameChip(SavegameWording.NoModList, SavegameChipTone.Neutral));
         }
 
         if (_hasUnpublishedPlay)

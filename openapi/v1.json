@@ -1603,6 +1603,10 @@
             "nullable": true,
             "type": "string"
           },
+          "profileName": {
+            "nullable": true,
+            "type": "string"
+          },
           "repoId": {
             "format": "guid",
             "type": "string"

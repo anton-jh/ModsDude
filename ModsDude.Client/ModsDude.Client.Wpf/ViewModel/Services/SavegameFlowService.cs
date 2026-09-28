@@ -46,9 +46,6 @@ public sealed class SavegameFlowService(
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts)
 {
-    /// <summary>What a savegame's profile is called where this member cannot see it.</summary>
-    public const string UnseenProfileName = "A profile you cannot see";
-
     /// <summary>
     /// Whether a locked pin moved between two revisions of one profile, keyed by the pair. Revisions do
     /// not change once written, so an answer is good for the session - and a check-out dialog and a
@@ -540,7 +537,7 @@ public sealed class SavegameFlowService(
         var modal = new SavegameCheckOutModalViewModel(
             mode,
             savegame.Name,
-            FindProfile(repo, savegame.ProfileId)?.Name ?? UnseenProfileName,
+            SavegameWording.ProfileOf(savegame),
             snapshotNumber,
             savegame.Head.Number,
             context);
@@ -1119,8 +1116,8 @@ public sealed class SavegameFlowService(
     }
 
     /// <summary>
-    /// The profile a savegame follows, or <c>null</c> where it follows none - the same answer as a
-    /// profile this member cannot see, and deliberately so.
+    /// The profile a savegame follows, or <c>null</c> where it follows none - or follows an archived
+    /// one, which the repo's live profile list does not hold, and which nothing here activates.
     /// </summary>
     private ProfileDto? FindProfile(Repo repo, Guid? profileId)
         => profileId is Guid id

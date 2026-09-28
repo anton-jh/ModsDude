@@ -1,4 +1,5 @@
 using ModsDude.Server.Api.Dtos;
+using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Users;
@@ -22,6 +23,10 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// to produce a nullable value object inside a projection - exactly the expression a provider
 /// declines to translate. It is also what keeps the whole list to a fixed number of round trips:
 /// savegames, their heads, their open claims, and the names, whatever the repo holds.
+/// </para>
+/// <para>
+/// <b>Profile names the same way</b>, read with every list rather than kept on the savegame, so a
+/// rename is on the next read. Archived profiles are named too: a savegame goes on following one.
 /// </para>
 /// </remarks>
 internal static class SavegameReads
@@ -68,6 +73,8 @@ internal static class SavegameReads
             [.. heads.Select(x => x.CreatedBy), .. checkouts.Select(x => x.UserId)],
             cancellationToken);
 
+        var profiles = await GetProfileNamesAsync(dbContext, repoId, rows.Select(x => x.ProfileId), cancellationToken);
+
         var headsBySavegame = heads.ToDictionary(x => x.SavegameId);
         var checkoutsBySavegame = checkouts.ToDictionary(x => x.SavegameId);
 
@@ -78,6 +85,7 @@ internal static class SavegameReads
                 repoId.Value,
                 row.Name.Value,
                 row.ProfileId?.Value,
+                row.ProfileId is ProfileId profileId ? profiles.GetValueOrDefault(profileId) : null,
                 row.Created,
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
                 checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names) : null,
@@ -118,11 +126,14 @@ internal static class SavegameReads
 
         var names = await GetNamesAsync(dbContext, userIds, cancellationToken);
 
+        var profiles = await GetProfileNamesAsync(dbContext, savegame.RepoId, [savegame.ProfileId], cancellationToken);
+
         return new SavegameDto(
             savegame.Id.Value,
             savegame.RepoId.Value,
             savegame.Name.Value,
             savegame.ProfileId?.Value,
+            savegame.ProfileId is ProfileId profileId ? profiles.GetValueOrDefault(profileId) : null,
             savegame.Created,
             head is null ? null : ToDto(savegame.RepoId, head, names),
             checkout is null ? null : ToDto(checkout, names),
@@ -220,6 +231,18 @@ internal static class SavegameReads
         CancellationToken cancellationToken)
     {
         return dbContext.Users.GetNameplatesAsync([.. userIds.Distinct()], cancellationToken);
+    }
+
+    private static async Task<Dictionary<ProfileId, string>> GetProfileNamesAsync(
+        ApplicationDbContext dbContext,
+        RepoId repoId,
+        IEnumerable<ProfileId?> profileIds,
+        CancellationToken cancellationToken)
+    {
+        var summaries = await dbContext.Profiles.GetSummariesAsync(
+            repoId, [.. profileIds.OfType<ProfileId>().Distinct()], cancellationToken);
+
+        return summaries.ToDictionary(x => x.Key, x => x.Value.Name.Value);
     }
 
     private static SavegameSnapshotDto ToDto(RepoId repoId, SavegameSnapshotRow row, IReadOnlyDictionary<UserId, UserNameplate> names)

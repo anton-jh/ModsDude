@@ -11318,6 +11318,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("profileId", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Guid? ProfileId { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("profileName", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string? ProfileName { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("repoId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Guid RepoId { get; set; } = default!;
 

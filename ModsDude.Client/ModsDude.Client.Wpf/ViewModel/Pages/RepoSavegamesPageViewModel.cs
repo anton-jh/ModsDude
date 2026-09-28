@@ -57,8 +57,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
 
-    private const string _unseenProfileName = SavegameFlowService.UnseenProfileName;
-
     private IReadOnlyList<SavegameDto> _fetched = [];
     private string? _currentUserId;
     private Guid? _selectOnArrival;
@@ -725,7 +723,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         {
             var row = new SavegameListItemViewModel(
                 savegame,
-                FindProfile(savegame.ProfileId)?.Name ?? _unseenProfileName,
                 _currentUserId,
                 IsMember,
                 ambiguous.Contains(savegame.Checkout?.User.Id ?? ""),
@@ -768,7 +765,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private IEnumerable<SavegameDto> InListOrder(IEnumerable<SavegameDto> savegames)
         => savegames
             .OrderBy(x => x.ProfileId is null)
-            .ThenBy(x => FindProfile(x.ProfileId)?.Name ?? _unseenProfileName, NaturalOrder.Comparer)
+            .ThenBy(SavegameWording.ProfileOf, NaturalOrder.Comparer)
             .ThenBy(x => x.ProfileId)
             .ThenBy(x => x.SupersededAt is not null)
             .ThenByDescending(x => x.SupersededAt)
@@ -1254,9 +1251,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The profile a savegame follows, or <c>null</c> where it follows none. The same answer as a
-    /// profile this member cannot see, and deliberately so: every caller wants the same thing from
-    /// both, which is to say nothing about mod lists on that row.
+    /// The profile a savegame follows, or <c>null</c> where it follows none - or follows an archived
+    /// one, which the repo's live profile list does not hold. The caller says nothing about head
+    /// revisions on that row either way. Not where a row's profile name comes from: see
+    /// <see cref="SavegameWording.ProfileOf"/>.
     /// </summary>
     private ProfileDto? FindProfile(Guid? profileId)
         => profileId is Guid id

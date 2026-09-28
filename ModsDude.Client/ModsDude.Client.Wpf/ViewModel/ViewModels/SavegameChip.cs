@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Globalization;
 
 namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
@@ -43,6 +44,15 @@ public sealed record SavegameChip(string Text, SavegameChipTone Tone)
 /// </remarks>
 public static class SavegameWording
 {
+    /// <summary>What a savegame that follows no profile says where a profile's name would go.</summary>
+    public const string NoModList = "No mod list";
+
+    /// <summary>
+    /// The profile a savegame follows, by the name the server read with it - which is there for an
+    /// archived profile too, where the repo's live profile list has nothing to look it up in.
+    /// </summary>
+    public static string ProfileOf(SavegameDto savegame) => savegame.ProfileName ?? NoModList;
+
     /// <summary>
     /// How long ago something happened, in the roundest form that is still true. Falls back to a date
     /// once "days ago" stops meaning anything.

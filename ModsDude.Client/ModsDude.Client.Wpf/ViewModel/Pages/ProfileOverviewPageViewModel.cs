@@ -453,7 +453,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         Current = savegame is null
             ? null
-            : new SavegameListItemViewModel(savegame, _profile.Name, _currentUserId, IsMember, isAmbiguous: false);
+            : new SavegameListItemViewModel(savegame, _currentUserId, IsMember, isAmbiguous: false);
 
         OfferCurrent();
     }
