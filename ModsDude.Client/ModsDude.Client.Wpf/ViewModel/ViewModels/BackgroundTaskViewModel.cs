@@ -33,6 +33,14 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// faster is counted, and a row once earned is never taken back.
 /// </para>
 /// <para>
+/// <b>A task begun inside another is a step of it, not a page of its own.</b> A save imports and then
+/// applies, and each of those is a task in its own right when started alone - but beside the save
+/// they were three pages, the one on screen said "Saving" with nothing moving, and the bar that was
+/// actually filling was a click away. So a task begun while another is open in the same async flow
+/// nests under it: the page keeps the gesture's title and Cancel, and the deepest running step lends
+/// it its line, its bar and its rows. See <see cref="Begin"/>.
+/// </para>
+/// <para>
 /// <b>Not dismissible, and not a modal.</b> There is nothing to acknowledge - it goes away when the
 /// work does. Which is also why every handle is disposable: a <c>using</c> at the call site is what
 /// guarantees the strip disappears on the cancellation and failure paths too.
@@ -79,7 +87,16 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
 
     private readonly Lock _lock = new();
+
+    /// <summary>The top-level tasks, in start order: one page each. Steps hang off these.</summary>
     private readonly List<RunningTask> _running = [];
+
+    /// <summary>
+    /// The task open in the current async flow, which a <see cref="Begin"/> inside it nests under.
+    /// Set by the begin and put back by the dispose, both of which run in the caller's own flow.
+    /// </summary>
+    private readonly AsyncLocal<RunningTask?> _current = new();
+
     private readonly HashSet<RunningTask> _seen = [];
     private readonly DispatcherTimer? _timer;
     private readonly TransferLimits _transferLimits;
@@ -212,7 +229,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
         lock (_lock)
         {
-            cancel = InCancelGuard() ? null : _shown?.TakeCancel();
+            cancel = InCancelGuard() ? null : _shown?.CancelOwner?.TakeCancel();
         }
 
         if (cancel is null)
@@ -265,22 +282,49 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     /// exactly once - when there was nothing to look at - and wrong every time after, because it pulls
     /// a five minute import off screen for a check that runs for 300ms, and swaps the Cancel button
     /// under the pointer while it does. The arrival shows as a dot beside the pager instead.
+    /// <para>
+    /// <b>Nor does a task begun inside another get a page at all.</b> Where the caller's async flow
+    /// already holds an open task, this one becomes a step of it - found rather than passed, so the
+    /// import and the apply nest under a save without either of them knowing there is one, and stand
+    /// alone exactly as before when nothing is. A step that outlives what it was begun under - work
+    /// fired off and not awaited - moves up to the nearest ancestor still running, or to a page of
+    /// its own, rather than disappearing with it.
+    /// </para>
     /// </remarks>
     public IBackgroundTask Begin(string title, string? detail = null, Action? cancel = null)
     {
-        var task = new RunningTask(this, title, detail, cancel);
+        RunningTask task;
 
         lock (_lock)
         {
-            var wasIdle = _running.Count == 0;
+            var parent = Running(_current.Value);
 
-            _running.Add(task);
+            task = new RunningTask(this, parent, title, detail, cancel);
 
-            if (wasIdle)
+            if (parent is not null)
             {
-                _shown = task;
+                var cancelBefore = _shown?.CancelOwner;
+
+                parent.Children.Add(task);
+
+                // A step of a gesture that has no Cancel of its own brings one to a page already on
+                // screen - where the last step's may have been a moment ago, doing something else.
+                GuardIfCancelMoved(cancelBefore);
+            }
+            else
+            {
+                var wasIdle = _running.Count == 0;
+
+                _running.Add(task);
+
+                if (wasIdle)
+                {
+                    _shown = task;
+                }
             }
         }
+
+        _current.Value = task;
 
         Publish(immediate: true);
 
@@ -290,37 +334,100 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
     private void End(RunningTask task)
     {
+        RunningTask? heir;
+
         lock (_lock)
         {
-            var index = _running.IndexOf(task);
-
             // Idempotent: a handle disposed twice - a using inside a using, a finally after an early
             // return - must not take the count negative and hide a task that is still running.
-            if (index < 0)
+            if (task.IsEnded)
             {
                 return;
             }
 
-            _running.RemoveAt(index);
-            _seen.Remove(task);
+            var cancelBefore = _shown?.CancelOwner;
 
-            if (ReferenceEquals(_shown, task) is false)
+            task.IsEnded = true;
+            heir = Running(task.Parent);
+
+            // Steps still running under it are not ended with it: they are handed up.
+            var orphans = task.Children.ToList();
+
+            task.Children.Clear();
+
+            foreach (var orphan in orphans)
             {
-                return;
+                orphan.Parent = heir;
+                heir?.Children.Add(orphan);
             }
 
-            // The older neighbour first - the pager reads left to right in start order, so falling
-            // backwards lands where the user was already looking. Whatever takes over does so without
-            // being asked, which is why its Cancel is dead for a moment.
-            _shown = _running.ElementAtOrDefault(index - 1) ?? _running.ElementAtOrDefault(index);
-
-            if (_shown is not null)
+            if (task.Parent is { } parent)
             {
-                _cancelGuardFrom = Stopwatch.GetTimestamp();
+                parent.Children.Remove(task);
             }
+            else
+            {
+                var index = _running.IndexOf(task);
+
+                _running.RemoveAt(index);
+                _seen.Remove(task);
+
+                if (heir is null)
+                {
+                    // In its place, so a step that outlived its gesture is on the page that was
+                    // already showing it.
+                    _running.InsertRange(index, orphans);
+                }
+
+                if (ReferenceEquals(_shown, task))
+                {
+                    // The older neighbour first - the pager reads left to right in start order, so
+                    // falling backwards lands where the user was already looking.
+                    _shown = orphans.FirstOrDefault()
+                        ?? _running.ElementAtOrDefault(index - 1)
+                        ?? _running.ElementAtOrDefault(index);
+                }
+            }
+
+            GuardIfCancelMoved(cancelBefore);
+        }
+
+        // Only where this flow still points at it. A task ended from somewhere else leaves the flow
+        // that is running alone.
+        if (ReferenceEquals(_current.Value, task))
+        {
+            _current.Value = heir;
         }
 
         Publish(immediate: true);
+    }
+
+    /// <summary>
+    /// Deadens Cancel for a moment where the one on screen now belongs to a different task than
+    /// <paramref name="before"/>. Under the lock.
+    /// </summary>
+    /// <remarks>
+    /// Whatever Cancel sits under the pointer got there without being asked - a neighbouring page, or
+    /// the next step of a gesture whose own has none - and a click aimed at the one before must not
+    /// land on it.
+    /// </remarks>
+    private void GuardIfCancelMoved(RunningTask? before)
+    {
+        if (_shown?.CancelOwner is { } after && ReferenceEquals(after, before) is false)
+        {
+            _cancelGuardFrom = Stopwatch.GetTimestamp();
+        }
+    }
+
+    /// <summary>The nearest of this task and its ancestors that has not ended. Under the lock.</summary>
+    private static RunningTask? Running(RunningTask? task)
+    {
+        while (task is { IsEnded: true })
+        {
+            task = task.Parent;
+        }
+
+        return task;
     }
 
 
@@ -444,26 +551,33 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
 
         _seen.Add(shown);
 
-        var rows = shown.Rows(MaxRows, out var hidden);
+        // The page is the gesture's, and everything that moves on it is the step's: the bar, the
+        // rows and the estimate all describe the one piece of work actually running.
+        var chain = shown.Chain();
+        var step = chain[^1];
+
+        var rows = step.Rows(MaxRows, out var hidden);
 
         return new Snapshot
         {
             Count = _running.Count,
             Index = _running.IndexOf(shown),
             Title = shown.Title,
+            Step = ReferenceEquals(step, shown) ? null : step.Title,
 
             // Read at every redraw rather than fixed when the task began, so a limit set or lifted
             // part way through is what the strip says from then on.
-            Limit = TransferRate.DescribeLimits(_transferLimits, shown.Transfers),
-            Detail = shown.Detail,
-            Completed = shown.Completed,
-            Total = shown.Total,
-            Amount = shown.Amount,
-            Remaining = shown.Remaining,
-            Running = shown.LiveSubtasks,
+            Limit = TransferRate.DescribeLimits(_transferLimits, chain.Aggregate(TransferDirection.None, (x, y) => x | y.Transfers)),
+            Detail = step.Detail,
+            Completed = step.Completed,
+            Total = step.Total,
+            Amount = step.Amount,
+            Remaining = step.Remaining,
+            Running = step.LiveSubtasks,
+            MoreSteps = chain.Sum(x => Math.Max(0, x.Children.Count - 1)),
             Rows = rows,
             Hidden = hidden,
-            CanCancel = shown.CanCancel,
+            CanCancel = shown.CancelOwner?.CanCancel ?? false,
             InCancelGuard = InCancelGuard(),
             HasUnseen = _running.Exists(x => _seen.Contains(x) is false)
         };
@@ -479,7 +593,14 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     /// </remarks>
     private static string? Compose(Snapshot snapshot)
     {
-        var parts = new List<string>(3);
+        var parts = new List<string>(5);
+
+        // The step's own name leads, because the title above it is the gesture's and would otherwise
+        // leave the count beside it counting nobody knows what.
+        if (snapshot.Step is not null)
+        {
+            parts.Add(snapshot.Step);
+        }
 
         if (string.IsNullOrWhiteSpace(snapshot.Detail) is false)
         {
@@ -500,6 +621,13 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         if (snapshot.Running > 1)
         {
             parts.Add($"{snapshot.Running} running");
+        }
+
+        // Steps running side by side, of which only the newest is drawn. Nothing does that today;
+        // this is so that something that starts to is not silently half-reported.
+        if (snapshot.MoreSteps > 0)
+        {
+            parts.Add(snapshot.MoreSteps == 1 ? "and 1 more step" : $"and {snapshot.MoreSteps} more steps");
         }
 
         return parts.Count > 0 ? string.Join(" · ", parts) : null;
@@ -567,6 +695,9 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public int Count { get; init; }
         public int Index { get; init; }
         public string Title { get; init; }
+
+        /// <summary>The running step's title, or null while the gesture has none.</summary>
+        public string? Step { get; init; }
         public string? Limit { get; init; }
         public string? Detail { get; init; }
         public long Completed { get; init; }
@@ -574,6 +705,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public string? Amount { get; init; }
         public TimeSpan? Remaining { get; init; }
         public int Running { get; init; }
+        public int MoreSteps { get; init; }
         public IReadOnlyList<Row> Rows { get; init; }
         public int Hidden { get; init; }
         public bool CanCancel { get; init; }
@@ -586,14 +718,31 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     /// One announced piece of work. Its fields are written from whichever thread is doing the work and
     /// read under the same lock the list is, so the strip never renders half of an update.
     /// </summary>
-    private sealed class RunningTask(BackgroundTaskViewModel owner, string title, string? detail, Action? cancel)
+    private sealed class RunningTask(
+        BackgroundTaskViewModel owner,
+        RunningTask? parent,
+        string title,
+        string? detail,
+        Action? cancel)
         : IBackgroundTask
     {
         private readonly List<RunningSubtask> _subtasks = [];
         private readonly RemainingTimeEstimator _remaining = new();
 
+        /// <summary>Whether it was given a Cancel at all, which stays true once the button has been used.</summary>
+        private readonly bool _cancellable = cancel is not null;
+
         private Action? _cancel = cancel;
 
+
+        /// <summary>What it is a step of, or null for a task with a page of its own. Under the lock.</summary>
+        public RunningTask? Parent { get; set; } = parent;
+
+        /// <summary>Its steps still running, in start order. Under the lock.</summary>
+        public List<RunningTask> Children { get; } = [];
+
+        /// <summary>Set once, by the end. Under the lock.</summary>
+        public bool IsEnded { get; set; }
 
         public string Title { get; private set; } = title;
         public string? Detail { get; private set; } = detail;
@@ -607,6 +756,35 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         public bool CanCancel => _cancel is not null;
 
         public int LiveSubtasks => _subtasks.Count(x => x.IsLive);
+
+        /// <summary>
+        /// Whose Cancel the page offers: the outermost task along <see cref="Chain"/> that was given
+        /// one. Under the lock.
+        /// </summary>
+        /// <remarks>
+        /// <b>Outermost, because stopping is a decision about the gesture.</b> A save's steps take its
+        /// token, so its Cancel reaches whichever step is running - where a step's own would stop only
+        /// that step and let the save carry on with the next. And by whether it was <em>given</em> one
+        /// rather than whether it still holds it, so pressing the gesture's Cancel does not bring up a
+        /// step's in its place.
+        /// </remarks>
+        public RunningTask? CancelOwner => Chain().FirstOrDefault(x => x._cancellable);
+
+        /// <summary>
+        /// This task and, from it, the newest running step all the way down - the last is what the
+        /// page draws the bar of. Under the lock.
+        /// </summary>
+        public List<RunningTask> Chain()
+        {
+            var chain = new List<RunningTask> { this };
+
+            while (chain[^1].Children.Count > 0)
+            {
+                chain.Add(chain[^1].Children[^1]);
+            }
+
+            return chain;
+        }
 
 
         /// <summary>
@@ -699,7 +877,10 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
             owner.Publish();
         }
 
-        /// <summary>Promotes what is due and drops what has outstayed its dwell. Under the lock.</summary>
+        /// <summary>
+        /// Promotes what is due and drops what has outstayed its dwell, here and in every step. Under
+        /// the lock.
+        /// </summary>
         public void Sweep()
         {
             foreach (var subtask in _subtasks)
@@ -708,6 +889,11 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
             }
 
             _subtasks.RemoveAll(x => x.IsExpired);
+
+            foreach (var child in Children)
+            {
+                child.Sweep();
+            }
         }
 
         /// <summary>

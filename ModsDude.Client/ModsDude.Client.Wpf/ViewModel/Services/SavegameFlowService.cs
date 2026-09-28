@@ -868,6 +868,8 @@ public sealed class SavegameFlowService(
 
         await driftMonitor.CheckAsync();
 
+        // Declined only, not stopped: a Cancel on the strip says nothing about the files in the folder,
+        // and the offer below exists for the decline that does.
         if (outcome.Status is ProfileApplyStatus.Declined)
         {
             await OfferModListReviewAsync(repo, game, profile, cancellationToken);
