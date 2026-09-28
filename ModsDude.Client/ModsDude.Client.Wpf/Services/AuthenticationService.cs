@@ -183,7 +183,7 @@ public class AuthenticationService : IAccessTokenAccessor
     /// on it. Asking again is how the user says they gave up, so that is what ends the old attempt. A
     /// tab finished after being replaced reaches a listener that is no longer there.
     /// </remarks>
-    /// <returns>Null where the user closed the page, or asked for a new one before finishing it.</returns>
+    /// <returns>Null where the user closed the page, asked for a new one before finishing it, or the caller cancelled.</returns>
     private async Task<AuthenticationResult?> PromptAsync(CancellationToken cancellationToken, string? loginHint = null)
     {
         // Called from the UI thread and resumed on it, so the one open prompt is never raced.
@@ -200,7 +200,9 @@ public class AuthenticationService : IAccessTokenAccessor
         {
             return null;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested is false)
+        // Whoever cancelled it - this, for a newer prompt, or the command itself, which cancels its
+        // previous run when clicked again - the user did not finish the page, and that is all it means.
+        catch (OperationCanceledException)
         {
             return null;
         }
