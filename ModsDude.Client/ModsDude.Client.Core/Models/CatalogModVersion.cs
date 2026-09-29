@@ -52,6 +52,7 @@ public record CatalogModVersion(
             ContentHash = dto.ContentHash,
             SizeBytes = dto.SizeBytes,
             SequenceNumber = dto.SequenceNumber,
+            Registered = dto.Created,
             DeletionScheduledFor = dto.DeletionScheduledFor,
             DeletionReason = dto.DeletionReason
         };
@@ -108,6 +109,9 @@ public record CatalogModVersion(
 
     /// <summary>Where the repo orders this version among its siblings. Null until registered.</summary>
     public int? SequenceNumber { get; init; }
+
+    /// <summary>When the repo registered this version. Null until registered.</summary>
+    public DateTimeOffset? Registered { get; init; }
 
     /// <summary>When the server's retention deletes this version, or null where it is not scheduled.</summary>
     public DateOnly? DeletionScheduledFor { get; init; }

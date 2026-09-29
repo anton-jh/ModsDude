@@ -84,17 +84,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
     public bool ShowsVersionChip => ShowVersion && HasVersion;
 
-    /// <summary>
-    /// A line of plain text after the name, for a page that has something to say about this row that is
-    /// not the version. The review of a draft says what moved here - "1.2 → 1.3 · locked" - and it is
-    /// drawn on the row rather than beside it so the row's divider runs the whole width.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDetail))]
-    private string? _detail;
-
-    public bool HasDetail => string.IsNullOrEmpty(Detail) is false;
-
     public bool IsOnServer => Mod.IsOnServer;
     public bool IsLocal => Mod.IsLocal;
 
@@ -201,7 +190,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
     [NotifyPropertyChangedFor(nameof(HasStatus))]
-    [NotifyPropertyChangedFor(nameof(IsUpdateRow))]
     private ModDisplayStatus _status = ModDisplayStatus.None;
 
     /// <summary>
@@ -261,28 +249,9 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [ObservableProperty]
     private bool _outlineStatus;
 
-    /// <summary>
-    /// Whether this row's version is newer than what the profile pins - which is what decides where
-    /// it sorts, and which of the two pin-moving glyphs it carries. Derived from the status so the
-    /// chip and the button cannot disagree.
-    /// </summary>
-    public bool IsUpdateRow => Status is ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending;
-
-    /// <summary>
-    /// Whether pressing this row's button moves a pin the profile already has rather than adding a
-    /// new one.
-    /// </summary>
-    /// <remarks>
-    /// <b>Not the same question as <see cref="IsUpdateRow"/>, which is what this used to be read off.</b>
-    /// The left list's own version selector reaches versions that are older than the pin, and ones
-    /// the ordering cannot place against it at all - the <em>New?</em> rows this page exists to
-    /// surface - and neither of those is an update. Both still move the pin, so a row deciding its
-    /// verb by "is this newer" showed a <b>+</b> labelled <em>Add to this profile</em> over an action
-    /// that silently changed an existing pin. Set by the page, which is the thing that knows what the
-    /// draft holds; false everywhere else, where a row cannot move anything.
-    /// </remarks>
+    /// <summary>In the saved profile, and taken out of the draft.</summary>
     [ObservableProperty]
-    private bool _movesPin;
+    private bool _isStruckOut;
 
 
     /// <summary>
@@ -349,9 +318,6 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public string StatusText => Status switch
     {
         ModDisplayStatus.New => "New",
-        // Two fills, one word: what the row says about this profile is the same either way, and
-        // which of the two it is is what the colour carries.
-        ModDisplayStatus.UpdateAvailable or ModDisplayStatus.UpdatePending => "Update",
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
         ModDisplayStatus.ImportsOnSave => "Imports on save",

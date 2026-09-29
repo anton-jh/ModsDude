@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using System.Collections;
 using System.ComponentModel;
 
@@ -87,12 +88,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     /// <param name="all">Every row, shown or not.</param>
     /// <param name="activate">What Enter and a double click do to the picked rows.</param>
     /// <param name="verb">What the primary button says it will do, e.g. "Add".</param>
-    /// <param name="describe">
-    /// The whole label, for a list where one verb is not enough. The editor's left-hand list moves
-    /// two different things now - a mod the profile has never held is an add, and a newer version of
-    /// one it holds is an update - and a button reading "Add 15 mods" over a selection that would
-    /// move three pins is a label that lies about what pressing it does.
-    /// </param>
+    /// <param name="describe">The whole label, for a list where one verb is not enough.</param>
     /// <param name="canSelect">
     /// Which rows may be picked at all, for a list where some rows are there to be seen and not acted
     /// on - the repo's versions that a profile still uses. Every gesture passes over the others, and
@@ -264,6 +260,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
         }
     }
 
+    [RelayCommand]
     public void SelectAllShown()
     {
         InOneGesture(() =>
@@ -291,6 +288,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     /// The counterpart of a selection that survives the search: what makes carrying rows across
     /// searches safe is being able to put down the ones no longer in hand.
     /// </summary>
+    [RelayCommand]
     public void DeselectHidden()
     {
         var shown = new HashSet<ISelectableRow>(Rows());
@@ -307,6 +305,7 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
         });
     }
 
+    [RelayCommand]
     public void ClearSelection()
     {
         InOneGesture(Clear);

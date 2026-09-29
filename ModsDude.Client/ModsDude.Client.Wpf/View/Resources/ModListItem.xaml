@@ -79,7 +79,17 @@
                                    ToolTipService.InitialShowDelay="400">
                             <Hyperlink Style="{StaticResource TextLink}"
                                        Command="{Binding ShowDetailsCommand}">
-                                <Run Text="{Binding Name, Mode=OneWay}" />
+                                <Run Text="{Binding Name, Mode=OneWay}">
+                                    <Run.Style>
+                                        <Style TargetType="Run">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsStruckOut}" Value="True">
+                                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Run.Style>
+                                </Run>
                             </Hyperlink>
                         </TextBlock>
 
@@ -230,13 +240,6 @@
                         </StackPanel>
                     </Button>
 
-                    <TextBlock Margin="0 0 8 0"
-                               VerticalAlignment="Center"
-                               Text="{Binding Detail}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
-
                     <Border Margin="0 0 8 0"
                             ToolTip="{Binding TouchTooltip}"
                             ToolTipService.InitialShowDelay="300"
@@ -286,22 +289,9 @@
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
                                     </DataTrigger>
-                                    <!-- Green for the two that are only on disk, because what they
-                                         have in common is that saving uploads a file - and the
-                                         accent for the one that costs nothing. The fill says what
-                                         the version means for the repo; the word says what it means
-                                         for the profile. -->
                                     <DataTrigger Binding="{Binding Status}" Value="NewVersion">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Status}" Value="UpdatePending">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
-                                        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                     </DataTrigger>
                                     <!-- Where a draft exists to tell apart from, every fill above steps
                                          back to an outline: a filled chip there means "you did this"

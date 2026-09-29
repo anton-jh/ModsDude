@@ -707,15 +707,12 @@ registered versions per repo.
   `Task<SourceScan>` per source, with the merged view built from the enabled ones. This is what
   makes a source chip usable — toggling a source recomposes from memory and is instant, and
   adding one scans only the new folder rather than every folder again.
-- **A source switched off goes on standby.** It leaves the merged view and keeps its scan, which a
-  rescan still refreshes; only *removing* an ad-hoc folder forgets it. So `GetAsync` answers with two
-  sets: `Versions`, what the enabled sources hold, which is what a list of mods is a list *of*, and
-  `Known`, widened to the standby ones, which is what a version selector and an update planner read.
-  A chip and a rescan are different events and a single set cannot serve both — unticking a source
-  must not shrink a draft's selector, and a rescan that no longer finds a file must. The editor used
-  to do this with an append-only dictionary of its own, which got the first right and the second
-  exactly wrong: a deleted archive stayed offered and stayed counted as an update forever. Both sets
-  are recomputed from the current scans, so neither can outlive what is on disk.
+- **A source is unloaded, enabled or on standby** (`ModSourceState`). A source switched off goes on
+  standby: it leaves the merged view and keeps its scan, which a rescan still refreshes. So `GetAsync`
+  answers with two sets: `Versions`, what the enabled sources hold, and `Known`, widened to the standby
+  ones, which is where a version the profile editor's draft already pins finds its file. Unloading a
+  source drops it from both but keeps its scan, so loading it again is instant. Both sets are
+  recomputed from the current scans, so neither can outlive what is on disk.
 - **Cache the `Task`, not the result.** A second caller arriving during an in-flight scan joins
   it rather than starting a second `Parallel.For` over a thousand archives.
 - **Invalidate explicitly** — on import, and on a change to the game's settings. Never silently. A
@@ -731,8 +728,7 @@ registered versions per repo.
   folder (`ModCatalog.RescanFolder`, by path, **whether the chip is on or on standby**) and
   recomposes. Without it a mod the apply recycled stayed in the scan as an import candidate whose
   file was gone, and one it installed was missing from it. A recompose rather than a reload, so the
-  draft survives, and one that lands mid-save waits for the save like any other. A folder the page
-  never scanned has nothing cached and does not recompose.
+  draft survives. A folder the page never scanned has nothing cached and does not recompose.
 - **The 150 ms scan delay and the cancellation behaviour moved into the service**, unchanged.
   They exist so that a page nobody stopped on never touches the disk; that reasoning is not
   specific to the import page. Note the delay predates the sidebar's drag-selection fix and stays
@@ -801,432 +797,133 @@ Two things this needed, and both now exist:
 
 ### Profile mod list editor
 
-Two lists: available on the left, in-profile on the right. The left is the union of what the enabled
-sources offer, so a mod can be added to a profile *and imported* in one action without a detour to
-another page. Its sources are the chip row described above — adding a mod straight from Downloads
-while building a profile is the point of having sources at all.
+Two lists. **The left is what the profile does not hold**: every mod an enabled source offers that
+the profile neither pins nor held when the page read it. **The right is the draft**: every pin, plus
+every saved pin the draft has taken out. A mod is only ever on one side.
 
-**A change to the catalog is never a reason to re-read the profile.** The load is split in two. The
-server half — the dependency list, the revision the page is based on, and the baseline a save diffs
-against — is read on init, on *Discard*, and after a save has committed. Everything that changes
-what is merely *known* — a source chip, a rescan, a folder added or removed, a drift notice's scan
-target — runs a **recompose**, which rebuilds the chips, the left list, the version selectors and
-the update plan and leaves the draft, both selections, the pending removals, the search and the bulk
-undo exactly where they were. The two used to be one method, which meant ticking a chip silently
-discarded everything the user had built, dropped the unsaved-changes flag to false and released the
-navigation lock. It was also a needless round trip: a recompose reads the catalog, which composes
-from scans already in memory.
+#### One path for every change
 
-**What the draft holds is part of the merged set.** The version index is the union of everything the
-catalog has read — `ModCatalogSnapshot.Known`, so the standby sources as well as the enabled ones —
-and the versions the draft is pinning. So a pending row whose folder has just been switched off keeps
-its pin, keeps the `FoundIn` occurrence that names the file on disk, stays reported as pending, and
-still imports on save. Disabling a source is a statement about what is *looked at*, never about what
-exists — and without this the row degraded to the unknown-version placeholder, which reports
-`IsOnServer: true` and would have had the save write a dependency on a version the repo does not
-hold. The index is still rebuilt from the catalog every compose rather than accumulated, which is
-what keeps a rescan able to take a deleted file back out of it.
+The draft is an immutable `ProfileDraft` (Client.Core): the saved pins and ignore list, and the
+draft's own. Every edit returns a new one. `ProfileEditorState.Compute` turns the draft, the catalog,
+the sources and the view options (search, filters, sorts) into both lists, every count and the update
+plan, and the page updates its rows in place from that, keyed by mod so a row keeps its thumbnail
+and selection. Nothing on the page is kept in sync by hand: an edit, an undo, a source toggle and a
+search all end in the same recompute. The computation is tested in Client.Core.
 
-**One search box, over both lists.** It sits above the two columns rather than in the left one's
-header, because a mod is only ever on one side: a box that reached only the left list answered
-half the question, and the half it could not answer was "is this already in the profile?".
-`ProfileModRowViewModel.Matches` delegates to its `Item`, so both sides answer the same question
-the same way and the answer follows the version selector. 
+**Undo and redo.** Each step is an `ProfileEditorSnapshot` - the draft and the set of loaded sources -
+in an `EditHistory` that keeps the last 50. The bottom bar has Undo and Redo, which say what they would
+take back, and Ctrl+Z and Ctrl+Y work anywhere but a text box. Searching, filtering, sorting and
+switching an already-loaded source on or off are not steps. *Discard changes* reverts to the saved
+profile as one step, so it does not ask. The history starts over when the page reads the profile: on
+opening, and after a save.
 
-**Attribute filters, and Ctrl+Space.** Beside plain words the box takes `key:value` filters over
-the versions' [attributes](04-game-adapters.md#mod-attributes) - `category:tractors`, `kind:script`,
-`brand:"new holland"` - with `key:` alone for "has any", a leading `-` to invert either, and
-whatever aliases the adapter declares (`cat:`, `mp:`). A value matches by substring, ignoring
-case; words stay fuzzy. `key>v`, `key<v`, `key>=v` and `key<=v` compare instead, in the order the
-attribute sort uses (`ModAttributeOrder`, below): a number typed compares only with values that are
-numbers, and text compares in natural order. There is no colon form - `key:>5` looks for ">5" - and
-`key>` alone is `key:`, so the list does not empty halfway through typing one. Ctrl+Space offers the
-values after an operator too. Only a **declared** key makes a filter, so `FS25:` is still a word and a
-mod named that way is still found. The text is parsed once per keystroke into a `ModSearchQuery`
-rather than once per row. The same box on the repo mods page takes the same syntax, because both go
-through `ModListItemViewModel.Matches`.
+**The server is read on opening and after a save**, and at no other time. Anything that changes what
+is known - a source, a rescan, a folder an apply changed - recomposes from the catalog and leaves the
+draft alone.
 
-Ctrl+Space opens a completion list under the word being typed - the keys, or once it has its colon
-that key's values - which narrows as typing goes on and never takes focus from the box. A key's
-values are the adapter's list (the game's shop categories) together with every value the catalog
-actually holds, which is what gives a brand, or a category some mod invented, anywhere to come from.
-Choosing a key goes straight on to its values. The logic is `ModSearchCompleter` in Core; the
-`SearchCompletion` behaviour only draws it, and the page's own Escape and Down handling stands aside
-while it is open.
+**One search box, over both lists**, with `key:value` attribute filters, comparisons (`key>v`), `-` to
+invert and Ctrl+Space completion. Both lists go through `ModSearchQuery`, parsed once per keystroke;
+the repo mods page uses the same syntax. Each header reads "N of M mods" while something is hidden.
 
-Each header then reads **"N of M mods"** while a search is narrowing it — a count that only ever
-said "412 mods" could not distinguish a search that found nothing from an empty list. The right
-list gains a second empty-state message for the same reason: with the search reaching it, "nothing
-in this profile yet" would be a lie for a two-thousand-mod profile with no match.
+#### Sources in the editor
 
-#### The left list is about versions, not mods
+A source is **unloaded** until it is switched on, **enabled** while it is on, and **on standby** once
+switched off again (`ModSourceState`):
 
-The hide rule is **"this version is what the profile pins"**, not "this mod is pinned". A new
-version of a pinned mod is not in this profile, whatever else is — so it belongs on the left, and
-under the old rule it had nowhere at all to be except that row's own version dropdown.
+- **Enabled** sources feed everything: the left list, the version selectors, the updates.
+- **Standby** sources feed nothing new. They only keep supplying the files of versions the draft
+  already pins, so a pin waiting to be imported still imports.
+- The **✕** on a loaded chip **unloads** it. Everything it supplied goes, including draft pins whose
+  version nothing else can supply (`ProfileEditorCatalog.PinsOnlyIn`) - a confirmation says how many
+  when there are any. Pins to registered versions stay: the repo supplies those.
 
-**The row carries its own version selector**, offering whatever the enabled chips offer of that mod
-— the left side's counterpart of the right list's, and built the same way: `ProfileModRowViewModel`
-wraps the shared list row and swaps it when the selection moves, which is what makes the two lists
-structurally identical down to the template. Picking a version here is not yet a decision the
-profile has made — nothing is committed until the row's own **+** or **⬆** is pressed — so unlike
-the right list's selector, choosing a locked mod's version here never raises the confirmation; the
-button click does.
+Loading and unloading are undo steps; the scan stays in memory so an undo is instant, and loading a
+source again by hand rescans it. The repo chip and the remote chips are switched, never unloaded.
 
-**The default is the newest offered version, except on a removal.** A mod this draft has just taken
-out defaults to the exact version the profile held, and that version is offered regardless of the
-chips — a pending removal is draft state, not catalog state, so the chips must not be able to hide
-it. Without this the row's own **+** would re-add at the newest offered version instead of undoing
-the removal, which is precisely the hazard *Restore removed* exists to route around. A choice
-already made on this row otherwise survives a recompose — the same "the draft outlives the catalog"
-argument, one level down — so ticking an unrelated chip does not silently reset three selectors
-somebody has just set.
+#### The left list
 
-Its action is one verb applied to the profile: **Pin** where the mod is absent, **SetVersion** where
-it is already there, with the same locked-mod confirmation the version selector on the right raises —
-it is the same act, so it asks the same question. **Which of the two the button shows is decided by
-whether the profile holds the mod, not by whether this version is newer than the pin.** The row's own
-selector reaches versions older than the pin, and versions the ordering cannot place against it at
-all — the *New?* rows — and neither of those is an update while both still move the pin, so a row
-reading its verb off "is this an update" showed a **+** labelled *Add to this profile* over an action
-that silently changed an existing pin. ⬆ is kept for the move that genuinely goes up and a neutral
-glyph carries the rest; the tooltip is the same sentence either way. The sort still reads taken out,
-then updates, then versions the ordering could not settle, then alphabetical.
-
-That does not put a mod on both sides at once, which was the original objection to updates on the
-left: what is on the left is a version the profile does *not* pin, and what is on the right is the
-one it does.
-
-**The "N taken out" count is also the control that hides them.** Defaults to shown — a removal is
-unsaved work, and hiding unsaved work by default is how people lose it — but clicking the count
-toggles it off, the same shape as the updates band's skipped-locked count opening its own list.
-Turning on the *Taken out* filter chip forces the toggle back on, since a filter that selects a set
-the toggle is hiding would be an empty list with no explanation.
-
-**A removal always has a row, whatever the chips offer.** The left list is composed from the mods the
-enabled sources hold *and* the mods this draft has taken out, so a mod no enabled chip offers any
-version of — take the repo chip off and the rest is whatever a folder happens to hold — still gets a
-row the moment it leaves the profile. Without that the header counted a removal nothing rendered and
-the *Taken out* filter selected an empty list. A bulk removal normally touches mods that already have
-rows and costs only a re-offer; the full rebuild is reached when a row is genuinely missing.
-
-#### Two kinds of chip: facts, and what you did
-
-A row can wear two chips, and they are drawn differently so they cannot be mistaken for each other.
-**A status is a fact about the version; a touch is something the draft did to the mod.** In the editor
-a status is an *outline* — muted, on the trailing edge — and a touch is a *fill* with a stripe down
-the row's leading edge. Filled means you did this; outlined means it is so. (The repo mods page has no
-draft to tell apart from and keeps its filled chips.)
-
-**The status chip** follows the selector: the row *is* the selected version, so the chip and the +/⬆
-glyph move together when the selection does, exactly as they already do on the right when `Item` is
-replaced. Its text says what the version means for **this profile**.
+Each row offers the versions the enabled sources offer of its mod, and points at the newest unless its
+selector was set to another. **+** pins it at that version, with the lock an enabled profile source
+holds it at. Its status chip says what the version is to the repo:
 
 | Chip | Means |
 | --- | --- |
-| **Update** | A newer version of a mod this profile pins. Free where the repo holds it; saving imports it where only a folder does. |
-| **New version** | Newer than anything the repo holds, of a mod this profile does *not* pin. An import candidate — which is what the management page calls an *Update* from its own point of view, and which is not one from here: nothing in this profile moves by taking it. |
-| **New** | A version the repo does not hold, with nothing else to say. |
-| **In repo** | Registered, and not pinned. |
-| **Imports on save** | The review's version of *New*: a version the draft pins that saving has to upload first. |
+| **New** | The repo does not hold it. Saving imports it. |
+| **New version** | Newer than anything the repo holds of the mod. |
+| **In repo** | Registered. |
 
-**The version chip is not drawn in the editor.** Every row on both sides carries a selector that says
-the same thing, and says it for the version the row is showing. A version that saving has to import
-is starred in the selector (`1.3*`) with the words in a tooltip — a sentence in a 150px box was
-clipped.
+Filters: *All*, *New to the repo*, *Not settled* (see [below](#a-version-nothing-could-compare)).
+Sorts: *Name*, *Date imported* - when the version was registered, with versions not in the repo
+counting as newest - and an attribute.
 
-#### What the draft has done to a mod
+**Ignored mods** are hidden until the eye toggle beside the count shows them, dimmed. The row's eye
+ignores or stops ignoring a mod, and the selection bar does the same in bulk. Ignoring is part of the
+draft and saved with it: written as the whole list, after the revision. A pinned mod is never written
+as ignored (`ProfileDraft.IgnoredToWrite`), so pinning an ignored mod and taking it out again puts the
+ignore back. A save that only changes what is ignored mints no revision, imports nothing and does not
+re-apply; its button reads *Save changes*.
 
-`ProfileModTouch` is **derived, never recorded**: the saved profile's pin of a mod against the
-draft's. A mod pinned at another version and pinned back is not touched, because saving it would
-change nothing; a log of clicks would have called it touched twice. It applies the same rule as
-`ProfileModListDiff` and `ProfileRevisionComparison` — a mod's version and the profile's own lock,
-never the adapter's — and a test holds the three together.
+#### The right list is the draft
 
-| Mark | Fill | Means |
-| --- | --- | --- |
-| **Added** | green | The saved profile does not hold it. |
-| **Version changed** | accent | Pinned at another version than the saved profile holds. |
-| **Lock changed** | accent | Locked or unlocked in this profile since the saved one. |
-| **Version & lock changed** | accent | Both. |
-| **Taken out** | caution | The saved profile holds it and the draft does not. It wears the mark on the left, where it is back among the mods that were never in the profile; a taken-out mod's status chip is suppressed, since nothing is on offer of it. |
+Rows are the pins, plus the saved pins the draft has taken out - struck through, dimmed, with a
+**Taken out** mark. What the draft has done to a mod is `ProfileModTouch`, derived by comparing the
+saved pin with the draft's, never recorded: a mod moved and moved back is untouched.
 
-The tooltip carries the detail — *Was 1.2 in the saved profile, now 1.3* — and it is worded once, in
-`ProfileModTouches.Describe`, for both lists and the review. **Ignoring is not a touch.** It is saved
-with the rest, but it is an aid to editing rather than a result of it, so it never makes a row
-"changed", does not count in the review, and keeps its own eye button.
+| Mark | Means |
+| --- | --- |
+| **Added** | The saved profile does not hold it. |
+| **Version changed** / **Lock changed** / **Version & lock changed** | The draft moved it. |
+| **Taken out** | The saved profile holds it and the draft does not. |
 
-#### Reviewing the draft
+Every changed row has a **↺** that puts that one mod back the way the saved profile has it; the
+selection bar reverts the picked rows and *Revert everything shown* the lot. The version selector offers
+visible versions (registered or in an enabled source) and moving a locked pin asks first, naming why
+it is locked. A version saving has to import is starred in the selector (`1.3*`).
 
-**Review changes (N)**, beside Save, swaps the two lists for what the draft would change: added,
-changed, taken out — each row with the way it moved (`1.2 → 1.3 · locked`) and a **↺** that takes
-that one change back (a mod is put out again if it was added, back in if it was taken out, and to its
-saved version and lock if it was moved). The lists are hidden rather than dropped, so the search, the
-selection and the scroll position are all there on the way back.
+Filters:
 
-It is read **from the draft**, by the comparison the history page uses, so it is every change and only
-those whatever the sources, filters and search are doing — a mod no enabled source offers is still
-reviewed, because its original version comes from the version index rather than from the left list.
-It is optional: a review somebody has to click through before every save is friction, and the one
-consequence of a save that is dangerous, the re-apply, already has its own control.
+- **All** - the draft, taken-out rows included.
+- **Result** - exactly what a save would write.
+- **Changes** - only what differs from the saved profile, taken-out rows included. The change summary
+  in the header ("2 added · 1 taken out") opens it.
+- **Updates**, **Locked**, **Not in the sources** - about pins, so never a taken-out row. *Not in the
+  sources* is the mods no enabled source offers any version of: with another profile as the only
+  source, what this profile has and that one does not.
 
-**It is also where a save that imports is watched.** Pressing Save on a draft with something to
-upload switches to the review, and each import reports on its row: *Imports on save*, then *Queued*,
-*Uploading 42%*, *Imported* or a failure. A save with nothing to upload finishes before there would be
-anything to watch, so it stays where it is and says what it did in a toast. What could not be imported
-moves to a **Could not be imported** group at the top of the review once the save stops — not while it
-runs, so the list does not reshuffle under the pointer that is watching it — and its ↺ is the way to
-drop the mod and save again. A save that commits reloads and returns to the lists; an editor opened
-in the middle of one lands on the review. The run's marks are held by the page and stamped onto rows
-as they are built, because the review is rebuilt from the draft after a failed save and a rebuilt row
-has to be told again how its import went.
-
-#### A version nothing could compare
-
-Planning an update already steps over a pair the comparer abstained on rather than guessing — see
-[the note below](#a-note-on-update-available) — but stepping over it made the version disappear
-entirely: no update, no chip, no count, just an entry in the selector sitting wherever the
-topological sort happened to put it. That is the worst version to be silent about, because it may be
-exactly the one somebody came here to add, and the only reason it was never offered as an update is
-that the program could not tell.
-
-**The definition is one sentence, used in five places**: a version an enabled source holds that the
-ordering could not compare against what the repo holds — `ModVersionSet.CouldNotCompareToNewest`,
-tested in `Client.Core`. It answers against the repo's own newest specifically, not against
-whichever version this profile happens to pin, which is what makes it a single repo-level fact
-usable identically whether or not the mod is pinned here — and it is exactly the pair the import-time
-arbitration dialog exists to ask about, so a version this is true of is also a preview of "importing
-this will ask a question".
-
-- The selector label carries it: *"2024.03 — imports on save, order not settled"*.
-- A green **New?** chip sits on the row, sharing the source-conflict chip's column — both mean "this
-  row will ask you something at save", and the question mark is deliberate: the reader does not need
-  to know a comparer abstained, they need to know this might be the version they came for.
-- The **Conflicts** filter chip is gone; this took its slot. A source conflict is answered at save,
-  one version at a time, in a dialog — nobody bulk-acts on a set of conflicts, so a filter for it
-  never earned its place, and the row's own chip is the whole of what it needs. An uncompared
-  version is worth isolating precisely because it is silent everywhere else.
-- The updates band names a count beside the skipped-locked link: *"3 versions could not be
-  compared"*, linking to the filter above. They are not counted as updates, and saying why is the
-  whole job.
-- It ranks in the left list's sort, after updates and before alphabetical, so the count is findable
-  without opening the filter.
+Sorts: *Name*, *Date added* and an attribute. *Date added* is the server's `ModDependency.Added` while a
+pin is at its saved version; a pin the draft added or moved has no date yet, reads *Unsaved* and sorts as
+newest.
 
 #### The updates band
 
-**"7 updates available · 2 will be imported when you save"**, above the right list, counting both
-kinds and saying the split — because the two cost differently: one is a pin moving and the other is
-a file going up first.
+**"7 updates available · 2 will be imported when you save"**, always on screen so "no updates" is an
+answer too. Updates come from registered versions and enabled sources only. Locked pins are skipped by
+*Update all* and counted in a link that opens them one by one. *Update all* is a split button whose
+caret offers *Update the N already in the repo* where that is a different set. Links beside it count
+the updates a remote source knows of and the versions the ordering could not compare; both open the
+*Updates* filter.
 
-**It stays on screen at zero**, and is honest there. "Are there updates?" is a question people come
-to this page to answer, and a section that is absent when the answer is no never answers it — it
-just leaves them looking. But an on-disk update only exists while its folder's chip is on, so with
-no folder being read it says "No updates in this repo. No folders are being read." rather than
-claiming to have looked.
+#### A version nothing could compare
 
-***Update all* is a split button** carrying the same split: the primary takes everything that is
-newer wherever the file is, and behind the caret is *Update the N already in the repo*, for somebody
-who does not want to spend an upload right now. The caret carries its own enabled condition and
-appears only where the two counts differ, unlike the save split's — a menu offering the same thing
-as the button beside it is an invitation to nothing.
-
-The existing **Updates** filter chip is the way into the list of them. No new region, and no third
-copy of the rows.
-
-The right list is keyed by `ModId` — the domain enforces one `ModDependency` per mod — so
-moving a mod rightward also means choosing a version. That row needs a version selector and a
-`Locked` toggle.
-
-**The two bulk moves are split, and sit under the left list.** *Add all shown new* takes everything
-on screen the profile has never held; *Restore removed* is an undo, so it puts back what this draft
-took out at the version and lock the profile still holds rather than picking a default. One button
-doing both would silently re-add a removal at the newest version — which is a different pin from the
-one that was there.
-
-**Adding and upgrading stay apart.** Now that an update row is on the left, *Add all shown new* and
-the count on it exclude those rows: a bulk add that silently moved pins would be a different act
-under the same label. A mixed *selection* does both, and says so — **"Add 12 and update 3"** — since
-the set somebody assembled across several searches is theirs and splitting it would be worse than
-labelling it honestly. Locked pins are left alone and counted, exactly as the batch update leaves
-them.
-
-**The bar says what it will not do, and will not pretend to.** A locked pin is left where it is by a
-selection, so the button names it - **"Update 2 mods (1 locked)"** - and a selection of nothing but
-locked pins reads **"Nothing to update (2 locked)"** and is *disabled*, with a tooltip saying how
-to move one on purpose. It used to be an enabled "Update 1 mod" that did nothing and reported it
-afterwards. What each row would do is `ProfileVersionMoves.Classify` - add, update, any
-other move (an earlier version, or one the order will not place - worded as an update, since the left
-list has no move verb of its own), locked, or already there - and the bar's wording and the command
-both read it. Adding is never blocked by a lock, so a selection
-of adds and locked pins still has something to do and reads **"Add 3 mods (2 locked)"**.
-
-The right-hand selection bar's Update button says what it will skip in the same way - **"Update (skip 2 locked)"**, counting only locked pins that have an update to take.
-
-The row's button is the up arrow for an update and the neutral glyph for any other move. The
-profile-side update button on the right list is the same up arrow, not the refresh glyph it had.
-
-**A chosen downgrade stays on the right.** A mod pinned below its newest version is an update on the
-left as well as the right - that is right for a pin that merely fell behind. Once the user has picked
-an *older* version on the right, offering the newer one back on the left is the list arguing with them,
-so the mod is left out of the left list (`FindDowngraded`). It is measured against what the profile
-held when the page read it, so it lasts as long as the draft: once saved, the older pin is the
-profile's and the newer version is an update again, which is what a lock is for.
-
-**The left list leads with what the draft has taken out; the right list is alphabetical unless it has been switched.** Mods
-this draft has *taken out* of the profile are back on the left looking exactly like a mod that was
-never in it, so they sort to the top, wear the **Taken out** mark (see
-[the next section](#what-the-draft-has-done-to-a-mod)) and get a count in the header. The right list
-used to lead with what could not be imported and what was pending; both are now the review's business
-([below](#reviewing-the-draft)), and a list whose order never changes under the pointer is one somebody
-can edit. The left re-sorts on every recount.
-
-**The right list can be sorted by name or by date added**, with an arrow to
-reverse it. Name is where the page opens and A to Z its direction; each date opens newest first, and
-changing the sort always resets the direction to that sort's own default, since "descending" means
-opposite things for a name and for a date. It is a way of looking rather than a setting, so it is not
-remembered between visits. Ties fall back to the name, always ascending, so reversing reverses the list
-rather than shuffling the mods one save added together.
-
-- **Date added** is when the mod entered the profile or last moved to another version - the server's
-  `ModDependency.Added` for a pin the server holds. A row the draft has added or moved has no server
-  date yet and takes the moment the draft did it, so it is the newest thing in the list and sorts to the
-  top under the default direction; putting a mod back at the version it was saved at gives its saved date
-  back. Taking a mod out and adding it again is a new event. This is the one sort that moves rows under
-  the pointer, which is why the name sort stays the default. A page that rejoins a save already running
-  reads the dates of the revision that save started from.
-There is deliberately no sort by registration date. It could only be derived - the earliest `Created`
-among the versions the catalog happens to hold - and it drifts when old revisions are pruned and the
-versions only they pinned are deleted; storing it would mean a per-version copy of a per-mod fact. It
-is a repo-management question anyway, and *Date added* answers the one a profile editor asks.
-
-Under the date sort each row says the date it is ordered by (*Added 3 Sep*, with the year only where it
-is not this one) and carries it in full as a tooltip. Under the name sort the row has nothing extra to
-say. See `ProfileModSorting`.
-
-**Both lists can be sorted by an attribute.** A dropdown beside the sort chips lists the keys the
-adapter declares - too many for chips - and picking one sorts by that key's values, A to Z first;
-picking a chip empties it again. On the left the chip is **Default**, the grouped order above, and an
-attribute sort replaces all of it: taken out, updates and not settled no longer lead, because somebody
-who asked for the list by category asked for it by category, and the chips still say the rest. The
-left's arrow reverses the names inside the groups under Default. Values order as `ModAttributeOrder`
-says: numbers as numbers and ahead of text, text in natural order. A mod carrying the key several times
-sorts by its lowest value, so reversing does not move it from one end to the other, and a mod without
-the key sorts last both ways. Each row says its values beside it, as the date sort does its date.
+`ModVersionSet.CouldNotCompareToNewest` is a version the ordering could not place against the repo's
+newest - exactly the pair the import-time arbitration dialog asks about. On the left it is a **New?**
+chip and the *Not settled* filter; in a selector, its option's tooltip; on the right, a count in the
+updates band.
 
 #### Picking mods in bulk
 
-A profile is dozens to hundreds of mods. Building one by clicking **+** on every row, and unbuilding
-one by clicking **−** on every row, is not a workflow — so both lists carry a real selection, and
-every bulk action on the page is stated against **what the list is showing**.
+**Selection lives on the rows** (`ModListItemViewModel.IsSelected`), not in the list control, so it
+survives the search: narrow, pick, narrow again, act on the union. `ModListSelection` counts picked
+rows against what is shown - "47 selected, 12 of them are not shown" - and offers *Deselect hidden*.
+`ListSelection` turns clicks, ctrl-clicks, shift-clicks, arrows, space and Enter into calls on it.
 
-**Selection lives on the rows, not in the list control.** `ModListItemViewModel.IsSelected` is the
-flag; `ProfileModRowViewModel` forwards to the item inside it, so a mod stays picked through a
-version change and reads the same on both sides. It is not the `ListBox`'s own selection, and that is
-the whole point: a list control drops from its selection whatever the collection view filters out, so
-binding to it would mean **one more character in the search box silently discarding the set being
-assembled**. Carrying a selection across several searches — narrow, pick, clear, narrow again, act on
-the union — is precisely what makes the selection worth having.
+Every bulk action is stated against what the list is showing: *Add all shown*, *Take out everything
+shown*, *Revert everything shown*, and the selection bars - Add and Ignore on the left; Take out,
+Update, Lock, Unlock and Revert on the right. Dragging a selection across does the same as its button.
 
-The consequence is that some picked rows are off screen, and the page must never quietly act on rows
-nobody can see. So everything is counted twice, against the rows and against the view:
-`ModListSelection` reports **"47 selected, 12 of them are not shown"** and offers **Deselect hidden**
-next to it. The bar is worded as a fact rather than a warning — those rows were picked on purpose —
-and its only job is to make sure the count on the button is never a surprise.
-
-`ListSelection` (an attached behaviour) turns gestures into calls on that selection: click,
-ctrl-click, shift-click a range in view order, arrow keys, shift-arrow, `Ctrl+A`, space, Escape,
-Enter and double-click to move. The `ListBox` keeps `SelectionMode="Single"` and its selection means
-only **which row is current** — rendered as a focus ring, never as a fill. That is the same
-distinction Explorer draws between the focus rectangle and the picked set, and it exists for the same
-reason: the arrow keys have to be able to move without that meaning the set has changed. A press on a
-row that is *already* picked defers its click to the mouse-up, because that press is also how a drag
-of the whole selection starts.
-
-**Filter chips compose with the search** rather than replacing it, which is what keeps "everything
-shown" a single well-defined set for the counts, the bulk buttons and the header's three-state box to
-be stated against. They are deliberately few, and each names a set somebody would want to act on all
-of — a filter nobody would bulk-move is a filter that earns nothing.
-
-**Both directions cost the same.** *Take out everything shown* is the mirror of *Add all shown new*,
-and the right-hand selection bar carries Update, Lock and Unlock beside it. A page where adding forty
-mods is one click and removing forty is forty clicks has not solved the problem, it has picked a
-side.
-
-**The right list's *Not in the sources* chip is the mirror of the left list's diff view**, and the
-half of it that was missing: the mods this profile pins that no enabled source offers any version
-of. With another profile as the only enabled source, that is exactly what this list holds and that
-one does not — and with *Take out everything shown* under it, "make this profile match that one" is
-two clicks.
-
-It is **mod-level rather than version-level**, deliberately: a mod the other profile holds at a
-different version is an update, not a removal, and the left list already says so. It is disabled
-while nothing at all is enabled, where it would select the whole profile and mean nothing, and the
-filter falls back to *All* rather than staying checked on a chip that has just gone dead.
-
-**Every bulk move is undoable, and the undo is the whole draft.** `RunBulk` snapshots the pins,
-runs the change, and offers what it turned out to do — "Added 47 mods", counted after the fact,
-because how many were skipped as already-present is only known once it has run. A snapshot rather
-than a reverse replay means one mechanism covers adds, removals, a copied list and a batch of version
-changes alike, and cannot half-succeed. The offer retires itself: **any** subsequent change clears it
-(`Recount`), because the draft it holds stops being an undo the moment something is built on top of
-it, and a 15-second timer catches the rest.
-
-**Two ways of not picking mods one at a time at all**, which between them beat any selection UI for
-the cases they cover:
-
-- **Copy from a profile** takes another profile's list at its head — *add what is missing* by
-  default, *replace* as a deliberate second choice, since the two read almost the same in a sentence
-  and are very different in effect. Nothing is written until Save, so even the destructive one is
-  recoverable by discarding, by the undo, or by not saving.
-- **Paste a list** takes text off a forum post or a modpack manifest. `ModListPaste` is forgiving
-  about shape — bullets, numbering, quotes, commas — and the matching that follows is *exact*, ids
-  before names: a fuzzy match would quietly pin the wrong mod, and "3 not found: Foo, Bar, Baz" is a
-  far better outcome than three plausible mistakes nobody notices until the game does. It **selects
-  and reports; it never adds**. Somebody else's list is a suggestion, and the step between reading it
-  and committing to it is exactly where a person wants to see what matched, what is already here and
-  what is missing.
-
-Dragging between the panes is offered too, and is never the only way to do anything: a two-pane drag
-is undiscoverable, awkward over a long list and impossible without a pointer. The payload is only the
-name of the side it started on — what moves is whatever that side has selected, which the view model
-already knows — which makes the rule for a valid drop simply that the two sides differ.
-
-#### The left list can hide what is ignored
-
-The left list is mostly noise for anybody with a large folder or a large repo: things that will never
-be in this profile, and other versions of mods whose pin is not going to move. Two things are hidden
-by default and shown together by one **eye toggle** beside the list's count:
-
-- **Ignored mods** — mods somebody ignored in this profile (`ProfileIgnoredMod`, see
-  [02 — Ignored mods](02-domain-model.md#ignored-mods)). The row's own crossed-out eye ignores it,
-  the open eye on a shown row stops ignoring it, and the selection bar has a bulk **Ignore** and
-  **Stop ignoring** that say how many of the picked rows they will take.
-- **Other versions of a locked pin.** A mod the profile pins *and holds in place* offers no update
-  that the profile is going to take, so its other versions are ignored for as long as the lock
-  stands. Nobody decided this, so the row's eye is greyed and says why; unlocking the pin turns the
-  row back into the update it is.
-
-**The toggle is a filter, not a source.** It narrows what the enabled sources offer and never adds a
-row they did not, so it composes with the search and the filter chips and sits with the count rather
-than in the source chips. Its count is taken against everything else the list applies, so it says how
-many rows clicking it would reveal; and the list's own total leaves ignored rows out while they are
-hidden, because hidden by a toggle is not hidden by a search.
-
-**A pinned mod is never ignored, and the draft decides.** `ProfileIgnoring.Classify` answers the pin
-first: a mod the server lists as ignored and this draft has pinned is an ordinary update row until a
-save says otherwise, which is what lets discarding undo the pin without the ignore list having moved.
-
-**Ignoring is part of the draft, and is saved with it.** The eye edits a list on the page, which counts as an
-unsaved change, is reverted by Discard, and is written by Save - as the whole list, to its own route, *after*
-the revision and only if the revision was written. A failed ignore write does not undo the revision; the
-save says which half did not land. A pin never mutates the list: what is written is the ignored mods minus
-the draft's pins (`ProfileIgnoring.WithoutPinned`), so pinning an ignored mod and then discarding puts it
-back.
-
-**A save that only changes what is ignored** mints no revision, imports nothing, does not re-apply the
-profile even where it is the active one, and does not check for drift - nothing a folder was built from
-has moved. Its button reads *Save changes* rather than *Save and apply*, and the *Save only* variant is
-not offered (`WillApply`).
+**Copy from a profile** takes another profile's list at its head, *add what is missing* or *replace*.
+**Paste a list** matches pasted ids and names exactly and **selects** what matched on the left, saying
+what was already here and what was not found; it never adds.
 
 ### Import on save
 
@@ -1265,20 +962,12 @@ started them.
 
 **A save writes what was on screen when Save was pressed.** The request carries the desired pins,
 the baseline, the revision, the label and the pending versions, all taken before the import starts
-rather than read back out of the draft after it. Before that, a row added during an upload was saved
-without having been imported, and a source toggled during one replaced the draft with the server's
-own list — which the save then wrote back as a revision that changed nothing. A scan target arriving
-from a drift notice mid-save now defers its recompose until the save is over.
+rather than read back out of the draft after it. Each import reports on its row in the right list -
+*Queued*, *Uploading 42%*, *Imported* or a failure. A save that fails leaves the draft unsaved with
+those marks on it, so pressing Save again once the cause is fixed is the whole recovery.
 
-**Coming back rejoins the save in progress.** An editor built for a profile that is being saved asks
-the service before it asks the server: it draws the draft the service is holding — the server has
-not been told about it yet — opens on the review with its rows marked from the run's own progress, and
-stays read-only until it finishes, at which point it does the post-save reload it would have done anyway. What is retained
-is the draft, not the page instance: keeping the view model alive would need a show/hide lifecycle
-the page has never had, since the notice suppression, the catalog, the games subscription and the
-navigation lock are all acquired on construction and released on dispose, and a retained page holds
-every one of them while somebody is three screens away. The price is the scroll position, the
-selection, the undo bar and the version description.
+**An editor opened while its profile is being saved waits.** It is read-only and says so until the
+save finishes, then reads what the save wrote.
 
 **A save that finished while you were elsewhere says so.** The strip is enough while it runs. Once
 it is over with no editor there to show the summary, the outcome goes to the notice column — a
@@ -1289,7 +978,7 @@ it as its own summary, so it is said once.
 **The editor is read-only while its own profile is being saved, per control rather than per list.**
 `IsEnabled` on a `ListBox` stops the mouse wheel along with everything else, so the flag binds to
 what can change the draft: the row buttons, the selection checkboxes, the version selectors, the
-lock toggles, the review's ↺, drag-and-drop and the source chips. The lists, their scrolling and the mod name that
+lock toggles, the ↺ buttons, undo, drag-and-drop and the source chips. The lists, their scrolling and the mod name that
 opens the details dialog stay live — reading is not writing — and so do the search and the filter
 chips, which change the view and nothing else.
 

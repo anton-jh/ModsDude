@@ -616,7 +616,7 @@ only decides which rows an editor offers.
 is also where deleting a mod's last version is redirected), so a mod that is imported again later does
 not come back already hidden. The rows cascade from the profile in the database, and so from the repo.
 
-See [09 — The left list can hide what is ignored](09-mod-catalog.md#the-left-list-can-hide-what-is-ignored)
+See [09 — The left list](09-mod-catalog.md#the-left-list)
 for what the client does with it.
 
 ## Savegame

@@ -45,16 +45,18 @@ public static class ProfileModUpdates
     /// The same, against an index the caller already holds. An editor replans on every toggle, and
     /// re-deriving a repo's several thousand orderings each time would be work it has already done.
     /// </summary>
+    /// <param name="eligible">Which versions may be updated to. Null allows every version in the index.</param>
     public static ProfileModUpdatePlan Plan(
         IEnumerable<ProfileModPin> pins,
-        IReadOnlyDictionary<ModKey, ModVersionSet> versions)
+        IReadOnlyDictionary<ModKey, ModVersionSet> versions,
+        Func<CatalogModVersion, bool>? eligible = null)
     {
         var available = new List<ProfileModUpdate>();
         var skipped = new List<ProfileModUpdate>();
 
         foreach (var pin in pins)
         {
-            if (FindUpdate(pin, versions) is not ProfileModUpdate update)
+            if (FindUpdate(pin, versions, eligible) is not ProfileModUpdate update)
             {
                 continue;
             }
@@ -76,7 +78,8 @@ public static class ProfileModUpdates
     /// </remarks>
     public static ProfileModUpdate? FindUpdate(
         ProfileModPin pin,
-        IReadOnlyDictionary<ModKey, ModVersionSet> versions)
+        IReadOnlyDictionary<ModKey, ModVersionSet> versions,
+        Func<CatalogModVersion, bool>? eligible = null)
     {
         if (versions.TryGetValue(pin.ModId, out var set) is false)
         {
@@ -92,7 +95,7 @@ public static class ProfileModUpdates
                 return null;
             }
 
-            if (set.IsAfter(candidate.VersionId, pin.VersionId))
+            if ((eligible is null || eligible(candidate)) && set.IsAfter(candidate.VersionId, pin.VersionId))
             {
                 return new ProfileModUpdate(pin.ModId, pin.VersionId, candidate.VersionId, pin.Lock)
                 {

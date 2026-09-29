@@ -1,3 +1,4 @@
+using ModsDude.Client.Wpf.ViewModel.Pages;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -30,19 +31,41 @@ public partial class ProfileModsEditorPage : Page
     }
 
     /// <summary>
-    /// Ctrl+F puts the caret in the search box from anywhere on the page. The narrow-then-act loop -
-    /// type a few letters, take everything shown, type a few more - is the fastest way to work here,
-    /// and it is only fast if getting back to the box costs nothing.
+    /// Ctrl+F puts the caret in the search box. Ctrl+Z and Ctrl+Y undo and redo the draft - except in a
+    /// text box, where they are the text's own.
     /// </summary>
     private void PageKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key is Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        if (e.Key is Key.F)
         {
             SearchBox.Focus();
             SearchBox.SelectAll();
 
             e.Handled = true;
+
+            return;
         }
+
+        if (e.Key is not (Key.Z or Key.Y)
+            || Keyboard.FocusedElement is TextBox
+            || DataContext is not ProfileModsEditorPageViewModel page)
+        {
+            return;
+        }
+
+        var command = e.Key is Key.Z ? page.UndoCommand : page.RedoCommand;
+
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>

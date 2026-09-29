@@ -59,19 +59,8 @@ public sealed class ModCatalog : IDisposable
     /// </summary>
     private readonly HashSet<ModSourceId> _enabledSources = [];
 
-    /// <summary>
-    /// Every source that has been switched on at least once this session, whether or not it still
-    /// is. Never persisted, for the same reason <see cref="_enabledSources"/> is not.
-    /// </summary>
-    /// <remarks>
-    /// <b>Switching a source off puts it on standby rather than forgetting it.</b> A chip decides
-    /// what a page is <em>looking at</em>, never what this catalog has read - so a source on standby
-    /// is kept out of the merged view, stays in <see cref="ModCatalogSnapshot.Known"/>, and is
-    /// re-read by a rescan along with everything else. That is what lets a page keep offering a
-    /// version whose chip is off without also offering one whose file has since been deleted: the
-    /// first is a standby source still reporting it, the second is a rescan no longer doing so.
-    /// </remarks>
-    private readonly HashSet<ModSourceId> _standbySources = [];
+    /// <summary>Every loaded source, enabled or on standby. See <see cref="ModSourceState"/>.</summary>
+    private readonly HashSet<ModSourceId> _loadedSources = [];
 
     /// <summary>Registered versions accumulated across delta fetches, keyed by their join key.</summary>
     private readonly Dictionary<ModVersionIdentity, ModDto> _registered = [];
@@ -166,64 +155,48 @@ public sealed class ModCatalog : IDisposable
         return [.. game.Targets.Select(x => (x.Key, TargetNames.Of(x.Key, null), x.ModFolder))];
     }
 
-    /// <summary>
-    /// Whether a source is scanned. Answered entirely from this catalog, which lives and dies with
-    /// the page - nothing about it is persisted.
-    /// </summary>
-    public bool IsEnabled(ModSource source)
+    public ModSourceState GetState(ModSourceId sourceId)
     {
         lock (_lock)
         {
-            return _enabledSources.Contains(source.Id);
+            return _enabledSources.Contains(sourceId)
+                ? ModSourceState.Enabled
+                : _loadedSources.Contains(sourceId) ? ModSourceState.Standby : ModSourceState.Unloaded;
         }
     }
 
+    public bool IsEnabled(ModSource source) => GetState(source.Id) is ModSourceState.Enabled;
+
     /// <summary>
-    /// Whether this source has been read at least once this session, whether or not its chip is on
-    /// now. <inheritdoc cref="_standbySources" path="/remarks"/>
+    /// Unloading keeps the cached scan, so loading again restores exactly what was there. Call
+    /// <see cref="Rescan"/> first to read the folder afresh.
     /// </summary>
-    public bool IsStandby(ModSource source)
+    public void SetState(ModSourceId sourceId, ModSourceState state)
     {
         lock (_lock)
         {
-            return _standbySources.Contains(source.Id);
-        }
-    }
-
-    /// <summary>
-    /// Switches a source in or out of the merged view. Disabling a game says nothing about
-    /// syncing to it - a source is somewhere to find mods, a sync target is a folder sync will make
-    /// match a profile, and a game's mod folder simply happens to be both.
-    /// </summary>
-    public void SetEnabled(ModSource source, bool enabled)
-    {
-        SetEnabled(source.Id, enabled);
-    }
-
-    /// <summary>
-    /// The same, by id, for a source that has not been listed yet - the one caller being a page
-    /// opened <i>at</i> a particular folder rather than merely opened.
-    /// </summary>
-    public void SetEnabled(ModSourceId sourceId, bool enabled)
-    {
-        lock (_lock)
-        {
-            if (enabled)
+            if (state is ModSourceState.Enabled)
             {
                 _enabledSources.Add(sourceId);
-                _standbySources.Add(sourceId);
             }
             else
             {
-                // Left on standby - still read, still refreshed by a rescan, simply not merged in.
                 _enabledSources.Remove(sourceId);
+            }
+
+            if (state is ModSourceState.Unloaded)
+            {
+                _loadedSources.Remove(sourceId);
+            }
+            else
+            {
+                _loadedSources.Add(sourceId);
             }
         }
     }
 
     /// <summary>
-    /// Adds a folder for this session only. Someone importing from a USB stick should not have that
-    /// folder haunting the list for months, so nothing about it is written to disk.
+    /// Adds a folder for this session only, unloaded. Nothing about it is written to disk.
     /// </summary>
     public ModSource AddAdHocSource(string path)
     {
@@ -238,24 +211,8 @@ public sealed class ModCatalog : IDisposable
 
             var source = new ModSource(id, GetFolderDisplayName(path), path, ModSourceKind.AdHoc);
             _adHocSources.Add(source);
-            _enabledSources.Add(id);
-            _standbySources.Add(id);
 
             return source;
-        }
-    }
-
-    public void RemoveAdHocSource(ModSourceId sourceId)
-    {
-        lock (_lock)
-        {
-            // Removed rather than switched off, which is the stronger of the two statements: this
-            // folder is not somewhere to look at all, so it leaves standby along with everything
-            // else and what it contributed goes with it.
-            _adHocSources.RemoveAll(x => x.Id == sourceId);
-            _enabledSources.Remove(sourceId);
-            _standbySources.Remove(sourceId);
-            _scans.Remove(sourceId);
         }
     }
 
@@ -370,13 +327,13 @@ public sealed class ModCatalog : IDisposable
     /// are already cached - but they are re-read after a rescan, which is the whole point: a source
     /// this session has looked in keeps contributing to <see cref="ModCatalogSnapshot.Known"/> while
     /// its chip is off, and stops the moment the folder itself stops holding the file. See
-    /// <see cref="_standbySources"/>.
+    /// <see cref="_loadedSources"/>.
     /// </remarks>
     public async Task<ModCatalogSnapshot> GetAsync(CancellationToken cancellationToken)
     {
         var sources = GetSources();
-        var enabled = sources.Where(IsEnabled).ToList();
-        var standby = sources.Where(x => IsEnabled(x) is false && IsStandby(x)).ToList();
+        var enabled = sources.Where(x => GetState(x.Id) is ModSourceState.Enabled).ToList();
+        var standby = sources.Where(x => GetState(x.Id) is ModSourceState.Standby).ToList();
 
         var scans = enabled.Select(GetOrStartScan).ToList();
         var standbyScans = standby.Select(GetOrStartScan).ToList();
@@ -654,6 +611,7 @@ public sealed class ModCatalog : IDisposable
             ContentHash = dto?.ContentHash,
             SizeBytes = dto?.SizeBytes,
             SequenceNumber = dto?.SequenceNumber,
+            Registered = dto?.Created,
             DeletionScheduledFor = dto?.DeletionScheduledFor,
             DeletionReason = dto?.DeletionReason,
             Usage = usage
@@ -689,17 +647,8 @@ public sealed class ModCatalog : IDisposable
 /// list of mods is a list <em>of</em>.
 /// </param>
 /// <param name="Known">
-/// The same, widened to the sources on standby - every source this session has switched on at least
-/// once, whether or not it still is.
+/// The same, widened to the sources on standby. Where a version a draft already pins finds its file.
 /// </param>
-/// <remarks>
-/// <b>Two sets, because a chip and a rescan are different events.</b> Unticking a source must not
-/// take a version out of a draft's version selector or off the update planner - it is a statement
-/// about what is being looked at - while a rescan that no longer finds a file must. A single set
-/// cannot do both, and an append-only accumulation kept by the caller does the first at the cost of
-/// never being able to do the second. <see cref="Known"/> is a superset of <see cref="Versions"/>
-/// and both are recomputed from the current scans, so neither can outlive what is actually on disk.
-/// </remarks>
 public record ModCatalogSnapshot(
     IReadOnlyList<CatalogModVersion> Versions,
     IReadOnlyList<CatalogModVersion> Known,
@@ -712,6 +661,17 @@ public record ModCatalogSnapshot(
 public record ModSourceStatus(ModSource Source, bool IsEnabled, int ModCount, string? Error)
 {
     public bool HasFailed => Error is not null;
+}
+
+/// <summary>
+/// Enabled sources feed every list. A source on standby only supplies the files of versions a draft
+/// already pins. An unloaded one contributes nothing.
+/// </summary>
+public enum ModSourceState
+{
+    Unloaded,
+    Standby,
+    Enabled
 }
 
 internal record SourceScan(ModSource Source, IReadOnlyList<LocalMod> Mods, string? Error);

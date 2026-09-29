@@ -41,7 +41,13 @@ public partial class ModSourceViewModel : ObservableObject
     /// Whether there is anything to count yet. A remote source nobody has asked has no count at all, and
     /// a zero on it would read as "nothing newer".
     /// </param>
-    public ModSourceViewModel(ModSourceStatus status, Action<ModSourceViewModel, bool> onEnabledChanged, bool isBusy = false, bool hasCount = true)
+    /// <param name="canUnload">Whether the chip carries a ✕ that unloads what the source supplied.</param>
+    public ModSourceViewModel(
+        ModSourceStatus status,
+        Action<ModSourceViewModel, bool> onEnabledChanged,
+        bool isBusy = false,
+        bool hasCount = true,
+        bool canUnload = false)
     {
         _onEnabledChanged = onEnabledChanged;
 
@@ -50,6 +56,7 @@ public partial class ModSourceViewModel : ObservableObject
         ModCount = status.ModCount;
         IsBusy = isBusy;
         HasCount = hasCount;
+        CanRemove = canUnload;
 
         _isEnabled = status.IsEnabled;
         _initialized = true;
@@ -64,11 +71,7 @@ public partial class ModSourceViewModel : ObservableObject
     /// <summary>A folder the user added for this session. Never persisted, and removable.</summary>
     public bool IsAdHoc => Source.Kind is ModSourceKind.AdHoc;
 
-    /// <summary>
-    /// Whether this source is one the user added rather than one that is always there. Ad-hoc
-    /// folders and profiles carry their own ⨯; the standing ones are switched off instead.
-    /// </summary>
-    public bool CanRemove => Source.Kind is ModSourceKind.AdHoc or ModSourceKind.Profile;
+    public bool CanRemove { get; }
 
     /// <summary>
     /// Whether this chip is the repo rather than somewhere to look. It has no scan, no failure and
@@ -123,7 +126,7 @@ public partial class ModSourceViewModel : ObservableObject
         }
     }
 
-    public string RemoveTooltip => IsProfile ? "Stop reading this profile" : "Stop reading this folder";
+    public string RemoveTooltip => "Unload: everything this source supplied leaves the lists";
 
     [ObservableProperty]
     private bool _isEnabled;
