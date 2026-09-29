@@ -334,6 +334,21 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
+    /// A cancelled load is the expected outcome of navigating away - the drift notice's Review button
+    /// can leave before the current user has been read - not something to show the user an error
+    /// modal about.
+    /// </summary>
+    protected override void OnInitFailed(Exception ex)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return;
+        }
+
+        base.OnInitFailed(ex);
+    }
+
+    /// <summary>
     /// Which "checked out to" is you. Absorbed: a card that cannot tell whose is whose still says who
     /// holds the save, and only the Check in button is lost to it.
     /// </summary>
