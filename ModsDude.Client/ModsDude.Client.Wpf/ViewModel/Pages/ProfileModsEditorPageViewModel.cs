@@ -3009,7 +3009,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // it added, which is on this computer and unregistered until a save imports it, and what it
         // took away, which with the repo off above is exactly what this profile pins and the folder
         // no longer does.
-        AvailableFilter = AvailableModFilter.New;
         PinnedFilter = PinnedModFilter.NotInSources;
 
         // Only recomposes where the page is already up; during construction there is nothing to
