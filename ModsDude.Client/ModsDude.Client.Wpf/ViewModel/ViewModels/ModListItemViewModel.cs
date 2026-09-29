@@ -320,7 +320,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModDisplayStatus.New => "New",
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
-        ModDisplayStatus.ImportsOnSave => "Imports on save",
+        ModDisplayStatus.ImportsOnSave => "*Imports on save",
         _ => string.Empty
     };
 
