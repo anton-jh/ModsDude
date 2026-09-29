@@ -13,8 +13,8 @@ public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalo
     /// <summary>The enabled profile sources.</summary>
     public IReadOnlyList<ProfileModSource> ProfileSources { get; init; } = [];
 
-    /// <summary>The enabled remote sources, in chip order: the first to offer a mod wins its row.</summary>
-    public IReadOnlyList<RemoteSourceAnswers> RemoteSources { get; init; } = [];
+    /// <summary>What each remote update provider has answered, in the adapter's order.</summary>
+    public IReadOnlyList<RemoteUpdateAnswers> RemoteUpdates { get; init; } = [];
 
     /// <summary>The version each left row's selector was set to, where it was.</summary>
     public IReadOnlyDictionary<ModKey, ModVersionKey> AvailableChoices { get; init; } = new Dictionary<ModKey, ModVersionKey>();
@@ -38,7 +38,7 @@ public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalo
 public readonly record struct SavedPinDate(ModVersionKey Version, DateTimeOffset Added);
 
 
-public sealed record RemoteSourceAnswers(ModSourceId Id, string DisplayName, IReadOnlyCollection<RemoteModOffer> Answers);
+public sealed record RemoteUpdateAnswers(string ProviderName, IReadOnlyCollection<RemoteModVersion> Versions);
 
 
 /// <summary>Another profile in this repo, read as a source. Its locks travel with its versions.</summary>

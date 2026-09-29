@@ -36,13 +36,11 @@ public sealed record ProfileEditorState
 
     public required ProfileModUpdatePlan Updates { get; init; }
 
-    /// <summary>How many pinned mods have a newer version on a remote source, locked ones apart.</summary>
+    /// <summary>How many pinned mods have a newer version online, locked ones apart.</summary>
     public required int RemoteUpdateCount { get; init; }
     public required int RemoteLockedUpdateCount { get; init; }
 
     public required int UnsettledCount { get; init; }
-
-    public required IReadOnlyDictionary<ModSourceId, int> RemoteOfferCounts { get; init; }
 
     public int ResultCount => Pinned.Count(x => x.IsTakenOut is false);
     public int TakenOutCount => Pinned.Count(x => x.IsTakenOut);
@@ -52,10 +50,10 @@ public sealed record ProfileEditorState
     public static ProfileEditorState Compute(ProfileEditorInputs inputs)
     {
         var offered = OfferedVersions(inputs);
-        var remoteOffers = RemoteOffers(inputs, out var remoteCounts);
+        var remoteUpdates = FindRemoteUpdates(inputs);
 
-        var available = AvailableRows(inputs, offered, remoteOffers);
-        var (pinned, updates) = PinnedRows(inputs, offered, remoteOffers);
+        var available = AvailableRows(inputs, offered, remoteUpdates);
+        var (pinned, updates) = PinnedRows(inputs, offered, remoteUpdates);
 
         var availableShown = available
             .Where(x => IsShown(inputs, x))
@@ -76,10 +74,9 @@ public sealed record ProfileEditorState
             Pinned = pinned,
             PinnedShown = pinnedShown,
             Updates = updates,
-            RemoteUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteOffer is not null && x.Lock.IsLocked is false),
-            RemoteLockedUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteOffer is not null && x.Lock.IsLocked),
-            UnsettledCount = pinned.Count(x => x.HasUnsettledVersion),
-            RemoteOfferCounts = remoteCounts
+            RemoteUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteUpdate is not null && x.Lock.IsLocked is false),
+            RemoteLockedUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteUpdate is not null && x.Lock.IsLocked),
+            UnsettledCount = pinned.Count(x => x.HasUnsettledVersion)
         };
     }
 
@@ -115,34 +112,26 @@ public sealed record ProfileEditorState
         return offered;
     }
 
-    private static Dictionary<ModKey, RemoteOfferInfo> RemoteOffers(
-        ProfileEditorInputs inputs,
-        out IReadOnlyDictionary<ModSourceId, int> counts)
+    /// <summary>The newer version each mod has somewhere online. The first provider to have one wins.</summary>
+    private static Dictionary<ModKey, RemoteUpdate> FindRemoteUpdates(ProfileEditorInputs inputs)
     {
-        var offers = new Dictionary<ModKey, RemoteOfferInfo>();
-        var perSource = new Dictionary<ModSourceId, int>();
+        var updates = new Dictionary<ModKey, RemoteUpdate>();
 
-        foreach (var remote in inputs.RemoteSources)
+        foreach (var provider in inputs.RemoteUpdates)
         {
-            var newer = RemoteModOffers.Newer(remote.Answers, inputs.Catalog.Index, inputs.Catalog.Comparer);
-
-            perSource[remote.Id] = newer.Count;
-
-            foreach (var (modId, offer) in newer)
+            foreach (var (modId, version) in RemoteUpdates.Newer(provider.Versions, inputs.Catalog.Index, inputs.Catalog.Comparer))
             {
-                offers.TryAdd(modId, new RemoteOfferInfo(offer, remote.DisplayName));
+                updates.TryAdd(modId, new RemoteUpdate(version, provider.ProviderName));
             }
         }
 
-        counts = perSource;
-
-        return offers;
+        return updates;
     }
 
     private static List<AvailableModRow> AvailableRows(
         ProfileEditorInputs inputs,
         Dictionary<ModKey, HashSet<ModVersionKey>> offered,
-        Dictionary<ModKey, RemoteOfferInfo> remoteOffers)
+        Dictionary<ModKey, RemoteUpdate> remoteUpdates)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -183,7 +172,7 @@ public sealed record ProfileEditorState
                 nameSources && selected.FoundIn.Count > 0
                     ? string.Join(", ", selected.FoundIn.Select(x => x.Source.Name).Distinct())
                     : null,
-                remoteOffers.GetValueOrDefault(modId),
+                remoteUpdates.GetValueOrDefault(modId),
                 inputs.AvailableSort.Caption(key, inputs.Now, ModListDateWording.ImportedToRepo),
                 inputs.AvailableSort.Describe(key, ModListDateWording.ImportedToRepo)));
         }
@@ -194,7 +183,7 @@ public sealed record ProfileEditorState
     private static (List<PinnedModRow> Rows, ProfileModUpdatePlan Updates) PinnedRows(
         ProfileEditorInputs inputs,
         Dictionary<ModKey, HashSet<ModVersionKey>> offered,
-        Dictionary<ModKey, RemoteOfferInfo> remoteOffers)
+        Dictionary<ModKey, RemoteUpdate> remoteUpdates)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -244,7 +233,7 @@ public sealed record ProfileEditorState
                 ProfileModTouches.Classify(saved, pin),
                 ProfileModTouches.Describe(saved, pin),
                 pin is null ? null : updatesByMod.GetValueOrDefault(modId),
-                pin is null ? null : remoteOffers.GetValueOrDefault(modId),
+                pin is null ? null : remoteUpdates.GetValueOrDefault(modId),
                 unsettled,
                 offered.ContainsKey(modId) is false,
                 added,
@@ -310,7 +299,7 @@ public sealed record ProfileEditorState
             PinnedModFilter.Result => row.IsTakenOut is false,
             PinnedModFilter.Changes => row.Touch is not ProfileModTouch.None,
             PinnedModFilter.Updates => row.IsTakenOut is false
-                && (row.Update is not null || row.RemoteOffer is not null || row.HasUnsettledVersion),
+                && (row.Update is not null || row.RemoteUpdate is not null || row.HasUnsettledVersion),
             PinnedModFilter.Locked => row.IsTakenOut is false && row.Lock.IsLocked,
             PinnedModFilter.NotInSources => row.IsTakenOut is false && row.NotInSources,
             _ => true

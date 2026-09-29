@@ -12,11 +12,8 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using System.Collections.Immutable;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf.ViewModel.Pages;
@@ -48,7 +45,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
-    private readonly IDialogService _dialogService;
     private readonly NavigationLockService _navigationLock;
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
@@ -63,14 +59,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IReadOnlyList<IRelayCommand> _commands;
 
     private readonly EditHistory<ProfileEditorSnapshot> _history = new(new(new ProfileDraft([], []), []));
-
-    /// <summary>Loaded sources that are switched off. Showing and hiding is not an edit, so it is not history.</summary>
-    private readonly HashSet<ModSourceId> _standby = [];
-
-    /// <summary>Every profile read as a source this session, loaded or not, so an undo can load it again.</summary>
-    private readonly Dictionary<ModSourceId, ProfileModSource> _profileSources = [];
-
-    private readonly List<RemoteModSourceState> _remoteSources;
+    private readonly OtherProfilesReader _otherProfiles;
     private readonly Dictionary<ModKey, ModVersionKey> _availableChoices = [];
 
     private readonly Dictionary<ModKey, AvailableModRowViewModel> _availableRows = [];
@@ -80,7 +69,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private ProfileEditorState _state;
     private IReadOnlyDictionary<ModKey, SavedPinDate> _savedDates = new Dictionary<ModKey, SavedPinDate>();
     private ModSearchQuery _searchQuery = ModSearchQuery.Empty;
-    private bool _includeRegistered = true;
     private int _basedOn;
     private int _recomposeGeneration;
     private bool _skipApplyOnce;
@@ -116,7 +104,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _profilesClient = profilesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;
-        _dialogService = dialogService;
         _navigationLock = navigationLock;
         _gameRepository = gameRepository;
         _applyService = applyService;
@@ -129,8 +116,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _catalog = catalogFactory.Create(repo);
         _catalogView = ProfileEditorCatalog.Empty(repo.Adapter.VersionComparer);
-        _remoteSources = [.. (repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [])
-            .Select(x => new RemoteModSourceState(x))];
+        _otherProfiles = new OtherProfilesReader(profilesClient, dependenciesClient, repo.Id, profile.Id);
+
+        Sources = new EditorSourcesViewModel(
+            _catalog, _otherProfiles, dialogService, modalService, errorReporter,
+            () => _history.Current, CommitAsync, RecomposeAsync, _cancellation.Token);
+
+        RemoteUpdates = new RemoteUpdatesViewModel(
+            repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteUpdatesAdapter>()?.Invoke().Providers ?? [],
+            errorReporter,
+            _cancellation.Token);
+
+        RemoteUpdates.Changed += Refresh;
+        RemoteUpdates.DownloadsWanted += () => _ = Sources.EnableDownloadsAsync();
 
         _state = ProfileEditorState.Compute(Inputs());
         _summary = Summarize();
@@ -164,7 +162,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public string ProfileName { get; }
 
-    public ObservableCollection<ModSourceViewModel> Sources { get; } = [];
+    public EditorSourcesViewModel Sources { get; }
+
+    public RemoteUpdatesViewModel RemoteUpdates { get; }
 
     public BulkObservableCollection<AvailableModRowViewModel> AvailableRows { get; } = [];
     public BulkObservableCollection<PinnedModRowViewModel> PinnedRows { get; } = [];
@@ -217,9 +217,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool _isReadOnly;
 
     public bool CanEdit => IsReadOnly is false;
-
-    [ObservableProperty]
-    private bool _hasEnabledSources = true;
 
     /// <summary>What to call this save in the profile's history. Optional.</summary>
     [ObservableProperty]
@@ -274,11 +271,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private ProfileEditorInputs Inputs() => new(_history.Current.Draft, _catalogView)
     {
-        IncludeRegistered = _includeRegistered,
-        ProfileSources = [.. _profileSources.Values.Where(x => IsEnabled(x.Source.Id))],
-        RemoteSources = [.. _remoteSources
-            .Where(x => x.IsEnabled)
-            .Select(x => new RemoteSourceAnswers(x.Id, x.Remote.DisplayName, x.Answers.Values))],
+        IncludeRegistered = Sources.IncludeRegistered,
+        ProfileSources = Sources.EnabledProfiles,
+        RemoteUpdates = RemoteUpdates.Answers(),
         AvailableChoices = _availableChoices,
         SavedDates = _savedDates,
         Search = _searchQuery,
@@ -298,11 +293,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         Sync(AvailableRows, _availableRows, _state.Available, _state.AvailableShown, x => x.ModId,
             x => new AvailableModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked),
-            (row, x) => row.Update(x, Offer(x.RemoteOffer), pickable));
+            (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
 
         Sync(PinnedRows, _pinnedRows, _state.Pinned, _state.PinnedShown, x => x.ModId,
             x => new PinnedModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked, OnLockToggled),
-            (row, x) => row.Update(x, Offer(x.RemoteOffer), pickable));
+            (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
 
         StampMarks();
 
@@ -333,7 +328,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _state,
         ShowIgnored,
         _catalogView.Snapshot.Sources.Any(x => x.IsEnabled),
-        _remoteSources.Count == 1 ? _remoteSources[0].Remote.DisplayName : "online",
+        RemoteUpdates.Name,
         ApplyTarget is not null);
 
     /// <summary>Records an edit of the draft as one step, then shows it.</summary>
@@ -360,16 +355,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// <summary>Tells the catalog what is loaded and shown, reads it, and refreshes.</summary>
     private async Task RecomposeAsync()
     {
-        foreach (var source in _catalog.GetSources())
-        {
-            _catalog.SetState(source.Id, StateOf(source.Id));
-        }
+        Sources.ApplyToCatalog();
 
-        HasEnabledSources = _includeRegistered
-            || _catalog.GetSources().Any(x => IsEnabled(x.Id))
-            || _profileSources.Keys.Any(IsEnabled);
-
-        if (HasEnabledSources is false && PinnedFilter is PinnedModFilter.NotInSources)
+        if (Sources.HasEnabledSources is false && PinnedFilter is PinnedModFilter.NotInSources)
         {
             PinnedFilter = PinnedModFilter.All;
         }
@@ -395,9 +383,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
                 SearchCompleter.SetCatalogValues(snapshot.Known.SelectMany(x => x.Attributes));
 
-                LookUpRemoteOffers();
+                RemoteUpdates.LookUp(catalogView.Index.Keys);
                 Refresh();
-                RebuildSourceChips();
+                Sources.RebuildChips(catalogView);
             });
         }
         catch (OperationCanceledException)
@@ -411,16 +399,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             }
         }
     }
-
-    private ModSourceState StateOf(ModSourceId id)
-        => Current.Loaded.Contains(id) is false
-            ? ModSourceState.Unloaded
-            : _standby.Contains(id) ? ModSourceState.Standby : ModSourceState.Enabled;
-
-    private bool IsEnabled(ModSourceId id) => StateOf(id) is ModSourceState.Enabled;
-
-    private RemoteOfferViewModel? Offer(RemoteOfferInfo? offer)
-        => offer is null ? null : new RemoteOfferViewModel(offer.Offer, offer.SourceName, OpenRemoteOffer);
 
     /// <summary>
     /// Makes <paramref name="shown"/> hold the rows for <paramref name="shownStates"/>, in order, reusing
@@ -1019,7 +997,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         try
         {
-            var modal = new CopyProfileModsModalViewModel(await GetOtherProfilesAsync(), ProfileName);
+            var modal = new CopyProfileModsModalViewModel(await _otherProfiles.ListAsync(_cancellation.Token), ProfileName);
 
             await _modalService.Show(modal);
 
@@ -1028,7 +1006,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            var pins = await ReadPinsAsync(source.Id);
+            var pins = await _otherProfiles.ReadPinsAsync(source.Id, _cancellation.Token);
 
             if (modal.ResultMode is CopyProfileModsMode.Replace)
             {
@@ -1150,234 +1128,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         return text;
     }
 
-    private async Task<List<ProfileDto>> GetOtherProfilesAsync()
-    {
-        var profiles = await _profilesClient.GetProfilesV1Async(_repo.Id, _cancellation.Token);
-
-        return [.. profiles.Where(x => x.Id != _profile.Id).OrderBy(x => x.Name, NaturalOrder.Comparer)];
-    }
-
-    /// <summary>What another profile pins now, with its own locks.</summary>
-    private async Task<IReadOnlyList<ProfileModPin>> ReadPinsAsync(Guid profileId)
-        => ToPins(await _dependenciesClient.GetModDependenciesV1Async(_repo.Id, profileId, null, _cancellation.Token));
-
-    private static IReadOnlyList<ProfileModPin> ToPins(GetModDependenciesResponse response)
-        => [.. response.Dependencies.Select(x => new ProfileModPin(
-            ModKey.From(x.ModId),
-            ModVersionKey.From(x.ModVersionId),
-            new ProfileModLock(false, x.Locked)))];
-
     #endregion
 
 
     #region Sources
-
-    private void RebuildSourceChips()
-    {
-        Sources.Clear();
-
-        Sources.Add(new ModSourceViewModel(
-            new ModSourceStatus(
-                new ModSource(ModSourceId.Repo, "This repo", "Everything this repo has registered", ModSourceKind.Repo),
-                _includeRegistered,
-                _catalogView.Visible.Count(x => x.IsOnServer),
-                null),
-            OnSourceChipToggled));
-
-        var scanned = _catalogView.Snapshot.Sources.ToDictionary(x => x.Source.Id);
-
-        foreach (var source in _catalog.GetSources())
-        {
-            var loaded = Current.Loaded.Contains(source.Id);
-
-            if (source.Kind is ModSourceKind.AdHoc && loaded is false)
-            {
-                continue;
-            }
-
-            var status = scanned.GetValueOrDefault(source.Id);
-
-            Sources.Add(new ModSourceViewModel(
-                new ModSourceStatus(source, IsEnabled(source.Id), status?.ModCount ?? 0, status?.Error),
-                OnSourceChipToggled,
-                hasCount: IsEnabled(source.Id),
-                canUnload: loaded));
-        }
-
-        foreach (var profile in _profileSources.Values.Where(x => Current.Loaded.Contains(x.Source.Id)))
-        {
-            Sources.Add(new ModSourceViewModel(
-                new ModSourceStatus(profile.Source, IsEnabled(profile.Source.Id), profile.Pins.Count, null),
-                OnSourceChipToggled,
-                canUnload: true));
-        }
-
-        foreach (var remote in _remoteSources)
-        {
-            Sources.Add(new ModSourceViewModel(
-                new ModSourceStatus(remote.Source, remote.IsEnabled, _state.RemoteOfferCounts.GetValueOrDefault(remote.Id), remote.Error),
-                OnSourceChipToggled,
-                isBusy: remote.IsEnabled && remote.IsLookingUp,
-                hasCount: remote.IsEnabled && remote.HasAnswered));
-        }
-    }
-
-    private void OnSourceChipToggled(ModSourceViewModel chip, bool enabled)
-    {
-        var id = chip.Source.Id;
-
-        if (chip.IsRepo)
-        {
-            _includeRegistered = enabled;
-            _ = RecomposeAsync();
-        }
-        else if (chip.IsRemote)
-        {
-            if (_remoteSources.FirstOrDefault(x => x.Id == id) is RemoteModSourceState remote)
-            {
-                remote.IsEnabled = enabled;
-
-                // Switching it off and on again is how an answer that failed, or could not be vouched
-                // for, is asked again.
-                if (enabled && (remote.Error is not null || remote.IsIncomplete))
-                {
-                    remote.Forget();
-                }
-            }
-
-            LookUpRemoteOffers();
-            Refresh();
-            RebuildSourceChips();
-        }
-        else if (Current.Loaded.Contains(id))
-        {
-            if (enabled)
-            {
-                _standby.Remove(id);
-            }
-            else
-            {
-                _standby.Add(id);
-            }
-
-            _ = RecomposeAsync();
-        }
-        else if (enabled)
-        {
-            _catalog.Rescan(id);
-            _ = LoadAsync(id, chip.Name);
-        }
-    }
-
-    private Task LoadAsync(ModSourceId id, string name)
-    {
-        _standby.Remove(id);
-
-        return Current.Loaded.Contains(id)
-            ? RecomposeAsync()
-            : CommitAsync(Current with { Loaded = Current.Loaded.Add(id) }, $"Loaded {name}");
-    }
-
-    /// <summary>
-    /// Takes away everything a source supplied, including pins whose file only it holds. Undoable, so it
-    /// only asks when the draft would lose something.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanEdit))]
-    private async Task UnloadSource(ModSourceViewModel? chip)
-    {
-        if (chip is null || Current.Loaded.Contains(chip.Source.Id) is false)
-        {
-            return;
-        }
-
-        var dependent = _catalogView.PinsOnlyIn(Draft, chip.Source.Id);
-
-        if (dependent.Count > 0)
-        {
-            var confirmation = new ConfirmationDialogViewModel(
-                $"Unload {chip.Name}?",
-                $"{ProfileModsEditorSummary.Mods(dependent.Count)} in your draft come only from {chip.Name} "
-                    + "and will be taken out with it.",
-                IconKind.Question,
-                "Unload",
-                "Keep it");
-
-            await _modalService.Show(confirmation);
-
-            if (confirmation.Result is false)
-            {
-                return;
-            }
-        }
-
-        await CommitAsync(
-            new ProfileEditorSnapshot(Draft.Remove(dependent), Current.Loaded.Remove(chip.Source.Id)),
-            $"Unloaded {chip.Name}");
-    }
-
-    [RelayCommand(CanExecute = nameof(CanEdit))]
-    private Task RescanAll()
-    {
-        _catalog.RescanAll();
-
-        return RecomposeAsync();
-    }
-
-    /// <summary>Adds a folder for this session only. Nothing about it is written to disk.</summary>
-    [RelayCommand(CanExecute = nameof(CanEdit))]
-    private Task AddSource()
-    {
-        if (_dialogService.PickFolder(null) is not string path)
-        {
-            return Task.CompletedTask;
-        }
-
-        var source = _catalog.AddAdHocSource(path);
-
-        _catalog.Rescan(source.Id);
-
-        return LoadAsync(source.Id, source.Name);
-    }
-
-    /// <summary>
-    /// Reads another profile in this repo as a source. With the repo switched off, the left list is then
-    /// exactly what that profile has and this one does not.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanEdit))]
-    private async Task AddProfileSource()
-    {
-        try
-        {
-            var others = (await GetOtherProfilesAsync())
-                .Where(x => Current.Loaded.Contains(ModSourceId.ForProfile(x.Id)) is false)
-                .ToList();
-
-            var modal = new PickProfileSourceModalViewModel(others);
-
-            await _modalService.Show(modal);
-
-            if (modal.Result is not ProfileDto picked)
-            {
-                return;
-            }
-
-            var id = ModSourceId.ForProfile(picked.Id);
-
-            _profileSources[id] = new ProfileModSource(
-                picked.Id,
-                new ModSource(id, picked.Name, "Another profile in this repo.", ModSourceKind.Profile),
-                await ReadPinsAsync(picked.Id));
-
-            await LoadAsync(id, picked.Name);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "reading another profile's mod list as a source");
-        }
-    }
 
     /// <summary>
     /// Makes one of a game's mod folders the only source, for a page opened at that folder - which means
@@ -1385,29 +1139,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// </summary>
     public void ScanTarget(ModTargetRef target)
     {
-        var targetId = ModSourceId.ForTarget(target);
+        var loaded = Sources.FocusOn(ModSourceId.ForTarget(target));
 
-        foreach (var id in Current.Loaded.Where(x => x != targetId))
-        {
-            _standby.Add(id);
-        }
-
-        _standby.Remove(targetId);
-        _includeRegistered = false;
         PinnedFilter = PinnedModFilter.NotInSources;
 
         if (IsLoading && _history.CanUndo is false)
         {
-            _history.Reset(Current with { Loaded = Current.Loaded.Add(targetId) });
+            _history.Reset(Current with { Loaded = loaded });
         }
-        else if (Current.Loaded.Contains(targetId))
+        else if (loaded.SetEquals(Current.Loaded))
         {
             _ = RecomposeAsync();
         }
         else
         {
-            _catalog.Rescan(targetId);
-            _ = CommitAsync(Current with { Loaded = Current.Loaded.Add(targetId) }, "Loaded the game's mod folder");
+            _ = CommitAsync(Current with { Loaded = loaded }, "Loaded the game's mod folder");
         }
     }
 
@@ -1420,102 +1166,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         _ = Application.Current?.Dispatcher.InvokeAsync(RecomposeAsync);
-    }
-
-    #endregion
-
-
-    #region Remote sources
-
-    /// <summary>Asks each enabled remote source about the mods it has not been asked about yet.</summary>
-    private void LookUpRemoteOffers()
-    {
-        foreach (var remote in _remoteSources)
-        {
-            if (remote.IsEnabled is false || remote.IsLookingUp || remote.Error is not null)
-            {
-                continue;
-            }
-
-            var unasked = _catalogView.Index.Keys.Where(x => remote.Asked.Contains(x) is false).ToList();
-
-            if (unasked.Count == 0)
-            {
-                continue;
-            }
-
-            remote.Asked.UnionWith(unasked);
-            remote.IsLookingUp = true;
-
-            _ = LookUpAsync(remote, unasked);
-        }
-    }
-
-    private async Task LookUpAsync(RemoteModSourceState remote, List<ModKey> mods)
-    {
-        try
-        {
-            var lookup = await remote.Remote.LookUpAsync(mods, _cancellation.Token);
-
-            foreach (var offer in lookup.Offers)
-            {
-                remote.Answers[offer.ModId] = offer;
-            }
-
-            remote.HasAnswered = true;
-            remote.CurrentAsOf = lookup.CurrentAsOf;
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            remote.Asked.ExceptWith(mods);
-            remote.Error = exception is ApiException api
-                ? $"{remote.Remote.DisplayName} could not be looked up ({api.StatusCode})."
-                : $"{remote.Remote.DisplayName} could not be looked up.";
-        }
-        finally
-        {
-            remote.IsLookingUp = false;
-        }
-
-        await OnUiThreadAsync(() =>
-        {
-            Refresh();
-            RebuildSourceChips();
-        });
-    }
-
-    /// <summary>
-    /// Opens the page a newer version is downloaded from, and switches Downloads on - the file lands
-    /// there, and looking for it is the next thing anybody does.
-    /// </summary>
-    private void OpenRemoteOffer(RemoteModOffer offer)
-    {
-        // The address came from the server; only ever hand the shell a web page.
-        if (Uri.TryCreate(offer.PageUrl, UriKind.Absolute, out var uri) is false
-            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-        {
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-        }
-        catch (Exception exception)
-        {
-            _ = _errorReporter.ShowAsync(exception, "opening the mod's page");
-
-            return;
-        }
-
-        if (Sources.FirstOrDefault(x => x.Source.Kind is ModSourceKind.Downloads) is { IsEnabled: false } downloads)
-        {
-            downloads.IsEnabled = true;
-        }
     }
 
     #endregion
@@ -1579,7 +1229,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
                 _history.Reset(Current with
                 {
-                    Draft = new ProfileDraft(ToPins(modList), ignored.ModIds.Select(ModKey.From))
+                    Draft = new ProfileDraft(OtherProfilesReader.ToPins(modList), ignored.ModIds.Select(ModKey.From))
                 });
             });
 
@@ -1678,5 +1328,3 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 }
 
 
-/// <summary>What one undo step restores: the draft, and which sources are loaded.</summary>
-public sealed record ProfileEditorSnapshot(ProfileDraft Draft, ImmutableHashSet<ModSourceId> Loaded);

@@ -99,7 +99,7 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
     protected void Show(
         CatalogModVersion version,
         IReadOnlyList<ProfileModVersionOption> versions,
-        RemoteOfferViewModel? remoteOffer,
+        RemoteUpdateViewModel? remoteUpdate,
         string? sortCaption,
         string? sortTooltip)
     {
@@ -129,9 +129,9 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
             OnPropertyChanged(nameof(SelectedVersion));
         }
 
-        if (Item.RemoteOffer?.Offer != remoteOffer?.Offer || Item.RemoteOffer?.Text != remoteOffer?.Text)
+        if (Item.RemoteUpdate?.Version != remoteUpdate?.Version || Item.RemoteUpdate?.Text != remoteUpdate?.Text)
         {
-            Item.RemoteOffer = remoteOffer;
+            Item.RemoteUpdate = remoteUpdate;
         }
 
         SortCaption = sortCaption;
@@ -195,13 +195,13 @@ public sealed partial class AvailableModRowViewModel : EditorModRowViewModel
         : "Ignore this mod in this profile. It is hidden from this list until you show ignored mods.";
 
 
-    public void Update(AvailableModRow state, RemoteOfferViewModel? remoteOffer, bool pickable)
+    public void Update(AvailableModRow state, RemoteUpdateViewModel? remoteUpdate, bool pickable)
     {
         State = state;
         IsPickable = pickable;
         IsIgnored = state.IsIgnored;
 
-        Show(state.Version, state.Options, remoteOffer, state.SortCaption, state.SortTooltip);
+        Show(state.Version, state.Options, remoteUpdate, state.SortCaption, state.SortTooltip);
         Configure(Item);
     }
 
@@ -305,12 +305,12 @@ public sealed partial class PinnedModRowViewModel : EditorModRowViewModel
     }
 
 
-    public void Update(PinnedModRow state, RemoteOfferViewModel? remoteOffer, bool pickable)
+    public void Update(PinnedModRow state, RemoteUpdateViewModel? remoteUpdate, bool pickable)
     {
         State = state;
         IsPickable = pickable;
 
-        Show(state.Version, state.Options, remoteOffer, state.SortCaption, state.SortTooltip);
+        Show(state.Version, state.Options, remoteUpdate, state.SortCaption, state.SortTooltip);
         Configure(Item);
 
         OnPropertyChanged(nameof(IsTakenOut));

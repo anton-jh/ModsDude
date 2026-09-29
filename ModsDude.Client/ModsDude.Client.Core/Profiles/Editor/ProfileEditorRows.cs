@@ -17,7 +17,7 @@ public sealed record ProfileModVersionOption(CatalogModVersion Version, bool Cou
 }
 
 
-public sealed record RemoteOfferInfo(RemoteModOffer Offer, string SourceName);
+public sealed record RemoteUpdate(RemoteModVersion Version, string ProviderName);
 
 
 public enum AvailableModStatus
@@ -43,7 +43,7 @@ public sealed record AvailableModRow(
     bool IsIgnored,
     bool LockedBySource,
     string? Sources,
-    RemoteOfferInfo? RemoteOffer,
+    RemoteUpdate? RemoteUpdate,
     string? SortCaption,
     string? SortTooltip);
 
@@ -65,7 +65,7 @@ public sealed record PinnedModRow(
     ProfileModTouch Touch,
     string? TouchTooltip,
     ProfileModUpdate? Update,
-    RemoteOfferInfo? RemoteOffer,
+    RemoteUpdate? RemoteUpdate,
     bool HasUnsettledVersion,
     bool NotInSources,
     DateTimeOffset? Added,

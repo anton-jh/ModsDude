@@ -589,39 +589,35 @@ which means uninstalling things from it. A game's own mod folder is both. Downlo
 folders are **only ever sources** — nothing in sync will ever delete, move, or quarantine a file
 in them.
 
-### Remote sources point, and never supply
+### Remote updates point, and never supply
 
-A game's adapter can name places outside the machine that know of newer versions — for Farming
-Simulator 25, ModHub, which the server crawls (see [03 — Server](03-server.md#the-modhub-crawler)). In the
-profile editor each is a chip at the end of the source row, `ModSourceKind.Remote`, and **it starts switched
-on** — the one source besides the repo that does. Sources start off so that opening a page never reads a
-disk; this reads the ModsDude server, which the page is reading anyway, and a chip nobody knows to click is
-updates nobody sees.
+A game's adapter can name places outside the machine that know of newer versions - for Farming
+Simulator 25, ModHub, which the server crawls (see [03 — Server](03-server.md#the-modhub-crawler)). These
+are **remote update providers** (`IRemoteUpdatesAdapter`), not sources: they never add a version to either
+list of the profile editor, only a link on a row that is already there. The name leaves room for a real
+remote source later, one that downloads.
 
 **What it contributes is a link, not a version.** A version from ModHub has no bytes behind it here, so
-letting it into the version index would expose it to everything that can pin a version — the row's
-selector, *Update all*, import on save — and each would have to learn to refuse it. Instead an offer is a
-chip on the mod's own row, *ModHub 1.0.1.2 ↗*, on either list, and it cannot be moved anywhere. Following it
-opens the mod's page and switches Downloads on, since the file lands there; the rescan once the download
-finishes is still the user's. When the scan finds the file, the version is known, and a known version is
-never offered — so the link is replaced by an ordinary version in the same pass.
+letting it into the version index would expose it to everything that can pin a version - the row's
+selector, *Update all*, import on save - and each would have to learn to refuse it. Instead it is a chip on
+the mod's own row, *ModHub 1.0.1.2 ↗*, on either list. Following it opens the mod's page and switches
+Downloads on, since the file lands there; the rescan once the download finishes is still the user's. When
+the scan finds the file the version is known, and a known version is never a remote update - so the link
+is replaced by an ordinary version in the same pass.
 
-**On the right list they are updates**, because that is what they are. The **Updates** filter takes in a
-pinned row with a link as well as one with an update here, and the updates band names them beside its own
-count — "3 updates available · 5 more on ModHub · 2 locked", or "No updates here · 5 on ModHub" — as a link
-to that filter. Beside it rather than added into it: *Update all* cannot move a pin to a version with no
-file, so a single number would promise something the button next to it will not do. Locked pins are counted
-apart, as they are for updates here.
+**It belongs to the updates band.** The **Updates** filter takes in a pinned row with a link as well as one
+with an update here, and the band names them beside its own count - "3 updates available · 5 more on
+ModHub · 2 locked" - as a link to that filter. Beside it rather than added into it: *Update all* cannot move
+a pin to a version with no file. Under it, one line per provider says how current its answer is - *ModHub:
+as of 29/09 12:04*, *looking up…*, or why it could not be asked - with **Check again**, which forgets the
+answers and asks about everything again.
 
-**An offer has to be newer than every version known here** (`RemoteModOffers.Newer`): not already known,
-placed after at least one known version and before or level with none. An abstention does not count, for
-the same reason it does not count as an update.
+**A remote update has to be newer than every version known here** (`RemoteUpdates.Newer`): not already
+known, placed after at least one known version and before or level with none. An abstention does not count,
+for the same reason it does not count as an update.
 
-The chip counts the rows carrying a link. It shows no count until the server has answered, `…` while it is
-asked, and red with the reason if it could not be. **Every known mod is asked about, not only the pinned
-ones**, incrementally, so switching a folder on later asks only about what it brought. An answer the server
-cannot yet vouch for — it has not finished reading ModHub — says so on the chip's tooltip; switching the chip
-off and on asks again.
+**Every known mod is asked about, not only the pinned ones**, incrementally, so loading a folder later asks
+only about what it brought. It is always on: it reads the ModsDude server, which the page reads anyway.
 
 ### Same mod, several sources
 
@@ -838,7 +834,7 @@ switched off again (`ModSourceState`):
   when there are any. Pins to registered versions stay: the repo supplies those.
 
 Loading and unloading are undo steps; the scan stays in memory so an undo is instant, and loading a
-source again by hand rescans it. The repo chip and the remote chips are switched, never unloaded.
+source again by hand rescans it. The repo chip is switched, never unloaded.
 
 #### The left list
 
@@ -900,7 +896,7 @@ newest.
 answer too. Updates come from registered versions and enabled sources only. Locked pins are skipped by
 *Update all* and counted in a link that opens them one by one. *Update all* is a split button whose
 caret offers *Update the N already in the repo* where that is a different set. Links beside it count
-the updates a remote source knows of and the versions the ordering could not compare; both open the
+the remote updates (see [above](#remote-updates-point-and-never-supply)) and the versions the ordering could not compare; both open the
 *Updates* filter.
 
 #### A version nothing could compare

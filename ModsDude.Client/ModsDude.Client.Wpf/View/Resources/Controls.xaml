@@ -272,8 +272,8 @@
 
     <!-- A newer version somewhere else - ModHub - on a mod's own row. The status chip's shape, since it
          sits in the same row of chips, but outlined in the accent and clickable: it is the one chip
-         that goes somewhere, and it goes out of the app. Bound against RemoteOfferViewModel. -->
-    <Style x:Key="RemoteOfferChip" TargetType="Button">
+         that goes somewhere, and it goes out of the app. Bound against RemoteUpdateViewModel. -->
+    <Style x:Key="RemoteUpdateChip" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Padding" Value="8 2" />

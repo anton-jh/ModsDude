@@ -370,9 +370,9 @@
                         </Grid>
 
                         <!-- The sources. A ✕ unloads one, taking everything it supplied. -->
-                        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8">
+                        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8" IsEnabled="{Binding CanEdit}">
 
-                            <ItemsControl ItemsSource="{Binding Sources}">
+                            <ItemsControl ItemsSource="{Binding Sources.Chips}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <WrapPanel Orientation="Horizontal" />
@@ -384,8 +384,7 @@
                                                       Margin="0 0 6 6"
                                                       ToolTip="{Binding Tooltip}"
                                                       ToolTipService.ShowDuration="20000"
-                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                      IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Name}"
                                                            MaxWidth="160"
@@ -405,7 +404,7 @@
                                                         Content="&#xE711;"
                                                         ToolTip="{Binding RemoveTooltip}"
                                                         Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                        Command="{Binding DataContext.UnloadSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        Command="{Binding DataContext.Sources.UnloadCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                         CommandParameter="{Binding}" />
                                             </StackPanel>
                                         </ToggleButton>
@@ -417,20 +416,20 @@
                                     Margin="0 0 6 6"
                                     Content="+ folder"
                                     ToolTip="Scanned for this session only, and never written to disk"
-                                    Command="{Binding AddSourceCommand}" />
+                                    Command="{Binding Sources.AddFolderCommand}" />
 
                             <Button Style="{StaticResource SourceActionChip}"
                                     Margin="0 0 6 6"
                                     Content="+ profile"
                                     ToolTip="Read another profile's list as a source, to see what it holds and this one does not"
-                                    Command="{Binding AddProfileSourceCommand}" />
+                                    Command="{Binding Sources.AddProfileCommand}" />
 
                             <Button Style="{StaticResource SourceActionChip}"
                                     Margin="0 0 6 6"
                                     Content="&#xE72C;"
                                     FontFamily="{DynamicResource SymbolThemeFontFamily}"
                                     ToolTip="Rescan every folder"
-                                    Command="{Binding RescanAllCommand}" />
+                                    Command="{Binding Sources.RescanAllCommand}" />
                         </WrapPanel>
 
                         <Grid Grid.Row="2" Margin="0 0 0 8" ColumnDefinitions="* auto">
@@ -671,7 +670,7 @@
                                 <RadioButton Style="{StaticResource FilterChip}"
                                              Content="Not in the sources"
                                              ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
-                                             IsEnabled="{Binding HasEnabledSources}"
+                                             IsEnabled="{Binding Sources.HasEnabledSources}"
                                              IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
                             </WrapPanel>
 
@@ -684,7 +683,7 @@
                                 Padding="12 8"
                                 CornerRadius="4"
                                 Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                            <Grid ColumnDefinitions="auto * auto">
+                            <Grid ColumnDefinitions="auto * auto" RowDefinitions="auto auto">
                                 <TextBlock Grid.Column="0"
                                            VerticalAlignment="Center"
                                            Text="{Binding Summary.UpdateCountText}"
@@ -753,6 +752,37 @@
                                         </Border>
                                     </Popup>
                                 </StackPanel>
+
+                                <!-- Where the online updates come from, and how current they are. -->
+                                <ItemsControl Grid.Row="1" Grid.ColumnSpan="3"
+                                              Margin="0 6 0 0"
+                                              ItemsSource="{Binding RemoteUpdates.Providers}"
+                                              Visibility="{Binding RemoteUpdates.HasProviders, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:RemoteUpdateProviderViewModel}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock VerticalAlignment="Center" Text="{Binding StatusText}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasFailed}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Button Margin="8 0 0 0"
+                                                        Padding="6 2"
+                                                        Style="{DynamicResource SubtleMenuButton}"
+                                                        Content="Check again"
+                                                        ToolTip="Forget what it answered and look everything up again"
+                                                        Command="{Binding CheckAgainCommand}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </Grid>
                         </Border>
 

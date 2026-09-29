@@ -52,7 +52,7 @@ var modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()
 | --- | --- | --- |
 | Mods | `IBaseModAdapter.GetModsFromFolder(path, ct)` | `ILocalModAdapter` — `ModTargets`, plus `GetInstalledMods(target, skip, ct)`, `GetModFilePath(target, …)` and `GetInstalledModPath` |
 | Savegames | `IBaseSavegameAdapter.CanCreateSlots` | `ILocalSavegameAdapter` — `SavegameTargets`, plus `GetSlots(target, ct)`, `GetSlotPath(target, slot)`, `CreateSlot` and `BelongsInPackedSave` |
-| Remote sources | `IRemoteModSourcesAdapter.Sources` — each an `IRemoteModSource` with a key, a name and `LookUpAsync(mods, ct)` | — |
+| Remote updates | `IRemoteUpdatesAdapter.Providers` — each an `IRemoteUpdateProvider` with a key, a name and `LookUpAsync(mods, ct)` | — |
 
 `IBaseGameAdapter` carries `CanSupportMods` / `CanSupportSavegames` booleans for the UI to
 consult before offering a feature, so a page can grey out an option without constructing an
@@ -61,12 +61,12 @@ the answer can depend on how a repo configured the adapter: for a scripted adapt
 implements savegames and another does not. That is the same layering mistake as keying games
 on the adapter id, one stage further up; see [Game identity](#game-identity).
 
-**Remote sources** are places outside the machine that know of newer versions — ModHub, for Farming
-Simulator. Base-stage only, because which remote sources exist depends on the game a repo is about and on
-nothing about this machine. A remote source **only ever points**: it answers with a version and the page to
+**Remote updates** come from places outside the machine that know of newer versions — ModHub, for Farming
+Simulator. Base-stage only, because which providers exist depends on the game a repo is about and on
+nothing about this machine. A provider **only ever points**: it answers with a version and the page to
 download it from, never with bytes, so nothing it says can be pinned or imported. The file still arrives the
 ordinary way, into a folder a scan reads. A game with none leaves the capability out rather than answering
-with an empty list. See [09 — Mod catalog](09-mod-catalog.md#remote-sources-point-and-never-supply).
+with an empty list. See [09 — Mod catalog](09-mod-catalog.md#remote-updates-point-and-never-supply).
 
 The capability adapters mirror the same base-then-local shape: `IBaseModAdapter` can scan
 an arbitrary folder, and `WithLocalSettings` turns it into an `ILocalModAdapter` that
@@ -454,7 +454,7 @@ the only one that exists.
 | `FarmingSimulatorLocalSettings` | No fields. The game data folder is found by `FarmingSimulatorGameDataFolder` from the repo's `GameVersion`, trying both spellings the installer has used; hydrating a local adapter throws a `UserFriendlyException` while neither exists |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
 | `FarmingSimulatorLocalModAdapter` | `{GameDataFolder}/mods`, or the `modsDirectoryOverride` in `{GameDataFolder}/gameSettings.xml` where it is switched on — scans it, and answers where a mod file belongs in it. The override is read afresh on every hydration; `GameRepository.RefreshTargets` writes a moved folder down on each repo-list load and before each apply, so drift and the watchers follow it. An unparseable `gameSettings.xml` is refused rather than read as "no override" |
-| `FarmingSimulatorModHubSource` | The remote source ModHub: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for a game the server does not crawl, the game has no remote source |
+| `ModHubUpdateProvider` | The remote update provider ModHub: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for a game the server does not crawl, the game has no remote updates |
 | `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
 
 ### How a savegame is described

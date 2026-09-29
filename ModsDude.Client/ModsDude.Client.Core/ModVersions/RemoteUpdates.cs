@@ -4,15 +4,15 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.ModVersions;
 
 /// <summary>
-/// Which versions a remote source has that are worth pointing somebody at: the ones newer than
+/// Which versions a remote update provider has that are worth pointing somebody at: the ones newer than
 /// everything already here.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Newer than every version known, not than the one pinned.</b> A version already in a folder or in
 /// the repo is one the editor can offer by itself; sending somebody to a website to download it again
-/// would be noise. That is also what makes an offer go away once its file is downloaded and scanned -
-/// the version becomes known, and a known version is never offered.
+/// would be noise. That is also what makes an update go away once its file is downloaded and scanned -
+/// the version becomes known, and a known version is never an update.
 /// </para>
 /// <para>
 /// <b>Abstentions do not count as newer.</b> A version the comparer cannot place against something
@@ -21,27 +21,27 @@ namespace ModsDude.Client.Core.ModVersions;
 /// level with none.
 /// </para>
 /// </remarks>
-public static class RemoteModOffers
+public static class RemoteUpdates
 {
-    public static IReadOnlyDictionary<ModKey, RemoteModOffer> Newer(
-        IEnumerable<RemoteModOffer> offers,
+    public static IReadOnlyDictionary<ModKey, RemoteModVersion> Newer(
+        IEnumerable<RemoteModVersion> versions,
         IReadOnlyDictionary<ModKey, ModVersionSet> known,
         IModVersionComparer comparer)
     {
-        var result = new Dictionary<ModKey, RemoteModOffer>();
+        var result = new Dictionary<ModKey, RemoteModVersion>();
 
-        foreach (var offer in offers)
+        foreach (var version in versions)
         {
-            if (known.TryGetValue(offer.ModId, out var set) is false || set.Find(offer.VersionId) is not null)
+            if (known.TryGetValue(version.ModId, out var set) is false || set.Find(version.VersionId) is not null)
             {
                 continue;
             }
 
-            if (IsNewerThanAll(offer.VersionId, set, comparer))
+            if (IsNewerThanAll(version.VersionId, set, comparer))
             {
-                // A source listing two files that normalise to one mod id is its own oddity; the first
+                // A provider listing two files that normalise to one mod id is its own oddity; the first
                 // answer stands rather than one silently replacing the other.
-                result.TryAdd(offer.ModId, offer);
+                result.TryAdd(version.ModId, version);
             }
         }
 

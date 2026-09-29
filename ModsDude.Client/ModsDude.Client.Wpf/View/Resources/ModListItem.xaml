@@ -223,14 +223,14 @@
 
                     <!-- A newer version somewhere else, and the way to it. First in the row of chips
                          because it is the only one that asks for something to be done outside the
-                         app; see RemoteOfferViewModel. -->
+                         app; see RemoteUpdateViewModel. -->
                     <Button Margin="0 0 8 0"
-                            Style="{StaticResource RemoteOfferChip}"
-                            Command="{Binding RemoteOffer.Open}"
-                            ToolTip="{Binding RemoteOffer.Tooltip}"
-                            Visibility="{Binding HasRemoteOffer, Converter={StaticResource BoolToVisibilityConverter}}">
+                            Style="{StaticResource RemoteUpdateChip}"
+                            Command="{Binding RemoteUpdate.Open}"
+                            ToolTip="{Binding RemoteUpdate.Tooltip}"
+                            Visibility="{Binding HasRemoteUpdate, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding RemoteOffer.Text}"
+                            <TextBlock Text="{Binding RemoteUpdate.Text}"
                                        Style="{DynamicResource CaptionTextBlockStyle}" />
                             <TextBlock Margin="4 0 0 0"
                                        VerticalAlignment="Center"

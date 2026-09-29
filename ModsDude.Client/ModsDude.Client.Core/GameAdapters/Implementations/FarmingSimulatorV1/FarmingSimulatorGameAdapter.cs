@@ -18,7 +18,7 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null, I
 
     /// <summary>
     /// What ModHub is asked through - the ModsDude server's copy of it. Optional like
-    /// <see cref="Loggers"/>; without it the game simply has no remote source.
+    /// <see cref="Loggers"/>; without it the game simply has no remote updates.
     /// </summary>
     protected IModHubClient? ModHub { get; } = modHubClient;
 
@@ -68,7 +68,7 @@ public class FarmingSimulatorBaseGameAdapter(
     private readonly List<object> _capabilities = [
         new Func<IBaseModAdapter>(() => new FarmingSimulatorBaseModAdapter(RequireGameVersion(settings), loggerFactory)),
         new Func<IBaseSavegameAdapter>(() => new FarmingSimulatorBaseSavegameAdapter(RequireGameVersion(settings), loggerFactory)),
-        .. RemoteSources(settings, modHubClient)
+        .. RemoteUpdates(settings, modHubClient)
         ];
 
 
@@ -124,16 +124,16 @@ public class FarmingSimulatorBaseGameAdapter(
     /// ModHub, where the server crawls the repo's game - and nothing at all otherwise, so the capability
     /// is absent rather than empty for a game ModHub is not read for.
     /// </summary>
-    private static IEnumerable<object> RemoteSources(FarmingSimulatorBaseSettings settings, IModHubClient? client)
+    private static IEnumerable<object> RemoteUpdates(FarmingSimulatorBaseSettings settings, IModHubClient? client)
     {
-        if (client is null || FarmingSimulatorModHubSource.GameFor(settings.GameVersion) is not string game)
+        if (client is null || ModHubUpdateProvider.GameFor(settings.GameVersion) is not string game)
         {
             yield break;
         }
 
-        IRemoteModSource[] sources = [new FarmingSimulatorModHubSource(client, game)];
+        IRemoteUpdateProvider[] providers = [new ModHubUpdateProvider(client, game)];
 
-        yield return new Func<IRemoteModSourcesAdapter>(() => new FarmingSimulatorRemoteModSourcesAdapter(sources));
+        yield return new Func<IRemoteUpdatesAdapter>(() => new FarmingSimulatorRemoteUpdatesAdapter(providers));
     }
 
     protected static FarmingSimulatorGameVersion RequireGameVersion(FarmingSimulatorBaseSettings settings)

@@ -11,7 +11,7 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 /// A ModHub archive is named after the mod, which is exactly what <see cref="ModKey"/> is built from,
 /// so a key is what is sent and the server matches it on the file name ignoring case and extension.
 /// </remarks>
-public sealed class FarmingSimulatorModHubSource(IModHubClient client, string game) : IRemoteModSource
+public sealed class ModHubUpdateProvider(IModHubClient client, string game) : IRemoteUpdateProvider
 {
     /// <summary>
     /// Asked in batches, well inside what the server accepts in one request.
@@ -23,9 +23,9 @@ public sealed class FarmingSimulatorModHubSource(IModHubClient client, string ga
     public string DisplayName => "ModHub";
 
 
-    public async Task<RemoteModLookup> LookUpAsync(IReadOnlyCollection<ModKey> mods, CancellationToken cancellationToken)
+    public async Task<RemoteUpdateLookup> LookUpAsync(IReadOnlyCollection<ModKey> mods, CancellationToken cancellationToken)
     {
-        var offers = new List<RemoteModOffer>();
+        var versions = new List<RemoteModVersion>();
         DateTimeOffset? currentAsOf = null;
 
         foreach (var batch in mods.Select(x => x.Value).Chunk(_batchSize))
@@ -44,7 +44,7 @@ public sealed class FarmingSimulatorModHubSource(IModHubClient client, string ga
                     continue;
                 }
 
-                offers.Add(new RemoteModOffer(
+                versions.Add(new RemoteModVersion(
                     ModKey.From(mod.Name),
                     ModVersionKey.From(mod.Version),
                     mod.Title,
@@ -53,7 +53,7 @@ public sealed class FarmingSimulatorModHubSource(IModHubClient client, string ga
             }
         }
 
-        return new RemoteModLookup(currentAsOf, offers);
+        return new RemoteUpdateLookup(currentAsOf, versions);
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class FarmingSimulatorModHubSource(IModHubClient client, string ga
     };
 }
 
-internal sealed class FarmingSimulatorRemoteModSourcesAdapter(IReadOnlyList<IRemoteModSource> sources) : IRemoteModSourcesAdapter
+internal sealed class FarmingSimulatorRemoteUpdatesAdapter(IReadOnlyList<IRemoteUpdateProvider> providers) : IRemoteUpdatesAdapter
 {
-    public IReadOnlyList<IRemoteModSource> Sources { get; } = sources;
+    public IReadOnlyList<IRemoteUpdateProvider> Providers { get; } = providers;
 }

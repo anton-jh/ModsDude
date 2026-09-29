@@ -104,3 +104,7 @@ public sealed record ProfileDraft
     private static ProfileModPin Normalize(ProfileModPin pin)
         => pin.Lock.ByAdapter ? pin with { Lock = new ProfileModLock(false, pin.Lock.ByProfile) } : pin;
 }
+
+
+/// <summary>What one undo step of the editor restores: the draft, and which sources are loaded.</summary>
+public sealed record ProfileEditorSnapshot(ProfileDraft Draft, ImmutableHashSet<ModSourceId> Loaded);
