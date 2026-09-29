@@ -8,7 +8,6 @@ namespace ModsDude.Client.Core.Tests.GameAdapters;
 public class GameShortNameTests
 {
     [Theory]
-    [InlineData(FarmingSimulatorGameVersion.Fs22, "FS22")]
     [InlineData(FarmingSimulatorGameVersion.Fs25, "FS25")]
     public void Farming_Simulator_is_named_for_its_game_version(FarmingSimulatorGameVersion version, string expected)
     {

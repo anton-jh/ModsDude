@@ -264,9 +264,10 @@ under every Farming Simulator 25 repo you belong to, which is why games are not 
 The obvious key for that is the adapter id — and it is not quite right, because **one adapter can
 serve more than one game**.
 
-Farming Simulator 22 and 25 read the same `modDesc.xml` out of the same kind of archive and
-differ only in where the folder is and which mods belong in it. One adapter handles both. But an
-FS22 install and an FS25 install are not interchangeable sync targets: offering one under the
+The games in the Farming Simulator series read the same `modDesc.xml` out of the same kind of
+archive and differ only in where the folder is and which mods belong in it, so one adapter is
+built to handle them all - FS25 today, with the base settings' `GameVersion` choosing among them.
+But two games' installs are not interchangeable sync targets: offering one under the
 other's repo points a profile at the wrong folder and fills it with the wrong mods. A generic
 scripted adapter — one Lua adapter driving a dozen games from a script the repo supplies — makes
 it starker, since every one of those games reports the same `GameAdapterId`.
@@ -333,15 +334,15 @@ accidental non-sharing that looks exactly like a bug.
 
 ### Consequences
 
-**Game identity is immutable, so an FS22 repo cannot become an FS25 repo.** That follows from the
+**Game identity is immutable, so an FS25 repo could never become an FS26 repo.** That follows from the
 first rule, and it is the right answer — the mods are different files, so it is a new repo rather
 than an edit — but treat it as a decision rather than a side effect. If it is ever wanted, it is
 an admin-level *re-scope repo* operation that has to re-point or orphan every member's games,
 not a field on a form.
 
 **This is not what compatibility versions are for.** `@2` means the adapter's settings shape
-broke and existing repos stay on `@1`. FS22 and FS25 coexist indefinitely and neither succeeds
-the other; conflating the two axes would strand every FS22 repo the day FS26 ships.
+broke and existing repos stay on `@1`. Games in a series coexist indefinitely and none succeeds
+another; conflating the two axes would strand every FS25 repo the day FS26 ships.
 
 **Scope resolution can become asynchronous.** A scripted adapter cannot report a scope until the
 client holds the script, so a repo whose script has not been fetched cannot say which game it is about
@@ -446,11 +447,11 @@ the only one that exists.
 | `FarmingSimulatorGameAdapter` | Catalogue entry, `_farming_simulator@1` |
 | `FarmingSimulatorBaseGameAdapter` | + base settings, exposes base capability factories |
 | `FarmingSimulatorLocalGameAdapter` | + local settings, exposes local capability factories |
-| `FarmingSimulatorBaseSettings` | `GameVersion` (FS22 or FS25) — required, not `[CanBeModified]`, and what feeds the [game identity](#game-identity) |
+| `FarmingSimulatorBaseSettings` | `GameVersion` (only FS25 so far, but a choice so later games can join) — required, not `[CanBeModified]`, and what feeds the [game identity](#game-identity) |
 | `FarmingSimulatorLocalSettings` | No fields. The game data folder is found by `FarmingSimulatorGameDataFolder` from the repo's `GameVersion`, trying both spellings the installer has used; hydrating a local adapter throws a `UserFriendlyException` while neither exists |
 | `FarmingSimulatorBaseModAdapter` | Scans a folder of `.zip` mods. Declares `SupportsHardlinks => true`, on tested updater behaviour |
 | `FarmingSimulatorLocalModAdapter` | `{GameDataFolder}/mods`, or the `modsDirectoryOverride` in `{GameDataFolder}/gameSettings.xml` where it is switched on — scans it, and answers where a mod file belongs in it. The override is read afresh on every hydration; `GameRepository.RefreshTargets` writes a moved folder down on each repo-list load and before each apply, so drift and the watchers follow it. An unparseable `gameSettings.xml` is refused rather than read as "no override" |
-| `FarmingSimulatorModHubSource` | The remote source ModHub, for FS25 only: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for FS22, the game has no remote source |
+| `FarmingSimulatorModHubSource` | The remote source ModHub: asks the ModsDude server's copy of it (`POST modhub/fs2025/lookup`) by mod key, since a ModHub archive is named after the mod. Handed an `IModHubClient` through the adapter's constructor, like the logger factory; without one, or for a game the server does not crawl, the game has no remote source |
 | `FarmingSimulator*SavegameAdapter` | Twenty fixed `savegameN` slots under `{GameDataFolder}`, each named and described from its own `careerSavegame.xml` and `farms.xml` — see [How a savegame is described](#how-a-savegame-is-described). `CanCreateSlots => false` |
 
 ### How a savegame is described
@@ -568,18 +569,14 @@ Several details in this code are load-bearing and worth preserving if you touch 
 
 **Raw ids, no labels.** The game's category titles live in its encrypted archives, and a
 mod-defined brand's title exists only inside the mod that defines it - which a teammate without
-the file cannot read. **The category lists are the game's**: FS25's is the SDK's
-`sdk/xmlDoku/storeCategories.xml`, whole. FS22 ships no such file, so its list is every category a
-base-game store item uses, plus `decoration`, which mods use and the base game does not. Against
-FS25, where the real list exists to check it by, the same method found 141 of its 147. A category
-in neither list is reported anyway. One the game knows in another casing - `PlaceableMisc`,
+the file cannot read. **The category list is the game's**: FS25's is the SDK's
+`sdk/xmlDoku/storeCategories.xml`, whole. A category not in it is reported anyway. One the game knows in another casing - `PlaceableMisc`,
 `lowLoaders`, both seen in real mods - is spelled the game's way, because the game matches them
 case-insensitively and one category should be one tag.
 
-**Groups are FS25's alone.** The SDK file puts each category in one of 20 shop sections, and the
-adapter carries that table; a test holds it to the category list so the two cannot drift. FS22 has
-no file to take its sections from, so it declares no `categoryGroup` at all rather than a
-hand-made guess. A category no section lists - one a mod invented - gets no group.
+**Groups come from the same file.** The SDK file puts each category in one of 20 shop sections,
+and the adapter carries that table; a test holds it to the category list so the two cannot drift.
+A category no section lists - one a mod invented - gets no group.
 
 A store item pointing into the base game (`$data/...`) is not in the archive and is skipped; one
 that is missing or will not parse costs its own tags and nothing else, as it does in the game.

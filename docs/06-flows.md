@@ -90,7 +90,7 @@ same repo have entirely separate ones.
 A game is keyed by its **identity**, not by a repo, so a machine configures that game once and
 every repo about it offers the same one. It carries an explicit **active profile** — the
 `(RepoId, ProfileId)` pair sync reconciles against — and every folder it reaches follows that one
-profile. The identity is not the adapter id alone, because one adapter serves both FS22 and FS25;
+profile. The identity is not the adapter id alone, because one adapter can serve several games;
 see [04 — Game adapters](04-game-adapters.md#game-identity).
 
 Note what "configured once" does *not* mean. A game reaching three folders is usually three

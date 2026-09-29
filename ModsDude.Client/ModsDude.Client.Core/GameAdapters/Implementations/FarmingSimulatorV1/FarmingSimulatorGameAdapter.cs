@@ -25,7 +25,7 @@ public class FarmingSimulatorGameAdapter(ILoggerFactory? loggerFactory = null, I
     public GameAdapterId Id { get; } = new("_farming_simulator", 1);
     public string DisplayName { get; } = "Farming Simulator";
     public string ShortName { get; } = "FS";
-    public string Description { get; } = "For Farming Simulator 22 and 25.";
+    public string Description { get; } = "For Farming Simulator 25.";
 
 
     public DynamicForm GetBaseSettingsTemplate()
@@ -79,16 +79,16 @@ public class FarmingSimulatorBaseGameAdapter(
     public bool CanSupportSavegames { get; } = true;
 
     /// <summary>
-    /// One adapter serves both Farming Simulator 22 and 25, and their mod folders are not
-    /// interchangeable sync targets, so the adapter id alone would offer an FS22 folder to an FS25
-    /// repo.
+    /// One adapter can serve several games in the series, and their mod folders are not
+    /// interchangeable sync targets, so the adapter id alone would offer one game's folder to
+    /// another game's repo.
     /// </summary>
     public GameIdentity Scope => new(Id.Id, RequireGameVersion(BaseSettings).ToString().ToLowerInvariant());
 
     /// <summary>
-    /// The particular game rather than the adapter, so a sidebar grouping repos by game puts the FS22
-    /// ones somewhere other than the FS25 ones - which is the same distinction <see cref="Scope"/>
-    /// makes and has to agree with.
+    /// The particular game rather than the adapter, so a sidebar grouping repos by game puts each
+    /// game in the series under a heading of its own - which is the same distinction
+    /// <see cref="Scope"/> makes and has to agree with.
     /// </summary>
     /// <remarks>
     /// Read off the enum member's own <see cref="TitleAttribute"/>, which is what the base settings
@@ -107,7 +107,6 @@ public class FarmingSimulatorBaseGameAdapter(
     /// </summary>
     public string GameShortName => BaseSettings.GameVersion switch
     {
-        FarmingSimulatorGameVersion.Fs22 => "FS22",
         FarmingSimulatorGameVersion.Fs25 => "FS25",
         _ => ShortName
     };

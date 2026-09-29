@@ -49,8 +49,9 @@ public interface IBaseGameAdapter : IGameAdapter
     /// <remarks>
     /// The counterpart of <see cref="Scope"/> and it must agree with it: the sidebar groups repos by
     /// this, and two repos in one group whose games are not interchangeable would be the group
-    /// heading telling a lie. Farming Simulator 22 and 25 share an adapter and are two games, which
-    /// is the whole reason this is not just <see cref="IGameAdapter.DisplayName"/>.
+    /// heading telling a lie. One adapter can serve several games - Farming Simulator's is built to
+    /// serve each game in the series - which is the whole reason this is not just
+    /// <see cref="IGameAdapter.DisplayName"/>.
     /// </remarks>
     string GameDisplayName => DisplayName;
 

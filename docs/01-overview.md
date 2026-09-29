@@ -48,8 +48,8 @@ the other's half until the client puts them together.
 A **game is the policy holder**: one active profile, at most one savegame held. It is keyed by
 which game it is, not by a repo, so a machine configures Farming Simulator 25 once and it appears
 under every FS25 repo you belong to. That key is the adapter plus whatever its base settings say
-about which game it was configured for, because one adapter can serve several — FS22 and FS25
-share one, and a scripted adapter could serve a dozen. See
+about which game it was configured for, because one adapter can serve several — Farming Simulator's
+is built to serve each game in the series, and a scripted adapter could serve a dozen. See
 [04 — Game adapters](04-game-adapters.md#game-identity).
 
 Its **targets** are how many folders it reaches. Farming Simulator has one and never mentions it;

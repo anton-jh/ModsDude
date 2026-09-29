@@ -875,8 +875,8 @@ The client does not reuse the server's entities. It has its own, in
   is configured once". A game reaching three folders is usually three installations — a dedicated
   server, an MP client and a singleplayer copy are separate downloads in separate places — and
   this system has never modelled installations at all. What there is one of is the policy: which
-  profile, which savegame. The identity is not the adapter id, since one adapter serves both
-  Farming Simulator 22 and 25, but a value the base adapter derives from its base settings; see
+  profile, which savegame. The identity is not the adapter id, since one adapter can serve
+  several games in a series, but a value the base adapter derives from its base settings; see
   [04 — Game adapters](04-game-adapters.md#game-identity).
 
   **Its folders are its *targets*, and a target is a value the adapter returns rather than an

@@ -7,8 +7,8 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
 /// <summary>
 /// What a Farming Simulator mod is tagged with, and every tag it can be: the shop categories, their
-/// shop sections (FS25 only) and brands of its store items, what kind of thing it adds, and whether
-/// it plays in multiplayer.
+/// shop sections and brands of its store items, what kind of thing it adds, and whether it plays in
+/// multiplayer.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,11 +18,9 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 /// exists only inside the mod that defines it, which a teammate without the file cannot read.
 /// </para>
 /// <para>
-/// <b>The category lists are the game's, not ours.</b> FS25's is the SDK's <c>storeCategories.xml</c>
-/// (<c>sdk/xmlDoku</c> in the install), in full. FS22 ships no such file, so its list is every
-/// category a base-game store item uses, plus <c>decoration</c>, which mods use and the base game
-/// does not. A category missing from either list is still reported - the list only feeds a search
-/// box, which also offers whatever the catalog holds.
+/// <b>The category list is the game's, not ours.</b> FS25's is the SDK's <c>storeCategories.xml</c>
+/// (<c>sdk/xmlDoku</c> in the install), in full. A category missing from it is still reported - the
+/// list only feeds a search box, which also offers whatever the catalog holds.
 /// </para>
 /// </remarks>
 internal static class FarmingSimulatorModAttributes
@@ -51,27 +49,6 @@ internal static class FarmingSimulatorModAttributes
         ["placeable"] = Placeable,
         ["handTool"] = HandTool
     };
-
-    private static readonly string[] _fs22Categories =
-    [
-        "animalpens", "animals", "animalsVehicles", "animalTransport", "augerWagons", "baleLoaders",
-        "balers", "bales", "baleWrappers", "beeHives", "beetHarvesting", "beetVehicles", "belts",
-        "bigbagPallets", "bigbags", "cars", "chainsaws", "cornHeaders", "cottonHarvesting",
-        "cottonVehicles", "cultivators", "cutters", "cutterTrailers", "decoration", "dieselTanks",
-        "discHarrows", "dollys", "farmhouses", "fences", "fertilizerSpreaders", "fillableTanks",
-        "floodLighting", "forageHarvesterCutters", "forageHarvesters", "forklifts", "frontLoaders",
-        "frontLoaderTools", "frontLoaderVehicles", "gardenSheds", "generators", "grapeTools",
-        "grapeVehicles", "grasslandCare", "harvesters", "leveler", "loaderWagons", "lowloaders",
-        "manureSpreaders", "misc", "miscVehicles", "mowers", "mowerVehicles", "mulchers",
-        "oliveVehicles", "pallets", "placeableMisc", "planters", "plows", "potatoHarvesting",
-        "potatoVehicles", "powerHarrows", "productionPoints", "rollers", "seeders", "sellingPoints",
-        "sheds", "silocompaction", "siloExtensions", "silos", "skidSteerTools", "skidSteerVehicles",
-        "slurryTanks", "slurryVehicles", "spaders", "sprayers", "sprayerVehicles", "stonePickers",
-        "storages", "subsoilers", "sugarCaneHarvesting", "sugarcaneVehicles", "tedders",
-        "teleLoaderTools", "teleLoaderVehicles", "tractorsL", "tractorsM", "tractorsS", "trailers",
-        "trees", "trucks", "waterTanks", "weeders", "weights", "wheelLoaderTools",
-        "wheelLoaderVehicles", "windrowers", "winterEquipment", "wood", "woodHarvesting"
-    ];
 
     private static readonly string[] _fs25Categories =
     [
@@ -107,7 +84,7 @@ internal static class FarmingSimulatorModAttributes
 
     /// <summary>
     /// The shop section each FS25 category sits in - the SDK's category <c>type</c>, lower-cased.
-    /// In shop order. FS22 has none: it ships no category file to read its sections from.
+    /// In shop order.
     /// </summary>
     private static readonly (string Group, string[] Categories)[] _fs25CategoryGroups =
     [
@@ -142,16 +119,14 @@ internal static class FarmingSimulatorModAttributes
         .SelectMany(x => x.Categories.Select(category => (Category: category, x.Group)))
         .ToDictionary(x => x.Category, x => x.Group, StringComparer.OrdinalIgnoreCase);
 
-    private static readonly IReadOnlyList<ModAttributeDefinition> _fs22 = Declare(_fs22Categories, groups: null);
     private static readonly IReadOnlyList<ModAttributeDefinition> _fs25 = Declare(_fs25Categories, _fs25Groups);
 
     /// <summary>
-    /// Every category either game knows, by any casing, to the casing the game spells it in. The game
+    /// Every category the game knows, by any casing, to the casing the game spells it in. The game
     /// matches categories case-insensitively and mod authors take advantage - <c>PlaceableMisc</c>,
     /// <c>lowLoaders</c> - so without this one category would be two tags.
     /// </summary>
-    private static readonly Dictionary<string, string> _canonicalCategories = _fs22Categories
-        .Concat(_fs25Categories)
+    private static readonly Dictionary<string, string> _canonicalCategories = _fs25Categories
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToDictionary(x => x, x => x, StringComparer.OrdinalIgnoreCase);
 
@@ -159,15 +134,14 @@ internal static class FarmingSimulatorModAttributes
     /// <summary>Every key the adapter reports for this game - and it reports nothing else.</summary>
     public static IReadOnlyList<ModAttributeDefinition> For(FarmingSimulatorGameVersion gameVersion) => gameVersion switch
     {
-        FarmingSimulatorGameVersion.Fs22 => _fs22,
-        _ => _fs25
+        FarmingSimulatorGameVersion.Fs25 => _fs25,
+        _ => throw new ArgumentOutOfRangeException(nameof(gameVersion), gameVersion, "No mod attributes are declared for this game.")
     };
 
-    /// <param name="groups">The game's category groups, or null for a game whose groups are not known.</param>
-    private static IReadOnlyList<ModAttributeDefinition> Declare(string[] categories, string[]? groups) =>
+    private static IReadOnlyList<ModAttributeDefinition> Declare(string[] categories, string[] groups) =>
     [
         new(CategoryKey, ["cat"], categories),
-        .. groups is null ? [] : new ModAttributeDefinition[] { new(CategoryGroupKey, ["catGroup"], groups) },
+        new(CategoryGroupKey, ["catGroup"], groups),
         new(BrandKey, [], []),
         new(KindKey, [], _kinds),
         new(MultiplayerKey, ["mp"], ["yes", "no"])
@@ -184,8 +158,8 @@ internal static class FarmingSimulatorModAttributes
     /// this archive's to read.
     /// </remarks>
     /// <param name="gameVersion">
-    /// Which game's tags these are. Only FS25 gets <c>categoryGroup</c>, so it is the one thing here
-    /// that depends on it.
+    /// Which game's tags these are. The category groups are FS25's, so <c>categoryGroup</c> is the one
+    /// thing here that depends on it.
     /// </param>
     public static IReadOnlyList<ModAttribute> Read(ZipArchive zip, XElement desc, FarmingSimulatorGameVersion gameVersion, CancellationToken cancellationToken)
     {

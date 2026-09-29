@@ -128,7 +128,7 @@ public partial class MainPageViewModel
         ApplyTags();
 
         // One heading per game, because the sidebar's repos are only interchangeable within one. An
-        // game belongs to a game, so a Farming Simulator 22 repo and a Farming Simulator 25 repo
+        // game belongs to a game, so two repos of one adapter configured for different games
         // offer disjoint game lists and nothing that works in one works in the other; running
         // them together in one alphabetical column made that invisible.
         ReposView = CollectionViewSource.GetDefaultView(Repos);

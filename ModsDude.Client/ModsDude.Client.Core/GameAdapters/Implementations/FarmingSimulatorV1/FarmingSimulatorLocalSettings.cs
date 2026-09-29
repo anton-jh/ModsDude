@@ -13,7 +13,7 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 /// <remarks>
 /// It used to carry the folder as a picker, back when it was also how a repo said which game in the
 /// series it was for. The base settings say that now, and a folder that could be pointed anywhere
-/// was only a way to point an FS25 repo at an FS22 installation.
+/// was only a way to point a repo at another game's installation.
 /// </remarks>
 public class FarmingSimulatorLocalSettings : DynamicForm<FarmingSimulatorLocalSettings>
 {

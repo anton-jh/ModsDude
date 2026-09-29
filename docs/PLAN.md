@@ -53,9 +53,9 @@ targeting that game. It also gains an explicit **active profile**, a `(RepoId, P
 pair, since sync makes a folder match a profile exactly and only one repo can own a folder at
 a time.
 
-**The scope is not the adapter id.** One adapter serves both Farming Simulator 22 and 25, and a
+**The scope is not the adapter id.** One adapter can serve several Farming Simulator games, and a
 generic scripted adapter would serve a dozen games under one id — so keying instances on
-`GameAdapterId` would offer an FS22 folder to an FS25 repo. `IBaseGameAdapter` produces an
+`GameAdapterId` would offer one game's folder to another game's repo. `IBaseGameAdapter` produces an
 `InstanceScope` instead: the adapter id, plus a discriminator its **base settings** decide, and
 a repo offers the instances whose scope equals its own. Farming Simulator's base settings gain a
 `GameVersion` to feed it. Full reasoning, and the two rules a discriminator has to obey, in
@@ -2518,7 +2518,7 @@ there. So the server reads ModHub and every client asks the server.
 - [x] **`POST modhub/{game}/lookup`**, by file name, with `currentAsOf` so a half-finished backfill is not
       read as "nothing newer".
 - [x] **Remote sources as an adapter capability.** `IRemoteModSourcesAdapter`, base stage; the FS adapter
-      offers ModHub for FS25 and nothing for FS22.
+      offers ModHub for FS25.
 - [x] **A chip in the editor, and a link on the row.** An offer is not a version — it has no bytes — so it
       never enters the version index and cannot be pinned; it is a chip on the mod's row that opens the
       ModHub page and switches Downloads on. Once the file is scanned the link is replaced by the real
@@ -2564,15 +2564,13 @@ See [04 — Mod attributes](04-game-adapters.md#mod-attributes) and
 [09 — Profile mod list editor](09-mod-catalog.md#profile-mod-list-editor).
 
 - [x] **The adapter declares its keys** - `category` (`cat`), `brand`, `kind`, `multiplayer`
-      (`mp`) - and reports nothing else. Categories are the game's own ids: FS25's SDK list, and
-      for FS22 every category a base-game store item uses.
+      (`mp`) - and reports nothing else. Categories are the game's own ids: FS25's SDK list.
 - [x] **Registration sends them**, and a registered version reads the repo's rather than its
       archive's, like its name.
 - [x] **`key:value`, `key:`, `-key:value`** in the search, parsed once per keystroke. Only a
       declared key is a filter.
 - [x] **Ctrl+Space** completes keys, then values - the game's list plus what the catalog holds.
-- [x] **`categoryGroup` (`catGroup`)**, FS25 only: the shop section each category sits in, from the
-      SDK file. FS22 has no file to take them from and declares none.
+- [x] **`categoryGroup` (`catGroup`)**: the shop section each category sits in, from the SDK file.
 
 Settled with it:
 

@@ -94,18 +94,6 @@ public class FarmingSimulatorModAttributesTests : IDisposable
         Assert.Equal(["drivables", "placeable"], Values(mod, "categoryGroup"));
     }
 
-    /// <summary>FS22 ships no category file, so there is nothing to read its sections from.</summary>
-    [Fact]
-    public async Task An_FS22_mod_has_no_category_group()
-    {
-        WriteMod("FS22_Tractor", storeItems: [("a.xml", Vehicle("tractorsM", "FENDT"))]);
-
-        var mod = Assert.Single(await new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs22).GetModsFromFolder(_folder, CancellationToken.None));
-
-        Assert.Empty(Values(mod, "categoryGroup"));
-        Assert.DoesNotContain(new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs22).Attributes, x => x.Key == "categoryGroup");
-    }
-
     /// <summary>The groups are a second copy of the SDK file; this is what keeps the two lists one.</summary>
     [Fact]
     public void Every_FS25_category_is_in_exactly_one_group()
@@ -212,7 +200,6 @@ public class FarmingSimulatorModAttributesTests : IDisposable
     }
 
     [Theory]
-    [InlineData(FarmingSimulatorGameVersion.Fs22)]
     [InlineData(FarmingSimulatorGameVersion.Fs25)]
     public async Task Every_key_reported_is_one_the_adapter_declared(FarmingSimulatorGameVersion gameVersion)
     {
@@ -242,17 +229,6 @@ public class FarmingSimulatorModAttributesTests : IDisposable
         Assert.True(attributes.Single(x => x.Key == "category").IsNamed("cat"));
         Assert.True(attributes.Single(x => x.Key == "multiplayer").IsNamed("MP"));
         Assert.True(attributes.Single(x => x.Key == "categoryGroup").IsNamed("catGroup"));
-    }
-
-    [Fact]
-    public void Each_game_declares_its_own_categories()
-    {
-        static IReadOnlyList<string> Categories(FarmingSimulatorGameVersion version)
-            => new FarmingSimulatorBaseModAdapter(version).Attributes.Single(x => x.Key == "category").Values;
-
-        Assert.Contains("woodHarvesting", Categories(FarmingSimulatorGameVersion.Fs22));
-        Assert.DoesNotContain("woodHarvesting", Categories(FarmingSimulatorGameVersion.Fs25));
-        Assert.Contains("forestryHarvesters", Categories(FarmingSimulatorGameVersion.Fs25));
     }
 
 

@@ -5,8 +5,8 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 public class FarmingSimulatorBaseSettings : DynamicForm<FarmingSimulatorBaseSettings>
 {
     // Deliberately not [CanBeModified]: the game identity is derived from this, so an admin
-    // editing it would silently orphan every game on every member's machine. An FS22 repo
-    // cannot become an FS25 repo.
+    // editing it would silently orphan every game on every member's machine. A repo for one
+    // game in the series cannot become a repo for another.
     [Required, Title("Game version")]
     public FarmingSimulatorGameVersion? GameVersion { get; set; }
 
@@ -24,11 +24,12 @@ public class FarmingSimulatorBaseSettings : DynamicForm<FarmingSimulatorBaseSett
 /// The games this adapter serves. The member name is what the game identity keys on; the value is
 /// the year the game names its data folder after.
 /// </summary>
+/// <remarks>
+/// Only FS25 for now, but kept a choice so a later game in the series is a new member here rather
+/// than a new adapter.
+/// </remarks>
 public enum FarmingSimulatorGameVersion
 {
-    [Title("Farming Simulator 22")]
-    Fs22 = 2022,
-
     [Title("Farming Simulator 25")]
     Fs25 = 2025
 }
