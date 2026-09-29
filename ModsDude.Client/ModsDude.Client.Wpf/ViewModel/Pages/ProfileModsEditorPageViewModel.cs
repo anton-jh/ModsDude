@@ -292,11 +292,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         var pickable = IsReadOnly is false;
 
         Sync(AvailableRows, _availableRows, _state.Available, _state.AvailableShown, x => x.ModId,
-            x => new AvailableModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked),
+            x => Watched(new AvailableModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked), AvailableSelection),
             (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
 
         Sync(PinnedRows, _pinnedRows, _state.Pinned, _state.PinnedShown, x => x.ModId,
-            x => new PinnedModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked, OnLockToggled),
+            x => Watched(new PinnedModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked, OnLockToggled), PinnedSelection),
             (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
 
         StampMarks();
@@ -439,6 +439,24 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         shown.Reconcile([.. shownStates.Select(x => rows[key(x)])]);
+    }
+
+    /// <summary>
+    /// Recounts a list's selection whenever one of its rows is picked or put down - by its own checkbox
+    /// as well as by the list's gestures, which recount by themselves.
+    /// </summary>
+    private static TRow Watched<TRow>(TRow row, ModListSelection selection)
+        where TRow : EditorModRowViewModel
+    {
+        row.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ISelectableRow.IsSelected))
+            {
+                selection.Recount();
+            }
+        };
+
+        return row;
     }
 
     private void NotifyCommands()
