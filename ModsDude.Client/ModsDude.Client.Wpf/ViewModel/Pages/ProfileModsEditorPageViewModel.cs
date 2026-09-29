@@ -676,8 +676,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             || IsReadOnly
             || (pinned.IsLocked && await ConfirmLockedVersionChangeAsync(pinned, option.Version.VersionId) is false))
         {
-            row.RestoreSelector();
-
             return;
         }
 

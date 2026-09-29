@@ -16,8 +16,66 @@
 
     <Page.Resources>
 
-        <DataTemplate x:Key="VersionOptionTemplate" DataType="{x:Type ed:ProfileModVersionOption}">
-            <TextBlock Text="{Binding Label}" ToolTip="{Binding Note}" />
+        <!-- A row's version: the box says what the row holds, one way only, and the list under it picks
+             by command. It never holds a selection of its own, so it cannot show anything but the row. -->
+        <DataTemplate x:Key="VersionPicker" DataType="{x:Type vm:EditorModRowViewModel}">
+            <Grid Width="150" Margin="4 0" VerticalAlignment="Center">
+                <ToggleButton x:Name="Box"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch"
+                              IsEnabled="{Binding HasSeveralVersions}"
+                              IsChecked="{Binding IsVersionMenuOpen, Mode=TwoWay}">
+                    <!-- Greyed where there is nothing else to pick, as a disabled combo box would be: the
+                         theme greys the button, not what is drawn inside it. -->
+                    <Grid ColumnDefinitions="* auto">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEnabled, ElementName=Box}" Value="False">
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <TextBlock Text="{Binding CurrentVersion.Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Margin="8 0 0 0"
+                                   VerticalAlignment="Center"
+                                   FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                   FontSize="10"
+                                   Text="&#xE70D;" />
+                    </Grid>
+                </ToggleButton>
+
+                <Popup IsOpen="{Binding IsVersionMenuOpen, Mode=TwoWay}"
+                       PlacementTarget="{Binding ElementName=Box}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True"
+                       MinWidth="150">
+                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            Padding="4">
+                        <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="Options" ItemsSource="{Binding Versions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type ed:ProfileModVersionOption}">
+                                        <Button HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Content="{Binding Label}"
+                                                ToolTip="{Binding Note}"
+                                                Command="{Binding DataContext.PickVersionCommand, ElementName=Options}"
+                                                CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+            </Grid>
         </DataTemplate>
 
         <!-- Grey hint text over an empty box. Tag is the TextBox it hints for. -->
@@ -512,14 +570,7 @@
                                                         </Button.Style>
                                                     </Button>
 
-                                                    <ComboBox Width="150"
-                                                              Margin="4 0"
-                                                              VerticalAlignment="Center"
-                                                              ItemsSource="{Binding Versions}"
-                                                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
-                                                              ItemTemplate="{StaticResource VersionOptionTemplate}"
-                                                              IsEnabled="{Binding HasSeveralVersions}"
-                                                              ToolTip="Which version this would add" />
+                                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this would add" />
 
                                                     <Button Style="{DynamicResource SubtleIconButton}"
                                                             Margin="0 0 8 0"
@@ -842,14 +893,7 @@
                                                             Command="{Binding DataContext.UpdateOneCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
 
-                                                    <ComboBox Width="150"
-                                                              Margin="4 0"
-                                                              VerticalAlignment="Center"
-                                                              ItemsSource="{Binding Versions}"
-                                                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
-                                                              ItemTemplate="{StaticResource VersionOptionTemplate}"
-                                                              IsEnabled="{Binding HasSeveralVersions}"
-                                                              ToolTip="Which version this profile pins" />
+                                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this profile pins" />
 
                                                     <!-- Open while nothing holds the pin, closed while something does, in the
                                                          accent while the adapter does - which unticking cannot release. -->

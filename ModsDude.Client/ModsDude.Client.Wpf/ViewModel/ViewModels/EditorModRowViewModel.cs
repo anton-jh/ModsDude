@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
@@ -62,17 +63,15 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
 
     public bool HasSeveralVersions => _versions.Count > 1;
 
-    public ProfileModVersionOption? SelectedVersion
-    {
-        get => _versions.FirstOrDefault(x => x.Version.VersionId == _version.VersionId);
-        set
-        {
-            if (value is not null && value.Version.VersionId != _version.VersionId)
-            {
-                _versionPicked(this, value);
-            }
-        }
-    }
+    /// <summary>
+    /// What the version picker's box says. Read one way only: the picker reports a choice as a command
+    /// and never holds a selection of its own, so what it shows cannot drift from what the row holds.
+    /// </summary>
+    public ProfileModVersionOption CurrentVersion
+        => _versions.FirstOrDefault(x => x.Version.VersionId == _version.VersionId) ?? new ProfileModVersionOption(_version);
+
+    [ObservableProperty]
+    private bool _isVersionMenuOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSortCaption))]
@@ -84,15 +83,15 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
     public bool HasSortCaption => SortCaption is not null;
 
 
-    /// <summary>
-    /// Puts the selector back on the version the row holds, after the binding has finished writing
-    /// the one that was picked and turned down.
-    /// </summary>
-    public void RestoreSelector()
+    [RelayCommand]
+    private void PickVersion(ProfileModVersionOption? option)
     {
-        Application.Current?.Dispatcher.BeginInvoke(
-            () => OnPropertyChanged(nameof(SelectedVersion)),
-            DispatcherPriority.DataBind);
+        IsVersionMenuOpen = false;
+
+        if (option is not null && option.Version.VersionId != _version.VersionId)
+        {
+            _versionPicked(this, option);
+        }
     }
 
 
@@ -112,8 +111,6 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
             Item = CreateItem(version, previous.IsSelected);
         }
 
-        var versionChanged = version.VersionId != _version.VersionId;
-
         _version = version;
 
         if (_versions.SequenceEqual(versions) is false)
@@ -122,12 +119,9 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
 
             OnPropertyChanged(nameof(Versions));
             OnPropertyChanged(nameof(HasSeveralVersions));
-            OnPropertyChanged(nameof(SelectedVersion));
         }
-        else if (versionChanged)
-        {
-            OnPropertyChanged(nameof(SelectedVersion));
-        }
+
+        OnPropertyChanged(nameof(CurrentVersion));
 
         if (Item.RemoteUpdate?.Version != remoteUpdate?.Version || Item.RemoteUpdate?.Text != remoteUpdate?.Text)
         {
