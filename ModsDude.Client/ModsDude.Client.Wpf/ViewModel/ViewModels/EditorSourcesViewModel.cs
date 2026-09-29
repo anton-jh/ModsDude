@@ -44,8 +44,7 @@ public sealed partial class EditorSourcesViewModel(
     [ObservableProperty]
     private bool _hasEnabledSources = true;
 
-    /// <summary>Whether any folder is being read, which is whether "no updates" has looked anywhere but the repo.</summary>
-    public bool HasEnabledFolders => catalog.GetSources().Any(x => IsEnabled(x.Id));
+    private bool HasEnabledFolders => catalog.GetSources().Any(x => IsEnabled(x.Id));
 
     public IReadOnlyList<ProfileModSource> EnabledProfiles => [.. _profiles.Values.Where(x => IsEnabled(x.Source.Id))];
 

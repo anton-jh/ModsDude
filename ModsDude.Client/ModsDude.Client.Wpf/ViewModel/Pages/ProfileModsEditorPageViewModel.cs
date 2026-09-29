@@ -327,7 +327,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         Draft,
         _state,
         ShowIgnored,
-        _catalogView.Snapshot.Sources.Any(x => x.IsEnabled),
         RemoteUpdates.Name,
         ApplyTarget is not null);
 

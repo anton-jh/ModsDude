@@ -10,7 +10,6 @@ public sealed class ProfileModsEditorSummary
         ProfileDraft draft,
         ProfileEditorState state,
         bool showIgnored,
-        bool hasEnabledFolders,
         string remoteName,
         bool hasApplyTarget)
     {
@@ -48,8 +47,7 @@ public sealed class ProfileModsEditorSummary
         UpdateCountText = updates.Count switch
         {
             0 when state.RemoteUpdateCount + state.RemoteLockedUpdateCount > 0 => "No updates here",
-            0 when hasEnabledFolders => "No updates available",
-            0 => "No updates in this repo. No folders are being read.",
+            0 => "No updates",
             _ when updates.PendingCount > 0
                 => $"{Plural(updates.Count, "update")} available · {updates.PendingCount} will be imported when you save",
             _ => $"{Plural(updates.Count, "update")} available"
