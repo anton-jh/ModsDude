@@ -3441,7 +3441,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         Sources.Add(new ModSourceViewModel(
             new ModSourceStatus(
-                new ModSource(ModSourceId.Repo, _repo.Name, "Everything this repo has registered", ModSourceKind.Repo),
+                new ModSource(ModSourceId.Repo, "This repo", "Everything this repo has registered", ModSourceKind.Repo),
                 _includeRegistered,
                 snapshot.Versions.Count(x => x.IsOnServer),
                 null),
