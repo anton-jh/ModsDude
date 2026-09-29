@@ -833,6 +833,23 @@ half the question, and the half it could not answer was "is this already in the 
 `ProfileModRowViewModel.Matches` delegates to its `Item`, so both sides answer the same question
 the same way and the answer follows the version selector. 
 
+**Attribute filters, and Ctrl+Space.** Beside plain words the box takes `key:value` filters over
+the versions' [attributes](04-game-adapters.md#mod-attributes) - `category:tractors`, `kind:script`,
+`brand:"new holland"` - with `key:` alone for "has any", a leading `-` to invert either, and
+whatever aliases the adapter declares (`cat:`, `mp:`). A value matches by substring, ignoring
+case; words stay fuzzy. Only a **declared** key makes a filter, so `FS25:` is still a word and a
+mod named that way is still found. The text is parsed once per keystroke into a `ModSearchQuery`
+rather than once per row. The same box on the repo mods page takes the same syntax, because both go
+through `ModListItemViewModel.Matches`.
+
+Ctrl+Space opens a completion list under the word being typed - the keys, or once it has its colon
+that key's values - which narrows as typing goes on and never takes focus from the box. A key's
+values are the adapter's list (the game's shop categories) together with every value the catalog
+actually holds, which is what gives a brand, or a category some mod invented, anywhere to come from.
+Choosing a key goes straight on to its values. The logic is `ModSearchCompleter` in Core; the
+`SearchCompletion` behaviour only draws it, and the page's own Escape and Down handling stands aside
+while it is open.
+
 Each header then reads **"N of M mods"** while a search is narrowing it — a count that only ever
 said "412 mods" could not distinguish a search that found nothing from an empty list. The right
 list gains a second empty-state message for the same reason: with the search reaching it, "nothing

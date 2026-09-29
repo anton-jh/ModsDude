@@ -52,6 +52,7 @@
                      second hand-rolled one sat exactly on top of it. -->
                 <TextBox x:Name="SearchBox"
                          Grid.Column="0"
+                         b:SearchCompletion.Completer="{Binding SearchCompleter}"
                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
                          VerticalAlignment="Center" />
 
@@ -59,7 +60,7 @@
                      text through, so anything driven off SearchText stays a beat behind what has
                      actually been typed. -->
                 <TextBlock Grid.Column="0"
-                           Text="Search by name, id or author"
+                           Text="Search by name, id or author - Ctrl+Space for filters"
                            Margin="12 0 0 0"
                            VerticalAlignment="Center"
                            IsHitTestVisible="False"

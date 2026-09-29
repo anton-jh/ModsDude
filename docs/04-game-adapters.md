@@ -173,6 +173,26 @@ from each file rather than inheriting it, which comes out consistent because eve
 map mod declares maps. It never sets `ModDependency.Locked`; profile-level locking is a human
 decision. See [02 — Domain model](02-domain-model.md#locking-in-two-places).
 
+### Mod attributes
+
+```csharp
+IReadOnlyList<ModAttributeDefinition> Attributes { get; }   // on IBaseModAdapter, default []
+```
+
+Every key the adapter can put in `LocalMod.Attributes` - the tags a search box filters on - with
+the short aliases a search accepts for it and, where the game defines one, the list of values.
+Registration sends a version's attributes and the repo keeps them, so a version only the repo holds
+is searchable the same way. On the base adapter because that is all a reader with no game connected
+has.
+
+**An adapter reports nothing it has not declared.** Nothing downstream checks: a key missing from
+the declaration cannot be completed, and a search for it reads as a plain word. Values are looser -
+the declared list feeds the completion list and nothing else, so a mod carrying a value the list
+lacks still reports it. Aliases are never stored; the attribute always carries the full key.
+
+**Nothing may depend on one**, as [02](02-domain-model.md) says of `ModAttribute` - they exist to be
+searched.
+
 ## Version ordering
 
 Deciding whether one mod version is newer than another is game knowledge, so it belongs here.
@@ -494,6 +514,7 @@ archive in the folder and extracts:
 | `modDesc/description/en` (or first child) | `Description`, normalised |
 | `modDesc/author` | `Author` |
 | Whether `modDesc` declares maps | `Locked` — the mod is version-sensitive |
+| `modDesc`, and each store item it lists | `Attributes` — see [below](#what-a-mod-is-tagged-with) |
 
 **Three outcomes, and only one is a fault.** A mod is a `.zip`, so anything else in the folder is
 not a mod that failed to read — it is not a candidate, and is ignored without being opened. A mod
@@ -534,6 +555,28 @@ Several details in this code are load-bearing and worth preserving if you touch 
   source scan, and `leaveOpen: false` only starts applying once the archive exists, so a throwing
   constructor leaked a handle per non-zip — which in a Downloads folder is most of the files.
   Both surfaced the first time a real Downloads folder was scanned.
+
+### What a mod is tagged with
+
+| Key (alias) | Values | From |
+| --- | --- | --- |
+| `category` (`cat`) | The shop category ids, e.g. `tractorsM`; several per mod | Each store item's `storeData/category`, split on whitespace |
+| `brand` | The brand id, lower-cased; `none` is dropped | Each store item's `storeData/brand` |
+| `kind` | `vehicle`, `placeable`, `handtool`, `script`, `map`; several per mod | The store items' root elements, `extraSourceFiles`, `maps` |
+| `multiplayer` (`mp`) | `yes`, `no` | `modDesc/multiplayer@supported` |
+
+**Raw ids, no labels.** The game's category titles live in its encrypted archives, and a
+mod-defined brand's title exists only inside the mod that defines it - which a teammate without
+the file cannot read. **The category lists are the game's**: FS25's is the SDK's
+`sdk/xmlDoku/storeCategories.xml`, whole. FS22 ships no such file, so its list is every category a
+base-game store item uses, plus `decoration`, which mods use and the base game does not. Against
+FS25, where the real list exists to check it by, the same method found 141 of its 147. A category
+in neither list is reported anyway. One the game knows in another casing - `PlaceableMisc`,
+`lowLoaders`, both seen in real mods - is spelled the game's way, because the game matches them
+case-insensitively and one category should be one tag.
+
+A store item pointing into the base game (`$data/...`) is not in the archive and is skipped; one
+that is missing or will not parse costs its own tags and nothing else, as it does in the game.
 
 ## Adding a new game
 

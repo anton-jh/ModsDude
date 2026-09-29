@@ -48,10 +48,16 @@ public partial class ProfileModsEditorPage : Page
     /// <summary>
     /// Down out of the search box steps into the list it has just narrowed, which is where the
     /// arrow keys, space and Enter take over. Escape empties the box first and only gives up focus
-    /// on a box that is already empty.
+    /// on a box that is already empty. Neither while the completion list is open, whose keys those
+    /// are - see <see cref="Behaviors.SearchCompletion"/>.
     /// </summary>
     private void SearchBoxKeyDown(object sender, KeyEventArgs e)
     {
+        if (Behaviors.SearchCompletion.IsOpen(SearchBox))
+        {
+            return;
+        }
+
         if (e.Key is Key.Down)
         {
             AvailableList.Focus();

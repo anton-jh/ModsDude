@@ -48,6 +48,7 @@ public record CatalogModVersion(
             Locked: dto.Locked)
         {
             ServerImages = [.. dto.Images.Select(ModImageReference.FromDto)],
+            Attributes = ReadAttributes(dto),
             ContentHash = dto.ContentHash,
             SizeBytes = dto.SizeBytes,
             SequenceNumber = dto.SequenceNumber,
@@ -57,9 +58,21 @@ public record CatalogModVersion(
     }
 
 
+    /// <summary>What the registering client's adapter tagged a registered version with.</summary>
+    public static IReadOnlyList<ModAttribute> ReadAttributes(ModDto dto)
+        => [.. dto.Attributes.Select(x => new ModAttribute(x.Key, x.Value))];
+
+
     public ModVersionIdentity Identity => new(ModId, VersionId);
 
     public string? Author { get; init; }
+
+    /// <summary>
+    /// What the adapter tagged this version with, for searching by. The repo's record where the
+    /// version is registered, and the archive's where it is not - the same rule as the name, so two
+    /// members searching one registered version find it by the same tags.
+    /// </summary>
+    public IReadOnlyList<ModAttribute> Attributes { get; init; } = [];
 
     /// <summary>
     /// The archive's own icon, for a version that has a file here. Not what a registered version

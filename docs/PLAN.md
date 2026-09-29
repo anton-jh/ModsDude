@@ -2556,6 +2556,29 @@ Settled with it:
 - **Archived repos, profiles and savegames are pruned too.** Archiving is putting something away, not
   asking for it to be kept.
 
+## Phase 18 — Searching by attribute
+
+`ModAttribute` had been stored and sent since the first migration and never filled in. The
+Farming Simulator adapter now tags each version, and both mod list search boxes filter on the tags.
+See [04 — Mod attributes](04-game-adapters.md#mod-attributes) and
+[09 — Profile mod list editor](09-mod-catalog.md#profile-mod-list-editor).
+
+- [x] **The adapter declares its keys** - `category` (`cat`), `brand`, `kind`, `multiplayer`
+      (`mp`) - and reports nothing else. Categories are the game's own ids: FS25's SDK list, and
+      for FS22 every category a base-game store item uses.
+- [x] **Registration sends them**, and a registered version reads the repo's rather than its
+      archive's, like its name.
+- [x] **`key:value`, `key:`, `-key:value`** in the search, parsed once per keystroke. Only a
+      declared key is a filter.
+- [x] **Ctrl+Space** completes keys, then values - the game's list plus what the catalog holds.
+
+Settled with it:
+
+- **Raw ids, no labels.** The game's titles are in encrypted archives, and a mod-defined brand's
+  title only in the mod that defines it.
+- **No sorting by attribute yet.**
+- **Versions registered before this carry none.** Alpha; nothing backfills them.
+
 ## Deliberately not planned
 
 - **Dependency resolution between mods.** A profile is a pinned list, not a constraint

@@ -48,4 +48,10 @@ public record LocalMod(ModKey Id, ModVersionKey Version, string Name, string Des
     /// See docs/09-mod-catalog.md#the-adapter-sets-it-once-at-registration.
     /// </summary>
     public bool Locked { get; init; }
+
+    /// <summary>
+    /// What the adapter tagged this archive with, for searching by. Only keys the adapter declared -
+    /// see <see cref="GameAdapters.IBaseModAdapter.Attributes"/>.
+    /// </summary>
+    public IReadOnlyList<ModAttribute> Attributes { get; init; } = [];
 }

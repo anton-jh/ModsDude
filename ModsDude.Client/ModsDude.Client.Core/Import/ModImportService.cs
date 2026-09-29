@@ -685,7 +685,7 @@ public sealed class ModImportService(
                             After = placement.After?.Value,
                             Before = placement.Before?.Value
                         },
-                        Attributes = []
+                        Attributes = [.. version.Attributes.Select(x => new ModAttributeDto() { Key = x.Key, Value = x.Value })]
                     },
                     cancellationToken);
             }

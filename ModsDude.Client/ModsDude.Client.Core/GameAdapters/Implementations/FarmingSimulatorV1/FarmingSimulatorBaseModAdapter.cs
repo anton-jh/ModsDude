@@ -47,6 +47,9 @@ public class FarmingSimulatorBaseModAdapter(
     /// </remarks>
     public bool SupportsHardlinks => true;
 
+    /// <inheritdoc/>
+    public IReadOnlyList<ModAttributeDefinition> Attributes => FarmingSimulatorModAttributes.For(gameVersion);
+
 
     /// <summary>
     /// What a Farming Simulator mod is packaged as. Anything else in the folder is not a mod that
@@ -165,7 +168,8 @@ public class FarmingSimulatorBaseModAdapter(
                 Author = desc.Element("author")?.Value.Trim(),
                 Locked = DeclaresMaps(desc),
                 Icon = GetIcon(zip, path, desc),
-                Images = GetImages(zip, path, desc)
+                Images = GetImages(zip, path, desc),
+                Attributes = FarmingSimulatorModAttributes.Read(zip, desc, cancellationToken)
             };
 
         return maybeLocalMod.HasValue ? maybeLocalMod.Value : null;

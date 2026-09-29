@@ -345,8 +345,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // The page owns the catalog and disposes it, so the per-source scan cache lives exactly as
         // long as the checkboxes that recompose from it.
         _catalog = catalogFactory.Create(repo);
+        SearchCompleter = new ModSearchCompleter(_catalog.Attributes);
 
-        _remoteSources = [.. (repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [])
+        _remoteSources =[.. (repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [])
             .Select(x => new RemoteModSourceState(x))];
 
         // An apply changes what is in a mod folder, which is what a scan of it was a picture of. Held from
@@ -453,6 +454,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    /// <summary><see cref="SearchText"/>, read once per keystroke rather than once per row of each list.</summary>
+    private ModSearchQuery _searchQuery = ModSearchQuery.Empty;
+
+    /// <summary>What the search box offers on Ctrl+Space. Its values follow every catalog rebuild.</summary>
+    public ModSearchCompleter SearchCompleter { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AvailableCountText))]
@@ -3499,6 +3506,12 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 .Concat(Pinned.Select(x => x.SelectedVersion.Version)),
             _repo.Adapter.VersionComparer);
 
+        // Everything either list could show, so a value is offered whether or not a filter chip or a
+        // source toggle is hiding the mod carrying it right now.
+        SearchCompleter.SetCatalogValues(snapshot.Known
+            .Concat(Pinned.Select(x => x.SelectedVersion.Version))
+            .SelectMany(x => x.Attributes));
+
         // Here rather than beside it, because an offer is only an offer against what is known: a file
         // that has just been downloaded and scanned has to take its link away in the same pass.
         ComputeRemoteOffers();
@@ -3848,7 +3861,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// many rows that toggle is holding back.
     /// </summary>
     private bool PassesExceptIgnore(ProfileModRowViewModel row)
-        => row.Matches(SearchText)
+        => row.Matches(_searchQuery)
         && IsPinnedAt(row.SelectedVersion.Version) is false
         && _downgraded.Contains(row.ModId) is false
         && (ShowRemovals || IsPendingRemoval(row) is false);
@@ -3913,7 +3926,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     /// <summary>Everything the right list is showing: the same search, and its own chip.</summary>
     private bool PassesPinned(ProfileModRowViewModel row)
-        => row.Matches(SearchText)
+        => row.Matches(_searchQuery)
         && PinnedFilter switch
         {
             PinnedModFilter.Updates => row.HasUpdate || row.RemoteOffer is not null,
@@ -4253,6 +4266,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     partial void OnSearchTextChanged(string value)
     {
+        _searchQuery = ModSearchQuery.Parse(value, _catalog.Attributes);
+
         RefreshViews();
     }
 

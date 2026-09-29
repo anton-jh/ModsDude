@@ -508,17 +508,19 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
 
     /// <summary>
-    /// Whether this row is one of the ones somebody typing <paramref name="searchTerm"/> meant.
+    /// Whether this row is one of the ones somebody typing <paramref name="query"/> meant.
     /// </summary>
     /// <remarks>
     /// <b>The one search in the app.</b> Every filter on every mod list - both lists on the catalog
     /// page and both on the profile editor - runs through here, which is why adopting
-    /// <see cref="FuzzySearch"/> was one edit rather than four. The three fields are passed
-    /// separately rather than joined, because a term matching across the seam between a name and an
-    /// author is a hit nobody can see the reason for.
+    /// <see cref="FuzzySearch"/> was one edit rather than four, and attribute filters another. The
+    /// three fields are passed separately rather than joined, because a term matching across the
+    /// seam between a name and an author is a hit nobody can see the reason for. The query arrives
+    /// parsed, because a page re-reading the search box for each of two thousand rows is the page
+    /// doing the same work two thousand times.
     /// </remarks>
-    public bool Matches(string? searchTerm)
-        => FuzzySearch.Matches(searchTerm, Name, Id, Author);
+    public bool Matches(ModSearchQuery query)
+        => query.Matches(Mod.Attributes, Name, Id, Author);
 
     /// <summary>
     /// Whether two records of one version would draw the same row.

@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Profiles;
@@ -106,7 +107,7 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     /// that the answer follows the version selector, since <see cref="Item"/> is replaced when the
     /// selection changes.
     /// </summary>
-    public bool Matches(string? searchTerm) => Item.Matches(searchTerm);
+    public bool Matches(ModSearchQuery query) => Item.Matches(query);
 
     /// <summary>
     /// Whether the editor has this row picked. Kept on <see cref="Item"/> rather than here, because

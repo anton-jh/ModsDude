@@ -117,6 +117,18 @@ public interface IBaseModAdapter
     /// </remarks>
     bool SupportsHardlinks => false;
 
+    /// <summary>
+    /// Every attribute key this adapter can put on a <see cref="LocalMod"/>, for a search box to
+    /// offer. On the base adapter rather than the local one, because a version only the repo holds
+    /// carries attributes too and a reader with no game connected still searches them.
+    /// </summary>
+    /// <remarks>
+    /// <b>The adapter reports nothing it has not declared here.</b> Nothing downstream checks, so
+    /// keeping the two in step is the adapter's job. Empty, the default, is a game with no
+    /// attributes at all, which every search still handles.
+    /// </remarks>
+    IReadOnlyList<ModAttributeDefinition> Attributes => [];
+
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
     ILocalModAdapter WithLocalSettings(string serializedLocalSettings);
     ILocalModAdapter WithLocalSettings(DynamicForm localSettings);

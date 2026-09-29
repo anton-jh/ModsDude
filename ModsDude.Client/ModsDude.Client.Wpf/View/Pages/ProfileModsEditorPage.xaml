@@ -184,13 +184,14 @@
                          see SearchBoxKeyDown. -->
                     <TextBox x:Name="SearchBox"
                              PreviewKeyDown="SearchBoxKeyDown"
+                             b:SearchCompletion.Completer="{Binding SearchCompleter}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
                              VerticalAlignment="Center" />
 
                     <!-- Watches the box rather than the view model: the binding above delays pushing
                          the text through, so anything driven off SearchText stays a beat behind what
                          has actually been typed. -->
-                    <TextBlock Text="Search by name, id or author"
+                    <TextBlock Text="Search by name, id or author - Ctrl+Space for filters"
                                Margin="12 0 0 0"
                                VerticalAlignment="Center"
                                IsHitTestVisible="False"

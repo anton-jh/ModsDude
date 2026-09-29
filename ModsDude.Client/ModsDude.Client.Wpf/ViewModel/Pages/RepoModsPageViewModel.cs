@@ -65,6 +65,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         // The page owns the catalog and disposes it. No source is ever switched on, so it reads the
         // repo and touches no disk.
         _catalog = catalogFactory.Create(repo);
+        SearchCompleter = new ModSearchCompleter(_catalog.Attributes);
 
         // A guest can read the catalog - every GET here is theirs - but everything that writes to the
         // repo needs Member. The commands refuse, and the note is what the refused buttons say.
@@ -119,6 +120,12 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    /// <summary><see cref="SearchText"/>, read once per keystroke rather than once per row.</summary>
+    private ModSearchQuery _searchQuery = ModSearchQuery.Empty;
+
+    /// <summary>What the search box offers on Ctrl+Space. Its values follow every reload.</summary>
+    public ModSearchCompleter SearchCompleter { get; }
 
     /// <summary>
     /// Narrows the list to what a delete would be accepted for: registered here, and pinned by none
@@ -575,6 +582,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     private void Publish(ModCatalogSnapshot snapshot)
     {
+        SearchCompleter.SetCatalogValues(snapshot.Versions.SelectMany(x => x.Attributes));
+
         _registered = [.. snapshot.Versions
             .Where(x => x.IsOnServer)
             .OrderBy(x => x.Name, NaturalOrder.Comparer)
@@ -650,7 +659,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     private bool Passes(ModListItemViewModel row)
-        => row.Matches(SearchText) && (UnusedOnly is false || row.Mod.IsUnused);
+        => row.Matches(_searchQuery) && (UnusedOnly is false || row.Mod.IsUnused);
 
     private static string Describe(int visible, int total)
     {
@@ -660,7 +669,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     partial void OnSearchTextChanged(string value)
-        => RefreshList();
+    {
+        _searchQuery = ModSearchQuery.Parse(value, _catalog.Attributes);
+
+        RefreshList();
+    }
 
     partial void OnUnusedOnlyChanged(bool value)
         => RefreshList();

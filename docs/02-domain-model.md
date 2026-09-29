@@ -219,7 +219,10 @@ therefore two different sets of rows.
 | `Created`, `Updated` | `Updated` is what the mod list's delta form is keyed on |
 
 `Attributes` is for **tags and categories** — free-form labels an adapter attaches for
-searching and filtering. Nothing populates it beyond what the registering client sends.
+searching and filtering. Nothing populates it beyond what the registering client sends, which is
+whatever its adapter read out of the file: for Farming Simulator the shop categories, brands, kind
+and multiplayer support. The mod list's search box filters on them (`category:silos`); see
+[04 — Game adapters](04-game-adapters.md#mod-attributes).
 
 **The system must never depend on an attribute.** Attributes are opaque, optional, and written
 by whichever client registered the version; anything the system needs in order to behave

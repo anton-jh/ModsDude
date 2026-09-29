@@ -94,6 +94,10 @@ public sealed class ModCatalog : IDisposable
     }
 
 
+    /// <summary>Every attribute key this repo's game can tag a mod with. See <see cref="IBaseModAdapter.Attributes"/>.</summary>
+    public IReadOnlyList<ModAttributeDefinition> Attributes => _modAdapter.Attributes;
+
+
     /// <summary>
     /// Every source currently available, standing ones first. Rebuilt on each call, because the
     /// game list and the settings behind it are live.
@@ -646,6 +650,7 @@ public sealed class ModCatalog : IDisposable
             Locked: dto?.Locked ?? local?.Locked ?? false)
         {
             Author = local?.Author,
+            Attributes = dto is null ? local?.Attributes ?? [] : CatalogModVersion.ReadAttributes(dto),
             Icon = local?.Icon,
             Images = local?.Images ?? [],
             ServerImages = dto is null ? [] : [.. dto.Images.Select(ModImageReference.FromDto)],
