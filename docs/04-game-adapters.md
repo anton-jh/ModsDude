@@ -102,7 +102,7 @@ a dedicated server, the MP client that has to match it, and a singleplayer insta
 adapter answers with a list.
 
 ```csharp
-public sealed record ModTarget(TargetKey Key, string? DisplayName, string Path);
+public sealed record ModTarget(TargetKey Key, string DisplayName, string Path);
 public sealed record SavegameTarget(TargetKey Key, string? DisplayName, string Path);
 ```
 
@@ -123,9 +123,12 @@ are asked. Emptying a field takes that half away; filling it in puts it back. A 
 folder the adapter **omits** rather than one carrying a null path, and a game reaching no folder at
 all is an ordinary answer rather than an error.
 
-`DisplayName` is null for a game with one target, which never mentions it: Farming Simulator has
-a mod folder, not a mod folder called something. A game with several names them, because with
-three of them the interesting half of any notice is which one it is about.
+A mod target's `DisplayName` is **required**, because it is the whole label of that folder's source
+in the mod list editor — no game name in front of it. Farming Simulator calls its one folder "Mod
+folder"; `ModTargets` refuses a blank one. Notices and other wordings that only name a folder to
+say *which* of several it means still leave it out for a game with one, and name it for a game with
+three, where the interesting half of any notice is which one it is about. A savegame target's
+`DisplayName` stays optional: it only ever appears in wordings of that second kind.
 
 **Keys are the adapter author's to keep stable, and that is a real obligation.** A manifest and a
 savegame binding are keyed on `(GameIdentity, TargetKey)`, so renaming a key in a later adapter

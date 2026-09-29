@@ -116,11 +116,7 @@ public sealed class ModCatalog : IDisposable
             {
                 sources.Add(new ModSource(
                     ModSourceId.ForTarget(new ModTargetRef(game.Identity, key)),
-                    // The game alone where it has one folder, which is every game the user is
-                    // likely to have: naming a folder that has no sibling is noise.
-                    targets.Count > 1 && displayName is string folderName
-                        ? $"{game.Name} - {folderName}"
-                        : game.Name,
+                    displayName,
                     path,
                     ModSourceKind.Game));
             }
@@ -140,16 +136,16 @@ public sealed class ModCatalog : IDisposable
     }
 
     /// <summary>
-    /// A game's folders, named where the adapter can be asked what to call them.
+    /// A game's folders, each named as its adapter names it - the whole label of its source.
     /// </summary>
     /// <remarks>
     /// <b>The list has to be complete and the names do not.</b> A target missing from it is a folder
     /// the merged view never looks in, which reports what that folder holds as missing from this
     /// machine - so settings this repo's adapter version cannot read fall back to the persisted
-    /// targets, which are paths and keys with no display name. That is the same list with worse
-    /// labels rather than a shorter one.
+    /// targets, which are paths and keys with no display name, labelled by their keys. That is the
+    /// same list with worse labels rather than a shorter one.
     /// </remarks>
-    private IReadOnlyList<(TargetKey Key, string? DisplayName, string Path)> ReadTargets(Game game)
+    private IReadOnlyList<(TargetKey Key, string DisplayName, string Path)> ReadTargets(Game game)
     {
         try
         {
@@ -167,7 +163,7 @@ public sealed class ModCatalog : IDisposable
                 game.Identity);
         }
 
-        return [.. game.Targets.Select(x => (x.Key, (string?)null, x.ModFolder))];
+        return [.. game.Targets.Select(x => (x.Key, TargetNames.Of(x.Key, null), x.ModFolder))];
     }
 
     /// <summary>

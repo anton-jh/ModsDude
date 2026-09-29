@@ -3,7 +3,8 @@ using ModsDude.Client.Core.GameAdapters;
 namespace ModsDude.Client.Core.Tests.GameAdapters;
 
 /// <summary>
-/// The list an adapter answers with: how a target is addressed, and the two things a key may not be.
+/// The list an adapter answers with: how a target is addressed, the two things a key may not be, and
+/// the name every target has to carry.
 /// </summary>
 public class ModTargetsTests
 {
@@ -36,8 +37,22 @@ public class ModTargetsTests
     public void An_adapter_returning_two_targets_under_one_key_is_refused()
     {
         Assert.Throws<ArgumentException>(() => new ModTargets(
-            new ModTarget(new TargetKey("mods"), null, @"C:\one"),
-            new ModTarget(new TargetKey("mods"), null, @"C:\two")));
+            new ModTarget(new TargetKey("mods"), "One", @"C:\one"),
+            new ModTarget(new TargetKey("mods"), "Two", @"C:\two")));
+    }
+
+    /// <summary>
+    /// A target's name is the whole label of its source in the mod list editor, so an adapter that
+    /// names nothing would put a blank chip there - refused here rather than guessed at downstream.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void An_adapter_returning_an_unnamed_target_is_refused(string? displayName)
+    {
+        Assert.Throws<ArgumentException>(() => new ModTargets(
+            new ModTarget(new TargetKey("mods"), displayName!, @"C:\mods")));
     }
 
     /// <summary>

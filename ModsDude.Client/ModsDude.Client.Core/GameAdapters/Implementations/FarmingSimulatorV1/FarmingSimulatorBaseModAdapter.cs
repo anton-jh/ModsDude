@@ -401,14 +401,14 @@ public class FarmingSimulatorLocalModAdapter(
     : FarmingSimulatorBaseModAdapter(gameVersion, loggerFactory), ILocalModAdapter
 {
     /// <summary>
-    /// The one target, and the key that ends up in its manifest's filename. Never shown: a game with
-    /// one mod folder does not have a mod folder called something.
+    /// The one target, and the key that ends up in its manifest's filename. Its name is what the mod
+    /// list editor calls the folder as a source.
     /// </summary>
     /// <remarks>
     /// Shared with <see cref="FarmingSimulatorLocalSavegameAdapter"/>, which reaches the savegame
     /// half of the same target - see <see cref="FarmingSimulatorTarget"/>.
     /// </remarks>
-    public ModTargets ModTargets => new(new ModTarget(FarmingSimulatorTarget.Key, null, ModFolder));
+    public ModTargets ModTargets => new(new ModTarget(FarmingSimulatorTarget.Key, "Mod folder", ModFolder));
 
     /// <summary>
     /// Read from the game's own settings the first time it is asked for, and then kept for as long

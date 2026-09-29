@@ -28,8 +28,8 @@ public class TargetNamesTests
     }
 
     /// <summary>
-    /// Farming Simulator does not have a mod folder <em>called</em> something, so nothing about a
-    /// game with one target ever mentions which folder it means.
+    /// A game with one target has nothing to tell apart, so a wording that names a folder only to
+    /// say which of several it means leaves it out.
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -64,22 +64,6 @@ public class TargetNamesTests
         Assert.Equal("Dedicated server", names[FakeMultiTargetSettings.Server]);
         Assert.Equal("MP client", names[FakeMultiTargetSettings.Client]);
         Assert.Equal("Singleplayer", names[FakeMultiTargetSettings.Solo]);
-    }
-
-    /// <summary>
-    /// A folder the adapter named nothing is absent rather than present-and-blank, so the caller's
-    /// lookup misses and <see cref="TargetNames.Of"/> falls back to the key. Farming Simulator's one
-    /// target is exactly this.
-    /// </summary>
-    [Fact]
-    public void Read_leaves_out_a_folder_the_adapter_named_nothing()
-    {
-        var unnamed = new FakeMultiTargetSettings { ServerModFolder = @"C:\server\mods" };
-
-        // The fake names all three, so this asserts the shape rather than the fake: what a caller
-        // does with a key that is not in the answer.
-        Assert.Equal("solo", TargetNames.Of(FakeMultiTargetSettings.Solo,
-            TargetNames.Read(GameWith(unnamed), Adapter).GetValueOrDefault(FakeMultiTargetSettings.Solo)));
     }
 
     /// <summary>

@@ -207,7 +207,7 @@ internal sealed class FakeModFileDownloader(FakeSyncServer server) : IModFileDow
 /// </summary>
 internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardlinks) : ILocalModAdapter
 {
-    public ModTarget Target { get; } = new(new TargetKey("mods"), null, modFolder);
+    public ModTarget Target { get; } = new(new TargetKey("mods"), "Mod folder", modFolder);
 
     public ModTargets ModTargets => new(Target);
 

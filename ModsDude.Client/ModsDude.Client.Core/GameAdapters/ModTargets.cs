@@ -19,12 +19,13 @@ namespace ModsDude.Client.Core.GameAdapters;
 /// orphans both and is indistinguishable from having removed the target.
 /// </param>
 /// <param name="DisplayName">
-/// What to call this folder where the game has more than one - "dedicated server", "MP client". Null
-/// for a game with one target, which never mentions it: Farming Simulator has a mod folder, not a
-/// mod folder called something.
+/// What to call this folder, exactly as the user reads it - "Mod folder", "Dedicated server", "MP
+/// client". Required even for a game with one target, because it is the whole label of that
+/// folder's source in the mod list editor. Wordings that only mention a folder to tell it from its
+/// siblings still leave it out where there is one - see <see cref="TargetNames.Distinguishing"/>.
 /// </param>
 /// <param name="Path">The folder itself. It need not exist right now.</param>
-public sealed record ModTarget(TargetKey Key, string? DisplayName, string Path);
+public sealed record ModTarget(TargetKey Key, string DisplayName, string Path);
 
 
 /// <summary>
@@ -122,8 +123,8 @@ public readonly record struct ModTargetRef(GameIdentity Game, TargetKey Key)
 /// rather than one with a null path, so a game can reach none at all.
 /// </para>
 /// <para>
-/// Keys are distinct within a game - a construction, checked here, rather than something every
-/// adapter has to be trusted with.
+/// Keys are distinct within a game and every target is named - a construction, checked here,
+/// rather than something every adapter has to be trusted with.
 /// </para>
 /// </remarks>
 public sealed class ModTargets : IReadOnlyList<ModTarget>
@@ -142,6 +143,11 @@ public sealed class ModTargets : IReadOnlyList<ModTarget>
         if (_targets.GroupBy(x => x.Key).FirstOrDefault(x => x.Count() > 1) is IGrouping<TargetKey, ModTarget> duplicate)
         {
             throw new ArgumentException($"An adapter returned two targets keyed '{duplicate.Key}'.", nameof(targets));
+        }
+
+        if (Array.Find(_targets, x => string.IsNullOrWhiteSpace(x.DisplayName)) is ModTarget unnamed)
+        {
+            throw new ArgumentException($"An adapter returned target '{unnamed.Key}' without a name.", nameof(targets));
         }
     }
 

@@ -437,7 +437,7 @@ Present automatically, without the user configuring anything:
 
 | Source | Where |
 | --- | --- |
-| Each mod folder the game reaches | From the local settings, via `ILocalModAdapter.GetInstalledMods` — one source per target, named where the game has more than one |
+| Each mod folder the game reaches | From the local settings, via `ILocalModAdapter.GetInstalledMods` — one source per target, labelled with the target's `DisplayName` alone ("Mod folder" for Farming Simulator) |
 | The system Downloads folder | Once per machine, not once per folder |
 
 Downloads needs care to locate. .NET has no `SpecialFolder.Downloads`; the correct route on

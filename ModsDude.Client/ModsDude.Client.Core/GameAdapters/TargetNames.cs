@@ -9,9 +9,10 @@ namespace ModsDude.Client.Core.GameAdapters;
 /// <remarks>
 /// <para>
 /// <b>Two halves of one rule.</b> A folder is called whatever the adapter named it, and its key
-/// where nothing can ask an adapter what that was - and it is not named at all unless the game
-/// reaches more than one, because Farming Simulator does not have a mod folder <em>called</em>
-/// something.
+/// where nothing can ask an adapter what that was - and a wording that only names it to say which
+/// of several it means does not name it at all unless the game reaches more than one. The mod list
+/// editor's sources are the exception: a source is labelled by the name alone, so every mod target
+/// carries one.
 /// </para>
 /// <para>
 /// <b>The name is asked for, never written down.</b> It was persisted beside the folder path for
@@ -55,8 +56,9 @@ public static class TargetNames
     /// </summary>
     /// <remarks>
     /// <b>Names only, and empty is an ordinary answer.</b> A key missing from the result is a folder
-    /// with no name rather than a folder that is gone: the caller is iterating the persisted target
-    /// list, which stays complete, and a name that could not be read costs a word in a sentence.
+    /// whose name could not be read rather than a folder that is gone: the caller is iterating the
+    /// persisted target list, which stays complete, and a name that could not be read costs a word
+    /// in a sentence.
     /// Settings this repo's adapter version cannot read therefore degrade to keys rather than to a
     /// shorter list - the same bargain <c>ModCatalog.ReadTargets</c> strikes, which cannot degrade
     /// the same way because a missing <em>source</em> reports what that folder holds as missing from
@@ -75,9 +77,7 @@ public static class TargetNames
             if (game.GetAdapter(baseAdapter).GetLocalCapabilityAdapterFactory<ILocalModAdapter>() is
                 Func<ILocalModAdapter> factory)
             {
-                return factory().ModTargets
-                    .Where(x => x.DisplayName is { Length: > 0 })
-                    .ToDictionary(x => x.Key, x => x.DisplayName!);
+                return factory().ModTargets.ToDictionary(x => x.Key, x => x.DisplayName);
             }
         }
         catch (Exception exception)
