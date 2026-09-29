@@ -30,7 +30,7 @@ public record ModAttribute(string Key, string? Value);
 /// here is an adapter bug: nothing could complete it, and a search for it would be mistaken for
 /// plain text. Values are looser - see <paramref name="Values"/>.
 /// </remarks>
-/// <param name="Key">Stable, lowercase, and short enough to type.</param>
+/// <param name="Key">Stable and short enough to type. Matched ignoring case.</param>
 /// <param name="Aliases">Shorter spellings a search accepts in place of <paramref name="Key"/>. Never stored.</param>
 /// <param name="Values">
 /// The values the game itself defines, for a key that has such a list - empty for one whose values

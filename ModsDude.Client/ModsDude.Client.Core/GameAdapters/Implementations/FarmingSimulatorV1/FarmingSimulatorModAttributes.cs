@@ -6,8 +6,9 @@ using System.Xml.Linq;
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
 /// <summary>
-/// What a Farming Simulator mod is tagged with, and every tag it can be: the shop categories and
-/// brands of its store items, what kind of thing it adds, and whether it plays in multiplayer.
+/// What a Farming Simulator mod is tagged with, and every tag it can be: the shop categories, their
+/// shop sections (FS25 only) and brands of its store items, what kind of thing it adds, and whether
+/// it plays in multiplayer.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,6 +28,7 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 internal static class FarmingSimulatorModAttributes
 {
     public const string CategoryKey = "category";
+    public const string CategoryGroupKey = "categoryGroup";
     public const string BrandKey = "brand";
     public const string KindKey = "kind";
     public const string MultiplayerKey = "multiplayer";
@@ -103,8 +105,45 @@ internal static class FarmingSimulatorModAttributes
         "winterEquipment", "woodChippers", "woodTransport"
     ];
 
-    private static readonly IReadOnlyList<ModAttributeDefinition> _fs22 = Declare(_fs22Categories);
-    private static readonly IReadOnlyList<ModAttributeDefinition> _fs25 = Declare(_fs25Categories);
+    /// <summary>
+    /// The shop section each FS25 category sits in - the SDK's category <c>type</c>, lower-cased.
+    /// In shop order. FS22 has none: it ships no category file to read its sections from.
+    /// </summary>
+    private static readonly (string Group, string[] Categories)[] _fs25CategoryGroups =
+    [
+        ("drivables", ["tractorsS", "tractorsM", "tractorsL", "trucks", "cars", "miscDrivables"]),
+        ("loaders", ["frontLoaderVehicles", "frontLoaders", "frontLoaderTools", "teleLoaderVehicles", "teleLoaderTools", "wheelLoaderVehicles", "wheelLoaderTools", "skidSteerVehicles", "skidSteerTools", "forklifts"]),
+        ("trailers", ["trailers", "augerWagons", "trailersChangingSystem", "trailersFlatbed", "lowloaders", "trailersSemi"]),
+        ("soil_preparation", ["plows", "cultivators", "discHarrows", "powerHarrows", "subsoilers", "mulchers", "spaders", "stonePickers"]),
+        ("seeding", ["seeders", "planters", "seedTanks", "palletSeeds"]),
+        ("yield", ["sprayers", "manureSpreaders", "fertilizerSpreaders", "slurryTanks", "slurryTools", "slurryTransport", "weeders", "rollers", "palletFertilizerHerbicide"]),
+        ("combine", ["harvesters", "cutters", "cornHeaders", "specialHeaders", "cutterTrailers", "combineWindrower"]),
+        ("forage", ["forageHarvesters", "forageHarvesterCutters", "forageHarvesterCutterTrailers", "leveler", "silocompaction", "palletSilage"]),
+        ("grassland", ["mowers", "tedders", "windrowers", "loaderWagons", "grasslandCare", "palletGrassland"]),
+        ("baling", ["balersSquare", "balersRound", "baleLoaders", "baleWrappers", "balingMisc", "palletBaling"]),
+        ("rootcrops", ["beetHarvesters", "beetHarvesterCutters", "beetLoading", "potatoPlanting", "potatoHarvesting", "palletSeedsRootcrops"]),
+        ("vegetables", ["vegetablePlanters", "vegetableHarvesters", "spinachHarvesters", "greenBeanHarvesters", "peaHarvesters", "palletVegetables"]),
+        ("specialcrops", ["ricePlanters", "riceHarvesters", "sugarcanePlanters", "sugarcaneHarvesters", "sugarcaneTransport", "cottonHarvesters", "cottonTransport", "specialCropsPallets"]),
+        ("grapes_olives", ["oliveHarvesters", "grapeHarvesters", "grapeTrailers", "grapeTools"]),
+        ("animals", ["forageMixers", "barrels", "animalTransport", "strawBlowers", "palletAnimals"]),
+        ("forestry", ["forestryHarvesters", "forestryForwarders", "forestryExcavators", "forestryExcavatorTools", "woodTransport", "woodChippers", "forestryMulchers", "forestryWinches", "forestryPlanters", "forestryStumpCutters", "forestryMisc", "palletForestry"]),
+        ("misc", ["weights", "belts", "winterEquipment", "carTrailers", "misc"]),
+        ("objects", ["bigbags", "bigbagPallets", "ibc", "pallets", "bales", "shippingContainers", "objectAnimal", "objectMisc"]),
+        ("handtools", ["chainsaws", "shovels", "flashlights", "markingSpray", "handtoolsAnimals", "handtoolsMisc"]),
+        ("placeable", ["animalpens", "fences", "trees", "storages", "containers", "dieselTanks", "waterTanks", "fillableTanks", "silos", "siloExtensions", "sheds", "gardenSheds", "farmhouses", "beeHives", "generators", "floodLighting", "decoration", "productionPoints", "sellingPoints", "placeableMisc"])
+    ];
+
+    private static readonly string[] _fs25Groups = [.. _fs25CategoryGroups.Select(x => x.Group)];
+
+    /// <summary>Each FS25 category's group. Exposed for the test that holds it to the category list.</summary>
+    internal static IReadOnlyDictionary<string, string> Fs25GroupOf => _fs25GroupOf;
+
+    private static readonly Dictionary<string, string> _fs25GroupOf = _fs25CategoryGroups
+        .SelectMany(x => x.Categories.Select(category => (Category: category, x.Group)))
+        .ToDictionary(x => x.Category, x => x.Group, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyList<ModAttributeDefinition> _fs22 = Declare(_fs22Categories, groups: null);
+    private static readonly IReadOnlyList<ModAttributeDefinition> _fs25 = Declare(_fs25Categories, _fs25Groups);
 
     /// <summary>
     /// Every category either game knows, by any casing, to the casing the game spells it in. The game
@@ -124,9 +163,11 @@ internal static class FarmingSimulatorModAttributes
         _ => _fs25
     };
 
-    private static IReadOnlyList<ModAttributeDefinition> Declare(string[] categories) =>
+    /// <param name="groups">The game's category groups, or null for a game whose groups are not known.</param>
+    private static IReadOnlyList<ModAttributeDefinition> Declare(string[] categories, string[]? groups) =>
     [
         new(CategoryKey, ["cat"], categories),
+        .. groups is null ? [] : new ModAttributeDefinition[] { new(CategoryGroupKey, ["catGroup"], groups) },
         new(BrandKey, [], []),
         new(KindKey, [], _kinds),
         new(MultiplayerKey, ["mp"], ["yes", "no"])
@@ -142,7 +183,11 @@ internal static class FarmingSimulatorModAttributes
     /// skipped rather than thrown, and one pointing into the base game (<c>$data/...</c>) is not
     /// this archive's to read.
     /// </remarks>
-    public static IReadOnlyList<ModAttribute> Read(ZipArchive zip, XElement desc, CancellationToken cancellationToken)
+    /// <param name="gameVersion">
+    /// Which game's tags these are. Only FS25 gets <c>categoryGroup</c>, so it is the one thing here
+    /// that depends on it.
+    /// </param>
+    public static IReadOnlyList<ModAttribute> Read(ZipArchive zip, XElement desc, FarmingSimulatorGameVersion gameVersion, CancellationToken cancellationToken)
     {
         var categories = new List<string>();
         var brands = new List<string>();
@@ -179,6 +224,15 @@ internal static class FarmingSimulatorModAttributes
         var attributes = new List<ModAttribute>();
 
         attributes.AddRange(categories.Distinct(StringComparer.OrdinalIgnoreCase).Select(x => new ModAttribute(CategoryKey, x)));
+
+        if (gameVersion is FarmingSimulatorGameVersion.Fs25)
+        {
+            // A category no group lists - one a mod invented - has no group, rather than a guessed one.
+            var groups = categories.Select(x => _fs25GroupOf.GetValueOrDefault(x)).OfType<string>().ToHashSet();
+
+            attributes.AddRange(_fs25Groups.Where(groups.Contains).Select(x => new ModAttribute(CategoryGroupKey, x)));
+        }
+
         attributes.AddRange(brands.Distinct(StringComparer.Ordinal).Select(x => new ModAttribute(BrandKey, x)));
         // Declared order rather than the order the items happened to be listed in, so two versions
         // with the same contents tag themselves identically.

@@ -78,6 +78,46 @@ public class FarmingSimulatorModAttributesTests : IDisposable
     }
 
     [Fact]
+    public async Task An_FS25_mod_is_tagged_with_the_shop_sections_of_its_categories()
+    {
+        WriteMod("FS25_Pack",
+            storeItems:
+            [
+                ("a.xml", Placeable("sheds", "NONE")),
+                ("b.xml", Vehicle("tractorsM tractorsL", "FENDT")),
+                ("c.xml", Placeable("myOwnCategory", "NONE"))
+            ]);
+
+        var mod = await ScanOne();
+
+        // Once each, in shop order, and nothing guessed for the category no section lists.
+        Assert.Equal(["drivables", "placeable"], Values(mod, "categoryGroup"));
+    }
+
+    /// <summary>FS22 ships no category file, so there is nothing to read its sections from.</summary>
+    [Fact]
+    public async Task An_FS22_mod_has_no_category_group()
+    {
+        WriteMod("FS22_Tractor", storeItems: [("a.xml", Vehicle("tractorsM", "FENDT"))]);
+
+        var mod = Assert.Single(await new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs22).GetModsFromFolder(_folder, CancellationToken.None));
+
+        Assert.Empty(Values(mod, "categoryGroup"));
+        Assert.DoesNotContain(new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs22).Attributes, x => x.Key == "categoryGroup");
+    }
+
+    /// <summary>The groups are a second copy of the SDK file; this is what keeps the two lists one.</summary>
+    [Fact]
+    public void Every_FS25_category_is_in_exactly_one_group()
+    {
+        var categories = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25).Attributes.Single(x => x.Key == "category").Values;
+
+        Assert.Equal(
+            categories.Order(StringComparer.OrdinalIgnoreCase),
+            FarmingSimulatorModAttributes.Fs25GroupOf.Keys.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Script_and_map_mods_say_so()
     {
         WriteMod("FS25_Script", descBody: "<extraSourceFiles><sourceFile filename=\"main.lua\"/></extraSourceFiles>");
@@ -201,6 +241,7 @@ public class FarmingSimulatorModAttributesTests : IDisposable
 
         Assert.True(attributes.Single(x => x.Key == "category").IsNamed("cat"));
         Assert.True(attributes.Single(x => x.Key == "multiplayer").IsNamed("MP"));
+        Assert.True(attributes.Single(x => x.Key == "categoryGroup").IsNamed("catGroup"));
     }
 
     [Fact]

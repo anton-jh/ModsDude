@@ -90,7 +90,7 @@ public class FarmingSimulatorBaseModAdapter(
             };
 
             // Indexed rather than collected, so the results keep the order of the folder.
-            Parallel.For(0, files.Count, options, i => mods[i] = GetModFromFile(files[i], Log, cancellationToken));
+            Parallel.For(0, files.Count, options, i => mods[i] = GetModFromFile(files[i], gameVersion, Log, cancellationToken));
 
             return mods.OfType<LocalMod>().ToList();
         }, cancellationToken);
@@ -117,11 +117,11 @@ public class FarmingSimulatorBaseModAdapter(
     /// one bad archive must not take a thousand good ones down with it.
     /// </para>
     /// </remarks>
-    private static LocalMod? GetModFromFile(string path, ILogger log, CancellationToken cancellationToken)
+    private static LocalMod? GetModFromFile(string path, FarmingSimulatorGameVersion gameVersion, ILogger log, CancellationToken cancellationToken)
     {
         try
         {
-            return ReadModFromFile(path, cancellationToken);
+            return ReadModFromFile(path, gameVersion, cancellationToken);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or XmlException)
         {
@@ -136,7 +136,7 @@ public class FarmingSimulatorBaseModAdapter(
         }
     }
 
-    private static LocalMod? ReadModFromFile(string path, CancellationToken cancellationToken)
+    private static LocalMod? ReadModFromFile(string path, FarmingSimulatorGameVersion gameVersion, CancellationToken cancellationToken)
     {
         using var zip = GetZip(path);
 
@@ -169,7 +169,7 @@ public class FarmingSimulatorBaseModAdapter(
                 Locked = DeclaresMaps(desc),
                 Icon = GetIcon(zip, path, desc),
                 Images = GetImages(zip, path, desc),
-                Attributes = FarmingSimulatorModAttributes.Read(zip, desc, cancellationToken)
+                Attributes = FarmingSimulatorModAttributes.Read(zip, desc, gameVersion, cancellationToken)
             };
 
         return maybeLocalMod.HasValue ? maybeLocalMod.Value : null;

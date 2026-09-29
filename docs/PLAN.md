@@ -2571,6 +2571,8 @@ See [04 — Mod attributes](04-game-adapters.md#mod-attributes) and
 - [x] **`key:value`, `key:`, `-key:value`** in the search, parsed once per keystroke. Only a
       declared key is a filter.
 - [x] **Ctrl+Space** completes keys, then values - the game's list plus what the catalog holds.
+- [x] **`categoryGroup` (`catGroup`)**, FS25 only: the shop section each category sits in, from the
+      SDK file. FS22 has no file to take them from and declares none.
 
 Settled with it:
 

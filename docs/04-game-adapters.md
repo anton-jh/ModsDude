@@ -561,6 +561,7 @@ Several details in this code are load-bearing and worth preserving if you touch 
 | Key (alias) | Values | From |
 | --- | --- | --- |
 | `category` (`cat`) | The shop category ids, e.g. `tractorsM`; several per mod | Each store item's `storeData/category`, split on whitespace |
+| `categoryGroup` (`catGroup`) | FS25 only: the shop section of each category, e.g. `forestry`, `soil_preparation` | The SDK file's category `type`, lower-cased |
 | `brand` | The brand id, lower-cased; `none` is dropped | Each store item's `storeData/brand` |
 | `kind` | `vehicle`, `placeable`, `handtool`, `script`, `map`; several per mod | The store items' root elements, `extraSourceFiles`, `maps` |
 | `multiplayer` (`mp`) | `yes`, `no` | `modDesc/multiplayer@supported` |
@@ -574,6 +575,11 @@ FS25, where the real list exists to check it by, the same method found 141 of it
 in neither list is reported anyway. One the game knows in another casing - `PlaceableMisc`,
 `lowLoaders`, both seen in real mods - is spelled the game's way, because the game matches them
 case-insensitively and one category should be one tag.
+
+**Groups are FS25's alone.** The SDK file puts each category in one of 20 shop sections, and the
+adapter carries that table; a test holds it to the category list so the two cannot drift. FS22 has
+no file to take its sections from, so it declares no `categoryGroup` at all rather than a
+hand-made guess. A category no section lists - one a mod invented - gets no group.
 
 A store item pointing into the base game (`$data/...`) is not in the archive and is skipped; one
 that is missing or will not parse costs its own tags and nothing else, as it does in the game.
