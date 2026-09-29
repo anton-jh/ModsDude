@@ -837,7 +837,11 @@ the same way and the answer follows the version selector.
 the versions' [attributes](04-game-adapters.md#mod-attributes) - `category:tractors`, `kind:script`,
 `brand:"new holland"` - with `key:` alone for "has any", a leading `-` to invert either, and
 whatever aliases the adapter declares (`cat:`, `mp:`). A value matches by substring, ignoring
-case; words stay fuzzy. Only a **declared** key makes a filter, so `FS25:` is still a word and a
+case; words stay fuzzy. `key>v`, `key<v`, `key>=v` and `key<=v` compare instead, in the order the
+attribute sort uses (`ModAttributeOrder`, below): a number typed compares only with values that are
+numbers, and text compares in natural order. There is no colon form - `key:>5` looks for ">5" - and
+`key>` alone is `key:`, so the list does not empty halfway through typing one. Ctrl+Space offers the
+values after an operator too. Only a **declared** key makes a filter, so `FS25:` is still a word and a
 mod named that way is still found. The text is parsed once per keystroke into a `ModSearchQuery`
 rather than once per row. The same box on the repo mods page takes the same syntax, because both go
 through `ModListItemViewModel.Matches`.
@@ -1098,6 +1102,16 @@ is a repo-management question anyway, and *Date added* answers the one a profile
 Under the date sort each row says the date it is ordered by (*Added 3 Sep*, with the year only where it
 is not this one) and carries it in full as a tooltip. Under the name sort the row has nothing extra to
 say. See `ProfileModSorting`.
+
+**Both lists can be sorted by an attribute.** A dropdown beside the sort chips lists the keys the
+adapter declares - too many for chips - and picking one sorts by that key's values, A to Z first;
+picking a chip empties it again. On the left the chip is **Default**, the grouped order above, and an
+attribute sort replaces all of it: taken out, updates and not settled no longer lead, because somebody
+who asked for the list by category asked for it by category, and the chips still say the rest. The
+left's arrow reverses the names inside the groups under Default. Values order as `ModAttributeOrder`
+says: numbers as numbers and ahead of text, text in natural order. A mod carrying the key several times
+sorts by its lowest value, so reversing does not move it from one end to the other, and a mod without
+the key sorts last both ways. Each row says its values beside it, as the date sort does its date.
 
 #### Picking mods in bulk
 

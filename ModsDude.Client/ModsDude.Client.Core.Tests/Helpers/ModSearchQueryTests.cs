@@ -10,7 +10,8 @@ public class ModSearchQueryTests
         new("category", ["cat"], ["tractorsS", "tractorsM", "silos"]),
         new("brand", [], []),
         new("kind", [], ["vehicle", "script"]),
-        new("multiplayer", ["mp"], ["yes", "no"])
+        new("multiplayer", ["mp"], ["yes", "no"]),
+        new("seats", [], [])
     ];
 
     private static readonly IReadOnlyList<ModAttribute> _tractor =
@@ -87,6 +88,74 @@ public class ModSearchQueryTests
         Assert.Empty(query.Filters);
         Assert.Equal(["FS25:tractor"], query.Words);
         Assert.True(query.Matches([], "FS25:tractor pack"));
+    }
+
+    [Theory]
+    [InlineData("seats>2", true)]
+    [InlineData("seats>4", false)]
+    [InlineData("seats>=4", true)]
+    [InlineData("seats<10", true)]
+    [InlineData("seats<4", false)]
+    [InlineData("seats<=4", true)]
+    [InlineData("seats>3.5", true)]
+    public void A_comparison_with_a_number_compares_numbers(string search, bool expected)
+    {
+        // As text, "4" is after "10"; as a number it is not.
+        Assert.Equal(expected, Matches(search, [new("seats", "4")]));
+    }
+
+    [Fact]
+    public void A_comparison_with_a_number_skips_values_that_are_not_numbers()
+    {
+        Assert.False(Matches("seats>2", [new("seats", "many")]));
+        Assert.True(Matches("seats>2", [new("seats", "many"), new("seats", "3")]));
+    }
+
+    [Theory]
+    [InlineData("brand<d", true)]
+    [InlineData("brand>d", false)]
+    [InlineData("brand>=CLAAS", true)]
+    [InlineData("brand<claas", false)]
+    [InlineData("brand<\"deutz fahr\"", true)]
+    public void A_comparison_with_text_compares_in_natural_order_ignoring_case(string search, bool expected)
+    {
+        Assert.Equal(expected, Matches(search, [new("brand", "claas")]));
+    }
+
+    [Fact]
+    public void A_comparison_reads_its_operator_and_resolves_an_alias()
+    {
+        var filter = Assert.Single(ModSearchQuery.Parse("-cat>=silos", _declared).Filters);
+
+        Assert.Equal(new ModSearchQuery.AttributeFilter("category", "silos", true, ModSearchQuery.AttributeOperator.GreaterOrEqual), filter);
+    }
+
+    /// <summary>A comparison half typed keeps the list as it would be for <c>key:</c>, not empty.</summary>
+    [Fact]
+    public void A_comparison_with_nothing_after_it_keeps_any_mod_carrying_the_key()
+    {
+        Assert.True(Matches("category>", _tractor));
+        Assert.False(Matches("category>", _script));
+    }
+
+    /// <summary>The operators take no colon. <c>key:&gt;5</c> looks for "&gt;5" in the value.</summary>
+    [Fact]
+    public void A_colon_before_the_operator_makes_it_part_of_the_value()
+    {
+        var filter = Assert.Single(ModSearchQuery.Parse("seats:>2", _declared).Filters);
+
+        Assert.Equal(ModSearchQuery.AttributeOperator.Contains, filter.Operator);
+        Assert.Equal(">2", filter.Value);
+        Assert.False(Matches("seats:>2", [new("seats", "4")]));
+    }
+
+    [Fact]
+    public void A_comparison_on_a_key_nobody_declared_is_a_plain_word()
+    {
+        var query = ModSearchQuery.Parse("x>5", _declared);
+
+        Assert.Empty(query.Filters);
+        Assert.Equal(["x>5"], query.Words);
     }
 
     [Fact]

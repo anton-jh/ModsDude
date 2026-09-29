@@ -4,8 +4,8 @@ namespace ModsDude.Client.Core.Helpers;
 
 /// <summary>
 /// What a mod search box offers on Ctrl+Space: the attribute keys while a key is being typed, and
-/// that key's values once it has its colon. Knows nothing about the box - it is handed the text and
-/// the caret and answers with what to show and what part of the text a choice replaces.
+/// that key's values once it has its colon or comparison. Knows nothing about the box - it is handed
+/// the text and the caret and answers with what to show and what part of the text a choice replaces.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -53,11 +53,14 @@ public sealed class ModSearchCompleter(IReadOnlyList<ModAttributeDefinition> att
         var negation = typed.StartsWith('-') ? "-" : string.Empty;
         var body = typed[negation.Length..];
 
-        var colon = body.IndexOf(':');
+        if (ModSearchQuery.SplitFilter(body) is { } split)
+        {
+            return CompleteValue(token, negation, split.Key, split.Operator, split.Value);
+        }
 
-        return colon < 0
+        return body.IndexOfAny([':', '<', '>']) < 0
             ? CompleteKey(token, negation, body)
-            : CompleteValue(token, negation, body[..colon], body[(colon + 1)..]);
+            : null;
     }
 
     private ModSearchCompletion? CompleteKey(ModSearchQuery.SearchToken token, string negation, string typed)
@@ -83,7 +86,12 @@ public sealed class ModSearchCompleter(IReadOnlyList<ModAttributeDefinition> att
         return items.Count == 0 ? null : new ModSearchCompletion(token.Start, token.Raw.Length, items);
     }
 
-    private ModSearchCompletion? CompleteValue(ModSearchQuery.SearchToken token, string negation, string name, string typed)
+    private ModSearchCompletion? CompleteValue(
+        ModSearchQuery.SearchToken token,
+        string negation,
+        string name,
+        ModSearchQuery.AttributeOperator op,
+        string typed)
     {
         if (Attributes.FirstOrDefault(x => x.IsNamed(name)) is not ModAttributeDefinition definition)
         {
@@ -97,9 +105,13 @@ public sealed class ModSearchCompleter(IReadOnlyList<ModAttributeDefinition> att
             .Where(x => x.Rank >= 0)
             .OrderBy(x => x.Rank)
             .ThenBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
-            // Keeps what was typed for the key - an alias stays an alias - so accepting a value does
-            // not rewrite the part of the token somebody already chose.
-            .Select(x => new ModSearchCompletionItem(x.Value, null, $"{negation}{name}:{Quote(x.Value)}", IsKey: false))
+            // Keeps what was typed for the key and the operator - an alias stays an alias, a > stays
+            // a > - so accepting a value does not rewrite the part of the token somebody already chose.
+            .Select(x => new ModSearchCompletionItem(
+                x.Value,
+                null,
+                $"{negation}{name}{ModSearchQuery.Spell(op)}{Quote(x.Value)}",
+                IsKey: false))
             .ToList();
 
         return items.Count == 0 ? null : new ModSearchCompletion(token.Start, token.Raw.Length, items);

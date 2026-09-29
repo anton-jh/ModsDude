@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
 
 namespace ModsDude.Client.Core.Tests.Profiles;
@@ -67,10 +68,36 @@ public class ProfileModSortingTests
     }
 
     [Fact]
-    public void Names_open_ascending_and_dates_open_newest_first()
+    public void Names_and_attributes_open_ascending_and_dates_open_newest_first()
     {
         Assert.True(ProfileModSorting.DefaultAscending(ProfileModSort.Name));
+        Assert.True(ProfileModSorting.DefaultAscending(ProfileModSort.Attribute));
         Assert.False(ProfileModSorting.DefaultAscending(ProfileModSort.DateAdded));
+    }
+
+    [Fact]
+    public void An_attribute_sort_orders_by_value_then_name_with_the_untagged_last()
+    {
+        var keys = new[]
+        {
+            Tagged("untagged"),
+            Tagged("b fendt", ("brand", "fendt")),
+            Tagged("claas", ("brand", "claas")),
+            Tagged("a fendt", ("brand", "fendt"))
+        };
+
+        Assert.Equal(["claas", "a fendt", "b fendt", "untagged"], Sorted(ProfileModSort.Attribute, true, "brand", keys));
+        Assert.Equal(["a fendt", "b fendt", "claas", "untagged"], Sorted(ProfileModSort.Attribute, false, "brand", keys));
+    }
+
+    [Fact]
+    public void The_attribute_sort_captions_the_values()
+    {
+        var key = Tagged("pack", ("category", "trailers"), ("category", "tractorsM"));
+
+        Assert.Equal("tractorsM, trailers", ProfileModSorting.Caption(ProfileModSort.Attribute, key, _now, "category"));
+        Assert.Equal("category: tractorsM, trailers", ProfileModSorting.Describe(ProfileModSort.Attribute, key, "category"));
+        Assert.Null(ProfileModSorting.Caption(ProfileModSort.Attribute, key, _now, "brand"));
     }
 
     [Fact]
@@ -98,8 +125,14 @@ public class ProfileModSortingTests
 
     private static ProfileModSortKey Key(string name, DateTime? added = null) => new(name, added);
 
+    private static ProfileModSortKey Tagged(string name, params (string Key, string Value)[] attributes)
+        => new(name, null, [.. attributes.Select(x => new ModAttribute(x.Key, x.Value))]);
+
     private static IEnumerable<string> Sorted(ProfileModSort sort, bool ascending, params ProfileModSortKey[] keys)
+        => Sorted(sort, ascending, null, keys);
+
+    private static IEnumerable<string> Sorted(ProfileModSort sort, bool ascending, string? attribute, params ProfileModSortKey[] keys)
         => keys
-            .Order(Comparer<ProfileModSortKey>.Create((left, right) => ProfileModSorting.Compare(sort, ascending, left, right)))
+            .Order(Comparer<ProfileModSortKey>.Create((left, right) => ProfileModSorting.Compare(sort, ascending, left, right, attribute)))
             .Select(x => x.Name);
 }

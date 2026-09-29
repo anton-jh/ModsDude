@@ -346,6 +346,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         // long as the checkboxes that recompose from it.
         _catalog = catalogFactory.Create(repo);
         SearchCompleter = new ModSearchCompleter(_catalog.Attributes);
+        SortAttributes = [.. _catalog.Attributes.Select(x => x.Key)];
 
         _remoteSources =[.. (repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [])
             .Select(x => new RemoteModSourceState(x))];
@@ -440,14 +441,49 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [NotifyPropertyChangedFor(nameof(PinnedSortDirectionText))]
     private bool _pinnedSortAscending = true;
 
+    /// <summary>
+    /// The key the right list is sorted by under <see cref="ProfileModSort.Attribute"/>, and null under
+    /// every other sort - picking one switches the sort to it, and picking a chip clears it.
+    /// </summary>
+    [ObservableProperty]
+    private string? _pinnedSortAttribute;
+
     /// <summary>What the direction button says the list is doing, and so what pressing it changes.</summary>
     public string PinnedSortDirectionText => (PinnedSort, PinnedSortAscending) switch
     {
-        (ProfileModSort.Name, true) => "A to Z. Click to reverse.",
-        (ProfileModSort.Name, false) => "Z to A. Click to reverse.",
-        (_, true) => "Oldest first. Click to reverse.",
-        _ => "Newest first. Click to reverse."
+        (ProfileModSort.DateAdded, true) => "Oldest first. Click to reverse.",
+        (ProfileModSort.DateAdded, false) => "Newest first. Click to reverse.",
+        (_, true) => "A to Z. Click to reverse.",
+        _ => "Z to A. Click to reverse."
     };
+
+    /// <summary>
+    /// What the left list is ordered by. <see cref="AvailableModSort.Default"/> is the grouped order
+    /// the list has always had; an attribute sort replaces all of it. Not remembered, like the right's.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AvailableSortDirectionText))]
+    private AvailableModSort _availableSort = AvailableModSort.Default;
+
+    /// <inheritdoc cref="PinnedSortAttribute"/>
+    [ObservableProperty]
+    private string? _availableSortAttribute;
+
+    /// <summary>
+    /// Whether the left list runs A to Z. Under the default sort this turns the names around inside
+    /// each group, and leaves the groups where they are.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AvailableSortDirectionText))]
+    private bool _availableSortAscending = true;
+
+    /// <inheritdoc cref="PinnedSortDirectionText"/>
+    public string AvailableSortDirectionText => AvailableSortAscending
+        ? "A to Z. Click to reverse."
+        : "Z to A. Click to reverse.";
+
+    /// <summary>The keys either list can be sorted by: what the adapter declares, in its order.</summary>
+    public IReadOnlyList<string> SortAttributes { get; }
 
     [ObservableProperty]
     private bool _isLoading = true;
@@ -3943,18 +3979,31 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private IReadOnlyList<ISelectableRow> PinnedRows() => [.. Pinned];
 
     /// <summary>
-    /// The left list's order: what this draft has taken out of the profile, then what is an update to
-    /// something it holds, then what could not be compared against the repo, then alphabetical.
+    /// The left list's order. By default: what this draft has taken out of the profile, then what is
+    /// an update to something it holds, then what could not be compared against the repo, then
+    /// alphabetical. Sorted by an attribute, only that and then the name.
     /// </summary>
     /// <remarks>
     /// A removed mod looks exactly like one that was never in the profile, and an update looks
     /// exactly like an addition - the only thing that can say otherwise is a chip and where the row
     /// sits. Read from the status the recount has just written rather than re-derived, so the sort
     /// and the chip cannot disagree. The ambiguous rank exists so the count beside the updates band
-    /// is findable without opening its filter.
+    /// is findable without opening its filter. None of it survives an attribute sort: somebody who
+    /// asked for the list by category asked for it by category, and the chips still say the rest.
     /// </remarks>
     private int CompareAvailable(ProfileModRowViewModel left, ProfileModRowViewModel right)
     {
+        if (AvailableSort is AvailableModSort.Attribute && AvailableSortAttribute is string attribute)
+        {
+            var byAttribute = ModAttributeOrder.Compare(
+                attribute,
+                AvailableSortAscending,
+                left.SelectedVersion.Version.Attributes,
+                right.SelectedVersion.Version.Attributes);
+
+            return byAttribute != 0 ? byAttribute : NaturalOrder.Compare(left.Name, right.Name);
+        }
+
         var byRemoval = IsPendingRemoval(right).CompareTo(IsPendingRemoval(left));
 
         if (byRemoval != 0)
@@ -3971,10 +4020,79 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         var byAmbiguous = right.Item.OrderNotSettled.CompareTo(left.Item.OrderNotSettled);
 
-        return byAmbiguous != 0
-            ? byAmbiguous
-            : NaturalOrder.Compare(left.Name, right.Name);
+        if (byAmbiguous != 0)
+        {
+            return byAmbiguous;
+        }
+
+        var byName = NaturalOrder.Compare(left.Name, right.Name);
+
+        return AvailableSortAscending ? byName : -byName;
     }
+
+    /// <summary>What a left-hand row says about the attribute its list is sorted by, if it is.</summary>
+    private void ApplyAvailableSortInfo(ProfileModRowViewModel row)
+    {
+        if (AvailableSort is AvailableModSort.Attribute && AvailableSortAttribute is string attribute)
+        {
+            var caption = ModAttributeOrder.Caption(row.SelectedVersion.Version.Attributes, attribute);
+
+            row.SortCaption = caption;
+            row.SortTooltip = $"{attribute}: {caption}";
+        }
+        else
+        {
+            row.SortCaption = null;
+            row.SortTooltip = null;
+        }
+    }
+
+    partial void OnAvailableSortChanged(AvailableModSort value)
+    {
+        if (value is not AvailableModSort.Attribute)
+        {
+            AvailableSortAttribute = null;
+        }
+
+        AvailableSortAscending = true;
+
+        ReorderAvailable();
+    }
+
+    partial void OnAvailableSortAttributeChanged(string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (AvailableSort is AvailableModSort.Attribute)
+        {
+            AvailableSortAscending = true;
+
+            ReorderAvailable();
+        }
+        else
+        {
+            AvailableSort = AvailableModSort.Attribute;
+        }
+    }
+
+    partial void OnAvailableSortAscendingChanged(bool value) => ReorderAvailable();
+
+    private void ReorderAvailable()
+    {
+        foreach (var row in _available)
+        {
+            ApplyAvailableSortInfo(row);
+        }
+
+        RefreshViews();
+    }
+
+    /// <summary>Reverses the left list. Reading is not writing, so no <c>CanEdit</c> guard.</summary>
+    [RelayCommand]
+    private void ToggleAvailableSortDirection() => AvailableSortAscending = AvailableSortAscending is false;
 
     private static bool IsUpdateRow(ProfileModRowViewModel row) => row.Item.IsUpdateRow;
 
@@ -4045,19 +4163,45 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     /// edit, which is why the name sort is where the page opens.
     /// </summary>
     private int ComparePinned(ProfileModRowViewModel left, ProfileModRowViewModel right)
-        => ProfileModSorting.Compare(PinnedSort, PinnedSortAscending, SortKey(left), SortKey(right));
+        => ProfileModSorting.Compare(PinnedSort, PinnedSortAscending, SortKey(left), SortKey(right), PinnedSortAttribute);
 
     private static ProfileModSortKey SortKey(ProfileModRowViewModel row)
-        => new(row.Name, row.Added);
+        => new(row.Name, row.Added, row.SelectedVersion.Version.Attributes);
 
     partial void OnPinnedSortChanged(ProfileModSort value)
     {
+        // A chip clears the key the dropdown picked, so the dropdown stops claiming the sort.
+        if (value is not ProfileModSort.Attribute)
+        {
+            PinnedSortAttribute = null;
+        }
+
         // Set before the refresh below, so the list is not sorted by the new key in the old direction
         // first. Where the direction does not change this raises nothing, which is why the refresh is
         // asked for here as well.
         PinnedSortAscending = ProfileModSorting.DefaultAscending(value);
 
         ApplySortInfo(reorder: true);
+    }
+
+    partial void OnPinnedSortAttributeChanged(string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (PinnedSort is ProfileModSort.Attribute)
+        {
+            // One key for another: the sort itself did not change, so nothing above runs.
+            PinnedSortAscending = ProfileModSorting.DefaultAscending(ProfileModSort.Attribute);
+
+            ApplySortInfo(reorder: true);
+        }
+        else
+        {
+            PinnedSort = ProfileModSort.Attribute;
+        }
     }
 
     partial void OnPinnedSortAscendingChanged(bool value)
@@ -4122,15 +4266,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             var key = SortKey(row);
 
-            row.SortCaption = ProfileModSorting.Caption(PinnedSort, key, now);
-            row.SortTooltip = ProfileModSorting.Describe(key);
+            row.SortCaption = ProfileModSorting.Caption(PinnedSort, key, now, PinnedSortAttribute);
+            row.SortTooltip = ProfileModSorting.Describe(PinnedSort, key, PinnedSortAttribute);
         }
 
         if (reorder)
         {
             RefreshViews();
         }
-        else if (changed && PinnedSort is not ProfileModSort.Name)
+        else if (changed && PinnedSort is ProfileModSort.DateAdded)
         {
             // Only the date sort can be moved by a date, and only a date that moved can move it. The
             // recount that called this counts the visible rows itself.
@@ -4426,6 +4570,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             row.Touch = ProfileModTouches.Classify(removed, null);
             row.TouchTooltip = ProfileModTouches.Describe(removed, null);
+
+            // Here for the same reason: a row that has just come back from the right, or moved its
+            // selector, says what the version it now shows is tagged with.
+            ApplyAvailableSortInfo(row);
         }
 
         var savedPins = _original.ToDictionary(x => x.ModId);
@@ -4592,6 +4740,16 @@ public enum AvailableModFilter
     /// version somebody might have come here for was never offered as one.
     /// </summary>
     Unordered
+}
+
+/// <summary>What the left list is ordered by.</summary>
+public enum AvailableModSort
+{
+    /// <summary>Taken out, then updates, then not settled, then by name - see <c>CompareAvailable</c>.</summary>
+    Default,
+
+    /// <summary>By one attribute key's values and nothing else. Which key is said beside it.</summary>
+    Attribute
 }
 
 /// <inheritdoc cref="AvailableModFilter"/>

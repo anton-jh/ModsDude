@@ -187,14 +187,14 @@ public partial class ProfileModRowViewModel : ObservableObject, ISelectableRow
     public DateTime? Added { get; set; }
 
     /// <summary>
-    /// What the row says about the date its list is sorted by, or null under the name sort. Set by the
-    /// page along with the date.
+    /// What the row says about the date or attribute its list is sorted by, or null under a sort with
+    /// nothing to add to the row. Set by the page, which knows the sort.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSortCaption))]
     private string? _sortCaption;
 
-    /// <summary>The date in full, whichever the list is sorted by.</summary>
+    /// <summary>The caption in full.</summary>
     [ObservableProperty]
     private string? _sortTooltip;
 

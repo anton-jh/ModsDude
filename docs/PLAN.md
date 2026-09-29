@@ -2576,8 +2576,14 @@ Settled with it:
 
 - **Raw ids, no labels.** The game's titles are in encrypted archives, and a mod-defined brand's
   title only in the mod that defines it.
-- **No sorting by attribute yet.**
 - **Versions registered before this carry none.** Alpha; nothing backfills them.
+
+Then:
+
+- [x] **Sorting by attribute** in both lists of the profile mod list editor, from a dropdown of the
+      declared keys. On the left it replaces the grouped order, now called *Default*, entirely.
+- [x] **`key>v`, `key<v`, `key>=v`, `key<=v`** in the search. Numbers compare as numbers, text in
+      natural order; no colon form.
 
 ## Deliberately not planned
 

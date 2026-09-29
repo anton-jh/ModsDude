@@ -23,6 +23,102 @@
             <TextBlock Text="{Binding Label}" ToolTip="{Binding Note}" />
         </DataTemplate>
 
+        <!-- An attribute sort's dropdown, drawn as a sort chip: grey and saying "Attribute" while it
+             holds no key, lit like a checked chip while it holds the one the list is sorted by - it is
+             the sort then, and the chips beside it are not. Its own template, because the theme's
+             repaints its box and text on hover, press and focus whatever the style says. -->
+        <Style x:Key="SortAttributeBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0 0 6 0" />
+            <Setter Property="MinWidth" Value="110" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="ToolTip" Value="Sort by what the mods are tagged with" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="Chip"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    Padding="12 5 10 5"
+                                    CornerRadius="14">
+                                <Grid ColumnDefinitions="* auto">
+                                    <ContentPresenter x:Name="Selection"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      VerticalAlignment="Center" />
+                                    <TextBlock x:Name="Placeholder"
+                                               Text="Attribute"
+                                               VerticalAlignment="Center"
+                                               Visibility="Collapsed" />
+                                    <TextBlock Grid.Column="1"
+                                               Margin="8 0 0 0"
+                                               VerticalAlignment="Center"
+                                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                               FontSize="10"
+                                               Text="&#xE70D;" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Takes the click, as the theme's does, and draws nothing. Stretched and kept off
+                                 the theme's ToggleButton style, which sizes it to its empty content. -->
+                            <ToggleButton OverridesDefaultStyle="True"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent" />
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <Popup x:Name="PART_Popup"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   VerticalOffset="2"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   MinWidth="{TemplateBinding ActualWidth}">
+                                <Border Background="{DynamicResource ComboBoxDropDownBackground}"
+                                        BorderBrush="{DynamicResource ComboBoxDropDownBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{DynamicResource PopupCornerRadius}"
+                                        Padding="0 4">
+                                    <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="SelectedItem" Value="{x:Null}">
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="SelectedItem" Value="{x:Null}" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- The save button and its variant caret are one control, so the accent chrome lives here
              once and is split down the seam: only the outer corners round, and the halves meet on a
              hairline instead of the gap that made them read as two buttons. -->
@@ -445,7 +541,8 @@
                         <!-- Chips rather than a dropdown: they compose with the search into one
                              well-defined set, and every bulk action and count on this side is
                              stated against that set. -->
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0 0 0 8">
+                        <Grid Grid.Row="2" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
                             <RadioButton GroupName="AvailableFilter"
                                          Style="{StaticResource FilterChip}"
                                          Content="All"
@@ -465,7 +562,46 @@
                                          Content="Not settled"
                                          ToolTip="The order between this version and what the repo holds is not settled. Importing it will ask which comes first."
                                          IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unordered}" />
-                        </StackPanel>
+                            </WrapPanel>
+
+                            <!-- As on the right. Default is the grouped order - taken out, updates,
+                                 not settled, then names - and an attribute sort replaces all of it;
+                                 the arrow reverses the names, or the attribute. -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Top">
+                                <TextBlock Text="Sort"
+                                           Margin="0 0 8 0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <RadioButton GroupName="AvailableSort"
+                                             Style="{StaticResource FilterChip}"
+                                             Content="Default"
+                                             ToolTip="Taken out first, then updates, then what is not settled, then by name"
+                                             IsChecked="{Binding AvailableSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Default}" />
+
+                                <ComboBox Style="{StaticResource SortAttributeBox}"
+                                          ItemsSource="{Binding SortAttributes}"
+                                          SelectedItem="{Binding AvailableSortAttribute, Mode=TwoWay}" />
+
+                                <Button Style="{DynamicResource SubtleIconButton}"
+                                        ToolTip="{Binding AvailableSortDirectionText}"
+                                        Command="{Binding ToggleAvailableSortDirectionCommand}">
+                                    <Button.Content>
+                                        <TextBlock FontFamily="{DynamicResource SymbolThemeFontFamily}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#xE74B;" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding AvailableSortAscending}" Value="True">
+                                                            <Setter Property="Text" Value="&#xE74A;" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button.Content>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
 
                         <Border Grid.Row="3">
 
@@ -506,7 +642,7 @@
                                          so a mod looks the same here as it does everywhere else. -->
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:ProfileModRowViewModel}">
-                                            <Grid ColumnDefinitions="* auto">
+                                            <Grid ColumnDefinitions="* auto auto">
 
                                                 <!-- Dimmed where the row is only here because ignored mods
                                                      are being shown. -->
@@ -522,7 +658,16 @@
 
                                                 <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
 
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                                <!-- The attribute the list is sorted by, as on the right. -->
+                                                <TextBlock Grid.Column="1"
+                                                           Margin="8 0"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding SortCaption}"
+                                                           ToolTip="{Binding SortTooltip}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                                                             IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
 
                                                     <!-- Ignore this mod in this profile, or stop. The glyph is
@@ -788,6 +933,14 @@
                                              Content="Date added"
                                              ToolTip="When the mod entered the profile, or last moved to another version"
                                              IsChecked="{Binding PinnedSort, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=DateAdded}" />
+
+                                <!-- The attribute keys are the adapter's and there are too many of
+                                     them for chips. Empty, and saying so, until one is picked; a chip
+                                     empties it again. -->
+                                <ComboBox Style="{StaticResource SortAttributeBox}"
+                                          ItemsSource="{Binding SortAttributes}"
+                                          SelectedItem="{Binding PinnedSortAttribute, Mode=TwoWay}" />
+
                                 <Button Style="{DynamicResource SubtleIconButton}"
                                         ToolTip="{Binding PinnedSortDirectionText}"
                                         Command="{Binding TogglePinnedSortDirectionCommand}">

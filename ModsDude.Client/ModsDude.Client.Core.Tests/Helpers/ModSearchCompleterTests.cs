@@ -53,6 +53,17 @@ public class ModSearchCompleterTests
         Assert.Equal("category:tractorsM", completion.Items[0].Insert);
     }
 
+    [Theory]
+    [InlineData("category>tr", "category>tractorsM")]
+    [InlineData("-cat<=tr", "-cat<=tractorsM")]
+    public void After_a_comparison_the_values_are_offered_and_the_operator_kept(string text, string insert)
+    {
+        var completion = Complete(text, text.Length);
+
+        Assert.Equal(["tractorsM", "tractorsS"], completion.Items.Select(x => x.Text));
+        Assert.Equal(insert, completion.Items[0].Insert);
+    }
+
     [Fact]
     public void An_alias_stays_as_typed_when_a_value_is_chosen()
     {
