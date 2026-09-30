@@ -77,6 +77,8 @@ A change is done only when all of these hold:
 
 - Output is deterministic: the same inputs give the same result in the same order. Sort explicitly; never depend on dictionary or enumeration order or on timing.
 - Any server mutation the client may send more than once is idempotent. That covers automatic retries and a user clicking again: a repeat gives the same outcome, not a duplicate or an error.
+  - Such requests carry a client-generated request ID. The server recognises a repeat by it and returns the original outcome, including when optimistic concurrency would otherwise reject the retry as stale.
+  - The request ID only identifies the request. Never use it as an entity ID.
 - Concurrent edits use optimistic concurrency. A write based on a stale version is rejected, and the client says so and lets the user reload.
 - Local file work (sync, apply, import, savegame check-in and check-out) must:
   - compute and validate a full plan before touching disk, refusing up front rather than failing halfway;
@@ -93,6 +95,7 @@ A change is done only when all of these hold:
 
 - Consistent look: reuse the shared styles and controls in the resource dictionaries. No one-off margins, colours or fonts.
 - Use identical domain terms (repo, profile, revision, game, target, savegame) in UI text, client code and server code.
+- No long sentences to describe state or information. Prefer a layout that makes it obvious what is static (labels, explanations) and what is dynamic (values, state), such as label/value pairs, badges or columns.
 - Errors say what happened in plain, short words. No long sentences and no explanation of why or how it happened. Never show raw exception text or status codes.
 - Each kind of feedback has one channel:
   - An expected failure of something the user just did (validation, conflict) shows where they did it.
