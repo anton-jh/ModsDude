@@ -5,7 +5,6 @@ using ModsDude.Client.Wpf.Services;
 using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
-using ModsDude.Shared.GenericFactories;
 
 namespace ModsDude.Client.Wpf.ViewModel.Windows;
 public partial class MainWindowViewModel

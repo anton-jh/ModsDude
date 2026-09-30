@@ -26,8 +26,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Client.Wpf", "ModsDude.Client\ModsDude.Client.Wpf\ModsDude.Client.Wpf.csproj", "{5F628DFE-070E-4310-A605-1325480B2918}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Shared", "ModsDude.Shared\ModsDude.Shared.csproj", "{0C6276B5-8A30-44A1-8F52-1978179C4838}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Server.Domain.Tests", "ModsDude.Server\ModsDude.Server.Domain.Tests\ModsDude.Server.Domain.Tests.csproj", "{0E684A9F-CEF1-442F-926D-41B50A42FA5C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Server.Persistence.Tests", "ModsDude.Server\ModsDude.Server.Persistence.Tests\ModsDude.Server.Persistence.Tests.csproj", "{C1285089-A4DB-4548-AFD4-2155829940D7}"
@@ -132,18 +130,6 @@ Global
 		{5F628DFE-070E-4310-A605-1325480B2918}.Release|x64.Build.0 = Release|Any CPU
 		{5F628DFE-070E-4310-A605-1325480B2918}.Release|x86.ActiveCfg = Release|Any CPU
 		{5F628DFE-070E-4310-A605-1325480B2918}.Release|x86.Build.0 = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|x64.Build.0 = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Debug|x86.Build.0 = Debug|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|x64.ActiveCfg = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|x64.Build.0 = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|x86.ActiveCfg = Release|Any CPU
-		{0C6276B5-8A30-44A1-8F52-1978179C4838}.Release|x86.Build.0 = Release|Any CPU
 		{0E684A9F-CEF1-442F-926D-41B50A42FA5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0E684A9F-CEF1-442F-926D-41B50A42FA5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0E684A9F-CEF1-442F-926D-41B50A42FA5C}.Debug|x64.ActiveCfg = Debug|Any CPU

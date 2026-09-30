@@ -43,7 +43,6 @@ ModsDude.Server/    ASP.NET Core API, PostgreSQL, Azure Blob Storage
 ModsDude.Client/    ModsDude.Client.Core (adapters, server client, state, catalog, import, sync)
                     ModsDude.Client.Wpf  (the desktop app)
                     + ModsDude.Client.Core.Tests
-ModsDude.Shared/    Helpers used by both client projects
 openapi/v1.json     The API's OpenAPI document, checked in so a stale client shows as a diff
 scripts/            openapi.ps1 — regenerate or verify that document
 ```

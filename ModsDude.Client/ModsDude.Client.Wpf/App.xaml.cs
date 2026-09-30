@@ -28,7 +28,6 @@ using ModsDude.Client.Wpf.ViewModel.Pages;
 using ModsDude.Client.Wpf.ViewModel.Services;
 using ModsDude.Client.Wpf.ViewModel.ViewModels;
 using ModsDude.Client.Wpf.ViewModel.Windows;
-using ModsDude.Shared.GenericFactories;
 using System.IO;
 using System.Windows;
 
@@ -431,7 +430,6 @@ public partial class App : Application
             AppIdentity.IsProduction));
 
         services.AddFactory<MainPageViewModel>();
-        services.AddFactory<CreateRepoPageViewModel>();
         services.AddFactory<SettingsPageViewModel>();
         services.AddFactory<AccountPageViewModel>();
         services.AddSingleton<RepoAdminPageViewModel.Factory>();

@@ -83,8 +83,6 @@ public partial class RepoPageViewModel
     private readonly MenuItemViewModel _connectGameMenuItem;
     private readonly MenuItemViewModel _gameMenuItem;
 
-    private bool _selectionRestored;
-
 
     public RepoPageViewModel(
         Repo repo,

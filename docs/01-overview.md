@@ -72,7 +72,6 @@ one of is the policy.
 | Storage | `ModsDude.Server.Storage` | Azure Blob Storage, SAS link issuance |
 | Client core | `ModsDude.Client.Core` | Game adapters, server client, local state, models. UI-framework agnostic |
 | Client WPF | `ModsDude.Client.Wpf` | The desktop app: views, view models, navigation, imaging |
-| Shared | `ModsDude.Shared` | Small helpers used by both sides of the client |
 
 Three test projects sit alongside them: `ModsDude.Server.Domain.Tests` (pure, no
 infrastructure), `ModsDude.Server.Persistence.Tests` (a real PostgreSQL, for the invariants only

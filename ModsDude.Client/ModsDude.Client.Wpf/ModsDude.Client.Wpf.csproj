@@ -31,7 +31,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\ModsDude.Shared\ModsDude.Shared.csproj" />
     <ProjectReference Include="..\ModsDude.Client.Core\ModsDude.Client.Core.csproj" />
   </ItemGroup>
 

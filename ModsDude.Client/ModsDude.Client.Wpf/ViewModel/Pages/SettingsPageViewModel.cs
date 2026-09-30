@@ -375,10 +375,10 @@ public partial class SettingsPageViewModel
 
         try
         {
-            var report = await RunCancellableAsync(
+            var report = await RunAsync(
                 () => _maintenance.VerifyAsync(store, progress, cancellation.Token, Waiting(task)));
 
-            await ReportVerificationAsync(row, report);
+            await ReportVerificationAsync(row, report?.Value);
         }
         catch (OperationCanceledException)
         {
@@ -480,9 +480,9 @@ public partial class SettingsPageViewModel
 
         using var task = Announce($"Reclaiming space from the store on {row.VolumeRoot}");
 
-        var result = await RunAsync(() => _maintenance.ReclaimAsync(store, CancellationToken.None, Waiting(task)));
+        var ran = await RunAsync(() => _maintenance.ReclaimAsync(store, CancellationToken.None, Waiting(task)));
 
-        if (result is null)
+        if (ran?.Value is not ContentStoreClearResult result)
         {
             return;
         }
@@ -529,15 +529,14 @@ public partial class SettingsPageViewModel
 
         using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}");
 
-        var outcome = await RunAsync(async () =>
-            new QuarantineOutcome(await _maintenance.RecycleQuarantineAsync(store, CancellationToken.None, Waiting(task))));
+        var ran = await RunAsync(() => _maintenance.RecycleQuarantineAsync(store, CancellationToken.None, Waiting(task)));
 
-        if (outcome is null)
+        if (ran is null)
         {
             return;
         }
 
-        if (outcome.Recycled is long recycled)
+        if (ran.Value is long recycled)
         {
             await ReportAsync("Recycled", $"Moved {ByteSize.Describe(recycled)} to the Recycle Bin.");
         }
@@ -551,8 +550,6 @@ public partial class SettingsPageViewModel
         await RefreshUsageAsync();
     }
 
-    private sealed record QuarantineOutcome(long? Recycled);
-
     /// <summary>
     /// Empties the machine's image cache. Costs re-fetching thumbnails and nothing else, so it is
     /// the one of these that does not ask first.
@@ -560,9 +557,7 @@ public partial class SettingsPageViewModel
     [RelayCommand(CanExecute = nameof(CanManage))]
     public async Task EmptyImageCache()
     {
-        var reclaimed = await RunAsync(_imageCache.Clear);
-
-        if (reclaimed is null)
+        if (await RunAsync(_imageCache.Clear) is not { } reclaimed)
         {
             return;
         }
@@ -638,47 +633,20 @@ public partial class SettingsPageViewModel
     /// failure into a dialog rather than the app's error modal - a store that could not be swept is
     /// a full disk, not a broken client.
     /// </summary>
-    private async Task<T?> RunAsync<T>(Func<T> work)
-        where T : class
-    {
-        IsBusy = true;
-
-        try
-        {
-            return await Task.Run(work);
-        }
-        catch (Exception exception)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
-
-            return null;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
     /// <remarks>
-    /// The asynchronous form, and the one that lets a cancellation straight through: stopping a
-    /// verification pass on purpose is not a failure, and turning it into "that did not work" would
-    /// be the app calling the user's own decision an error.
+    /// A cancellation is let straight through: stopping a verification pass on purpose is not a
+    /// failure, and turning it into "that did not work" would call the user's own decision an error.
     /// </remarks>
-    private async Task<T?> RunCancellableAsync<T>(Func<Task<T>> work)
-        where T : class
+    /// <returns>What the work answered, or null where it failed and the dialog has said so.</returns>
+    private async Task<Ran<T>?> RunAsync<T>(Func<Task<T>> work)
     {
         IsBusy = true;
 
         try
         {
-            return await Task.Run(work);
+            return new Ran<T>(await Task.Run(work));
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
 
@@ -690,74 +658,9 @@ public partial class SettingsPageViewModel
         }
     }
 
-    /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
-    /// <remarks>
-    /// For the store housekeeping, which is asynchronous now that it waits for the store to itself
-    /// before touching it - a sweep that deletes blobs out from under a sync that is linking them is
-    /// the one way this page could make things worse than it found them.
-    /// </remarks>
-    private async Task<T?> RunAsync<T>(Func<Task<T>> work)
-        where T : class
-    {
-        IsBusy = true;
+    private async Task<Ran<T>?> RunAsync<T>(Func<T> work) => await RunAsync(() => Task.FromResult(work()));
 
-        try
-        {
-            return await Task.Run(work);
-        }
-        catch (Exception exception)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
-
-            return null;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    /// <inheritdoc cref="RunAsync{T}(Func{Task{T}})"/>
-    private async Task<long?> RunAsync(Func<Task<long>> work)
-    {
-        IsBusy = true;
-
-        try
-        {
-            return await Task.Run(work);
-        }
-        catch (Exception exception)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
-
-            return null;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    /// <inheritdoc cref="RunAsync{T}(Func{T})"/>
-    private async Task<long?> RunAsync(Func<long> work)
-    {
-        IsBusy = true;
-
-        try
-        {
-            return await Task.Run(work);
-        }
-        catch (Exception exception)
-        {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
-
-            return null;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private sealed record Ran<T>(T Value);
 
     /// <summary>
     /// Puts one store operation on the shell strip for as long as it runs.
