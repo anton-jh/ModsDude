@@ -203,8 +203,13 @@ public class FarmingSimulatorLocalSavegameAdapter(
                 Indent = true
             };
 
-            using var writer = XmlWriter.Create(careerFile, writerSettings);
-            document.Value.Save(writer);
+            // Through a temporary file, so a write that fails part way leaves the old career file rather
+            // than a truncated one that would be packed and uploaded as the save.
+            AtomicFile.Write(careerFile, stream =>
+            {
+                using var writer = XmlWriter.Create(stream, writerSettings);
+                document.Value.Save(writer);
+            });
 
             return true;
         }

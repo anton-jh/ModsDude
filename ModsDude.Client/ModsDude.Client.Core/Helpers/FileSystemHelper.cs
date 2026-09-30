@@ -43,6 +43,52 @@ public static class FileSystemHelper
     }
 
     /// <summary>
+    /// Moves a folder, across volumes where it has to. A cross-volume move copies everything first and
+    /// removes the source only once the copy is complete; a copy that fails part way is removed and
+    /// the source is left as it was.
+    /// </summary>
+    public static void MoveDirectory(string source, string destination)
+    {
+        if (string.Equals(NormalizeVolumeRoot(source), NormalizeVolumeRoot(destination), StringComparison.OrdinalIgnoreCase))
+        {
+            Directory.Move(source, destination);
+
+            return;
+        }
+
+        try
+        {
+            CopyDirectory(source, destination);
+        }
+        catch (Exception)
+        {
+            if (Directory.Exists(destination))
+            {
+                Directory.Delete(destination, recursive: true);
+            }
+
+            throw;
+        }
+
+        Directory.Delete(source, recursive: true);
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(source))
+        {
+            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+        }
+    }
+
+    /// <summary>
     /// A path in <paramref name="folder"/> for <paramref name="fileName"/> that nothing is using: the name as
     /// given where it is free, and otherwise with a counter before the extension - <c>mod (2).zip</c>, the
     /// way Explorer does it, so that a move never overwrites what a previous one put there.

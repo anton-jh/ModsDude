@@ -74,19 +74,18 @@ public interface ISavegamePacker
     /// <remarks>
     /// <para>
     /// <b>The slot ends up holding exactly the archive, and nothing else.</b> Whatever was there is
-    /// permanently deleted - not recycled, not quarantined. That is deliberate: by the time this runs
-    /// the caller has already decided what displacing this slot means, and it is the caller that owes
-    /// the user the confirmation and the trip to <c>IRecycleBin</c>. A second, silent safety net in
-    /// here would only make the first one look optional.
+    /// renamed beside it, e.g. <c>savegame3 (replaced 2026-09-30 14-02)</c>, and handed back: where it
+    /// goes from there is the caller's decision. Nothing here deletes it.
     /// </para>
     /// <para>
-    /// An entry that would resolve outside the slot folder is refused rather than written, and
-    /// refusing aborts the whole unpack - the slot is left as it was.
+    /// Any failure before the new contents are in place leaves the slot as it was. An entry that would
+    /// resolve outside the slot folder is one such failure.
     /// </para>
     /// </remarks>
     /// <param name="progress">Bytes of the archive's files written so far, of what the archive declares.</param>
+    /// <returns>Where the slot's previous contents now are, or null where the slot was empty.</returns>
     /// <exception cref="InvalidDataException">An entry names a path outside the slot folder.</exception>
-    Task UnpackAsync(
+    Task<string?> UnpackAsync(
         string archivePath,
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
@@ -166,7 +165,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         return WriteArchiveAsync(adapter, target, slot, Stream.Null, null, cancellationToken);
     }
 
-    public async Task UnpackAsync(
+    public async Task<string?> UnpackAsync(
         string archivePath,
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
@@ -179,44 +178,78 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
             ?? throw new ArgumentException($"'{slotPath}' is a filesystem root, not a savegame slot.", nameof(slot));
 
         // Staged beside the slot rather than in the system temp folder, so landing it is a rename on
-        // one volume instead of a second copy of a save that can be hundreds of megabytes. The
-        // displaced folder is moved aside rather than deleted first, so a failure anywhere up to the
-        // last rename leaves the slot exactly as it was.
+        // one volume instead of a second copy of a save that can be hundreds of megabytes.
         var staging = Path.Combine(parent, $".modsdude-unpack-{Guid.NewGuid():N}");
-        var displaced = Path.Combine(parent, $".modsdude-replaced-{Guid.NewGuid():N}");
 
         try
         {
             Directory.CreateDirectory(staging);
 
             await ExtractAsync(archivePath, staging, progress, cancellationToken);
+        }
+        catch (Exception)
+        {
+            TryDeleteDirectory(staging);
 
-            if (Directory.Exists(slotPath))
+            throw;
+        }
+
+        if (Directory.Exists(slotPath) is false)
+        {
+            MoveIntoSlot(staging, slotPath);
+
+            return null;
+        }
+
+        var displaced = FileSystemHelper.GetUnusedPath(
+            parent, $"{Path.GetFileName(slotPath)} (replaced {DateTime.Now:yyyy-MM-dd HH-mm})");
+
+        try
+        {
+            Directory.Move(slotPath, displaced);
+        }
+        catch (Exception)
+        {
+            TryDeleteDirectory(staging);
+
+            throw;
+        }
+
+        try
+        {
+            MoveIntoSlot(staging, slotPath);
+        }
+        catch (Exception exception)
+        {
+            try
             {
-                Directory.Move(slotPath, displaced);
+                Directory.Move(displaced, slotPath);
+            }
+            catch (Exception restoreFailure)
+            {
+                throw new IOException(
+                    $"The new save could not be put in '{slotPath}', and the save that was there could not be moved back. It is at '{displaced}'.",
+                    new AggregateException(exception, restoreFailure));
             }
 
+            throw;
+        }
+
+        return displaced;
+    }
+
+    /// <summary>Moves the staged contents into the slot, and drops the staging folder if that fails.</summary>
+    private void MoveIntoSlot(string staging, string slotPath)
+    {
+        try
+        {
             Directory.Move(staging, slotPath);
         }
         catch (Exception)
         {
             TryDeleteDirectory(staging);
 
-            if (Directory.Exists(displaced) && Directory.Exists(slotPath) is false)
-            {
-                // The only window this can fire in is between the two renames. Putting it back is
-                // worth attempting because the alternative is a slot that vanished.
-                Directory.Move(displaced, slotPath);
-            }
-
             throw;
-        }
-        finally
-        {
-            // What the caller already decided to displace. A failure here leaves a dotted folder
-            // beside the slots that no adapter enumerates - untidy, and not worth failing a
-            // successful unpack over.
-            TryDeleteDirectory(displaced);
         }
     }
 

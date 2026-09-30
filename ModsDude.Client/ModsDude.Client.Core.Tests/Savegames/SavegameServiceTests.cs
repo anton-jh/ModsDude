@@ -90,10 +90,73 @@ public class SavegameServiceTests
         harness.Sightings.SetClaim(harness.Server.SavegameId, new SavegameClaimSighting(
             new SavegameClaimHolder("bob", "Bob", since), IsYours: false));
 
-        var takenFrom = await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        var (takenFrom, _) = await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         Assert.Equal(new SavegameClaimHolder("bob", "Bob", since), takenFrom);
         Assert.True(harness.Sightings.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
+    }
+
+    [Fact]
+    public async Task Checking_out_over_somebodys_own_save_sends_it_to_the_recycle_bin_under_a_readable_name()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.WriteSlotFile(_slot1, "my own save");
+
+        var (_, displaced) = await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(DisplacedSavegameDestination.RecycleBin, displaced?.Destination);
+        Assert.StartsWith("savegame1 (replaced ", displaced!.Name);
+        Assert.Equal(Path.GetFileName(Assert.Single(harness.RecycleBin.Recycled)), displaced.Name);
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
+    }
+
+    [Fact]
+    public async Task A_replaced_save_the_recycle_bin_refuses_goes_to_quarantine()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.WriteSlotFile(_slot1, "my own save");
+        harness.RecycleBin.Refuses = true;
+
+        var (_, displaced) = await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        Assert.Equal(DisplacedSavegameDestination.QuarantineFolder, displaced?.Destination);
+        Assert.StartsWith(harness.Store.QuarantinePath, displaced!.Path);
+        Assert.Equal("my own save", File.ReadAllText(Path.Combine(displaced.Path!, "careerSavegame.xml")));
+    }
+
+    [Fact]
+    public async Task A_replaced_save_nothing_will_take_stays_beside_the_slots()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.WriteSlotFile(_slot1, "my own save");
+        harness.RecycleBin.Refuses = true;
+        File.WriteAllText(harness.Store.QuarantinePath, "a file where the quarantine folder would go");
+
+        var displaced = await harness.Service.TakeCopyAsync(harness.Game, harness.Server.Savegame, 1, _slot1, CancellationToken.None);
+
+        Assert.Equal(DisplacedSavegameDestination.BesideSlots, displaced?.Destination);
+        Assert.Equal(Path.GetDirectoryName(harness.SlotPath(_slot1)), Path.GetDirectoryName(displaced!.Path));
+        Assert.Equal("my own save", File.ReadAllText(Path.Combine(displaced.Path!, "careerSavegame.xml")));
+    }
+
+    [Fact]
+    public async Task A_slot_the_game_saved_to_during_the_check_in_is_not_recycled()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        harness.Uploader.DuringUpload = () => harness.WriteSlotFile(_slot1, "a savegame, played once and saved again");
+
+        var result = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+
+        Assert.Equal(SavegameLocalCopy.ChangedSinceUpload, result.LocalCopy);
+        Assert.Empty(harness.RecycleBin.Recycled);
+        Assert.Equal("a savegame, played once and saved again", harness.ReadSlotFile(_slot1));
     }
 
     [Fact]
@@ -102,7 +165,7 @@ public class SavegameServiceTests
         using var harness = new Harness();
         await harness.SeedHeadAsync("a savegame");
 
-        Assert.Null(await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None));
+        Assert.Null((await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None)).TakenFrom);
     }
 
     /// <summary>
@@ -675,7 +738,7 @@ public class SavegameServiceTests
 
         harness.WriteSlotFile(_slot1, "a brand new savegame");
 
-        var (savegame, leftBehind) = await harness.Service.PublishAsync(
+        var (savegame, localCopy) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
         // The savegame is real and the snapshot was minted: this is a publish, not a cancelled one.
@@ -686,7 +749,7 @@ public class SavegameServiceTests
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Null(harness.Service.GetBinding(harness.Game, savegame.Id));
         Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
-        Assert.False(leftBehind);
+        Assert.Equal(SavegameLocalCopy.Recycled, localCopy);
 
         // Which is what leaves the mod folder free for the next savegame, rather than spoken for by
         // one that is no longer here.
@@ -706,10 +769,10 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a brand new savegame");
         harness.RecycleBin.Refuses = true;
 
-        var (savegame, leftBehind) = await harness.Service.PublishAsync(
+        var (savegame, localCopy) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
-        Assert.True(leftBehind);
+        Assert.Equal(SavegameLocalCopy.LeftBehind, localCopy);
         Assert.Equal(4, harness.RecycleBin.Attempts);
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
@@ -734,10 +797,10 @@ public class SavegameServiceTests
         harness.WriteSlotFile(_slot1, "a brand new savegame");
         harness.RecycleBin.RefusesFirst = 2;
 
-        var (_, leftBehind) = await harness.Service.PublishAsync(
+        var (_, localCopy) = await harness.Service.PublishAsync(
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
 
-        Assert.False(leftBehind);
+        Assert.Equal(SavegameLocalCopy.Recycled, localCopy);
         Assert.Equal(3, harness.RecycleBin.Attempts);
         Assert.False(Directory.Exists(harness.SlotPath(_slot1)));
     }
@@ -755,7 +818,7 @@ public class SavegameServiceTests
 
         var result = await harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
 
-        Assert.True(result.LocalCopyLeftBehind);
+        Assert.Equal(SavegameLocalCopy.LeftBehind, result.LocalCopy);
         Assert.Null(harness.Service.GetBinding(harness.Game, harness.Server.SavegameId));
         Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
     }
@@ -1549,6 +1612,7 @@ public class SavegameServiceTests
         private readonly TempDirectory _slots = new("savegame-service-slots");
         private readonly TempDirectory _clientSlots = new("savegame-service-client-slots");
         private readonly TempDirectory _manifests = new("savegame-service-manifests");
+        private readonly TempDirectory _store = new("savegame-service-store");
 
 
         public Harness(bool writeManifest = true, int appliedRevision = 1)
@@ -1571,6 +1635,7 @@ public class SavegameServiceTests
             Adapter = new FakeSavegameAdapter(_slots.Path, _slot1.Slot.Value, _slot2.Slot.Value);
             Bindings = new SavegameBindingStore(State);
             ManifestStore = new SyncManifestStore(_manifests.Path);
+            Store = new ContentStore("C:\\", _store.Path, long.MaxValue);
 
             if (writeManifest)
             {
@@ -1587,6 +1652,7 @@ public class SavegameServiceTests
                 Uploader,
                 ManifestStore,
                 RecycleBin,
+                new FakeStoreProvider(Store),
                 NullLogger<SavegameService>.Instance,
                 Sightings)
             {
@@ -1606,6 +1672,7 @@ public class SavegameServiceTests
         public FakeSavegameAdapter Adapter { get; }
         public SavegameBindingStore Bindings { get; }
         public SyncManifestStore ManifestStore { get; }
+        public ContentStore Store { get; }
         public SavegameService Service { get; }
         public Game Game { get; }
 
@@ -1743,6 +1810,7 @@ public class SavegameServiceTests
             _slots.Dispose();
             _clientSlots.Dispose();
             _manifests.Dispose();
+            _store.Dispose();
         }
     }
 }

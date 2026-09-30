@@ -184,19 +184,52 @@ public sealed record HeldSlotReading(
 public readonly record struct SavegamePublishTarget(Guid ProfileId, int Revision);
 
 
-/// <summary>What a check-in minted, and whether the local copy it was meant to hand back is still there.</summary>
-/// <param name="LocalCopyLeftBehind">
-/// The claim was released and the binding cleared, but the slot's folder could not be moved to the
-/// Recycle Bin - see <see cref="SavegameService.RecycleAsync"/>. Never true where the save was kept.
-/// </param>
-public sealed record SavegameCheckInResult(SavegameSnapshotDto Snapshot, bool LocalCopyLeftBehind);
+/// <summary>What became of the slot a check-in or publish uploaded from.</summary>
+public enum SavegameLocalCopy
+{
+    /// <summary>Still checked out, as asked.</summary>
+    Kept,
+
+    Recycled,
+
+    /// <summary>Handed back, but the folder could not be moved to the Recycle Bin and is still in its slot.</summary>
+    LeftBehind,
+
+    /// <summary>
+    /// Handed back, but the slot no longer matches what was uploaded - the game saved again, most
+    /// likely - so it was left in its slot rather than recycled.
+    /// </summary>
+    ChangedSinceUpload
+}
 
 
-/// <summary>What a publish created, and whether the local copy it was meant to hand back is still there.</summary>
-/// <param name="LocalCopyLeftBehind">
-/// The same as <see cref="SavegameCheckInResult.LocalCopyLeftBehind"/>. Never true where the save was kept.
-/// </param>
-public sealed record SavegamePublishResult(SavegameDto Savegame, bool LocalCopyLeftBehind);
+public sealed record SavegameCheckInResult(SavegameSnapshotDto Snapshot, SavegameLocalCopy LocalCopy);
+
+
+public sealed record SavegamePublishResult(SavegameDto Savegame, SavegameLocalCopy LocalCopy);
+
+
+/// <summary>Where the save a check-out or copy replaced has gone.</summary>
+public enum DisplacedSavegameDestination
+{
+    RecycleBin,
+
+    /// <summary>The Recycle Bin refused it, so it was moved into the content store's quarantine folder.</summary>
+    QuarantineFolder,
+
+    /// <summary>Neither worked, so it is still beside the slots under its new name.</summary>
+    BesideSlots
+}
+
+
+/// <param name="Name">The folder's name now, e.g. <c>savegame3 (replaced 2026-09-30 14-02)</c>.</param>
+/// <param name="Path">Where it is, where that is not the Recycle Bin.</param>
+public sealed record DisplacedSavegame(DisplacedSavegameDestination Destination, string Name, string? Path);
+
+
+/// <param name="TakenFrom">Whoever held the claim until this took it, or null where nobody else did.</param>
+/// <param name="Displaced">The save the slot held before, or null where it was empty.</param>
+public sealed record SavegameCheckOutResult(SavegameClaimHolder? TakenFrom, DisplacedSavegame? Displaced);
 
 
 /// <summary>
@@ -257,13 +290,14 @@ public interface ISavegameService : IHeldSavegames
     /// parameter, with the same meaning, on every verb below that moves a save.
     /// </param>
     /// <returns>
-    /// Whoever held the claim until this took it, or null where nobody else did. Taking a save from
-    /// somebody is allowed; the caller says so, naming them.
+    /// Whoever held the claim until this took it - allowed, and the caller says so, naming them - and
+    /// where the save the slot held before went.
     /// </returns>
-    Task<SavegameClaimHolder?> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Writes a named snapshot into a slot without claiming anything.</summary>
-    Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    /// <returns>Where the save the slot held before went, or null where it was empty.</returns>
+    Task<DisplacedSavegame?> TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>Hands a held savegame back, minting a snapshot from whatever is in its slot now.</summary>
     /// <param name="savegameName">
@@ -455,6 +489,7 @@ public sealed class SavegameService(
     IModFileUploader uploader,
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
+    IContentStoreProvider storeProvider,
     ILogger<SavegameService> logger,
     ISavegameSightings? sightings = null)
     : ISavegameService
@@ -690,7 +725,7 @@ public sealed class SavegameService(
     /// The slot holds play nobody has checked in, or this game already holds a savegame that
     /// claims its mod folder.
     /// </exception>
-    public async Task<SavegameClaimHolder?> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
+    public async Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
@@ -710,7 +745,7 @@ public sealed class SavegameService(
 
         sightings?.RecordOwnClaim(savegame.RepoId, savegame.Id, claim.Checkout);
 
-        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
+        var displaced = await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 
         // Last, and only after the bytes are in place: this is the record that says the slot is ours
         // and which snapshot is in it, and writing it before the unpack would claim a slot holding
@@ -736,9 +771,11 @@ public sealed class SavegameService(
             LastPlayedRevision = null
         });
 
-        return claim.TakenFrom is SavegameCheckoutDto takenFrom
+        var holder = claim.TakenFrom is SavegameCheckoutDto takenFrom
             ? new SavegameClaimHolder(takenFrom.User.Id, takenFrom.User.DisplayName, takenFrom.TakenAt)
             : null;
+
+        return new SavegameCheckOutResult(holder, displaced);
     }
 
     /// <summary>
@@ -751,7 +788,7 @@ public sealed class SavegameService(
     /// there is no snapshot to mint from it and no claim to give back, so it is a copy in the plainest
     /// sense.
     /// </remarks>
-    public async Task TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
+    public async Task<DisplacedSavegame?> TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
@@ -760,16 +797,18 @@ public sealed class SavegameService(
 
         var contentHash = await ResolveSnapshotHashAsync(savegame, snapshotNumber, ct);
 
-        await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, progress, ct);
+        var displaced = await DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, contentHash, slot.Slot, progress, ct);
 
         // A binding that survived this would name a slot whose contents are now a different savegame
         // entirely, and the safety check would read that slot as unpublished play forever. The claim
         // it recorded is still open on the server - the caller is the one that can offer to give it
         // back, and it can only do that if this leaves a truthful local record behind.
-        if (bindings.GetBindingForSlot(game.Identity, slot) is SavegameCheckoutBinding displaced)
+        if (bindings.GetBindingForSlot(game.Identity, slot) is SavegameCheckoutBinding displacedBinding)
         {
-            bindings.ClearBinding(game.Identity, displaced.SavegameId);
+            bindings.ClearBinding(game.Identity, displacedBinding.SavegameId);
         }
+
+        return displaced;
     }
 
     /// <summary>
@@ -904,7 +943,7 @@ public sealed class SavegameService(
                 LastPlayedRevision = null
             });
 
-            return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: false);
+            return new SavegameCheckInResult(snapshot, SavegameLocalCopy.Kept);
         }
 
         // Only now. The binding goes first so that a failure to recycle cannot leave a slot claimed
@@ -912,7 +951,7 @@ public sealed class SavegameService(
         // which needs a confirmation to displace, and that is the safe way round.
         bindings.ClearBinding(game.Identity, savegameId);
 
-        return new SavegameCheckInResult(snapshot, LocalCopyLeftBehind: await RecycleAsync(adapter, target, slot) is false);
+        return new SavegameCheckInResult(snapshot, await HandBackAsync(adapter, target, slot, packed.ContentHash));
     }
 
     /// <inheritdoc cref="ISavegameService.MakeCurrentAsync"/>
@@ -1064,16 +1103,12 @@ public sealed class SavegameService(
 
         if (keepPlaying is false)
         {
-            // The same three steps a discard takes, in the same order and by the same route: release
-            // the claim somebody else is waiting on, forget the binding, recycle the copy. Reused
-            // rather than repeated - "publish and hand back" is a publish followed by exactly the
-            // give-it-back verb, and two copies of that order would eventually disagree about it.
-            var recycled = await DiscardAsync(game, savegameId, ct);
+            await ReleaseAsync(game, repoId, savegameId, ct);
 
-            return new SavegamePublishResult(savegame, LocalCopyLeftBehind: recycled is false);
+            return new SavegamePublishResult(savegame, await HandBackAsync(adapter, savegameTarget, slot.Slot, packed.ContentHash));
         }
 
-        return new SavegamePublishResult(savegame, LocalCopyLeftBehind: false);
+        return new SavegamePublishResult(savegame, SavegameLocalCopy.Kept);
     }
 
     /// <summary>
@@ -1099,14 +1134,41 @@ public sealed class SavegameService(
         // nothing can name - so this refuses instead, and Disconnect is the verb for that case.
         var target = RequireTarget(game, adapter, binding.Slot);
 
-        // The server first: it is the half somebody else is waiting on, and a local record cleared
-        // against a claim that is still open would leave the save unclaimable by anybody, this
-        // machine included.
-        await savegamesClient.DiscardSavegameCheckoutV1Async(binding.RepoId, savegameId, ct);
-
-        bindings.ClearBinding(game.Identity, savegameId);
+        await ReleaseAsync(game, binding.RepoId, savegameId, ct);
 
         return await RecycleAsync(adapter, target, binding.Slot.Slot);
+    }
+
+    /// <summary>
+    /// Gives the claim back and forgets the binding - the server first: it is the half somebody else
+    /// is waiting on, and a local record cleared against a claim that is still open would leave the
+    /// save unclaimable by anybody, this machine included.
+    /// </summary>
+    private async Task ReleaseAsync(Game game, Guid repoId, Guid savegameId, CancellationToken ct)
+    {
+        await savegamesClient.DiscardSavegameCheckoutV1Async(repoId, savegameId, ct);
+
+        bindings.ClearBinding(game.Identity, savegameId);
+    }
+
+    /// <summary>
+    /// Recycles a slot that has just been uploaded, but only while it still holds exactly what was
+    /// uploaded: anything the game wrote since exists nowhere else, so that slot is left alone.
+    /// </summary>
+    private async Task<SavegameLocalCopy> HandBackAsync(
+        ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string uploadedHash)
+    {
+        if (Directory.Exists(adapter.GetSlotPath(target, slot)) &&
+            ModContentHasher.Matches(await HashOrNothing(adapter, target, slot, CancellationToken.None), uploadedHash) is false)
+        {
+            logger.LogWarning("Slot {Slot} changed after it was uploaded; it was left where it is rather than recycled.", slot.Value);
+
+            return SavegameLocalCopy.ChangedSinceUpload;
+        }
+
+        return await RecycleAsync(adapter, target, slot)
+            ? SavegameLocalCopy.Recycled
+            : SavegameLocalCopy.LeftBehind;
     }
 
     public async Task ObserveAsync(ModTargetRef target, CancellationToken ct)
@@ -1453,7 +1515,8 @@ public sealed class SavegameService(
     /// against the hash the server addressed it by on the way past - one pass, no second read - since
     /// what lands here is about to replace somebody's slot.
     /// </remarks>
-    private async Task DownloadIntoSlotAsync(
+    /// <returns>Where the slot's previous contents went, or null where it was empty.</returns>
+    private async Task<DisplacedSavegame?> DownloadIntoSlotAsync(
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         Guid repoId,
@@ -1515,11 +1578,46 @@ public sealed class SavegameService(
                 }
             }
 
-            await packer.UnpackAsync(archivePath, adapter, target, slot, ct, progress);
+            return await packer.UnpackAsync(archivePath, adapter, target, slot, ct, progress) is string displaced
+                ? PutAway(displaced)
+                : null;
         }
         finally
         {
             TryDeleteFile(archivePath);
+        }
+    }
+
+    /// <summary>
+    /// Sends a save a check-out or copy replaced to the Recycle Bin, or failing that into the content
+    /// store's quarantine folder. Where both refuse it stays beside the slots, under its new name.
+    /// </summary>
+    private DisplacedSavegame PutAway(string displaced)
+    {
+        var name = Path.GetFileName(displaced);
+
+        if (recycleBin.IsAvailableFor(displaced) && recycleBin.TryRecycle(displaced) && Directory.Exists(displaced) is false)
+        {
+            return new DisplacedSavegame(DisplacedSavegameDestination.RecycleBin, name, null);
+        }
+
+        try
+        {
+            var quarantine = storeProvider.GetStoreServing(displaced).GetQuarantineDirectory(DateTimeOffset.UtcNow);
+
+            Directory.CreateDirectory(quarantine);
+
+            var destination = FileSystemHelper.GetUnusedPath(quarantine, name);
+
+            FileSystemHelper.MoveDirectory(displaced, destination);
+
+            return new DisplacedSavegame(DisplacedSavegameDestination.QuarantineFolder, name, destination);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not recycle or quarantine the replaced save {Path}; it stays beside the slots.", displaced);
+
+            return new DisplacedSavegame(DisplacedSavegameDestination.BesideSlots, name, displaced);
         }
     }
 

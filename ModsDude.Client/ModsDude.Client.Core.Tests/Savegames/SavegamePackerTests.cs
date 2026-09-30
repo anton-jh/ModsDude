@@ -234,16 +234,21 @@ public class SavegamePackerTests
         WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
         WriteSlotFile(root, _slot, "items/placeables.xml", "a shed");
 
-        // Whatever was in the target is gone, whether or not the archive has a file by that name.
+        // Whatever was in the target is moved out, whether or not the archive has a file by that name.
         WriteSlotFile(root, _otherSlot, "careerSavegame.xml", "somebody else's savegame");
         WriteSlotFile(root, _otherSlot, "vehicles.xml", "and their tractors");
 
         using var archive = await Pack(adapter, _slot);
-        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
+        var displaced = await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
 
         Assert.Equal(
             ["careerSavegame.xml", "items/placeables.xml"],
             RelativeContents(adapter.GetSlotPath(adapter.Target, _otherSlot)));
+
+        // Handed back beside the slots under a name a person recognises, never deleted.
+        Assert.NotNull(displaced);
+        Assert.StartsWith($"{_otherSlot.Value} (replaced ", Path.GetFileName(displaced));
+        Assert.Equal(["careerSavegame.xml", "vehicles.xml"], RelativeContents(displaced));
 
         Assert.Equal("a savegame", await File.ReadAllTextAsync(Path.Combine(adapter.GetSlotPath(adapter.Target, _otherSlot), "careerSavegame.xml")));
 
@@ -261,9 +266,10 @@ public class SavegamePackerTests
         WriteSlotFile(root, _slot, "careerSavegame.xml", "a savegame");
 
         using var archive = await Pack(adapter, _slot);
-        await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
+        var displaced = await new SavegamePacker().UnpackAsync(archive.FilePath, adapter, adapter.Target, _otherSlot, CancellationToken.None);
 
         Assert.Equal(["careerSavegame.xml"], RelativeContents(adapter.GetSlotPath(adapter.Target, _otherSlot)));
+        Assert.Null(displaced);
     }
 
     /// <summary>

@@ -328,6 +328,9 @@ internal sealed class FakeSavegameUploader(FakeSavegameServer server) : IModFile
 {
     public int Uploads { get; private set; }
 
+    /// <summary>Runs once the bytes have been read, as the game saving again mid-upload would.</summary>
+    public Action? DuringUpload { get; set; }
+
 
     public async Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken)
     {
@@ -337,6 +340,8 @@ internal sealed class FakeSavegameUploader(FakeSavegameServer server) : IModFile
         using var buffer = new MemoryStream();
 
         await content.CopyToAsync(buffer, cancellationToken);
+
+        DuringUpload?.Invoke();
 
         var bytes = buffer.ToArray();
         var hash = FakeSavegameServer.HashOf(bytes);

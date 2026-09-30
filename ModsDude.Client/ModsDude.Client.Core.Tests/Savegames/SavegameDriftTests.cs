@@ -419,6 +419,7 @@ public class SavegameDriftTests
                 new FakeSavegameUploader(Server),
                 _manifestStore,
                 new FakeSlotRecycleBin(),
+                new FakeStoreProvider(new ContentStore("C:\\", Path.Combine(Path.GetTempPath(), "modsdude-tests", "savegame-store", Guid.NewGuid().ToString("N")), long.MaxValue)),
                 NullLogger<SavegameService>.Instance,
                 Sightings);
         }
