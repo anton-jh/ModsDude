@@ -492,9 +492,13 @@ keep the save and the claim, or hand both straight back. Publishing with **no pr
 same, since such a savegame claims no mod folder.
 
 **Publishing to any other profile takes the choice away** and hands the save back — the snapshot is
-minted, the claim is released and the local copy goes to the Recycle Bin, which is exactly
-`DiscardAsync`, called by `PublishAsync` once the publish has committed. The dialog says so before
-the button is pressed and the button says it too.
+minted, the claim is released and the local copy goes to the Recycle Bin - the same release a
+discard makes, run by `PublishAsync` once the publish has committed. The dialog says so before the
+button is pressed and the button says it too.
+
+A hand-back, from a publish or a check-in, recycles the slot only while it still hashes to what was
+uploaded. One the game wrote to in the meantime holds play that exists nowhere else, so it is left
+in its slot as an ordinary save and the result says why.
 
 The reason is that the alternative is unreachable ground. A savegame following profile B, checked
 out into a folder on profile A, is `PlayedOnAnotherModList` — the state that damages saves
@@ -573,6 +577,12 @@ user's own, which is exactly what the button did.
 A slot occupied by a savegame this machine never checked out is `SavegameSlotAvailability.Unrecognised`.
 Writing to one is a confirmation naming the save, and the folder goes to the Recycle Bin rather
 than being deleted.
+
+Any write into an occupied slot keeps what was there: the new save is unpacked beside the slot, the
+old folder is renamed to e.g. `savegame3 (replaced 2026-09-30 14-02)` and the new one moved into
+place. Only then does the old one go to the Recycle Bin - or, where the bin refuses it, the content
+store's quarantine folder, or failing both it stays beside the slots under that name. A failure
+before the new save is in place puts the old folder back.
 
 Such savegames are not held by ModsDude at all, so they do not count towards the limit, and they
 do not affect which profile may be active or whether a profile may be applied. They are, however,

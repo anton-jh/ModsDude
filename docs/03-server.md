@@ -130,12 +130,27 @@ inserted twice.
 claim used to exist unreferenced beside it; they were deleted rather than wired up, because no
 token anywhere carries those scopes and activating them would have denied every request.
 
-Every endpoint that touches a repo starts the same way:
+An endpoint whose route names a repo declares the level it needs where the route is mapped:
+
+```csharp
+return builder.MapPut("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots", CheckIn)
+    .WithTags("Savegames")
+    .RequireRepoLevel(RepoMembershipLevel.Member);
+```
+
+`RequireRepoLevel` (`Api/Authorization/RepoAccessEndpointFilter.cs`) is an endpoint filter: it reads
+`{repoId}` from the route, runs `AccessRepoAtLevel` and answers `403` before the handler runs, and
+it declares that `403` for the OpenAPI document. The endpoints it cannot express check for
+themselves, the long way:
+
+- the repo arrives in the body rather than the route - the `files/*` link endpoints, recording
+  game activity;
+- the rule depends on the request - creating an invite, and changing or removing a member.
 
 ```csharp
 var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
     .CheckIsAllowedTo(x => x
-        .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
+        .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Member))
     .MapToForbidden();
 if (authResult is not null)
 {

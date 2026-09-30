@@ -358,7 +358,15 @@ nothing. On a copy-served disk they are equal and nothing is said.
 
 The **quarantine folder is the exception and is handled as one**: it is the only part of a store
 that nothing can fetch back, since a quarantined file is precisely a mod no repo registers. It is
-reported separately, deleted separately, and its dialog is the only alarming one on the page.
+reported separately and emptied separately, into the Recycle Bin rather than deleted. Where the
+bin will not take it - often, since a disk without one is how files end up in quarantine - it is
+left where it is and the page says so.
+
+**A store only ever touches a folder it owns.** Its path is the user's choice, so the first write
+drops a `modsdude-store.txt` marker, and only into an empty folder or one that already has it.
+Everything that deletes - reclaiming, eviction, removing a corrupt blob, emptying the quarantine -
+does nothing in a folder without the marker. Picking a folder that already holds other things puts
+the store in a `ModsDude store` folder inside it.
 
 ## Reconciliation
 
@@ -517,7 +525,18 @@ One shell detail is load-bearing. `FOF_NOCONFIRMATION` alone lets the shell **pe
 destroy** a file it cannot recycle — most often because it is larger than the bin's quota, which
 a mod archive easily is. `FOF_WANTNUKEWARNING` partially overrides it so the shell asks first;
 declining aborts, which is reported as a failure and sends the file to quarantine instead.
-Without that flag the exact outcome these rules exist to prevent happens silently.
+Without that flag the exact outcome these rules exist to prevent happens silently. `TryRecycle`
+also refuses outright on a volume with no Recycle Bin, where the shell's only way to "recycle" is
+to delete.
+
+**Only the removal phase takes a file out of a mod folder**, and three rules keep it honest:
+
+- A file that cannot be moved aside by any route fails its item: the apply is not complete, no
+  manifest is written, and that mod is not installed.
+- Installing never replaces a file. One found at the destination is one the plan did not know
+  about - dropped in while the plan was being confirmed, say - and the install fails instead.
+- A recoverable file is re-checked against the size and modification time the plan saw before it
+  is deleted. A plan can be minutes old by then; a file written since is moved aside instead.
 
 **The user is warned either way.** Before executing a plan that uninstalls anything
 unrecognised, show a dialog listing the affected mods by name, stating plainly where they are
