@@ -18,11 +18,8 @@ public interface IFriendActivitySeen
 public sealed class StateStoreFriendActivitySeen(StateStore store) : IFriendActivitySeen
 {
     public DateTime? Get(string userId)
-        => store.Get().FriendActivitySeenUntil.TryGetValue(userId, out var until) ? until : null;
+        => store.Read(state => state.FriendActivitySeenUntil.TryGetValue(userId, out var until) ? until : (DateTime?)null);
 
     public void Set(string userId, DateTime until)
-    {
-        store.Get().FriendActivitySeenUntil[userId] = until;
-        store.Save();
-    }
+        => store.Update(state => state.FriendActivitySeenUntil[userId] = until);
 }

@@ -91,7 +91,7 @@ public partial class SettingsPageViewModel
         _updater = updater;
         _updater.Changed += OnUpdaterChanged;
 
-        var settings = settingsRepository.Settings;
+        var settings = settingsRepository.Snapshot();
 
         // A store on a disk with no mod folders on it serves nothing, so the disks with games on
         // them are what the page is about.
@@ -261,40 +261,39 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        var settings = _settingsRepository.Settings;
-
-        foreach (var volume in ModFolderVolumes)
-        {
-            settings.StoreAssignments[volume.VolumeRoot] = volume.ServingVolume;
-        }
-
-        // Entries for volumes that no longer serve anything are left alone: they cost nothing, and
-        // dropping them would throw away a size the user set on a disk they are between uses of.
-        foreach (var store in Stores)
-        {
-            settings.Stores[store.VolumeRoot] = new ContentStoreSettings()
-            {
-                Path = store.Path,
-                MaxSizeBytes = (long)(store.MaxSizeGigabytes * _bytesPerGigabyte)
-            };
-        }
-
-        settings.ImageCache.Path = ImageCache.Path;
-        settings.ImageCache.MaxSizeBytes = (long)(ImageCache.MaxSizeGigabytes * _bytesPerGigabyte);
-
-        settings.Transfers.DownloadBytesPerSecond = ParseLimit(DownloadLimit);
-        settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
-
-        settings.Background.CloseToTray = CloseToTray;
-        settings.Background.Notifications = Notifications;
-
         await ApplyAutostartAsync();
 
-        _settingsRepository.Save();
+        _settingsRepository.Update(settings =>
+        {
+            foreach (var volume in ModFolderVolumes)
+            {
+                settings.StoreAssignments[volume.VolumeRoot] = volume.ServingVolume;
+            }
+
+            // Entries for volumes that no longer serve anything are left alone: they cost nothing, and
+            // dropping them would throw away a size the user set on a disk they are between uses of.
+            foreach (var store in Stores)
+            {
+                settings.Stores[store.VolumeRoot] = new ContentStoreSettings()
+                {
+                    Path = store.Path,
+                    MaxSizeBytes = (long)(store.MaxSizeGigabytes * _bytesPerGigabyte)
+                };
+            }
+
+            settings.ImageCache.Path = ImageCache.Path;
+            settings.ImageCache.MaxSizeBytes = (long)(ImageCache.MaxSizeGigabytes * _bytesPerGigabyte);
+
+            settings.Transfers.DownloadBytesPerSecond = ParseLimit(DownloadLimit);
+            settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
+
+            settings.Background.CloseToTray = CloseToTray;
+            settings.Background.Notifications = Notifications;
+        });
 
         // Into the live limiters as well as the file, so a download already running slows down - or
         // speeds up - from its next read rather than from the next start of the app.
-        _transferLimits.Apply(settings.Transfers);
+        _transferLimits.Apply(_settingsRepository.Read(x => x.Transfers));
         _navigationLockService.ReleaseLock(this);
 
         HasUnsavedChanges = false;
@@ -819,7 +818,7 @@ public partial class SettingsPageViewModel
     /// </remarks>
     private void RefreshStores()
     {
-        var settings = _settingsRepository.Settings;
+        var settings = _settingsRepository.Snapshot();
 
         var servingVolumes = ModFolderVolumes
             .Select(x => x.ServingVolume)

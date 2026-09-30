@@ -5,6 +5,11 @@ using System.Text.Json;
 
 namespace ModsDude.Client.Core.Persistence;
 
+/// <summary>
+/// State persisted as one json file. It is only ever touched under one lock - read through
+/// <see cref="Read"/>, changed and written through <see cref="Update"/> - so a write can never
+/// serialise a collection another thread is changing.
+/// </summary>
 /// <param name="isCompatible">
 /// Decides whether state read from disk can be used as-is. Returning false discards it the same way
 /// a parse failure does — the file is moved aside and a fresh instance is returned. This is what the
@@ -17,71 +22,100 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
     private readonly static JsonSerializerOptions _serializerOptions = new() { WriteIndented = true };
     private readonly string _filepath = Path.Combine(FileSystemHelper.GetAppDataDirectory(), filename);
     private T? _state;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     /// <summary>Never null: a store built without one is a store nothing is listening to.</summary>
     private ILogger Log { get; } = logger ?? NullLogger.Instance;
 
 
-    public T Get()
+    /// <summary>
+    /// Reads under the lock. What <paramref name="read"/> returns must not be a live collection of
+    /// the state - copy it - or it can be changed while the caller enumerates it.
+    /// </summary>
+    public TResult Read<TResult>(Func<T, TResult> read)
     {
         lock (_lock)
         {
-            if (_state is null)
+            return read(Load());
+        }
+    }
+
+    /// <summary>Changes the state and writes it, under the lock.</summary>
+    public void Update(Action<T> update)
+    {
+        lock (_lock)
+        {
+            update(Load());
+            Write();
+        }
+    }
+
+    /// <summary>Changes the state, and writes it only where <paramref name="update"/> says it changed.</summary>
+    /// <returns>What <paramref name="update"/> returned.</returns>
+    public bool UpdateIf(Func<T, bool> update)
+    {
+        lock (_lock)
+        {
+            var changed = update(Load());
+
+            if (changed)
             {
-                if (File.Exists(_filepath))
+                Write();
+            }
+
+            return changed;
+        }
+    }
+
+
+    private T Load()
+    {
+        if (_state is null)
+        {
+            if (File.Exists(_filepath))
+            {
+                var raw = File.ReadAllText(_filepath);
+                try
                 {
-                    var raw = File.ReadAllText(_filepath);
-                    try
-                    {
-                        var loaded = JsonSerializer.Deserialize<T>(raw);
+                    var loaded = JsonSerializer.Deserialize<T>(raw);
 
-                        if (loaded is null || isCompatible?.Invoke(loaded) == false)
-                        {
-                            // Deliberate, not a fault: a schema bump discards old state by design.
-                            // Still worth a line, because it is why somebody's settings are gone.
-                            Log.LogInformation("{File} is not compatible with this version and was moved aside.", _filepath);
-
-                            _state = new();
-                            MoveAside();
-                        }
-                        else
-                        {
-                            _state = loaded;
-                        }
-                    }
-                    catch (JsonException exception)
+                    if (loaded is null || isCompatible?.Invoke(loaded) == false)
                     {
-                        // The user's connected games, store assignments and savegame bindings, gone.
-                        // Recoverable - the file is moved aside rather than deleted - but only by
-                        // somebody who knows it happened, which is what this line is for.
-                        Log.LogError(exception, "{File} could not be read and was moved aside; starting from empty state.", _filepath);
+                        // Deliberate, not a fault: a schema bump discards old state by design.
+                        // Still worth a line, because it is why somebody's settings are gone.
+                        Log.LogInformation("{File} is not compatible with this version and was moved aside.", _filepath);
 
                         _state = new();
                         MoveAside();
                     }
+                    else
+                    {
+                        _state = loaded;
+                    }
                 }
-                else
+                catch (JsonException exception)
                 {
+                    // The user's connected games, store assignments and savegame bindings, gone.
+                    // Recoverable - the file is moved aside rather than deleted - but only by
+                    // somebody who knows it happened, which is what this line is for.
+                    Log.LogError(exception, "{File} could not be read and was moved aside; starting from empty state.", _filepath);
+
                     _state = new();
+                    MoveAside();
                 }
             }
-
-            return _state;
+            else
+            {
+                _state = new();
+            }
         }
+
+        return _state;
     }
 
-    public void Save()
+    private void Write()
     {
-        lock (_lock)
-        {
-            if (_state is null)
-            {
-                return;
-            }
-
-            AtomicFile.WriteAllText(_filepath, JsonSerializer.Serialize(_state, _serializerOptions));
-        }
+        AtomicFile.WriteAllText(_filepath, JsonSerializer.Serialize(_state, _serializerOptions));
     }
 
 

@@ -32,16 +32,14 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 {
     private readonly StateStore _store;
     private readonly SyncManifestStore _manifestStore;
-    private readonly LocalState _state;
 
 
     public GameRepository(StateStore store, SyncManifestStore manifestStore)
     {
         _store = store;
         _manifestStore = manifestStore;
-        _state = store.Get();
 
-        Games = new(_state.Games.Select(x => new Game(x.Key, x.Value)));
+        Games = new(store.Read(state => state.Games.Select(x => new Game(x.Key, x.Value)).ToList()));
 
         // At startup as well as after every edit, because the state can arrive smaller than the
         // manifest directory without anything here having run: a version bump discards it wholesale,
@@ -193,7 +191,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         // Refused rather than merged or renumbered: the state is keyed by identity, so a second
         // record for the same game has nowhere to be written, and silently replacing the first would
         // take away its active profile and its savegame holds.
-        if (_state.Games.ContainsKey(identity))
+        if (Find(identity) is not null)
         {
             throw new UserFriendlyException(
                 "This game is already connected",
@@ -214,9 +212,8 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
         var game = new Game(identity, persistedModel);
 
-        _state.Games[identity] = persistedModel;
+        _store.Update(state => state.Games[identity] = persistedModel);
         Games.Add(game);
-        _store.Save();
 
         return game;
     }
@@ -232,8 +229,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 
         EnsureFoldersAreUnclaimed(targets, game.Identity);
 
-        game.Update(baseAdapter.GameDisplayName, localSettings, targets);
-        _store.Save();
+        _store.Update(_ => game.Update(baseAdapter.GameDisplayName, localSettings, targets));
 
         // A field somebody emptied has taken a target away, and the manifest describing what used to
         // be in that folder is one nothing will look for again. Dropped here rather than worked out,
@@ -283,8 +279,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// </param>
     public void SetActiveProfile(Game game, ActiveProfile? activeProfile, int? pinnedRevision = null)
     {
-        game.SetActiveProfile(activeProfile, pinnedRevision);
-        _store.Save();
+        _store.Update(_ => game.SetActiveProfile(activeProfile, pinnedRevision));
 
         // A folder that was in sync with one profile is drifted from another the moment it is pointed
         // at it, and nothing about the collection changed to say so.
@@ -318,22 +313,22 @@ public class GameRepository : IModFolders, IDriftCandidateSource
             return;
         }
 
-        foreach (var game in affected)
-        {
-            game.SetActiveProfile(null);
-        }
-
         // One save for the batch: they were all made unusable by one event.
-        _store.Save();
+        _store.Update(_ =>
+        {
+            foreach (var game in affected)
+            {
+                game.SetActiveProfile(null);
+            }
+        });
 
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Delete(Game game)
     {
-        _state.Games.Remove(game.Identity);
+        _store.Update(state => state.Games.Remove(game.Identity));
         Games.Remove(game);
-        _store.Save();
 
         // Nothing reads a manifest for a folder no game reaches any more, and leaving one behind
         // would keep a few hundred kilobytes per disconnected folder forever.

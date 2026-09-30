@@ -534,7 +534,7 @@ public partial class App : Application
         // One cache per machine, not one per volume: images are always copies, so the hardlink
         // constraint that makes content stores per-volume does not apply to them.
         services.AddSingleton(sp => new ModImageCache(
-            () => sp.GetRequiredService<ClientSettingsRepository>().Settings.ImageCache,
+            () => sp.GetRequiredService<ClientSettingsRepository>().Read(x => x.ImageCache),
             sp.GetRequiredService<ILogger<ModImageCache>>()));
         services.AddSingleton<IModImageStore, ModImageStore>();
         services.AddSingleton<IModImagerySource, ModImagerySource>();

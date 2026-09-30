@@ -98,7 +98,7 @@ public sealed class TrayService(
         notices.SeverityCounts.CollectionChanged += (_, _) => Refresh();
         updates.Changed += (_, _) => Application.Current?.Dispatcher.InvokeAsync(Refresh);
         window.HiddenToTray += OnHiddenToTray;
-        window.HideOnClose = () => settings.Settings.Background.CloseToTray;
+        window.HideOnClose = () => settings.Read(x => x.Background.CloseToTray);
 
         Refresh();
 
@@ -139,13 +139,12 @@ public sealed class TrayService(
     /// </summary>
     private void OnHiddenToTray(object? sender, EventArgs e)
     {
-        if (settings.Settings.Background.TrayHintShown)
+        if (settings.Read(x => x.Background.TrayHintShown))
         {
             return;
         }
 
-        settings.Settings.Background.TrayHintShown = true;
-        settings.Save();
+        settings.Update(x => x.Background.TrayHintShown = true);
 
         _icon?.ShowNotification(
             $"{_name} is still running",

@@ -570,8 +570,20 @@ internal sealed class FakeGameState : IPersistedGameState
 
     public void Add(GameIdentity identity, PersistedGame game) => _games[identity] = game;
 
-    public PersistedGame? Find(GameIdentity identity)
-        => _games.TryGetValue(identity, out var game) ? game : null;
+    /// <summary>The live record, for a test to inspect directly.</summary>
+    public PersistedGame? Find(GameIdentity identity) => _games.GetValueOrDefault(identity);
 
-    public void Save() => Saves++;
+    public T Read<T>(GameIdentity game, Func<PersistedGame?, T> read) => read(_games.GetValueOrDefault(game));
+
+    public bool Update(GameIdentity game, Func<PersistedGame?, bool> update)
+    {
+        var changed = update(_games.GetValueOrDefault(game));
+
+        if (changed)
+        {
+            Saves++;
+        }
+
+        return changed;
+    }
 }

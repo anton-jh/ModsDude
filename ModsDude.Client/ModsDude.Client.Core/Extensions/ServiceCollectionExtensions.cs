@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
         // One per process, so every transfer in a direction shares its limit. Read from settings once;
         // the settings page applies a change to this same object rather than to a copy.
         services.AddSingleton(sp => Transfers.TransferLimits.From(
-            sp.GetRequiredService<Services.ClientSettingsRepository>().Settings.Transfers));
+            sp.GetRequiredService<Services.ClientSettingsRepository>().Read(x => x.Transfers)));
 
         // Only if nothing else has: a client that can decode mod archives registers a real
         // publisher, and this is called after the app has composed its own services.

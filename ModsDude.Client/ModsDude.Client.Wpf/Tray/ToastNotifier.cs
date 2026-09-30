@@ -72,7 +72,7 @@ public sealed class ToastNotifier(
     }
 
 
-    private bool Enabled => settings.Settings.Background.Notifications;
+    private bool Enabled => settings.Read(x => x.Background.Notifications);
 
     private bool WindowInFront => window.IsVisible
         && window.WindowState is not WindowState.Minimized

@@ -25,23 +25,25 @@ namespace ModsDude.Client.Core.Savegames;
 /// </remarks>
 public interface IPersistedGameState
 {
-    /// <summary>The game's persisted record, or null where no such game is configured.</summary>
-    PersistedGame? Find(GameIdentity game);
+    /// <summary>
+    /// Reads the game's persisted record - null where no such game is configured - under the state's
+    /// lock. Whatever is returned must be a copy, never one of its lists.
+    /// </summary>
+    T Read<T>(GameIdentity game, Func<PersistedGame?, T> read);
 
-    /// <summary>Flushes every pending change. Whole-state, exactly as the rest of the client saves.</summary>
-    void Save();
+    /// <summary>Changes the game's record under the state's lock, and saves where the change says it changed anything.</summary>
+    bool Update(GameIdentity game, Func<PersistedGame?, bool> update);
 }
 
 
 /// <summary><see cref="IPersistedGameState"/> over the real <c>state.json</c>.</summary>
 public sealed class StateStoreGameState(StateStore store) : IPersistedGameState
 {
-    public PersistedGame? Find(GameIdentity game)
-        => store.Get().Games.TryGetValue(game, out var persisted) ? persisted : null;
+    public T Read<T>(GameIdentity game, Func<PersistedGame?, T> read)
+        => store.Read(state => read(state.Games.GetValueOrDefault(game)));
 
-    // Store.Save() serialises the entire LocalState, so there is nothing finer to flush and no
-    // ordering to get wrong - the same call GameRepository makes after every mutation.
-    public void Save() => store.Save();
+    public bool Update(GameIdentity game, Func<PersistedGame?, bool> update)
+        => store.UpdateIf(state => update(state.Games.GetValueOrDefault(game)));
 }
 
 
@@ -101,9 +103,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// </remarks>
     public int? GetPinnedRevision(GameIdentity game, Guid profileId)
     {
-        return state.Find(game) is PersistedGame persisted && persisted.ActiveProfile?.ProfileId == profileId
-            ? persisted.PinnedRevision
-            : null;
+        return state.Read(game, persisted => persisted is not null && persisted.ActiveProfile?.ProfileId == profileId ? persisted.PinnedRevision : null);
     }
 
 
@@ -157,7 +157,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// </summary>
     public IReadOnlyList<SavegameCheckoutBinding> GetBindings(GameIdentity game)
     {
-        return Bindings(game) is List<SavegameCheckoutBinding> bindings ? [.. bindings] : [];
+        return Bindings(game);
     }
 
     /// <summary>
@@ -185,18 +185,23 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
         // Refused rather than ignored. Silently dropping this loses the only record of which
         // savegame is sitting in that slot, and the folder is already written by the time anybody
         // would notice.
-        var persisted = state.Find(game)
-            ?? throw new InvalidOperationException($"No local game '{game}' to bind a savegame to.");
+        state.Update(game, persisted =>
+        {
+            if (persisted is null)
+            {
+                throw new InvalidOperationException($"No local game '{game}' to bind a savegame to.");
+            }
 
-        persisted.SavegameCheckouts.RemoveAll(x =>
-            x.SavegameId == binding.SavegameId ||
-            x.Slot.Addresses(binding.Slot));
+            persisted.SavegameCheckouts.RemoveAll(x =>
+                x.SavegameId == binding.SavegameId ||
+                x.Slot.Addresses(binding.Slot));
 
-        persisted.SavegameCheckouts.Add(binding);
+            persisted.SavegameCheckouts.Add(binding);
 
-        SetHint(persisted, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.Slot));
+            SetHint(persisted, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.Slot));
 
-        state.Save();
+            return true;
+        });
 
         BindingsChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -214,19 +219,13 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     {
         // A binding that is already gone is the state the caller wanted, so this is idempotent - a
         // check-in retried after a crash must not fail on its own success.
-        if (state.Find(game) is not PersistedGame persisted)
+        var removed = state.Update(game, persisted =>
+            persisted is not null && persisted.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId) > 0);
+
+        if (removed)
         {
-            return;
+            BindingsChanged?.Invoke(this, EventArgs.Empty);
         }
-
-        if (persisted.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId) == 0)
-        {
-            return;
-        }
-
-        state.Save();
-
-        BindingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -252,24 +251,17 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// <returns>False where this game knew nothing about the savegame, which is idempotent rather than an error.</returns>
     public bool Forget(GameIdentity game, Guid savegameId)
     {
-        if (state.Find(game) is not PersistedGame persisted)
+        var removed = state.Update(game, persisted =>
+            persisted is not null &&
+            persisted.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId)
+                + persisted.SavegameSlotHints.RemoveAll(x => x.SavegameId == savegameId) > 0);
+
+        if (removed)
         {
-            return false;
+            BindingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        var removed = persisted.SavegameCheckouts.RemoveAll(x => x.SavegameId == savegameId)
-            + persisted.SavegameSlotHints.RemoveAll(x => x.SavegameId == savegameId);
-
-        if (removed == 0)
-        {
-            return false;
-        }
-
-        state.Save();
-
-        BindingsChanged?.Invoke(this, EventArgs.Empty);
-
-        return true;
+        return removed;
     }
 
     /// <summary>
@@ -283,26 +275,17 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// </remarks>
     public SavegameSlotRef? GetSlotHint(GameIdentity game, Guid savegameId)
     {
-        if (state.Find(game)?.SavegameSlotHints is not List<SavegameSlotHint> hints)
-        {
-            return null;
-        }
-
-        // Written out rather than LINQ'd for the reason FirstOrNull exists: SavegameSlotHint is a
-        // struct, and the default one carries a slot reference nobody can address.
-        foreach (var hint in hints)
-        {
-            if (hint.SavegameId == savegameId)
-            {
-                return hint.Slot;
-            }
-        }
-
-        return null;
+        // Not FirstOrDefault, for the reason FirstOrNull exists: SavegameSlotHint is a struct, and
+        // the default one carries a slot reference nobody can address.
+        return state.Read(game, persisted => persisted?.SavegameSlotHints
+            .Where(x => x.SavegameId == savegameId)
+            .Select(x => (SavegameSlotRef?)x.Slot)
+            .FirstOrDefault());
     }
 
 
-    private List<SavegameCheckoutBinding>? Bindings(GameIdentity game) => state.Find(game)?.SavegameCheckouts;
+    private IReadOnlyList<SavegameCheckoutBinding> Bindings(GameIdentity game)
+        => state.Read<IReadOnlyList<SavegameCheckoutBinding>>(game, persisted => persisted is null ? [] : [.. persisted.SavegameCheckouts]);
 
     /// <summary>
     /// The first matching binding, or null for none.
@@ -314,7 +297,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state)
     /// handed that binding declares the slot held with unpublished play and refuses to write to it.
     /// </remarks>
     private static SavegameCheckoutBinding? FirstOrNull(
-        IEnumerable<SavegameCheckoutBinding>? bindings,
+        IEnumerable<SavegameCheckoutBinding> bindings,
         Func<SavegameCheckoutBinding, bool> predicate)
     {
         if (bindings is null)

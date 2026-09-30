@@ -397,27 +397,4 @@ public class SavegameBindingStoreTests
         Name = "Farming Simulator 25",
         AdapterLocalSettings = "{}"
     };
-
-
-    /// <summary>
-    /// The persisted games, in memory. <c>state.json</c> lives at a fixed path under LocalAppData,
-    /// so a test running against the real store would rewrite the developer's own game list - and
-    /// none of the rules under test is about json.
-    /// </summary>
-    private sealed class FakeGameState : IPersistedGameState
-    {
-        private readonly Dictionary<GameIdentity, PersistedGame> _games = [];
-
-
-        /// <summary>Counted, because "saves on every change" is itself one of the rules.</summary>
-        public int Saves { get; private set; }
-
-
-        public void Add(GameIdentity identity, PersistedGame game) => _games[identity] = game;
-
-        public PersistedGame? Find(GameIdentity identity)
-            => _games.TryGetValue(identity, out var game) ? game : null;
-
-        public void Save() => Saves++;
-    }
 }

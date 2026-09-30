@@ -23,22 +23,22 @@ public class LastSelectionRepository(
 
     public Guid? GetLastRepo(IEnumerable<Guid> offered)
     {
-        return FindFirstOffered(store.Get().LastSelectedRepos, offered);
+        return store.Read(state => FindFirstOffered(state.LastSelectedRepos, offered));
     }
 
     public Guid? GetLastProfile(IEnumerable<Guid> offered)
     {
-        return FindFirstOffered(store.Get().LastSelectedProfiles, offered);
+        return store.Read(state => FindFirstOffered(state.LastSelectedProfiles, offered));
     }
 
     public void RecordRepo(Guid repoId)
     {
-        Record(store.Get().LastSelectedRepos, repoId);
+        store.UpdateIf(state => Record(state.LastSelectedRepos, repoId));
     }
 
     public void RecordProfile(Guid profileId)
     {
-        Record(store.Get().LastSelectedProfiles, profileId);
+        store.UpdateIf(state => Record(state.LastSelectedProfiles, profileId));
     }
 
 
@@ -57,11 +57,11 @@ public class LastSelectionRepository(
         return null;
     }
 
-    private void Record(List<Guid> remembered, Guid id)
+    private static bool Record(List<Guid> remembered, Guid id)
     {
         if (remembered.FirstOrDefault() == id)
         {
-            return;
+            return false;
         }
 
         remembered.Remove(id);
@@ -72,6 +72,6 @@ public class LastSelectionRepository(
             remembered.RemoveRange(_maxRemembered, remembered.Count - _maxRemembered);
         }
 
-        store.Save();
+        return true;
     }
 }

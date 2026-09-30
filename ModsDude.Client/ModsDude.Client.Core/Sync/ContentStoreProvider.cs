@@ -30,7 +30,7 @@ public sealed class ContentStoreProvider(
 {
     public ContentStore GetStoreServing(string path)
     {
-        var settings = settingsRepository.Settings;
+        var settings = settingsRepository.Snapshot();
         var servingVolume = settings.GetServingVolume(FileSystemHelper.NormalizeVolumeRoot(path));
 
         return Build(servingVolume, settings, storeLogger);
@@ -38,7 +38,7 @@ public sealed class ContentStoreProvider(
 
     public IReadOnlyList<ContentStore> GetAllStores()
     {
-        var settings = settingsRepository.Settings;
+        var settings = settingsRepository.Snapshot();
 
         // Both halves matter: a volume can have a store configured that nothing currently points at,
         // and an assignment can name a volume whose store has never been saved.
