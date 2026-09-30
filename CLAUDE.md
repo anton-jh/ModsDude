@@ -6,12 +6,15 @@ These rules override default behaviour.
 
 - ModsDude is in alpha: one developer, no users. Existing data is test data.
 - Never build backfills, data migrations for old rows, re-publish logic or backwards-compatibility paths unless asked. Just change behaviour going forward.
+- Break the API and client state file formats freely; the API stays at v1. Regenerate the client in the same change. No version bumps, deprecation shims or format migrations.
+  - Flag in the summary when a change means local state, the database or a cache must be cleared.
 - Treat everything in `docs/` as out of date. Don't rely on it and don't update it; it will be removed or overhauled.
 
 ## Priorities
 
 - Correctness and stability > consistency (code and UI/UX) > readability > performance. Correctness and stability carry by far the most weight.
-- Optimise only when a real cost is shown.
+- Exception: in heavy work (uploading, downloading, hashing, scanning mod folders, applying mods, packing saves), performance ranks right after correctness and stability. Design these paths for performance from the start.
+- Elsewhere, optimise only when a real cost is shown.
 
 ## Workflow
 
@@ -21,6 +24,7 @@ These rules override default behaviour.
 - Write plans as terse bullets, one fact each, grouped under short phase headings. No paragraphs. Open questions go only in a short list at the end.
 - Plans include the refactoring and cleanup the change calls for (see "Changing existing code"), even if that grows the change.
 - Never add a NuGet package without asking first. Propose it in the plan.
+- When unsure mid-task (an ambiguous requirement, or a design choice the plan doesn't cover), stop and ask. Never guess.
 
 ## Definition of done
 
@@ -47,6 +51,13 @@ A change is done only when all of these hold:
 
 ## Architecture
 
+### Boundaries
+
+- `Server.Domain` references no framework or infrastructure packages (EF Core, ASP.NET, Azure).
+- `Client.Core` never references WPF or UI concepts. Anything WPF lives in `Client.Wpf`.
+- Use strongly typed IDs (`RepoId`, `ProfileId`, ...) everywhere inside. Raw `Guid`s and strings only in DTOs and the generated client.
+- Prefer immutable records for models and DTOs. Entities change only through their own methods.
+
 ### Server
 
 - Endpoints orchestrate: one class per endpoint, using `ApplicationDbContext` directly, checking authorization and calling domain methods. No handler, mediator or repository layers.
@@ -54,7 +65,10 @@ A change is done only when all of these hold:
 - The database backs every invariant it can express (unique indexes, foreign keys, check constraints), so concurrent requests can't slip past the domain check.
 - Broken invariants throw (`DomainValidationException`). Expected outcomes such as not found, forbidden or conflict are typed `Results` returned by the endpoint.
 - Every error carries a distinct problem type that gives the client enough information to react correctly. The HTTP status code is secondary; existing ones stay as they are.
+- Every endpoint declares its authorization: the repo level on the route, or an explicit check in the endpoint. Nothing is reachable by default.
+- Split an endpoint whose response mixes data for different access levels (for example admin-only and member data) into separate endpoints.
 - EF Core: always add a new migration. Never edit or squash existing ones.
+- Background jobs (Hangfire) keep their logic in testable code, not in the Hangfire wrapper.
 
 ### Client
 
@@ -78,12 +92,20 @@ A change is done only when all of these hold:
 - Always general, never in an adapter: the content store (hashing, dedupe, hardlinks), the safety guarantees, the server model and the UI.
   - Adapters influence the UI only through data (settings forms, attributes, savegame details, capability flags, names) and small presentation hints (for example which attribute to group or filter by, or an icon). The general UI renders them the same way for every game.
 
+## Security
+
+- Blob access only through short-lived, narrowly scoped SAS links.
+- Never log tokens, SAS URLs or other credentials.
+- Never commit secrets to `appsettings*.json` or source. Use user secrets or environment variables.
+
 ## Correctness and stability
 
 - Output is deterministic: the same inputs give the same result in the same order. Sort explicitly; never depend on dictionary or enumeration order or on timing.
 - Any server mutation the client may send more than once is idempotent. That covers automatic retries and a user clicking again: a repeat gives the same outcome, not a duplicate or an error.
   - Such requests carry a client-generated request ID. The server recognises a repeat by it and returns the original outcome, including when optimistic concurrency would otherwise reject the retry as stale.
   - The request ID only identifies the request. Never use it as an entity ID.
+- Background jobs are idempotent and resumable: a retried, repeated or concurrent run is safe and continues where the last one stopped. They are also safe against API requests changing the same data at the same time.
+  - A malicious actor getting into the Hangfire dashboard can't break the system by running jobs repeatedly or concurrently, nor extract any secrets or sensitive data from the job data.
 - Concurrent edits to shared state use optimistic concurrency. A write based on a stale version is rejected, and the client says so and lets the user reload.
 - Local file work (sync, apply, import, savegame check-in and check-out) must:
   - compute and validate a full plan before touching disk, refusing up front rather than failing halfway;
@@ -110,7 +132,13 @@ A change is done only when all of these hold:
 - No `async void` and no `.Result` / `.Wait()` / `GetAwaiter().GetResult()`, except where WPF requires it (such as event handlers).
 - Never read the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`). Use the time service or `TimeProvider`.
 
-### Comments and files
+### Files and size
+
+- A file contains one main type, plus at most a few very small supporting types (such as strongly typed IDs or small records).
+- Group by feature (Profiles, Savegames, ...) rather than by kind (Services, Models) where applicable.
+- One responsibility per class. Split a very large class where it helps readability, even when it is all one concern. Never use `partial` classes for this.
+
+### Comments and line endings
 
 - Keep comments to a minimum. Use descriptive names instead of doc-comment essays on every member.
 - A comment only describes what the code does now, never what it used to do or how it got here.
@@ -131,11 +159,14 @@ A change is done only when all of these hold:
 
 ## Tests
 
-- Every new or changed piece of logic ships with tests in the same change.
+- New or changed domain logic (`Server.Domain`) and core logic (`Client.Core`, including adapters) ships with tests in the same change.
+- Background job logic ships with tests.
+- Test anything else only when it is very specific or critical.
 - Test the unhappy paths too: interruption, retries, cancellation and concurrent requests, not just the happy path.
 
 ## UI/UX
 
+- UI text is English only, written directly in XAML and view models. No localisation infrastructure.
 - Consistent look: reuse the shared styles and controls in the resource dictionaries. No one-off margins, colours or fonts.
 - Use identical domain terms (repo, profile, revision, game, target, savegame) in UI text, client code and server code.
 - No long sentences to describe state or information. Prefer a layout that makes it obvious what is static (labels, explanations) and what is dynamic (values, state), such as label/value pairs, badges or columns.
