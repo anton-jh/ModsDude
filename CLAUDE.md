@@ -62,6 +62,22 @@ A change is done only when all of these hold:
 - Avoid logic in code-behind (`.xaml.cs`) when a binding, behavior or view model can reasonably do it.
 - The app is useless without the server. When it is unreachable, show a clear offline state and block server-backed actions until it reconnects. Don't cache server data to keep working offline.
 
+### Game adapters
+
+- Game-specific knowledge lives in client game adapters, compiled into `Client.Core`, as much as possible.
+- Server modules for a single game (such as the ModHub crawler) are allowed and need not be generic. They count as part of the adapter, and only adapter code may talk to them.
+- Games to design for: Farming Simulator and BeamNG.drive (+BeamMP) for mods and savegames; Minecraft, Stationeers and Space Engineers for savegames only. More will be added. Load order and dependencies between mods are planned for later.
+- Adapters read and compute; they don't write. All writes go through the general engine as:
+  - file placements: the adapter declares which files a mod version or save consists of, at which relative paths;
+  - pure transforms of an existing file: `current content + desired state → new content`, idempotent, and preserving entries the adapter doesn't manage (for example BeamNG's `db.json`, or renaming a save).
+- The engine plans, validates, stages, applies, recycles and records every change, so the safety rules under "Correctness and stability" are implemented once.
+- Escape hatch: an adapter may own a write step only when a game genuinely can't be expressed as placements or transforms. Raise it in the plan; its safety is reviewed case by case.
+- Pass adapters full context of the whole operation (target, the full desired set, the current state), not one item at a time, so they see the whole picture.
+- Capabilities (mods, savegames, remote updates, creating slots, and so on) are optional. The general code and UI adapt to what an adapter offers, never to which adapter it is.
+- Never change a game's files while any of its processes are running. Refuse, and name the game.
+- Always general, never in an adapter: the content store (hashing, dedupe, hardlinks), the safety guarantees, the server model, and the UI.
+- Adapters shape the UI only through data (settings forms, attributes, savegame details, capability flags, names) plus small presentation hints (for example which attribute to group or filter by, or an icon). The general UI renders them the same way for every game.
+
 ### General
 
 - Every DI-registered service gets an interface.
