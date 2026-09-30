@@ -498,7 +498,7 @@
 
                                 <!-- Where a repo's first savegame comes from, which is why it sits
                                      under the list that is empty and saying so. It asks which save
-                                     on this disk it is about, then the publish dialog asks the
+                                     on this disk it is about, then the publish modal asks the
                                      rest. -->
                                 <Button Margin="8 0 0 0"
                                         Style="{DynamicResource SubtleMenuButton}"

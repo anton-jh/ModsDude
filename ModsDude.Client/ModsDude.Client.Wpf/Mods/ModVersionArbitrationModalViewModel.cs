@@ -11,7 +11,7 @@ namespace ModsDude.Client.Wpf.Mods;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One dialog for every ambiguous mod rather than one per mod, and never one per unordered pair: the
+/// One modal for every ambiguous mod rather than one per mod, and never one per unordered pair: the
 /// import computes the whole selection's ordering up front, so everything the comparer settled is
 /// already registering by the time this appears and only the remainder is on screen.
 /// </para>
@@ -47,7 +47,7 @@ public partial class ModVersionArbitrationModalViewModel : ModalViewModel
 
     /// <summary>
     /// The intended final order per mod, or null where the user declined to say. A null answer skips
-    /// exactly the mods this dialog was asking about.
+    /// exactly the mods this modal was asking about.
     /// </summary>
     public IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>? Result { get; private set; }
 
@@ -67,7 +67,7 @@ public partial class ModVersionArbitrationModalViewModel : ModalViewModel
     }
 
 
-    /// <summary>Escape skips, which is this dialog's own way of declining to answer.</summary>
+    /// <summary>Escape skips, which is this modal's own way of declining to answer.</summary>
     public override bool TryCancel() => Press(SkipCommand);
 
     public override bool TryAccept() => Press(ConfirmCommand);

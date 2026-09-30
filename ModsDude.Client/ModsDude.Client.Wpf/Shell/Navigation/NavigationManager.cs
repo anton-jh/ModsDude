@@ -80,7 +80,7 @@ public partial class NavigationManager(
 
     private async Task<bool> ConfirmNavigateAwayAsync()
     {
-        var modal = new ConfirmationDialogViewModel(
+        var modal = new ConfirmationModalViewModel(
             "Huh?",
             "Are you sure you want to navigate away?\nThis will discard your current changes!",
             IconKind.Warning,

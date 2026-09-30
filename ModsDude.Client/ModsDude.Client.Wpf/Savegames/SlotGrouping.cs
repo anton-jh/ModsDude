@@ -24,8 +24,8 @@ internal interface IGroupedSlot
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The key is what groups a picker</b>, and this is the whole of that: the check-out dialog and
-/// the publish dialog each show one flat list across every savegame folder a game reaches, and a
+/// <b>The key is what groups a picker</b>, and this is the whole of that: the check-out modal and
+/// the publish modal each show one flat list across every savegame folder a game reaches, and a
 /// heading appears over each folder only where there is more than one to tell apart. Shared so the
 /// two cannot decide differently - they are showing the same slots.
 /// </para>

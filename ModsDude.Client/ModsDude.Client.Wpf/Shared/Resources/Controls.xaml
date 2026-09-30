@@ -305,7 +305,7 @@
     </Style>
 
 
-    <!-- The row of a list somebody is choosing from - a slot, in the dialogs that pick one - drawn the way
+    <!-- The row of a list somebody is choosing from - a slot, in the modals that pick one - drawn the way
          the mod lists and the savegame log draw theirs: a full-width row with a hairline under it, the
          accent at low opacity and a bar down the left for the chosen one, and a lighter fill under the
          pointer. The default ListBoxItem is a padded box with the theme's own highlight, which is what
@@ -357,7 +357,7 @@
         </Setter>
     </Style>
 
-    <!-- A list to choose one thing from, in a dialog. Scrolls by the pixel rather than by the row:
+    <!-- A list to choose one thing from, in a modal. Scrolls by the pixel rather than by the row:
          a slot is two or three lines tall, so scrolling by the item moved the list a third of its
          height with every notch of the wheel and made it jump rather than glide. That costs
          virtualization, which is the right trade for a list of a couple of dozen. -->

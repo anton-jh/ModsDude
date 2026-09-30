@@ -27,11 +27,11 @@ public partial class ModDependentsModalViewModel : ModalViewModel
 {
     /// <param name="what">
     /// What was refused, named the way the user named it - "version 1.2.0 of Big Bud" rather than a
-    /// pair of ids. The dialog is about their action, not about the row it came from.
+    /// pair of ids. The modal is about their action, not about the row it came from.
     /// </param>
     /// <param name="goToRevision">
     /// Opens a profile's history at one revision. Returns false where the shell refused - a page
-    /// holding unsaved changes is entitled to say no - which is why the dialog stays open until it
+    /// holding unsaved changes is entitled to say no - which is why the modal stays open until it
     /// knows the navigation happened.
     /// </param>
     public ModDependentsModalViewModel(
@@ -88,9 +88,9 @@ public partial class ModDependentsModalViewModel : ModalViewModel
 
     private async void OnGoTo(Guid profileId, int revision)
     {
-        // The dialog has to be out of the way before the page it navigates to is on screen, and it
+        // The modal has to be out of the way before the page it navigates to is on screen, and it
         // is closed regardless: a refused navigation leaves the user where they were, which is this
-        // page, and reopening the dialog over it would be the app arguing with itself.
+        // page, and reopening the modal over it would be the app arguing with itself.
         Done = true;
 
         await _goToRevision(profileId, revision);

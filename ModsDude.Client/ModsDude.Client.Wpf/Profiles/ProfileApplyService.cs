@@ -153,7 +153,7 @@ public sealed record PlanAttempt(IReadOnlyList<ModSyncPlan> Plans, IReadOnlyList
 /// The modal host is taken lazily because it is the shell itself: the drift notice is built as part
 /// of <c>MainWindowViewModel</c>, which is what <see cref="IModalService"/> resolves to, so asking
 /// for it in the constructor closes a cycle the container never gets out of. Nothing here needs a
-/// dialog until the user applies something, which is long after the shell exists.
+/// modal until the user applies something, which is long after the shell exists.
 /// </para>
 /// </remarks>
 public sealed class ProfileApplyService(
@@ -161,7 +161,7 @@ public sealed class ProfileApplyService(
     GameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
-    IDialogService dialogs,
+    IFilePickerService filePicker,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases,
     GameActivityReporter activity)
@@ -185,7 +185,7 @@ public sealed class ProfileApplyService(
     /// <param name="revision">
     /// Which revision to plan against, or null to let the game decide - a past savegame held
     /// there pins the folder to its own revision, and everything else follows head. Named only by the
-    /// check-out dialog, which is previewing the apply for a savegame nothing is holding yet.
+    /// check-out modal, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
     /// <param name="progress">
     /// Where to say which mod is being examined. Planning is not the quick half it was assumed to be -
@@ -294,7 +294,7 @@ public sealed class ProfileApplyService(
     /// different profile uninstalls whatever the previous one put there and the reconciler knows
     /// exactly what that is, so it is shown rather than a bare "are you sure"; a re-apply of the
     /// profile the game is already on has nothing to disclose beyond the destructive part, which is
-    /// confirmed either way. A caller whose own dialog has already shown the plan passes false.
+    /// confirmed either way. A caller whose own modal has already shown the plan passes false.
     /// </param>
     /// <param name="revision">
     /// Which revision to install, or null - nearly always - to let the game decide, per
@@ -455,7 +455,7 @@ public sealed class ProfileApplyService(
     /// claim cannot be forgotten by a route added later.
     /// </para>
     /// <para>
-    /// <b>Held across the confirmation, deliberately.</b> A dialog asking whether to take the previous
+    /// <b>Held across the confirmation, deliberately.</b> A modal asking whether to take the previous
     /// profile's mods back out is part of this gesture, and another apply starting on that folder while
     /// the question is on screen is exactly what wants preventing - the answer would be about a plan
     /// that no longer describes the folder.
@@ -518,7 +518,7 @@ public sealed class ProfileApplyService(
             // a folder whose files no longer match the manifest is read and hashed in full here, which
             // on a real mod folder is minutes of a still window with the confirmation appearing at the
             // end of it. Its own task rather than the execute one below - planning may end in a
-            // dialog the user declines, and a strip entry that outlived that would describe work
+            // modal the user declines, and a strip entry that outlived that would describe work
             // nobody agreed to.
             using var planning = backgroundTasks.Begin(
                 $"Working out what would change in '{game.Name}'", cancel: stop.Cancel);
@@ -811,7 +811,7 @@ public sealed class ProfileApplyService(
     /// so showing it beats asking "are you sure" about something the user cannot see.
     /// </summary>
     /// <param name="plans">
-    /// Every folder the gesture would change, in one dialog. A game reaching three of them is still
+    /// Every folder the gesture would change, in one modal. A game reaching three of them is still
     /// one decision about one profile, so each folder gets a block of its own and the question is
     /// asked once - see the remarks on this class for why the alternative is unrepresentable.
     /// </param>
@@ -822,14 +822,14 @@ public sealed class ProfileApplyService(
     public async Task<bool> ConfirmPlanAsync(Game game, IReadOnlyList<ModSyncPlan> plans, bool clearing = false)
     {
         var modal = clearing
-            ? new ConfirmationDialogViewModel(
+            ? new ConfirmationModalViewModel(
                 $"Clear the mods from '{game.Name}'?",
                 string.Join("\n\n", plans.Select(Describe))
                     + $"\n\n'{game.Name}' will no longer follow a profile, and every mod in the folders above is taken out.",
                 IconKind.Question,
                 "Clear mods",
                 "Cancel")
-            : new ConfirmationDialogViewModel(
+            : new ConfirmationModalViewModel(
                 $"Apply to '{game.Name}'?",
                 $"{DescribeDownloads(PlannedDownloads.Across(plans))}\n\n"
                     + string.Join("\n\n", plans.Select(Describe))
@@ -844,7 +844,7 @@ public sealed class ProfileApplyService(
     }
 
     /// <summary>
-    /// What the apply will download, first in the dialog because it is the part that costs something:
+    /// What the apply will download, first in the modal because it is the part that costs something:
     /// time and, on a metered line, money. Says so when there is nothing to fetch, rather than saying
     /// nothing - "nothing" reads the same as "not worked out".
     /// </summary>
@@ -860,7 +860,7 @@ public sealed class ProfileApplyService(
         return $"{mods} to download, {ByteSize.Describe(downloads.Bytes)} in total.";
     }
 
-    /// <summary>One folder's block of the plan dialog: where it is, and what would happen there.</summary>
+    /// <summary>One folder's block of the plan modal: where it is, and what would happen there.</summary>
     private static string Describe(ModSyncPlan plan)
     {
         var lines = new List<string>();
@@ -893,7 +893,7 @@ public sealed class ProfileApplyService(
 
         var modal = new UnrecognisedFilesModalViewModel(
             [.. unrecognised.Select(x => $"  {x.DisplayName}")],
-            dialogs,
+            filePicker,
             _lastQuarantineFolder);
 
         await modalService.Value.Show(modal);

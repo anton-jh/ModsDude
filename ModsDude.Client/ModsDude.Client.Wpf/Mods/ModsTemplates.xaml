@@ -8,19 +8,19 @@
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type mods:ModDetailsModalViewModel}">
-        <mods:ModDetailsDialog />
+        <mods:ModDetailsModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type mods:ModDependentsModalViewModel}">
-        <mods:ModDependentsDialog />
+        <mods:ModDependentsModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type mods:ModVersionArbitrationModalViewModel}">
-        <mods:ModVersionArbitrationDialog />
+        <mods:ModVersionArbitrationModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type mods:ModVersionReorderModalViewModel}">
-        <mods:ModVersionReorderDialog />
+        <mods:ModVersionReorderModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type import:UnrecognisedFilesModalViewModel}">
-        <import:UnrecognisedFilesDialog />
+        <import:UnrecognisedFilesModal />
     </DataTemplate>
 
 </ResourceDictionary>

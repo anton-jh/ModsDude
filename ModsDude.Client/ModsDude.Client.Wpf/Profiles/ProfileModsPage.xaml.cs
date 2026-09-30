@@ -1,15 +1,11 @@
 using System.Windows.Controls;
 
-namespace ModsDude.Client.Wpf.Profiles
+namespace ModsDude.Client.Wpf.Profiles;
+
+public partial class ProfileModsPage : Page
 {
-    /// <summary>
-    /// Interaction logic for ProfileModsPage.xaml
-    /// </summary>
-    public partial class ProfileModsPage : Page
+    public ProfileModsPage()
     {
-        public ProfileModsPage()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

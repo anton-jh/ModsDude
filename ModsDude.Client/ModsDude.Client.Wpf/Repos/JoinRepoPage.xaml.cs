@@ -1,15 +1,11 @@
 using System.Windows.Controls;
 
-namespace ModsDude.Client.Wpf.Repos
+namespace ModsDude.Client.Wpf.Repos;
+
+public partial class JoinRepoPage : Page
 {
-    /// <summary>
-    /// Interaction logic for JoinRepoPage.xaml
-    /// </summary>
-    public partial class JoinRepoPage : Page
+    public JoinRepoPage()
     {
-        public JoinRepoPage()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

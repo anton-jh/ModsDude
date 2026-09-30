@@ -187,7 +187,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
     private async Task DeleteAsync(ArchivedItemViewModel item)
     {
-        var confirmation = ConfirmationDialogViewModel.ConfirmDeleteRepo(item.Name);
+        var confirmation = ConfirmationModalViewModel.ConfirmDeleteRepo(item.Name);
 
         await _modalService.Show(confirmation);
 

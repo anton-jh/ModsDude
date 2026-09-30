@@ -41,7 +41,7 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
     public string Warning => "Locking exists because changing these versions can break things that are "
         + "expensive to undo. Pick the ones you mean to move.";
 
-    /// <summary>Empty until something is confirmed, so a dismissed dialog moves nothing.</summary>
+    /// <summary>Empty until something is confirmed, so a dismissed modal moves nothing.</summary>
     public IReadOnlyList<ModKey> Result { get; private set; } = [];
 
     public int SelectedCount => Items.Count(x => x.IsSelected);
@@ -106,7 +106,7 @@ public partial class ProfileLockedUpdateViewModel : ObservableObject
 
     public string VersionText => $"{From} → {To}";
 
-    /// <summary>Unchecked, deliberately: this dialog defaults to changing nothing.</summary>
+    /// <summary>Unchecked, deliberately: this modal defaults to changing nothing.</summary>
     [ObservableProperty]
     private bool _isSelected;
 

@@ -6,7 +6,6 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
-using ModsDude.Client.Wpf.Shell.Sidebar;
 
 namespace ModsDude.Client.Wpf.Profiles;
 
@@ -18,11 +17,6 @@ public partial class EditProfilePageViewModel(
     IModalService modalService)
     : PageViewModel, IDisposable
 {
-    private readonly NavigationManager _navigationManager = new(navigationLockService, modalService);
-    private readonly MenuItemViewModel _modListEditorMenuItem = new(
-        "", () => new ExamplePageViewModel(repo.Name, "Mods"));
-
-
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name = profile.Name;
@@ -57,12 +51,6 @@ public partial class EditProfilePageViewModel(
         }
     }
 
-    [RelayCommand]
-    public void OpenModListEditor()
-    {
-        _navigationManager.Selected = _modListEditorMenuItem;
-    }
-
     public void Dispose()
     {
         navigationLockService.ReleaseLock(this);
@@ -77,7 +65,7 @@ public partial class EditProfilePageViewModel(
 
     private async Task<bool> ConfirmArchive()
     {
-        var modal = ConfirmationDialogViewModel.ConfirmArchive(OriginalName, "profile");
+        var modal = ConfirmationModalViewModel.ConfirmArchive(OriginalName, "profile");
 
         await modalService.Show(modal);
 

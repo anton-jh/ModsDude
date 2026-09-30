@@ -74,7 +74,7 @@ public partial class MainPageViewModel
         NavigationLockService navigationLockService,
         ShellNavigationService shellNavigationService,
         AccountViewModel account,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
         ProfileSyncStatusService syncStatus,
@@ -84,7 +84,7 @@ public partial class MainPageViewModel
         _syncStatus = syncStatus;
         _connection = connection;
 
-        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, dialogService, modalService))
+        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, filePickerService, modalService))
             .WithIcon(MenuIcons.CreateRepo);
 
         _joinRepoMenuItem = new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create)
@@ -261,7 +261,7 @@ public partial class MainPageViewModel
     /// </summary>
     /// <remarks>
     /// Async void for the same reason the command's own Execute rethrows: a failure that waiting will
-    /// not fix still reaches the error dialog on the UI thread, as it did before this retried at all.
+    /// not fix still reaches the error modal on the UI thread, as it did before this retried at all.
     /// </remarks>
     private async void LoadInitialRepos()
     {

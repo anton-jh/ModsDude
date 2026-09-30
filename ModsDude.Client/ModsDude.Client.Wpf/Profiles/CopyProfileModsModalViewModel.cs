@@ -43,7 +43,7 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
 
     public IReadOnlyList<ProfileDto> Profiles { get; }
 
-    /// <summary>The profile being edited, named so the dialog says which way the mods travel.</summary>
+    /// <summary>The profile being edited, named so the modal says which way the mods travel.</summary>
     public string TargetName { get; }
 
     public string Title => "Copy a mod list";
@@ -62,7 +62,7 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
     [ObservableProperty]
     private CopyProfileModsMode _mode = CopyProfileModsMode.Add;
 
-    /// <summary>Null until something is confirmed, so a dismissed dialog copies nothing.</summary>
+    /// <summary>Null until something is confirmed, so a dismissed modal copies nothing.</summary>
     public ProfileDto? Result { get; private set; }
 
     public CopyProfileModsMode ResultMode { get; private set; }

@@ -31,7 +31,7 @@
 
                     <!-- The same row as the repo's mod list and the editor, rendered by the implicit
                          ModListItemViewModel template in App.xaml - so the name still opens the
-                         details dialog and the icon still loads the same way. What this page adds
+                         details modal and the icon still loads the same way. What this page adds
                          to the end of the row is what the editor puts there as controls and a
                          reader can only be told. -->
                     <ItemsControl ItemsSource="{Binding Mods}"

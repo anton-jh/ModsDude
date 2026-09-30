@@ -11,6 +11,7 @@ using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
+using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -91,7 +92,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IProfilesClient profilesClient,
         IModalService modalService,
         IErrorReporter errorReporter,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         NavigationLockService navigationLock,
         GameRepository gameRepository,
         ProfileApplyService applyService,
@@ -124,7 +125,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _otherProfiles = new OtherProfilesReader(profilesClient, dependenciesClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
-            _catalog, _otherProfiles, dialogService, modalService, errorReporter,
+            _catalog, _otherProfiles, filePickerService, modalService, errorReporter,
             () => _history.Current, CommitAsync, RecomposeAsync, _cancellation.Token);
 
         RemoteUpdates = new RemoteUpdatesViewModel(
@@ -801,7 +802,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                     + "Changing its version partway through a save can corrupt that save.",
         };
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             "This mod is locked",
             $"'{row.Name}' is pinned at {row.Version.VersionId} and locked.\n\n{reason}\n\n"
                 + $"Change '{row.Name}' to {target} in this profile?",

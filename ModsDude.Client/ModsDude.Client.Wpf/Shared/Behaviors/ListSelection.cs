@@ -1,4 +1,3 @@
-using ModsDude.Client.Wpf.Mods;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -19,7 +18,7 @@ namespace ModsDude.Client.Wpf.Shared.Behaviors;
 /// most of this, but it drops from its selection anything the collection view filters out - so
 /// typing one more character into the search box would throw away the set the user was assembling.
 /// The editor's selection has to survive the search, so the flag lives on the row view models and
-/// this class is the translation layer. See <see cref="ModListSelection"/>.
+/// this class is the translation layer.
 /// </para>
 /// <para>
 /// <b>The list keeps its current item.</b> <c>SelectionMode="Single"</c> is left switched on and

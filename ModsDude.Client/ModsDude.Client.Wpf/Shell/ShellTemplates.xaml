@@ -8,13 +8,13 @@
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type modals:ModalViewModel}">
-        <modals:Dialog />
+        <modals:Modal />
     </DataTemplate>
 
     <!-- Without its own template this would fall through to the base ModalViewModel one
-         above and render as a confirmation dialog. -->
-    <DataTemplate DataType="{x:Type modals:ErrorDialogViewModel}">
-        <modals:ErrorDialog />
+         above and render as a confirmation modal. -->
+    <DataTemplate DataType="{x:Type modals:ErrorModalViewModel}">
+        <modals:ErrorModal />
     </DataTemplate>
 
 </ResourceDictionary>

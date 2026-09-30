@@ -9,7 +9,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// </summary>
 /// <remarks>
 /// The mod itself is rendered by <see cref="ModListItemViewModel"/>, exactly as in the editor and on
-/// the repo's mod list - same icon, same description, same name that opens the details dialog. What
+/// the repo's mod list - same icon, same description, same name that opens the details modal. What
 /// hangs off the end of the row is what the editor puts there as a control and this page can only
 /// report: whether the profile holds the pin where it is.
 /// </remarks>

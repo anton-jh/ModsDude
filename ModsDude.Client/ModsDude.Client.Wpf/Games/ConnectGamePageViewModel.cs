@@ -31,7 +31,7 @@ public partial class ConnectGamePageViewModel
     public ConnectGamePageViewModel(
         Repo repo,
         GameRepository gameRepository,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {
@@ -46,7 +46,7 @@ public partial class ConnectGamePageViewModel
         RepoName = _repo.Name;
         GameName = _repo.Adapter.GameDisplayName;
 
-        LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), dialogService);
+        LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), filePickerService);
         LocalSettingsEditor.Modified += OnLocalSettingsModified;
     }
 
@@ -69,7 +69,7 @@ public partial class ConnectGamePageViewModel
     {
         if (!IsValid)
         {
-            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            var modal = ConfirmationModalViewModel.ValidationErrors(GetValidationErrors());
             await _modalService.Show(modal);
 
             return;

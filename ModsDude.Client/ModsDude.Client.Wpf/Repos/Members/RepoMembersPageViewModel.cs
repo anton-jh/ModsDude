@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -358,13 +357,13 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private async Task KickAsync(RepoMemberViewModel member)
     {
         var modal = member.IsSelf
-            ? new ConfirmationDialogViewModel(
+            ? new ConfirmationModalViewModel(
                 $"Leave {_repo.Name}?",
                 "You lose access to its mods and profiles. Getting back in needs a new invite from somebody still in it.",
                 IconKind.Warning,
                 "Leave",
                 "Stay")
-            : ConfirmationDialogViewModel.ConfirmDelete(member.DisplayName);
+            : ConfirmationModalViewModel.ConfirmDelete(member.DisplayName);
 
         await _modalService.Show(modal);
 
@@ -402,13 +401,13 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private async Task RemoveInviteAsync(RepoInviteViewModel invite)
     {
         var modal = invite.IsActive
-            ? new ConfirmationDialogViewModel(
+            ? new ConfirmationModalViewModel(
                 "Revoke this invite?",
                 $"{invite.Code} will stop working for good and leave this list. Anybody who already joined with it stays a member.",
                 IconKind.Warning,
                 "Revoke",
                 "Keep it")
-            : new ConfirmationDialogViewModel(
+            : new ConfirmationModalViewModel(
                 "Remove this invite?",
                 $"{invite.Code} already stopped working - it is on this list only as the record that it was made. Removing it takes it off for everybody.",
                 IconKind.Question,

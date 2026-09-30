@@ -19,19 +19,19 @@ public partial class ModalViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Each dialog answers for itself, because only it knows which of its buttons means "no".</b>
-    /// Skip, Cancel, Close and Dismiss are all that answer in different dialogs, and a shell reaching
+    /// <b>Each modal answers for itself, because only it knows which of its buttons means "no".</b>
+    /// Skip, Cancel, Close and Dismiss are all that answer in different modals, and a shell reaching
     /// in to press whichever button is on the right would eventually press a destructive one.
     /// </para>
     /// <para>
-    /// <b>The answer is the dialog's own command, not the method behind it</b>, so a confirmation the
-    /// dialog would refuse from the button is refused from the keyboard too - see
+    /// <b>The answer is the modal's own command, not the method behind it</b>, so a confirmation the
+    /// modal would refuse from the button is refused from the keyboard too - see
     /// <see cref="TryAccept"/>, where that matters most.
     /// </para>
     /// <para>
     /// These are asked by the shell, once, rather than by seventeen copies of a <c>KeyBinding</c> on
     /// seventeen <c>UserControl</c>s - which is what was there, and which fired only when focus
-    /// happened to be inside the dialog. Nine of them never took focus at all, so their Escape did
+    /// happened to be inside the modal. Nine of them never took focus at all, so their Escape did
     /// nothing whatsoever. See <c>MainWindow.OnPreviewKeyDown</c>.
     /// </para>
     /// </remarks>
@@ -42,7 +42,7 @@ public partial class ModalViewModel : ObservableObject
     /// What Enter does here, or false where nothing does.
     /// </summary>
     /// <remarks>
-    /// <b>Routed through the command, so a dialog that cannot be confirmed is not confirmed.</b> A
+    /// <b>Routed through the command, so a modal that cannot be confirmed is not confirmed.</b> A
     /// publish with no name and a rename with no new one both refuse their own button, and Enter has
     /// to mean exactly what the button means or it is a second, laxer way in.
     /// </remarks>
@@ -51,10 +51,10 @@ public partial class ModalViewModel : ObservableObject
 
 
     /// <summary>
-    /// Presses one of this dialog's own buttons, if it would let itself be pressed.
+    /// Presses one of this modal's own buttons, if it would let itself be pressed.
     /// </summary>
     /// <remarks>
-    /// <b>Through the command rather than round it.</b> Every validity rule these dialogs have is
+    /// <b>Through the command rather than round it.</b> Every validity rule these modals have is
     /// already a <c>CanExecute</c>, so asking the command is what keeps the keyboard and the button
     /// meaning the same thing - and it keeps that true when somebody adds a rule later without
     /// thinking about Enter.

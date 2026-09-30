@@ -12,7 +12,7 @@ namespace ModsDude.Client.Wpf.Settings;
 public partial class ImageCacheViewModel(
     string path,
     double maxSizeGigabytes,
-    IDialogService dialogService)
+    IFilePickerService filePickerService)
     : ObservableObject
 {
     public event EventHandler? Modified;
@@ -39,7 +39,7 @@ public partial class ImageCacheViewModel(
     [RelayCommand]
     public void PickPath()
     {
-        if (dialogService.PickFolder(string.IsNullOrWhiteSpace(Path) ? null : Path) is string folder)
+        if (filePickerService.PickFolder(string.IsNullOrWhiteSpace(Path) ? null : Path) is string folder)
         {
             Path = folder;
         }

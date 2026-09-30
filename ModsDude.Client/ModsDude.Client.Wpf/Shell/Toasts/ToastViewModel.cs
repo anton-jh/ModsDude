@@ -8,7 +8,7 @@ namespace ModsDude.Client.Wpf.Shell.Toasts;
 /// </summary>
 /// <remarks>
 /// <b>The clock stops while the pointer is on it.</b> A toast that leaves while somebody is reading
-/// it, or is reaching for the link on it, is the one way this can be worse than a dialog - so
+/// it, or is reaching for the link on it, is the one way this can be worse than a modal - so
 /// pointing at it is taken as "not yet", and it gets its whole time again once the pointer leaves.
 /// </remarks>
 public sealed class ToastViewModel : IToast
@@ -88,7 +88,7 @@ public sealed class ToastActionViewModel
 
         InvokeCommand = new RelayCommand(() =>
         {
-            // Down first, so what the action does - which may be slow, or show a dialog - is not
+            // Down first, so what the action does - which may be slow, or show a modal - is not
             // happening under a toast that still says it is on offer.
             toast.Dismiss();
 

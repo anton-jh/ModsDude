@@ -332,7 +332,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         {
             // The one thing that outlives archiving: a save whose mod list is gone is not
             // restorable, which is the only thing that made keeping it worth anything.
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal(
+            await _modalService.Show(ConfirmationModalViewModel.Refusal(
                 "A savegame still needs it",
                 $"'{item.Name}' cannot be deleted while a savegame follows it or was played on one of "
                     + "its revisions. Archive or delete those savegames first."));
@@ -384,7 +384,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
     private async Task<bool> ConfirmDeleteAsync(ArchivedItemViewModel item)
     {
-        var modal = ConfirmationDialogViewModel.ConfirmDelete(item.Name);
+        var modal = ConfirmationModalViewModel.ConfirmDelete(item.Name);
 
         await _modalService.Show(modal);
 

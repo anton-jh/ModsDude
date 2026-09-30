@@ -6,14 +6,14 @@ using System.Text;
 namespace ModsDude.Client.Wpf.Mods.Import;
 
 /// <summary>
-/// What an import that did not finish everything says to the user: one dialog for the whole run,
+/// What an import that did not finish everything says to the user: one modal for the whole run,
 /// with the mods that did not make it grouped by reason.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One dialog per import, not per mod.</b> A run is one action the user took, and a batch of two
+/// <b>One modal per import, not per mod.</b> A run is one action the user took, and a batch of two
 /// thousand mods that hits the same wall four hundred times is one thing that went wrong - four
-/// hundred dialogs, or four hundred distinct sentences down a list, is the same information made
+/// hundred modals, or four hundred distinct sentences down a list, is the same information made
 /// unreadable.
 /// </para>
 /// <para>
@@ -31,7 +31,7 @@ public static class ModImportProblems
 
 
     /// <summary>
-    /// The dialog for a finished import, or null when there is nothing to report - which is the
+    /// The modal for a finished import, or null when there is nothing to report - which is the
     /// ordinary case and must not raise anything.
     /// </summary>
     /// <param name="nameOf">
@@ -40,9 +40,9 @@ public static class ModImportProblems
     /// </param>
     /// <param name="consequence">
     /// What the failures cost, in the caller's terms - a save that wrote nothing, say. A few words,
-    /// not a paragraph: this is the top of a dialog, and the reasons under it are the point of it.
+    /// not a paragraph: this is the top of a modal, and the reasons under it are the point of it.
     /// </param>
-    public static ErrorDialogViewModel? Build(
+    public static ErrorModalViewModel? Build(
         IErrorReporter errorReporter,
         ModImportResult result,
         Func<ModVersionIdentity, string> nameOf,
@@ -89,7 +89,7 @@ public static class ModImportProblems
 
     /// <summary>
     /// The mark's tooltip: which of these the row was, for whoever comes back to the list after the
-    /// dialog is gone.
+    /// modal is gone.
     /// </summary>
     public static string DescribeRow(ModImportStatus? status) => status switch
     {

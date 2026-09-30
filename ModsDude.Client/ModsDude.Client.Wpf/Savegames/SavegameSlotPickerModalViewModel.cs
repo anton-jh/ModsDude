@@ -6,14 +6,14 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.Savegames;
 
 /// <summary>
-/// Which save already on this disk is about to be published, chosen before the publish dialog asks
+/// Which save already on this disk is about to be published, chosen before the publish modal asks
 /// anything about it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Publishing is inherently about a slot</b>, and this is the step that used to be a button on a
 /// row of the game's own slot list. Reaching it from the repo's Saves list means the slot has to be
-/// named rather than clicked, so it is asked first and on its own: the publish dialog's every other
+/// named rather than clicked, so it is asked first and on its own: the publish modal's every other
 /// question - the name, the mod list, the revision it declares - is about the bytes this one picks.
 /// </para>
 /// <para>
@@ -48,7 +48,7 @@ public partial class SavegameSlotPickerModalViewModel : ModalViewModel
         $"A save that is already on this disk becomes a savegame of its own in {RepoName}. Only saves " +
         "ModsDude has no copy of are listed - a checked-out one is checked in rather than published again.";
 
-    /// <summary>The slot to publish, or null where the dialog was dismissed.</summary>
+    /// <summary>The slot to publish, or null where the modal was dismissed.</summary>
     public SavegameSlotOptionViewModel? Result { get; private set; }
 
 

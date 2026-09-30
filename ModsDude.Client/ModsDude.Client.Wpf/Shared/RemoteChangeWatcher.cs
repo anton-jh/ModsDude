@@ -18,7 +18,7 @@ namespace ModsDude.Client.Wpf.Shared;
 /// </para>
 /// <para>
 /// <b>Failures are logged and nothing else.</b> Nobody asked for this check, so a network blip is
-/// not worth an error dialog; the next tick asks again, and the refresh control still says what it
+/// not worth an error modal; the next tick asks again, and the refresh control still says what it
 /// always said.
 /// </para>
 /// <para>

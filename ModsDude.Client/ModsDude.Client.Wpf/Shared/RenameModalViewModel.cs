@@ -18,7 +18,7 @@ namespace ModsDude.Client.Wpf.Shared;
 /// </para>
 /// <para>
 /// The wording is the caller's, all of it, because those two read nothing alike - which is also why
-/// the button is a parameter rather than a word chosen here. A dialog that says "Restore it" over a
+/// the button is a parameter rather than a word chosen here. A modal that says "Restore it" over a
 /// rename is one somebody has to read twice to be sure of.
 /// </para>
 /// </remarks>

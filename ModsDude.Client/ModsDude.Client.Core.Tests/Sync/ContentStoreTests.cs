@@ -85,7 +85,7 @@ public class ContentStoreTests
         // either. This single check is what makes a store shared between repos safe.
         Assert.False(store.Contains(declared));
         Assert.False(store.Contains(exception.ActualHash));
-        Assert.Empty(Directory.EnumerateFiles(root.Path, "*", SearchOption.AllDirectories).Where(x => x.EndsWith("modsdude-store.txt") is false));
+        Assert.DoesNotContain(Directory.EnumerateFiles(root.Path, "*", SearchOption.AllDirectories), x => x.EndsWith("modsdude-store.txt") is false);
     }
 
     [Fact]

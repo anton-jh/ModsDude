@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Retention;
-using ModsDude.Client.Wpf.Mods;
+using ModsDude.Client.Wpf.Shared.Behaviors;
 
 namespace ModsDude.Client.Wpf.Profiles;
 

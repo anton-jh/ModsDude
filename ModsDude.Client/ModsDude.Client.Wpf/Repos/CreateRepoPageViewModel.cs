@@ -14,7 +14,7 @@ public partial class CreateRepoPageViewModel(
     RepoRepository repoRepository,
     IGameAdapterIndex gameAdapterIndex,
     NavigationLockService navigationLockService,
-    IDialogService dialogService,
+    IFilePickerService filePickerService,
     IModalService modalService)
     : PageViewModel, IDisposable
 {
@@ -44,7 +44,7 @@ public partial class CreateRepoPageViewModel(
     {
         if (!IsValid || SelectedGameAdapter is null || string.IsNullOrWhiteSpace(Name) || BaseSettingsEditor is null)
         {
-            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            var modal = ConfirmationModalViewModel.ValidationErrors(GetValidationErrors());
             await modalService.Show(modal);
 
             return;
@@ -93,7 +93,7 @@ public partial class CreateRepoPageViewModel(
     {
         BaseSettingsEditor?.Dispose();
         BaseSettingsEditor = value?.GetBaseSettingsTemplate() is DynamicForm template
-            ? new DynamicFormViewModel(editing: false, template, dialogService)
+            ? new DynamicFormViewModel(editing: false, template, filePickerService)
             : null;
 
         navigationLockService.AcquireLock(this);

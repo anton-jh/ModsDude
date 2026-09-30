@@ -12,7 +12,7 @@ namespace ModsDude.Client.Wpf.Mods;
 /// arbitration someone regrets.
 /// </summary>
 /// <remarks>
-/// The same operation the arbitration dialog performs, over the same control, with every version
+/// The same operation the arbitration modal performs, over the same control, with every version
 /// movable because every one of them is already registered.
 /// <para>
 /// Saving writes through the same both-neighbour placement the server asserts when a version is
@@ -63,14 +63,14 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
 
     /// <summary>
     /// True once the repo's copy of the order has actually been changed, so that the page behind the
-    /// dialog knows its sequence numbers are stale.
+    /// modal knows its sequence numbers are stale.
     /// </summary>
     public bool Saved { get; private set; }
 
     public bool CanSave => !IsSaving && !Order.Order.SequenceEqual(_serverOrder);
 
     /// <summary>
-    /// Set when the order changed underneath the dialog. Not retried automatically: an order arrived
+    /// Set when the order changed underneath the modal. Not retried automatically: an order arrived
     /// at by a comparer can be recomputed, but this one is a person's answer to a question the client
     /// cannot re-answer on their behalf, and the question it answered was about an order that no
     /// longer exists.
@@ -102,7 +102,7 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
         {
             while (true)
             {
-                // A version registered or deleted while the dialog was open leaves a target order
+                // A version registered or deleted while the modal was open leaves a target order
                 // that no sequence of moves can reach. Every placement would keep validating, so
                 // nothing else would ever report it - it has to be noticed here.
                 if (current.Count != target.Count || current.Except(target).Any())
@@ -172,7 +172,7 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
 
     /// <summary>
     /// Enter saves, and only where there is a reorder to save - the same gate the Save button is
-    /// behind, so a dialog nobody has changed anything in does not close on a stray keypress.
+    /// behind, so a modal nobody has changed anything in does not close on a stray keypress.
     /// </summary>
     public override bool TryAccept() => Press(SaveCommand);
 

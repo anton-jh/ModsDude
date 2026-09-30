@@ -4,9 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace ModsDude.Client.Wpf.Profiles.Editor;
-/// <summary>
-/// Interaction logic for ProfileModsEditorPage.xaml
-/// </summary>
 public partial class ProfileModsEditorPage : Page
 {
     public ProfileModsEditorPage()

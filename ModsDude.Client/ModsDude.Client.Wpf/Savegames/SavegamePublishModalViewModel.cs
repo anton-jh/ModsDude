@@ -26,7 +26,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// <param name="CurrentSavegameRevision">The revision that savegame stays on once it is past.</param>
 /// <param name="FolderIsOnIt">
 /// Whether the mod folder is actually on this profile. Where it is not, the revision below is a
-/// declaration about a list this folder has never run - which the dialog says out loud.
+/// declaration about a list this folder has never run - which the modal says out loud.
 /// </param>
 public sealed record SavegamePublishOption(
     Guid? ProfileId,
@@ -64,7 +64,7 @@ public sealed record SavegamePublishOption(
 /// is asked here rather than derived from whatever the folder happens to be on.
 /// </para>
 /// <para>
-/// <b>Three consequences, stated inline rather than as a second dialog.</b> The revision this declares,
+/// <b>Three consequences, stated inline rather than as a second modal.</b> The revision this declares,
 /// the savegame it supersedes, and the folder being on a different list are all things somebody would want
 /// to have seen before pressing the button, and a confirmation that appears afterwards is one that
 /// gets clicked through.
@@ -83,12 +83,12 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <param name="preselected">
     /// The profile to arrive on, or null to arrive on nothing. Null where the game follows no
     /// profile in this repo: the two defaults available there - the first profile in the list, and no
-    /// mod list - are both permanent decisions made on the user's behalf, so the dialog asks instead.
+    /// mod list - are both permanent decisions made on the user's behalf, so the modal asks instead.
     /// </param>
     /// <param name="activeProfileId">
     /// Which profile this game follows, or null where it follows none in this repo. Read only to decide
     /// whether keeping the save is on offer - <b>separately from <paramref name="preselected"/></b>,
-    /// which is the same profile today and is a statement about where the dialog opens rather than
+    /// which is the same profile today and is a statement about where the modal opens rather than
     /// about what the folder is on.
     /// </param>
     /// <param name="folderProfileName">
@@ -168,7 +168,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <remarks>
     /// Kept separately from the answer so that picking another profile and picking this one back does
     /// not silently drop a tick the user had put there. Ticked by default: publishing a save you are
-    /// in the middle of and being handed it back is the ordinary case, and it is what this dialog
+    /// in the middle of and being handed it back is the ordinary case, and it is what this modal
     /// always did.
     /// </remarks>
     [ObservableProperty]
@@ -177,7 +177,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
     private bool _wantsToKeepPlaying = true;
 
-    /// <summary>The name to publish under, or null where the dialog was dismissed.</summary>
+    /// <summary>The name to publish under, or null where the modal was dismissed.</summary>
     public string? Result { get; private set; }
 
     /// <summary>Blank means no description of the first snapshot, which is the ordinary answer.</summary>
@@ -189,7 +189,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <remarks>
     /// <b>A declaration, which is why it is shown rather than implied.</b> The bytes predate ModsDude,
     /// so nothing knows which mods were in the folder while this savegame was played, and no arrangement of
-    /// this dialog recovers it. Every snapshot after this one is observed.
+    /// this modal recovers it. Every snapshot after this one is observed.
     /// </remarks>
     public string? RevisionText => SelectedProfile switch
     {
@@ -205,7 +205,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// That this publish displaces the savegame the profile is following now.
     /// </summary>
     /// <remarks>
-    /// Inline rather than a second dialog, and worded for what actually happens to the other savegame:
+    /// Inline rather than a second modal, and worded for what actually happens to the other savegame:
     /// past is not archived and not read-only. It stays playable, it stays checkable-out, and the one
     /// thing that changes is that its revision stops moving.
     /// </remarks>

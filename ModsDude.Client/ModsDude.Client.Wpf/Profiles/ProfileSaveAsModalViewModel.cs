@@ -29,7 +29,7 @@ public partial class ProfileSaveAsModalViewModel : ModalViewModel
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private string _name;
 
-    /// <summary>The name to create, or <c>null</c> where the dialog was dismissed.</summary>
+    /// <summary>The name to create, or <c>null</c> where the modal was dismissed.</summary>
     public string? Result { get; private set; }
 
 

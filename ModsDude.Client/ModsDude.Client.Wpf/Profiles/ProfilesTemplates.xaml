@@ -26,25 +26,25 @@
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type profiles:BlockedRevisionsModalViewModel}">
-        <profiles:BlockedRevisionsDialog />
+        <profiles:BlockedRevisionsModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type profiles:ProfileLockedUpdatesModalViewModel}">
-        <profiles:ProfileLockedUpdatesDialog />
+        <profiles:ProfileLockedUpdatesModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type profiles:CopyProfileModsModalViewModel}">
-        <profiles:CopyProfileModsDialog />
+        <profiles:CopyProfileModsModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type profiles:PickProfileSourceModalViewModel}">
-        <profiles:PickProfileSourceDialog />
+        <profiles:PickProfileSourceModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type profiles:ProfileSaveAsModalViewModel}">
-        <profiles:ProfileSaveAsDialog />
+        <profiles:ProfileSaveAsModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type editor:ModSourceConflictModalViewModel}">
-        <editor:ModSourceConflictDialog />
+        <editor:ModSourceConflictModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type editor:PasteModListModalViewModel}">
-        <editor:PasteModListDialog />
+        <editor:PasteModListModal />
     </DataTemplate>
 
 </ResourceDictionary>

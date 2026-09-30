@@ -153,7 +153,7 @@ public partial class AccountViewModel : ObservableObject
 
     private async Task<bool> ConfirmDiscardAsync()
     {
-        var modal = new ConfirmationDialogViewModel(
+        var modal = new ConfirmationModalViewModel(
             "Huh?",
             "Are you sure you want to switch user?\nThis will discard your current changes!",
             IconKind.Warning,

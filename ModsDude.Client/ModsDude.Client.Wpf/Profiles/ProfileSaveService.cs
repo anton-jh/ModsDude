@@ -80,7 +80,7 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
 /// either.
 /// </remarks>
 /// <param name="Pending">The versions the repo does not hold yet, which the import has to register first.</param>
-/// <param name="Names">What each pending version is called, for the strip line and the failure dialog.</param>
+/// <param name="Names">What each pending version is called, for the strip line and the failure modal.</param>
 /// <param name="Catalog">
 /// The starting page's catalog, invalidated when the run ends however it ends. Passed rather than
 /// owned, exactly as <see cref="ModImportCoordinator"/> takes it.
@@ -188,7 +188,7 @@ public sealed class ProfileSaveRun
 /// <para>
 /// <b>Sibling to <see cref="ProfileApplyService"/> and <see cref="ModImportCoordinator"/>, and shaped
 /// like them</b> - it claims the resource, owns the strip entry and its Cancel, and raises its
-/// dialogs through the shell's modal host rather than through a page that may already be gone.
+/// modals through the shell's modal host rather than through a page that may already be gone.
 /// Before this, navigating away disposed the editor and its catalog mid-flight: the files finished
 /// registering on the background strip, the revision was never written, and nothing said so.
 /// </para>
@@ -511,7 +511,7 @@ public sealed class ProfileSaveService(
 
     /// <summary>
     /// Uploads and registers the rows that are still only on disk, and reports which of them the repo
-    /// now holds - and, where some did not make it, the one dialog that says so.
+    /// now holds - and, where some did not make it, the one modal that says so.
     /// </summary>
     private async Task<PendingImport> ImportAsync(ProfileSaveRun run, CancellationToken cancellationToken)
     {
@@ -612,7 +612,7 @@ public sealed class ProfileSaveService(
     {
         return OnUiThreadAsync(async () =>
         {
-            var confirmation = new ConfirmationDialogViewModel(
+            var confirmation = new ConfirmationModalViewModel(
                 "Somebody else saved this profile",
                 "Your list was built from an older revision. Saving anyway records yours as the newest one - theirs stays in the history and can be restored. Loading theirs discards what you have here.",
                 IconKind.Warning,
@@ -695,7 +695,7 @@ public sealed class ProfileSaveService(
     /// The sentence, and beside it - where the save went on to apply - the sentence about that.
     /// </summary>
     /// <remarks>
-    /// A failure was already put in front of the user as a dialog where it had anything to add, so
+    /// A failure was already put in front of the user as a modal where it had anything to add, so
     /// what is said here is the short version of what was left undone: the draft is still open and
     /// saving again is the way on.
     /// </remarks>
@@ -749,7 +749,7 @@ public sealed class ProfileSaveService(
 
 
     /// <param name="Imported">What the repo holds now, which is what the save is allowed to pin.</param>
-    /// <param name="Problems">The dialog for what did not make it, or null when everything did.</param>
+    /// <param name="Problems">The modal for what did not make it, or null when everything did.</param>
     /// <param name="Superseded">
     /// Copies the user chose against where two sources disagreed. Held until the save commits: here
     /// the import is only the first half of the action, and a file removed for a revision that was
@@ -758,7 +758,7 @@ public sealed class ProfileSaveService(
     /// <param name="Refusal">Why the import never started, in a sentence. Null whenever it did.</param>
     private sealed record PendingImport(
         HashSet<ModVersionIdentity> Imported,
-        ErrorDialogViewModel? Problems,
+        ErrorModalViewModel? Problems,
         IReadOnlyList<ModSupersededFile> Superseded,
         string? Refusal);
 

@@ -11,18 +11,18 @@ public partial class DynamicFormViewModel
     : ObservableObject, IDisposable
 {
     private readonly DynamicForm _form;
-    private readonly IDialogService _dialogService;
+    private readonly IFilePickerService _filePickerService;
     private bool? _oldIsValid = null;
 
 
     public DynamicFormViewModel(
         bool editing,
         DynamicForm form,
-        IDialogService dialogService)
+        IFilePickerService filePickerService)
     {
         Editing = editing;
         _form = form;
-        _dialogService = dialogService;
+        _filePickerService = filePickerService;
         Fields = ExtractFields();
 
         foreach (var field in Fields)
@@ -91,7 +91,7 @@ public partial class DynamicFormViewModel
             field = new FolderPathDynamicFormFieldViewModel(
                 _form, property,
                 title, required, canBeModified,
-                _dialogService);
+                _filePickerService);
         }
         else if (GetEnumType(property.PropertyType) is Type enumType)
         {
@@ -169,7 +169,7 @@ public partial class FolderPathDynamicFormFieldViewModel(
     string title,
     bool required,
     bool canBeModified,
-    IDialogService dialogService)
+    IFilePickerService filePickerService)
     : DynamicFormFieldViewModel(form, property)
 {
     public string Title { get; } = title;
@@ -188,7 +188,7 @@ public partial class FolderPathDynamicFormFieldViewModel(
     {
         var hint = string.IsNullOrWhiteSpace((string?)Value) ? null : Value;
 
-        if (dialogService.PickFolder((string?)hint) is string folder)
+        if (filePickerService.PickFolder((string?)hint) is string folder)
         {
             Value = folder;
         }

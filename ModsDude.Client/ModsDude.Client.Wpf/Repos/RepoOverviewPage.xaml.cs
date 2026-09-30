@@ -3,9 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 
 namespace ModsDude.Client.Wpf.Repos;
-/// <summary>
-/// Interaction logic for RepoOverviewPage.xaml
-/// </summary>
 public partial class RepoOverviewPage : Page
 {
     public RepoOverviewPage()

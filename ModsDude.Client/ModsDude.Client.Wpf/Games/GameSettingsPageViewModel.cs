@@ -44,7 +44,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         Repo repo,
         Game subject,
         GameRepository gameRepository,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         IModalService modalService,
         NavigationLockService navigationLockService)
     {
@@ -56,7 +56,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         GameName = subject.Name;
         RepoName = repo.Name;
 
-        LocalSettingsEditor = new DynamicFormViewModel(true, subject.GetLocalSettings(repo.Adapter), dialogService);
+        LocalSettingsEditor = new DynamicFormViewModel(true, subject.GetLocalSettings(repo.Adapter), filePickerService);
 
         LocalSettingsEditor.Modified += OnLocalSettingsModified;
         LocalSettingsEditor.IsValidChanged += OnLocalSettingsIsValidChanged;
@@ -92,7 +92,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     {
         if (!IsValid)
         {
-            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            var modal = ConfirmationModalViewModel.ValidationErrors(GetValidationErrors());
             await _modalService.Show(modal);
 
             return;
@@ -108,7 +108,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     [RelayCommand]
     public async Task Delete()
     {
-        var modal = ConfirmationDialogViewModel.ConfirmDelete(_subject.Name);
+        var modal = ConfirmationModalViewModel.ConfirmDelete(_subject.Name);
 
         await _modalService.Show(modal);
 

@@ -8,7 +8,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// </summary>
 /// <remarks>
 /// The same row as the profile's mod list and the repo's - so the icon loads the same way and the
-/// name still opens the details dialog - with the transition on the end where the read-only list
+/// name still opens the details modal - with the transition on the end where the read-only list
 /// puts its lock icon. A comparison is a reading surface, so nothing here is selectable.
 /// </remarks>
 public class ProfileModChangeViewModel

@@ -11,16 +11,16 @@
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type savegames:SavegameCheckOutModalViewModel}">
-        <savegames:SavegameCheckOutDialog />
+        <savegames:SavegameCheckOutModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type savegames:SavegameCheckInModalViewModel}">
-        <savegames:SavegameCheckInDialog />
+        <savegames:SavegameCheckInModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type savegames:SavegamePublishModalViewModel}">
-        <savegames:SavegamePublishDialog />
+        <savegames:SavegamePublishModal />
     </DataTemplate>
     <DataTemplate DataType="{x:Type savegames:SavegameSlotPickerModalViewModel}">
-        <savegames:SavegameSlotPickerDialog />
+        <savegames:SavegameSlotPickerModal />
     </DataTemplate>
 
     <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so

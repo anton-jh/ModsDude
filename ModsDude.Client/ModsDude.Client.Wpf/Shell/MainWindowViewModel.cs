@@ -56,7 +56,7 @@ public partial class MainWindowViewModel
 
     /// <summary>
     /// Along the bottom edge: what the last thing somebody did just said, for a few seconds. Above the
-    /// modal layer, so a result reported while a dialog is open is still seen.
+    /// modal layer, so a result reported while a modal is open is still seen.
     /// </summary>
     public ToastCenterViewModel Toasts { get; }
 
@@ -103,7 +103,7 @@ public partial class MainWindowViewModel
             return true;
         }
 
-        var modal = new ConfirmationDialogViewModel(
+        var modal = new ConfirmationModalViewModel(
             running.Count == 1 ? "Something is still running" : $"{running.Count} things are still running",
             string.Join("\n", running.Select(x => $"  {x}")) +
             "\n\nClosing now stops it part way. Nothing is lost - a mod folder left half-applied is "

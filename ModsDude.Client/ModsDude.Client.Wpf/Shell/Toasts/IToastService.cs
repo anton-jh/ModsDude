@@ -2,7 +2,7 @@ using ModsDude.Client.Wpf.Shell.Modals;
 
 namespace ModsDude.Client.Wpf.Shell.Toasts;
 
-/// <summary>How loudly a toast says it. Failures are not among them - those are the error dialog's.</summary>
+/// <summary>How loudly a toast says it. Failures are not among them - those are the error modal's.</summary>
 public enum ToastSeverity
 {
     /// <summary>Something happened and went as expected.</summary>

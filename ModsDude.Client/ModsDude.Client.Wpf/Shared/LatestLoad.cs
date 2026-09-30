@@ -35,7 +35,7 @@ public sealed class LatestLoad(Action<bool> setLoading, CancellationToken lifeti
         }
         catch (Exception exception) when (_current == mine && mine.IsCancellationRequested is false)
         {
-            // The flag goes off before the dialog, which stays up until it is closed.
+            // The flag goes off before the modal, which stays up until it is closed.
             setLoading(false);
 
             await fail(exception);

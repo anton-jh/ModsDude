@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -177,7 +178,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// <summary>
     /// The manual reorder - the backstop for an order that is wrong for reasons optimistic
     /// concurrency cannot catch, such as a comparer that guessed badly or an arbitration someone
-    /// regrets. The same control the arbitration dialog uses, over the same operation.
+    /// regrets. The same control the arbitration modal uses, over the same operation.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanModify))]
     private async Task ReorderVersions(ModListItemViewModel? row)
@@ -211,7 +212,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             "Really?",
             $"Delete version '{row.Version}' of '{row.Name}' from the repo?\n"
                 + "The file goes with it, and this cannot be undone.",
@@ -262,7 +263,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         var versionCount = _registered.Count(x => x.Mod.ModId == row.Mod.ModId);
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             "Really?",
             $"Delete '{row.Name}' and all {versionCount} of its versions from the repo?\n"
                 + "The files go with them, and this cannot be undone.",
@@ -318,7 +319,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         var steps = PlanDelete(picked);
         var wholeMods = steps.Count(x => x.WholeMod);
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             "Really?",
             $"Delete {Versions(picked.Count)} from the repo?\n"
                 + (wholeMods == 0 ? "" : $"That is every version of {Mods(wholeMods)}, so {(wholeMods == 1 ? "the mod goes" : "the mods go")} too.\n")
@@ -460,7 +461,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
     private Task ShowRefusal(string title, string message)
     {
-        return _modalService.Show(ConfirmationDialogViewModel.Refusal(title, message));
+        return _modalService.Show(ConfirmationModalViewModel.Refusal(title, message));
     }
 
     /// <summary>

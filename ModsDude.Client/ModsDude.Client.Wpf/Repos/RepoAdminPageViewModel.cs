@@ -22,14 +22,14 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         RepoRepository repoService,
         NavigationLockService navigationLockService,
         IModalService modalService,
-        IDialogService dialogService)
+        IFilePickerService filePickerService)
     {
         _repo = repo;
         _repoService = repoService;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _name = repo.Name;
-        BaseSettingsEditor = new(true, repo.Adapter.BaseSettings.Copy(), dialogService);
+        BaseSettingsEditor = new(true, repo.Adapter.BaseSettings.Copy(), filePickerService);
 
         BaseSettingsEditor.Modified += OnBaseSettingsModified;
     }
@@ -52,7 +52,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     {
         if (!IsValid)
         {
-            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            var modal = ConfirmationModalViewModel.ValidationErrors(GetValidationErrors());
             await _modalService.Show(modal);
             return;
         }
@@ -106,7 +106,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 
     private async Task<bool> ConfirmArchive()
     {
-        var modal = ConfirmationDialogViewModel.ConfirmArchive(OriginalName, "repo");
+        var modal = ConfirmationModalViewModel.ConfirmArchive(OriginalName, "repo");
 
         await _modalService.Show(modal);
 

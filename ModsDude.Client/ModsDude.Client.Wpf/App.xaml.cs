@@ -5,7 +5,6 @@ using ModsDude.Client.Core;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Connectivity;
-using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
@@ -44,9 +43,6 @@ using System.IO;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf;
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
     private IServiceProvider _serviceProvider = null!;
@@ -498,7 +494,7 @@ public partial class App : Application
         // registering the files and never writing the revision.
         services.AddSingleton<ProfileSaveService>();
 
-        // Check-in is reached from a slot row and from the check-out dialog's way out of a refused
+        // Check-in is reached from a slot row and from the check-out modal's way out of a refused
         // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
         services.AddSingleton<SavegameFlowService>();
 
@@ -532,10 +528,10 @@ public partial class App : Application
         // The shell is the modal host, so anything the shell itself is built from has to ask for the
         // host after the fact rather than as a constructor argument. See ProfileApplyService.
         services.AddSingleton(sp => new Lazy<IModalService>(sp.GetRequiredService<IModalService>));
-        services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IFilePickerService, FilePickerService>();
 
         // Everything the user is told went wrong goes through here, which is what makes the log a
-        // by-product of the dialog rather than a second thing every catch block has to remember.
+        // by-product of the modal rather than a second thing every catch block has to remember.
         services.AddSingleton<IErrorReporter, ErrorReporter>();
 
         // Singleton so the decoded thumbnails survive navigating away from a page and back.

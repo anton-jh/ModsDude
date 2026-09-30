@@ -7,7 +7,7 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance mods:ModVersionOrderViewModel, IsDesignTimeCreatable=False}">
 
-    <!-- One mod's versions, oldest first. Shared by the arbitration dialog and the manual reorder,
+    <!-- One mod's versions, oldest first. Shared by the arbitration modal and the manual reorder,
          because they are the same operation reached from two directions. -->
     <ItemsControl ItemsSource="{Binding Entries}">
         <ItemsControl.ItemTemplate>
@@ -23,7 +23,7 @@
                             <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
                             <Setter Property="BorderBrush" Value="Transparent" />
                             <Style.Triggers>
-                                <!-- The versions nothing could place - which is what the dialog is
+                                <!-- The versions nothing could place - which is what the modal is
                                      actually asking about, so they are the ones drawn to be found. -->
                                 <DataTrigger Binding="{Binding IsUnplaceable}" Value="True">
                                     <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />

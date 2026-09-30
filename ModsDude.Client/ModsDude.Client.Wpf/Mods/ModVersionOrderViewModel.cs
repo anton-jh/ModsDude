@@ -7,7 +7,7 @@ namespace ModsDude.Client.Wpf.Mods;
 
 /// <summary>
 /// One mod's versions, oldest first, with the ones the user is allowed to move. Shared by the
-/// arbitration dialog and the manual reorder, because they are the same operation - deciding where a
+/// arbitration modal and the manual reorder, because they are the same operation - deciding where a
 /// version sits among its siblings - reached from two directions.
 /// </summary>
 /// <remarks>
@@ -33,7 +33,7 @@ public partial class ModVersionOrderViewModel : ObservableObject
 
     /// <summary>
     /// True while something the ordering could not place is still where the derivation left it. Not
-    /// an error - the derived position is often right - but it is the thing the dialog is asking
+    /// an error - the derived position is often right - but it is the thing the modal is asking
     /// about, so it is worth being able to say whether anything was actually looked at.
     /// </summary>
     public bool HasUnplaceableEntries => Entries.Any(x => x.IsUnplaceable);
@@ -43,7 +43,7 @@ public partial class ModVersionOrderViewModel : ObservableObject
     /// Replaces the list with a freshly read order, discarding whatever the user had arranged.
     /// </summary>
     /// <remarks>
-    /// What a dialog does when it is told the order changed underneath it: the arrangement on screen
+    /// What a modal does when it is told the order changed underneath it: the arrangement on screen
     /// was an answer about an order that no longer exists, so merging it into the new one would
     /// silently reinterpret a decision the user made about something else.
     /// </remarks>

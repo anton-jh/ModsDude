@@ -6,7 +6,6 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
-using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shared;
@@ -53,7 +52,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Every savegame in the repo, live and archived. This profile's are picked out of it, and the rest
-    /// are what the check-out dialog names a savegame in the way by.
+    /// are what the check-out modal names a savegame in the way by.
     /// </summary>
     private IReadOnlyList<SavegameDto> _fetchedSavegames = [];
 
@@ -242,7 +241,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// The Saves list's publish, opened on this profile. Every answer stays on offer in the dialog -
+    /// The Saves list's publish, opened on this profile. Every answer stays on offer in the modal -
     /// this page only decides where it starts.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanPublish))]

@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -29,7 +28,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
     private readonly UserAccountService _userAccountService;
     private readonly AuthenticationService _authenticationService;
-    private readonly IDialogService _dialogService;
+    private readonly IFilePickerService _filePickerService;
     private readonly IToastService _toasts;
     private readonly ILogger<AccountPageViewModel> _logger;
 
@@ -38,14 +37,14 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
         AccountViewModel account,
         UserAccountService userAccountService,
         AuthenticationService authenticationService,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         IToastService toasts,
         ILogger<AccountPageViewModel> logger)
     {
         Account = account;
         _userAccountService = userAccountService;
         _authenticationService = authenticationService;
-        _dialogService = dialogService;
+        _filePickerService = filePickerService;
         _toasts = toasts;
         _logger = logger;
 
@@ -101,7 +100,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanChangePicture))]
     private async Task ChangePicture(CancellationToken cancellationToken)
     {
-        if (_dialogService.PickImage() is not string path)
+        if (_filePickerService.PickImage() is not string path)
         {
             return;
         }

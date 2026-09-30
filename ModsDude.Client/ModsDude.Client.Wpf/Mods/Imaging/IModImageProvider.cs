@@ -8,7 +8,7 @@ public interface IModImageProvider
     /// <summary>Edge length used for the icon in a mod list row.</summary>
     public const int ThumbnailSize = 64;
 
-    /// <summary>Edge length used for the image strip in the mod details dialog.</summary>
+    /// <summary>Edge length used for the image strip in the mod details modal.</summary>
     public const int PreviewSize = 96;
 
     /// <summary>Pass as <c>maxWidth</c> to decode at the image's own resolution.</summary>

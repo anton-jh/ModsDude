@@ -9,7 +9,7 @@ public sealed class ErrorReporter(
     Lazy<IModalService> modalService)
     : IErrorReporter
 {
-    public ErrorDialogViewModel Record(Exception exception, string? context = null)
+    public ErrorModalViewModel Record(Exception exception, string? context = null)
     {
         var friendly = exception as UserFriendlyException ?? UserFriendlyException.WrapUnknown(exception);
 
@@ -20,25 +20,25 @@ public sealed class ErrorReporter(
         logger.LogError(
             exception,
             "Shown to the user at {LoggedAt} while {Context}: {UserMessage}",
-            loggedAt.ToString(ErrorDialogViewModel.TimestampFormat),
+            loggedAt.ToString(ErrorModalViewModel.TimestampFormat),
             context ?? "working",
             friendly.UserMessage);
 
-        return new ErrorDialogViewModel(friendly.UserMessage, friendly.DeveloperMessage, loggedAt, logger);
+        return new ErrorModalViewModel(friendly.UserMessage, friendly.DeveloperMessage, loggedAt, logger);
     }
 
-    public ErrorDialogViewModel Record(string message, string? details = null, string? context = null)
+    public ErrorModalViewModel Record(string message, string? details = null, string? context = null)
     {
         var loggedAt = DateTimeOffset.Now;
 
         logger.LogError(
             "Shown to the user at {LoggedAt} while {Context}: {UserMessage} {Details}",
-            loggedAt.ToString(ErrorDialogViewModel.TimestampFormat),
+            loggedAt.ToString(ErrorModalViewModel.TimestampFormat),
             context ?? "working",
             message,
             details ?? "");
 
-        return new ErrorDialogViewModel(message, details, loggedAt, logger);
+        return new ErrorModalViewModel(message, details, loggedAt, logger);
     }
 
     public Task ShowAsync(Exception exception, string? context = null)

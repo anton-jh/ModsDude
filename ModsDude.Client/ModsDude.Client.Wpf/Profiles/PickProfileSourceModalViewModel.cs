@@ -10,7 +10,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Not the same act as copying a list</b>, which is why it is not the same dialog. A source only
+/// <b>Not the same act as copying a list</b>, which is why it is not the same modal. A source only
 /// ever <em>offers</em>: it puts that profile's versions on the left, where each of them is still a
 /// row somebody has to move. Copying writes into the draft, and its second mode takes things out -
 /// a statement about the whole list, which no chip could express.
@@ -48,7 +48,7 @@ public partial class PickProfileSourceModalViewModel : ModalViewModel
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private ProfileDto? _selected;
 
-    /// <summary>Null until something is confirmed, so a dismissed dialog adds no source.</summary>
+    /// <summary>Null until something is confirmed, so a dismissed modal adds no source.</summary>
     public ProfileDto? Result { get; private set; }
 
 

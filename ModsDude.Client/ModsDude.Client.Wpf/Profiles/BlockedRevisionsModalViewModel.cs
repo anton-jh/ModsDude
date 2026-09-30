@@ -71,7 +71,7 @@ public partial class BlockedRevisionsModalViewModel : ModalViewModel
     private async void OnGoTo(Guid savegameId)
     {
         // Closed first, and regardless of what navigation says: a refused one leaves the user on this
-        // page, and reopening the dialog over it would be the app arguing with itself.
+        // page, and reopening the modal over it would be the app arguing with itself.
         Done = true;
 
         await _goToSavegame(savegameId);

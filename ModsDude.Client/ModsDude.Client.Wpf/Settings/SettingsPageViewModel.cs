@@ -53,7 +53,7 @@ public partial class SettingsPageViewModel
     private readonly ModImageCache _imageCache;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
-    private readonly IDialogService _dialogService;
+    private readonly IFilePickerService _filePickerService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
     private readonly AutostartService _autostart;
@@ -74,7 +74,7 @@ public partial class SettingsPageViewModel
         GameRepository gameRepository,
         ContentStoreMaintenance maintenance,
         ModImageCache imageCache,
-        IDialogService dialogService,
+        IFilePickerService filePickerService,
         IModalService modalService,
         NavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
@@ -85,7 +85,7 @@ public partial class SettingsPageViewModel
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
         _imageCache = imageCache;
-        _dialogService = dialogService;
+        _filePickerService = filePickerService;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
         _backgroundTasks = backgroundTasks;
@@ -113,7 +113,7 @@ public partial class SettingsPageViewModel
         ImageCache = new ImageCacheViewModel(
             settings.ImageCache.Path,
             settings.ImageCache.MaxSizeBytes / (double)_bytesPerGigabyte,
-            dialogService);
+            filePickerService);
         ImageCache.Modified += OnStoreModified;
 
         // Straight into the fields, so loading the page does not count as an edit.
@@ -258,7 +258,7 @@ public partial class SettingsPageViewModel
 
         if (errors.Count > 0)
         {
-            var modal = ConfirmationDialogViewModel.ValidationErrors(errors);
+            var modal = ConfirmationModalViewModel.ValidationErrors(errors);
             await _modalService.Show(modal);
 
             return;
@@ -345,7 +345,7 @@ public partial class SettingsPageViewModel
             ? $"about {ByteSize.Describe(usage.TotalBytes)} across {usage.Entries} files"
             : "every file in it";
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             $"Check the store on {row.VolumeRoot} for damage?",
             $"Every mod file is read back and checked against what it is filed as - {size}, so this takes a "
                 + "while and works the disk. Progress shows at the top of the window, and you can stop it "
@@ -464,7 +464,7 @@ public partial class SettingsPageViewModel
             ? ByteSize.Describe(usage.ReclaimableBytes)
             : "the space this store is using";
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             $"Reclaim {amount} from {row.VolumeRoot}?",
             "Every mod file kept here that is not already installed in a mod folder is dropped. Nothing is "
                 + "lost - each one is registered in a repo and downloads again when a profile needs it - but "
@@ -515,7 +515,7 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             "Move the rescued files to the Recycle Bin?",
             $"These are files sync found in a mod folder that no repo has registered, kept in {store.QuarantinePath}. "
                 + "Nothing can fetch them back once the Recycle Bin is emptied.",
@@ -633,14 +633,14 @@ public partial class SettingsPageViewModel
 
     /// <summary>
     /// Runs one piece of housekeeping off the UI thread with the buttons held down, and turns a
-    /// failure into a dialog rather than the app's error modal - a store that could not be swept is
+    /// failure into a modal rather than the app's error modal - a store that could not be swept is
     /// a full disk, not a broken client.
     /// </summary>
     /// <remarks>
     /// A cancellation is let straight through: stopping a verification pass on purpose is not a
     /// failure, and turning it into "that did not work" would call the user's own decision an error.
     /// </remarks>
-    /// <returns>What the work answered, or null where it failed and the dialog has said so.</returns>
+    /// <returns>What the work answered, or null where it failed and the modal has said so.</returns>
     private async Task<Ran<T>?> RunAsync<T>(Func<Task<T>> work)
     {
         IsBusy = true;
@@ -651,7 +651,7 @@ public partial class SettingsPageViewModel
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await _modalService.Show(ConfirmationDialogViewModel.Refusal("That did not work", exception.Message));
+            await _modalService.Show(ConfirmationModalViewModel.Refusal("That did not work", exception.Message));
 
             return null;
         }
@@ -701,7 +701,7 @@ public partial class SettingsPageViewModel
 
     private Task ReportAsync(string title, string message)
     {
-        return _modalService.Show(ConfirmationDialogViewModel.Notice(title, message));
+        return _modalService.Show(ConfirmationModalViewModel.Notice(title, message));
     }
 
     private void OnServingVolumeChanged(object? sender, EventArgs e)
@@ -745,7 +745,7 @@ public partial class SettingsPageViewModel
                     volume,
                     configured?.Path ?? ContentStoreSettings.GetDefaultPath(volume),
                     (configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes) / (double)_bytesPerGigabyte,
-                    _dialogService);
+                    _filePickerService);
 
                 store.Modified += OnStoreModified;
                 _storesByVolume[volume] = store;

@@ -76,7 +76,7 @@ public partial class ContentStoreViewModel(
     string volumeRoot,
     string path,
     double maxSizeGigabytes,
-    IDialogService dialogService)
+    IFilePickerService filePickerService)
     : ObservableObject
 {
     public event EventHandler? Modified;
@@ -180,7 +180,7 @@ public partial class ContentStoreViewModel(
     [RelayCommand]
     public void PickPath()
     {
-        if (dialogService.PickFolder(string.IsNullOrWhiteSpace(Path) ? null : Path) is string folder)
+        if (filePickerService.PickFolder(string.IsNullOrWhiteSpace(Path) ? null : Path) is string folder)
         {
             // A folder that already holds other things gets the store in a folder of its own inside
             // it: the store deletes files, and must never be pointed at somebody's Documents.

@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Wpf.Mods;
+using ModsDude.Client.Wpf.Shared.Behaviors;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;

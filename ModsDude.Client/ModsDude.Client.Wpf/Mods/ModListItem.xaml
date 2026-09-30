@@ -134,7 +134,7 @@
                         </StackPanel>
 
                         <!-- The mod's description, whatever the import is doing. What went wrong with
-                             an import is a chip and an icon on the row and a dialog behind that: an
+                             an import is a chip and an icon on the row and a modal behind that: an
                              exception message rendered here is a line of clipped text nobody reads. -->
                         <TextBlock Grid.Row="1" Grid.Column="0"
                                    Margin="0 2 0 0"

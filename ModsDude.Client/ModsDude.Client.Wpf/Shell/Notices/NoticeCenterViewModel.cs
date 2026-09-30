@@ -368,7 +368,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <remarks>
     /// Every outcome that is worth a word goes back onto the card that was pressed rather than into a
-    /// dialog: these are all things the user can carry on ignoring, and a modal is exactly what this
+    /// modal: these are all things the user can carry on ignoring, and a modal is exactly what this
     /// column exists not to be.
     /// </remarks>
     private async Task InvokeAsync(Notice notice, NoticeActionKind kind)

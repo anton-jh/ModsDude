@@ -6,7 +6,7 @@ namespace ModsDude.Client.Wpf.Shell.Sidebar;
 /// <remarks>
 /// <para>
 /// Segoe Fluent Icons code points, which is the font the rest of the app's iconography already uses -
-/// the dialogs' icon converter, the sidebar headers' refresh button, the subtle icon buttons. Kept as
+/// the modals' icon converter, the sidebar headers' refresh button, the subtle icon buttons. Kept as
 /// constants rather than written into the XAML so that the same idea keeps the same glyph wherever it
 /// appears, which is what lets somebody find an entry by its shape rather than by reading the column.
 /// </para>

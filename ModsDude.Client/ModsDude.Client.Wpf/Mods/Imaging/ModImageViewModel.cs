@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace ModsDude.Client.Wpf.Mods.Imaging;
 
 /// <summary>
-/// One entry in the image strip of the mod details dialog. A pack can ship a few dozen of these,
+/// One entry in the image strip of the mod details modal. A pack can ship a few dozen of these,
 /// so the strip only decodes the ones that scroll into view.
 /// </summary>
 public partial class ModImageViewModel(ModImage image, IModImageProvider imageProvider)

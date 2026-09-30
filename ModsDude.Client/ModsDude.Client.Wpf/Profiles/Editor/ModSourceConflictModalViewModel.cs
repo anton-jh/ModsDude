@@ -19,13 +19,13 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 /// id and the same version string, which the repo has no way to hold both of.
 /// </para>
 /// <para>
-/// <b>The copies not chosen go to the Recycle Bin</b>, and that is said on the dialog rather than
+/// <b>The copies not chosen go to the Recycle Bin</b>, and that is said on the modal rather than
 /// afterwards. It is the whole reason the choice is worth making: leaving them means being asked the
 /// same question on every future import, by two files that will never stop disagreeing.
 /// </para>
 /// <para>
 /// Dismissing skips the versions listed here and lets the rest of the import finish, and skipping
-/// recycles nothing. Same bargain as the version arbitration dialog: one undecidable mod is one
+/// recycles nothing. Same bargain as the version arbitration modal: one undecidable mod is one
 /// mod's problem, and losing a two-thousand-mod batch over it is not a trade anybody would make.
 /// </para>
 /// </remarks>
@@ -60,7 +60,7 @@ public partial class ModSourceConflictModalViewModel : ModalViewModel
 
     /// <summary>
     /// Which file to import per version, or null where the user declined to say. A null answer skips
-    /// exactly the versions this dialog was asking about.
+    /// exactly the versions this modal was asking about.
     /// </summary>
     public IReadOnlyDictionary<ModVersionIdentity, string>? Result { get; private set; }
 
@@ -80,7 +80,7 @@ public partial class ModSourceConflictModalViewModel : ModalViewModel
     }
 
 
-    /// <summary>Escape skips, which is this dialog's own way of declining to answer.</summary>
+    /// <summary>Escape skips, which is this modal's own way of declining to answer.</summary>
     public override bool TryCancel() => Press(SkipCommand);
 
     public override bool TryAccept() => Press(ConfirmCommand);
@@ -116,7 +116,7 @@ public sealed class ModSourceConflictItemViewModel
 
     /// <summary>
     /// The mutual exclusion, held here rather than by <c>RadioButton.GroupName</c>. A group name is
-    /// resolved across the whole window, so several of these lists on one dialog would share one
+    /// resolved across the whole window, so several of these lists on one modal would share one
     /// group and a second mod's choice would clear the first mod's.
     /// </summary>
     private void Select(ModFileCandidateViewModel chosen)

@@ -3,9 +3,9 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Mods;
+using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -336,7 +336,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
             return;
         }
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             marked.Count == 1 ? "Delete this revision?" : $"Delete {marked.Count} revisions?",
             marked.Count == 1
                 ? "The mod list it recorded goes with it and cannot be brought back. Anything it was "
@@ -494,7 +494,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
             return;
         }
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             $"Restore revision {revision.Number}?",
             "The profile goes back to what it pinned then, recorded as a new revision. Nothing is deleted - what it pins now stays in the history, so this can be undone the same way.",
             IconKind.Question,
@@ -529,7 +529,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     /// <summary>
     /// Branches the selected revision off into a profile of its own. The same primitive as a
     /// restore, pointed somewhere else - which is why an old revision being read-only costs nobody
-    /// anything: taking it somewhere it can be edited is one dialog away.
+    /// anything: taking it somewhere it can be edited is one modal away.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSaveAs))]
     private async Task SaveAs(CancellationToken cancellationToken)

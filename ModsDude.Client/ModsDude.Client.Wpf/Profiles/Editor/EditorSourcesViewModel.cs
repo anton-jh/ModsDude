@@ -23,7 +23,7 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 public sealed partial class EditorSourcesViewModel(
     ModCatalog catalog,
     OtherProfilesReader otherProfiles,
-    IDialogService dialogService,
+    IFilePickerService filePickerService,
     IModalService modalService,
     IErrorReporter errorReporter,
     Func<ProfileEditorSnapshot> current,
@@ -146,7 +146,7 @@ public sealed partial class EditorSourcesViewModel(
     [RelayCommand]
     private Task AddFolder()
     {
-        if (dialogService.PickFolder(null) is not string path)
+        if (filePickerService.PickFolder(null) is not string path)
         {
             return Task.CompletedTask;
         }
@@ -215,7 +215,7 @@ public sealed partial class EditorSourcesViewModel(
 
         if (dependent.Count > 0)
         {
-            var confirmation = new ConfirmationDialogViewModel(
+            var confirmation = new ConfirmationModalViewModel(
                 $"Unload {chip.Name}?",
                 $"{ProfileModsEditorSummary.Mods(dependent.Count)} in your draft come only from {chip.Name} "
                     + "and will be taken out with it.",

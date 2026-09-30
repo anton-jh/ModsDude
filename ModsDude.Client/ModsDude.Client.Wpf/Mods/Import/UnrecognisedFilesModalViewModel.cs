@@ -33,7 +33,7 @@ public sealed record UnrecognisedFilesChoice(string? Folder);
 /// a folder of large archives.
 /// </para>
 /// <para>
-/// Either way nothing is deleted. That is the one rule this dialog exists to keep, and the reason
+/// Either way nothing is deleted. That is the one rule this modal exists to keep, and the reason
 /// picking a folder is offered here rather than somewhere in the settings: the moment it matters is
 /// the moment the files are named.
 /// </para>
@@ -42,14 +42,14 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
 {
     private const int _namesShown = 10;
 
-    private readonly IDialogService _dialogs;
+    private readonly IFilePickerService _filePicker;
 
 
     /// <param name="names">Every file, in the order the plans list them.</param>
     /// <param name="lastFolder">The folder chosen last time, so a second apply starts where the first ended.</param>
-    public UnrecognisedFilesModalViewModel(IReadOnlyList<string> names, IDialogService dialogs, string? lastFolder)
+    public UnrecognisedFilesModalViewModel(IReadOnlyList<string> names, IFilePickerService filePicker, string? lastFolder)
     {
-        _dialogs = dialogs;
+        _filePicker = filePicker;
 
         Count = names.Count;
         Names = [.. names.Take(_namesShown)];
@@ -76,7 +76,7 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
 
     public bool HasMore => MoreText is not null;
 
-    /// <summary>What the user chose, or null where they backed out. Read after the dialog is done.</summary>
+    /// <summary>What the user chose, or null where they backed out. Read after the modal is done.</summary>
     public UnrecognisedFilesChoice? Result { get; private set; }
 
 
@@ -131,7 +131,7 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
     [RelayCommand]
     private void Browse()
     {
-        if (_dialogs.PickFolder(string.IsNullOrWhiteSpace(Folder) ? null : Folder) is string picked)
+        if (_filePicker.PickFolder(string.IsNullOrWhiteSpace(Folder) ? null : Folder) is string picked)
         {
             Folder = picked;
 

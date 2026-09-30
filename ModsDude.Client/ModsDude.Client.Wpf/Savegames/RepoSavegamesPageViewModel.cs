@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -265,8 +264,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// <b>Done rather than asked.</b> A binding whose savegame has been archived and then deleted for
     /// good names something nobody can produce: there is no claim left to hand back, no history to
     /// check a snapshot into, and every server-side verb on it answers 404. The only thing anybody can
-    /// do about it is stop tracking it, and a dialog offering a choice with one sane answer is a
-    /// dialog that exists to be clicked through. So the row is not built, the button is not offered,
+    /// do about it is stop tracking it, and a modal offering a choice with one sane answer is a
+    /// modal that exists to be clicked through. So the row is not built, the button is not offered,
     /// and the state is simply gone the next time this list is opened.
     /// </para>
     /// <para>
@@ -454,13 +453,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// <para>
     /// <b>Nothing else moves with the name.</b> The snapshots, the claim log, whoever is holding it and
     /// which mod list it follows are all untouched - a savegame cannot be moved between profiles, so
-    /// there is no second field this dialog could grow. The server's route says the same thing from
+    /// there is no second field this modal could grow. The server's route says the same thing from
     /// its end: it became a rename in Phase 9 and takes nothing but a name.
     /// </para>
     /// <para>
     /// <b>The clash is the server's to find.</b> Names are unique per repo behind a filtered unique
     /// index, so checking here first would be a second copy of a rule that would still be racing
-    /// somebody else's rename. Losing that race re-opens the dialog with what they typed rather than
+    /// somebody else's rename. Losing that race re-opens the modal with what they typed rather than
     /// an error they have to start over from.
     /// </para>
     /// </remarks>
@@ -555,7 +554,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return;
         }
 
-        var confirmation = ConfirmationDialogViewModel.ConfirmArchive(row.Name, "savegame");
+        var confirmation = ConfirmationModalViewModel.ConfirmArchive(row.Name, "savegame");
 
         await _modalService.Show(confirmation);
 
@@ -600,7 +599,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return;
         }
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             $"Delete snapshot {number}?",
             $"This copy of '{row.Name}' goes for good. The others stay, and whoever is playing it now "
                 + "is unaffected - they hold the current snapshot, which this is not.",
@@ -818,7 +817,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Nothing awaits this, so an escape would go unobserved rather than reaching the shell.
-            // Logged and left to the notice column rather than raised as a dialog: the list is
+            // Logged and left to the notice column rather than raised as a modal: the list is
             // correct without these chips, and a modal over a list that loaded fine is the wrong size
             // of answer for a missing caption.
             _errorReporter.Record(exception, "checking the savegame list against this machine");
@@ -982,7 +981,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             var played = await _savegameService.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
                 is SavegameSlotAvailability.HeldWithUnpublishedPlay;
 
-            // The savegame's name where the dialog wants a slot label, as the check-in does: a slot
+            // The savegame's name where the modal wants a slot label, as the check-in does: a slot
             // id is a folder name the player has never thought in, and what they are giving back is
             // the save rather than the folder.
             if (await _flowService.DiscardAsync(hold.Game, row.Id, row.Name, row.Name, played, _lifetime) is false)
@@ -1039,7 +1038,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         var incumbent = _fetched.FirstOrDefault(x =>
             x.ProfileId == row.Savegame.ProfileId && x.SupersededAt is null);
 
-        var confirmation = new ConfirmationDialogViewModel(
+        var confirmation = new ConfirmationModalViewModel(
             $"Make '{row.Name}' {row.ProfileName}'s current savegame?",
             DescribeSwap(row, incumbent),
             IconKind.Question,
@@ -1070,7 +1069,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// <summary>
     /// Runs one of the page's actions with the list marked busy, and says a failure once, here.
     /// </summary>
-    /// <param name="doing">What was being done, for the error dialog: "archiving a savegame".</param>
+    /// <param name="doing">What was being done, for the error modal: "archiving a savegame".</param>
     private async Task RunAsync(string doing, Func<Task> work)
     {
         IsWorking = true;
@@ -1122,7 +1121,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     }
 
     /// <summary>
-    /// The check-out dialog and everything after it, which is <see cref="SavegameFlowService.CheckOutAsync"/>'s
+    /// The check-out modal and everything after it, which is <see cref="SavegameFlowService.CheckOutAsync"/>'s
     /// - a profile's Overview offers the same check-out for its own savegame.
     /// </summary>
     private Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)

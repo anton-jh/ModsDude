@@ -136,6 +136,8 @@ A change is done only when all of these hold:
 
 - A file contains one main type, plus at most a few very small supporting types (such as strongly typed IDs or small records).
 - Group by feature (Profiles, Savegames, ...) rather than by kind (Services, Models) where applicable.
+  - WPF: one folder per feature with views next to their view models, `Shell/` for the app frame and `Shared/` for what several features use. Each feature maps its view models to views in its own `<Feature>Templates.xaml`, merged by `App.xaml`.
+  - A view shown in the modal layer is named `<Name>Modal`, with its view model `<Name>ModalViewModel`.
 - One responsibility per class. Split a very large class where it helps readability, even when it is all one concern. Never use `partial` classes for this.
 
 ### Comments and line endings

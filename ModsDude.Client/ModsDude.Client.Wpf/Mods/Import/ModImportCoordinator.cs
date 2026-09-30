@@ -34,13 +34,13 @@ public sealed record ModImportOutcome(ModImportResult? Result, string? Refusal)
 /// <b>The counterpart of <see cref="ProfileApplyService"/>, and it exists for the same reason.</b> Two
 /// surfaces import into a repo - the catalog page's Import button and the mod list editor's save,
 /// which registers whatever the draft pins and is only on disk - and they had a copy each of the
-/// strip entry, the two resolver dialogs and the request assembly. One copy of that is one too many
+/// strip entry, the two resolver modals and the request assembly. One copy of that is one too many
 /// for code whose whole job is to agree with itself, and it left nowhere to put a claim that a third
 /// surface could not forget.
 /// </para>
 /// <para>
 /// <b>What it does not do is decide what the result means.</b> The two callers genuinely differ there:
-/// the catalog page marks its rows and is finished, while the editor holds the problems dialog and the
+/// the catalog page marks its rows and is finished, while the editor holds the problems modal and the
 /// superseded copies back until the save it was half of has actually committed - a file removed for a
 /// revision that was never written is a file removed for nothing. So this hands back the raw result
 /// and lets each of them do that themselves.
@@ -81,7 +81,7 @@ public sealed class ModImportCoordinator(
     /// </summary>
     /// <param name="names">
     /// What each of these versions is called, keyed by identity - what the strip line and the failure
-    /// dialog both need, and the only thing about a caller's rows this has ever used.
+    /// modal both need, and the only thing about a caller's rows this has ever used.
     /// </param>
     /// <param name="progress">
     /// The caller's own sink, where it has rows to draw into. Null for a caller that owns no view -
@@ -191,13 +191,13 @@ public sealed class ModImportCoordinator(
 
 
     /// <summary>
-    /// One dialog for the whole import, and only for the mods the comparer could not settle.
+    /// One modal for the whole import, and only for the mods the comparer could not settle.
     /// Everything it settled is already registering by the time this is asked.
     /// </summary>
     /// <remarks>
     /// <b>Raised by the coordinator rather than by a page</b>, which is what stops it being a question
     /// asked on behalf of a view that has since been navigated away from and disposed. The strip
-    /// entry behind it names the run either way, so the dialog is never the only thing on screen that
+    /// entry behind it names the run either way, so the modal is never the only thing on screen that
     /// knows what it is about.
     /// </remarks>
     private async Task<IReadOnlyDictionary<ModKey, IReadOnlyList<ModVersionKey>>?> ResolveArbitrationAsync(
@@ -240,7 +240,7 @@ public sealed class ModImportCoordinator(
     /// </summary>
     /// <remarks>
     /// <c>InvokeAsync</c> of an async lambda hands back a task whose result is the inner task, so the
-    /// unwrap is what makes awaiting this wait for the user rather than for the dialog to open.
+    /// unwrap is what makes awaiting this wait for the user rather than for the modal to open.
     /// </remarks>
     private static Task<T> OnUiThreadAsync<T>(Func<Task<T>> work)
     {

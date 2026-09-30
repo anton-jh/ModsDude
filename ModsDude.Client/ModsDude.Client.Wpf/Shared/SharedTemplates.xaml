@@ -3,7 +3,7 @@
                     xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared">
 
     <DataTemplate DataType="{x:Type shared:RenameModalViewModel}">
-        <shared:RenameDialog />
+        <shared:RenameModal />
     </DataTemplate>
 
 </ResourceDictionary>

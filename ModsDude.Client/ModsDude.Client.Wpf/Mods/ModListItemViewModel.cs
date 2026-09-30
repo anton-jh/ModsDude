@@ -113,7 +113,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
 
     /// <summary>
     /// The order between this version and what the repo holds is not settled - a comparer abstention
-    /// against the repo's own newest, which is exactly the pair the import-time arbitration dialog
+    /// against the repo's own newest, which is exactly the pair the import-time arbitration modal
     /// exists for. Set by the page from <c>ModVersionSet.CouldNotCompareToNewest</c>, which is where
     /// the comparison actually lives: this row only renders the fact.
     /// </summary>
@@ -393,7 +393,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public bool HasImportProblem => ImportState is ModImportRowState.Failed or ModImportRowState.Skipped;
 
     /// <summary>
-    /// Which mod the dialog was talking about, for whoever comes back to the list after it. On the
+    /// Which mod the modal was talking about, for whoever comes back to the list after it. On the
     /// chip, since that is what carries the state now - and null where there is no problem, so a row
     /// that is merely new does not sprout a tooltip explaining that nothing went wrong.
     /// </summary>
@@ -442,7 +442,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// place the whole story is written down.
     /// </summary>
     /// <remarks>
-    /// The row gets a mark and the dialog gets a sentence, so an exception - message, inner
+    /// The row gets a mark and the modal gets a sentence, so an exception - message, inner
     /// exceptions, stack - reaches nobody unless it is logged here. Logged as an error only where
     /// something actually went wrong: a mod the import declined to touch is a decision waiting to be
     /// made, and a mod the repo already held is not news at all.
@@ -547,7 +547,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     }
 
     /// <summary>
-    /// Where this row's imagery comes from, resolved once and shared with the details dialog. For a
+    /// Where this row's imagery comes from, resolved once and shared with the details modal. For a
     /// registered version that has none and whose file is here, this is what generates and uploads
     /// it - the client that noticed the gap is the one best placed to close it, for everyone.
     /// </summary>

@@ -18,12 +18,12 @@ namespace ModsDude.Client.Wpf.Savegames;
 
 /// <summary>
 /// The verbs that move a savegame between a slot and the repo - check out, check in, discard and
-/// publish - with the dialogs they need, in one place.
+/// publish - with the modals they need, in one place.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The same shape as <see cref="ProfileApplyService"/>, and for the same reason: check-in is reached
-/// from the repo's Saves list <em>and</em> from the check-out dialog's way out of a refused slot,
+/// from the repo's Saves list <em>and</em> from the check-out modal's way out of a refused slot,
 /// and two copies of "ask, send, resolve a stale base" would be two copies that eventually disagree
 /// about what force means.
 /// </para>
@@ -53,14 +53,14 @@ public sealed class SavegameFlowService(
 {
     /// <summary>
     /// Whether a locked pin moved between two revisions of one profile, keyed by the pair. Revisions do
-    /// not change once written, so an answer is good for the session - and a check-out dialog and a
+    /// not change once written, so an answer is good for the session - and a check-out modal and a
     /// row chip ask the same question about the same pair.
     /// </summary>
     private readonly Dictionary<(Guid ProfileId, int From, int To), bool> _lockedDrift = [];
 
     /// <summary>
     /// The number the player knows a held savegame's slot by, for a game that numbers them - what the
-    /// dialogs say instead of leaving the player to work out which folder is meant.
+    /// modals say instead of leaving the player to work out which folder is meant.
     /// </summary>
     private int? HeldSlotNumber(Game game, Guid savegameId)
         => savegames.GetBinding(game, savegameId) is SavegameCheckoutBinding binding
@@ -128,7 +128,7 @@ public sealed class SavegameFlowService(
     /// <summary>
     /// Asks, uploads, and turns a refused base into a choice rather than an error.
     /// </summary>
-    /// <param name="savegameName">What the dialog calls the save. Display text only - see <paramref name="renameTo"/>.</param>
+    /// <param name="savegameName">What the modal calls the save. Display text only - see <paramref name="renameTo"/>.</param>
     /// <param name="renameTo">
     /// What to write into the slot as the save's name before packing it, or null to leave the slot's
     /// own name alone. Deliberately separate from <paramref name="savegameName"/>: a caller that is
@@ -181,7 +181,7 @@ public sealed class SavegameFlowService(
               "It goes to the Recycle Bin and no snapshot is minted, so the only copy of that play is one you restore by hand."
             : $"{Capitalised(slot)} goes to the Recycle Bin and no snapshot is minted. The savegame goes back to being anybody's to take.";
 
-        var modal = new ConfirmationDialogViewModel(
+        var modal = new ConfirmationModalViewModel(
             $"Give '{savegameName}' back without checking it in?",
             consequence,
             hasUnpublishedPlay ? IconKind.Warning : IconKind.Question,
@@ -232,7 +232,7 @@ public sealed class SavegameFlowService(
     /// What the folder holding it is called, where the caller could name it - by key, since no
     /// adapter offers the folder any more. Null falls back to a sentence that names no folder.
     /// </param>
-    /// <returns>False where the dialog was dismissed, or there was nothing to forget.</returns>
+    /// <returns>False where the modal was dismissed, or there was nothing to forget.</returns>
     public async Task<bool> DisconnectAsync(
         Game game,
         Guid savegameId,
@@ -241,7 +241,7 @@ public sealed class SavegameFlowService(
     {
         var where = folderName is string named ? $"the '{named}' folder" : "a folder this game's settings no longer name";
 
-        var modal = new ConfirmationDialogViewModel(
+        var modal = new ConfirmationModalViewModel(
             $"Stop tracking '{savegameName}'?",
             $"Your copy stays exactly where it is, in {where}, and becomes an ordinary save of your own - ModsDude stops recognising it. "
               + $"The claim on '{savegameName}' is not handed back, so nobody else can take it until you do. "
@@ -279,7 +279,7 @@ public sealed class SavegameFlowService(
     {
         try
         {
-            // The savegame's name where the dialog wants a slot label, as CheckInBlockingAsync does:
+            // The savegame's name where the modal wants a slot label, as CheckInBlockingAsync does:
             // the slot's own id is a folder name the player has never thought in, and what they are
             // handing back is the save rather than the folder. It is this savegame's own record, so it
             // also stands as the name to write into the slot before it is packed.
@@ -457,7 +457,7 @@ public sealed class SavegameFlowService(
 
 
     /// <summary>
-    /// Checks a savegame out, or takes a copy of it: the slot dialog, then the claim, then the mods.
+    /// Checks a savegame out, or takes a copy of it: the slot modal, then the claim, then the mods.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -476,7 +476,7 @@ public sealed class SavegameFlowService(
     /// <param name="nameOf">What a savegame is called, read off the caller's own list. Null where it is not in it.</param>
     /// <param name="changed">
     /// Called whenever the repo moved under the caller: after the check-out, and after checking in the
-    /// savegame that was in the way - before the dialog is offered again, so the caller's list is the
+    /// savegame that was in the way - before the modal is offered again, so the caller's list is the
     /// one it names savegames from.
     /// </param>
     public async Task CheckOutAsync(
@@ -523,7 +523,7 @@ public sealed class SavegameFlowService(
     {
         if (savegame.Head is null || snapshotNumber <= 0)
         {
-            await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
+            await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
                 $"'{savegame.Name}' has no snapshot yet",
                 "Nothing has been checked in for this savegame, so there is nothing to write into a slot."));
 
@@ -532,7 +532,7 @@ public sealed class SavegameFlowService(
 
         if (repo.Games.FirstOrDefault() is not Game game)
         {
-            await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
+            await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
                 NotConnectedTitle(repo),
                 $"A savegame has to be written into an installation of the game. {HowToConnect(repo)}"));
 
@@ -561,7 +561,7 @@ public sealed class SavegameFlowService(
         }
 
         // After the take-over question and before the slot one: whether there is a check-out at all
-        // is decided first, and the slot dialog's mod summary should describe the folder as it will
+        // is decided first, and the slot modal's mod summary should describe the folder as it will
         // be rather than as it was.
         if (await ActivateFirstAsync(repo, game, savegame, mode, changed, cancellationToken) is false)
         {
@@ -605,11 +605,11 @@ public sealed class SavegameFlowService(
     /// two copies of one save, and whoever checks in second overwrites the other. That is the sentence
     /// worth reading before the click rather than after it.
     /// </remarks>
-    private static ConfirmationDialogViewModel ConfirmTakeOver(string savegameName, SavegameCheckoutDto holder)
+    private static ConfirmationModalViewModel ConfirmTakeOver(string savegameName, SavegameCheckoutDto holder)
     {
         var name = holder.User.DisplayName;
 
-        return new ConfirmationDialogViewModel(
+        return new ConfirmationModalViewModel(
             $"{name} has '{savegameName}' checked out",
             $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Checking it out takes it from them, "
                 + "and their ModsDude will tell them.\n\n"
@@ -672,7 +672,7 @@ public sealed class SavegameFlowService(
         var list = SavegameRowRules.DescribeActivation(profile.Name, pinned);
 
         var confirmation = mode is SavegameCheckOutMode.TakeCopy
-            ? new ConfirmationDialogViewModel(
+            ? new ConfirmationModalViewModel(
                 $"Activate {list} first?",
                 $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
                     + $"Activating it first puts the mods the copy was saved with in place. Leaving it writes the copy "
@@ -681,7 +681,7 @@ public sealed class SavegameFlowService(
                 "Activate it, then take the copy",
                 "Cancel",
                 "Leave the mods as they are")
-            : new ConfirmationDialogViewModel(
+            : new ConfirmationModalViewModel(
                 $"Activate {list} first?",
                 $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
                     + $"Checking it out activates {list} first, then asks which slot to write the save into.",
@@ -710,7 +710,7 @@ public sealed class SavegameFlowService(
         await driftMonitor.CheckAsync();
 
         // The folder moved, so every row's answer about it has too - including where the check-out
-        // is abandoned at the slot dialog that follows.
+        // is abandoned at the slot modal that follows.
         await changed();
 
         if (outcome.Succeeded is false)
@@ -724,7 +724,7 @@ public sealed class SavegameFlowService(
     }
 
     /// <summary>
-    /// The way out of a refused slot: check the savegame occupying it in, then offer the dialog again
+    /// The way out of a refused slot: check the savegame occupying it in, then offer the modal again
     /// with the slot free. One action rather than a warning, per docs/PLAN.md#slot-safety.
     /// </summary>
     private async Task CheckInBlockingAsync(
@@ -763,7 +763,7 @@ public sealed class SavegameFlowService(
             return;
         }
 
-        // The slot is no longer claimed but not empty either, so the dialog about to open again offers
+        // The slot is no longer claimed but not empty either, so the modal about to open again offers
         // it as an unrecognised save - which needs saying, or it reads as the check-in having done nothing.
         if (NotRecycled(outcome.LocalCopy, blockingName is null ? "its slot" : $"'{blockingName}'s slot") is string notRecycled)
         {
@@ -772,7 +772,7 @@ public sealed class SavegameFlowService(
 
         await changed();
 
-        // Read again rather than reused: the savegame's own state is what the dialog describes, and a
+        // Read again rather than reused: the savegame's own state is what the modal describes, and a
         // check-in a moment ago is exactly the kind of thing that moves it.
         var refreshed = (await savegamesClient.GetSavegamesV1Async(repo.Id, cancellationToken))
             .FirstOrDefault(x => x.Id == savegame.Id);
@@ -927,7 +927,7 @@ public sealed class SavegameFlowService(
     /// </para>
     /// <para>
     /// <b>A second, small question rather than a third button on the first.</b> Folding it into the
-    /// service's own disclosure would mean either a three-way dialog or listing the same files a
+    /// service's own disclosure would mean either a three-way modal or listing the same files a
     /// second time - and the plan is only re-read on this path, which is the uncommon one. Nothing is
     /// recorded either way: the user said no to the apply.
     /// </para>
@@ -937,7 +937,7 @@ public sealed class SavegameFlowService(
         // The first folder with something unrecognised in it, since that is the one whose contents
         // the user is about to read. A decline for any other reason finds none and asks nothing.
         // On the strip because planning reads and hashes the mod folder - see ModSyncService.PlanAsync -
-        // and this one runs between two dialogs, where a still window reads as the app having stopped.
+        // and this one runs between two modals, where a still window reads as the app having stopped.
         using var task = backgroundTasks.Begin($"Checking what '{profile.Name}' would change");
 
         var plans = (await applyService.TryPlanAsync(
@@ -948,7 +948,7 @@ public sealed class SavegameFlowService(
             return;
         }
 
-        var choice = new ConfirmationDialogViewModel(
+        var choice = new ConfirmationModalViewModel(
             $"Open '{profile.Name}'s mod list?",
             $"{plan.Unrecognised.Count} mods in the mod folder are not in this repo, and applying is what moves them to "
                 + "the Recycle Bin. The mod list is where they get imported instead - and until something is applied, "
@@ -966,7 +966,7 @@ public sealed class SavegameFlowService(
     }
 
     /// <summary>
-    /// Everything the check-out dialog needs about one game: its slots and their safety, what the mod
+    /// Everything the check-out modal needs about one game: its slots and their safety, what the mod
     /// folder would have to do, and how far the save's revision is from the profile's.
     /// </summary>
     private async Task<SavegameCheckOutContext> BuildCheckOutContextAsync(
@@ -1077,7 +1077,7 @@ public sealed class SavegameFlowService(
         // Named rather than resolved from the game: nothing is holding this savegame yet, so the
         // game has no opinion about it - and the plan shown here has to be the plan that runs.
         // On the strip for the same reason the apply's own planning is: this reads and hashes the mod
-        // folder, and it runs while somebody is waiting for the check-out dialog to open.
+        // folder, and it runs while somebody is waiting for the check-out modal to open.
         using var task = backgroundTasks.Begin($"Checking what '{savegame.Name}' would need");
 
         var plans = (await applyService.TryPlanAsync(
@@ -1166,14 +1166,14 @@ public sealed class SavegameFlowService(
             : null;
 
     /// <summary>
-    /// Makes a savegame out of a save that is already on this disk: which slot, then the publish dialog.
+    /// Makes a savegame out of a save that is already on this disk: which slot, then the publish modal.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>The slot is what it is about</b>, so it is asked for first: the same flat slot list across
     /// every savegame folder the game reaches, filtered to the ones ModsDude has no copy of. Everything
     /// after that - the name, the mod list, the revision this first snapshot declares - is the publish
-    /// dialog's.
+    /// modal's.
     /// </para>
     /// <para>
     /// Failures are reported here rather than thrown, because both callers reach this from a click and
@@ -1181,8 +1181,8 @@ public sealed class SavegameFlowService(
     /// </para>
     /// </remarks>
     /// <param name="preselectProfileId">
-    /// The profile the dialog opens on, where the caller is a profile's own page. Null opens it on the
-    /// profile this game follows - the dialog still offers every answer either way.
+    /// The profile the modal opens on, where the caller is a profile's own page. Null opens it on the
+    /// profile this game follows - the modal still offers every answer either way.
     /// </param>
     /// <param name="published">Called with the new savegame's id once it exists, so the caller can re-read.</param>
     public async Task PublishAsync(
@@ -1193,7 +1193,7 @@ public sealed class SavegameFlowService(
     {
         if (repo.Games.FirstOrDefault() is not Game game)
         {
-            await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
+            await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
                 NotConnectedTitle(repo),
                 $"Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from. {HowToConnect(repo)}"));
 
@@ -1206,7 +1206,7 @@ public sealed class SavegameFlowService(
 
             if (slots.Count == 0)
             {
-                await modalService.Value.Show(ConfirmationDialogViewModel.Refusal(
+                await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
                     "There is nothing here to publish",
                     "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in the repo's saves list."));
 
@@ -1294,7 +1294,7 @@ public sealed class SavegameFlowService(
     /// <see cref="SavegamePublishModalViewModel"/> - so this is also where the repo's profiles, the
     /// savegame each is currently following and what the mod folder is on are gathered.
     /// </remarks>
-    /// <returns>What was created and whether it is still held, or null where the dialog was dismissed.</returns>
+    /// <returns>What was created and whether it is still held, or null where the modal was dismissed.</returns>
     private async Task<SavegamePublishOutcome?> PublishSlotAsync(
         Game game,
         Repo repo,
@@ -1355,7 +1355,7 @@ public sealed class SavegameFlowService(
     }
 
     /// <summary>
-    /// Every profile in the repo as something the dialog can offer, plus the no-mod-list answer last.
+    /// Every profile in the repo as something the modal can offer, plus the no-mod-list answer last.
     /// </summary>
     /// <remarks>
     /// <b>Archived savegames count towards "current".</b> Archiving is the repo-wide visibility state
@@ -1369,7 +1369,7 @@ public sealed class SavegameFlowService(
         int? appliedRevision,
         CancellationToken cancellationToken)
     {
-        // This dialog can be the first thing that needs them: the repo's Saves page is reachable
+        // This modal can be the first thing that needs them: the repo's Saves page is reachable
         // without ever having opened a profile.
         if (profileService.Profiles.Any(x => x.RepoId == repo.Id) is false)
         {
@@ -1437,7 +1437,7 @@ public sealed class SavegameFlowService(
     /// </summary>
     /// <remarks>
     /// <b>Read rather than recomputed.</b> The number is <see cref="ISavegameService.GetPlayedRevision"/>'s,
-    /// which is the same one the check-in sends - working it out a second time here is how a dialog
+    /// which is the same one the check-in sends - working it out a second time here is how a modal
     /// comes to name a revision the snapshot does not carry. The profile's name is this layer's to add:
     /// the binding records an id, and a bare "rev 1004" is a number belonging to no list in particular.
     /// </remarks>
@@ -1484,7 +1484,7 @@ public sealed class SavegameFlowService(
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
-            var choice = new ConfirmationDialogViewModel(
+            var choice = new ConfirmationModalViewModel(
                 $"Somebody else checked '{savegameName}' in",
                 "Your save was built on an older snapshot. Checking yours in anyway records it as the newest one, with " +
                 "theirs named beside it and still in the history - nothing is deleted either way. Leaving it alone keeps " +
@@ -1535,7 +1535,7 @@ public sealed record SavegameHost(
 /// <remarks>
 /// The second half is not decoration. A publish that handed the save back left an empty slot and a
 /// savegame anybody can take, and a caller that said "checked out to you" over it would be describing
-/// the state this dialog just took away.
+/// the state this modal just took away.
 /// </remarks>
 public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlaying, SavegameLocalCopy LocalCopy);
 

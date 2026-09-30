@@ -3,12 +3,8 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Navigation;
 
 namespace ModsDude.Client.Wpf.Shell;
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
 public partial class MainWindow : Window
 {
     /// <summary>
@@ -53,8 +49,8 @@ public partial class MainWindow : Window
 
         SuppressBrowserNavigation();
 
-        // Preview, so the keys reach the dialog wherever focus happens to be - including the page
-        // behind it, which is where focus still is for a dialog that never asked for it.
+        // Preview, so the keys reach the modal wherever focus happens to be - including the page
+        // behind it, which is where focus still is for a modal that never asked for it.
         PreviewKeyDown += OnPreviewKeyDown;
 
         Closing += OnClosing;
@@ -387,16 +383,16 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Here rather than on each dialog.</b> Every dialog used to carry its own <c>KeyBinding</c>
+    /// <b>Here rather than on each modal.</b> Every modal used to carry its own <c>KeyBinding</c>
     /// pair, and an <c>InputBinding</c> only fires when focus is inside the element carrying it -
-    /// so the nine dialogs that never called <c>Focus()</c> had an Escape that did nothing at all,
+    /// so the nine modals that never called <c>Focus()</c> had an Escape that did nothing at all,
     /// and which of the seventeen worked was decided by a line of constructor code nothing connected
     /// to the binding. The shell always has the focus this needs, and it has exactly one modal.
     /// </para>
     /// <para>
-    /// <b>What the keys mean is still the dialog's to say</b> - see
+    /// <b>What the keys mean is still the modal's to say</b> - see
     /// <see cref="ModalViewModel.TryCancel"/>. This only decides <em>whether to
-    /// ask</em>, which is a question about the focused control rather than about the dialog.
+    /// ask</em>, which is a question about the focused control rather than about the modal.
     /// </para>
     /// </remarks>
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -418,9 +414,9 @@ public partial class MainWindow : Window
     /// <remarks>
     /// <b>Three cases, and all three are ones where taking the key would break something the user can
     /// see.</b> An open drop-down uses both keys to pick and to abandon; a focused button is the
-    /// thing Enter presses, and stealing it would confirm a dialog whose Cancel the user had just
+    /// thing Enter presses, and stealing it would confirm a modal whose Cancel the user had just
     /// tabbed to; and a box that takes newlines is one where Enter types rather than submits.
-    /// Escape is never any of the last two, so it passes through to the dialog from a text box -
+    /// Escape is never any of the last two, so it passes through to the modal from a text box -
     /// which is the whole point of asking at the shell.
     /// </remarks>
     private static bool BelongsToFocus(Key key)
