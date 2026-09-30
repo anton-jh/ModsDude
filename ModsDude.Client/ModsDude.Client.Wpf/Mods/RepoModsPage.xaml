@@ -1,0 +1,223 @@
+﻿<Page x:Class="ModsDude.Client.Wpf.Mods.RepoModsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
+      xmlns:mods="clr-namespace:ModsDude.Client.Wpf.Mods"
+      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=mods:RepoModsPageViewModel, IsDesignTimeCreatable=False}"
+      Title="RepoModsPage">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Grid RowDefinitions="auto auto auto auto auto * auto">
+
+            <navigation:PageTitle Grid.Row="0" Text="Mods" />
+
+            <!-- A guest can read the list and nothing else, so this is where the reason lives - the
+                 same sentence the refused row actions would have carried. -->
+            <TextBlock Grid.Row="1"
+                       Margin="0 0 0 12"
+                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="{Binding ModifyRestriction}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CanModify}" Value="False">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <!-- What the whole repo holds. Above the search because it does not narrow with it - see
+                 StatisticsText. -->
+            <TextBlock Grid.Row="2"
+                       Margin="0 0 0 12"
+                       HorizontalAlignment="Left"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding StatisticsText}"
+                       Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+            <Grid Grid.Row="3" Margin="0 0 0 12" ColumnDefinitions="* auto auto">
+
+                <!-- No clear button of its own. The Fluent theme's TextBox template draws one, and a
+                     second hand-rolled one sat exactly on top of it. -->
+                <TextBox x:Name="SearchBox"
+                         Grid.Column="0"
+                         behaviors:SearchCompletion.Completer="{Binding SearchCompleter}"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                         VerticalAlignment="Center" />
+
+                <!-- Watches the box rather than the view model: the binding above delays pushing the
+                     text through, so anything driven off SearchText stays a beat behind what has
+                     actually been typed. -->
+                <TextBlock Grid.Column="0"
+                           Text="Search by name, id or author - Ctrl+Space for filters"
+                           Margin="12 0 0 0"
+                           VerticalAlignment="Center"
+                           IsHitTestVisible="False"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <ToggleButton Grid.Column="1"
+                              Margin="12 0 0 0"
+                              Padding="10 5"
+                              Content="Unused only"
+                              ToolTip="Registered here, and pinned by none of this repo's profiles."
+                              IsChecked="{Binding UnusedOnly, Mode=TwoWay}" />
+
+                <TextBlock Grid.Column="2"
+                           Margin="12 0 0 0"
+                           VerticalAlignment="Center"
+                           Text="{Binding RepoCountText}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Grid>
+
+            <!-- Selecting every version shown that can be deleted. Only for somebody who may delete,
+                 and the one place that says why some rows have no box to tick. -->
+            <StackPanel Grid.Row="4"
+                        Margin="0 0 0 8"
+                        Orientation="Horizontal"
+                        Visibility="{Binding CanModify, Converter={StaticResource BoolToVisibilityConverter}}">
+                <CheckBox Margin="13 0 10 0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding Selection.AllShownSelected, Mode=TwoWay}"
+                          ToolTip="Select every version shown that can be deleted" />
+                <TextBlock VerticalAlignment="Center"
+                           Text="Versions in use cannot be selected."
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <Border Grid.Row="5"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <Grid>
+
+                    <!-- One row per mod version, rendered by the implicit ModListItemViewModel template
+                         in App.xaml, with the profile editor's selection gestures. Virtualized with
+                         recycling: a repo can hold thousands. -->
+                    <ListBox Style="{StaticResource ModList}"
+                             ItemsSource="{Binding RepoView}"
+                             behaviors:ListSelection.Controller="{Binding Selection}"
+                             ContextMenuService.IsEnabled="{Binding CanModify}">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Delete the selected versions" Command="{Binding DeleteSelectedCommand}" />
+                                <Separator />
+                                <MenuItem Header="Select everything shown" Command="{Binding SelectAllShownCommand}" />
+                                <MenuItem Header="Clear the selection" Command="{Binding ClearSelectionCommand}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
+
+                    <TextBlock Text="Reading the repo…"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsLoading}" Value="False" />
+                                            <Condition Binding="{Binding HasRepoMods}" Value="False" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Text="This repo holds no mods yet."
+                                   TextAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="Add them to a profile's mod list, and they are registered when you save."
+                                   TextAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <TextBlock Text="No mods match the search and filter."
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsLoading}" Value="False" />
+                                            <Condition Binding="{Binding HasRepoMods}" Value="True" />
+                                            <Condition Binding="{Binding HasVisibleRepoMods}" Value="False" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                </Grid>
+            </Border>
+
+            <!-- Only while something is picked. What it deletes is everything selected, including
+                 rows the search is hiding - so it says how many those are and offers to put them down. -->
+            <Border Grid.Row="6"
+                    Style="{StaticResource SelectionBar}"
+                    Visibility="{Binding Selection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid ColumnDefinitions="auto * auto auto auto">
+
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="{Binding Selection.SelectedText}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Margin="8 0 0 0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Selection.HiddenText}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding Selection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Grid.Column="2"
+                            Margin="8 0 0 0"
+                            Content="{Binding Selection.DeselectHiddenText}"
+                            Command="{Binding DeselectHiddenCommand}"
+                            Visibility="{Binding Selection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Grid.Column="3"
+                            Margin="8 0 0 0"
+                            Content="Clear"
+                            Command="{Binding ClearSelectionCommand}" />
+
+                    <Button Grid.Column="4"
+                            Margin="8 0 0 0"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="{Binding Selection.ActionText}"
+                            Command="{Binding DeleteSelectedCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Page>

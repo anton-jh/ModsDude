@@ -1,0 +1,127 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Games;
+using ModsDude.Client.Wpf.Shared;
+using ModsDude.Client.Wpf.Shell.Modals;
+using ModsDude.Client.Wpf.Shell.Navigation;
+
+namespace ModsDude.Client.Wpf.Repos;
+public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
+{
+    private readonly Repo _repo;
+    private readonly RepoRepository _repoService;
+    private readonly NavigationLockService _navigationLockService;
+    private readonly IModalService _modalService;
+
+
+    public RepoAdminPageViewModel(
+        Repo repo,
+        RepoRepository repoService,
+        NavigationLockService navigationLockService,
+        IModalService modalService,
+        IDialogService dialogService)
+    {
+        _repo = repo;
+        _repoService = repoService;
+        _navigationLockService = navigationLockService;
+        _modalService = modalService;
+        _name = repo.Name;
+        BaseSettingsEditor = new(true, repo.Adapter.BaseSettings.Copy(), dialogService);
+
+        BaseSettingsEditor.Modified += OnBaseSettingsModified;
+    }
+
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
+    private string _name;
+
+    /// <summary>The name as the server has it. Read from the model rather than snapshotted, because saving now updates the model in place instead of rebuilding it.</summary>
+    public string OriginalName => _repo.Name;
+
+    public DynamicFormViewModel BaseSettingsEditor { get; }
+
+    public bool IsValid => !string.IsNullOrWhiteSpace(Name) && BaseSettingsEditor.IsValid;
+
+
+    [RelayCommand]
+    public async Task SaveChanges(CancellationToken cancellationToken)
+    {
+        if (!IsValid)
+        {
+            var modal = ConfirmationDialogViewModel.ValidationErrors(GetValidationErrors());
+            await _modalService.Show(modal);
+            return;
+        }
+
+        _navigationLockService.ReleaseLock(this);
+
+        await _repo.Update(Name, BaseSettingsEditor.ExtractResults(), cancellationToken);
+
+        OnPropertyChanged(nameof(OriginalName));
+    }
+
+    /// <summary>
+    /// Puts the repo in the top-level Archive rather than deleting it - for every member at once,
+    /// since archiving is repo state and not membership state.
+    /// </summary>
+    [RelayCommand]
+    public async Task ArchiveRepo(CancellationToken cancellationToken)
+    {
+        if (await ConfirmArchive())
+        {
+            _navigationLockService.ReleaseLock(this);
+            await _repoService.ArchiveRepo(_repo.Id, cancellationToken);
+        }
+    }
+
+    public void Dispose()
+    {
+        _navigationLockService.Dispose();
+        BaseSettingsEditor.Modified -= OnBaseSettingsModified;
+        BaseSettingsEditor.Dispose();
+    }
+
+
+    partial void OnNameChanged(string value)
+    {
+        _navigationLockService.AcquireLock(this);
+    }
+
+    private List<string> GetValidationErrors()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            errors.Add("Name is required.");
+        }
+        errors.AddRange(BaseSettingsEditor.GetValidationErrors());
+
+        return errors;
+    }
+
+    private async Task<bool> ConfirmArchive()
+    {
+        var modal = ConfirmationDialogViewModel.ConfirmArchive(OriginalName, "repo");
+
+        await _modalService.Show(modal);
+
+        return modal.Result;
+    }
+
+    private void OnBaseSettingsModified(object? sender, EventArgs e)
+    {
+        _navigationLockService.AcquireLock(this);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public RepoAdminPageViewModel Create(Repo repo)
+            => ActivatorUtilities.CreateInstance<RepoAdminPageViewModel>(serviceProvider, repo);
+    }
+}

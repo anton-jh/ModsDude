@@ -1,0 +1,111 @@
+﻿<UserControl x:Class="ModsDude.Client.Wpf.Shell.Modals.Dialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
+             mc:Ignorable="d"
+             Width="500"
+             d:DataContext="{d:DesignInstance modals:DesignTimeConfirmationDialogViewModel, IsDesignTimeCreatable=True}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="* auto">
+            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 0">
+
+                <!-- A grid rather than a horizontal stack: a stack hands the title infinite width,
+                     so a long one runs off the side of a dialog this wide instead of wrapping. -->
+                <Grid ColumnDefinitions="auto *">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Icon, Converter={StaticResource IconKindToStringConverter}}"
+                               FontFamily="{StaticResource SymbolThemeFontFamily}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 12 24"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Title}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource TitleTextBlockStyle}"
+                               Margin="0 32 0 24" />
+                </Grid>
+
+                <!-- Wrapped: a dialog is fixed width and some of what lands here is a sentence
+                     rather than a label. -->
+                <TextBlock Text="{Binding Message}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0 0 0 24" />
+
+            </StackPanel>
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <!-- A uniform grid because it leaves collapsed buttons out of the count: one answer
+                     takes the whole width, two share it. Three are stacked instead - each is a
+                     phrase rather than a word, and a third of this dialog does not fit one. -->
+                <UniformGrid Margin="20 24">
+                    <UniformGrid.Style>
+                        <Style TargetType="UniformGrid">
+                            <Setter Property="Rows" Value="1" />
+                            <Setter Property="Columns" Value="0" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasAlternative}" Value="True">
+                                    <Setter Property="Rows" Value="0" />
+                                    <Setter Property="Columns" Value="1" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </UniformGrid.Style>
+
+                    <!-- The affirmative, alone where there is nothing to choose between: a dialog
+                         that says "Ok" on both buttons is reporting rather than asking, and the second
+                         button exists only to be read twice. -->
+                    <Button Margin="4"
+                            Content="{Binding YesText}"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{Binding SetYesCommand}" />
+
+                    <Button Margin="4"
+                            Content="{Binding AlternativeText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SetAlternativeCommand}"
+                            Visibility="{Binding HasAlternative, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <Button Margin="4"
+                            Content="{Binding NoText}"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding SetNoCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOneAnswer}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                </UniformGrid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <!-- Escape and Enter are the shell's, handled once for whatever modal is up rather than by a
+         KeyBinding here that only fires when focus is already inside this control. See
+         MainWindow.OnPreviewKeyDown. -->
+
+</UserControl>

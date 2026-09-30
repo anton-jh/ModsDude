@@ -1,0 +1,75 @@
+<Page x:Class="ModsDude.Client.Wpf.Account.WelcomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
+      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=account:WelcomePageViewModel, IsDesignTimeCreatable=False}"
+      Title="WelcomePage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
+
+                <navigation:PageTitle Text="Welcome to ModsDude" />
+
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                           Text="Everything here happens in a repo: one game's mods, profiles and savegames, shared by the people playing it together. Join the one your group already has, or start one." />
+
+                <!-- The two ways in, side by side. Join is the accent: most people arrive with an invite. -->
+                <Grid Margin="0 24 0 0" ColumnDefinitions="* 16 *" MaxWidth="720" HorizontalAlignment="Left">
+
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16">
+                        <Grid RowDefinitions="auto * auto">
+                            <TextBlock Grid.Row="0" Text="Join a repo" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <TextBlock Grid.Row="1" Margin="0 4 0 16" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="Somebody sent you an invite code. Paste it and the repo joins your list." />
+                            <Button Grid.Row="2" Content="Join repo"
+                                    HorizontalAlignment="Left" MinWidth="140"
+                                    Style="{DynamicResource AccentButtonStyle}"
+                                    Command="{Binding JoinRepoCommand}" />
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="2"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16">
+                        <Grid RowDefinitions="auto * auto">
+                            <TextBlock Grid.Row="0" Text="Create a repo" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <TextBlock Grid.Row="1" Margin="0 4 0 16" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="Start one for your group, then invite them from its Members page." />
+                            <!-- Closed the way the header's entry is, with its reason on the button. -->
+                            <Button Grid.Row="2" Content="Create repo"
+                                    HorizontalAlignment="Left" MinWidth="140"
+                                    Command="{Binding CreateRepoCommand}"
+                                    IsEnabled="{Binding CreateRepoItem.IsAvailable}"
+                                    ToolTip="{Binding CreateRepoItem.UnavailableReason}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    ToolTipService.InitialShowDelay="200" />
+                        </Grid>
+                    </Border>
+
+                </Grid>
+
+                <TextBlock Margin="0 24 0 0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                           Text="Both are also behind the ⋯ above the repo list, along with the repos gone to the archive." />
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Page>

@@ -1,0 +1,195 @@
+<Page x:Class="ModsDude.Client.Wpf.Repos.RepoOverviewPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
+      xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
+      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=repos:RepoOverviewPageViewModel, IsDesignTimeCreatable=False}"
+      Title="RepoOverviewPage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
+
+                <navigation:PageTitle Text="Overview" />
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16">
+                    <GroupBox Header="This repo" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       Text="{Binding Game}" />
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 4 0 0"
+                                       Text="{Binding MembershipSummary}" />
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding HasMemberSummary, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="{Binding MemberSummary}" />
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding ProfileSummary}" />
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0">
+                    <!-- Singular, because a repo is about one game and a machine configures that
+                         game once. This is where a local installation is read now: there is no page
+                         behind it, only the settings entry that edits its folders. -->
+                    <GroupBox Header="This machine" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <StackPanel Orientation="Vertical"
+                                        Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="{Binding NoGameText}" />
+
+                                <!-- Only for a game that connects by itself: one with settings is connected
+                                     from its own page, which the sidebar already offers. -->
+                                <Button Margin="0 12 0 0" HorizontalAlignment="Left"
+                                        Visibility="{Binding ConnectsAutomatically, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Content="Check again"
+                                        Command="{Binding CheckForGameCommand}" />
+                            </StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding Games}"
+                                          Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type games:GameOverviewViewModel}">
+                                        <StackPanel Orientation="Vertical" Margin="0 0 0 16">
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Text="{Binding Name}" />
+
+                                            <!-- A line per folder, each with its own drift: a game
+                                                 whose server folder drifted and whose client folder
+                                                 did not has to say which. -->
+                                            <ItemsControl ItemsSource="{Binding Folders}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type games:GameFolderLine}">
+                                                        <StackPanel Orientation="Vertical">
+                                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       ToolTip="{Binding Text}"
+                                                                       Text="{Binding Text}" />
+                                                            <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                                       TextWrapping="Wrap"
+                                                                       Text="{Binding Drift}"
+                                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="No mod folder configured"
+                                                       Visibility="{Binding HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding ActiveProfileSummary}" />
+
+                                            <!-- For managing the mods by hand for a while without ModsDude
+                                                 objecting. The same two ways as the profile page's Activate
+                                                 button has, and here as well because a game set to another
+                                                 repo's profile has no page of that profile in this repo. -->
+                                            <StackPanel Margin="0 8 0 0"
+                                                        HorizontalAlignment="Left"
+                                                        Visibility="{Binding HasActiveProfile, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <ToggleButton x:Name="DeactivateToggle"
+                                                              Content="Deactivate  ▾"
+                                                              ToolTip="Stop ModsDude keeping this game's mod folders in step with its profile." />
+
+                                                <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateToggle, Mode=TwoWay}"
+                                                       PlacementTarget="{Binding ElementName=DeactivateToggle}"
+                                                       Placement="Bottom"
+                                                       VerticalOffset="4"
+                                                       StaysOpen="False"
+                                                       AllowsTransparency="True">
+                                                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                                            BorderThickness="1"
+                                                            Padding="4">
+                                                        <StackPanel Orientation="Vertical">
+                                                            <Button Width="340"
+                                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                                    Tag="{Binding ElementName=DeactivateToggle}"
+                                                                    Command="{Binding DataContext.DeactivateCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Click="CloseDeactivateMenu">
+                                                                <StackPanel Orientation="Vertical">
+                                                                    <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
+                                                                    <TextBlock Text="Stop following the profile and leave the mod folders exactly as they are."
+                                                                               Margin="0 2 0 0"
+                                                                               TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Button Width="340"
+                                                                    Style="{DynamicResource SubtleMenuButton}"
+                                                                    Tag="{Binding ElementName=DeactivateToggle}"
+                                                                    Command="{Binding DataContext.DeactivateAndClearCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Click="CloseDeactivateMenu">
+                                                                <StackPanel Orientation="Vertical">
+                                                                    <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
+                                                                    <TextBlock Text="Stop following the profile and take every mod out of the mod folders. You are shown what goes first."
+                                                                               Margin="0 2 0 0"
+                                                                               TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Popup>
+                                            </StackPanel>
+
+                                            <!-- Neutral. Holding a past savegame is a state
+                                                 somebody chose and is playing in, not a problem
+                                                 with the game - so it reads like the folder paths
+                                                 above it rather than like the drift lines. -->
+                                            <TextBlock Margin="0 4 0 0"
+                                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding HoldingSummary}"
+                                                       Visibility="{Binding HasHoldingSummary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Mods updated from inside the game are the commonest way a folder
+                                 drifts, and there is nowhere else left to ask for a fresh look. -->
+                            <Button Margin="0 8 0 0"
+                                    HorizontalAlignment="Left"
+                                    Content="Re-check the folders"
+                                    Command="{Binding RecheckCommand}"
+                                    Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <!-- Who else is on which of this repo's profiles. Only this repo's: somebody on
+                     another repo's profile is not playing this one. -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0">
+                    <GroupBox Header="Members' profiles" Padding="0 16 0 16">
+                        <friends:FriendActivityList DataContext="{Binding Friends}" />
+                    </GroupBox>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Page>

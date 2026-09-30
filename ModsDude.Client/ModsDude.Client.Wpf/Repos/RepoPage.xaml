@@ -1,0 +1,491 @@
+<Page x:Class="ModsDude.Client.Wpf.Repos.RepoPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
+      xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+      xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=repos:RepoPageViewModel, IsDesignTimeCreatable=False}"
+      Title="RepoPage">
+
+    <Page.Resources>
+        <converters:ShareWidthConverter x:Key="ShareWidth" />
+
+        <!-- The repo name in the header. TextLink is text until the pointer is on it; this is the same, in the
+             accent colour, because it is the one thing in the header that goes somewhere. -->
+        <Style x:Key="RepoNameLink" TargetType="Hyperlink" BasedOn="{StaticResource TextLink}">
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        </Style>
+
+        <!-- The activation button and the caret that opens the ways of deactivating are one control: the accent
+             chrome is drawn once per half and split down the seam, so only the outer corners round and the halves
+             meet on a hairline. The same idea as the mod list editor's save button, which this is not shared
+             with because its primary half also rounds off when there is no caret - here the whole control is
+             swapped for a plain button instead. -->
+        <Style x:Key="ActivateSplitPrimary" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Background"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="4 0 0 4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="FocusRing"
+                                    CornerRadius="4 0 0 4"
+                                    BorderThickness="0"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The other half. A drawn chevron rather than a glyph: an icon font that is missing is not an error,
+             it just renders as a stray mark in the middle of the button. Stays enabled while the activation is
+             greyed out - the menu behind it is a different question, and its own items are greyed on their own
+             terms. -->
+        <Style x:Key="ActivateSplitCaret" TargetType="ToggleButton">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Background"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                CornerRadius="0 4 4 0">
+                            <Grid>
+                                <Rectangle Width="1" Margin="0 9"
+                                           HorizontalAlignment="Left"
+                                           Fill="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                           Opacity="0.3" />
+                                <Path Data="M 0 0 L 4.5 4.5 L 9 0"
+                                      Stroke="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                      StrokeThickness="1.4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Border x:Name="FocusRing"
+                                        CornerRadius="0 4 4 0"
+                                        BorderThickness="0"
+                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <!-- Held down for as long as the menu it opened is up. -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The plain activation button, for a game that does not follow this profile: there is nothing to
+             deactivate from here, so no caret. Gives way to the split one the moment the game does. -->
+        <Style x:Key="ActivatePlain" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding OpenProfile.HasDeactivation}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
+
+    <Grid RowDefinitions="auto *">
+
+        <!-- One header for everything under this repo, across the top of the sidebar and the page both.
+             It says where you are - the repo, its game, and the profile when one is open - so the pages
+             under it do not have to, and it is where the primary act of the app lives: putting a profile on
+             the game. That act used to be a bar on the profile's shell; it is here because it is the same
+             act from every page of the profile.
+
+             The button follows the words rather than sitting in the far corner, behind a divider. The words
+             are a fixed width where there is room for it, so the button is in the same place on every page of
+             every profile whatever the names are: a button that moves under the pointer with the length of a
+             name is one that gets missed. Where there is not room, the words give way and the button does not.
+             What does not fit is trimmed rather than wrapped, and the full name is in a tooltip. -->
+        <Border Grid.Row="0"
+                Padding="24 16"
+                MinHeight="84"
+                CornerRadius="4"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever width
+                         they end up with: in a window with room they are exactly 600 and the button does not move with
+                         the names; in a narrow one they give way first, and the button stays where it can be reached.
+                         A star column, and not an Auto one, so that it is measured against the room there is: an Auto
+                         column is measured against unlimited width, grows to whatever its names want, and takes the
+                         button out of the window with it. The limits on the names below are worked out from the width
+                         this column ends up giving the words. -->
+                    <ColumnDefinition Width="*" MinWidth="160" MaxWidth="600" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Grid x:Name="WordsGrid"
+                      Grid.Column="0"
+                      VerticalAlignment="Center"
+                      RowDefinitions="auto auto">
+
+                    <!-- On the repo's own pages, the repo's name alone: the way back to its overview, and the
+                         title. It is the accent colour because it is the one thing here that is a link; it reads
+                         as plain text of that colour until the pointer is on it. The colour is set on the
+                         TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn in the
+                         TextBlock's own colour and not the link's. -->
+                    <TextBlock Grid.Row="0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Hyperlink Style="{StaticResource RepoNameLink}"
+                                   Command="{Binding GoToOverviewCommand}"
+                                   ToolTip="{Binding RepoName}">
+                            <Run Text="{Binding RepoName, Mode=OneWay}" />
+                        </Hyperlink>
+                    </TextBlock>
+
+                    <!-- Under a profile, the repo's name and then the profile's, each in its own colour and each
+                         trimmed in its own. The repo's gives way first: it is given whatever is left of the row
+                         once the profile's name has taken its width, so a long profile name keeps its text and a
+                         long repo name is the one that ends in an ellipsis. The profile's is in turn stopped short
+                         of the whole row, so that the repo's name is never trimmed to nothing. The profile's is the
+                         selected entry's title rather than its own name, because that is the one a rename
+                         updates in place. -->
+                    <Grid x:Name="BreadcrumbRow"
+                          Grid.Row="0"
+                          ColumnDefinitions="auto auto auto"
+                          VerticalAlignment="Center">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
+                        <TextBlock x:Name="BreadcrumbSeparator"
+                                   Grid.Column="1"
+                                   Margin="12 0"
+                                   VerticalAlignment="Center"
+                                   FontSize="22"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Text="&#x203A;" />
+
+                        <TextBlock x:Name="BreadcrumbProfile"
+                                   Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   ToolTip="{Binding NavManager.Selected.Title}"
+                                   Text="{Binding NavManager.Selected.Title}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                        </TextBlock>
+
+                        <!-- The width the profile's name wants, measured on a copy of it that is not drawn. The
+                             repo's limit has to be worked out from that, and it cannot be worked out from the drawn
+                             one: that is arranged after the repo's, at whatever the repo left, and a name that
+                             has been left no room reads as no width and so never asks the repo to give way. The copy
+                             has the same limit as the drawn one, so what it measures is what the drawn one will
+                             take. -->
+                        <TextBlock x:Name="BreadcrumbProfileSize"
+                                   Grid.Column="2"
+                                   Visibility="Hidden"
+                                   IsHitTestVisible="False"
+                                   VerticalAlignment="Center"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding NavManager.Selected.Title}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                        </TextBlock>
+
+                        <!-- Last of the four, because it is bound to the widths of the others and a name in a binding has to
+                             be declared before the element that refers to it: the repo's limit is what is left once the
+                             separator and the profile's name have taken theirs. -->
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   ToolTip="{Binding RepoName}">
+                            <TextBlock.MaxWidth>
+                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;24">
+                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                    <Binding ElementName="BreadcrumbProfileSize" Path="ActualWidth" />
+                                </MultiBinding>
+                            </TextBlock.MaxWidth>
+                            <Hyperlink Style="{StaticResource RepoNameLink}"
+                                       Command="{Binding GoToOverviewCommand}">
+                                <Run Text="{Binding RepoName, Mode=OneWay}" />
+                            </Hyperlink>
+                        </TextBlock>
+
+                    </Grid>
+
+                    <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
+                         being so when a profile is open. Where the profile stands against the game follows it, on
+                         the profile the game follows only: on any other there is nothing to say, and a chip reading
+                         "not active" on every other profile would only be noise. The fills are the theme's status
+                         colours, paired with the text colour each is legible under - see StatusChip. -->
+                    <StackPanel Grid.Row="1" Margin="0 4 0 0" Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="{Binding GameName}" />
+
+                        <!-- The negative vertical margin takes back what the chip's padding adds over the game's line:
+                             the chip is a little taller than the text beside it, and without it showing the chip
+                             would push the whole page down by the difference. -->
+                        <Border Margin="14 -3 0 -3"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="InSync">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Drifted">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="NotApplied">
+                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Applying">
+                                            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13" Text="{Binding OpenProfile.SyncLabel}" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Behind a divider, and labelled for what it will do - Activate, or Re-apply where the game is
+                     already on this profile - taking no target: a repo is about one game, so there is nothing to
+                     pick. Where there is no game to put anything on, the one thing to do is connect one, which
+                     goes to the Connect game entry in the sidebar rather than opening a page of its own, so the
+                     sidebar still says where you are. Only one of the two is ever showing. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding OpenProfile.HasActivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                        <Border Width="1"
+                                Margin="32 0"
+                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                        <Button MinWidth="150"
+                                Padding="28 10"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Style="{StaticResource ActivatePlain}"
+                                Content="{Binding OpenProfile.ActivationLabel}"
+                                ToolTip="{Binding OpenProfile.ActivationDescription}"
+                                ToolTipService.ShowOnDisabled="True"
+                                ToolTipService.InitialShowDelay="200"
+                                Command="{Binding OpenProfile.ActivateCommand}" />
+
+                        <!-- Where the game already follows this profile, the same button with a caret: the
+                             ways of deactivating are behind it rather than beside it, because they are the
+                             rare act and this is the everyday one. -->
+                        <StackPanel x:Name="ActivateSplit"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding OpenProfile.HasDeactivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+
+                            <Button MinWidth="150"
+                                    Padding="28 10"
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Style="{StaticResource ActivateSplitPrimary}"
+                                    Content="{Binding OpenProfile.ActivationLabel}"
+                                    ToolTip="{Binding OpenProfile.ActivationDescription}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    ToolTipService.InitialShowDelay="200"
+                                    Command="{Binding OpenProfile.ActivateCommand}" />
+
+                            <ToggleButton x:Name="DeactivateCaret"
+                                          Style="{StaticResource ActivateSplitCaret}"
+                                          ToolTip="{Binding OpenProfile.DeactivationDescription}"
+                                          ToolTipService.ShowOnDisabled="True"
+                                          ToolTipService.InitialShowDelay="200" />
+
+                            <!-- Hangs off the pair rather than the caret alone, so a menu wider than the
+                                 caret still starts at an edge that is there in the layout. Declared inline,
+                                 which is what keeps the data context. -->
+                            <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateCaret, Mode=TwoWay}"
+                                   PlacementTarget="{Binding ElementName=ActivateSplit}"
+                                   Placement="Bottom"
+                                   VerticalOffset="6"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True">
+
+                                <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        Padding="4">
+                                    <StackPanel Orientation="Vertical">
+                                        <Button Width="340"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding OpenProfile.DeactivateCommand}"
+                                                Click="CloseDeactivateMenu">
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
+                                                <TextBlock Text="Stop following this profile and leave the mod folder exactly as it is - for managing the mods yourself for a while."
+                                                           Margin="0 2 0 0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Width="340"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding OpenProfile.DeactivateAndClearCommand}"
+                                                Click="CloseDeactivateMenu">
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
+                                                <TextBlock Text="Stop following this profile and take every mod out of the mod folder. You are shown what goes first."
+                                                           Margin="0 2 0 0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border Width="1"
+                                Margin="32 0"
+                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                        <Button MinWidth="150"
+                                Padding="28 10"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Connect game"
+                                Command="{Binding ConnectGameCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- The sidebar is a rail while a profile is open - the profile's own sidebar is the one in use
+             then - and a hover shows it in full over the top of the page, the profile's sidebar included.
+             See SidebarShell. -->
+        <sidebar:SidebarShell Grid.Row="1"
+                         Style="{StaticResource SidebarShellStyle}"
+                         IsCollapsed="{Binding IsSidebarCollapsed}">
+
+            <sidebar:SidebarShell.SidebarTemplate>
+                <DataTemplate>
+                    <Grid RowDefinitions="auto auto * auto auto">
+
+                        <ListView Grid.Row="0"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=MenuItems}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+                        <sidebar:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
+                                          HasPendingChanges="{Binding HasPendingProfileChanges}"
+                                          AddCommand="{Binding CreateProfileCommand}"
+                                          IsAddSelected="{Binding IsCreateProfileSelected}"
+                                          IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"
+                                          AddToolTip="{Binding CreateProfileItem.ToolTip}" />
+
+                        <ListView Grid.Row="2"
+                                  ItemsSource="{Binding Path=Profiles}"
+                                  Style="{StaticResource SidebarList}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+
+                        <!-- At most one row, and only while a link into an archived profile is being followed.
+                             Under its own heading so it reads as reached through the archive rather than as
+                             back in the list above; it goes away on the next navigation. -->
+                        <sidebar:SidebarHeader Grid.Row="3" Title="From the archive" Command="" ActionIcon=""
+                                          Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <ListView Grid.Row="4"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=ArchivedProfiles}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                                  Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </Grid>
+                </DataTemplate>
+            </sidebar:SidebarShell.SidebarTemplate>
+
+            <Frame Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+        </sidebar:SidebarShell>
+    </Grid>
+</Page>

@@ -1,0 +1,222 @@
+<Page x:Class="ModsDude.Client.Wpf.Repos.Members.RepoMembersPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
+      xmlns:members="clr-namespace:ModsDude.Client.Wpf.Repos.Members"
+      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance Type=members:RepoMembersPageViewModel, IsDesignTimeCreatable=False}"
+      Title="RepoMembersPage"
+      FontSize="14">
+
+    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
+
+                <navigation:PageTitle Text="Members" />
+
+                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           Visibility="{Binding IsHiddenFromMe, Converter={StaticResource BoolToVisibilityConverter}}"
+                           Text="Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level." />
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Members" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+                            <ItemsControl ItemsSource="{Binding Members}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type members:RepoMemberViewModel}">
+                                        <StackPanel Orientation="Vertical" Margin="0 0 0 16">
+                                            <StackPanel Orientation="Horizontal">
+
+                                                <!-- Theirs everywhere, and the same colour as their tag.
+                                                     Always drawn: it is an avatar, not a warning. -->
+                                                <account:UserAvatar Width="28" Height="28"
+                                                               VerticalAlignment="Center"
+                                                               DataContext="{Binding Avatar}" />
+
+                                                <StackPanel Orientation="Horizontal" Width="212" Margin="12 0 0 0"
+                                                            VerticalAlignment="Center">
+                                                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                               Text="{Binding DisplayName}" />
+
+                                                    <!-- Only where somebody else in this list is called the
+                                                         same. Both of them get one; neither is the original. -->
+                                                    <TextBlock VerticalAlignment="Center" Margin="6 0 0 0"
+                                                               FontFamily="Consolas"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding ShowTag, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                               Text="{Binding Tag}" />
+                                                </StackPanel>
+
+                                                <ComboBox Width="140"
+                                                          ItemsSource="{Binding AvailableLevels}"
+                                                          SelectedItem="{Binding Level, Mode=TwoWay}"
+                                                          IsEnabled="{Binding CanChangeLevel}"
+                                                          ToolTip="{Binding LevelRestriction}"
+                                                          ToolTipService.ShowOnDisabled="True" />
+
+                                                <!-- An unsaved pick is marked rather than sent. The card's
+                                                     Save button is what commits it. -->
+                                                <TextBlock VerticalAlignment="Center" Margin="8 0 0 0"
+                                                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding HasPendingLevelChange, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="unsaved" />
+
+                                                <!-- Leaving is the same call as being removed, so it is the
+                                                     same button, saying which one it is about to do. -->
+                                                <Button Content="{Binding KickLabel}" Margin="8 0 0 0"
+                                                        ToolTip="{Binding KickRestriction}"
+                                                        ToolTipService.ShowOnDisabled="True"
+                                                        Command="{Binding RequestKickCommand}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                <Button Content="Save levels" Style="{DynamicResource AccentButtonStyle}"
+                                        Command="{Binding SaveLevelsCommand}" />
+                                <Button Content="Discard" Margin="8 0 0 0"
+                                        Command="{Binding DiscardLevelsCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0 16 0 0"
+                        Visibility="{Binding CanManageInvites, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Invites" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <StackPanel Orientation="Vertical">
+                                    <Label Content="Joins as" />
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding GrantableLevels}"
+                                              SelectedItem="{Binding NewInviteLevel, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Vertical" Margin="12 0 0 0">
+                                    <Label Content="Expires" />
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding ExpiryOptions}"
+                                              SelectedItem="{Binding NewInviteExpiry, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Vertical" Margin="12 0 0 0">
+                                    <Label Content="Max joins" />
+                                    <TextBox Width="100"
+                                             Text="{Binding NewInviteMaximumUses, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <Button Content="Create invite" Margin="12 0 0 0" VerticalAlignment="Bottom"
+                                        Style="{DynamicResource AccentButtonStyle}"
+                                        Command="{Binding CreateInviteCommand}" />
+                            </StackPanel>
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0 8 0 0"
+                                       Text="Leave max joins blank for no limit." />
+
+                            <ItemsControl ItemsSource="{Binding Invites}" Margin="0 20 0 0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type members:RepoInviteViewModel}">
+                                        <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                                CornerRadius="4" Padding="12" Margin="0 0 0 8">
+                                            <StackPanel Orientation="Vertical">
+
+                                                <!-- A Grid rather than a StackPanel of fixed widths.
+                                                     The expiry is a formatted local date and time,
+                                                     which is as long as the locale makes it: pinned
+                                                     at 150px it was ellipsed for every invite that
+                                                     had one, and widening the number only moves the
+                                                     locale that breaks it. The code and the two
+                                                     counts are what have a knowable width, so they
+                                                     keep one and the expiry takes the rest. -->
+                                                <Grid ColumnDefinitions="auto auto auto auto * auto">
+
+                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                                               FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                               Text="{Binding Code}" />
+
+                                                    <Button Grid.Column="1" Content="Copy" Margin="12 0 0 0"
+                                                            Command="{Binding CopyCommand}" />
+
+                                                    <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                                               MinWidth="70" Margin="16 0 0 0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Level}" />
+
+                                                    <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                                               MinWidth="70" Margin="12 0 0 0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Uses}" />
+
+                                                    <!-- The star column, and no trimming: this is the
+                                                         one field whose length nothing here controls. -->
+                                                    <TextBlock Grid.Column="4" VerticalAlignment="Center"
+                                                               Margin="12 0 8 0"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Limit}" />
+
+                                                    <!-- One button, two tenses: an active code is
+                                                         revoked, a spent one is only taken off the
+                                                         list. Which is which is the row's to say. -->
+                                                    <Button Grid.Column="5" Content="{Binding ActionText}"
+                                                            VerticalAlignment="Center"
+                                                            ToolTip="{Binding ActionToolTip}"
+                                                            Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding RequestRemovalCommand}" />
+                                                </Grid>
+
+                                                <TextBlock Margin="0 6 0 0"
+                                                           Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding IsCopied, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="Copied to the clipboard." />
+                                            </StackPanel>
+
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <!-- Spent invites stay for their join count, and so
+                                                             that a list with none on it reads as "I never made
+                                                             one" rather than "it ran out". History, though,
+                                                             rather than something to hand out. -->
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                            <Setter Property="Opacity" Value="0.5" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
+
+                <Button Content="Refresh" HorizontalAlignment="Left" Margin="0 16 0 0"
+                        Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Command="{Binding RefreshCommand}" />
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Page>

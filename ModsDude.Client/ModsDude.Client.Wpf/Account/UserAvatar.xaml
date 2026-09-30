@@ -1,0 +1,27 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Account.UserAvatar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=account:AvatarViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="28" d:DesignHeight="28"
+             Width="28" Height="28">
+
+    <!-- A person: their picture where they have one, otherwise their initial on their tag's colour.
+         The circle is a clip on the whole control, so the picture and the fallback share one outline
+         at whatever size the caller sets. The DataContext is an AvatarViewModel. -->
+    <Grid x:Name="Root">
+        <Border Background="{Binding Color}">
+            <TextBlock Text="{Binding Initial}"
+                       Foreground="White" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+
+        <Image Source="{Binding Image}"
+               Stretch="UniformToFill"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               Visibility="{Binding HasImage, Converter={StaticResource BoolToVisibilityConverter}}" />
+    </Grid>
+</UserControl>

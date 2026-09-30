@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Startup;
-using ModsDude.Client.Wpf.Tray;
+using ModsDude.Client.Wpf.Shell.Tray;
 using Velopack;
 
 namespace ModsDude.Client.Wpf;

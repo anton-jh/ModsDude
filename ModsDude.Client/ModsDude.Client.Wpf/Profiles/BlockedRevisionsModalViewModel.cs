@@ -1,0 +1,162 @@
+using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Wpf.Shell.Modals;
+using System.Collections.ObjectModel;
+
+namespace ModsDude.Client.Wpf.Profiles;
+
+/// <summary>
+/// Which revisions a prune kept, and why - with a way to go and deal with the savegames holding
+/// them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The prune deletes what it can and reports the rest, so this is never the whole answer to what
+/// happened: the status line beside the list says how many went. This is the part that needs acting
+/// on.
+/// </para>
+/// <para>
+/// <b>Three reasons, and only one of them is work.</b> The head cannot be pruned at all - it is what
+/// the profile pins - so that row is an explanation and nothing more. A revision a savegame was
+/// played on can be freed, by deleting that savegame snapshot, which is why those rows carry links.
+/// A revision a checked-out save may be playing on frees itself once the save is checked in; its
+/// links say whose save it is, because asking them is the only thing to do sooner.
+/// </para>
+/// </remarks>
+public partial class BlockedRevisionsModalViewModel : ModalViewModel
+{
+    public BlockedRevisionsModalViewModel(
+        string profileName,
+        PruneProfileRevisionsResponse result,
+        Func<Guid, Task<bool>> goToSavegame)
+    {
+        ProfileName = profileName;
+        Deleted = result.Deleted;
+
+        Rows = [.. result.Blocked.Select(x => new BlockedRevisionViewModel(x, OnGoTo))];
+
+        _goToSavegame = goToSavegame;
+    }
+
+
+    private readonly Func<Guid, Task<bool>> _goToSavegame;
+
+
+    public string ProfileName { get; }
+    public int Deleted { get; }
+
+    public ObservableCollection<BlockedRevisionViewModel> Rows { get; }
+
+    public string Title => Rows.Count == 1
+        ? "One revision was kept"
+        : $"{Rows.Count} revisions were kept";
+
+    public string Message => Deleted == 0
+        ? $"Nothing was deleted from '{ProfileName}'."
+        : Deleted == 1
+            ? $"One revision was deleted from '{ProfileName}'. These were not:"
+            : $"{Deleted} revisions were deleted from '{ProfileName}'. These were not:";
+
+
+    [RelayCommand]
+    private void Close() => Done = true;
+
+
+    /// <summary>Nothing to decide here, so both keys close it.</summary>
+    public override bool TryCancel() => Press(CloseCommand);
+
+    public override bool TryAccept() => Press(CloseCommand);
+
+
+    private async void OnGoTo(Guid savegameId)
+    {
+        // Closed first, and regardless of what navigation says: a refused one leaves the user on this
+        // page, and reopening the dialog over it would be the app arguing with itself.
+        Done = true;
+
+        await _goToSavegame(savegameId);
+    }
+}
+
+
+/// <summary>One revision that stayed, and what is holding it.</summary>
+public sealed class BlockedRevisionViewModel
+{
+    public BlockedRevisionViewModel(BlockedRevisionDto dto, Action<Guid> goTo)
+    {
+        Revision = dto.Revision;
+        IsHead = dto.Reason is BlockedRevisionReason.IsHead;
+
+        // Claims first: while one stands, deleting the snapshots below would not free the revision.
+        var checkouts = (dto.Checkouts ?? []).ToList();
+        var snapshots = (dto.Savegames ?? []).ToList();
+
+        Savegames =
+        [
+            .. checkouts.Select(x => SavegameSnapshotLinkViewModel.ForCheckout(x, goTo)),
+            .. snapshots.Select(x => new SavegameSnapshotLinkViewModel(x, goTo))
+        ];
+
+        Reason = dto.Reason switch
+        {
+            BlockedRevisionReason.IsHead
+                => "This is the profile's current revision. Editing the profile is what replaces it; it can never be deleted on its own.",
+            BlockedRevisionReason.CheckedOut => checkouts.Count == 1
+                ? "A savegame is checked out and may be playing on it. It can go once that save is checked in."
+                : $"{checkouts.Count} savegames are checked out and may be playing on it. It can go once they are checked in.",
+            _ => snapshots.Count == 1
+                ? "A savegame snapshot was played on it. Delete that snapshot first, and this revision can go."
+                : $"{snapshots.Count} savegame snapshots were played on it. Delete those first, and this revision can go."
+        };
+    }
+
+
+    public int Revision { get; }
+    public string Label => $"Revision {Revision}";
+
+    /// <summary>The one blocked reason nothing can be done about, which is why it reads differently.</summary>
+    public bool IsHead { get; }
+
+    public string Reason { get; }
+
+    public IReadOnlyList<SavegameSnapshotLinkViewModel> Savegames { get; }
+
+    public bool HasSavegames => Savegames.Count > 0;
+}
+
+
+/// <summary>One savegame snapshot, or one checked-out save, as a link into the repo's saves list.</summary>
+public partial class SavegameSnapshotLinkViewModel
+{
+    private readonly Guid _savegameId;
+    private readonly Action<Guid> _goTo;
+
+
+    public SavegameSnapshotLinkViewModel(SavegameSnapshotRefDto dto, Action<Guid> goTo)
+    {
+        _savegameId = dto.SavegameId;
+        _goTo = goTo;
+
+        Label = $"{dto.SavegameName} · snapshot {dto.Number}";
+    }
+
+    private SavegameSnapshotLinkViewModel(Guid savegameId, string label, Action<Guid> goTo)
+    {
+        _savegameId = savegameId;
+        _goTo = goTo;
+
+        Label = label;
+    }
+
+
+    /// <summary>A save somebody has checked out, named with who has it - they are who to ask.</summary>
+    public static SavegameSnapshotLinkViewModel ForCheckout(CheckedOutSavegameRefDto dto, Action<Guid> goTo)
+        => new(dto.SavegameId, $"{dto.SavegameName} · checked out by {dto.HeldBy.DisplayName}", goTo);
+
+
+    public string Label { get; }
+
+
+    [RelayCommand]
+    private void Open() => _goTo(_savegameId);
+}

@@ -1,14 +1,23 @@
 ﻿<Application x:Class="ModsDude.Client.Wpf.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:ModsDude.Client.Wpf"
-             xmlns:vm="clr-namespace:ModsDude.Client.Wpf.ViewModel.ViewModels"
-             xmlns:wvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Windows"
-             xmlns:pvm="clr-namespace:ModsDude.Client.Wpf.ViewModel.Pages"
-             xmlns:p="clr-namespace:ModsDude.Client.Wpf.View.Pages"
-             xmlns:uc="clr-namespace:ModsDude.Client.Wpf.View.UserControls"
-             xmlns:vc="clr-namespace:ModsDude.Client.Wpf.View.ValueConverters"
-             xmlns:b="clr-namespace:ModsDude.Client.Wpf.View.Behaviors"
+             xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
+             xmlns:archive="clr-namespace:ModsDude.Client.Wpf.Repos.Archive"
+             xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
+             xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
+             xmlns:editor="clr-namespace:ModsDude.Client.Wpf.Profiles.Editor"
+             xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
+             xmlns:import="clr-namespace:ModsDude.Client.Wpf.Mods.Import"
+             xmlns:members="clr-namespace:ModsDude.Client.Wpf.Repos.Members"
+             xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
+             xmlns:mods="clr-namespace:ModsDude.Client.Wpf.Mods"
+             xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
+             xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+             xmlns:savegames="clr-namespace:ModsDude.Client.Wpf.Savegames"
+             xmlns:settings="clr-namespace:ModsDude.Client.Wpf.Settings"
+             xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
+             xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell"
+             xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
              DispatcherUnhandledException="Application_DispatcherUnhandledException"
              ThemeMode="Dark">
 
@@ -17,150 +26,150 @@
 
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml"/>
-                <ResourceDictionary Source="View/Resources/Controls.xaml"/>
-                <ResourceDictionary Source="View/Resources/ModListItem.xaml"/>
+                <ResourceDictionary Source="Shared/Resources/Controls.xaml"/>
+                <ResourceDictionary Source="Mods/ModListItem.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <DataTemplate DataType="{x:Type pvm:CreateRepoPageViewModel}">
-                <p:CreateRepoPage />
+            <DataTemplate DataType="{x:Type repos:CreateRepoPageViewModel}">
+                <repos:CreateRepoPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:JoinRepoPageViewModel}">
-                <p:JoinRepoPage />
+            <DataTemplate DataType="{x:Type repos:JoinRepoPageViewModel}">
+                <repos:JoinRepoPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:LoginPageViewModel}">
-                <p:LoginPage />
+            <DataTemplate DataType="{x:Type account:LoginPageViewModel}">
+                <account:LoginPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:MainPageViewModel}">
-                <p:MainPage />
+            <DataTemplate DataType="{x:Type shell:MainPageViewModel}">
+                <shell:MainPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoPageViewModel}">
-                <p:RepoPage />
+            <DataTemplate DataType="{x:Type repos:RepoPageViewModel}">
+                <repos:RepoPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ExamplePageViewModel}">
-                <p:ExamplePage />
+            <DataTemplate DataType="{x:Type profiles:ExamplePageViewModel}">
+                <profiles:ExamplePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:WelcomePageViewModel}">
-                <p:WelcomePage />
+            <DataTemplate DataType="{x:Type account:WelcomePageViewModel}">
+                <account:WelcomePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoAdminPageViewModel}">
-                <p:RepoAdminPage />
+            <DataTemplate DataType="{x:Type repos:RepoAdminPageViewModel}">
+                <repos:RepoAdminPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoOverviewPageViewModel}">
-                <p:RepoOverviewPage />
+            <DataTemplate DataType="{x:Type repos:RepoOverviewPageViewModel}">
+                <repos:RepoOverviewPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoMembersPageViewModel}">
-                <p:RepoMembersPage />
+            <DataTemplate DataType="{x:Type members:RepoMembersPageViewModel}">
+                <members:RepoMembersPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ProfileOverviewPageViewModel}">
-                <p:ProfileOverviewPage />
+            <DataTemplate DataType="{x:Type profiles:ProfileOverviewPageViewModel}">
+                <profiles:ProfileOverviewPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:CreateProfilePageViewModel}">
-                <p:CreateProfilePage />
+            <DataTemplate DataType="{x:Type profiles:CreateProfilePageViewModel}">
+                <profiles:CreateProfilePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ProfilePageViewModel}">
-                <p:ProfilePage />
+            <DataTemplate DataType="{x:Type profiles:ProfilePageViewModel}">
+                <profiles:ProfilePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:EditProfilePageViewModel}">
-                <p:EditProfilePage />
+            <DataTemplate DataType="{x:Type profiles:EditProfilePageViewModel}">
+                <profiles:EditProfilePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ProfileModsEditorPageViewModel}">
-                <p:ProfileModsEditorPage />
+            <DataTemplate DataType="{x:Type editor:ProfileModsEditorPageViewModel}">
+                <editor:ProfileModsEditorPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ProfileModsPageViewModel}">
-                <p:ProfileModsPage />
+            <DataTemplate DataType="{x:Type profiles:ProfileModsPageViewModel}">
+                <profiles:ProfileModsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ProfileHistoryPageViewModel}">
-                <p:ProfileHistoryPage />
+            <DataTemplate DataType="{x:Type profiles:ProfileHistoryPageViewModel}">
+                <profiles:ProfileHistoryPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ConnectGamePageViewModel}">
-                <p:ConnectGamePage />
+            <DataTemplate DataType="{x:Type games:ConnectGamePageViewModel}">
+                <games:ConnectGamePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:GameSettingsPageViewModel}">
-                <p:GameSettingsPage />
+            <DataTemplate DataType="{x:Type games:GameSettingsPageViewModel}">
+                <games:GameSettingsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoSavegamesPageViewModel}">
-                <p:RepoSavegamesPage />
+            <DataTemplate DataType="{x:Type savegames:RepoSavegamesPageViewModel}">
+                <savegames:RepoSavegamesPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoModsPageViewModel}">
-                <p:RepoModsPage />
+            <DataTemplate DataType="{x:Type mods:RepoModsPageViewModel}">
+                <mods:RepoModsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:ArchivePageViewModel}">
-                <p:ArchivePage />
+            <DataTemplate DataType="{x:Type archive:ArchivePageViewModel}">
+                <archive:ArchivePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:RepoArchivePageViewModel}">
-                <p:RepoArchivePage />
+            <DataTemplate DataType="{x:Type archive:RepoArchivePageViewModel}">
+                <archive:RepoArchivePage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:SettingsPageViewModel}">
-                <p:SettingsPage />
+            <DataTemplate DataType="{x:Type settings:SettingsPageViewModel}">
+                <settings:SettingsPage />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type pvm:AccountPageViewModel}">
-                <p:AccountPage />
+            <DataTemplate DataType="{x:Type account:AccountPageViewModel}">
+                <account:AccountPage />
             </DataTemplate>
 
-            <DataTemplate DataType="{x:Type vm:ModalViewModel}">
-                <uc:Dialog />
+            <DataTemplate DataType="{x:Type modals:ModalViewModel}">
+                <modals:Dialog />
             </DataTemplate>
 
             <!-- Without its own template this would fall through to the base ModalViewModel one
                  above and render as a confirmation dialog. -->
-            <DataTemplate DataType="{x:Type vm:ErrorDialogViewModel}">
-                <uc:ErrorDialog />
+            <DataTemplate DataType="{x:Type modals:ErrorDialogViewModel}">
+                <modals:ErrorDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ModDetailsModalViewModel}">
-                <uc:ModDetailsDialog />
+            <DataTemplate DataType="{x:Type mods:ModDetailsModalViewModel}">
+                <mods:ModDetailsDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:BlockedRevisionsModalViewModel}">
-                <uc:BlockedRevisionsDialog />
+            <DataTemplate DataType="{x:Type profiles:BlockedRevisionsModalViewModel}">
+                <profiles:BlockedRevisionsDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ModDependentsModalViewModel}">
-                <uc:ModDependentsDialog />
+            <DataTemplate DataType="{x:Type mods:ModDependentsModalViewModel}">
+                <mods:ModDependentsDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ModSourceConflictModalViewModel}">
-                <uc:ModSourceConflictDialog />
+            <DataTemplate DataType="{x:Type editor:ModSourceConflictModalViewModel}">
+                <editor:ModSourceConflictDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ModVersionArbitrationModalViewModel}">
-                <uc:ModVersionArbitrationDialog />
+            <DataTemplate DataType="{x:Type mods:ModVersionArbitrationModalViewModel}">
+                <mods:ModVersionArbitrationDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ModVersionReorderModalViewModel}">
-                <uc:ModVersionReorderDialog />
+            <DataTemplate DataType="{x:Type mods:ModVersionReorderModalViewModel}">
+                <mods:ModVersionReorderDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ProfileLockedUpdatesModalViewModel}">
-                <uc:ProfileLockedUpdatesDialog />
+            <DataTemplate DataType="{x:Type profiles:ProfileLockedUpdatesModalViewModel}">
+                <profiles:ProfileLockedUpdatesDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:CopyProfileModsModalViewModel}">
-                <uc:CopyProfileModsDialog />
+            <DataTemplate DataType="{x:Type profiles:CopyProfileModsModalViewModel}">
+                <profiles:CopyProfileModsDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:PickProfileSourceModalViewModel}">
-                <uc:PickProfileSourceDialog />
+            <DataTemplate DataType="{x:Type profiles:PickProfileSourceModalViewModel}">
+                <profiles:PickProfileSourceDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:PasteModListModalViewModel}">
-                <uc:PasteModListDialog />
+            <DataTemplate DataType="{x:Type editor:PasteModListModalViewModel}">
+                <editor:PasteModListDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:RenameModalViewModel}">
-                <uc:RenameDialog />
+            <DataTemplate DataType="{x:Type shared:RenameModalViewModel}">
+                <shared:RenameDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:UnrecognisedFilesModalViewModel}">
-                <uc:UnrecognisedFilesDialog />
+            <DataTemplate DataType="{x:Type import:UnrecognisedFilesModalViewModel}">
+                <import:UnrecognisedFilesDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ProfileSaveAsModalViewModel}">
-                <uc:ProfileSaveAsDialog />
+            <DataTemplate DataType="{x:Type profiles:ProfileSaveAsModalViewModel}">
+                <profiles:ProfileSaveAsDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SavegameCheckOutModalViewModel}">
-                <uc:SavegameCheckOutDialog />
+            <DataTemplate DataType="{x:Type savegames:SavegameCheckOutModalViewModel}">
+                <savegames:SavegameCheckOutDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SavegameCheckInModalViewModel}">
-                <uc:SavegameCheckInDialog />
+            <DataTemplate DataType="{x:Type savegames:SavegameCheckInModalViewModel}">
+                <savegames:SavegameCheckInDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SavegamePublishModalViewModel}">
-                <uc:SavegamePublishDialog />
+            <DataTemplate DataType="{x:Type savegames:SavegamePublishModalViewModel}">
+                <savegames:SavegamePublishDialog />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SavegameSlotPickerModalViewModel}">
-                <uc:SavegameSlotPickerDialog />
+            <DataTemplate DataType="{x:Type savegames:SavegameSlotPickerModalViewModel}">
+                <savegames:SavegameSlotPickerDialog />
             </DataTemplate>
 
             <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so
                  that "this can damage a save" is never a colour somebody picked in a template. -->
-            <DataTemplate DataType="{x:Type vm:SavegameChip}">
+            <DataTemplate DataType="{x:Type savegames:SavegameChip}">
                 <Border Margin="0 0 4 4">
                     <Border.Style>
                         <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
@@ -183,9 +192,9 @@
             <!-- The row for ModListItemViewModel is a template in View/Resources/ModListItem.xaml,
                  merged above. -->
 
-            <vc:IconKindToStringConverter x:Key="IconKindToStringConverter" />
-            <vc:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
-            <vc:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+            <converters:IconKindToStringConverter x:Key="IconKindToStringConverter" />
+            <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+            <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
 
             <!-- A heading inside a sidebar list, for a list that is grouped. Deliberately quieter than
                  SidebarHeader, which names a whole list and carries an action: this one only says
@@ -225,7 +234,7 @@
                                         <Setter Property="Text" Value="{Binding Name.Name}" />
                                         <Setter Property="Margin" Value="16 0 16 4" />
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                            <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
                                                 <Setter Property="Text" Value="{Binding Name.ShortName}" />
                                                 <Setter Property="Margin" Value="4 0 4 4" />
                                                 <Setter Property="TextAlignment" Value="Center" />
@@ -252,7 +261,7 @@
             <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
                 <Setter Property="SelectionMode" Value="Single" />
                 <!-- Selection is navigation here, so a drag down the list must not visit every item. -->
-                <Setter Property="b:DragSelection.Suppressed" Value="True" />
+                <Setter Property="behaviors:DragSelection.Suppressed" Value="True" />
                 <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
                 <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
                 <!-- The tooltip and the enabled state live on the container rather than on the row's
@@ -276,7 +285,7 @@
                 </Setter>
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
-                        <DataTemplate DataType="{x:Type vm:MenuItemViewModel}">
+                        <DataTemplate DataType="{x:Type sidebar:MenuItemViewModel}">
                             <Grid ClipToBounds="True">
                                 <Grid.Style>
                                     <Style TargetType="Grid">
@@ -318,7 +327,7 @@
                                                     <Setter Property="HorizontalAlignment" Value="Stretch" />
                                                     <Setter Property="MinHeight" Value="56" />
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
                                                     <Setter Property="HorizontalAlignment" Value="Center" />
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -435,7 +444,7 @@
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="TextWrapping" Value="NoWrap" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
                                                     <!-- Exactly two lines' worth of room, whatever the name
@@ -464,7 +473,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Path=(b:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsEntity}" Value="True">
