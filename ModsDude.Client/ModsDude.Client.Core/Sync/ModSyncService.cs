@@ -624,7 +624,7 @@ public sealed class ModSyncService(
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.ChosenFolder) { Path = moved };
         }
 
-        if (recycleBin.IsAvailableFor(path) && recycleBin.TryRecycle(path))
+        if (recycleBin.TryRecycle(path))
         {
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.RecycleBin);
         }
@@ -1285,21 +1285,8 @@ public sealed class ModSyncService(
         }
         finally
         {
-            TryDelete(link);
-            TryDelete(probe);
-        }
-    }
-
-    private void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception)
-        {
-            // A leftover probe file is inert.
-            logger.LogDebug(exception, "Could not delete the hardlink probe file {File}.", path);
+            FileSystemHelper.TryDeleteFile(link, logger);
+            FileSystemHelper.TryDeleteFile(probe, logger);
         }
     }
 

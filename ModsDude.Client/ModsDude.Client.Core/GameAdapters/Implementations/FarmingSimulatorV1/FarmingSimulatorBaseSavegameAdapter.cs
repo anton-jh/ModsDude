@@ -492,15 +492,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
     {
         try
         {
-            var settings = new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Prohibit,
-                XmlResolver = null
-            };
-
-            using var reader = XmlReader.Create(path, settings);
-
-            return Maybe.From(XDocument.Load(reader));
+            return Maybe.From(SafeXml.Load(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
         {

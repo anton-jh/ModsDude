@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.Helpers;
 /// </summary>
 internal static class ReportingCopy
 {
-    private const int BufferSize = 64 * 1024;
+
 
     /// <summary>How much has to move before another report. The reads are 64 KiB; nothing wants that many messages.</summary>
     private const int ReportEvery = 512 * 1024;
@@ -19,14 +19,14 @@ internal static class ReportingCopy
     /// </param>
     public static async Task CopyAsync(Stream source, Stream destination, Action<long>? copied, CancellationToken cancellationToken)
     {
-        var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+        var buffer = ArrayPool<byte>.Shared.Rent(FileSystemHelper.StreamBufferSize);
 
         try
         {
             long pending = 0;
             int read;
 
-            while ((read = await source.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken)) > 0)
+            while ((read = await source.ReadAsync(buffer.AsMemory(0, FileSystemHelper.StreamBufferSize), cancellationToken)) > 0)
             {
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 

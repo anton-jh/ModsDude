@@ -277,10 +277,6 @@ public class ContentStoreTests
         // deleting it is a separate act with its own question.
         Assert.True(File.Exists(Path.Combine(quarantine, "something-nobody-registered.zip")));
         Assert.True(store.Measure().QuarantineBytes > 0);
-
-        store.ClearQuarantine();
-
-        Assert.False(Directory.Exists(store.QuarantinePath));
     }
 
     /// <summary>

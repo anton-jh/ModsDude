@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Helpers;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -76,10 +77,7 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
 
-            var temporaryPath = $"{path}.{Environment.ProcessId}.{Environment.CurrentManagedThreadId}.tmp";
-
-            await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken);
-            File.Move(temporaryPath, path, overwrite: true);
+            await AtomicFile.WriteAllBytesAsync(path, bytes, cancellationToken);
         }
         catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {

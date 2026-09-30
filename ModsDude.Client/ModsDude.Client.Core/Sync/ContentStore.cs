@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using System.Security.Cryptography;
 
@@ -91,7 +92,7 @@ public sealed class ContentStore
     {
         Touch(hash);
 
-        return new FileStream(GetBlobPath(hash), FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return new FileStream(GetBlobPath(hash), FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
     /// <summary>
@@ -125,7 +126,7 @@ public sealed class ContentStore
         }
         finally
         {
-            Delete(temporaryPath);
+            FileSystemHelper.TryDeleteFile(temporaryPath, Log);
         }
     }
 
@@ -326,7 +327,7 @@ public sealed class ContentStore
     /// expected to be used. It is a button somebody presses.
     /// </para>
     /// <para>
-    /// A corrupt entry is deleted, on the same reasoning as <see cref="Clear"/>: the bytes at that
+    /// A corrupt entry is deleted, on the same reasoning as <see cref="Reclaim"/>: the bytes at that
     /// address are provably not what the address names, so the entry is worse than useless - every
     /// repo on the volume would be served it - and what it should have held is registered in a repo
     /// and downloads again. <b>What this cannot repair is a mod folder</b>: where the entry was
@@ -421,7 +422,7 @@ public sealed class ContentStore
             entries.Sum(x => x.Length),
             entries.Where(x => x.IsUniquelyHeld).Sum(x => x.Length),
             MeasureDirectory(Path.Combine(RootPath, _temporaryDirectory)),
-            MeasureDirectory(Path.Combine(RootPath, _quarantineDirectory)));
+            MeasureQuarantine());
     }
 
     /// <summary>
@@ -433,8 +434,7 @@ public sealed class ContentStore
     /// <b>Only what the store uniquely holds, which is the whole point of it.</b> A blob hardlinked
     /// into a live mod folder is one file under two names - deleting the store's name frees not one
     /// byte, because the folder still holds the data - so dropping it buys a guaranteed re-download
-    /// for nothing at all. This used to empty the store outright and count only the part that helped,
-    /// which meant a button offering 7 GB back quietly made the other 19 GB cold as well.
+    /// for nothing at all.
     /// </para>
     /// <para>
     /// So what is left behind afterwards is exactly what the mod folders on this disk are running,
@@ -448,7 +448,7 @@ public sealed class ContentStore
     /// <para>
     /// <b>The quarantine folder is not touched</b>, which is the whole distinction between the two:
     /// blobs are copies of something a server holds, and quarantined files are the ones sync found
-    /// that <em>nothing</em> holds. See <see cref="ClearQuarantine"/>.
+    /// that <em>nothing</em> holds. See <see cref="ContentStoreMaintenance.RecycleQuarantineAsync"/>.
     /// </para>
     /// <para>
     /// A file that will not delete - one open in the game, say - is counted and skipped rather than
@@ -495,19 +495,7 @@ public sealed class ContentStore
         return new ContentStoreClearResult(deleted, reclaimed, failed);
     }
 
-    /// <summary>
-    /// Deletes the files sync rescued here because they could not be recycled.
-    /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="Clear"/> and asked about separately, because this is the one part of
-    /// a store that is not re-downloadable: a quarantined file is a mod nothing in the repo
-    /// registers, which is exactly why it was moved here instead of deleted.
-    /// </remarks>
-    /// <returns>The bytes reclaimed.</returns>
-    public long ClearQuarantine()
-    {
-        return DeleteDirectory(Path.Combine(RootPath, _quarantineDirectory));
-    }
+    public long MeasureQuarantine() => MeasureDirectory(QuarantinePath);
 
     /// <summary>Where rescued files pile up, whether or not it exists yet.</summary>
     public string QuarantinePath => Path.Combine(RootPath, _quarantineDirectory);
@@ -586,7 +574,7 @@ public sealed class ContentStore
     /// <param name="bytesRead">How much of the file has been read so far, for a hash that takes long enough to watch.</param>
     public static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken, IProgress<long>? bytesRead = null)
     {
-        await using var content = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var content = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
 
         return await ModContentHasher.ComputeAsync(content, bytesRead, cancellationToken);
     }
@@ -679,19 +667,6 @@ public sealed class ContentStore
     private string GetTemporaryPath()
     {
         return Path.Combine(RootPath, _temporaryDirectory, $"{Guid.NewGuid():N}.part");
-    }
-
-    private void Delete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception)
-        {
-            // A leftover temporary file costs disk space until the next sweep, nothing more.
-            Log.LogDebug(exception, "Could not delete the temporary store file {File}.", path);
-        }
     }
 
     /// <summary>The bytes under a directory, or zero where there is no such directory.</summary>

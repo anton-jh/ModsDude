@@ -499,11 +499,11 @@ public partial class SettingsPageViewModel
     }
 
     /// <summary>
-    /// Deletes the files sync rescued into this store because the Recycle Bin would not take them.
+    /// Sends the files sync rescued into this store to the Recycle Bin.
     /// </summary>
     /// <remarks>
-    /// The one destructive button on this page, and asked about as such: a quarantined file is
-    /// precisely a mod that <em>no</em> repo registers, which is why it was moved rather than deleted.
+    /// Asked about first: a quarantined file is precisely a mod that <em>no</em> repo registers, which
+    /// is why it was moved rather than deleted.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanManage))]
     public async Task EmptyQuarantine(ContentStoreViewModel row)
@@ -514,11 +514,11 @@ public partial class SettingsPageViewModel
         }
 
         var confirmation = new ConfirmationDialogViewModel(
-            "Delete the rescued files?",
-            $"These are files sync found in a mod folder that no repo has registered, kept in {store.QuarantinePath} "
-                + "because the Recycle Bin would not take them. Nothing can fetch them back.\n\nThis cannot be undone!",
+            "Move the rescued files to the Recycle Bin?",
+            $"These are files sync found in a mod folder that no repo has registered, kept in {store.QuarantinePath}. "
+                + "Nothing can fetch them back once the Recycle Bin is emptied.",
             IconKind.Warning,
-            "Delete them",
+            "Move them to the Recycle Bin",
             "Keep them");
 
         await _modalService.Show(confirmation);
@@ -530,16 +530,29 @@ public partial class SettingsPageViewModel
 
         using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}");
 
-        var reclaimed = await RunAsync(() => _maintenance.ClearQuarantineAsync(store, CancellationToken.None, Waiting(task)));
+        var outcome = await RunAsync(async () =>
+            new QuarantineOutcome(await _maintenance.RecycleQuarantineAsync(store, CancellationToken.None, Waiting(task))));
 
-        if (reclaimed is null)
+        if (outcome is null)
         {
             return;
         }
 
-        await ReportAsync("Deleted", $"Freed {ByteSize.Describe(reclaimed.Value)}.");
+        if (outcome.Recycled is long recycled)
+        {
+            await ReportAsync("Recycled", $"Moved {ByteSize.Describe(recycled)} to the Recycle Bin.");
+        }
+        else
+        {
+            await ReportAsync(
+                "Not moved",
+                $"The Recycle Bin would not take the files - {row.VolumeRoot} may not have one. They are still in {store.QuarantinePath}; remove them yourself if you no longer want them.");
+        }
+
         await RefreshUsageAsync();
     }
+
+    private sealed record QuarantineOutcome(long? Recycled);
 
     /// <summary>
     /// Empties the machine's image cache. Costs re-fetching thumbnails and nothing else, so it is

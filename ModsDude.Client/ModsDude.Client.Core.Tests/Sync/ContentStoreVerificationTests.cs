@@ -180,6 +180,7 @@ public class ContentStoreVerificationTests
             new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
             new ResourceLeases(),
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));
@@ -210,6 +211,7 @@ public class ContentStoreVerificationTests
             new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
             new ResourceLeases(),
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));

@@ -139,7 +139,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         {
             string hash;
 
-            await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
+            await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous))
             {
                 hash = await WriteArchiveAsync(adapter, target, slot, file, progress, cancellationToken);
             }
@@ -150,7 +150,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         {
             // The caller owns the file only once it has one. A half-written archive nobody was told
             // about is this method's to clean up - including on cancellation.
-            TryDeleteFile(archivePath);
+            FileSystemHelper.TryDeleteFile(archivePath, _log);
 
             throw;
         }
@@ -189,7 +189,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
         catch (Exception)
         {
-            TryDeleteDirectory(staging);
+            FileSystemHelper.TryDeleteDirectory(staging, _log);
 
             throw;
         }
@@ -210,7 +210,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
         catch (Exception)
         {
-            TryDeleteDirectory(staging);
+            FileSystemHelper.TryDeleteDirectory(staging, _log);
 
             throw;
         }
@@ -247,7 +247,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
         catch (Exception)
         {
-            TryDeleteDirectory(staging);
+            FileSystemHelper.TryDeleteDirectory(staging, _log);
 
             throw;
         }
@@ -303,7 +303,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
                 // Shared for write and delete: the game may hold the save open, and a hash taken for
                 // a drift check must never be the reason it fails to save.
-                await using var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                await using var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
                 await using var entryStream = entry.Open();
 
                 await ReportingCopy.CopyAsync(source, entryStream, copied, cancellationToken);
@@ -348,7 +348,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         IProgress<SavegameProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await using var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read);
 
         var total = archive.Entries.Sum(x => x.Length);
@@ -384,7 +384,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination.Value)!);
 
-            await using var target = new FileStream(destination.Value, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous);
+            await using var target = new FileStream(destination.Value, FileMode.Create, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous);
             await using var source = entry.Open();
 
             await ReportingCopy.CopyAsync(source, target, copied, cancellationToken);
@@ -422,37 +422,8 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private static string ToArchivePath(string relativePath)
         => relativePath.Replace(Path.DirectorySeparatorChar, '/');
 
-    private static string GetTemporaryArchivePath()
+    internal static string GetTemporaryArchivePath()
         => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
-
-    private void TryDeleteFile(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception)
-        {
-            // A leftover temporary archive costs disk space until the machine's temp folder is swept.
-            _log.LogDebug(exception, "Could not delete the temporary archive {File}.", path);
-        }
-    }
-
-    private void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception)
-        {
-            // Same bargain as the file above, one directory larger.
-            _log.LogDebug(exception, "Could not delete the staging directory {Directory}.", path);
-        }
-    }
 
 
     /// <summary>

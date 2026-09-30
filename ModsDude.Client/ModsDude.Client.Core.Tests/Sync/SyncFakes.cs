@@ -287,8 +287,16 @@ internal sealed class FakeRecycleBin(bool available = true) : IRecycleBin
             return false;
         }
 
-        // The real bin keeps the bytes; the test only needs to know the file left the mod folder by
-        // a route the user can undo.
+        // The real bin keeps the bytes; the test only needs to know the file left by a route the
+        // user can undo. A folder is recorded by its path, a file by its contents.
+        if (Directory.Exists(path))
+        {
+            Recycled.Add(path);
+            Directory.Delete(path, recursive: true);
+
+            return true;
+        }
+
         Recycled.Add(File.ReadAllText(path));
         File.Delete(path);
 

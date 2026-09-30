@@ -93,10 +93,7 @@ public sealed class SyncManifestStore
         {
             Directory.CreateDirectory(_directory);
 
-            var temporaryPath = $"{path}.tmp";
-
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(manifest, _serializerOptions));
-            File.Move(temporaryPath, path, overwrite: true);
+            AtomicFile.WriteAllText(path, JsonSerializer.Serialize(manifest, _serializerOptions));
         }
     }
 

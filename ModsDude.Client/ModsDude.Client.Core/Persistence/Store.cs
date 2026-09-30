@@ -80,13 +80,7 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
                 return;
             }
 
-            // Written through a temp file and moved into place. A plain WriteAllText that is
-            // interrupted leaves a truncated file, which is exactly the corruption Get() recovers
-            // from by discarding the user's game list.
-            var tempPath = _filepath + ".tmp";
-
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(_state, _serializerOptions));
-            File.Move(tempPath, _filepath, true);
+            AtomicFile.WriteAllText(_filepath, JsonSerializer.Serialize(_state, _serializerOptions));
         }
     }
 

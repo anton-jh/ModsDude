@@ -21,9 +21,13 @@ public interface IRecycleBin
     /// </summary>
     bool IsAvailableFor(string path);
 
+    /// <summary>
+    /// Moves a file or folder to the Recycle Bin. Refuses outright on a volume without one, where the
+    /// shell's only way to "recycle" is a permanent delete.
+    /// </summary>
     /// <returns>
-    /// False when the file is still where it was. The caller then moves it into the store's
-    /// quarantine folder, which is the fallback that keeps the never-delete rule true.
+    /// False when it is still where it was. The caller then moves it somewhere safe instead, which is
+    /// the fallback that keeps the never-delete rule true.
     /// </returns>
     bool TryRecycle(string path);
 }
@@ -84,8 +88,10 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
     public bool TryRecycle(string path)
     {
-        if (OperatingSystem.IsWindows() is false)
+        if (IsAvailableFor(path) is false)
         {
+            logger.LogInformation("{Path} was not recycled: its volume has no Recycle Bin.", path);
+
             return false;
         }
 
@@ -120,7 +126,7 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
             // Aborted covers the user declining a permanent delete, which is a refusal to lose the
             // file rather than an error - and is handled the same way, by quarantining it.
-            return result == 0 && operation.AnyOperationsAborted == 0 && File.Exists(path) is false;
+            return result == 0 && operation.AnyOperationsAborted == 0 && Path.Exists(path) is false;
         }
         catch (Exception exception)
         {

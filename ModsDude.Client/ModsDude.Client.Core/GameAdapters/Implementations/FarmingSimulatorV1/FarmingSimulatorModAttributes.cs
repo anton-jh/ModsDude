@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using System.IO.Compression;
 using System.Xml;
@@ -256,13 +257,8 @@ internal static class FarmingSimulatorModAttributes
         try
         {
             using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Prohibit,
-                XmlResolver = null
-            });
 
-            return XDocument.Load(reader).Root;
+            return SafeXml.Load(stream).Root;
         }
         catch (Exception ex) when (ex is XmlException or InvalidDataException)
         {

@@ -1,6 +1,45 @@
-﻿namespace ModsDude.Client.Core.Helpers;
+﻿using Microsoft.Extensions.Logging;
+
+namespace ModsDude.Client.Core.Helpers;
+
 public static class FileSystemHelper
 {
+    /// <summary>The buffer every file stream and copy loop in the client uses.</summary>
+    public const int StreamBufferSize = 64 * 1024;
+
+
+    /// <summary>
+    /// Deletes a temporary or leftover file, logging rather than throwing where it will not go. Only
+    /// for files the client itself created: anything of the user's is recycled, never deleted.
+    /// </summary>
+    public static void TryDeleteFile(string path, ILogger log)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception)
+        {
+            log.LogDebug(exception, "Could not delete {File}.", path);
+        }
+    }
+
+    /// <inheritdoc cref="TryDeleteFile"/>
+    public static void TryDeleteDirectory(string path, ILogger log)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception exception)
+        {
+            log.LogDebug(exception, "Could not delete {Directory}.", path);
+        }
+    }
+
     public static string GetAppDataDirectory()
     {
         var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

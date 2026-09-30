@@ -920,7 +920,7 @@ public sealed class SavegameService(
         {
             // The archive is a temporary the packer handed us and nothing else will ever delete it.
             // The slot it was made from is untouched either way.
-            TryDeleteFile(packed.FilePath);
+            FileSystemHelper.TryDeleteFile(packed.FilePath, logger);
         }
 
         if (keepPlaying)
@@ -1072,7 +1072,7 @@ public sealed class SavegameService(
         }
         finally
         {
-            TryDeleteFile(packed.FilePath);
+            FileSystemHelper.TryDeleteFile(packed.FilePath, logger);
         }
 
         // Written even where the save is about to be handed straight back, because until the claim is
@@ -1533,14 +1533,14 @@ public sealed class SavegameService(
             ContentHash = contentHash
         }, ct);
 
-        var archivePath = GetTemporaryArchivePath();
+        var archivePath = SavegamePacker.GetTemporaryArchivePath();
 
         Directory.CreateDirectory(Path.GetDirectoryName(archivePath)!);
 
         try
         {
             using (var download = await downloader.OpenAsync(link.Link, null, ct))
-            await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous))
+            await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous))
             {
                 // Counted as it is written to disk rather than through the downloader's own progress:
                 // a ranged download reports what has arrived, which runs ahead of what the reader has
@@ -1559,7 +1559,7 @@ public sealed class SavegameService(
                     ct);
             }
 
-            await using (var written = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var written = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
                 var size = written.Length;
 
@@ -1584,7 +1584,7 @@ public sealed class SavegameService(
         }
         finally
         {
-            TryDeleteFile(archivePath);
+            FileSystemHelper.TryDeleteFile(archivePath, logger);
         }
     }
 
@@ -1596,7 +1596,7 @@ public sealed class SavegameService(
     {
         var name = Path.GetFileName(displaced);
 
-        if (recycleBin.IsAvailableFor(displaced) && recycleBin.TryRecycle(displaced) && Directory.Exists(displaced) is false)
+        if (recycleBin.TryRecycle(displaced) && Directory.Exists(displaced) is false)
         {
             return new DisplacedSavegame(DisplacedSavegameDestination.RecycleBin, name, null);
         }
@@ -1981,22 +1981,6 @@ public sealed class SavegameService(
             logger.LogWarning(exception, "Could not hash slot {Slot}; reporting no drift for it.", slot.Value);
 
             return null;
-        }
-    }
-
-    private static string GetTemporaryArchivePath()
-        => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
-
-    private void TryDeleteFile(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception)
-        {
-            // A leftover temporary archive costs disk space until the machine's temp folder is swept.
-            logger.LogDebug(exception, "Could not delete the temporary archive {File}.", path);
         }
     }
 }

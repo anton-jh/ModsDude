@@ -202,15 +202,8 @@ public class FarmingSimulatorBaseModAdapter(
         if (entry is null) return Maybe<XElement>.None;
 
         using var xmlStream = entry.Open();
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null
-        };
 
-        using var reader = XmlReader.Create(xmlStream, settings);
-        var document = XDocument.Load(reader);
-        return Maybe.From(document.Element("modDesc"));
+        return Maybe.From(SafeXml.Load(xmlStream).Element("modDesc"));
     }
 
     /// <summary>

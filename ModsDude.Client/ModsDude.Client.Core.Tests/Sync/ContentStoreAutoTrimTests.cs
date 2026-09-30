@@ -77,6 +77,7 @@ public class ContentStoreAutoTrimTests
             new FakeModFolders(),
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             new ResourceLeases(),
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         Assert.True(await maintenance.SweepAllAsync(CancellationToken.None) > 0);
@@ -114,6 +115,7 @@ public class ContentStoreAutoTrimTests
             new FakeModFolders(new GameModFolder(_target, modFolder)),
             manifests,
             new ResourceLeases(),
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -145,6 +147,7 @@ public class ContentStoreAutoTrimTests
             new FakeModFolders(),
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             leases,
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         // Returns rather than blocking, and leaves the store as it found it.
@@ -167,6 +170,7 @@ public class ContentStoreAutoTrimTests
             new FakeModFolders(),
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             leases,
+            new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -175,13 +179,54 @@ public class ContentStoreAutoTrimTests
     }
 
 
-    private static ContentStoreMaintenance Build(TempDirectory root, ContentStore store)
+    [Fact]
+    public async Task Emptying_the_quarantine_sends_it_to_the_recycle_bin()
+    {
+        using var root = new TempDirectory("store-quarantine");
+        var store = new ContentStore("C:\\", root.CreateSubdirectory("store"), maxSizeBytes: long.MaxValue);
+        var bin = new FakeRecycleBin();
+        WriteQuarantined(store, "rescued");
+
+        var recycled = await Build(root, store, bin).RecycleQuarantineAsync(store, CancellationToken.None);
+
+        Assert.Equal("rescued".Length, recycled);
+        Assert.Equal([store.QuarantinePath], bin.Recycled);
+        Assert.False(Directory.Exists(store.QuarantinePath));
+    }
+
+    [Fact]
+    public async Task A_quarantine_the_recycle_bin_refuses_is_left_as_it_was()
+    {
+        using var root = new TempDirectory("store-quarantine-refused");
+        var store = new ContentStore("C:\\", root.CreateSubdirectory("store"), maxSizeBytes: long.MaxValue);
+        var rescued = WriteQuarantined(store, "rescued");
+
+        var recycled = await Build(root, store, new FakeRecycleBin(available: false)).RecycleQuarantineAsync(store, CancellationToken.None);
+
+        Assert.Null(recycled);
+        Assert.Equal("rescued", File.ReadAllText(rescued));
+    }
+
+
+    private static string WriteQuarantined(ContentStore store, string content)
+    {
+        var folder = store.GetQuarantineDirectory(DateTimeOffset.UtcNow);
+        Directory.CreateDirectory(folder);
+
+        var path = Path.Combine(folder, "fs25_mine.zip");
+        File.WriteAllText(path, content);
+
+        return path;
+    }
+
+    private static ContentStoreMaintenance Build(TempDirectory root, ContentStore store, IRecycleBin? recycleBin = null)
     {
         return new ContentStoreMaintenance(
             new FakeStoreProvider(store),
             new FakeModFolders(new GameModFolder(_target, root.CreateSubdirectory("mods"))),
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             new ResourceLeases(),
+            recycleBin ?? new FakeRecycleBin(),
             NullLogger<ContentStoreMaintenance>.Instance);
     }
 

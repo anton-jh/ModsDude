@@ -35,8 +35,8 @@ public sealed record StoreVerificationReport(
 /// </para>
 /// <para>
 /// Nothing here can lose data: every blob is registered in some repo and re-downloadable, which is
-/// the same property eviction leans on. The one exception is the quarantine folder, which is why
-/// <see cref="ContentStore.ClearQuarantine"/> is a separate act with its own question.
+/// the same property eviction leans on. The quarantine folder is the exception, which is why
+/// <see cref="RecycleQuarantineAsync"/> is a separate act, and goes through the Recycle Bin.
 /// </para>
 /// </remarks>
 public sealed class ContentStoreMaintenance(
@@ -44,6 +44,7 @@ public sealed class ContentStoreMaintenance(
     IModFolders modFolders,
     SyncManifestStore manifestStore,
     IResourceLeases leases,
+    IRecycleBin recycleBin,
     ILogger<ContentStoreMaintenance> logger)
 {
     /// <summary>
@@ -179,18 +180,28 @@ public sealed class ContentStoreMaintenance(
     }
 
     /// <summary>
-    /// Deletes the files sync rescued into the store's quarantine folder because it could not recycle
-    /// them.
+    /// Sends the store's quarantine folder - files nothing else has a copy of - to the Recycle Bin.
     /// </summary>
     /// <inheritdoc cref="ReclaimAsync" path="/remarks/para[2]"/>
-    public async Task<long> ClearQuarantineAsync(
+    /// <returns>
+    /// The bytes it held, or null where the Recycle Bin would not take it - which is common, since a
+    /// disk without one is how files end up in quarantine - and the folder is left as it was.
+    /// </returns>
+    public async Task<long?> RecycleQuarantineAsync(
         ContentStore store,
         CancellationToken cancellationToken,
         Action? onWaiting = null)
     {
         using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, cancellationToken);
 
-        return store.ClearQuarantine();
+        if (Directory.Exists(store.QuarantinePath) is false)
+        {
+            return 0;
+        }
+
+        var bytes = store.MeasureQuarantine();
+
+        return recycleBin.TryRecycle(store.QuarantinePath) ? bytes : null;
     }
 
     /// <summary>
