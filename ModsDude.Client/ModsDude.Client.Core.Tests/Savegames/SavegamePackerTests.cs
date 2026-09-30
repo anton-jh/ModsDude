@@ -427,8 +427,6 @@ public class SavegamePackerTests
     {
         public List<string> Asked { get; } = [];
 
-        public bool CanCreateSlots => true;
-
         /// <summary>One folder, because the packer is handed the one it is to pack.</summary>
         public SavegameTargets SavegameTargets => new(Target);
 

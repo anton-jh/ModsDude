@@ -1,10 +1,13 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.Sync;
+
+using ModsDude.Client.Core.Tests.GameProcesses;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -420,6 +423,8 @@ public class SavegameDriftTests
                 _manifestStore,
                 new FakeSlotRecycleBin(),
                 new FakeStoreProvider(new ContentStore("C:\\", Path.Combine(Path.GetTempPath(), "modsdude-tests", "savegame-store", Guid.NewGuid().ToString("N")), long.MaxValue)),
+                new GameFileEditor(new FakeSlotRecycleBin(), NullLogger<GameFileEditor>.Instance),
+                new FakeGameRunningGuard(),
                 NullLogger<SavegameService>.Instance,
                 Sightings);
         }

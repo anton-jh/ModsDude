@@ -1,64 +1,11 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Notices;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
-using System.Diagnostics;
 
 namespace ModsDude.Client.Core.Savegames;
-
-/// <summary>Whether any of a game's processes is alive on this machine.</summary>
-/// <remarks>An interface so <see cref="PlaySessionWatch"/> can be exercised without starting a game.</remarks>
-public interface IGameProcesses
-{
-    bool IsAnyRunning(IReadOnlyList<string> processNames);
-}
-
-/// <summary><see cref="IGameProcesses"/> over the machine's own process list.</summary>
-public sealed class SystemGameProcesses : IGameProcesses
-{
-    public bool IsAnyRunning(IReadOnlyList<string> processNames)
-    {
-        foreach (var name in processNames)
-        {
-            var found = Process.GetProcessesByName(name);
-
-            foreach (var process in found)
-            {
-                process.Dispose();
-            }
-
-            if (found.Length > 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-}
-
-
-/// <summary>Which processes are a game running, for the games this client can name an adapter for.</summary>
-/// <remarks>
-/// A seam for the reason <see cref="ILocalSavegameAdapters"/> is one: the adapter hydrates from a
-/// repo's base settings, which a game does not carry, so the answer goes through whichever repo on
-/// this machine serves the game's scope.
-/// </remarks>
-public interface IGameProcessNames
-{
-    /// <returns>Empty where no loaded repo serves the game, or its adapter cannot name a process.</returns>
-    IReadOnlyList<string> Get(GameIdentity game);
-}
-
-/// <summary><see cref="IGameProcessNames"/> over the repos this client has loaded.</summary>
-public sealed class RepoGameProcessNames(RepoRepository repos) : IGameProcessNames
-{
-    public IReadOnlyList<string> Get(GameIdentity game)
-        => repos.Repos.FirstOrDefault(x => x.Scope == game)?.Adapter.ProcessNames ?? [];
-}
-
 
 /// <summary>A checked-out savegame that was played in a session that has just ended.</summary>
 /// <param name="SlotDisplayName">What the game calls the save, where the slot could be read.</param>

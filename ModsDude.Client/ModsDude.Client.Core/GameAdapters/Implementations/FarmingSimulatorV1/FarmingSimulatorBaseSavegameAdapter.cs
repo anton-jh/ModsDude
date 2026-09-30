@@ -30,8 +30,6 @@ public class FarmingSimulatorBaseSavegameAdapter(
     /// Farming Simulator has a fixed set of numbered folders and no way to add another, so a save
     /// always fills or displaces one that is already there.
     /// </summary>
-    public bool CanCreateSlots => false;
-
 
     public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings)
     {
@@ -156,69 +154,58 @@ public class FarmingSimulatorLocalSavegameAdapter(
     }
 
     /// <summary>
-    /// Writes <paramref name="name"/> into the slot's career file as <c>settings/savegameName</c> -
-    /// the same element <see cref="ReadSlot"/> reads it back from.
+    /// Sets <c>settings/savegameName</c> in the slot's career file - the element <see cref="ReadSlot"/>
+    /// reads the name from.
     /// </summary>
-    /// <remarks>
-    /// <b>Warns and moves on rather than throws.</b> The game may be holding the career file open, or
-    /// this save's layout may be one this adapter cannot parse at all - reading it takes the same
-    /// degrade-rather-than-throw view <see cref="ReadCareer"/> does. Either way a name is decoration
-    /// next to the bytes, and neither is worth failing a publish or a check-in over: the caller packs
-    /// whatever is on disk regardless, and the old name stands until a later attempt succeeds.
-    /// </remarks>
-    public bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name)
+    public IReadOnlyList<GameFileEdit> RenameSavegame(SavegameRenameContext context)
     {
-        var careerFile = Path.Combine(GetSlotPath(target, slot), _careerSavegameFile);
+        return [new GameFileEdit(_careerSavegameFile, current => WithSavegameName(current, context.Name))];
+    }
 
-        if (File.Exists(careerFile) is false)
+    /// <returns>Null, leaving the file alone, where there is no readable career file or it already has the name.</returns>
+    internal static byte[]? WithSavegameName(byte[]? careerFile, string name)
+    {
+        if (careerFile is null)
         {
-            return false;
+            return null;
         }
 
-        var document = ReadXml(careerFile, Log);
+        XDocument document;
 
-        if (document.HasValue is false)
+        try
         {
-            Log.LogWarning("Could not rename the savegame in slot {Slot}; its career file could not be read.", slot.Value);
-
-            return false;
+            using var input = new MemoryStream(careerFile);
+            document = SafeXml.Load(input);
+        }
+        catch (XmlException)
+        {
+            return null;
         }
 
-        var element = document.Value.Element("careerSavegame")?.Element("settings")?.Element("savegameName");
+        var element = document.Element("careerSavegame")?.Element("settings")?.Element("savegameName");
 
         if (element is null || element.Value == name)
         {
-            return false;
+            return null;
         }
 
         element.Value = name;
 
-        try
+        var writerSettings = new XmlWriterSettings
         {
-            var writerSettings = new XmlWriterSettings
-            {
-                // No BOM: matched to what the game itself writes, as far as this adapter has been able
-                // to observe it - see docs/08-known-issues.md for how much of this file is unverified.
-                Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                Indent = true
-            };
+            // No BOM, matching what the game itself writes.
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            Indent = true
+        };
 
-            // Through a temporary file, so a write that fails part way leaves the old career file rather
-            // than a truncated one that would be packed and uploaded as the save.
-            AtomicFile.Write(careerFile, stream =>
-            {
-                using var writer = XmlWriter.Create(stream, writerSettings);
-                document.Value.Save(writer);
-            });
+        using var output = new MemoryStream();
 
-            return true;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        using (var writer = XmlWriter.Create(output, writerSettings))
         {
-            Log.LogWarning(exception, "Could not rename the savegame in slot {Slot}; it keeps its old name for now.", slot.Value);
-
-            return false;
+            document.Save(writer);
         }
+
+        return output.ToArray();
     }
 
 

@@ -82,8 +82,8 @@ A change is done only when all of these hold:
 - Server modules for a single game (such as the ModHub crawler) are allowed and need not be generic. They count as part of the adapter, and only adapter code may talk to them.
 - Games to design for: Farming Simulator and BeamNG.drive (+BeamMP) for mods and savegames; Minecraft, Stationeers and Space Engineers for savegames only. More will be added. Load order and dependencies between mods are planned for later.
 - Adapters read and compute; they don't write. All writes go through the general engine as:
-  - file placements: the adapter declares which files a mod version or save consists of, at which relative paths;
-  - pure transforms of an existing file: `current content + desired state → new content`, idempotent, and preserving entries the adapter doesn't manage (for example BeamNG's `db.json`, or renaming a save).
+  - file placements: a mod version is one file (on the server and on disk), and the layout names the file it gets directly in the target's mod folder. Mod folders stay flat; a game whose mods are folders would need them packed like savegames;
+  - pure transforms of an existing file (`GameFileEdit`): `current content + desired state → new content`, idempotent, and preserving entries the adapter doesn't manage. Addressed by a path relative to the mod folder or save slot, which may climb out of it with `..`. The adapter flags whether replaced content goes to the Recycle Bin; the engine does the recycling.
 - The engine plans, validates, stages, applies, recycles and records every change, so the local file rules under "Correctness and stability" are implemented once.
 - Escape hatch: an adapter may own a write step only when a game genuinely can't be expressed as placements or transforms. Raise it in the plan; its safety is reviewed case by case.
 - Pass adapters full context of the whole operation (target, the full desired set, the current state), not one item at a time, so they see the whole picture.

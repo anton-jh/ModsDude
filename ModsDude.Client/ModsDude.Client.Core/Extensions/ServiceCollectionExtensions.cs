@@ -37,7 +37,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SyncManifestStore>();
         services.AddSingleton<DriftService>();
         services.AddSingleton<StoreIntegrityService>();
-        services.AddSingleton<ModSyncService>();
+        services.AddSingleton<IModSyncService, ModSyncService>();
+        services.AddSingleton<GameFiles.IGameFileEditor, GameFiles.GameFileEditor>();
+        services.AddSingleton<GameProcesses.IGameRunningGuard, GameProcesses.GameRunningGuard>();
         services.AddSingleton<ContentStoreMaintenance>();
         services.AddSingleton<Savegames.ISavegamePacker, Savegames.SavegamePacker>();
 

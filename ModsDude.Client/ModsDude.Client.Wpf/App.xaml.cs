@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Extensions;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Notices;

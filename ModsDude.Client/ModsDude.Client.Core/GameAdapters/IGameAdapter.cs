@@ -80,11 +80,11 @@ public interface IBaseGameAdapter : IGameAdapter
     /// alive is the game being played.
     /// </summary>
     /// <remarks>
-    /// What lets the client notice somebody stopping play, which is the moment a checked-out savegame
-    /// is worth a reminder to check it in. Every process a launch passes through belongs here - a
-    /// launcher that stays up beside the game as well as the game itself - so that the hand-over from
-    /// one to the other never reads as the game having closed. Empty, the default, is a game whose
-    /// sessions nobody can see; nothing about it is then reminded of, which is the answer from before.
+    /// What refuses any change to the game's files while it runs, and what lets the client notice
+    /// somebody stopping play, which is the moment a checked-out savegame is worth a reminder to check
+    /// it in. Every process a launch passes through belongs here - a launcher that stays up beside the
+    /// game as well as the game itself. Empty, the default, is a game whose sessions nobody can see:
+    /// nothing is refused or reminded of for it.
     /// </remarks>
     IReadOnlyList<string> ProcessNames => [];
 
@@ -157,45 +157,14 @@ public interface ILocalModAdapter : IBaseModAdapter
     Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Where a mod version's file belongs, and what it is called. The write side of the adapter -
-    /// where a file goes is game knowledge, and nothing else can answer it.
+    /// How a mod folder holds a set of mods: the file each one gets, and what else the game needs
+    /// changed to match. The engine does every write.
     /// </summary>
-    /// <param name="fileName">
-    /// What the repo has registered this file as being called, or null where it has nothing usable.
-    /// An adapter that honours it gives every member the folder the importer had rather than one
-    /// renamed to the normalized id; see <see cref="ModFileName"/>. The value is already checked to
-    /// be a bare name belonging to <paramref name="modId"/>, so it can be used as it stands.
-    /// </param>
-    /// <remarks>
-    /// A path rather than an <c>InstallMod</c> taking a stream, deliberately. Materialising is a
-    /// hardlink on one disk and a copy on another, and that decision depends on the store assignment
-    /// and the filesystem rather than on the game - so it belongs in the sync engine, once, instead
-    /// of in every adapter. Adapters supply paths; the engine performs the filesystem operations.
-    /// See docs/07-mod-sync-design.md#fitting-it-into-the-client.
-    /// </remarks>
-    string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName);
-
-    /// <summary>
-    /// The file to remove when uninstalling a mod that is currently installed. The uninstall half of
-    /// the same contract, separate from <see cref="GetModFilePath"/> because what is on disk is not
-    /// necessarily where this adapter version would put it.
-    /// </summary>
-    string GetInstalledModPath(LocalMod installed) => installed.FilePath;
+    ModLayout Layout(ModLayoutContext context);
 }
 
 public interface IBaseSavegameAdapter
 {
-    /// <summary>
-    /// Whether this game lets a save be put somewhere that does not exist yet. False for a game with
-    /// a fixed set of numbered slots, true for one whose saves are named freely.
-    /// </summary>
-    /// <remarks>
-    /// The point of asking this rather than a slot <em>count</em> is that both games are then the
-    /// same model - an adapter-supplied list of containers, some occupied - and nothing outside an
-    /// adapter ever hardcodes twenty.
-    /// </remarks>
-    bool CanCreateSlots { get; }
-
     ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings);
     ILocalSavegameAdapter WithLocalSettings(DynamicForm localSettings);
 }
@@ -255,13 +224,6 @@ public interface ILocalSavegameAdapter : IBaseSavegameAdapter
     int? GetSlotNumber(SavegameSlotId slot) => null;
 
     /// <summary>
-    /// The slot a save called <paramref name="name"/> would occupy, for a game where
-    /// <see cref="IBaseSavegameAdapter.CanCreateSlots"/> is true. Mints an address, not a folder -
-    /// creating it is the engine's business.
-    /// </summary>
-    SavegameSlotId CreateSlot(string name) => throw new NotSupportedException("This game's savegames cannot be put in a slot that does not already exist.");
-
-    /// <summary>
     /// Whether a file inside a slot's folder, given relative to it, is part of the save.
     /// </summary>
     /// <remarks>
@@ -273,24 +235,14 @@ public interface ILocalSavegameAdapter : IBaseSavegameAdapter
     bool BelongsInPackedSave(string relativePath) => true;
 
     /// <summary>
-    /// Writes <paramref name="name"/> into the slot as the name this game itself shows for the save,
-    /// where this game records one at all.
+    /// The edits, relative to the slot's folder, that make this game itself show the save as
+    /// <see cref="SavegameRenameContext.Name"/>. Empty for a game that records no name.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>In the slot, not only in the archive being packed.</b> The point is that the game's own menu
-    /// and the repo agree on what a save is called, and an edit that only reached the archive would let
-    /// the two drift apart forever - the slot is what the next launch, and the next pack, both read.
-    /// </para>
-    /// <para>
-    /// <b>Best-effort, and it must not throw.</b> A name is decoration next to the bytes: an adapter
-    /// that cannot place a name at all, that finds the slot already named this, or that meets a file
-    /// the game is holding open, all report false and change nothing on disk - the caller packs
-    /// whatever is there either way, and a publish or a check-in is not worth failing over a label.
-    /// Defaults to false for a game with no such file, or while nobody has taught this one where its
-    /// name lives.
-    /// </para>
+    /// Applied to the slot, not only to the archive being packed, so the game's own menu and the repo
+    /// agree on what a save is called.
     /// </remarks>
-    /// <returns>Whether the slot's bytes changed. False covers both "already correct" and "could not write" - both mean nothing on disk moved.</returns>
-    bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name) => false;
+    IReadOnlyList<GameFileEdit> RenameSavegame(SavegameRenameContext context) => [];
 }
+
+public sealed record SavegameRenameContext(SavegameTarget Target, SavegameSlotId Slot, string Name);

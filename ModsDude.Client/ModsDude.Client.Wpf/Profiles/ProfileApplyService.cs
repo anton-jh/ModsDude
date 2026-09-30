@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -157,7 +158,7 @@ public sealed record PlanAttempt(IReadOnlyList<ModSyncPlan> Plans, IReadOnlyList
 /// </para>
 /// </remarks>
 public sealed class ProfileApplyService(
-    ModSyncService syncService,
+    IModSyncService syncService,
     GameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
@@ -227,7 +228,7 @@ public sealed class ProfileApplyService(
             try
             {
                 plans.Add(await syncService.PlanAsync(
-                    new ModSyncRequest(game.Identity, target, adapter, repo.Id, clearAll ? Guid.Empty : profileId)
+                    new ModSyncRequest(game.Identity, game.Name, target, adapter, repo.Id, clearAll ? Guid.Empty : profileId)
                     {
                         ProfileName = clearAll ? null : profileName,
                         Revision = clearAll ? null : revision,
@@ -773,11 +774,16 @@ public sealed class ProfileApplyService(
                 : new ProfileApplyOutcome(
                     game,
                     ProfileApplyStatus.Failed,
-                    $"{where}: {result.Failures.Count} mods could not be applied.");
+                    $"{where}: {result.Failures.Count} changes could not be applied.");
         }
         catch (OperationCanceledException)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"{where} was stopped part way.");
+        }
+        catch (GameRunningException exception)
+        {
+            // Started between the confirmation and the work. Nothing was touched.
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Unavailable, exception.UserMessage);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

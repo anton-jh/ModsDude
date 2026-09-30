@@ -231,7 +231,7 @@ public class ModSyncPlannerTests
         var item = Assert.Single(items);
 
         Assert.Equal(ModSyncAction.Rename, item.Action);
-        Assert.Equal("FS25_A.zip", item.FileName?.Value);
+        Assert.Equal("FS25_A.zip", item.FileName);
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class ModSyncPlannerTests
 
         var reports = new List<ModSyncProgress>();
 
-        await ModSyncPlanner.PlanAsync(
+        await PlanWithLayout(
             [Want("fs25_a", "1.0.0", "the bytes"), Want("fs25_c", "1.0.0", "new bytes")],
             [both, onlyInstalled],
             RegisteredContent.None,
@@ -339,7 +339,7 @@ public class ModSyncPlannerTests
 
         var reports = new List<ModSyncProgress>();
 
-        await ModSyncPlanner.PlanAsync(
+        await PlanWithLayout(
             [Want("fs25_a", "1.0.0", "what sync installed")],
             [installed],
             RegisteredContent.None,
@@ -416,7 +416,7 @@ public class ModSyncPlannerTests
 
         var reports = new List<ModSyncProgress>();
 
-        await ModSyncPlanner.PlanAsync(
+        await PlanWithLayout(
             [Want("fs25_a", "1.0.0", "the bytes")],
             [installed],
             RegisteredContent.None,
@@ -436,7 +436,30 @@ public class ModSyncPlannerTests
         SyncManifest? manifest,
         Func<string, CancellationToken, IProgress<long>?, Task<string>>? hashFile = null)
     {
-        return ModSyncPlanner.PlanAsync(desired, installed, registered, manifest, hashFile, CancellationToken.None);
+        return PlanWithLayout(desired, installed, registered, manifest, hashFile, CancellationToken.None);
+    }
+
+    /// <summary>The planner under a layout that names files the way Farming Simulator's does.</summary>
+    private static Task<IReadOnlyList<ModSyncItem>> PlanWithLayout(
+        IReadOnlyCollection<DesiredMod> desired,
+        IReadOnlyCollection<InstalledMod> installed,
+        RegisteredContent registered,
+        SyncManifest? manifest,
+        Func<string, CancellationToken, IProgress<long>?, Task<string>>? hashFile,
+        CancellationToken cancellationToken,
+        IProgress<ModSyncProgress>? progress = null)
+    {
+        var installedNames = installed
+            .GroupBy(x => x.ModId)
+            .ToDictionary(x => x.Key, x => Path.GetFileName(x.First().Path));
+
+        var layout = new ModLayout(
+            [.. desired.Select(x => new ModPlacement(
+                x.ModId,
+                x.FileName?.Value ?? installedNames.GetValueOrDefault(x.ModId) ?? $"{x.ModId.Value}.zip"))],
+            []);
+
+        return ModSyncPlanner.PlanAsync(desired, layout, installed, registered, manifest, hashFile, cancellationToken, progress);
     }
 
     private static DesiredMod Want(string modId, string version, string content, bool locked = false)

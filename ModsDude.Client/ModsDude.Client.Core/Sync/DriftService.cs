@@ -419,6 +419,7 @@ public sealed class DriftService(
         var byName = manifest.Entries.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
         var present = new HashSet<string>(listing, StringComparer.OrdinalIgnoreCase);
         var unmanaged = new HashSet<string>(manifest.UnmanagedFileNames, StringComparer.OrdinalIgnoreCase);
+        var managed = new HashSet<string>(manifest.ManagedFiles.Select(x => x.RelativePath), StringComparer.OrdinalIgnoreCase);
 
         var added = new List<string>();
         var changed = new List<string>();
@@ -428,8 +429,9 @@ public sealed class DriftService(
             if (byName.TryGetValue(name, out var entry) is false)
             {
                 // A file sync never installed and was already ignoring is not an addition. One that
-                // was not there at the last sync is, whatever it turns out to be.
-                if (unmanaged.Contains(name) is false)
+                // was not there at the last sync is, whatever it turns out to be. Managed files are
+                // compared below, by their own record.
+                if (unmanaged.Contains(name) is false && managed.Contains(name) is false)
                 {
                     added.Add(name);
                 }
@@ -437,13 +439,29 @@ public sealed class DriftService(
                 continue;
             }
 
-            if (HasMoved(Path.Combine(modFolder, name), entry))
+            if (HasMoved(Path.Combine(modFolder, name), entry.Size, entry.ModifiedUtc))
             {
                 changed.Add(name);
             }
         }
 
-        return (added, [.. byName.Keys.Where(x => present.Contains(x) is false)], changed);
+        var removed = byName.Keys.Where(x => present.Contains(x) is false).ToList();
+
+        foreach (var file in manifest.ManagedFiles)
+        {
+            var path = Path.Combine(modFolder, file.RelativePath);
+
+            if (File.Exists(path) is false)
+            {
+                removed.Add(file.RelativePath);
+            }
+            else if (HasMoved(path, file.Size, file.ModifiedUtc))
+            {
+                changed.Add(file.RelativePath);
+            }
+        }
+
+        return (added, removed, changed);
     }
 
     /// <summary>
@@ -464,13 +482,13 @@ public sealed class DriftService(
     /// on a background thread nobody was awaiting.
     /// </para>
     /// </remarks>
-    private static bool HasMoved(string path, SyncManifestEntry entry)
+    private static bool HasMoved(string path, long size, DateTimeOffset modifiedUtc)
     {
         var info = new FileInfo(path);
 
         try
         {
-            return info.Length != entry.Size || info.LastWriteTimeUtc != entry.ModifiedUtc;
+            return info.Length != size || info.LastWriteTimeUtc != modifiedUtc;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

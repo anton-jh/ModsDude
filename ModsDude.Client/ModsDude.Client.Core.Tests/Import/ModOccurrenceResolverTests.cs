@@ -1,4 +1,3 @@
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using System.Text;

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameFiles;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -8,6 +10,8 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.Sync;
+
+using ModsDude.Client.Core.Tests.GameProcesses;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -1603,6 +1607,79 @@ public class SavegameServiceTests
         Assert.Equal(1004, harness.Server.CheckIns[^1].ProfileRevision);
     }
 
+    [Fact]
+    public async Task Checking_out_is_refused_while_the_game_is_running_and_the_slot_is_left_alone()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.WriteSlotFile(_slot1, "my own save");
+        harness.Guard.Running = true;
+
+        await Assert.ThrowsAsync<GameRunningException>(
+            () => harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None));
+
+        Assert.Equal("my own save", harness.ReadSlotFile(_slot1));
+        Assert.Equal(0, harness.Server.CheckoutsTaken);
+    }
+
+    [Fact]
+    public async Task Taking_a_copy_is_refused_while_the_game_is_running()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.WriteSlotFile(_slot1, "my own save");
+        harness.Guard.Running = true;
+
+        await Assert.ThrowsAsync<GameRunningException>(
+            () => harness.Service.TakeCopyAsync(harness.Game, harness.Server.Savegame, 1, _slot1, CancellationToken.None));
+
+        Assert.Equal("my own save", harness.ReadSlotFile(_slot1));
+    }
+
+    [Fact]
+    public async Task Checking_in_is_refused_while_the_game_is_running()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        harness.WriteSlotFile(_slot1, "played");
+        harness.Guard.Running = true;
+
+        await Assert.ThrowsAsync<GameRunningException>(
+            () => harness.Service.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None));
+
+        Assert.Empty(harness.Server.CheckIns);
+    }
+
+    [Fact]
+    public async Task Publishing_is_refused_while_the_game_is_running()
+    {
+        using var harness = new Harness();
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Guard.Running = true;
+
+        await Assert.ThrowsAsync<GameRunningException>(() => harness.Service.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
+
+        Assert.Empty(harness.Server.Publishes);
+        Assert.Empty(harness.Adapter.Renames);
+    }
+
+    [Fact]
+    public async Task Discarding_is_refused_while_the_game_is_running()
+    {
+        using var harness = new Harness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.Service.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        harness.Guard.Running = true;
+
+        await Assert.ThrowsAsync<GameRunningException>(
+            () => harness.Service.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
+
+        Assert.Equal(0, harness.Server.CheckoutsDiscarded);
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
+    }
+
 
     /// <summary>
     /// A real disk, a real packer and a fake server, wired the way the app wires them.
@@ -1653,6 +1730,8 @@ public class SavegameServiceTests
                 ManifestStore,
                 RecycleBin,
                 new FakeStoreProvider(Store),
+                new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance),
+                Guard,
                 NullLogger<SavegameService>.Instance,
                 Sightings)
             {
@@ -1668,6 +1747,7 @@ public class SavegameServiceTests
         public FakeSavegameUploader Uploader { get; }
         public FakeSlotRecycleBin RecycleBin { get; } = new();
         public FakeSavegameSightings Sightings { get; } = new();
+        public FakeGameRunningGuard Guard { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameBindingStore Bindings { get; }

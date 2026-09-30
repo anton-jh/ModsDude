@@ -1,6 +1,5 @@
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Net;
-using System.Net.Http;
 using System.Net.Sockets;
 
 namespace ModsDude.Client.Core.Connectivity;

@@ -176,8 +176,10 @@ internal sealed class FakeMultiTargetModAdapter(FakeMultiTargetSettings settings
     public async Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
         => (await GetModsFromFolder(target.Path, cancellationToken)).Where(x => skip(x.FilePath) is false);
 
-    public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
-        => Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
+    public ModLayout Layout(ModLayoutContext context)
+        => new(
+            [.. context.Desired.Select(x => new ModPlacement(x.ModId, x.FileName?.Value ?? x.InstalledFileName ?? $"{x.ModId.Value}.zip"))],
+            []);
 }
 
 
@@ -192,10 +194,6 @@ internal sealed class FakeMultiTargetModAdapter(FakeMultiTargetSettings settings
 /// </remarks>
 internal class FakeMultiTargetBaseSavegameAdapter : IBaseSavegameAdapter
 {
-    /// <summary>Named freely, so a test can mint a slot rather than picking from twenty.</summary>
-    public bool CanCreateSlots => true;
-
-
     public ILocalSavegameAdapter WithLocalSettings(string serializedLocalSettings)
         => new FakeMultiTargetSavegameAdapter(FakeMultiTargetSettings.Deserialize(serializedLocalSettings));
 
@@ -219,8 +217,6 @@ internal sealed class FakeMultiTargetSavegameAdapter(FakeMultiTargetSettings set
 
 
     public string GetSlotPath(SavegameTarget target, SavegameSlotId slot) => Path.Combine(target.Path, slot.Value);
-
-    public SavegameSlotId CreateSlot(string name) => new(name);
 
     public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
     {

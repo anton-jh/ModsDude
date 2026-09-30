@@ -258,8 +258,13 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
         return Task.FromResult<IEnumerable<LocalMod>>(mods);
     }
 
-    public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
-        => Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
+    /// <summary>The other files the layout asks to have changed. None unless a test sets it.</summary>
+    public Func<ModLayoutContext, IReadOnlyList<GameFileEdit>> ManagedFiles { get; set; } = _ => [];
+
+    public ModLayout Layout(ModLayoutContext context)
+        => new(
+            [.. context.Desired.Select(x => new ModPlacement(x.ModId, x.FileName?.Value ?? x.InstalledFileName ?? $"{x.ModId.Value}.zip"))],
+            ManagedFiles(context));
 
     public ILocalModAdapter WithLocalSettings(string serializedLocalSettings) => this;
     public ILocalModAdapter WithLocalSettings(DynamicForm localSettings) => this;

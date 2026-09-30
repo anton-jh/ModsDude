@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -19,6 +20,7 @@ public static class ModSyncPlanner
     private const int _concurrentHashes = 4;
 
 
+    /// <param name="layout">Where each desired mod's file belongs, from the adapter.</param>
     /// <param name="registered">
     /// What the repo can reproduce, keyed by content rather than by version id. Recoverability is a
     /// property of the bytes: a file whose hash the repo holds can be fetched again whatever it
@@ -40,6 +42,7 @@ public static class ModSyncPlanner
     /// </param>
     public static async Task<IReadOnlyList<ModSyncItem>> PlanAsync(
         IReadOnlyCollection<DesiredMod> desired,
+        ModLayout layout,
         IReadOnlyCollection<InstalledMod> installed,
         RegisteredContent registered,
         SyncManifest? manifest,
@@ -110,7 +113,7 @@ public static class ModSyncPlanner
                     DesiredVersion = want.VersionId,
                     DesiredHash = want.ContentHash,
                     DesiredSize = want.SizeBytes,
-                    FileName = want.FileName,
+                    FileName = layout.FileNameOf(want.ModId),
                     Locked = want.Locked
                 });
 
@@ -129,14 +132,14 @@ public static class ModSyncPlanner
             items.Add(new ModSyncItem
             {
                 Action = matches
-                    ? (IsMisnamed(have.Path, want.FileName) ? ModSyncAction.Rename : ModSyncAction.Keep)
+                    ? (IsMisnamed(have.Path, layout.FileNameOf(want.ModId)) ? ModSyncAction.Rename : ModSyncAction.Keep)
                     : ModSyncAction.Replace,
                 ModId = want.ModId,
                 DisplayName = registered.NameOf(want.ContentHash) ?? want.DisplayName ?? have.DisplayName,
                 DesiredVersion = want.VersionId,
                 DesiredHash = want.ContentHash,
                 DesiredSize = want.SizeBytes,
-                FileName = want.FileName,
+                FileName = layout.FileNameOf(want.ModId),
                 Locked = want.Locked,
                 InstalledVersion = have.VersionId,
                 InstalledPath = have.Path,
@@ -179,12 +182,11 @@ public static class ModSyncPlanner
     /// <remarks>
     /// Only asked of a file whose bytes already match, so it can never be confused with a mod
     /// changing what it calls itself between versions: that arrives as different content and is a
-    /// replace. A repo with nothing usable registered has no opinion, and nothing is renamed.
+    /// replace.
     /// </remarks>
-    private static bool IsMisnamed(string path, ModFileName? wanted)
+    private static bool IsMisnamed(string path, string wanted)
     {
-        return wanted is ModFileName name
-            && string.Equals(Path.GetFileName(path), name.Value, StringComparison.Ordinal) is false;
+        return string.Equals(Path.GetFileName(path), wanted, StringComparison.Ordinal) is false;
     }
 
     /// <summary>

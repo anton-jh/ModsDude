@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -385,8 +386,6 @@ internal sealed class FakeSavegameDownloader(FakeSavegameServer server) : IModFi
 /// </summary>
 internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) : ILocalSavegameAdapter
 {
-    public bool CanCreateSlots => false;
-
     /// <summary>What the game calls each save, keyed by slot - the name a picker shows.</summary>
     public Dictionary<string, string> DisplayNames { get; } = [];
 
@@ -437,30 +436,25 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
     public bool ThrowOnRename { get; set; }
 
     /// <summary>
-    /// Writes the name into its own file beside the career file, mirroring the one real fact this
-    /// fake stands in for: a rename edits bytes in the slot, so packing it again afterwards produces a
+    /// Puts the name in its own file beside the career file, mirroring the one real fact this fake
+    /// stands in for: a rename edits bytes in the slot, so packing it again afterwards produces a
     /// different hash than packing it before.
     /// </summary>
-    public bool RenameSavegame(SavegameTarget target, SavegameSlotId slot, string name)
+    public IReadOnlyList<GameFileEdit> RenameSavegame(SavegameRenameContext context)
     {
-        Renames.Add((target, slot, name));
+        Renames.Add((context.Target, context.Slot, context.Name));
 
-        if (ThrowOnRename)
+        return [new GameFileEdit(_nameFile, current =>
         {
-            throw new IOException("Simulated: the game is holding the career file open.");
-        }
+            if (ThrowOnRename)
+            {
+                throw new IOException("Simulated: the game is holding the career file open.");
+            }
 
-        var path = Path.Combine(GetSlotPath(target, slot), _nameFile);
+            var wanted = Encoding.UTF8.GetBytes(context.Name);
 
-        if (File.Exists(path) && File.ReadAllText(path) == name)
-        {
-            return false;
-        }
-
-        Directory.CreateDirectory(GetSlotPath(target, slot));
-        File.WriteAllText(path, name);
-
-        return true;
+            return current is not null && current.AsSpan().SequenceEqual(wanted) ? null : wanted;
+        })];
     }
 
     private const string _nameFile = "name.txt";

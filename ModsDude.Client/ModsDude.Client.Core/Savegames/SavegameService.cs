@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameFiles;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -490,6 +492,8 @@ public sealed class SavegameService(
     SyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IContentStoreProvider storeProvider,
+    IGameFileEditor fileEditor,
+    IGameRunningGuard runningGuard,
     ILogger<SavegameService> logger,
     ISavegameSightings? sightings = null)
     : ISavegameService
@@ -727,6 +731,8 @@ public sealed class SavegameService(
     /// </exception>
     public async Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
         var head = savegame.Head
@@ -790,6 +796,8 @@ public sealed class SavegameService(
     /// </remarks>
     public async Task<DisplacedSavegame?> TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
         var adapter = RequireAdapter(game);
         var target = RequireTarget(game, adapter, slot);
 
@@ -853,6 +861,8 @@ public sealed class SavegameService(
         IProgress<SavegameProgress>? progress = null,
         string? savegameName = null)
     {
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
         var adapter = RequireAdapter(game);
         var binding = bindings.GetBinding(game.Identity, savegameId)
             ?? throw new UserFriendlyException(
@@ -1031,6 +1041,8 @@ public sealed class SavegameService(
         CancellationToken ct,
         IProgress<SavegameProgress>? progress = null)
     {
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
         var adapter = RequireAdapter(game);
         var savegameTarget = RequireTarget(game, adapter, slot);
         var savegameId = Guid.NewGuid();
@@ -1122,6 +1134,8 @@ public sealed class SavegameService(
     /// <exception cref="UserFriendlyException">This machine holds no such savegame.</exception>
     public async Task<bool> DiscardAsync(Game game, Guid savegameId, CancellationToken ct)
     {
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
         var adapter = RequireAdapter(game);
         var binding = bindings.GetBinding(game.Identity, savegameId)
             ?? throw new UserFriendlyException(
@@ -1858,20 +1872,23 @@ public sealed class SavegameService(
     /// repo agree on what a save is called.
     /// </summary>
     /// <remarks>
-    /// <b>Never allowed to fail the publish or the check-in it is part of.</b> Same treatment
-    /// <see cref="DescribeAsync"/> gives the details it reads off the same slot, and for the same
-    /// reason: a name is decoration next to the bytes, and <see cref="ILocalSavegameAdapter.RenameSavegame"/>
-    /// already logs why it could not write one before it gets here.
+    /// <b>Never allowed to fail the publish or the check-in it is part of.</b> A name is decoration
+    /// next to the bytes, so a failed edit is logged and the slot is packed as it is.
     /// </remarks>
     private void TryRenameSavegame(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string name)
     {
-        try
+        var slotPath = adapter.GetSlotPath(target, slot);
+
+        foreach (var edit in adapter.RenameSavegame(new SavegameRenameContext(target, slot, name)))
         {
-            adapter.RenameSavegame(target, slot, name);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogWarning(exception, "Could not rename the savegame in slot {Slot}; it keeps its old name.", slot.Value);
+            try
+            {
+                fileEditor.Apply(slotPath, edit);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(exception, "Could not rename the savegame in slot {Slot}; it keeps its old name.", slot.Value);
+            }
         }
     }
 

@@ -425,14 +425,15 @@ public class FarmingSimulatorLocalModAdapter(
     /// </summary>
     /// <remarks>
     /// The registered name rather than the mod id, because <see cref="ModKey"/> is lower-cased and
-    /// the id is not what the file is called. Building the name from the id renamed every archive in
-    /// the folder on the first apply, which is a real difference: Farming Simulator's mod list shows
-    /// filenames, and a mod that refers to another by name is reading a string the user can see.
-    /// Falls back to the id where the repo has nothing usable registered - an older row, or a name
-    /// that failed validation - which is exactly what this used to do for everything.
+    /// Farming Simulator's mod list shows file names, which a mod referring to another by name reads.
+    /// Where the repo has nothing usable registered, the file keeps the name it has, or gets the id.
     /// </remarks>
-    public string GetModFilePath(ModTarget target, ModKey modId, ModVersionKey versionId, ModFileName? fileName)
+    public ModLayout Layout(ModLayoutContext context)
     {
-        return Path.Combine(target.Path, fileName?.Value ?? $"{modId.Value}.zip");
+        return new ModLayout(
+            [.. context.Desired.Select(x => new ModPlacement(
+                x.ModId,
+                x.FileName?.Value ?? x.InstalledFileName ?? $"{x.ModId.Value}.zip"))],
+            []);
     }
 }

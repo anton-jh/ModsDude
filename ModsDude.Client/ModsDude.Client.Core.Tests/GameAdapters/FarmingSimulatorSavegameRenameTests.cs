@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
+using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Tests.Sync;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +27,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
-        var changed = Adapter().RenameSavegame(Target(), Slot, "Season 5");
+        var changed = Rename("Season 5");
 
         Assert.True(changed);
         Assert.Equal("Season 5", ReadBack().DisplayName);
@@ -44,7 +45,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
         WriteCareer(RealCareerFile);
         var before = File.ReadAllBytes(CareerFilePath);
 
-        var changed = Adapter().RenameSavegame(Target(), Slot, "My game save");
+        var changed = Rename("My game save");
 
         Assert.False(changed);
         Assert.Equal(before, File.ReadAllBytes(CareerFilePath));
@@ -58,14 +59,14 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
-        Assert.True(Adapter().RenameSavegame(Target(), Slot, name));
+        Assert.True(Rename(name));
         Assert.Equal(name, ReadBack().DisplayName);
     }
 
     [Fact]
     public void Renaming_a_slot_with_no_career_file_does_nothing()
     {
-        var changed = Adapter().RenameSavegame(Target(), Slot, "Season 5");
+        var changed = Rename("Season 5");
 
         Assert.False(changed);
         Assert.False(File.Exists(CareerFilePath));
@@ -82,7 +83,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
         WriteCareer("<careerSavegame><settings>");
         var before = File.ReadAllText(CareerFilePath);
 
-        var changed = Adapter().RenameSavegame(Target(), Slot, "Season 5");
+        var changed = Rename("Season 5");
 
         Assert.False(changed);
         Assert.Equal(before, File.ReadAllText(CareerFilePath));
@@ -99,7 +100,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
             </careerSavegame>
             """);
 
-        Assert.False(Adapter().RenameSavegame(Target(), Slot, "Season 5"));
+        Assert.False(Rename("Season 5"));
     }
 
     /// <summary>
@@ -111,7 +112,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
-        Adapter().RenameSavegame(Target(), Slot, "Season 5");
+        Rename("Season 5");
 
         var written = File.ReadAllText(CareerFilePath);
 
@@ -124,7 +125,7 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
-        Adapter().RenameSavegame(Target(), Slot, "Season 5");
+        Rename("Season 5");
 
         var slot = ReadBack();
 
@@ -133,7 +134,32 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     }
 
 
+    [Fact]
+    public void Renaming_twice_changes_nothing_the_second_time()
+    {
+        WriteCareer(RealCareerFile);
+        Rename("Season 5");
+        var after = File.ReadAllBytes(CareerFilePath);
+
+        Assert.False(Rename("Season 5"));
+        Assert.Equal(after, File.ReadAllBytes(CareerFilePath));
+    }
+
+
     private static readonly SavegameSlotId Slot = new("savegame1");
+
+    /// <summary>The adapter's edits, carried out the way the engine carries them out.</summary>
+    private bool Rename(string name)
+    {
+        var adapter = Adapter();
+        var target = Target();
+        var editor = new GameFileEditor(new FakeRecycleBin(), NullLogger<GameFileEditor>.Instance);
+
+        return adapter.RenameSavegame(new SavegameRenameContext(target, Slot, name))
+            .Select(x => editor.Apply(adapter.GetSlotPath(target, Slot), x))
+            .ToList()
+            .Any(x => x);
+    }
 
     private string CareerFilePath => Path.Combine(_gameData.Path, Slot.Value, "careerSavegame.xml");
 

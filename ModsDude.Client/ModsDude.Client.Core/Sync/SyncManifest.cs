@@ -97,7 +97,13 @@ public sealed record SyncManifest
     /// drift check does not report them as additions on every launch forever.
     /// </summary>
     public IReadOnlyList<string> UnmanagedFileNames { get; init; } = [];
+
+    /// <summary>The adapter's other files as the apply left them, so a change to one counts as drift.</summary>
+    public IReadOnlyList<SyncManifestManagedFile> ManagedFiles { get; init; } = [];
 }
+
+/// <param name="RelativePath">Relative to the mod folder.</param>
+public sealed record SyncManifestManagedFile(string RelativePath, long Size, DateTimeOffset ModifiedUtc);
 
 /// <param name="FileName">
 /// The file's name within the mod folder, which is what a directory listing produces - the cheap

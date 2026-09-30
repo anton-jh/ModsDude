@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Sync;
@@ -108,10 +109,10 @@ public sealed record ModSyncItem
     public long? DesiredSize { get; init; }
 
     /// <summary>
-    /// What the file has to be called once this item has run. Null where the repo registered nothing
-    /// usable, which leaves the name to the adapter. See <see cref="ModFileName"/>.
+    /// What the file is called in the mod folder once this item has run, from the adapter's layout.
+    /// Set on every item that ends with a file there.
     /// </summary>
-    public ModFileName? FileName { get; init; }
+    public string? FileName { get; init; }
 
     /// <summary>Version-sensitive in the profile. A locked mod at the wrong version risks a savegame.</summary>
     public bool Locked { get; init; }
@@ -173,6 +174,8 @@ public sealed record ModSyncPlan
     /// <summary>Which game this plan is for. Its holds are what can refuse the apply.</summary>
     public required GameIdentity Game { get; init; }
 
+    public required string GameName { get; init; }
+
     /// <summary>Carried only so the manifest can record it. See <see cref="ModSyncRequest.ProfileName"/>.</summary>
     public string? ProfileName { get; init; }
 
@@ -196,6 +199,9 @@ public sealed record ModSyncPlan
 
     /// <summary>Files in the mod folder the adapter does not recognise as mods. Never touched, recorded so drift does not report them.</summary>
     public required IReadOnlyList<string> UnmanagedFileNames { get; init; }
+
+    /// <summary>The other files the adapter needs changed to match the mods, relative to the mod folder.</summary>
+    public required IReadOnlyList<PlannedFileEdit> ManagedFiles { get; init; }
 
     /// <summary>
     /// Where files the repo cannot reproduce go instead of the Recycle Bin, when the user asked for that.
@@ -237,7 +243,7 @@ public sealed record ModSyncPlan
     /// Whether anything at all changes. A plan of nothing but <see cref="ModSyncAction.Keep"/> is
     /// still worth showing - it is the answer "your folder already matches".
     /// </summary>
-    public bool HasWork => Items.Any(x => x.Action is not ModSyncAction.Keep);
+    public bool HasWork => Items.Any(x => x.Action is not ModSyncAction.Keep) || ManagedFiles.Any(x => x.Changes);
 }
 
 
@@ -301,7 +307,8 @@ public sealed record QuarantinedFile(ModKey ModId, string OriginalPath, Quaranti
     public string? Path { get; init; }
 }
 
-public sealed record ModSyncFailure(ModKey ModId, ModSyncAction Action, string Message)
+/// <param name="Subject">The mod or managed file that failed, as a person would name it.</param>
+public sealed record ModSyncFailure(string Subject, string Message)
 {
     public Exception? Exception { get; init; }
 }

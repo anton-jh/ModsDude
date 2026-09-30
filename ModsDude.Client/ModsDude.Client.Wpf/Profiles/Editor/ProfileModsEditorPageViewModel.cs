@@ -54,7 +54,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly NavigationLockService _navigationLock;
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
-    private readonly ModSyncService _syncService;
+    private readonly IModSyncService _syncService;
     private readonly DriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
     private readonly IResourceLeases _leases;
@@ -96,7 +96,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         NavigationLockService navigationLock,
         GameRepository gameRepository,
         ProfileApplyService applyService,
-        ModSyncService syncService,
+        IModSyncService syncService,
         DriftMonitor driftMonitor,
         NoticeCenterViewModel notices,
         IResourceLeases leases,
