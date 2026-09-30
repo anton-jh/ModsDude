@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:archive="clr-namespace:ModsDude.Client.Wpf.Repos.Archive"
+                    xmlns:members="clr-namespace:ModsDude.Client.Wpf.Repos.Members"
+                    xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos">
+
+    <DataTemplate DataType="{x:Type repos:CreateRepoPageViewModel}">
+        <repos:CreateRepoPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type repos:JoinRepoPageViewModel}">
+        <repos:JoinRepoPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type repos:RepoPageViewModel}">
+        <repos:RepoPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type repos:RepoOverviewPageViewModel}">
+        <repos:RepoOverviewPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type repos:RepoAdminPageViewModel}">
+        <repos:RepoAdminPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type members:RepoMembersPageViewModel}">
+        <members:RepoMembersPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type archive:ArchivePageViewModel}">
+        <archive:ArchivePage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type archive:RepoArchivePageViewModel}">
+        <archive:RepoArchivePage />
+    </DataTemplate>
+
+</ResourceDictionary>

@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
+                    xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell">
+
+    <DataTemplate DataType="{x:Type shell:MainPageViewModel}">
+        <shell:MainPage />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type modals:ModalViewModel}">
+        <modals:Dialog />
+    </DataTemplate>
+
+    <!-- Without its own template this would fall through to the base ModalViewModel one
+         above and render as a confirmation dialog. -->
+    <DataTemplate DataType="{x:Type modals:ErrorDialogViewModel}">
+        <modals:ErrorDialog />
+    </DataTemplate>
+
+</ResourceDictionary>

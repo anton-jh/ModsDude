@@ -1,8 +1,12 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
                     xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar">
 
     <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+    <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+    <converters:IconKindToStringConverter x:Key="IconKindToStringConverter" />
 
     <!-- Text that reads as a TextBlock and selects like a TextBox. WPF's TextBlock has no selection
          of its own, so anything a user might want to take away - an error message, an exception - has

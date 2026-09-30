@@ -1,0 +1,50 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:editor="clr-namespace:ModsDude.Client.Wpf.Profiles.Editor"
+                    xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles">
+
+    <DataTemplate DataType="{x:Type profiles:CreateProfilePageViewModel}">
+        <profiles:CreateProfilePage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfilePageViewModel}">
+        <profiles:ProfilePage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileOverviewPageViewModel}">
+        <profiles:ProfileOverviewPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileModsPageViewModel}">
+        <profiles:ProfileModsPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileHistoryPageViewModel}">
+        <profiles:ProfileHistoryPage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:EditProfilePageViewModel}">
+        <profiles:EditProfilePage />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type editor:ProfileModsEditorPageViewModel}">
+        <editor:ProfileModsEditorPage />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type profiles:BlockedRevisionsModalViewModel}">
+        <profiles:BlockedRevisionsDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileLockedUpdatesModalViewModel}">
+        <profiles:ProfileLockedUpdatesDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:CopyProfileModsModalViewModel}">
+        <profiles:CopyProfileModsDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:PickProfileSourceModalViewModel}">
+        <profiles:PickProfileSourceDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileSaveAsModalViewModel}">
+        <profiles:ProfileSaveAsDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type editor:ModSourceConflictModalViewModel}">
+        <editor:ModSourceConflictDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type editor:PasteModListModalViewModel}">
+        <editor:PasteModListDialog />
+    </DataTemplate>
+
+</ResourceDictionary>

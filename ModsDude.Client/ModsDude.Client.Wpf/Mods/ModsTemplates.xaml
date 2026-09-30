@@ -1,0 +1,26 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:import="clr-namespace:ModsDude.Client.Wpf.Mods.Import"
+                    xmlns:mods="clr-namespace:ModsDude.Client.Wpf.Mods">
+
+    <DataTemplate DataType="{x:Type mods:RepoModsPageViewModel}">
+        <mods:RepoModsPage />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type mods:ModDetailsModalViewModel}">
+        <mods:ModDetailsDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type mods:ModDependentsModalViewModel}">
+        <mods:ModDependentsDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type mods:ModVersionArbitrationModalViewModel}">
+        <mods:ModVersionArbitrationDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type mods:ModVersionReorderModalViewModel}">
+        <mods:ModVersionReorderDialog />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type import:UnrecognisedFilesModalViewModel}">
+        <import:UnrecognisedFilesDialog />
+    </DataTemplate>
+
+</ResourceDictionary>
