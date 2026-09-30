@@ -1264,13 +1264,14 @@ public sealed class ModSyncService(
 
     private bool SupportsHardlinks(ContentStore servingStore)
     {
-        var directory = Path.Combine(servingStore.RootPath, "tmp");
-        var probe = Path.Combine(directory, $"linkprobe-{Guid.NewGuid():N}");
-        var link = probe + ".link";
+        var probe = string.Empty;
+        var link = string.Empty;
 
         try
         {
-            Directory.CreateDirectory(directory);
+            probe = servingStore.CreateTemporaryPath(".linkprobe");
+            link = probe + ".link";
+
             File.WriteAllBytes(probe, []);
 
             return FileLinks.TryCreateHardLink(link, probe);
@@ -1285,8 +1286,11 @@ public sealed class ModSyncService(
         }
         finally
         {
-            FileSystemHelper.TryDeleteFile(link, logger);
-            FileSystemHelper.TryDeleteFile(probe, logger);
+            if (probe.Length > 0)
+            {
+                FileSystemHelper.TryDeleteFile(link, logger);
+                FileSystemHelper.TryDeleteFile(probe, logger);
+            }
         }
     }
 

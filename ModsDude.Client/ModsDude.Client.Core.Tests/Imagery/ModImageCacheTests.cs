@@ -38,6 +38,20 @@ public class ModImageCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task Clearing_leaves_files_that_are_not_the_caches_own()
+    {
+        var cache = CreateCache();
+
+        await cache.WriteAsync("a-hash", [1, 2, 3], CancellationToken.None);
+
+        var unrelated = Path.Combine(_directory, "notes.txt");
+        File.WriteAllText(unrelated, "the folder the user picked held this already");
+
+        Assert.Equal(3, cache.Clear());
+        Assert.True(File.Exists(unrelated));
+    }
+
+    [Fact]
     public async Task A_key_that_was_never_written_reads_as_a_miss()
     {
         var cache = CreateCache();

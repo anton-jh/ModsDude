@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using System.Security.Cryptography;
@@ -41,6 +42,12 @@ public sealed class ContentStore
     private const string _quarantineDirectory = "quarantine";
 
     /// <summary>
+    /// What makes a folder a store. Written before anything else, and only into an empty folder, so
+    /// the store never writes to or deletes from a folder that holds anything of the user's.
+    /// </summary>
+    private const string _markerFile = "modsdude-store.txt";
+
+    /// <summary>
     /// Windows does not maintain last-access time by default, so last-write stands in for
     /// last-used. Refreshing it on every hit would cost a metadata write per file per sync, so a hit
     /// only re-stamps an entry that has already gone stale.
@@ -66,6 +73,28 @@ public sealed class ContentStore
 
     /// <summary>Never null: a store built without one is a store nothing is listening to.</summary>
     private ILogger Log { get; }
+
+    /// <summary>Whether this folder is a store. Nothing is read from, counted in or deleted from one that is not.</summary>
+    public bool IsMarked => File.Exists(Path.Combine(RootPath, _markerFile));
+
+
+    /// <summary>Whether a store may live at <paramref name="path"/>: nothing there yet, an empty folder, or already a store.</summary>
+    public static bool CanBeRootAt(string path)
+        => Directory.Exists(path) is false
+            || Directory.EnumerateFileSystemEntries(path).Any() is false
+            || File.Exists(Path.Combine(path, _markerFile));
+
+    /// <summary>A path in the store's own temporary folder that nothing is using.</summary>
+    public string CreateTemporaryPath(string extension = ".part")
+    {
+        EnsureMarked();
+
+        var path = Path.Combine(RootPath, _temporaryDirectory, $"{Guid.NewGuid():N}{extension}");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        return path;
+    }
 
 
     public string GetBlobPath(string hash)
@@ -109,7 +138,7 @@ public sealed class ContentStore
     /// <exception cref="ContentVerificationException">The bytes do not hash to the declared address.</exception>
     public async Task<long> IngestAsync(Stream content, string expectedHash, IProgress<long>? bytesWritten, CancellationToken cancellationToken)
     {
-        var temporaryPath = GetTemporaryPath();
+        var temporaryPath = CreateTemporaryPath();
 
         try
         {
@@ -145,6 +174,8 @@ public sealed class ContentStore
     /// </remarks>
     public async Task<long> IngestFileAsync(string sourcePath, string expectedHash, bool removeSource, CancellationToken cancellationToken)
     {
+        EnsureMarked();
+
         var hash = await HashFileAsync(sourcePath, cancellationToken);
 
         if (ModContentHasher.Matches(hash, expectedHash) is false)
@@ -261,7 +292,7 @@ public sealed class ContentStore
         {
             var path = GetBlobPath(hash);
 
-            if (File.Exists(path) is false)
+            if (IsMarked is false || File.Exists(path) is false)
             {
                 return false;
             }
@@ -389,7 +420,7 @@ public sealed class ContentStore
     {
         var blobs = Path.Combine(RootPath, _blobsDirectory);
 
-        if (Directory.Exists(blobs) is false)
+        if (IsMarked is false || Directory.Exists(blobs) is false)
         {
             return [];
         }
@@ -490,7 +521,10 @@ public sealed class ContentStore
             }
         }
 
-        reclaimed += DeleteDirectory(Path.Combine(RootPath, _temporaryDirectory));
+        if (IsMarked)
+        {
+            reclaimed += DeleteDirectory(Path.Combine(RootPath, _temporaryDirectory));
+        }
 
         return new ContentStoreClearResult(deleted, reclaimed, failed);
     }
@@ -566,6 +600,8 @@ public sealed class ContentStore
     /// </summary>
     public string GetQuarantineDirectory(DateTimeOffset runStartedAt)
     {
+        EnsureMarked();
+
         return Path.Combine(RootPath, _quarantineDirectory, runStartedAt.ToUnixTimeMilliseconds().ToString());
     }
 
@@ -664,9 +700,33 @@ public sealed class ContentStore
         return (ModContentHasher.Format(digest.GetHashAndReset()), length);
     }
 
-    private string GetTemporaryPath()
+    /// <exception cref="UserFriendlyException">The folder holds other things and is not a store.</exception>
+    private void EnsureMarked()
     {
-        return Path.Combine(RootPath, _temporaryDirectory, $"{Guid.NewGuid():N}.part");
+        if (IsMarked)
+        {
+            return;
+        }
+
+        if (CanBeRootAt(RootPath) is false)
+        {
+            throw new UserFriendlyException(
+                "The mod store folder holds other files",
+                $"'{RootPath}' is not empty and is not a ModsDude store, so nothing was written to it. Choose an empty folder for the store on {VolumeRoot} in Settings.");
+        }
+
+        Directory.CreateDirectory(RootPath);
+
+        try
+        {
+            using var marker = new StreamWriter(new FileStream(Path.Combine(RootPath, _markerFile), FileMode.CreateNew, FileAccess.Write));
+
+            marker.Write("This folder is a ModsDude mod store. ModsDude adds, replaces and deletes files in it.");
+        }
+        catch (IOException) when (IsMarked)
+        {
+            // Another fetch marked it first.
+        }
     }
 
     /// <summary>The bytes under a directory, or zero where there is no such directory.</summary>

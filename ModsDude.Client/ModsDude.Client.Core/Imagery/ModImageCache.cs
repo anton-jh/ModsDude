@@ -212,7 +212,12 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
                 return 0;
             }
 
-            foreach (var entry in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly))
+            // Only the cache's own files: the folder is the user's choice and may hold anything else.
+            var directory = new DirectoryInfo(path);
+            var entries = directory.EnumerateFiles("*.img", SearchOption.TopDirectoryOnly)
+                .Concat(directory.EnumerateFiles("*.img.*.tmp", SearchOption.TopDirectoryOnly));
+
+            foreach (var entry in entries)
             {
                 try
                 {

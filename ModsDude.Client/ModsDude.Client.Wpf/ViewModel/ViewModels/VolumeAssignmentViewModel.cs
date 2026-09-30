@@ -174,7 +174,7 @@ public partial class ContentStoreViewModel(
     public string QuarantineSummary => Usage is null
         ? string.Empty
         : $"{ByteSize.Describe(Usage.QuarantineBytes)} of rescued files that sync could not recycle. "
-          + "Nothing in the repo holds these, so deleting them is the one thing here that cannot be undone.";
+          + "Nothing in the repo holds these, so emptying this sends them to the Recycle Bin rather than deleting them.";
 
 
     [RelayCommand]
@@ -182,7 +182,11 @@ public partial class ContentStoreViewModel(
     {
         if (dialogService.PickFolder(string.IsNullOrWhiteSpace(Path) ? null : Path) is string folder)
         {
-            Path = folder;
+            // A folder that already holds other things gets the store in a folder of its own inside
+            // it: the store deletes files, and must never be pointed at somebody's Documents.
+            Path = ContentStore.CanBeRootAt(folder)
+                ? folder
+                : System.IO.Path.Combine(folder, "ModsDude store");
         }
     }
 

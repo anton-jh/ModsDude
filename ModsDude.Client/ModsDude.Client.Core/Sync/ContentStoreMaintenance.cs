@@ -194,7 +194,7 @@ public sealed class ContentStoreMaintenance(
     {
         using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, cancellationToken);
 
-        if (Directory.Exists(store.QuarantinePath) is false)
+        if (store.IsMarked is false || Directory.Exists(store.QuarantinePath) is false)
         {
             return 0;
         }
