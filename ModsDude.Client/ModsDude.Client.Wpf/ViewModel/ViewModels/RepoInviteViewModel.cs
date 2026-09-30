@@ -19,8 +19,9 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 /// </remarks>
 public partial class RepoInviteViewModel : ObservableObject
 {
-    public RepoInviteViewModel(RepoInviteDto invite, bool canRemove)
+    public RepoInviteViewModel(RepoInviteDto invite, bool canRemove, Func<RepoInviteViewModel, Task> remove)
     {
+        _remove = remove;
         Id = invite.Id;
         Code = invite.Code;
         Level = invite.MembershipLevel;
@@ -45,10 +46,10 @@ public partial class RepoInviteViewModel : ObservableObject
 
 
     /// <summary>
-    /// Raised when the user asks for this invite to go away. The page confirms and does it, and what
-    /// "away" means is decided by the server from the invite's own state rather than here.
+    /// What the remove button runs. The page confirms and does it, and what "away" means is decided by
+    /// the server from the invite's own state rather than here.
     /// </summary>
-    public event EventHandler? RemovalRequested;
+    private readonly Func<RepoInviteViewModel, Task> _remove;
 
 
     public Guid Id { get; }
@@ -93,10 +94,7 @@ public partial class RepoInviteViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(CanRemove))]
-    public void RequestRemoval()
-    {
-        RemovalRequested?.Invoke(this, EventArgs.Empty);
-    }
+    private Task RequestRemoval() => _remove(this);
 
 
     private static string Describe(int uses)

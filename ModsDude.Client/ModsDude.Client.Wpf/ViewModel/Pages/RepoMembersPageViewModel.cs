@@ -296,10 +296,10 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
                 _repo.MembershipLevel,
                 isOnlyAdmin: member.MembershipLevel is RepoMembershipLevel.Admin && adminCount == 1,
                 isAmbiguous: ambiguous.Contains(member.User.Id),
-                isSelf: member.User.Id == _currentUserId);
+                isSelf: member.User.Id == _currentUserId,
+                kick: KickAsync);
 
             row.PropertyChanged += OnMemberChanged;
-            row.KickRequested += OnKickRequested;
 
             Members.Add(row);
         }
@@ -319,9 +319,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             .OrderByDescending(x => x.Status is InviteStatus.Active)
             .ThenByDescending(x => x.Created))
         {
-            var row = new RepoInviteViewModel(invite, CanManageInvites);
-
-            row.RemovalRequested += OnRemovalRequested;
+            var row = new RepoInviteViewModel(invite, CanManageInvites, RemoveInviteAsync);
 
             Invites.Add(row);
         }
@@ -332,7 +330,6 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         foreach (var member in Members)
         {
             member.PropertyChanged -= OnMemberChanged;
-            member.KickRequested -= OnKickRequested;
         }
 
         Members.Clear();
@@ -340,11 +337,6 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
     private void ClearInvites()
     {
-        foreach (var invite in Invites)
-        {
-            invite.RemovalRequested -= OnRemovalRequested;
-        }
-
         Invites.Clear();
     }
 
@@ -361,13 +353,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         HasPendingLevelChanges = Members.Any(x => x.HasPendingLevelChange);
     }
 
-    private async void OnKickRequested(object? sender, EventArgs e)
+    private async Task KickAsync(RepoMemberViewModel member)
     {
-        if (sender is not RepoMemberViewModel member)
-        {
-            return;
-        }
-
         var modal = member.IsSelf
             ? new ConfirmationDialogViewModel(
                 $"Leave {_repo.Name}?",
@@ -410,13 +397,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     /// off, which is worth confirming; a spent one is only being tidied away, and saying so in the
     /// same words as a revocation would make the serious one read as routine.
     /// </summary>
-    private async void OnRemovalRequested(object? sender, EventArgs e)
+    private async Task RemoveInviteAsync(RepoInviteViewModel invite)
     {
-        if (sender is not RepoInviteViewModel invite)
-        {
-            return;
-        }
-
         var modal = invite.IsActive
             ? new ConfirmationDialogViewModel(
                 "Revoke this invite?",

@@ -36,7 +36,7 @@ namespace ModsDude.Client.Wpf.ViewModel.Pages;
 /// offered.
 /// </para>
 /// </remarks>
-public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
+public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowActions, IDisposable
 {
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
@@ -50,6 +50,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly LatestLoad _timelineLoad;
     private readonly IBackgroundProblemReporter _problems;
     private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
@@ -100,6 +101,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
+        _timelineLoad = new LatestLoad(loading => IsLoadingTimeline = loading, _lifetime);
 
         IsMember = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
@@ -371,7 +373,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     {
         _pageLifetime.Cancel();
 
-        ClearRows();
+        Savegames.Clear();
 
         _pageLifetime.Dispose();
     }
@@ -557,26 +559,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        IsWorking = true;
-
-        try
+        await RunAsync("archiving a savegame", async () =>
         {
-            await _savegamesClient.ArchiveSavegameV1Async(_repo.Id, row.Id, _pageLifetime.Token);
+            await _savegamesClient.ArchiveSavegameV1Async(_repo.Id, row.Id, _lifetime);
 
             await ReloadAsync(null);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "archiving a savegame");
-        }
-        finally
-        {
-            IsWorking = false;
-        }
+        });
     }
 
     // Member, like publishing and checking in: archiving is reversible and is part of keeping the
@@ -622,26 +610,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        IsWorking = true;
-
-        try
+        await RunAsync("deleting a savegame snapshot", async () =>
         {
-            await _savegamesClient.DeleteSavegameSnapshotV1Async(_repo.Id, row.Id, number, _pageLifetime.Token);
+            await _savegamesClient.DeleteSavegameSnapshotV1Async(_repo.Id, row.Id, number, _lifetime);
 
             await LoadTimelineAsync(row);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "deleting a savegame snapshot");
-        }
-        finally
-        {
-            IsWorking = false;
-        }
+        });
     }
 
     private bool CanDeleteEntry()
@@ -676,10 +650,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         Timeline.Clear();
         SelectedEntry = null;
 
-        if (value is not null)
+        if (value is null)
         {
-            _ = LoadTimelineAsync(value);
+            _timelineLoad.Cancel();
+
+            return;
         }
+
+        _ = LoadTimelineAsync(value);
     }
 
 
@@ -698,7 +676,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
         var wanted = select ?? Selected?.Id;
 
-        ClearRows();
+        Savegames.Clear();
 
         // Past is a fact about which savegame a profile is following, so the toggle hides rows rather than
         // marking them differently - and the count is said out loud, because a filter nobody can see
@@ -726,14 +704,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
                 _currentUserId,
                 IsMember,
                 ambiguous.Contains(savegame.Checkout?.User.Id ?? ""),
-                savegame.Checkout?.User is UserDto holder ? _avatarFactory.Create(holder) : null);
-
-            row.CheckOutRequested += OnCheckOutRequested;
-            row.CheckInRequested += OnCheckInRequested;
-            row.DiscardRequested += OnDiscardRequested;
-            row.DisconnectRequested += OnDisconnectRequested;
-            row.TakeCopyRequested += OnTakeCopyRequested;
-            row.MakeCurrentRequested += OnMakeCurrentRequested;
+                savegame.Checkout?.User is UserDto holder ? _avatarFactory.Create(holder) : null,
+                this);
 
             Savegames.Add(row);
         }
@@ -782,21 +754,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
         var snapshots = statistics.Snapshots == 1 ? "1 snapshot" : $"{statistics.Snapshots:N0} snapshots";
 
         return $"{saves} · {snapshots} · {ByteSize.Describe(statistics.TotalBytes)} stored";
-    }
-
-    private void ClearRows()
-    {
-        foreach (var row in Savegames)
-        {
-            row.CheckOutRequested -= OnCheckOutRequested;
-            row.CheckInRequested -= OnCheckInRequested;
-            row.DiscardRequested -= OnDiscardRequested;
-            row.DisconnectRequested -= OnDisconnectRequested;
-            row.TakeCopyRequested -= OnTakeCopyRequested;
-            row.MakeCurrentRequested -= OnMakeCurrentRequested;
-        }
-
-        Savegames.Clear();
     }
 
     private async Task ReloadAsync(Guid? select)
@@ -930,81 +887,63 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// <see cref="SavegameTimelineEntryViewModel"/>.
     /// </para>
     /// </summary>
-    private async Task LoadTimelineAsync(SavegameListItemViewModel row)
+    private Task LoadTimelineAsync(SavegameListItemViewModel row)
+        => _timelineLoad.RunAsync(
+            async token => (
+                Snapshots: await _savegamesClient.GetSavegameSnapshotsV1Async(_repo.Id, row.Id, null, null, token),
+                Checkouts: await _savegamesClient.GetSavegameCheckoutsV1Async(_repo.Id, row.Id, null, null, token)),
+            history => ShowTimeline(history.Snapshots, history.Checkouts),
+            exception =>
+            {
+                Timeline.Clear();
+
+                return _errorReporter.ShowAsync(exception, $"reading the history of '{row.Name}'");
+            });
+
+    private void ShowTimeline(GetSavegameSnapshotsResponse snapshots, GetSavegameCheckoutsResponse checkouts)
     {
-        IsLoadingTimeline = true;
+        // Which claims a snapshot already speaks for. Those get no ending row of their own - the
+        // snapshot minted against a claim is the check-in, and a thin "Checked back in" at the same
+        // second would only say it again. Taken from the loaded window rather than from the whole
+        // history on purpose: a check-in whose snapshot has since been pruned, or scrolled past,
+        // then gets its ending drawn, which is the point of the claim log outliving the blobs.
+        var recorded = snapshots.Snapshots
+            .Where(x => x.CheckoutId is not null)
+            .Select(x => x.CheckoutId!.Value)
+            .ToHashSet();
 
-        try
+        // Newest first, and the rank behind it carries weight rather than tidying: publishing,
+        // checking in and taking a save over each write two rows off one clock reading, so the
+        // moment alone leaves the tie to whichever read was concatenated first - which is what put
+        // a publish above the claim it opened and made the save look checked out before it existed.
+        var entries = snapshots.Snapshots
+            .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot))
+            .Concat(checkouts.Checkouts.Select(SavegameTimelineEntryViewModel.ForClaimTaken))
+            .Concat(checkouts.Checkouts
+                .Where(x => x.EndedAt is not null && recorded.Contains(x.Id) is false)
+                .Select(SavegameTimelineEntryViewModel.ForClaimEnded))
+            .OrderByDescending(x => x.Moment)
+            .ThenByDescending(x => x.Rank)
+            .ThenByDescending(x => x.SnapshotNumber);
+
+        Timeline.Clear();
+
+        foreach (var entry in entries)
         {
-            var snapshots = await _savegamesClient.GetSavegameSnapshotsV1Async(
-                _repo.Id, row.Id, null, null, _lifetime);
-
-            var checkouts = await _savegamesClient.GetSavegameCheckoutsV1Async(
-                _repo.Id, row.Id, null, null, _lifetime);
-
-            // The selection can have moved on while this was in flight, in which case this answer is
-            // about a savegame nobody is looking at any more.
-            if (ReferenceEquals(Selected, row) is false)
-            {
-                return;
-            }
-
-            // Which claims a snapshot already speaks for. Those get no ending row of their own - the
-            // snapshot minted against a claim is the check-in, and a thin "Checked back in" at the same
-            // second would only say it again. Taken from the loaded window rather than from the whole
-            // history on purpose: a check-in whose snapshot has since been pruned, or scrolled past,
-            // then gets its ending drawn, which is the point of the claim log outliving the blobs.
-            var recorded = snapshots.Snapshots
-                .Where(x => x.CheckoutId is not null)
-                .Select(x => x.CheckoutId!.Value)
-                .ToHashSet();
-
-            // Newest first, and the rank behind it carries weight rather than tidying: publishing,
-            // checking in and taking a save over each write two rows off one clock reading, so the
-            // moment alone leaves the tie to whichever read was concatenated first - which is what put
-            // a publish above the claim it opened and made the save look checked out before it existed.
-            var entries = snapshots.Snapshots
-                .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot))
-                .Concat(checkouts.Checkouts.Select(SavegameTimelineEntryViewModel.ForClaimTaken))
-                .Concat(checkouts.Checkouts
-                    .Where(x => x.EndedAt is not null && recorded.Contains(x.Id) is false)
-                    .Select(SavegameTimelineEntryViewModel.ForClaimEnded))
-                .OrderByDescending(x => x.Moment)
-                .ThenByDescending(x => x.Rank)
-                .ThenByDescending(x => x.SnapshotNumber);
-
-            Timeline.Clear();
-
-            foreach (var entry in entries)
-            {
-                Timeline.Add(entry);
-            }
-
-            HasOlder = snapshots.HasMore || checkouts.HasMore;
-
-            SelectedEntry = Timeline.FirstOrDefault();
+            Timeline.Add(entry);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            Timeline.Clear();
-            IsLoadingTimeline = false;
 
-            await _errorReporter.ShowAsync(exception, $"reading the history of '{row.Name}'");
-        }
-        finally
-        {
-            IsLoadingTimeline = false;
-        }
+        HasOlder = snapshots.HasMore || checkouts.HasMore;
+
+        SelectedEntry = Timeline.FirstOrDefault();
     }
 
 
-    private async void OnCheckOutRequested(object? sender, EventArgs e)
-    {
-        if (sender is SavegameListItemViewModel row)
-        {
-            await StartAsync(row, row.Savegame.Head?.Number ?? 0, SavegameCheckOutMode.CheckOut);
-        }
-    }
+    Task ISavegameRowActions.CheckOutAsync(SavegameListItemViewModel row)
+        => StartAsync(row, row.Savegame.Head?.Number ?? 0, SavegameCheckOutMode.CheckOut);
+
+    Task ISavegameRowActions.TakeCopyAsync(SavegameListItemViewModel row)
+        => StartAsync(row, row.Savegame.Head?.Number ?? 0, SavegameCheckOutMode.TakeCopy);
 
     /// <summary>
     /// Hands a save back from the game holding it, without going to that game's own page.
@@ -1015,79 +954,40 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// <see cref="SavegameListItemViewModel.HeldHere"/> and not <c>Host</c>, and why there is no
     /// picker here the way there is for a check-out.
     /// </remarks>
-    private async void OnCheckInRequested(object? sender, EventArgs e)
-    {
-        if (sender is not SavegameListItemViewModel row || row.HeldHere is not Game game)
-        {
-            return;
-        }
-
-        IsWorking = true;
-
-        try
-        {
-            await _flowService.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime);
-        }
-        finally
-        {
-            IsWorking = false;
-        }
-    }
+    Task ISavegameRowActions.CheckInAsync(SavegameListItemViewModel row)
+        => row.HeldHere is Game game
+            ? RunAsync("checking a savegame in", () => _flowService.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime))
+            : Task.CompletedTask;
 
     /// <summary>
     /// Gives a save back without minting a snapshot - taken by mistake, never played.
     /// </summary>
-    /// <remarks>
-    /// <b>Beside Check in, because it is the other answer to the same question.</b> It was a row
-    /// action on the game's own slot list, which is one page and one sidebar away from the list
-    /// somebody is looking at when they realise they took the wrong save - and the flow it runs is
-    /// the same one, dialog and all.
-    /// </remarks>
-    private async void OnDiscardRequested(object? sender, EventArgs e)
+    Task ISavegameRowActions.DiscardAsync(SavegameListItemViewModel row)
     {
-        if (sender is not SavegameListItemViewModel row || row.Hold is not SavegameHoldHere hold)
+        if (row.Hold is not SavegameHoldHere hold)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        IsWorking = true;
-
-        try
+        return RunAsync("giving a savegame back", async () =>
         {
             // Asked of the disk here rather than read off the row's chip. The chip arrives from a
             // background pass that may not have reached this row yet, and the two confirmations this
             // decides between are "nothing is lost" and "an evening of play goes to the Recycle Bin".
-            // A stale false there is the one wrong answer this whole feature cannot afford, and it
-            // costs one slot hash at the moment somebody is about to be asked anyway.
             var played = await _savegameService.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
                 is SavegameSlotAvailability.HeldWithUnpublishedPlay;
 
             // The savegame's name where the dialog wants a slot label, as the check-in does: a slot
             // id is a folder name the player has never thought in, and what they are giving back is
             // the save rather than the folder.
-            var discarded = await _flowService.DiscardAsync(
-                hold.Game, row.Id, row.Name, row.Name, played, _lifetime);
-
-            if (discarded is false)
+            if (await _flowService.DiscardAsync(hold.Game, row.Id, row.Name, row.Name, played, _lifetime) is false)
             {
                 return;
             }
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away mid-discard. There is no page left to report on.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "giving a savegame back");
-        }
-        finally
-        {
-            IsWorking = false;
-        }
+        });
     }
 
     /// <summary>
@@ -1099,16 +999,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// the repo has deleted never gets this far - it is dropped on sight, see
     /// <see cref="ForgetDeletedHoldsAsync"/>.
     /// </remarks>
-    private async void OnDisconnectRequested(object? sender, EventArgs e)
+    Task ISavegameRowActions.DisconnectAsync(SavegameListItemViewModel row)
     {
-        if (sender is not SavegameListItemViewModel row || row.Hold is not SavegameHoldHere hold)
+        if (row.Hold is not SavegameHoldHere hold)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        IsWorking = true;
-
-        try
+        return RunAsync("disconnecting a savegame", async () =>
         {
             if (await _flowService.DisconnectAsync(hold.Game, row.Id, row.Name, hold.FolderName) is false)
             {
@@ -1119,27 +1017,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away. Forgetting a binding is local and already done or not done.
-        }
-        catch (Exception exception)
-        {
-            await _errorReporter.ShowAsync(exception, "disconnecting a savegame");
-        }
-        finally
-        {
-            IsWorking = false;
-        }
-    }
-
-    private async void OnTakeCopyRequested(object? sender, EventArgs e)
-    {
-        if (sender is SavegameListItemViewModel row)
-        {
-            await StartAsync(row, row.Savegame.Head?.Number ?? 0, SavegameCheckOutMode.TakeCopy);
-        }
+        });
     }
 
     /// <summary>
@@ -1151,13 +1029,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// displaces is somebody's. The incumbent is named from this list where it is in it - an archived
     /// one is not, and still holds the slot - and the server's answer names it exactly afterwards.
     /// </remarks>
-    private async void OnMakeCurrentRequested(object? sender, EventArgs e)
+    async Task ISavegameRowActions.MakeCurrentAsync(SavegameListItemViewModel row)
     {
-        if (sender is not SavegameListItemViewModel row)
-        {
-            return;
-        }
-
         var incumbent = _fetched.FirstOrDefault(x =>
             x.ProfileId == row.Savegame.ProfileId && x.SupersededAt is null);
 
@@ -1175,9 +1048,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        IsWorking = true;
-
-        try
+        await RunAsync("making a savegame current", async () =>
         {
             var result = await _savegameService.MakeCurrentAsync(
                 [.. _repo.Games], row.Savegame, _lifetime);
@@ -1188,14 +1059,28 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
 
             await _driftMonitor.CheckAsync();
             await ReloadAsync(row.Id);
+        });
+    }
+
+    /// <summary>
+    /// Runs one of the page's actions with the list marked busy, and says a failure once, here.
+    /// </summary>
+    /// <param name="doing">What was being done, for the error dialog: "archiving a savegame".</param>
+    private async Task RunAsync(string doing, Func<Task> work)
+    {
+        IsWorking = true;
+
+        try
+        {
+            await work();
         }
         catch (OperationCanceledException)
         {
-            // Navigated away.
+            // Navigated away. There is no page left to report on.
         }
         catch (Exception exception)
         {
-            await _errorReporter.ShowAsync(exception, "making a savegame current");
+            await _errorReporter.ShowAsync(exception, doing);
         }
         finally
         {
@@ -1235,20 +1120,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, IDisposable
     /// The check-out dialog and everything after it, which is <see cref="SavegameFlowService.CheckOutAsync"/>'s
     /// - a profile's Overview offers the same check-out for its own savegame.
     /// </summary>
-    private async Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
-    {
-        IsWorking = true;
-
-        try
-        {
-            await _flowService.CheckOutAsync(
-                _repo, row.Savegame, snapshotNumber, mode, _currentUserId, NameOfHeld, () => ReloadAsync(row.Id), _lifetime);
-        }
-        finally
-        {
-            IsWorking = false;
-        }
-    }
+    private Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
+        => RunAsync("checking a savegame out", () => _flowService.CheckOutAsync(
+            _repo, row.Savegame, snapshotNumber, mode, _currentUserId, NameOfHeld, () => ReloadAsync(row.Id), _lifetime));
 
     /// <summary>
     /// The profile a savegame follows, or <c>null</c> where it follows none - or follows an archived

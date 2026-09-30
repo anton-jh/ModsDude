@@ -34,6 +34,18 @@ namespace ModsDude.Client.Wpf.ViewModel.ViewModels;
 public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? FolderName, bool IsUnreachable, int? SlotNumber = null);
 
 
+/// <summary>What a savegame row's buttons do. The page owns every flow; the row only says which one.</summary>
+public interface ISavegameRowActions
+{
+    Task CheckOutAsync(SavegameListItemViewModel row);
+    Task CheckInAsync(SavegameListItemViewModel row);
+    Task DiscardAsync(SavegameListItemViewModel row);
+    Task DisconnectAsync(SavegameListItemViewModel row);
+    Task TakeCopyAsync(SavegameListItemViewModel row);
+    Task MakeCurrentAsync(SavegameListItemViewModel row);
+}
+
+
 /// <summary>
 /// One savegame on the repo's Saves list: what it is called, which profile it follows, and one chip
 /// saying whose it is right now.
@@ -54,6 +66,7 @@ public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? F
 public partial class SavegameListItemViewModel : ObservableObject
 {
     private readonly string? _currentUserId;
+    private readonly ISavegameRowActions? _actions;
 
     private bool _hasUnpublishedPlay;
     private int _revisionsBehind;
@@ -83,15 +96,18 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <param name="holderAvatar">
     /// How whoever holds it is drawn. Only a list that draws the holder needs one.
     /// </param>
+    /// <param name="actions">What the row's buttons run. Only a list that shows them needs any.</param>
     public SavegameListItemViewModel(
         SavegameDto savegame,
         string? currentUserId,
         bool isMember,
         bool isAmbiguous,
-        AvatarViewModel? holderAvatar = null)
+        AvatarViewModel? holderAvatar = null,
+        ISavegameRowActions? actions = null)
     {
         Savegame = savegame;
         _currentUserId = currentUserId;
+        _actions = actions;
         IsMember = isMember;
         ShowHolderTag = isAmbiguous;
         HolderAvatar = holderAvatar;
@@ -105,15 +121,6 @@ public partial class SavegameListItemViewModel : ObservableObject
 
         RefreshChips();
     }
-
-
-    /// <summary>Raised when the row's own action is clicked. The page owns all of the flows.</summary>
-    public event EventHandler? CheckOutRequested;
-    public event EventHandler? CheckInRequested;
-    public event EventHandler? DiscardRequested;
-    public event EventHandler? DisconnectRequested;
-    public event EventHandler? TakeCopyRequested;
-    public event EventHandler? MakeCurrentRequested;
 
 
     public SavegameDto Savegame { get; }
@@ -410,7 +417,7 @@ public partial class SavegameListItemViewModel : ObservableObject
 
 
     [RelayCommand(CanExecute = nameof(CanCheckOut))]
-    private void CheckOut() => CheckOutRequested?.Invoke(this, EventArgs.Empty);
+    private Task CheckOut() => _actions?.CheckOutAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
     /// Hands the save back from the slot holding it, as a new snapshot.
@@ -421,18 +428,16 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// again was the thing that sent them hunting for the other page.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanCheckIn))]
-    private void CheckIn() => CheckInRequested?.Invoke(this, EventArgs.Empty);
+    private Task CheckIn() => _actions?.CheckInAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
     /// Gives the save back without minting anything - taken by mistake, never played.
     /// </summary>
     /// <remarks>
-    /// Beside Check in, because it is the other half of the same decision. It used to be a row action
-    /// on the game's own slot list, which is a page away from the list somebody is looking at when
-    /// they realise they took the wrong save.
+    /// Beside Check in, because it is the other half of the same decision.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanDiscard))]
-    private void Discard() => DiscardRequested?.Invoke(this, EventArgs.Empty);
+    private Task Discard() => _actions?.DiscardAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
     /// Stops tracking the local copy, for a hold in a folder the settings no longer name.
@@ -443,7 +448,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// folder left to read.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanDisconnect))]
-    private void Disconnect() => DisconnectRequested?.Invoke(this, EventArgs.Empty);
+    private Task Disconnect() => _actions?.DisconnectAsync(this) ?? Task.CompletedTask;
 
 
     /// <summary>
@@ -456,14 +461,14 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// click. See docs/10-savegame-profile-binding.md#current-and-past-savegames.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanMakeCurrent))]
-    private void MakeCurrent() => MakeCurrentRequested?.Invoke(this, EventArgs.Empty);
+    private Task MakeCurrent() => _actions?.MakeCurrentAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
     /// Open to everybody, Guest included. It is what makes the list worth showing to somebody who
     /// cannot take the claim: they can still read the history and play a copy.
     /// </summary>
     [RelayCommand]
-    private void TakeCopy() => TakeCopyRequested?.Invoke(this, EventArgs.Empty);
+    private Task TakeCopy() => _actions?.TakeCopyAsync(this) ?? Task.CompletedTask;
 
 
     /// <summary>

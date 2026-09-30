@@ -39,6 +39,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly LatestLoad _modsLoad;
+    private readonly LatestLoad _changesLoad;
     private readonly IToastService _toasts;
     private readonly ShellNavigationService _shellNavigation;
 
@@ -74,6 +76,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         ShellNavigationService shellNavigation)
     {
         _errorReporter = errorReporter;
+        _modsLoad = new LatestLoad(loading => IsLoadingMods = loading);
+        _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading);
         _toasts = toasts;
         _shellNavigation = shellNavigation;
         _repo = repo;
@@ -172,6 +176,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private bool _isLoadingMods;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoChanges))]
     private bool _isLoadingChanges;
 
     [ObservableProperty]
@@ -677,103 +682,67 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     /// time, and holding every revision's two thousand mods to save a request nobody made twice is
     /// the wrong trade.
     /// </summary>
-    private async Task LoadModsAsync(int revision)
-    {
-        IsLoadingMods = true;
-
-        try
-        {
-            var pinned = await _profileService.GetPinnedMods(_repo.Id, _profile.Id, revision, CancellationToken.None);
-
-            // The selection can have moved on while this was in flight, in which case this answer is
-            // about a revision nobody is looking at any more.
-            if (Selected?.Number != revision)
+    private Task LoadModsAsync(int revision)
+        => _modsLoad.RunAsync(
+            token => _profileService.GetPinnedMods(_repo.Id, _profile.Id, revision, token),
+            pinned =>
             {
-                return;
-            }
+                Mods.Clear();
 
-            Mods.Clear();
-
-            foreach (var mod in pinned)
+                foreach (var mod in pinned)
+                {
+                    Mods.Add(new PinnedModViewModel(mod, _repo.Id, _itemFactory));
+                }
+            },
+            exception =>
             {
-                Mods.Add(new PinnedModViewModel(mod, _repo.Id, _itemFactory));
-            }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // Nothing awaits this - selecting a row starts it - so an exception that escaped would
-            // go unobserved rather than reaching the shell's handler. Said in the error dialog
-            // instead, with the spinner already off: the dialog stays up until it is closed.
-            Mods.Clear();
-            IsLoadingMods = false;
+                Mods.Clear();
 
-            await _errorReporter.ShowAsync(exception, $"reading revision {revision} of '{_profile.Name}'");
-        }
-        finally
-        {
-            IsLoadingMods = false;
-        }
-    }
+                return _errorReporter.ShowAsync(exception, $"reading revision {revision} of '{_profile.Name}'");
+            });
 
     /// <summary>
     /// Compares the selected revision with the chosen one. Skipped entirely while the Contents view
     /// is showing, so picking through a history costs one read a row rather than three.
     /// </summary>
-    private async Task LoadChangesAsync()
+    private Task LoadChangesAsync()
     {
         if (ShowChanges is false)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (Selected is not ProfileRevisionViewModel selected || ComparedWith is not ProfileRevisionViewModel against)
         {
+            _changesLoad.Cancel();
             Changes.Clear();
             ComparisonIsEmpty = true;
-            OnPropertyChanged(nameof(HasNoChanges));
 
-            return;
+            return Task.CompletedTask;
         }
 
-        IsLoadingChanges = true;
-
-        try
-        {
-            var comparison = await _profileService.CompareRevisions(
-                _repo.Id, _profile.Id, against.Number, selected.Number, CancellationToken.None);
-
-            // The selection can have moved on while this was in flight, in which case this answer is
-            // about a pair nobody is looking at any more.
-            if (Selected?.Number != selected.Number || ComparedWith?.Number != against.Number)
+        return _changesLoad.RunAsync(
+            token => _profileService.CompareRevisions(_repo.Id, _profile.Id, against.Number, selected.Number, token),
+            comparison =>
             {
-                return;
-            }
+                Changes.Clear();
 
-            Changes.Clear();
+                foreach (var change in comparison.Changes)
+                {
+                    Changes.Add(new ProfileModChangeViewModel(change, _repo.Id, _itemFactory));
+                }
 
-            foreach (var change in comparison.Changes)
+                ComparisonIsEmpty = comparison.IsEmpty;
+            },
+            exception =>
             {
-                Changes.Add(new ProfileModChangeViewModel(change, _repo.Id, _itemFactory));
-            }
+                Changes.Clear();
+                ComparisonIsEmpty = true;
 
-            ComparisonIsEmpty = comparison.IsEmpty;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            Changes.Clear();
-            ComparisonIsEmpty = true;
-            IsLoadingChanges = false;
-            OnPropertyChanged(nameof(HasNoChanges));
-
-            await _errorReporter.ShowAsync(
-                exception,
-                $"comparing revisions {against.Number} and {selected.Number} of '{_profile.Name}'");
-        }
-        finally
-        {
-            IsLoadingChanges = false;
-            OnPropertyChanged(nameof(HasNoChanges));
-        }
+                return _errorReporter.ShowAsync(
+                    exception,
+                    $"comparing revisions {against.Number} and {selected.Number} of '{_profile.Name}'");
+            });
     }
 
 

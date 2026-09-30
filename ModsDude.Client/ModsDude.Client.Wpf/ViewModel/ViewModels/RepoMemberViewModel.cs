@@ -30,7 +30,8 @@ public partial class RepoMemberViewModel : ObservableObject
         RepoMembershipLevel viewerLevel,
         bool isOnlyAdmin,
         bool isAmbiguous,
-        bool isSelf)
+        bool isSelf,
+        Func<RepoMemberViewModel, Task> kick)
     {
         UserId = member.User.Id;
         DisplayName = member.User.DisplayName;
@@ -39,6 +40,7 @@ public partial class RepoMemberViewModel : ObservableObject
         Avatar = avatar;
         IsOnlyAdmin = isOnlyAdmin;
         IsSelf = isSelf;
+        _kick = kick;
 
         _originalLevel = member.MembershipLevel;
         _level = member.MembershipLevel;
@@ -76,8 +78,7 @@ public partial class RepoMemberViewModel : ObservableObject
     }
 
 
-    /// <summary>Raised when the user asks for this member to be removed. The page confirms and does it.</summary>
-    public event EventHandler? KickRequested;
+    private readonly Func<RepoMemberViewModel, Task> _kick;
 
 
     public string UserId { get; }
@@ -119,10 +120,7 @@ public partial class RepoMemberViewModel : ObservableObject
 
 
     [RelayCommand(CanExecute = nameof(CanKick))]
-    public void RequestKick()
-    {
-        KickRequested?.Invoke(this, EventArgs.Empty);
-    }
+    private Task RequestKick() => _kick(this);
 
 
     private static RepoMembershipLevel RequiredToChange(RepoMembershipLevel subjectLevel)
