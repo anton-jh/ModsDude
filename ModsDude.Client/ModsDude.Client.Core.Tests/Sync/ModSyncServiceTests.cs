@@ -418,6 +418,57 @@ public class ModSyncServiceTests
     }
 
     [Fact]
+    public async Task A_blocking_file_that_cannot_be_moved_aside_is_neither_deleted_nor_installed_over()
+    {
+        using var fixture = new SyncFixture(recycleBinAvailable: false);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        fixture.Folder.WriteFile("fs25_a.zip", "a half-finished download");
+        fixture.BlockStoreQuarantine();
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.False(result.Completed);
+        Assert.False(result.ManifestWritten);
+        Assert.Empty(result.Quarantined);
+        Assert.Equal("a half-finished download", fixture.ReadInstalled("fs25_a.zip"));
+    }
+
+    [Fact]
+    public async Task A_file_that_appears_where_a_mod_is_about_to_go_is_left_alone()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var plan = await fixture.PlanAsync();
+
+        fixture.Folder.WriteFile("fs25_a.zip", "dropped in while the plan was being confirmed");
+
+        var result = await fixture.ExecuteAsync(plan);
+
+        Assert.False(result.Completed);
+        Assert.Equal("dropped in while the plan was being confirmed", fixture.ReadInstalled("fs25_a.zip"));
+    }
+
+    [Fact]
+    public async Task A_recoverable_file_rewritten_after_planning_is_recycled_rather_than_deleted()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Register("fs25_old", "1.0.0", Mod("1.0.0", "old"));
+        fixture.Install("fs25_old.zip", Mod("1.0.0", "old"));
+        await fixture.SeedIntoStoreAsync(Mod("1.0.0", "old"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(1, plan.UninstallCount);
+
+        fixture.Install("fs25_old.zip", Mod("1.0.0", "the user's edit"));
+
+        await fixture.ExecuteAsync(plan);
+
+        Assert.Equal([Mod("1.0.0", "the user's edit")], fixture.RecycleBin.Recycled);
+    }
+
+    [Fact]
     public async Task A_file_that_is_not_a_readable_mod_is_left_alone()
     {
         using var fixture = new SyncFixture();
@@ -1251,6 +1302,9 @@ public class ModSyncServiceTests
             => [.. Directory.EnumerateFiles(Folder.Path).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)];
 
         public string ReadInstalled(string name) => File.ReadAllText(Folder.Combine(name));
+
+        /// <summary>A file where the store's quarantine folder would be created.</summary>
+        public void BlockStoreQuarantine() => File.WriteAllText(ServingStore.QuarantinePath, "");
 
         public DriftReport CheckDrift()
             => Drift.Check(Target, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);

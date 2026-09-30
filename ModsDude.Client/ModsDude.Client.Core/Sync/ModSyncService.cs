@@ -144,7 +144,7 @@ public sealed class ModSyncService(
     /// <param name="progress">
     /// Where to report which mod is being examined. Optional, and worth passing: on a folder whose
     /// files no longer match the manifest this reads and hashes every one of them, which is the
-    /// slowest thing an apply does and used to happen with nothing at all on screen.
+    /// slowest thing an apply does.
     /// </param>
     public async Task<ModSyncPlan> PlanAsync(
         ModSyncRequest request,
@@ -336,15 +336,14 @@ public sealed class ModSyncService(
                 return new ModSyncResult(false, failures);
             }
 
-            // From here the folder is being changed - if there is anything to change - so whatever happens next - success, a failure part way,
-            // a cancel - what anybody has cached about it is out of date. Announced once the lease is
-            // let go of, below.
+            // From here the folder is being changed, so whatever happens next, what anybody has cached
+            // about it is out of date. Announced once the lease is let go of, below.
             folderTouched = plan.HasWork;
 
             try
             {
-                await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
-                await InstallAsync(plan, progress, failures, cancellationToken);
+                var stillInPlace = await RemoveAsync(plan, progress, failures, quarantined, cancellationToken);
+                await InstallAsync(plan, stillInPlace, progress, failures, cancellationToken);
             }
             catch
             {
@@ -409,10 +408,11 @@ public sealed class ModSyncService(
         List<ModSyncFailure> failures,
         CancellationToken cancellationToken)
     {
-        var wanted = plan.Items
-            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
-            .Where(x => x.DesiredHash is not null && plan.ServingStore.Contains(x.DesiredHash) is false)
-            .GroupBy(x => x.DesiredHash!, StringComparer.OrdinalIgnoreCase)
+        var wanted = plan.HashesToFetch
+            .Where(x => plan.ServingStore.Contains(x) is false)
+            .Select(hash => (Hash: hash, Item: plan.Items.First(x =>
+                x.Action is ModSyncAction.Install or ModSyncAction.Replace &&
+                string.Equals(x.DesiredHash, hash, StringComparison.OrdinalIgnoreCase))))
             .ToList();
 
         var run = new FetchRun(wanted.Count, progress);
@@ -421,33 +421,20 @@ public sealed class ModSyncService(
         await Parallel.ForEachAsync(
             wanted,
             new ParallelOptions { MaxDegreeOfParallelism = _concurrentFetches, CancellationToken = cancellationToken },
-            async (group, ct) =>
+            async (fetch, ct) =>
             {
-                var item = group.First();
-
-                run.Report(item, 0, 0);
+                run.Report(fetch.Item, 0, 0);
 
                 try
                 {
-                    await FetchOneAsync(plan, item, group.Key, run, copying, ct);
+                    await FetchOneAsync(plan, fetch.Item, fetch.Hash, run, copying, ct);
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                catch (Exception exception) when (ct.IsCancellationRequested is false)
                 {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    // Collected rather than thrown, so the rest of the sync still runs - which is
-                    // also why nothing else would ever see the stack.
-                    logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
-
-                    lock (failures)
-                    {
-                        failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
-                    }
+                    RecordFailure(failures, fetch.Item, exception);
                 }
 
-                run.Finish(item);
+                run.Finish(fetch.Item);
             });
 
         progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, wanted.Count, wanted.Count));
@@ -525,7 +512,8 @@ public sealed class ModSyncService(
     /// The destructive phase, under the uninstall rules: a file whose bytes the repo can reproduce is
     /// deleted once some store holds them, and anything else goes to the Recycle Bin.
     /// </summary>
-    private async Task RemoveAsync(
+    /// <returns>The mods whose old file could not be moved out of the way, which are then not installed.</returns>
+    private async Task<IReadOnlySet<ModKey>> RemoveAsync(
         ModSyncPlan plan,
         IProgress<ModSyncProgress>? progress,
         List<ModSyncFailure> failures,
@@ -538,6 +526,7 @@ public sealed class ModSyncService(
             .ToList();
 
         var runStartedAt = DateTimeOffset.UtcNow;
+        var stillInPlace = new HashSet<ModKey>();
         var completed = 0;
 
         foreach (var item in removals)
@@ -552,7 +541,7 @@ public sealed class ModSyncService(
 
             try
             {
-                if (item.InstalledIsRecoverable && item.InstalledHash is string hash)
+                if (item.InstalledIsRecoverable && item.InstalledHash is string hash && IsAsPlanned(item))
                 {
                     await KeepIfNothingElseHasItAsync(plan, item.InstalledPath!, hash, cancellationToken);
                 }
@@ -561,23 +550,41 @@ public sealed class ModSyncService(
                     quarantined.Add(Quarantine(plan, item, runStartedAt));
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
             {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                // Collected rather than thrown, so the rest of the sync still runs - which is also
-                // why nothing else would ever see the stack.
-                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
-
-                failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
+                RecordFailure(failures, item, exception);
+                stillInPlace.Add(item.ModId);
             }
 
             completed++;
         }
 
         progress?.Report(new ModSyncProgress(ModSyncPhase.Removing, completed, removals.Count));
+
+        return stillInPlace;
+    }
+
+    /// <summary>
+    /// Whether the file is still the one the plan hashed. Anything written since is treated as
+    /// unrecognised and moved aside rather than deleted.
+    /// </summary>
+    private static bool IsAsPlanned(ModSyncItem item)
+    {
+        var info = new FileInfo(item.InstalledPath!);
+
+        return info.Exists
+            && info.Length == item.InstalledSize
+            && info.LastWriteTimeUtc == item.InstalledModifiedUtc;
+    }
+
+    private void RecordFailure(List<ModSyncFailure> failures, ModSyncItem item, Exception exception)
+    {
+        logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
+
+        lock (failures)
+        {
+            failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
+        }
     }
 
     /// <summary>
@@ -622,44 +629,26 @@ public sealed class ModSyncService(
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.RecycleBin);
         }
 
-        // A drive with the Recycle Bin turned off, or a network path. The file is still not deleted;
-        // it moves into the store's quarantine folder and the UI says where it went.
+        // A drive with the Recycle Bin turned off, or a network path. The file moves into the store's
+        // quarantine folder, and where that fails too it stays in the mod folder and the item fails.
         try
         {
-            var directory = plan.ServingStore.GetQuarantineDirectory(runStartedAt);
-            Directory.CreateDirectory(directory);
-
-            var destination = Path.Combine(directory, Path.GetFileName(path));
-
-            File.Move(path, destination, overwrite: true);
-
-            return new QuarantinedFile(item.ModId, path, QuarantineDestination.QuarantineFolder) { Path = destination };
+            return new QuarantinedFile(item.ModId, path, QuarantineDestination.QuarantineFolder)
+            {
+                Path = MoveInto(plan.ServingStore.GetQuarantineDirectory(runStartedAt), path)
+            };
         }
         catch (Exception exception)
         {
-            // Both routes refused. The file stays where it is, which is the safe end of the failure -
-            // sync reports it rather than removing something it cannot put back.
-            logger.LogWarning(exception, "Could not displace {File} for {Mod}; leaving it where it is.", path, item.ModId.Value);
-
-            return new QuarantinedFile(item.ModId, path, QuarantineDestination.Failed);
+            throw new IOException($"'{Path.GetFileName(path)}' could not be moved out of the mod folder, so it was left where it is.", exception);
         }
     }
 
-    /// <summary>
-    /// Moves a file into a folder the user named, under a name that does not overwrite anything already
-    /// there - a second mod of the same file name from a later apply must not replace the first.
-    /// </summary>
     private bool TryMoveInto(string folder, string path, out string destination)
     {
-        destination = string.Empty;
-
         try
         {
-            Directory.CreateDirectory(folder);
-
-            destination = FileSystemHelper.GetUnusedPath(folder, Path.GetFileName(path));
-
-            File.Move(path, destination);
+            destination = MoveInto(folder, path);
 
             return true;
         }
@@ -667,12 +656,31 @@ public sealed class ModSyncService(
         {
             logger.LogWarning(exception, "Could not move {File} into the chosen folder {Folder}.", path, folder);
 
+            destination = string.Empty;
+
             return false;
         }
     }
 
+    /// <summary>Moves a file into a folder under a name nothing there already has.</summary>
+    private static string MoveInto(string folder, string path)
+    {
+        Directory.CreateDirectory(folder);
+
+        var destination = FileSystemHelper.GetUnusedPath(folder, Path.GetFileName(path));
+
+        File.Move(path, destination);
+
+        return destination;
+    }
+
+    /// <param name="stillInPlace">
+    /// Mods whose old file, or a file blocking the new one, could not be moved aside. Installing them
+    /// would put a second file beside the first, or fail on it.
+    /// </param>
     private async Task InstallAsync(
         ModSyncPlan plan,
+        IReadOnlySet<ModKey> stillInPlace,
         IProgress<ModSyncProgress>? progress,
         List<ModSyncFailure> failures,
         CancellationToken cancellationToken)
@@ -681,6 +689,7 @@ public sealed class ModSyncService(
         // this name" - answered with one directory operation instead of a copy.
         var installs = plan.Items
             .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename)
+            .Where(x => stillInPlace.Contains(x.ModId) is false)
             .ToList();
 
         var completed = 0;
@@ -699,17 +708,9 @@ public sealed class ModSyncService(
             {
                 await Task.Run(() => Materialize(plan, item), cancellationToken);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
             {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                // Collected rather than thrown, so the rest of the sync still runs - which is also
-                // why nothing else would ever see the stack.
-                logger.LogError(exception, "{Action} failed for {Mod} during sync.", item.Action, item.ModId.Value);
-
-                failures.Add(new ModSyncFailure(item.ModId, item.Action, exception.Message) { Exception = exception });
+                RecordFailure(failures, item, exception);
             }
 
             completed++;
@@ -723,6 +724,10 @@ public sealed class ModSyncService(
     /// - a second directory entry into the store where that is safe, a copy otherwise, and for a
     /// rename just the name, since the right bytes are already there.
     /// </summary>
+    /// <remarks>
+    /// Never replaces a file. The removal phase is the only thing that takes files out of a mod folder,
+    /// so a file at the destination is one the plan did not know about, and the install fails instead.
+    /// </remarks>
     private static void Materialize(ModSyncPlan plan, ModSyncItem item)
     {
         var destination = plan.Adapter.GetModFilePath(plan.Target, item.ModId, item.DesiredVersion!.Value, item.FileName);
@@ -741,10 +746,7 @@ public sealed class ModSyncService(
 
         if (File.Exists(destination))
         {
-            // The removal phase took the old file, so anything still here is a leftover of a failed
-            // run rather than something the user owns - a plan that found a file it does not
-            // recognise here would have listed it for quarantine.
-            File.Delete(destination);
+            throw new IOException($"'{Path.GetFileName(destination)}' appeared in the mod folder after the plan was made, so it was left alone.");
         }
 
         if (plan.Materialization.Method is MaterializationMethod.Hardlink &&
@@ -753,7 +755,7 @@ public sealed class ModSyncService(
             return;
         }
 
-        File.Copy(blob, destination);
+        File.Copy(blob, destination, overwrite: false);
 
         // A copied file inherits the blob's read-only-ness and timestamps on some paths; make sure
         // the game sees an ordinary, writable file of its own.

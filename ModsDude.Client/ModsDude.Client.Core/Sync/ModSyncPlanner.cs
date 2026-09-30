@@ -142,6 +142,7 @@ public static class ModSyncPlanner
                 InstalledPath = have.Path,
                 InstalledHash = hash,
                 InstalledSize = have.Size,
+                InstalledModifiedUtc = have.ModifiedUtc,
                 InstalledIsRecoverable = registered.Holds(hash)
             });
         }
@@ -162,6 +163,7 @@ public static class ModSyncPlanner
                 InstalledPath = have.Path,
                 InstalledHash = hash,
                 InstalledSize = have.Size,
+                InstalledModifiedUtc = have.ModifiedUtc,
                 InstalledIsRecoverable = recoverable
             });
         }

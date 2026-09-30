@@ -125,6 +125,12 @@ public sealed record ModSyncItem
     public long InstalledSize { get; init; }
 
     /// <summary>
+    /// When the file was last written, as the plan saw it. Re-checked with <see cref="InstalledSize"/>
+    /// before a recoverable file is deleted, because a plan can be minutes old by then.
+    /// </summary>
+    public DateTimeOffset? InstalledModifiedUtc { get; init; }
+
+    /// <summary>
     /// Whether the file about to be removed can be fetched again. Also set on <see cref="ModSyncAction.Replace"/>,
     /// whose uninstall half follows exactly the same rules - a replaced file the repo has never seen
     /// is no more disposable than an uninstalled one.
@@ -286,10 +292,7 @@ public enum QuarantineDestination
     ChosenFolder,
 
     /// <summary>Where the Recycle Bin was unavailable - a drive with it turned off, a network path.</summary>
-    QuarantineFolder,
-
-    /// <summary>Neither worked. The file is still in the mod folder, which is the safe end of the failure.</summary>
-    Failed
+    QuarantineFolder
 }
 
 public sealed record QuarantinedFile(ModKey ModId, string OriginalPath, QuarantineDestination Destination)
