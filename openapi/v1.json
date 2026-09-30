@@ -2578,7 +2578,138 @@
         ]
       }
     },
-    "/api/v1/repo/{repoId}": {
+    "/api/v1/repos": {
+      "get": {
+        "operationId": "GetMyReposV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepoMembershipDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      },
+      "post": {
+        "operationId": "CreateRepoV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRepoRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos/archived": {
+      "get": {
+        "operationId": "GetArchivedReposV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepoMembershipDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Repos"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}": {
       "delete": {
         "operationId": "DeleteRepoV1",
         "parameters": [
@@ -2744,139 +2875,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Repos"
-        ]
-      }
-    },
-    "/api/v1/repos": {
-      "get": {
-        "operationId": "GetMyReposV1",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/RepoMembershipDto"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Repos"
-        ]
-      }
-    },
-    "/api/v1/repos/archived": {
-      "get": {
-        "operationId": "GetArchivedReposV1",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/RepoMembershipDto"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Repos"
-        ]
-      }
-    },
-    "/api/v1/repos/create": {
-      "post": {
-        "operationId": "CreateRepoV1",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateRepoRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-name": "request",
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepoDto"
                 }
               }
             },
@@ -4145,83 +4143,6 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/profile/{profileId}": {
-      "get": {
-        "operationId": "GetProfileV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "profileId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProfileDto"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Profiles"
-        ]
-      }
-    },
     "/api/v1/repos/{repoId}/profiles": {
       "get": {
         "operationId": "GetProfilesV1",
@@ -4456,6 +4377,81 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "get": {
+        "operationId": "GetProfileV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "profileId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDto"
+                }
+              }
+            },
             "description": ""
           },
           "400": {
@@ -6196,6 +6192,87 @@
         ]
       }
     },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/restore": {
+      "post": {
+        "operationId": "RestoreSavegameV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "x-name": "request",
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
     "/api/v1/repos/{repoId}/savegames/{savegameId}/snapshots": {
       "get": {
         "operationId": "GetSavegameSnapshotsV1",
@@ -6558,87 +6635,6 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/unarchive": {
-      "post": {
-        "operationId": "RestoreSavegameV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "savegameId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RestoreRequest"
-              }
-            }
-          },
-          "x-name": "request",
-          "x-position": 3
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Savegames"
-        ]
-      }
-    },
     "/api/v1/users": {
       "get": {
         "operationId": "GetUsersV1",
@@ -6802,7 +6798,7 @@
         ]
       }
     },
-    "/api/v1/users/me/display-name": {
+    "/api/v1/users/me/displayName": {
       "put": {
         "operationId": "SetDisplayNameV1",
         "requestBody": {

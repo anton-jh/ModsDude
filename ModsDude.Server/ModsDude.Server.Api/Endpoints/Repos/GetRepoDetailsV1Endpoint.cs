@@ -15,7 +15,7 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapGet("repo/{repoId:guid}", GetRepoDetails)
+        return builder.MapGet("repos/{repoId:guid}", GetRepoDetails)
             .WithTags("Repos")
             .RequireRepoLevel(RepoMembershipLevel.Member);
     }

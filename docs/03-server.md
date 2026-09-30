@@ -112,7 +112,7 @@ request:
 There is no signup endpoint; **first authenticated request is the signup**.
 
 The `name` claim **seeds** the display name and is never read again: from then on the name is the
-user's own, changed with `PUT users/me/display-name`. Entra External ID has no self-service page
+user's own, changed with `PUT users/me/displayName`. Entra External ID has no self-service page
 for editing a profile, so a name that kept following the claim would be one nobody could change.
 `DisplayName.FromClaim` never refuses — control characters are dropped, anything over 32
 characters is cut, and a blank claim becomes `"Unnamed user"` — while a typed name goes through
@@ -523,7 +523,7 @@ level required.
 | --- | --- | --- | --- |
 | GET | `users` | — | Every user who shares at least one repo with the caller, **excluding the caller** |
 | GET | `users/me` | — | The caller's own `CurrentUserDto` — `UserDto` plus `IsTrusted`. The only route that returns either: `users` deliberately leaves the caller out, the client cannot derive its `Tag` from the token, and whether somebody may create repos is not their teammates' business |
-| PUT | `users/me/display-name` | — | Renames the caller. Trimmed, 1–32 characters, no control characters; otherwise `invalid-display-name`. Answers with the new `CurrentUserDto` |
+| PUT | `users/me/displayName` | — | Renames the caller. Trimmed, 1–32 characters, no control characters; otherwise `invalid-display-name`. Answers with the new `CurrentUserDto` |
 | PUT | `users/me/avatar` | — | `{ hash }` — points the caller's picture at an image already uploaded through `POST images/{hash}`. Refused as `invalid-hash` or, where nothing is stored there, `file-not-found`. The client crops and encodes it; the server has no image stack |
 | DELETE | `users/me/avatar` | — | Back to the initial. The blob stays until the reclamation sweep finds nothing points at it |
 
@@ -545,12 +545,12 @@ through an invite instead.
 | --- | --- | --- | --- |
 | GET | `repos` | — | The caller's live repos with their membership level, ordered by name |
 | GET | `repos/archived` | — | The archived ones. A repo is archived for every member at once |
-| POST | `repos/create` | — | Requires `User.IsTrusted`. Creator becomes Admin |
-| GET | `repo/{repoId}` | Member | Repo details including the member list |
-| PUT | `repo/{repoId}` | Admin | Rename and/or replace adapter configuration |
+| POST | `repos` | — | Requires `User.IsTrusted`. Creator becomes Admin |
+| GET | `repos/{repoId}` | Member | Repo details including the member list |
+| PUT | `repos/{repoId}` | Admin | Rename and/or replace adapter configuration |
 | POST | `repos/{repoId}/archive` | Admin | Puts it away. The only way a repo goes away |
 | POST | `repos/{repoId}/restore` | Admin | Brings it back under its own name. No body: repo names are not unique, so nothing can have taken it |
-| DELETE | `repo/{repoId}` | Admin | Permanent, and refused unless archived. Takes the whole catalog, every profile's history and every savegame with it |
+| DELETE | `repos/{repoId}` | Admin | Permanent, and refused unless archived. Takes the whole catalog, every profile's history and every savegame with it |
 
 Note the inconsistency: the collection is `repos`, the single resource is `repo`.
 
@@ -599,7 +599,7 @@ everybody.
 | Method | Route | Level | Notes |
 | --- | --- | --- | --- |
 | GET | `repos/{repoId}/profiles` | Guest | Each carries `HeadRevision` |
-| GET | `repos/{repoId}/profile/{profileId}` | Guest | |
+| GET | `repos/{repoId}/profiles/{profileId}` | Guest | |
 | POST | `repos/{repoId}/profiles` | Member | `CopyFrom` branches a revision of another profile off into this one |
 | PUT | `repos/{repoId}/profiles/{profileId}` | Member | Rename |
 | POST | `repos/{repoId}/profiles/{profileId}/archive` | Member | Puts it away. The only way a profile goes away |
@@ -704,7 +704,7 @@ an answer. It is advisory; the delete endpoints re-ask the database when it matt
 | PUT | `repos/{repoId}/savegames/{savegameId}` | Member | Rename. Nothing moves a savegame to another profile — see below |
 | POST | `repos/{repoId}/savegames/{savegameId}/makeCurrent` | Member | Points the profile back at this past savegame, superseding whatever held the slot. Answers with both |
 | POST | `repos/{repoId}/savegames/{savegameId}/archive` | Member | Puts it away, keeping its snapshots and its claim log |
-| POST | `repos/{repoId}/savegames/{savegameId}/unarchive` | Member | Brings it back. Not "restore" - a savegame already has one, and it means putting an old *snapshot* back |
+| POST | `repos/{repoId}/savegames/{savegameId}/restore` | Member | Brings it back. Not to be confused with `snapshots/{number}/restore`, which puts an old snapshot back |
 | GET | `repos/{repoId}/savegames/archived` | Guest | The archived half of the same list |
 | DELETE | `repos/{repoId}/savegames/{savegameId}` | **Admin** | Permanent, and refused unless archived |
 | DELETE | `repos/{repoId}/savegames/{savegameId}/snapshots/{number}` | **Admin** | Deletes one snapshot. Refuses the head. Rows only - the blobs go to the reclamation sweep |

@@ -833,7 +833,7 @@ fetch is swallowed — a name is already up, what is missing is decoration.
 **The Account page** (`AccountPageViewModel`) edits what the user owns in this system and points
 at what they do not:
 
-- **Name** — validated against the server's rules as it is typed, then `PUT users/me/display-name`.
+- **Name** — validated against the server's rules as it is typed, then `PUT users/me/displayName`.
 - **Picture** — picked with a file dialog, cut to its centred square, shrunk to at most 256 px and
   encoded as WebP by `AvatarPicture` (a few KB whatever was picked), uploaded through the image
   store if the server does not already hold it, then `PUT users/me/avatar`. `UserAccountService`

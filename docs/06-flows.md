@@ -60,7 +60,7 @@ list.
    `DynamicFormEditor`. Editing it raises `Modified`, which takes the navigation lock, so
    navigating away now prompts.
 3. Save validates the name and the form, then `RepoRepository.CreateRepo` serializes the
-   settings and calls `POST api/v1/repos/create`.
+   settings and calls `POST api/v1/repos`.
 4. Server: refuses with a `403` unless `User.IsTrusted`; rejects a taken name with the
    `name-taken` problem; otherwise creates the repo with
    `AdapterData = (adapterId, serializedConfig)` and makes the caller Admin.

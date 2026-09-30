@@ -24,7 +24,7 @@ public class SetDisplayNameV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPut("users/me/display-name", SetDisplayName)
+        return builder.MapPut("users/me/displayName", SetDisplayName)
             .WithTags("Users");
     }
 

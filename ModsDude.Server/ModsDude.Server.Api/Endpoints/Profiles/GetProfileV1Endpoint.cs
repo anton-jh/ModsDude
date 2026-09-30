@@ -15,7 +15,7 @@ public class GetProfileV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapGet("repos/{repoId:guid}/profile/{profileId:guid}", GetSingle)
+        return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}", GetSingle)
             .WithTags("Profiles")
             .RequireRepoLevel(RepoMembershipLevel.Guest);
     }

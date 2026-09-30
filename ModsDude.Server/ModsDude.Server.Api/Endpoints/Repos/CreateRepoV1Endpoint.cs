@@ -15,8 +15,7 @@ public class CreateRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPost("repos/create", CreateRepo)
-            .RequireAuthorization()
+        return builder.MapPost("repos", CreateRepo)
             .WithTags("Repos");
     }
 

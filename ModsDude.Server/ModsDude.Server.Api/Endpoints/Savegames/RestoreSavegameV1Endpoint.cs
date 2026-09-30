@@ -14,22 +14,17 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <summary>
 /// Brings an archived savegame back into the repo's list, optionally under a new name.
 /// </summary>
-/// <remarks>
-/// Named "unarchive" in the route rather than "restore", because a savegame already has a restore
-/// and it means something else entirely: putting an old <em>snapshot</em> back. Two things called
-/// restore, one aggregate apart, is how somebody ends up rolling a save back a month by accident.
-/// </remarks>
 public class RestoreSavegameV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPost("repos/{repoId:guid}/savegames/{savegameId:guid}/unarchive", Unarchive)
+        return builder.MapPost("repos/{repoId:guid}/savegames/{savegameId:guid}/restore", Restore)
             .WithTags("Savegames")
             .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Unarchive(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Restore(
         Guid repoId, Guid savegameId,
         RestoreRequest? request,
         ApplicationDbContext dbContext,

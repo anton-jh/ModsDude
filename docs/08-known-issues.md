@@ -239,12 +239,6 @@ already visible in a member list — but it is unused surface.
 Cosmetic, but they leak into the generated client and are cheapest to fix before anything
 depends on them:
 
-- Collection routes are plural (`repos`, `repos/{id}/profiles`) while single-resource routes
-  are singular (`repo/{id}`, `repos/{id}/profile/{id}`).
-- `POST repos/create` is RPC-shaped among otherwise RESTful routes; `POST repos` would be the
-  consistent form.
-- `CreateRepoV1Endpoint` calls `.RequireAuthorization()` redundantly — the whole group already
-  requires it.
 - `Profile.Created` and `ProfileRevision.Created` are `DateTime` while
   `ModVersion.Created`/`Updated` are `DateTimeOffset`.
   `ITimeService.Now()` returns `DateTime` and the mod timestamps go through an implicit
