@@ -1,5 +1,6 @@
 using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using ModsDude.Server.Application.Dependencies;
@@ -53,6 +54,30 @@ internal class SavegameStorageService(
         return result.Value;
     }
 
+    public async Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
+    {
+        var blobClient = GetBlobClient(repoId, savegameId, contentHash);
+
+        try
+        {
+            var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+
+            // Rewriting the metadata it already has is the cheapest write there is, and any write gives
+            // the blob a new ETag - which is what the sweep's delete is conditional on.
+            await blobClient.SetMetadataAsync(
+                properties.Value.Metadata,
+                new BlobRequestConditions { IfMatch = properties.Value.ETag },
+                cancellationToken);
+
+            return true;
+        }
+        catch (RequestFailedException exception) when (exception.Status is 404 or 412)
+        {
+            // Gone, or changed under this call: either way the upload goes ahead and writes it again.
+            return false;
+        }
+    }
+
     public async Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
         try
@@ -91,17 +116,12 @@ internal class SavegameStorageService(
         await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
         {
             // See ModStorageService.ListStoredMods on the missing timestamp.
-            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue);
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue, Version: blob.Properties.ETag?.ToString());
         }
     }
 
-    public async Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken)
-    {
-        await blobServiceClient
-            .GetBlobContainerClient(_savegamesContainerName)
-            .GetBlobClient(blobName)
-            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
-    }
+    public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
+        => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_savegamesContainerName), blob, cancellationToken);
 
 
     private async Task<string> GetSasLink(RepoId repoId, SavegameId savegameId, string contentHash, BlobSasPermissions permissions, CancellationToken cancellationToken)

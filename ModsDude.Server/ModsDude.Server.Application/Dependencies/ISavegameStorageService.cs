@@ -41,16 +41,20 @@ public interface ISavegameStorageService
     string ContentHashMetadataKey { get; }
 
     /// <summary>
-    /// Whether these bytes are already stored for this savegame. True is the answer that makes a
-    /// re-check-in free: the address is the hash, so a blob that is there is the same save.
-    /// </summary>
-    /// <summary>
     /// Creates the container if it is not there. Called at startup rather than before each write:
     /// a fresh storage account should not present as savegames that silently never upload.
     /// </summary>
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
     Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether these bytes are already stored for this savegame, marking the blob as just written
+    /// where they are. True is the answer that makes a re-check-in free: the address is the hash, so a
+    /// blob that is there is the same save. The mark is what stops the reclamation sweep deleting a
+    /// blob it listed as unreferenced before this upload came along to reuse it.
+    /// </summary>
+    Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
     /// The SHA-256 the uploader recorded against the blob, or <c>null</c> when the blob is absent or
@@ -96,5 +100,5 @@ public interface ISavegameStorageService
     /// <summary>
     /// See <see cref="IModStorageService.DeleteStoredBlob"/>.
     /// </summary>
-    Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken);
+    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }

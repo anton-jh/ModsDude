@@ -8,7 +8,11 @@ namespace ModsDude.Server.Domain.Mods;
 /// bytes it holds. The length is only filled in where a caller asked for it - the reclamation sweep never
 /// reads it, and a listing that reports it costs nothing extra.
 /// </summary>
-public readonly record struct StoredBlob(string Name, DateTimeOffset LastModified, long Length = 0);
+/// <param name="Version">
+/// What storage calls this state of the blob (its ETag). The sweep deletes only on it, so a blob written
+/// or touched after it was listed is kept.
+/// </param>
+public readonly record struct StoredBlob(string Name, DateTimeOffset LastModified, long Length = 0, string? Version = null);
 
 /// <summary>
 /// The triple a mod file is stored against. Kept as a value rather than three parameters so a set of

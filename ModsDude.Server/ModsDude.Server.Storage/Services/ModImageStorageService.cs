@@ -82,17 +82,12 @@ internal class ModImageStorageService(
         await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
         {
             // See ModStorageService.ListStoredMods on the missing timestamp.
-            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue);
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue, Version: blob.Properties.ETag?.ToString());
         }
     }
 
-    public async Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken)
-    {
-        await blobServiceClient
-            .GetBlobContainerClient(_imagesContainerName)
-            .GetBlobClient(blobName)
-            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
-    }
+    public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
+        => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), blob, cancellationToken);
 
 
     private BlobClient GetBlobClient(string hash)

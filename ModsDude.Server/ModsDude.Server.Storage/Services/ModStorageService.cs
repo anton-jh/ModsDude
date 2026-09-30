@@ -102,17 +102,13 @@ internal class ModStorageService(
             yield return new StoredBlob(
                 blob.Name,
                 blob.Properties.LastModified ?? DateTimeOffset.MaxValue,
-                blob.Properties.ContentLength ?? 0);
+                blob.Properties.ContentLength ?? 0,
+                blob.Properties.ETag?.ToString());
         }
     }
 
-    public async Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken)
-    {
-        await blobServiceClient
-            .GetBlobContainerClient(_modsContainerName)
-            .GetBlobClient(blobName)
-            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
-    }
+    public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
+        => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_modsContainerName), blob, cancellationToken);
 
 
     private async Task<string> GetSasLink(RepoId repoId, ModId modId, ModVersionId versionId, BlobSasPermissions permissions, CancellationToken cancellationToken)

@@ -195,16 +195,22 @@ public class BlobReclamationJob(
     {
         var (container, plan, delete) = sweep;
 
+        var reclaimed = 0;
+
         foreach (var blob in plan.Reclaimable)
         {
-            await delete(blob.Name, cancellationToken);
+            if (await delete(blob, cancellationToken))
+            {
+                reclaimed++;
+            }
         }
 
         logger.LogInformation(
-            "Reclaimed {Reclaimed} of {Scanned} blobs in '{Container}'; {Retained} unreferenced but too recent, {Unrecognised} unrecognised.",
-            plan.Reclaimable.Count,
+            "Reclaimed {Reclaimed} of {Scanned} blobs in '{Container}'; {Kept} changed or gone since the listing, {Retained} unreferenced but too recent, {Unrecognised} unrecognised.",
+            reclaimed,
             plan.Scanned,
             container,
+            plan.Reclaimable.Count - reclaimed,
             plan.Retained.Count,
             plan.Unrecognised.Count);
 
@@ -218,5 +224,5 @@ public class BlobReclamationJob(
     }
 
 
-    private sealed record ContainerSweep(string Container, ReclamationPlan Plan, Func<string, CancellationToken, Task> Delete);
+    private sealed record ContainerSweep(string Container, ReclamationPlan Plan, Func<StoredBlob, CancellationToken, Task<bool>> Delete);
 }

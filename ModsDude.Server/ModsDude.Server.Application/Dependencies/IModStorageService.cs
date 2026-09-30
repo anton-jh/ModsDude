@@ -40,7 +40,8 @@ public interface IModStorageService
     /// <summary>
     /// Deletes by the exact name storage reported, which is what the sweep must use: re-deriving a
     /// path from a parsed address would put a parsing bug between deciding what is garbage and
-    /// deleting it.
+    /// deleting it. And only while the blob is still the one listed - see <see cref="StoredBlob.Version"/>.
     /// </summary>
-    Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken);
+    /// <returns>Whether it was deleted: false where it had gone, or had been written since the listing.</returns>
+    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }

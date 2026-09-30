@@ -86,7 +86,7 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        if (await savegameStorageService.CheckIfSavegameExists(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken))
+        if (await savegameStorageService.TryReuseSavegame(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken))
         {
             return TypedResults.Ok(new CreateSavegameUploadLinkResponse(null, true, savegameStorageService.ContentHashMetadataKey));
         }

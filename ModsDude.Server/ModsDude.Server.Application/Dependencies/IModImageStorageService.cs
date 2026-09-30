@@ -36,7 +36,7 @@ public interface IModImageStorageService
     /// <summary>
     /// See <see cref="IModStorageService.DeleteStoredBlob"/>.
     /// </summary>
-    Task DeleteStoredBlob(string blobName, CancellationToken cancellationToken);
+    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }
 
 
