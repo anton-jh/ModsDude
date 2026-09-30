@@ -178,7 +178,8 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
             ?? throw new ArgumentException($"'{slotPath}' is a filesystem root, not a savegame slot.", nameof(slot));
 
         // Staged beside the slot rather than in the system temp folder, so landing it is a rename on
-        // one volume instead of a second copy of a save that can be hundreds of megabytes.
+        // one volume instead of a second copy of a save that can be hundreds of megabytes. Whatever
+        // happens, the staging folder is gone afterwards: moved into the slot, or deleted below.
         var staging = Path.Combine(parent, $".modsdude-unpack-{Guid.NewGuid():N}");
 
         try
@@ -186,70 +187,53 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
             Directory.CreateDirectory(staging);
 
             await ExtractAsync(archivePath, staging, progress, cancellationToken);
-        }
-        catch (Exception)
-        {
-            FileSystemHelper.TryDeleteDirectory(staging, _log);
 
-            throw;
-        }
+            if (Directory.Exists(slotPath) is false)
+            {
+                Directory.Move(staging, slotPath);
 
-        if (Directory.Exists(slotPath) is false)
-        {
-            MoveIntoSlot(staging, slotPath);
+                return null;
+            }
 
-            return null;
-        }
+            var displaced = FileSystemHelper.GetUnusedPath(
+                parent, $"{Path.GetFileName(slotPath)} (replaced {DateTime.Now:yyyy-MM-dd HH-mm})");
 
-        var displaced = FileSystemHelper.GetUnusedPath(
-            parent, $"{Path.GetFileName(slotPath)} (replaced {DateTime.Now:yyyy-MM-dd HH-mm})");
-
-        try
-        {
             Directory.Move(slotPath, displaced);
-        }
-        catch (Exception)
-        {
-            FileSystemHelper.TryDeleteDirectory(staging, _log);
 
-            throw;
-        }
-
-        try
-        {
-            MoveIntoSlot(staging, slotPath);
-        }
-        catch (Exception exception)
-        {
             try
             {
-                Directory.Move(displaced, slotPath);
+                Directory.Move(staging, slotPath);
             }
-            catch (Exception restoreFailure)
+            catch (Exception exception)
             {
-                throw new IOException(
-                    $"The new save could not be put in '{slotPath}', and the save that was there could not be moved back. It is at '{displaced}'.",
-                    new AggregateException(exception, restoreFailure));
+                PutBack(displaced, slotPath, exception);
+
+                throw;
             }
 
-            throw;
+            return displaced;
         }
-
-        return displaced;
+        finally
+        {
+            FileSystemHelper.TryDeleteDirectory(staging, _log);
+        }
     }
 
-    /// <summary>Moves the staged contents into the slot, and drops the staging folder if that fails.</summary>
-    private void MoveIntoSlot(string staging, string slotPath)
+    /// <summary>
+    /// Returns a displaced save to its slot after the new one could not be put there. Where even that
+    /// fails, the save is left where it was moved to, and the error says where.
+    /// </summary>
+    private static void PutBack(string displaced, string slotPath, Exception failure)
     {
         try
         {
-            Directory.Move(staging, slotPath);
+            Directory.Move(displaced, slotPath);
         }
-        catch (Exception)
+        catch (Exception restoreFailure)
         {
-            FileSystemHelper.TryDeleteDirectory(staging, _log);
-
-            throw;
+            throw new IOException(
+                $"The new save could not be put in '{slotPath}', and the save that was there could not be moved back. It is at '{displaced}'.",
+                new AggregateException(failure, restoreFailure));
         }
     }
 

@@ -1155,20 +1155,38 @@ public sealed class SavegameService(
     /// Recycles a slot that has just been uploaded, but only while it still holds exactly what was
     /// uploaded: anything the game wrote since exists nowhere else, so that slot is left alone.
     /// </summary>
+    /// <remarks>
+    /// Never throws: by the time this runs the snapshot is committed and the claim released, and a
+    /// hand-back that plainly succeeded must not be reported as failing over its last, local step.
+    /// A slot that cannot be read cannot be shown to match, so it is left where it is too.
+    /// </remarks>
     private async Task<SavegameLocalCopy> HandBackAsync(
         ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string uploadedHash)
     {
-        if (Directory.Exists(adapter.GetSlotPath(target, slot)) &&
-            ModContentHasher.Matches(await HashOrNothing(adapter, target, slot, CancellationToken.None), uploadedHash) is false)
+        try
         {
-            logger.LogWarning("Slot {Slot} changed after it was uploaded; it was left where it is rather than recycled.", slot.Value);
+            if (Directory.Exists(adapter.GetSlotPath(target, slot)))
+            {
+                var current = await packer.HashSlotAsync(adapter, target, slot, CancellationToken.None);
 
-            return SavegameLocalCopy.ChangedSinceUpload;
+                if (ModContentHasher.Matches(current, uploadedHash) is false)
+                {
+                    logger.LogWarning("Slot {Slot} changed after it was uploaded; it was left where it is rather than recycled.", slot.Value);
+
+                    return SavegameLocalCopy.ChangedSinceUpload;
+                }
+            }
+
+            return await RecycleAsync(adapter, target, slot)
+                ? SavegameLocalCopy.Recycled
+                : SavegameLocalCopy.LeftBehind;
         }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not hand slot {Slot} back; it was left where it is.", slot.Value);
 
-        return await RecycleAsync(adapter, target, slot)
-            ? SavegameLocalCopy.Recycled
-            : SavegameLocalCopy.LeftBehind;
+            return SavegameLocalCopy.LeftBehind;
+        }
     }
 
     public async Task ObserveAsync(ModTargetRef target, CancellationToken ct)
@@ -1609,7 +1627,7 @@ public sealed class SavegameService(
 
             var destination = FileSystemHelper.GetUnusedPath(quarantine, name);
 
-            FileSystemHelper.MoveDirectory(displaced, destination);
+            FileSystemHelper.MoveDirectory(displaced, destination, logger);
 
             return new DisplacedSavegame(DisplacedSavegameDestination.QuarantineFolder, name, destination);
         }

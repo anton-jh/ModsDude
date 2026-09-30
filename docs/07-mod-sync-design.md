@@ -365,7 +365,7 @@ left where it is and the page says so.
 **A store only ever touches a folder it owns.** Its path is the user's choice, so the first write
 drops a `modsdude-store.txt` marker, and only into an empty folder or one that already has it.
 Everything that deletes - reclaiming, eviction, removing a corrupt blob, emptying the quarantine -
-does nothing in a folder without the marker. Picking a folder that already holds other things puts
+does nothing in a folder without the marker. Planning an apply refuses such a folder up front, naming it, before anything is read or moved. Picking a folder that already holds other things puts
 the store in a `ModsDude store` folder inside it.
 
 ## Reconciliation

@@ -230,6 +230,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         EnsureFoldersAreUnclaimed(targets, game.Identity);
 
         _store.Update(_ => game.Update(baseAdapter.GameDisplayName, localSettings, targets));
+        game.NotifySettingsChanged();
 
         // A field somebody emptied has taken a target away, and the manifest describing what used to
         // be in that folder is one nothing will look for again. Dropped here rather than worked out,
@@ -280,6 +281,7 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     public void SetActiveProfile(Game game, ActiveProfile? activeProfile, int? pinnedRevision = null)
     {
         _store.Update(_ => game.SetActiveProfile(activeProfile, pinnedRevision));
+        game.NotifyActiveProfileChanged();
 
         // A folder that was in sync with one profile is drifted from another the moment it is pointed
         // at it, and nothing about the collection changed to say so.
@@ -321,6 +323,11 @@ public class GameRepository : IModFolders, IDriftCandidateSource
                 game.SetActiveProfile(null);
             }
         });
+
+        foreach (var game in affected)
+        {
+            game.NotifyActiveProfileChanged();
+        }
 
         GameChanged?.Invoke(this, EventArgs.Empty);
     }

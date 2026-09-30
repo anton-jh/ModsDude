@@ -161,6 +161,10 @@ public sealed class ModSyncService(
                 $"'{modFolder}' does not exist right now. An unplugged drive or an offline network path looks like this; nothing has been changed.");
         }
 
+        // Before anything is read, so a store the apply could never write to is the reason given
+        // rather than a failure per mod once the folder is half changed.
+        storeProvider.GetStoreServing(modFolder).EnsureUsable();
+
         IReadOnlyList<DesiredMod> desired = [];
         int? revision = null;
         Task<(IReadOnlyList<DesiredMod> Mods, int Revision)>? desiredLoad = null;
@@ -408,11 +412,13 @@ public sealed class ModSyncService(
         List<ModSyncFailure> failures,
         CancellationToken cancellationToken)
     {
-        var wanted = plan.HashesToFetch
-            .Where(x => plan.ServingStore.Contains(x) is false)
-            .Select(hash => (Hash: hash, Item: plan.Items.First(x =>
-                x.Action is ModSyncAction.Install or ModSyncAction.Replace &&
-                string.Equals(x.DesiredHash, hash, StringComparison.OrdinalIgnoreCase))))
+        // Asked of the store again rather than read off the plan: another apply may have fetched some
+        // of these while this one's plan was being confirmed.
+        var wanted = plan.Items
+            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
+            .Where(x => x.DesiredHash is not null && plan.ServingStore.Contains(x.DesiredHash) is false)
+            .GroupBy(x => x.DesiredHash!, StringComparer.OrdinalIgnoreCase)
+            .Select(x => (Hash: x.Key, Item: x.First()))
             .ToList();
 
         var run = new FetchRun(wanted.Count, progress);
@@ -429,7 +435,11 @@ public sealed class ModSyncService(
                 {
                     await FetchOneAsync(plan, fetch.Item, fetch.Hash, run, copying, ct);
                 }
-                catch (Exception exception) when (ct.IsCancellationRequested is false)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
                 {
                     RecordFailure(failures, fetch.Item, exception);
                 }
@@ -550,7 +560,11 @@ public sealed class ModSyncService(
                     quarantined.Add(Quarantine(plan, item, runStartedAt));
                 }
             }
-            catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
             {
                 RecordFailure(failures, item, exception);
                 stillInPlace.Add(item.ModId);
@@ -708,7 +722,11 @@ public sealed class ModSyncService(
             {
                 await Task.Run(() => Materialize(plan, item), cancellationToken);
             }
-            catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
             {
                 RecordFailure(failures, item, exception);
             }

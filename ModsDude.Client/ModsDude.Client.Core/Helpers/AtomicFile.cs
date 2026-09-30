@@ -14,9 +14,31 @@ public static class AtomicFile
 
         try
         {
-            using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var stream = Create(temporaryPath))
             {
                 write(stream);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch (Exception)
+        {
+            TryDelete(temporaryPath);
+
+            throw;
+        }
+    }
+
+    public static async Task WriteAsync(string path, Func<Stream, Task> write)
+    {
+        var temporaryPath = GetTemporaryPath(path);
+
+        try
+        {
+            await using (var stream = Create(temporaryPath))
+            {
+                await write(stream);
                 stream.Flush(flushToDisk: true);
             }
 
@@ -38,24 +60,12 @@ public static class AtomicFile
             writer.Write(contents);
         });
 
-    public static async Task WriteAllBytesAsync(string path, byte[] contents, CancellationToken cancellationToken)
-    {
-        var temporaryPath = GetTemporaryPath(path);
+    public static Task WriteAllBytesAsync(string path, byte[] contents, CancellationToken cancellationToken)
+        => WriteAsync(path, stream => stream.WriteAsync(contents, cancellationToken).AsTask());
 
-        try
-        {
-            await File.WriteAllBytesAsync(temporaryPath, contents, cancellationToken);
 
-            File.Move(temporaryPath, path, overwrite: true);
-        }
-        catch (Exception)
-        {
-            TryDelete(temporaryPath);
-
-            throw;
-        }
-    }
-
+    private static FileStream Create(string path)
+        => new(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous);
 
     private static string GetTemporaryPath(string path) => $"{path}.{Guid.NewGuid():N}.tmp";
 

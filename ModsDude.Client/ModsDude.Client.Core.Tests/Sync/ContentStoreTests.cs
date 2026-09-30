@@ -40,6 +40,9 @@ public class ContentStoreTests
 
         Assert.True(File.Exists(foreign));
         Assert.True(File.Exists(lookalike));
+
+        // And reports nothing, so the settings page offers nothing to reclaim or empty there.
+        Assert.Equal(ContentStoreUsage.Empty, store.Measure());
     }
 
 

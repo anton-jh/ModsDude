@@ -103,6 +103,18 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
 }
 
 
+/// <summary>What planning an apply produced: a plan per folder that could be planned, and why any other could not.</summary>
+public sealed record PlanAttempt(IReadOnlyList<ModSyncPlan> Plans, IReadOnlyList<string> Refusals)
+{
+    public static PlanAttempt None { get; } = new([], []);
+
+    /// <summary>Why nothing could be planned, for a sentence; a folder that could not be reached where nothing says more.</summary>
+    public string Describe() => Refusals.Count > 0
+        ? string.Join(" ", Refusals)
+        : "Its mod folders could not be reached.";
+}
+
+
 /// <summary>
 /// The two verbs, for everywhere that is not the sync page: the drift notice's one-click re-apply,
 /// the mod list editor's save, and the activation controls.
@@ -162,7 +174,7 @@ public sealed class ProfileApplyService(
     /// <remarks>
     /// <b>A list rather than a plan, because a game reaching three folders has three of them.</b>
     /// Sync's unit of work is genuinely one folder - see <see cref="ModSyncRequest"/> - so the loop
-    /// lives here, at the thing that applies a profile to a <em>game</em>. Empty means there was
+    /// lives here, at the thing that applies a profile to a <em>game</em>. No plans means there was
     /// nothing to plan: no mod capability, no folder configured, or none of them reachable right now.
     /// </remarks>
     /// <param name="revision">
@@ -180,7 +192,7 @@ public sealed class ProfileApplyService(
     /// them. <paramref name="profileId"/>, <paramref name="profileName"/> and <paramref name="revision"/>
     /// are ignored.
     /// </param>
-    public async Task<IReadOnlyList<ModSyncPlan>> TryPlanAsync(
+    public async Task<PlanAttempt> TryPlanAsync(
         Repo repo,
         Game game,
         Guid profileId,
@@ -196,59 +208,40 @@ public sealed class ProfileApplyService(
 
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
-            return [];
+            return PlanAttempt.None;
         }
 
         var plans = new List<ModSyncPlan>();
+        var refusals = new List<string>();
 
         foreach (var target in adapter.ModTargets)
         {
             // Per folder, and one that cannot be planned does not cost the others theirs: a
             // dedicated server mid-session is exactly the folder somebody wants left out while the
             // client is put right.
-            if (await TryPlanTargetAsync(adapter, game, target, repo.Id, profileId, profileName, revision, cancellationToken, progress, clearAll)
-                is ModSyncPlan plan)
+            try
             {
-                plans.Add(plan);
+                plans.Add(await syncService.PlanAsync(
+                    new ModSyncRequest(game.Identity, target, adapter, repo.Id, clearAll ? Guid.Empty : profileId)
+                    {
+                        ProfileName = clearAll ? null : profileName,
+                        Revision = clearAll ? null : revision,
+                        ClearAll = clearAll
+                    },
+                    cancellationToken,
+                    progress));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is UserFriendlyException or IOException or UnauthorizedAccessException)
+            {
+                refusals.Add(exception is UserFriendlyException friendly ? friendly.DeveloperMessage : exception.Message);
             }
         }
 
-        return plans;
-    }
-
-    /// <summary>One folder's plan, or null where that folder cannot be planned against right now.</summary>
-    private async Task<ModSyncPlan?> TryPlanTargetAsync(
-        ILocalModAdapter adapter,
-        Game game,
-        ModTarget target,
-        Guid repoId,
-        Guid profileId,
-        string? profileName,
-        int? revision,
-        CancellationToken cancellationToken,
-        IProgress<ModSyncProgress>? progress,
-        bool clearAll)
-    {
-        try
-        {
-            return await syncService.PlanAsync(
-                new ModSyncRequest(game.Identity, target, adapter, repoId, clearAll ? Guid.Empty : profileId)
-                {
-                    ProfileName = clearAll ? null : profileName,
-                    Revision = clearAll ? null : revision,
-                    ClearAll = clearAll
-                },
-                cancellationToken,
-                progress);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is UserFriendlyException or IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        return new PlanAttempt(plans, refusals);
     }
 
     /// <summary>
@@ -381,20 +374,22 @@ public sealed class ProfileApplyService(
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        IReadOnlyList<ModSyncPlan> plans;
+        PlanAttempt attempt;
 
         try
         {
             using var planning = backgroundTasks.Begin(
                 $"Working out what would be cleared from '{game.Name}'", cancel: stop.Cancel);
 
-            plans = await TryPlanAsync(
+            attempt = await TryPlanAsync(
                 repo, game, Guid.Empty, null, null, stop.Token, Report(planning, progress), clearAll: true);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"'{game.Name}' was stopped before anything changed.");
         }
+
+        IReadOnlyList<ModSyncPlan> plans = attempt.Plans;
 
         if (plans.Count == 0)
         {
@@ -406,7 +401,7 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Deactivated,
-                $"'{game.Name}' no longer follows a profile, but its mod folders could not be reached to clear them.");
+                $"'{game.Name}' no longer follows a profile, but its mod folders could not be cleared. {attempt.Describe()}");
         }
 
         var consent = await ConsentedAsync(game, plans, confirmPlan: true, clearing: true);
@@ -424,7 +419,7 @@ public sealed class ProfileApplyService(
         games.SetActiveProfile(game, null);
         activity.ReportCleared(game.Identity);
 
-        var outcomes = new List<ProfileApplyOutcome>();
+        var outcomes = new List<ProfileApplyOutcome>(attempt.Refusals.Select(x => new ProfileApplyOutcome(game, ProfileApplyStatus.Unavailable, x)));
 
         foreach (var plan in plans)
         {
@@ -510,7 +505,7 @@ public sealed class ProfileApplyService(
         // stoppable, which is the whole reason the strip outlives the page.
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        IReadOnlyList<ModSyncPlan> plans;
+        PlanAttempt attempt;
 
         try
         {
@@ -523,13 +518,15 @@ public sealed class ProfileApplyService(
             using var planning = backgroundTasks.Begin(
                 $"Working out what would change in '{game.Name}'", cancel: stop.Cancel);
 
-            plans = await TryPlanAsync(
+            attempt = await TryPlanAsync(
                 repo, game, profileId, profileName, revision, stop.Token, Report(planning, progress));
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"'{game.Name}' was stopped before anything changed.");
         }
+
+        IReadOnlyList<ModSyncPlan> plans = attempt.Plans;
 
         if (plans.Count == 0)
         {
@@ -540,7 +537,7 @@ public sealed class ProfileApplyService(
             return Record(activate, repo, game, profileId, pinned, checkedOutSavegame, new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"'{game.Name}' could not be reached, so it was left as it is. It will keep showing as drifted until it can be."));
+                $"'{game.Name}' was left as it is, and will keep showing as drifted until it can be applied. {attempt.Describe()}"));
         }
 
         // Once, across every folder. Declining is one answer about one gesture, which is what stops
@@ -566,7 +563,7 @@ public sealed class ProfileApplyService(
         // One folder at a time, each with its own answer. A failure here is per folder by design -
         // the dedicated server being locked mid-session must not stop the client being put right -
         // and the folded answer below is what a caller that holds a game rather than a folder reads.
-        var outcomes = new List<ProfileApplyOutcome>();
+        var outcomes = new List<ProfileApplyOutcome>(attempt.Refusals.Select(x => new ProfileApplyOutcome(game, ProfileApplyStatus.Unavailable, x)));
 
         foreach (var plan in plans)
         {

@@ -82,11 +82,12 @@ public static class FileSystemHelper
     }
 
     /// <summary>
-    /// Moves a folder, across volumes where it has to. A cross-volume move copies everything first and
-    /// removes the source only once the copy is complete; a copy that fails part way is removed and
-    /// the source is left as it was.
+    /// Moves a folder, across volumes where it has to. A cross-volume move copies everything first:
+    /// a copy that fails part way is removed and the source is left as it was, and once the copy is
+    /// complete the move has happened - removing the source is tidying, logged where it fails.
     /// </summary>
-    public static void MoveDirectory(string source, string destination)
+    /// <exception cref="Exception">The folder was not moved, and is still at <paramref name="source"/>.</exception>
+    public static void MoveDirectory(string source, string destination, ILogger log)
     {
         if (string.Equals(NormalizeVolumeRoot(source), NormalizeVolumeRoot(destination), StringComparison.OrdinalIgnoreCase))
         {
@@ -101,15 +102,19 @@ public static class FileSystemHelper
         }
         catch (Exception)
         {
-            if (Directory.Exists(destination))
-            {
-                Directory.Delete(destination, recursive: true);
-            }
+            TryDeleteDirectory(destination, log);
 
             throw;
         }
 
-        Directory.Delete(source, recursive: true);
+        try
+        {
+            Directory.Delete(source, recursive: true);
+        }
+        catch (Exception exception)
+        {
+            log.LogWarning(exception, "Moved {Source} to {Destination}, but could not remove what was left at {Source}.", source, destination, source);
+        }
     }
 
     private static void CopyDirectory(string source, string destination)

@@ -935,8 +935,8 @@ public sealed class SavegameFlowService(
         // and this one runs between two dialogs, where a still window reads as the app having stopped.
         using var task = backgroundTasks.Begin($"Checking what '{profile.Name}' would change");
 
-        var plans = await applyService.TryPlanAsync(
-            repo, game, profile.Id, profile.Name, revision: null, cancellationToken, ProfileApplyService.Report(task, null));
+        var plans = (await applyService.TryPlanAsync(
+            repo, game, profile.Id, profile.Name, revision: null, cancellationToken, ProfileApplyService.Report(task, null))).Plans;
 
         if (plans.FirstOrDefault(x => x.Unrecognised.Count > 0) is not ModSyncPlan plan)
         {
@@ -1075,14 +1075,14 @@ public sealed class SavegameFlowService(
         // folder, and it runs while somebody is waiting for the check-out dialog to open.
         using var task = backgroundTasks.Begin($"Checking what '{savegame.Name}' would need");
 
-        var plans = await applyService.TryPlanAsync(
+        var plans = (await applyService.TryPlanAsync(
             repo,
             game,
             profile.Id,
             profile.Name,
             SavegameService.TargetRevisionOf(savegame),
             cancellationToken,
-            ProfileApplyService.Report(task, null));
+            ProfileApplyService.Report(task, null))).Plans;
 
         if (plans.Count == 0)
         {

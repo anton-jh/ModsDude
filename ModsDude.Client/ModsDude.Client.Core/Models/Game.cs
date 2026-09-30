@@ -71,22 +71,33 @@ public class Game
     }
 
 
+    /// <summary>
+    /// Changes the persisted record. Called under the state's lock, so it raises nothing: the
+    /// repository calls <see cref="NotifySettingsChanged"/> once the lock is released.
+    /// </summary>
     internal void Update(string name, DynamicForm localSettings, IEnumerable<PersistedModTarget> targets)
     {
         PersistedModel.Name = name;
         PersistedModel.AdapterLocalSettings = localSettings.Serialize();
         PersistedModel.Targets = [.. targets];
+    }
 
+    internal void NotifySettingsChanged()
+    {
         PropertyChanged?.Invoke(this, new(nameof(Name)));
         PropertyChanged?.Invoke(this, new(nameof(SerializedLocalSettings)));
         PropertyChanged?.Invoke(this, new(nameof(Targets)));
     }
 
+    /// <inheritdoc cref="Update"/>
     internal void SetActiveProfile(ActiveProfile? activeProfile, int? pinnedRevision = null)
     {
         PersistedModel.ActiveProfile = activeProfile;
         PersistedModel.PinnedRevision = activeProfile is null ? null : pinnedRevision;
+    }
 
+    internal void NotifyActiveProfileChanged()
+    {
         PropertyChanged?.Invoke(this, new(nameof(ActiveProfile)));
         PropertyChanged?.Invoke(this, new(nameof(PinnedRevision)));
     }

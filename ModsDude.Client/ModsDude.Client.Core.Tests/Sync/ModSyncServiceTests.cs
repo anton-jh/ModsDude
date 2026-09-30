@@ -423,14 +423,30 @@ public class ModSyncServiceTests
         using var fixture = new SyncFixture(recycleBinAvailable: false);
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
         fixture.Folder.WriteFile("fs25_a.zip", "a half-finished download");
+
+        var plan = await fixture.PlanAsync();
+
         fixture.BlockStoreQuarantine();
 
-        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+        var result = await fixture.ExecuteAsync(plan);
 
         Assert.False(result.Completed);
         Assert.False(result.ManifestWritten);
         Assert.Empty(result.Quarantined);
         Assert.Equal("a half-finished download", fixture.ReadInstalled("fs25_a.zip"));
+    }
+
+    [Fact]
+    public async Task A_store_folder_holding_other_files_refuses_the_plan_before_anything_is_read()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        File.WriteAllText(Path.Combine(fixture.ServingStore.RootPath, "notes.txt"), "the user's own file");
+
+        var refusal = await Assert.ThrowsAsync<Exceptions.UserFriendlyException>(() => fixture.PlanAsync());
+
+        Assert.Contains(fixture.ServingStore.RootPath, refusal.DeveloperMessage);
+        Assert.False(fixture.ServingStore.IsMarked);
     }
 
     [Fact]

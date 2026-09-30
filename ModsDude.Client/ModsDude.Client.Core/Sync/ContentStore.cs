@@ -446,6 +446,12 @@ public sealed class ContentStore
     /// </remarks>
     public ContentStoreUsage Measure()
     {
+        // A folder that is not a store holds nothing of the store's, whatever is in it.
+        if (IsMarked is false)
+        {
+            return ContentStoreUsage.Empty;
+        }
+
         var entries = Enumerate();
 
         return new ContentStoreUsage(
@@ -700,6 +706,18 @@ public sealed class ContentStore
         return (ModContentHasher.Format(digest.GetHashAndReset()), length);
     }
 
+    /// <summary>Refuses a folder this store may never write to, without writing anything itself.</summary>
+    /// <exception cref="UserFriendlyException">The folder holds other things and is not a store.</exception>
+    public void EnsureUsable()
+    {
+        if (CanBeRootAt(RootPath) is false)
+        {
+            throw new UserFriendlyException(
+                "The mod store folder holds other files",
+                $"'{RootPath}' is not empty and is not a ModsDude store, so nothing was written to it. Choose an empty folder for the store on {VolumeRoot} in Settings.");
+        }
+    }
+
     /// <exception cref="UserFriendlyException">The folder holds other things and is not a store.</exception>
     private void EnsureMarked()
     {
@@ -708,12 +726,7 @@ public sealed class ContentStore
             return;
         }
 
-        if (CanBeRootAt(RootPath) is false)
-        {
-            throw new UserFriendlyException(
-                "The mod store folder holds other files",
-                $"'{RootPath}' is not empty and is not a ModsDude store, so nothing was written to it. Choose an empty folder for the store on {VolumeRoot} in Settings.");
-        }
+        EnsureUsable();
 
         Directory.CreateDirectory(RootPath);
 
