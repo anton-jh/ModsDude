@@ -51,13 +51,16 @@ A change is done only when all of these hold:
 
 - Endpoints orchestrate: one class per endpoint, using `ApplicationDbContext` directly, checking authorization and calling domain methods. No handler, mediator or repository layers.
 - Invariants live in rich domain entities, not in endpoints.
+- The database backs every invariant it can express (unique indexes, foreign keys, check constraints), so concurrent requests can't slip past the domain check.
 - Broken invariants throw (`DomainValidationException`). Expected outcomes such as not found or forbidden are typed `Results` returned by the endpoint.
+- Conflicts keep their current status codes. What matters is that every error gives the client enough information (a distinct problem type) to react correctly.
 - EF Core: always add a new migration. Never edit or squash existing ones.
 
 ### Client
 
 - Use CommunityToolkit.Mvvm (`[ObservableProperty]`, `[RelayCommand]`) wherever it fits, which is most places.
 - Avoid logic in code-behind (`.xaml.cs`) when a binding, behavior or view model can reasonably do it.
+- The app is useless without the server. When it is unreachable, show a clear offline state and block server-backed actions until it reconnects. Don't cache server data to keep working offline.
 
 ### General
 
@@ -66,13 +69,49 @@ A change is done only when all of these hold:
 - Pass `CancellationToken` through every async call chain.
 - No fire-and-forget: every started task is awaited, or explicitly owned with its errors observed.
 - No `async void` and no `.Result` / `.Wait()` / `GetAwaiter().GetResult()`, except where WPF requires it (such as event handlers).
+- Never read the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`). Use the time service or `TimeProvider`.
+- Log every caught failure with enough context to diagnose it later.
+- Always use CRLF line endings. Correct any LF line endings that you find.
+
+## Correctness and stability
+
+- Output is deterministic: the same inputs give the same result in the same order. Sort explicitly; never depend on dictionary or enumeration order or on timing.
+- Any server mutation the client may send more than once is idempotent. That covers automatic retries and a user clicking again: a repeat gives the same outcome, not a duplicate or an error.
+- Concurrent edits use optimistic concurrency. A write based on a stale version is rejected, and the client says so and lets the user reload.
+- Local file work (sync, apply, import, savegame check-in and check-out) must:
+  - compute and validate a full plan before touching disk, refusing up front rather than failing halfway;
+  - never leave a half-written file or folder that looks complete (write to a temp location, then move atomically);
+  - converge on rerun: running again after a crash, kill or cancel reaches the same end state;
+  - never lose user data: anything ModsDude doesn't own is left alone, and anything replaced goes to the Recycle Bin.
 
 ## Tests
 
 - Every new or changed piece of domain or core logic ships with tests in the same change.
+- Test the unhappy paths too: interruption, retries, cancellation and concurrent requests, not just the happy path.
+
+## UI/UX
+
+- Consistent look: reuse the shared styles and controls in the resource dictionaries. No one-off margins, colours or fonts.
+- Use identical domain terms (repo, profile, revision, game, target, savegame) in UI text, client code and server code.
+- Errors say what happened in plain, short words. No long sentences and no explanation of why or how it happened. Never show raw exception text or status codes.
+- Each kind of feedback has one channel:
+  - An expected failure of something the user just did (validation, conflict) shows where they did it.
+  - Something that genuinely broke while the user was doing something shows the error modal.
+  - A background failure shows a notice that stays until it is resolved.
+  - Completion of long background work shows a toast.
+  - A destructive or hard-to-undo action asks for confirmation in a modal that names exactly what will be lost.
+- Long operations (sync, upload, download, check-in):
+  - always show progress in the progress strip, never on buttons. Rows being processed may also show their own progress in addition to the strip;
+  - can always be cancelled, and cancelling leaves a consistent state;
+  - disable (not hide) the controls that would conflict with them;
+  - keep running when the user navigates away, and stay tracked.
 
 ## Code style
 
+- Don't be afraid to overhaul or refactor a system when extending or modifying it. Reshape it so the new feature fits naturally, rather than bolting the feature onto a design that wasn't built for it.
+  - Why: workarounds layered onto an ill-fitting design are where inconsistency and instability come from.
+  - Put the refactor in the plan, and prefer it over special cases, flags or parallel code paths.
+- Never leave two ways of doing the same thing. When a change introduces a better pattern, migrate every existing instance of the old one in the same change.
 - Keep a generally high standard in all new code that you write or old code that you touch.
   - If the existing code has bad patterns, change that when touching it, instead of copying the bad pattern into new code.
   - Do not assume that existing code is good.
