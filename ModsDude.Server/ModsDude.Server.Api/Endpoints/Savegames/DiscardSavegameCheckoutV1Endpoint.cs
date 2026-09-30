@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -36,11 +35,12 @@ public class DiscardSavegameCheckoutV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapDelete("repos/{repoId:guid}/savegames/{savegameId:guid}/checkouts/current", Discard)
-            .WithTags("Savegames");
+            .WithTags("Savegames")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Discard(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Discard(
         Guid repoId, Guid savegameId,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
@@ -49,15 +49,6 @@ public class DiscardSavegameCheckoutV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
 
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)

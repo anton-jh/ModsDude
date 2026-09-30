@@ -2,13 +2,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
@@ -29,27 +27,18 @@ public class GetSavegameSnapshotsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots", Get)
-            .WithTags("Savegames");
+            .WithTags("Savegames")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
     /// <param name="skip">How many of the newest snapshots to pass over. See the response for why this is an offset.</param>
-    private static async Task<Results<Ok<GetSavegameSnapshotsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
+    private static async Task<Results<Ok<GetSavegameSnapshotsResponse>, BadRequest<CustomProblemDetails>>> Get(
         Guid repoId, Guid savegameId,
         int? skip, int? limit,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)
         {

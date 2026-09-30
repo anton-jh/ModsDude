@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Persistence.DbContexts;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
 
@@ -18,14 +19,14 @@ public class GetModVersionDependentsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/mods/{modId}/versions/{versionId}/dependents", Get)
-            .WithTags("Mods");
+            .WithTags("Mods")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
-    private static Task<Results<Ok<ModDependentsDto>, Forbidden<CustomProblemDetails>>> Get(
+    private static Task<Ok<ModDependentsDto>> Get(
         Guid repoId, string modId, string versionId,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
-        => ModDependentsReads.GetAsync(repoId, modId, new ModVersionId(versionId), claimsPrincipal, dbContext, cancellationToken);
+        => ModDependentsReads.GetAsync(repoId, modId, new ModVersionId(versionId), dbContext, cancellationToken);
 }

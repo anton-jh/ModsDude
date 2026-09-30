@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -11,7 +10,6 @@ using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
@@ -62,28 +60,19 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
         // POST rather than DELETE: the request carries a body naming what to remove, and a DELETE
         // with a body is the kind of thing proxies drop.
         return builder.MapPost("repos/{repoId:guid}/profiles/{profileId:guid}/revisions/prune", Prune)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Admin);
     }
 
 
-    private static async Task<Results<Ok<PruneProfileRevisionsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Prune(
+    private static async Task<Results<Ok<PruneProfileRevisionsResponse>, BadRequest<CustomProblemDetails>>> Prune(
         Guid repoId, Guid profileId,
         PruneProfileRevisionsRequest request,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Admin))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var requested = request.Revisions.Distinct().Select(x => new RevisionNumber(x)).ToList();
 
         if (requested.Count == 0)

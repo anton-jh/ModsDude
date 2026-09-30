@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
@@ -11,7 +10,6 @@ using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Buffers.Text;
 using System.Globalization;
-using System.Security.Claims;
 using System.Text;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -25,7 +23,8 @@ public class GetModsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/mods", GetAll)
-            .WithTags("Mods");
+            .WithTags("Mods")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
@@ -37,24 +36,14 @@ public class GetModsV1Endpoint : IEndpoint
     /// <param name="cursor">
     /// Opaque, from a previous response's <c>NextCursor</c>.
     /// </param>
-    public async Task<Results<Ok<GetModsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetAll(
+    public async Task<Results<Ok<GetModsResponse>, BadRequest<CustomProblemDetails>>> GetAll(
         Guid repoId,
         DateTimeOffset? updatedAfter,
         string? cursor,
         int? limit,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         ModsCursor? resumePoint = null;
         if (cursor is not null && !ModsCursor.TryDecode(cursor, out resumePoint))
         {

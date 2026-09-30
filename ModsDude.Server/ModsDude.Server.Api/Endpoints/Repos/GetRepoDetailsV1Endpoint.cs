@@ -4,12 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
@@ -18,25 +16,16 @@ public class GetRepoDetailsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repo/{repoId:guid}", GetRepoDetails)
-            .WithTags("Repos");
+            .WithTags("Repos")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private async Task<Results<Ok<RepoDetailsDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetRepoDetails(
+    private async Task<Results<Ok<RepoDetailsDto>, BadRequest<CustomProblemDetails>>> GetRepoDetails(
         [FromRoute] Guid repoId,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-        
         var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {

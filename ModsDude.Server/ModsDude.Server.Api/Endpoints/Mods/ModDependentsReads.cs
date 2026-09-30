@@ -2,13 +2,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
 
@@ -44,23 +42,11 @@ internal static class ModDependentsReads
     /// One version, or null for the whole mod - the two things that can be deleted, and the same
     /// query either way.
     /// </param>
-    public static async Task<Results<Ok<ModDependentsDto>, Forbidden<CustomProblemDetails>>> GetAsync(
+    public static async Task<Ok<ModDependentsDto>> GetAsync(
         Guid repoId, string modId, ModVersionId? versionId,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        // Guest, like every other read of the catalog: it says which profiles pin what, which a
-        // Guest can already read one profile at a time.
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         // One more than the cap, so "there are more" is answered by the query rather than guessed at
         // from a full page.
         var rows = await dbContext.ProfileRevisions.GetDependentRevisionsAsync(

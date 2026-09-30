@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
@@ -68,11 +67,12 @@ public class PublishSavegameV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPost("repos/{repoId:guid}/savegames", Publish)
-            .WithTags("Savegames");
+            .WithTags("Savegames")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<SavegameDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Publish(
+    private static async Task<Results<Ok<SavegameDto>, BadRequest<CustomProblemDetails>>> Publish(
         Guid repoId,
         PublishSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -84,15 +84,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
 
         var savegameId = new SavegameId(request.SavegameId);
 

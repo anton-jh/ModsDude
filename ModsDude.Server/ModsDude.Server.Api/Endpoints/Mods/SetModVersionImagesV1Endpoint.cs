@@ -2,7 +2,6 @@
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
@@ -10,7 +9,6 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
 
@@ -29,32 +27,23 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPut("repos/{repoId:guid}/mods/{modId}/versions/{versionId}/images", SetImages)
-            .WithTags("Mods");
+            .WithTags("Mods")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
     public record SetModVersionImagesRequest(IEnumerable<ModImageReferenceDto> Images);
 
 
-    private static async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> SetImages(
+    private static async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>>> SetImages(
         Guid repoId, string modId, string versionId,
         SetModVersionImagesRequest request,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IModImageStorageService imageStorageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId), cancellationToken);
         if (modVersion is null)
         {

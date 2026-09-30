@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
@@ -12,7 +11,6 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
 
@@ -26,7 +24,8 @@ public class MoveModVersionV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPut("repos/{repoId:guid}/mods/{modId}/versions/{versionId}/placement", Move)
-            .WithTags("Mods");
+            .WithTags("Mods")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
@@ -39,25 +38,15 @@ public class MoveModVersionV1Endpoint : IEndpoint
     /// recomputes and retries, a hand-authored order is a human's answer to a question the server
     /// cannot re-answer, so the client refetches and asks again.
     /// </summary>
-    private static async Task<Results<Ok<MoveModVersionResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Move(
+    private static async Task<Results<Ok<MoveModVersionResponse>, BadRequest<CustomProblemDetails>>> Move(
         Guid repoId, string modId, string versionId,
         MoveModVersionRequest request,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         RetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
 
         var modVersion = siblings.FirstOrDefault(x => x.Id == new ModVersionId(versionId));

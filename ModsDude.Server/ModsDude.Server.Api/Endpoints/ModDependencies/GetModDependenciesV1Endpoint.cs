@@ -2,13 +2,11 @@
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.ModDependencies;
 
@@ -33,27 +31,18 @@ public class GetModDependenciesV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/modDependencies", GetAll)
-            .WithTags("ModDependencies");
+            .WithTags("ModDependencies")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
     /// <param name="revision">Which revision to read, or omitted for the profile's current one.</param>
-    private static async Task<Results<Ok<GetModDependenciesResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> GetAll(
+    private static async Task<Results<Ok<GetModDependenciesResponse>, BadRequest<CustomProblemDetails>>> GetAll(
         Guid repoId, Guid profileId,
         int? revision,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {

@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
@@ -62,11 +61,12 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPut("repos/{repoId:guid}/savegames/{savegameId:guid}/snapshots", CheckIn)
-            .WithTags("Savegames");
+            .WithTags("Savegames")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CheckIn(
+    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>>> CheckIn(
         Guid repoId, Guid savegameId,
         CheckInSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -78,15 +78,6 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
 
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)

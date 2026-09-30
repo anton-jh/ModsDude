@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
@@ -11,7 +10,6 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
@@ -36,25 +34,16 @@ public class GetProfileIgnoredModsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/ignoredMods", Get)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
-    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
+    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>>> Get(
         Guid repoId, Guid profileId,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
@@ -73,27 +62,18 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPut("repos/{repoId:guid}/profiles/{profileId:guid}/ignoredMods", Set)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Set(
+    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>>> Set(
         Guid repoId, Guid profileId,
         SetProfileIgnoredModsRequest request,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {

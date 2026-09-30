@@ -2,13 +2,11 @@
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
@@ -29,27 +27,18 @@ public class GetProfileRevisionsV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/revisions", Get)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
     /// <param name="skip">How many of the newest revisions to pass over. See the response for why this is an offset.</param>
-    private static async Task<Results<Ok<GetProfileRevisionsResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Get(
+    private static async Task<Results<Ok<GetProfileRevisionsResponse>, BadRequest<CustomProblemDetails>>> Get(
         Guid repoId, Guid profileId,
         int? skip, int? limit,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {

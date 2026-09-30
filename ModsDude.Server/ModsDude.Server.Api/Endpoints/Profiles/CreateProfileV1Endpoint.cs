@@ -2,7 +2,6 @@
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Profiles;
@@ -29,11 +28,12 @@ public class CreateProfileV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPost("repos/{repoId:guid}/profiles", Create)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Create(
+    private static async Task<Results<Ok<ProfileDto>, BadRequest<CustomProblemDetails>>> Create(
         Guid repoId,
         CreateProfileRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -44,15 +44,6 @@ public class CreateProfileV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
 
         if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileName(request.Name), cancellationToken))
         {

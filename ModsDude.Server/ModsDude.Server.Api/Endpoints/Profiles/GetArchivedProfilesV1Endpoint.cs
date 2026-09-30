@@ -3,12 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
-using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
@@ -25,25 +23,16 @@ public class GetArchivedProfilesV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapGet("repos/{repoId:guid}/profiles/archived", GetArchivedProfiles)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
-    private static async Task<Results<Ok<IEnumerable<ProfileDto>>, Forbidden<CustomProblemDetails>>> GetArchivedProfiles(
+    private static async Task<Ok<IEnumerable<ProfileDto>>> GetArchivedProfiles(
         Guid repoId,
-        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Guest))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
-
         var profiles = await dbContext.Profiles
             .Where(x => x.RepoId == new RepoId(repoId) && x.ArchivedAt != null)
             // Most recently archived first, and the timestamp is load-bearing rather than decorative:

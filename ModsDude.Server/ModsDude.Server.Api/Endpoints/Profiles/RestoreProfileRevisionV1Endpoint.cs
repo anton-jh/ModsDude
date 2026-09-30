@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Profiles;
@@ -43,11 +42,12 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapPost("repos/{repoId:guid}/profiles/{profileId:guid}/revisions/{number:int}/restore", Restore)
-            .WithTags("Profiles");
+            .WithTags("Profiles")
+            .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<ProfileRevisionDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> Restore(
+    private static async Task<Results<Ok<ProfileRevisionDto>, BadRequest<CustomProblemDetails>>> Restore(
         Guid repoId, Guid profileId, int number,
         RestoreProfileRevisionRequest? request,
         ClaimsPrincipal claimsPrincipal,
@@ -58,15 +58,6 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
-            .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
-            .MapToForbidden();
-        if (authResult is not null)
-        {
-            return authResult;
-        }
 
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
