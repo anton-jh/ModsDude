@@ -23,7 +23,7 @@ namespace ModsDude.Client.Core.Helpers;
 /// then changes by a factor of ten, which is worse than none. Not thread-safe; the caller serialises.
 /// </para>
 /// </remarks>
-public sealed class RemainingTimeEstimator(TimeProvider? clock = null)
+public sealed class RemainingTimeEstimator(TimeProvider clock)
 {
     /// <summary>How much history the rate is taken over.</summary>
     public static readonly TimeSpan Window = TimeSpan.FromSeconds(30);
@@ -38,7 +38,7 @@ public sealed class RemainingTimeEstimator(TimeProvider? clock = null)
     private static readonly TimeSpan Ceiling = TimeSpan.FromHours(24);
 
 
-    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private readonly TimeProvider _clock = clock;
     private readonly Queue<(long At, long Completed)> _samples = [];
 
     private string? _stage;

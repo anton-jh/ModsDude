@@ -31,19 +31,20 @@ public sealed class ModSyncService(
     IRecycleBin recycleBin,
     IModFolders modFolders,
     IHeldSavegames heldSavegames,
+    ISavegamePlayAttribution playAttribution,
     IResourceLeases leases,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
-    ILogger<ModSyncService> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider,
+    ILogger<ModSyncService> logger)
     : IModSyncService
 {
     private readonly ModSyncPlanBuilder _planBuilder = new(
         modDependenciesClient, modsClient, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
 
     private readonly ModSyncExecutor _executor = new(
-        filesClient, downloader, storeProvider, manifestStore, recycleBin, modFolders, heldSavegames, leases, fileEditor, runningGuard,
-        timeProvider ?? TimeProvider.System, logger);
+        filesClient, downloader, storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases, fileEditor, runningGuard,
+        timeProvider, logger);
 
 
     public event Action<string>? ModFolderChanged

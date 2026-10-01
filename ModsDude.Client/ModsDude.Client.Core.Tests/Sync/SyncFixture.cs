@@ -53,9 +53,11 @@ internal sealed class SyncFixture : IDisposable
             RecycleBin,
             new FakeModFolders(folders),
             Held,
+            Held,
             Leases,
             new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance),
             Guard,
+            TimeProvider.System,
             NullLogger<ModSyncService>.Instance);
     }
 

@@ -100,14 +100,16 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     private readonly HashSet<RunningTask> _seen = [];
     private readonly DispatcherTimer? _timer;
     private readonly TransferLimits _transferLimits;
+    private readonly TimeProvider _time;
 
     private RunningTask? _shown;
     private long _cancelGuardFrom;
 
 
-    public BackgroundTaskViewModel(TransferLimits transferLimits)
+    public BackgroundTaskViewModel(TransferLimits transferLimits, TimeProvider time)
     {
         _transferLimits = transferLimits;
+        _time = time;
 
         // A limit changed in settings while a download runs changes what its title should say, and
         // nothing else would redraw it until the next report.
@@ -727,7 +729,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         : IBackgroundTask
     {
         private readonly List<RunningSubtask> _subtasks = [];
-        private readonly RemainingTimeEstimator _remaining = new();
+        private readonly RemainingTimeEstimator _remaining = new(owner._time);
 
         /// <summary>Whether it was given a Cancel at all, which stays true once the button has been used.</summary>
         private readonly bool _cancellable = cancel is not null;

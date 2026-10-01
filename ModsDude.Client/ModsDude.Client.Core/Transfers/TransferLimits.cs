@@ -28,8 +28,11 @@ public enum TransferDirection
 /// </remarks>
 public sealed class TransferLimits
 {
-    public TransferLimits()
+    public TransferLimits(TimeProvider time)
     {
+        Download = new TransferRateLimiter(time);
+        Upload = new TransferRateLimiter(time);
+
         Download.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         Upload.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -38,13 +41,13 @@ public sealed class TransferLimits
     /// <summary>Raised whenever either limit changes, from whichever thread applied it.</summary>
     public event EventHandler? Changed;
 
-    public TransferRateLimiter Download { get; } = new();
-    public TransferRateLimiter Upload { get; } = new();
+    public TransferRateLimiter Download { get; }
+    public TransferRateLimiter Upload { get; }
 
 
-    public static TransferLimits From(TransferLimitSettings settings)
+    public static TransferLimits From(TransferLimitSettings settings, TimeProvider time)
     {
-        var limits = new TransferLimits();
+        var limits = new TransferLimits(time);
         limits.Apply(settings);
 
         return limits;
@@ -108,9 +111,9 @@ public sealed class TransferRateLimiter
     private TaskCompletionSource _connectionFreed = NewSignal();
 
 
-    public TransferRateLimiter(TimeProvider? time = null)
+    public TransferRateLimiter(TimeProvider time)
     {
-        _time = time ?? TimeProvider.System;
+        _time = time;
         _refilledAt = _time.GetTimestamp();
     }
 

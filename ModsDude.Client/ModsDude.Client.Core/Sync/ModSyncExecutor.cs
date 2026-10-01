@@ -17,7 +17,7 @@ internal sealed class ModSyncExecutor(
     ISyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IModFolders modFolders,
-    IHeldSavegames heldSavegames,
+    ISavegamePlayAttribution playAttribution,
     IResourceLeases leases,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
@@ -608,7 +608,7 @@ internal sealed class ModSyncExecutor(
         // Deliberately not the caller's token. By this point the folder is already what the profile
         // asked for and the manifest is about to say so; abandoning the attribution here would credit
         // everything played on the outgoing revision to the incoming one, quietly and permanently.
-        await heldSavegames.ObserveAsync(plan.TargetRef, CancellationToken.None);
+        await playAttribution.ObserveAsync(plan.TargetRef, CancellationToken.None);
 
         var entries = new List<SyncManifestEntry>();
 

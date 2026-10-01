@@ -43,7 +43,6 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly IProfileService _profileService;
     private readonly IMembershipService _membershipService;
     private readonly IDriftMonitor _driftMonitor;
-    private readonly ISavegameService _savegameService;
     private readonly ISavegameBindingStore _bindingStore;
     private readonly IGameRepository _gameRepository;
     private readonly IProfileApplyService _applyService;
@@ -60,7 +59,6 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         IProfileService profileService,
         IMembershipService membershipService,
         IDriftMonitor driftMonitor,
-        ISavegameService savegameService,
         ISavegameBindingStore bindingStore,
         IGameRepository gameRepository,
         IProfileApplyService applyService,
@@ -74,7 +72,6 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _profileService = profileService;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
-        _savegameService = savegameService;
         _bindingStore = bindingStore;
         _gameRepository = gameRepository;
         _applyService = applyService;
@@ -402,7 +399,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     /// </remarks>
     private string? DescribeHolding(Game game)
     {
-        var held = _savegameService.GetBindings(game);
+        var held = _bindingStore.GetBindings(game.Identity);
         var claiming = held.FirstOrDefault(x => x.ProfileId is not null);
 
         if (claiming.ProfileId is not Guid profileId)

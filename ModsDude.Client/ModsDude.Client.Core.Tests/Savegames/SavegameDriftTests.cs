@@ -1,13 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters;
-using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.Sync;
-
-using ModsDude.Client.Core.Tests.GameProcesses;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -213,7 +210,7 @@ public class SavegameDriftTests
     {
         using var harness = new DriftHarness();
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     [Fact]
@@ -224,7 +221,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"));
         harness.WriteSlotFile("a savegame, played once");
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        var drift = Assert.Single(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.UncheckedInPlay, drift.Kind);
         Assert.Equal(_slot, drift.Slot);
@@ -238,7 +235,7 @@ public class SavegameDriftTests
 
         harness.Hold(await harness.WriteAndHashAsync("a savegame"));
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     [Fact]
@@ -249,7 +246,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
         harness.Sightings.Set(_savegameId, 4);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        var drift = Assert.Single(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.TakenOverAndCheckedIn, drift.Kind);
         Assert.Equal(3, drift.HeldSnapshot);
@@ -265,7 +262,7 @@ public class SavegameDriftTests
         harness.Sightings.Set(_savegameId, 3);
         harness.Sightings.SetClaim(_savegameId, Claim("bob"));
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        var drift = Assert.Single(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.TakenOver, drift.Kind);
         Assert.Equal("Bob", drift.TakenBy?.DisplayName);
@@ -283,7 +280,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6, target: 6);
         harness.WriteManifest(revision: 8);
 
-        var drift = Assert.Single(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        var drift = Assert.Single(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
 
         Assert.Equal(SavegameDriftKind.PlayedOnAnotherModList, drift.Kind);
         Assert.Equal(6, drift.TargetRevision);
@@ -302,7 +299,7 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), revision: 6);
         harness.WriteManifest(revision: 8);
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     /// <summary>
@@ -319,7 +316,7 @@ public class SavegameDriftTests
 
         Directory.Delete(harness.SlotPath, recursive: true);
 
-        Assert.Empty(await harness.Service.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
     }
 
     /// <summary>
@@ -412,29 +409,17 @@ public class SavegameDriftTests
 
             WriteManifest(revision: 6);
 
-            Service = new SavegameService(
-                Server,
-                Server,
-                new SavegamePacker(),
-                _bindings,
-                new FakeSavegameAdapters(Adapter),
-                new FakeSavegameDownloader(Server),
-                new FakeSavegameUploader(Server),
-                _manifestStore,
-                new FakeSlotRecycleBin(),
-                new FakeStoreProvider(new ContentStore("C:\\", Path.Combine(Path.GetTempPath(), "modsdude-tests", "savegame-store", Guid.NewGuid().ToString("N")), long.MaxValue)),
-                new GameFileEditor(new FakeSlotRecycleBin(), NullLogger<GameFileEditor>.Instance),
-                new FakeGameRunningGuard(),
-                NullLogger<SavegameService>.Instance,
-                Sightings);
+            var reader = new HeldSlotReader(
+                new FakeSavegameAdapters(Adapter), _bindings, new SavegamePacker(), NullLogger<HeldSlotReader>.Instance);
+
+            DriftCheck = new SavegameDriftCheck(reader, _manifestStore, Sightings);
         }
 
 
-        public FakeSavegameServer Server { get; } = new();
         public FakeSavegameSightings Sightings { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
-        public SavegameService Service { get; }
+        public SavegameDriftCheck DriftCheck { get; }
         public Game Game { get; }
 
         public SavegameTarget Target => Adapter.SavegameTargets[_slot.Target]!;

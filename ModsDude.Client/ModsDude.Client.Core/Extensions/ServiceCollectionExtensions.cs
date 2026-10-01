@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAccessTokenAccessor>(sp => sp.GetRequiredService<TAccessTokenAccessor>());
         services.AddModsDudeClient(serverBaseUrl);
         services.AddGameAdapters(typeof(IGameAdapter).Assembly);
+        services.AddSingleton(TimeProvider.System);
 
         // Their own HttpClients: they talk to blob storage over a SAS, not to the API, and must not
         // carry the access token the generated clients attach.
@@ -25,7 +26,8 @@ public static class ServiceCollectionExtensions
         // One per process, so every transfer in a direction shares its limit. Read from settings once;
         // the settings page applies a change to this same object rather than to a copy.
         services.AddSingleton(sp => Transfers.TransferLimits.From(
-            sp.GetRequiredService<Services.IClientSettingsRepository>().Read(x => x.Transfers)));
+            sp.GetRequiredService<Services.IClientSettingsRepository>().Read(x => x.Transfers),
+            sp.GetRequiredService<TimeProvider>()));
 
         // Only if nothing else has: a client that can decode mod archives registers a real
         // publisher, and this is called after the app has composed its own services.
@@ -49,17 +51,20 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Savegames.IPersistedGameState, Savegames.StateStoreGameState>();
         services.AddSingleton<Savegames.ISavegameBindingStore, Savegames.SavegameBindingStore>();
 
-        // The savegame engine and the one seam it needs: hydrating a savegame adapter takes the
-        // repo's base settings, which a game does not carry. TryAdd so a host that composes its
-        // own - a test harness, or a shell that knows its repos by another route - keeps it.
+        // TryAdd so a host that knows its repos by another route keeps its own.
         services.TryAddSingleton<Savegames.ILocalSavegameAdapters, Savegames.RepoSavegameAdapters>();
-        services.AddSingleton<Savegames.ISavegameService, Savegames.SavegameService>();
-
-        // What the sync engine knows about savegames, resolved to the same game rather than to a
-        // second engine: play has to be attributed before an apply moves the manifest, and a seam
-        // with its own binding store would attribute it to a copy nobody reads - and would answer
-        // the apply table from a set of holds nobody took.
-        services.AddSingleton<Savegames.IHeldSavegames>(sp => sp.GetRequiredService<Savegames.ISavegameService>());
+        services.AddSingleton<Savegames.ISavegameSlots, Savegames.SavegameSlots>();
+        services.AddSingleton<Savegames.IHeldSlotReader, Savegames.HeldSlotReader>();
+        services.AddSingleton<Savegames.IHeldSavegames, Savegames.HeldSavegames>();
+        services.AddSingleton<Savegames.ISavegamePlayAttribution, Savegames.SavegamePlayAttribution>();
+        services.AddSingleton<Savegames.ISavegameDriftCheck, Savegames.SavegameDriftCheck>();
+        services.AddSingleton<Savegames.ISavegameRecycler, Savegames.SavegameRecycler>();
+        services.AddSingleton<Savegames.ISavegameTransfer, Savegames.SavegameTransfer>();
+        services.AddSingleton<Savegames.ISavegameRenamer, Savegames.SavegameRenamer>();
+        services.AddSingleton<Savegames.ISavegameHolds, Savegames.SavegameHolds>();
+        services.AddSingleton<Savegames.ISavegameCheckOut, Savegames.SavegameCheckOut>();
+        services.AddSingleton<Savegames.ISavegameCheckIn, Savegames.SavegameCheckIn>();
+        services.AddSingleton<Savegames.ISavegamePublisher, Savegames.SavegamePublisher>();
 
         // One per app: the drift answer is app-level, and every view reads the same one.
         services.AddSingleton<IDriftMonitor, DriftMonitor>();

@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
-using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
@@ -169,9 +168,10 @@ public sealed class DriftMonitor : IDriftMonitor
     private readonly IDriftCandidateSource _candidates;
     private readonly IDriftService _driftService;
     private readonly ISyncManifestStore _manifestStore;
-    private readonly IProfileRevisions? _profileRevisions;
-    private readonly IHeldSavegames? _savegames;
-    private readonly IStoreIntegrityService? _storeIntegrity;
+    private readonly IProfileRevisions _profileRevisions;
+    private readonly IHeldSavegames _heldSavegames;
+    private readonly ISavegameDriftCheck _savegameDrift;
+    private readonly IStoreIntegrityService _storeIntegrity;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -187,32 +187,26 @@ public sealed class DriftMonitor : IDriftMonitor
     private readonly List<CorruptedBlob> _corruption = [];
 
 
-    /// <param name="savegames">
-    /// Where the savegame half of the answer comes from. Optional, and absent for a build with no
-    /// savegame support composed - the notice then says exactly what it has always said.
-    /// </param>
-    /// <param name="storeIntegrity">
-    /// The rewritten-blob check, run against whatever the folder comparison found changed. Optional
-    /// on the same terms as <paramref name="savegames"/>.
-    /// </param>
     public DriftMonitor(
         IDriftCandidateSource candidates,
         IDriftService driftService,
         ISyncManifestStore manifestStore,
-        IProfileRevisions? profileRevisions = null,
-        TimeProvider? timeProvider = null,
-        IHeldSavegames? savegames = null,
-        IStoreIntegrityService? storeIntegrity = null,
-        ILogger<DriftMonitor>? logger = null)
+        IProfileRevisions profileRevisions,
+        TimeProvider timeProvider,
+        IHeldSavegames heldSavegames,
+        ISavegameDriftCheck savegameDrift,
+        IStoreIntegrityService storeIntegrity,
+        ILogger<DriftMonitor> logger)
     {
-        _logger = logger ?? (ILogger)NullLogger.Instance;
+        _logger = logger;
         _candidates = candidates;
         _driftService = driftService;
         _manifestStore = manifestStore;
         _profileRevisions = profileRevisions;
-        _savegames = savegames;
+        _heldSavegames = heldSavegames;
+        _savegameDrift = savegameDrift;
         _storeIntegrity = storeIntegrity;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
     }
 
 
@@ -419,8 +413,8 @@ public sealed class DriftMonitor : IDriftMonitor
                 // on, and it comes out equal on its own. Against head instead, a game holding a
                 // past savegame would report drift permanently and offer a re-apply to head that the
                 // apply table refuses.
-                currentRevision: _savegames?.GetRequiredRevision(candidate.Identity, active.ProfileId)
-                    ?? _profileRevisions?.GetHeadRevision(active),
+                currentRevision: _heldSavegames.GetRequiredRevision(candidate.Identity, active.ProfileId)
+                    ?? _profileRevisions.GetHeadRevision(active),
                 savegameDrift: savegameDrift);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -447,24 +441,15 @@ public sealed class DriftMonitor : IDriftMonitor
         IReadOnlyList<Savegames.SavegameDrift> drift, GameModFolder target)
         => [.. drift.Where(x => x.Slot.Target == target.Target.Key)];
 
-    /// <summary>
-    /// The savegame half, or nothing where this build has none.
-    /// </summary>
     /// <remarks>
-    /// Its failures are swallowed on purpose. The mod half of the answer is the one that has always
-    /// been there and it is computed already; losing all of it because a save folder went missing
-    /// mid-check would trade a working notice for an exception on a background thread.
+    /// Its failures are logged and swallowed: losing the mod half, which is computed already, because
+    /// a save folder went missing mid-check would trade a working notice for a background exception.
     /// </remarks>
     private async Task<IReadOnlyList<Savegames.SavegameDrift>> CheckSavegamesAsync(GameIdentity game)
     {
-        if (_savegames is null)
-        {
-            return [];
-        }
-
         try
         {
-            return await _savegames.CheckDriftAsync(game, CancellationToken.None);
+            return await _savegameDrift.CheckDriftAsync(game, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -476,18 +461,13 @@ public sealed class DriftMonitor : IDriftMonitor
         }
     }
 
-    /// <summary>
-    /// The rewritten-blob half, or nothing where this build has none.
-    /// </summary>
     /// <remarks>
-    /// Swallows its failures for the same reason <see cref="CheckSavegamesAsync"/> does, and it has
-    /// one more of its own to swallow: a mod folder on a drive that went away between the listing
-    /// and the identity read. Nothing found means nothing said, which is also the honest answer for
-    /// a filesystem that cannot report file identities at all.
+    /// Swallows its failures for the same reason <see cref="CheckSavegamesAsync"/> does, including a
+    /// mod folder on a drive that went away between the listing and the identity read.
     /// </remarks>
     private async Task<IReadOnlyList<CorruptedBlob>> CheckStoreAsync(GameModFolder target, IReadOnlyList<string> changed)
     {
-        if (_storeIntegrity is null || changed.Count == 0)
+        if (changed.Count == 0)
         {
             return [];
         }

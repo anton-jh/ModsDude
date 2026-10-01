@@ -503,6 +503,7 @@ public partial class App : Application
         // library's own way of saying so, which Core cannot see.
         services.AddSingleton<IConnectionRetry>(sp => new ConnectionRetry(
             sp.GetRequiredService<ILogger<ConnectionRetry>>(),
+            sp.GetRequiredService<TimeProvider>(),
             alsoConnectionFailure: AuthenticationService.IsUnreachable));
 
         // Windows notifications: the toolkit behind one seam, and the object that decides when the

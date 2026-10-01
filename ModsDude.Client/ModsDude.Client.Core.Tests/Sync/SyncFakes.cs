@@ -333,7 +333,8 @@ internal sealed class FakeModFolders(params GameModFolder[] folders) : IModFolde
 /// still have read, and that is the number play gets attributed to.
 /// </para>
 /// </remarks>
-internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSavegames
+internal sealed class FakeHeldSavegames(SyncManifestStore manifests)
+    : IHeldSavegames, ISavegamePlayAttribution, ISavegameDriftCheck
 {
     private readonly List<SavegameCheckoutBinding> _held = [];
     private readonly List<SavegameDrift> _drift = [];
@@ -369,6 +370,15 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
         return Task.CompletedTask;
     }
 
+    public SavegameCheckoutBinding Observe(GameIdentity game, SavegameCheckoutBinding binding, string currentContentHash)
+        => throw new NotSupportedException();
+
+    public int? FindPlayedRevision(GameIdentity game, SavegameCheckoutBinding binding)
+        => throw new NotSupportedException();
+
+    public int? GetPlayedRevision(Game game, Guid savegameId)
+        => throw new NotSupportedException();
+
     public int? GetRequiredRevision(GameIdentity game, Guid profileId)
         => SavegameHoldRules.RequiredRevision(_held, profileId);
 
@@ -386,10 +396,6 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests) : IHeldSave
     /// </summary>
     public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<SavegameDrift>>([.. _drift]);
-
-    /// <summary>Nothing: what a held slot reads as is <c>SavegameService</c>'s and is exercised there.</summary>
-    public Task<IReadOnlyList<HeldSlotReading>> ReadHeldAsync(GameIdentity game, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<HeldSlotReading>>([]);
 
     /// <summary>Records that a save held in one of this game's folders has drifted.</summary>
     public void Drifted(SavegameSlotRef slot)

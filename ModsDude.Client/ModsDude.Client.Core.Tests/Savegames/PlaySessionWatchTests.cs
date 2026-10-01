@@ -246,18 +246,15 @@ public class PlaySessionWatchTests
     }
 
     /// <summary>Every held slot, reading as <see cref="Hash"/> - which starts out as what was checked out.</summary>
-    private sealed class Readings(SavegameBindingStore bindings) : IHeldSavegames
+    private sealed class Readings(SavegameBindingStore bindings) : IHeldSlotReader
     {
         public string? Hash { get; set; } = CheckedOut;
 
-        public Task<IReadOnlyList<HeldSlotReading>> ReadHeldAsync(GameIdentity game, CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<HeldSlotReading>>(
-                [.. bindings.GetBindings(game).Select(x => new HeldSlotReading(x, Hash, "My farm"))]);
+        public Task<IReadOnlyList<HeldSlotReading>> ReadAsync(GameIdentity game, CancellationToken ct)
+            => ReadAsync(game, bindings.GetBindings(game), ct);
 
-        public Task ObserveAsync(ModTargetRef target, CancellationToken ct) => throw new NotSupportedException();
-        public int? GetRequiredRevision(GameIdentity game, Guid profileId) => throw new NotSupportedException();
-        public SavegameApplyDecision DecideApply(GameIdentity game, Guid profileId, int? revision) => throw new NotSupportedException();
-        public SavegameCheckoutBinding? FindProfileHold(GameIdentity game) => throw new NotSupportedException();
-        public Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<HeldSlotReading>> ReadAsync(
+            GameIdentity game, IReadOnlyList<SavegameCheckoutBinding> held, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<HeldSlotReading>>([.. held.Select(x => new HeldSlotReading(x, Hash, "My farm"))]);
     }
 }

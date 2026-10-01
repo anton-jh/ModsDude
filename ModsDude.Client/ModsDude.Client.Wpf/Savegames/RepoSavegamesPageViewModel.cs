@@ -45,7 +45,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
     private readonly ISavegameSightingCache _sightings;
-    private readonly ISavegameService _savegameService;
+    private readonly ISavegameSlots _slots;
+    private readonly ISavegameHolds _holds;
     private readonly ISavegameBindingStore _bindingStore;
     private readonly IProfileService _profileService;
     private readonly ICurrentUserService _currentUserService;
@@ -70,7 +71,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     public RepoSavegamesPageViewModel(
         Repo repo,
         ISavegamesClient savegamesClient,
-        ISavegameService savegameService,
+        ISavegameSlots slots,
+        ISavegameHolds holds,
         ISavegameSightingCache sightings,
         ISavegameBindingStore bindingStore,
         IProfileService profileService,
@@ -91,7 +93,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _showPastSavegames = showPastSavegames;
         _repo = repo;
         _savegamesClient = savegamesClient;
-        _savegameService = savegameService;
+        _slots = slots;
+        _holds = holds;
         _sightings = sightings;
         _bindingStore = bindingStore;
         _profileService = profileService;
@@ -318,7 +321,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         foreach (var binding in held.Where(x => known.Contains(x.SavegameId) is false))
         {
-            _savegameService.Forget(game, binding.SavegameId);
+            _holds.Forget(game, binding.SavegameId);
         }
     }
 
@@ -858,7 +861,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             // A hold whose folder the settings no longer name has nothing to hash, so there is
             // nothing this chip could say about it. The row says that state in its own words instead,
             // and offers the one action it has - see SavegameListItemViewModel.HoldNote.
-            var unreachable = _savegameService.GetUnreachableHolds(game)
+            var unreachable = _holds.GetUnreachableHolds(game)
                 .Select(x => x.SavegameId)
                 .ToHashSet();
 
@@ -872,7 +875,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                     continue;
                 }
 
-                var availability = await _savegameService.ClassifySlotAsync(game, binding.Slot, _lifetime);
+                var availability = await _slots.ClassifySlotAsync(game, binding.Slot, _lifetime);
 
                 if (availability is SavegameSlotAvailability.HeldWithUnpublishedPlay)
                 {
@@ -978,7 +981,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             // Asked of the disk here rather than read off the row's chip. The chip arrives from a
             // background pass that may not have reached this row yet, and the two confirmations this
             // decides between are "nothing is lost" and "an evening of play goes to the Recycle Bin".
-            var played = await _savegameService.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
+            var played = await _slots.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
                 is SavegameSlotAvailability.HeldWithUnpublishedPlay;
 
             // The savegame's name where the modal wants a slot label, as the check-in does: a slot
@@ -1054,7 +1057,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         await RunAsync("making a savegame current", async () =>
         {
-            var result = await _savegameService.MakeCurrentAsync(
+            var result = await _holds.MakeCurrentAsync(
                 [.. _repo.Games], row.Savegame, _lifetime);
 
             _toasts.Show(result.Superseded is SavegameDto displaced

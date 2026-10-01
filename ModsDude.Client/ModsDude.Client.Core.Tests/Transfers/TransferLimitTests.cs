@@ -14,7 +14,7 @@ public class TransferLimitTests
     [Fact]
     public void Without_a_limit_nothing_ever_waits()
     {
-        var limiter = new TransferRateLimiter();
+        var limiter = new TransferRateLimiter(TimeProvider.System);
 
         for (var i = 0; i < 1000; i++)
         {
@@ -27,7 +27,7 @@ public class TransferLimitTests
     [Fact]
     public async Task A_limit_holds_the_rate_to_it()
     {
-        var limiter = new TransferRateLimiter { BytesPerSecond = 2 * _megabyte };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 2 * _megabyte };
         var stopwatch = Stopwatch.StartNew();
 
         // 2 MB at 2 MB/s, less the quarter second of burst the bucket may start with.
@@ -42,7 +42,7 @@ public class TransferLimitTests
     [Fact]
     public async Task Concurrent_transfers_share_one_limit()
     {
-        var limiter = new TransferRateLimiter { BytesPerSecond = 2 * _megabyte };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 2 * _megabyte };
         var stopwatch = Stopwatch.StartNew();
 
         // Four at 512 KB each is the same 2 MB, and so the same second, as one at 2 MB.
@@ -60,7 +60,7 @@ public class TransferLimitTests
     [Fact]
     public async Task Lifting_a_limit_frees_what_it_was_holding_back()
     {
-        var limiter = new TransferRateLimiter { BytesPerSecond = 256 * 1024 };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 256 * 1024 };
 
         using var first = await limiter.AcquireConnectionAsync(CancellationToken.None);
         var second = limiter.AcquireConnectionAsync(CancellationToken.None).AsTask();
@@ -76,7 +76,7 @@ public class TransferLimitTests
     [Fact]
     public async Task A_connection_handed_back_lets_the_next_one_in()
     {
-        var limiter = new TransferRateLimiter { BytesPerSecond = 256 * 1024 };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 256 * 1024 };
 
         var first = await limiter.AcquireConnectionAsync(CancellationToken.None);
         var second = limiter.AcquireConnectionAsync(CancellationToken.None).AsTask();
@@ -92,7 +92,7 @@ public class TransferLimitTests
     [Fact]
     public void A_limit_allows_as_many_connections_as_it_can_keep_busy()
     {
-        var limiter = new TransferRateLimiter { BytesPerSecond = 100 * 1024 };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 100 * 1024 };
         Assert.Equal(1, limiter.ConnectionCap);
 
         limiter.BytesPerSecond = 2 * _megabyte;
@@ -102,7 +102,7 @@ public class TransferLimitTests
     [Fact]
     public void Settings_reach_the_limiters_and_say_so()
     {
-        var limits = new TransferLimits();
+        var limits = new TransferLimits(TimeProvider.System);
         var changes = 0;
         limits.Changed += (_, _) => changes++;
 
@@ -120,7 +120,7 @@ public class TransferLimitTests
     [Fact]
     public async Task An_upload_is_held_to_the_upload_limit()
     {
-        var limits = TransferLimits.From(new TransferLimitSettings { UploadBytesPerSecond = 2 * _megabyte });
+        var limits = TransferLimits.From(new TransferLimitSettings { UploadBytesPerSecond = 2 * _megabyte }, TimeProvider.System);
         var storage = new SinkStorage();
         var uploader = new BlockBlobModFileUploader(new HttpClient(storage), limits);
         var bytes = new byte[2 * _megabyte];

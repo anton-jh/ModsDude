@@ -411,8 +411,16 @@ internal sealed class FakeSavegameAdapter(string root, params string[] slotIds) 
 
     public string GetSlotPath(SavegameTarget target, SavegameSlotId slot) => Path.Combine(target.Path, slot.Value);
 
+    /// <summary>What a savegame folder on a drive that went away looks like from the caller's side.</summary>
+    public bool ThrowOnGetSlots { get; set; }
+
     public Task<IReadOnlyList<SavegameSlot>> GetSlots(SavegameTarget target, CancellationToken cancellationToken)
     {
+        if (ThrowOnGetSlots)
+        {
+            throw new IOException("Simulated: the savegame folder cannot be read.");
+        }
+
         IReadOnlyList<SavegameSlot> slots =
         [
             .. slotIds.Select(id => new SavegameSlot(

@@ -588,6 +588,14 @@ public class DriftMonitorTests
         public int? GetHeadRevision(ActiveProfile profile) => Head;
     }
 
+    /// <summary>Finds nothing, for the fixtures with no store on a real volume to check.</summary>
+    private sealed class NoStoreIntegrity : IStoreIntegrityService
+    {
+        public Task<IReadOnlyList<CorruptedBlob>> CheckAsync(
+            ModTargetRef target, string modFolder, IReadOnlyList<string> changed, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<CorruptedBlob>>([]);
+    }
+
 
     /// <summary>
     /// A blob the game wrote through survives the check that can no longer see it.
@@ -700,7 +708,7 @@ public class DriftMonitorTests
 
             Held = new FakeHeldSavegames(Manifests);
 
-            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Integrity);
+            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
         }
 
 
@@ -715,7 +723,7 @@ public class DriftMonitorTests
 
         /// <summary>Null unless this fixture was built with one - see the constructor.</summary>
         public ContentStore? Store { get; }
-        public StoreIntegrityService? Integrity { get; }
+        public IStoreIntegrityService Integrity { get; } = new NoStoreIntegrity();
 
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();
@@ -804,7 +812,7 @@ public class DriftMonitorTests
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
         public DriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Revisions, Time, storeIntegrity: Integrity);
+            => new(Candidates, Drift, Manifests, Revisions, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
 
         public void Dispose()
         {

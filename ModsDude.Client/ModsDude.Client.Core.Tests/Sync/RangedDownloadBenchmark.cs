@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using System.Diagnostics;
 using Xunit.Abstractions;
 
@@ -54,7 +55,7 @@ public class RangedDownloadBenchmark(ITestOutputHelper output)
 
     private async Task MeasureAsync(HttpClient httpClient, string link, string label, RangedDownloadOptions options)
     {
-        var downloader = new HttpModFileDownloader(httpClient, options);
+        var downloader = new HttpModFileDownloader(httpClient, options, new TransferRateLimiter(TimeProvider.System));
         var stopwatch = Stopwatch.StartNew();
 
         using var download = await downloader.OpenAsync(link, null, CancellationToken.None);

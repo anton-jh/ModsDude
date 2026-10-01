@@ -16,7 +16,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// drifted. It is also permanent: nothing moves a savegame between profiles, or into one.
 /// </remarks>
 /// <param name="DeclaredRevision">
-/// The number this first snapshot records, from <see cref="SavegameService.DeclaredRevisionFor"/>.
+/// The number this first snapshot records, from <see cref="SavegameRevisionRules.DeclaredRevisionFor"/>.
 /// Null only for <see cref="NoModList"/>, whose pair is null on both halves.
 /// </param>
 /// <param name="CurrentSavegameName">

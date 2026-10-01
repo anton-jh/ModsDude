@@ -113,12 +113,11 @@ public sealed class HttpModFileDownloader : IModFileDownloader
     {
     }
 
-    /// <param name="limiter">Null for none, which is what a test that is not about limits wants.</param>
-    internal HttpModFileDownloader(HttpClient httpClient, RangedDownloadOptions options, TransferRateLimiter? limiter = null)
+    internal HttpModFileDownloader(HttpClient httpClient, RangedDownloadOptions options, TransferRateLimiter limiter)
     {
         _httpClient = httpClient;
         _options = options;
-        _limiter = limiter ?? new TransferRateLimiter();
+        _limiter = limiter;
     }
 
 

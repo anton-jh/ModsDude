@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Transfers;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
@@ -243,7 +244,7 @@ public class HttpModFileDownloaderTests
     {
         var options = Options() with { ChunkSize = 256 * 1024 };
         var storage = new FakeBlobStorage(Bytes(2 * 1024 * 1024));
-        var limiter = new Core.Transfers.TransferRateLimiter { BytesPerSecond = 2 * 1024 * 1024 };
+        var limiter = new TransferRateLimiter(TimeProvider.System) { BytesPerSecond = 2 * 1024 * 1024 };
         var downloader = new HttpModFileDownloader(new HttpClient(storage), options, limiter);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -273,7 +274,7 @@ public class HttpModFileDownloaderTests
 
     private static Task<ModFileDownload> Open(FakeBlobStorage storage, RangedDownloadOptions? options = null, IProgress<long>? bytesReceived = null)
     {
-        var downloader = new HttpModFileDownloader(new HttpClient(storage), options ?? Options());
+        var downloader = new HttpModFileDownloader(new HttpClient(storage), options ?? Options(), new TransferRateLimiter(TimeProvider.System));
 
         return downloader.OpenAsync("https://storage.example/blob?sas", bytesReceived, CancellationToken.None);
     }

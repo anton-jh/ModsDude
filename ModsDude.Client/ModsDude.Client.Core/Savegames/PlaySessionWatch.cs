@@ -46,7 +46,7 @@ public sealed record PlayedSavegame(
 public sealed class PlaySessionWatch(
     IDriftCandidateSource games,
     ISavegameBindingStore bindings,
-    IHeldSavegames held,
+    IHeldSlotReader reader,
     IGameProcessNames processNames,
     IGameProcesses processes,
     ILogger<PlaySessionWatch> logger) : IPlaySessionWatch
@@ -181,7 +181,7 @@ public sealed class PlaySessionWatch(
     {
         try
         {
-            return await held.ReadHeldAsync(game, ct);
+            return await reader.ReadAsync(game, ct);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -9,7 +9,7 @@ namespace ModsDude.Client.Core.Savegames;
 /// <para>
 /// <see cref="AnotherSavegameIsHeld"/> is a sentence a disabled button carries instead of working;
 /// <see cref="ModFolderElsewhere"/> is a question the button asks before it works.
-/// <see cref="SavegameHoldRules"/>, <see cref="SavegameService.CheckOutAsync"/> and the sync engine
+/// <see cref="SavegameHoldRules"/>, <see cref="SavegameCheckOut.CheckOutAsync"/> and the sync engine
 /// already refuse the first; those are the backstops nothing gets past, and this is the half that
 /// makes the refusal arrive before the click rather than after it.
 /// </para>
@@ -91,7 +91,7 @@ public static class SavegameRowRules
     /// can say what the folder ought to be on, so nothing is claimed about it.
     /// </param>
     /// <param name="pinnedRevision">
-    /// What a <em>past</em> savegame runs on, from <see cref="SavegameService.TargetRevisionOf"/>. Null
+    /// What a <em>past</em> savegame runs on, from <see cref="SavegameRevisionRules.TargetRevisionOf"/>. Null
     /// for a current one.
     /// </param>
     /// <param name="held">What the game is already holding.</param>

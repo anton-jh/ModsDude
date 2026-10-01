@@ -40,13 +40,13 @@ public enum ConnectionTarget
 /// </remarks>
 public sealed class ConnectionRetry(
     ILogger<ConnectionRetry> logger,
-    TimeProvider? timeProvider = null,
+    TimeProvider timeProvider,
     Func<Exception, bool>? alsoConnectionFailure = null) : IConnectionRetry
 {
     /// <summary>Notice keys are prefixed with this.</summary>
     public const string KeyPrefix = "connection/";
 
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly Lock _lock = new();
     private readonly Dictionary<ConnectionTarget, Outage> _outages = [];
 

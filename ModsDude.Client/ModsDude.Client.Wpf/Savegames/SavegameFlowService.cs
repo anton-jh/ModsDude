@@ -38,7 +38,12 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </para>
 /// </remarks>
 public sealed class SavegameFlowService(
-    ISavegameService savegames,
+    ISavegameSlots savegameSlots,
+    ISavegameCheckOut savegameCheckOut,
+    ISavegameCheckIn savegameCheckIn,
+    ISavegamePublisher savegamePublisher,
+    ISavegameHolds savegameHolds,
+    ISavegamePlayAttribution playAttribution,
     ISavegamesClient savegamesClient,
     IProfileService profileService,
     ISyncManifestStore manifestStore,
@@ -63,8 +68,8 @@ public sealed class SavegameFlowService(
     /// modals say instead of leaving the player to work out which folder is meant.
     /// </summary>
     private int? HeldSlotNumber(Game game, Guid savegameId)
-        => savegames.GetBinding(game, savegameId) is SavegameCheckoutBinding binding
-            ? savegames.DescribeSlotNumber(game, binding.Slot)
+        => bindingStore.GetBinding(game.Identity, savegameId) is SavegameCheckoutBinding binding
+            ? savegameSlots.DescribeSlotNumber(game, binding.Slot)
             : null;
 
     private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
@@ -176,7 +181,7 @@ public sealed class SavegameFlowService(
 
         using var task = backgroundTasks.Begin($"Giving '{savegameName}' back", "Releasing the claim, then recycling the local copy");
 
-        var recycled = await savegames.DiscardAsync(game, savegameId, cancellationToken);
+        var recycled = await savegameCheckIn.DiscardAsync(game, savegameId, cancellationToken);
 
         toasts.Show(recycled
             ? $"'{savegameName}' was given back without a snapshot. The local copy is in the Recycle Bin."
@@ -210,7 +215,7 @@ public sealed class SavegameFlowService(
             return false;
         }
 
-        return savegames.Forget(game, savegameId);
+        return savegameHolds.Forget(game, savegameId);
     }
 
     public async Task CheckInHeldAsync(
@@ -285,7 +290,7 @@ public sealed class SavegameFlowService(
         return new SavegameHost(
             game,
             bindingStore.GetBindings(game.Identity),
-            savegames.GetUnreachableHolds(game).Select(x => x.SavegameId).ToHashSet(),
+            savegameHolds.GetUnreachableHolds(game).Select(x => x.SavegameId).ToHashSet(),
             manifest?.ProfileId,
             manifest?.ProfileRevision);
     }
@@ -336,9 +341,9 @@ public sealed class SavegameFlowService(
             return new SavegameHoldHere(
                 host.Game,
                 binding.Slot,
-                savegames.DescribeFolder(host.Game, binding.Slot.Target),
+                savegameSlots.DescribeFolder(host.Game, binding.Slot.Target),
                 host.UnreachableHolds.Contains(savegameId),
-                savegames.DescribeSlotNumber(host.Game, binding.Slot));
+                savegameSlots.DescribeSlotNumber(host.Game, binding.Slot));
         }
 
         return null;
@@ -551,7 +556,7 @@ public sealed class SavegameFlowService(
             return true;
         }
 
-        var pinned = SavegameService.TargetRevisionOf(savegame);
+        var pinned = SavegameRevisionRules.TargetRevisionOf(savegame);
 
         var offer = SavegameRowRules.Describe(
             savegame.Id, profile.Id, profile.HeadRevision, pinned, host.Held, host.AppliedProfileId, host.AppliedRevision);
@@ -701,7 +706,7 @@ public sealed class SavegameFlowService(
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
-            var displacedByCopy = await savegames.TakeCopyAsync(
+            var displacedByCopy = await savegameCheckOut.TakeCopyAsync(
                 game, savegame, snapshotNumber, slot.Ref, cancellationToken, new SavegameStripProgress(task));
 
             toasts.Show($"Snapshot {snapshotNumber} of '{name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
@@ -728,7 +733,7 @@ public sealed class SavegameFlowService(
 
         task.Report("Taking the claim");
 
-        var (takenFrom, displaced) = await savegames.CheckOutAsync(game, savegame, slot.Ref, cancellationToken, new SavegameStripProgress(task));
+        var (takenFrom, displaced) = await savegameCheckOut.CheckOutAsync(game, savegame, slot.Ref, cancellationToken, new SavegameStripProgress(task));
 
         ReportDisplaced(displaced);
 
@@ -869,12 +874,12 @@ public sealed class SavegameFlowService(
         Func<Guid, string?> nameOf,
         CancellationToken cancellationToken)
     {
-        var slots = await savegames.GetSlotsAsync(game, cancellationToken);
+        var slots = await savegameSlots.GetSlotsAsync(game, cancellationToken);
         var options = new List<SavegameSlotOptionViewModel>();
 
         foreach (var slot in slots)
         {
-            var availability = await savegames.ClassifySlotAsync(game, slot.Ref, cancellationToken);
+            var availability = await savegameSlots.ClassifySlotAsync(game, slot.Ref, cancellationToken);
             var binding = bindingStore.GetBindingForSlot(game.Identity, slot.Ref);
 
             options.Add(new SavegameSlotOptionViewModel(
@@ -884,7 +889,7 @@ public sealed class SavegameFlowService(
                 binding is SavegameCheckoutBinding held ? nameOf(held.SavegameId) : null));
         }
 
-        var suggested = await savegames.SuggestSlotAsync(game, savegame.Id, cancellationToken);
+        var suggested = await savegameSlots.SuggestSlotAsync(game, savegame.Id, cancellationToken);
         var hint = bindingStore.GetSlotHint(game.Identity, savegame.Id);
 
         return new SavegameCheckOutContext(
@@ -910,7 +915,7 @@ public sealed class SavegameFlowService(
     /// </remarks>
     private string? DescribeRunsOn(Repo repo, SavegameDto savegame)
     {
-        if (SavegameService.TargetRevisionOf(savegame) is int pinned)
+        if (SavegameRevisionRules.TargetRevisionOf(savegame) is int pinned)
         {
             return $"This savegame stays on rev {pinned}. Playing it does not move it forward.";
         }
@@ -977,7 +982,7 @@ public sealed class SavegameFlowService(
             game,
             profile.Id,
             profile.Name,
-            SavegameService.TargetRevisionOf(savegame),
+            SavegameRevisionRules.TargetRevisionOf(savegame),
             cancellationToken,
             ProfileApplyService.Report(task, null))).Plans;
 
@@ -1104,7 +1109,7 @@ public sealed class SavegameFlowService(
             // Three endings, because the slot is in a different state in each and the sentence is the
             // only thing that says which. A publish that handed the save back emptied the folder -
             // unless the Recycle Bin refused it, which is the one that has to be said out loud.
-            if (NotRecycled(outcome.LocalCopy, SavegameSlotWording.Named(savegames.DescribeSlotNumber(game, chosen.Ref), outcome.Savegame.Name))
+            if (NotRecycled(outcome.LocalCopy, SavegameSlotWording.Named(savegameSlots.DescribeSlotNumber(game, chosen.Ref), outcome.Savegame.Name))
                 is string notRecycled)
             {
                 toasts.Show($"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. {notRecycled}", ToastSeverity.Warning);
@@ -1144,9 +1149,9 @@ public sealed class SavegameFlowService(
     {
         var options = new List<SavegameSlotOptionViewModel>();
 
-        foreach (var slot in await savegames.GetSlotsAsync(game, cancellationToken))
+        foreach (var slot in await savegameSlots.GetSlotsAsync(game, cancellationToken))
         {
-            var availability = await savegames.ClassifySlotAsync(game, slot.Ref, cancellationToken);
+            var availability = await savegameSlots.ClassifySlotAsync(game, slot.Ref, cancellationToken);
 
             if (availability is SavegameSlotAvailability.Unrecognised)
             {
@@ -1198,7 +1203,7 @@ public sealed class SavegameFlowService(
             options.FirstOrDefault(x => x.ProfileId == preselected && x.ProfileId is not null),
             activeProfileId,
             options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name,
-            savegames.DescribeSlotNumber(game, slot));
+            savegameSlots.DescribeSlotNumber(game, slot));
 
         await modalService.Value.Show(modal);
 
@@ -1219,7 +1224,7 @@ public sealed class SavegameFlowService(
 
         task.DeclareTransfers(TransferDirection.Upload);
 
-        var result = await savegames.PublishAsync(
+        var result = await savegamePublisher.PublishAsync(
             game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken,
             new SavegameStripProgress(task));
 
@@ -1258,7 +1263,7 @@ public sealed class SavegameFlowService(
             options.Add(new SavegamePublishOption(
                 profile.Id,
                 profile.Name,
-                SavegameService.DeclaredRevisionFor(profile.Id, profile.HeadRevision, appliedProfileId, appliedRevision),
+                SavegameRevisionRules.DeclaredRevisionFor(profile.Id, profile.HeadRevision, appliedProfileId, appliedRevision),
                 incumbent?.Name,
                 incumbent?.Head?.ProfileRevision,
                 profile.Id == appliedProfileId));
@@ -1308,16 +1313,16 @@ public sealed class SavegameFlowService(
     /// Which mod list the snapshot about to be minted records, in the one line that says it.
     /// </summary>
     /// <remarks>
-    /// <b>Read rather than recomputed.</b> The number is <see cref="ISavegameService.GetPlayedRevision"/>'s,
+    /// <b>Read rather than recomputed.</b> The number is <see cref="ISavegamePlayAttribution.GetPlayedRevision"/>'s,
     /// which is the same one the check-in sends - working it out a second time here is how a modal
     /// comes to name a revision the snapshot does not carry. The profile's name is this layer's to add:
     /// the binding records an id, and a bare "rev 1004" is a number belonging to no list in particular.
     /// </remarks>
     private string? DescribePlayedOn(Game game, Guid savegameId)
     {
-        if (savegames.GetBinding(game, savegameId) is not SavegameCheckoutBinding binding
+        if (bindingStore.GetBinding(game.Identity, savegameId) is not SavegameCheckoutBinding binding
             || binding.ProfileId is not Guid profileId
-            || savegames.GetPlayedRevision(game, savegameId) is not int revision)
+            || playAttribution.GetPlayedRevision(game, savegameId) is not int revision)
         {
             return null;
         }
@@ -1349,7 +1354,7 @@ public sealed class SavegameFlowService(
             using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
             task.DeclareTransfers(TransferDirection.Upload);
 
-            var result = await savegames.CheckInAsync(
+            var result = await savegameCheckIn.CheckInAsync(
                 game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task), renameTo);
 
             return SavegameCheckInOutcome.CheckedIn(result.Snapshot, keepPlaying, result.LocalCopy);
@@ -1391,7 +1396,7 @@ public sealed class SavegameFlowService(
 /// <param name="UnreachableHolds">
 /// The savegames held in a folder the settings no longer name, read once for the whole list. They
 /// are still held and still claimed, and nothing that touches the bytes works on them - see
-/// <see cref="ISavegameService.GetUnreachableHolds"/>.
+/// <see cref="ISavegameHolds.GetUnreachableHolds"/>.
 /// </param>
 public sealed record SavegameHost(
     Game Game,

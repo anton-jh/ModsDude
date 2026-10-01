@@ -26,7 +26,7 @@ namespace ModsDude.Client.Wpf.Shell.Notices;
 /// continues underneath, so what comes back afterwards shows the full total.
 /// </para>
 /// </remarks>
-public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) : IBackgroundProblemSource
+public sealed class BackgroundProblemSource(TimeProvider timeProvider) : IBackgroundProblemSource
 {
     /// <summary>Notice keys are prefixed with this, so the column knows whose dismissal to route here.</summary>
     public const string KeyPrefix = "background/";
@@ -37,7 +37,7 @@ public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) :
     /// </summary>
     private static readonly TimeSpan _cooldown = TimeSpan.FromMinutes(10);
 
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly Lock _lock = new();
     private readonly Dictionary<BackgroundProblem, int> _counts = [];
 

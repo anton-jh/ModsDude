@@ -25,7 +25,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// <param name="IsUnreachable">
 /// Whether the folder holding it is one the game's settings no longer name. The save is still on this
 /// disk and still claimed; nothing can read, pack or recycle it until the settings point back at that
-/// folder. See <see cref="ModsDude.Client.Core.Savegames.ISavegameService.GetUnreachableHolds"/>.
+/// folder. See <see cref="ModsDude.Client.Core.Savegames.ISavegameHolds.GetUnreachableHolds"/>.
 /// </param>
 /// <param name="SlotNumber">
 /// The number the player knows the slot by, for a game that numbers them. It is drawn on the row as a
@@ -116,7 +116,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         // Recorded here because the row's actions need it and because it is what the binding will
         // carry a moment later - two answers to "which list does this savegame run on" is how a row comes
         // to describe a different apply from the one that runs.
-        PinnedRevision = SavegameService.TargetRevisionOf(savegame);
+        PinnedRevision = SavegameRevisionRules.TargetRevisionOf(savegame);
 
         Chips = [];
 
@@ -141,7 +141,7 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>
     /// The revision this savegame runs on where it pins one, from
-    /// <see cref="SavegameService.TargetRevisionOf"/>. Null for a current savegame, which follows its
+    /// <see cref="SavegameRevisionRules.TargetRevisionOf"/>. Null for a current savegame, which follows its
     /// profile, and for one that follows no mod list.
     /// </summary>
     public int? PinnedRevision { get; }
