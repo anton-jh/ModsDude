@@ -48,6 +48,7 @@ public partial class App : Application
 {
     private IServiceProvider _serviceProvider = null!;
     private IConfiguration _configuration = null!;
+    private FileLoggerProvider _logProvider = null!;
 
     private SingleInstance? _singleInstance;
     private TrayService? _tray;
@@ -64,6 +65,48 @@ public partial class App : Application
         var environment = ResolveEnvironment();
         AppIdentity.Initialize(environment);
 
+        // Before anything that can fail, so a failure before the container exists is still written down.
+        _logProvider = new FileLoggerProvider();
+
+        StartedApp? started;
+
+        try
+        {
+            started = Start(e, environment);
+        }
+        catch (Exception exception)
+        {
+            FailStartup(exception);
+
+            return;
+        }
+
+        if (started is null)
+        {
+            return;
+        }
+
+        var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
+        var connection = _serviceProvider.GetRequiredService<ConnectionRetry>();
+
+        if (started.InBackground)
+        {
+            await SignInWithoutInterruptingAsync(authentication, connection, started.Window);
+
+            return;
+        }
+
+        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
+    }
+
+
+    /// <summary>
+    /// Everything the app needs before it is whole: configuration, the container, the window, the tray
+    /// and the watchers.
+    /// </summary>
+    /// <returns>Null where this process has nothing left to do: another copy is running, or an update was installed.</returns>
+    private StartedApp? Start(StartupEventArgs e, string environment)
+    {
         // Started by Windows at sign-in rather than by the user: up in the tray, no window, and no
         // browser. See AutostartService.
         var background = e.Args.Contains(AutostartService.BackgroundArgument, StringComparer.OrdinalIgnoreCase);
@@ -77,7 +120,7 @@ public partial class App : Application
         {
             Shutdown();
 
-            return;
+            return null;
         }
 
         var builder = new ConfigurationBuilder()
@@ -90,7 +133,7 @@ public partial class App : Application
         _configuration = builder.Build();
 
         var serviceCollection = new ServiceCollection();
-        ConfigureServices(serviceCollection, _configuration);
+        ConfigureServices(serviceCollection, _configuration, _logProvider);
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 
@@ -100,11 +143,11 @@ public partial class App : Application
         {
             Shutdown();
 
-            return;
+            return null;
         }
 
         // Two ways out of the process that the dispatcher handler never sees: a throw on a thread
-        // that is not the UI one, and a Task nobody awaited. Both used to be silent.
+        // that is not the UI one, and a Task nobody awaited.
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
@@ -149,17 +192,49 @@ public partial class App : Application
 
         TidyStoresInBackground();
 
-        var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
-        var connection = _serviceProvider.GetRequiredService<ConnectionRetry>();
+        return new StartedApp(window, background);
+    }
 
-        if (background)
+    /// <summary>
+    /// Ends a start that did not make it: says so, and leaves rather than lingering without a window.
+    /// </summary>
+    /// <remarks>
+    /// A plain message box, because the error modal lives in a main window that may not exist or may be
+    /// broken. Everything is released before it is up, so the tray cannot offer the broken window and a
+    /// second launch is not sent to a copy that is not listening.
+    /// </remarks>
+    private void FailStartup(Exception exception)
+    {
+        var log = _logProvider.CreateLogger(typeof(App).FullName!);
+
+        log.LogCritical(exception, "Could not start.");
+
+        try
         {
-            await SignInWithoutInterruptingAsync(authentication, connection, window);
+            foreach (var window in Windows.OfType<Window>())
+            {
+                window.Hide();
 
-            return;
+                if (window is MainWindow mainWindow)
+                {
+                    mainWindow.AllowClose();
+                }
+            }
+
+            ReleaseResources();
+        }
+        catch (Exception releaseException)
+        {
+            log.LogError(releaseException, "Could not release everything after a failed start.");
         }
 
-        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
+        MessageBox.Show(
+            $"{AppIdentity.DisplayName} could not start.\n\nLog folder:\n{FileLoggerProvider.LogDirectory}",
+            AppIdentity.DisplayName,
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+
+        Shutdown(1);
     }
 
 
@@ -283,18 +358,27 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        ReleaseResources();
+
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Lets go of everything the start claimed. Each is taken out of its field before it is disposed,
+    /// so a second call - a failed start, then the exit it leads to - only releases what is left.
+    /// </summary>
+    private void ReleaseResources()
+    {
         // Nobody is left to answer a click on what is still in Action Center, so it goes with the app.
         _serviceProvider?.GetService<WindowsToasts>()?.ClearAll();
 
-        _backstop?.Dispose();
-        _remoteChanges?.Dispose();
-        _claimWatcher?.Dispose();
-        _playSessionWatcher?.Dispose();
-        _friendWatcher?.Dispose();
-        _tray?.Dispose();
-        _singleInstance?.Dispose();
-
-        base.OnExit(e);
+        Interlocked.Exchange(ref _backstop, null)?.Dispose();
+        Interlocked.Exchange(ref _remoteChanges, null)?.Dispose();
+        Interlocked.Exchange(ref _claimWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _playSessionWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _friendWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _tray, null)?.Dispose();
+        Interlocked.Exchange(ref _singleInstance, null)?.Dispose();
     }
 
 
@@ -370,7 +454,7 @@ public partial class App : Application
     }
 
 
-    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
+    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration, FileLoggerProvider logProvider)
     {
         // A WPF app has no console, so an ILogger with no file behind it is the same as no
         // logger at all. Registered first, so everything composed below can ask for one.
@@ -384,7 +468,7 @@ public partial class App : Application
             // The typed clients log a line per request at Information, which would bury
             // everything worth reading.
             builder.AddFilter("System.Net.Http", LogLevel.Warning);
-            builder.AddProvider(new FileLoggerProvider());
+            builder.AddProvider(logProvider);
         });
 
         services.AddSingleton<MainWindow>();
@@ -605,4 +689,7 @@ public partial class App : Application
         services.AddSingleton<ClientConfiguration>();
         services.AddSingleton<StateStore>();
     }
+
+
+    private sealed record StartedApp(MainWindow Window, bool InBackground);
 }
