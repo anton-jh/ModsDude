@@ -1,4 +1,5 @@
-﻿using ModsDude.Server.Domain.Invites;
+﻿using ModsDude.Server.Api.Dtos;
+using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -116,6 +117,18 @@ public static class Problems
         Type = ProblemType.SavegameNotCheckedOut,
         Title = "Nobody has this savegame checked out",
         Detail = $"Savegame '{savegameId.Value}' has no open checkout, so there is none to renew or give back."
+    };
+
+    /// <summary>
+    /// A check-in that keeps playing would take the claim from whoever holds it now. Taking it is
+    /// allowed, but only once the person has been asked, so the holder comes with the refusal.
+    /// </summary>
+    public static CustomProblemDetails SavegameClaimHeldByOther(SavegameId savegameId, SavegameCheckoutDto holder) => new()
+    {
+        Type = ProblemType.SavegameClaimHeldByOther,
+        Title = "Somebody else has this savegame checked out",
+        Detail = $"Savegame '{savegameId.Value}' is checked out to {holder.User.DisplayName}. Check in again agreeing to take it over to keep playing.",
+        Holder = holder
     };
 
     /// <summary>
@@ -564,6 +577,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "savegame-not-checked-out")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-not-checked-out")]
         SavegameNotCheckedOut,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-claim-held-by-other")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-claim-held-by-other")]
+        SavegameClaimHeldByOther,
 
         [EnumMember(Value = _typeBaseUri + "profile-in-use-by-savegame")]
         [JsonStringEnumMemberName(_typeBaseUri + "profile-in-use-by-savegame")]

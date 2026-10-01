@@ -27,7 +27,7 @@ public class SavegameCheckInTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Uploader.DuringUpload = () => harness.WriteSlotFile(_slot1, "a savegame, played once and saved again");
 
-        var result = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        var result = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(SavegameLocalCopy.ChangedSinceUpload, result.LocalCopy);
         Assert.Empty(harness.RecycleBin.Recycled);
@@ -49,7 +49,7 @@ public class SavegameCheckInTests
 
         var snapshotsBefore = harness.Server.Snapshots.Count;
 
-        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(1, harness.Server.UploadLinksMinted);
         Assert.Equal(0, harness.Uploader.Uploads);
@@ -68,7 +68,7 @@ public class SavegameCheckInTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var (snapshot, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, CancellationToken.None);
+        var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, "after playing", keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal(head.Number + 1, snapshot.Number);
@@ -100,7 +100,7 @@ public class SavegameCheckInTests
         var reports = new List<SavegameProgress>();
 
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             new InlineProgress<SavegameProgress>(reports.Add));
 
         Assert.Equal(
@@ -127,7 +127,7 @@ public class SavegameCheckInTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
         Assert.False(Directory.Exists(harness.SlotPath(_slot1)));
@@ -155,7 +155,7 @@ public class SavegameCheckInTests
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
 
         var exception = await Assert.ThrowsAsync<ApiException<CustomProblemDetails>>(
-            () => harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None));
+            () => harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
         // Surfaced, never swallowed: forcing past a moved head is a decision only the person holding
         // the save can make, and the caller can only offer it if it can tell this failure apart.
@@ -177,7 +177,7 @@ public class SavegameCheckInTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
 
-        var (snapshot, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, CancellationToken.None);
+        var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, takeOver: false, CancellationToken.None);
 
         Assert.Equal(SavegameSnapshotOrigin.Forced, snapshot.Origin);
         Assert.Equal(head.Number, snapshot.BaseSnapshot);
@@ -198,7 +198,7 @@ public class SavegameCheckInTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
-        var (snapshot, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None);
 
         var binding = harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId);
 
@@ -214,7 +214,7 @@ public class SavegameCheckInTests
         // And a second check-in is based on the first, not on the snapshot that was checked out.
         harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
-        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, CancellationToken.None);
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(snapshot.Number, harness.Server.CheckIns[^1].BasedOn);
     }
@@ -225,7 +225,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
-            () => harness.CheckIn.CheckInAsync(harness.Game, Guid.NewGuid(), null, keepPlaying: false, force: false, CancellationToken.None));
+            () => harness.CheckIn.CheckInAsync(harness.Game, Guid.NewGuid(), null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
         Assert.Contains("not holding", exception.UserMessage);
     }
@@ -268,7 +268,7 @@ public class SavegameCheckInTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.RecycleBin.Refuses = true;
 
-        var result = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        var result = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(SavegameLocalCopy.LeftBehind, result.LocalCopy);
         Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
@@ -314,7 +314,7 @@ public class SavegameCheckInTests
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
 
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
     }
@@ -327,8 +327,8 @@ public class SavegameCheckInTests
 
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        var (snapshot, _) = await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+        var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             savegameName: "New name");
 
         Assert.Equal("New name", Assert.Single(harness.Adapter.Renames).Name);
@@ -349,7 +349,7 @@ public class SavegameCheckInTests
 
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
-        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Empty(harness.Adapter.Renames);
     }
@@ -369,8 +369,8 @@ public class SavegameCheckInTests
 
         harness.Adapter.ThrowOnRename = true;
 
-        var (snapshot, _) = await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+        var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             savegameName: "New name");
 
         Assert.Single(harness.Adapter.Renames);
@@ -395,7 +395,7 @@ public class SavegameCheckInTests
         Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
 
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             savegameName: "Renamed, never played");
 
         // Still nothing played - the rename is the only edit there was - so the revision sent is the
@@ -426,7 +426,7 @@ public class SavegameCheckInTests
 
         // Only the name changes from here on - nobody played anything else.
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             savegameName: "Renamed after the apply");
 
         Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
@@ -446,7 +446,7 @@ public class SavegameCheckInTests
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
 
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None,
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
             savegameName: "Renamed, no profile");
 
         Assert.Equal("Renamed, no profile", Assert.Single(harness.Adapter.Renames).Name);
@@ -462,7 +462,7 @@ public class SavegameCheckInTests
         harness.Guard.Running = true;
 
         await Assert.ThrowsAsync<GameRunningException>(
-            () => harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None));
+            () => harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
         Assert.Empty(harness.Server.CheckIns);
     }

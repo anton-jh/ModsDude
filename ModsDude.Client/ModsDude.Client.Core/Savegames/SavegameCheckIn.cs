@@ -29,6 +29,7 @@ public sealed class SavegameCheckIn(
         string? label,
         bool keepPlaying,
         bool force,
+        bool takeOver,
         CancellationToken ct,
         IProgress<SavegameProgress>? progress = null,
         string? savegameName = null)
@@ -67,7 +68,16 @@ public sealed class SavegameCheckIn(
         // Read before the upload, so the details describe the snapshot being minted, rename included.
         var details = await slots.ReadDetailsAsync(adapter, target, slot, ct);
 
-        SavegameSnapshotDto snapshot;
+        // The same bytes as an unanswered check-in are the same check-in, so it is repeated under its id
+        // and the server answers it as it did the first time.
+        var pending = binding.PendingCheckIn is { } unanswered && unanswered.ContentHash == packed.ContentHash
+            ? unanswered
+            : new SavegamePendingCheckIn(Guid.NewGuid(), packed.ContentHash);
+
+        binding = binding with { PendingCheckIn = pending };
+        bindings.SetBinding(game.Identity, binding);
+
+        CheckInSavegameResponse response;
 
         try
         {
@@ -75,14 +85,17 @@ public sealed class SavegameCheckIn(
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
-            snapshot = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
+            response = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
             {
+                RequestId = pending.RequestId,
                 BasedOn = binding.Snapshot,
                 ProfileRevision = ResolvePlayedRevision(game, binding),
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
                 Label = label,
                 Force = force,
+                KeepPlaying = keepPlaying,
+                TakeOver = takeOver,
                 Details = details
             }, ct);
         }
@@ -91,7 +104,11 @@ public sealed class SavegameCheckIn(
             FileSystemHelper.TryDeleteFile(packed.FilePath, logger);
         }
 
-        if (keepPlaying)
+        var snapshot = response.Snapshot;
+
+        // The server's answer rather than the request's: a repeat is answered as the first one was,
+        // whatever it asked for this time.
+        if (response.HoldsClaim)
         {
             // Rebased onto what was just minted, which is these bytes, and the attribution starts over.
             bindings.SetBinding(game.Identity, binding with
@@ -102,17 +119,18 @@ public sealed class SavegameCheckIn(
                 ProfileId = snapshot.ProfileId,
                 ProfileRevision = snapshot.ProfileRevision,
                 LastObservedHash = snapshot.ContentHash,
-                LastPlayedRevision = null
+                LastPlayedRevision = null,
+                PendingCheckIn = null
             });
 
-            return new SavegameCheckInResult(snapshot, SavegameLocalCopy.Kept);
+            return new SavegameCheckInResult(snapshot, true, SavegameLocalCopy.Kept, response.TakenFrom);
         }
 
         // The binding goes before the folder, so a failed recycle leaves an unrecognised slot rather than
         // one claimed by a savegame that is no longer checked out.
         bindings.ClearBinding(game.Identity, savegameId);
 
-        return new SavegameCheckInResult(snapshot, await recycler.HandBackAsync(adapter, target, slot, packed.ContentHash));
+        return new SavegameCheckInResult(snapshot, false, await recycler.HandBackAsync(adapter, target, slot, packed.ContentHash), response.TakenFrom);
     }
 
     public async Task<bool> DiscardAsync(Game game, Guid savegameId, CancellationToken ct)

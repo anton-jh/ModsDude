@@ -121,7 +121,18 @@ public readonly record struct SavegameCheckoutBinding(
     /// equal the held snapshot's and the server mints nothing anyway.
     /// </remarks>
     public int? LastPlayedRevision { get; init; }
+
+    /// <summary>
+    /// A check-in sent and not yet answered, or null where there is none. Written before the request
+    /// goes out, so a check-in of the same bytes after a lost answer - a click again, or a restart -
+    /// repeats the request instead of making a new one the server would refuse as stale.
+    /// </summary>
+    public SavegamePendingCheckIn? PendingCheckIn { get; init; }
 }
+
+
+/// <param name="ContentHash">The packed bytes the request was for. Other bytes are another check-in.</param>
+public sealed record SavegamePendingCheckIn(Guid RequestId, string ContentHash);
 
 
 /// <summary>

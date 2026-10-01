@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Retention;
+using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -45,12 +46,8 @@ public enum SavegameTimelineRank
 /// strikes the check-out through once the claim behind it is over.
 /// </para>
 /// <para>
-/// <b>A claim that a snapshot already records gets no ending row.</b> An ordinary check-in mints a
-/// snapshot stamped with <see cref="SavegameSnapshotDto.CheckoutId"/>, and that snapshot <em>is</em> the
-/// check-in - drawing a thin "Checked back in" a millimetre under it would say the same thing twice
-/// at the same second. The ending row is for the endings nothing else records: a check-in whose bytes
-/// matched the head and so minted nothing, a claim given back without a snapshot, a save taken over,
-/// and a check-in whose snapshot has since been pruned.
+/// <b>A claim ended by the snapshot it minted gets no ending row</b>, because that snapshot is the
+/// check-in. Which endings do get one is <see cref="SavegameTimelineRules.EndingsToShow"/>.
 /// </para>
 /// </remarks>
 public sealed class SavegameTimelineEntryViewModel

@@ -57,7 +57,7 @@ public class SavegameSlotsTests
         Assert.Equal(_slot1, await harness.Slots.SuggestSlotAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
 
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot2, CancellationToken.None);
-        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         // The hint survives the check-in that destroyed the binding - that asymmetry is its whole job.
         Assert.Equal(_slot2, await harness.Slots.SuggestSlotAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));

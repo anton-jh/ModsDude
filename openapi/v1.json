@@ -84,6 +84,9 @@
           "force": {
             "type": "boolean"
           },
+          "keepPlaying": {
+            "type": "boolean"
+          },
           "label": {
             "nullable": true,
             "type": "string"
@@ -93,9 +96,36 @@
             "nullable": true,
             "type": "integer"
           },
+          "requestId": {
+            "format": "guid",
+            "type": "string"
+          },
           "sizeBytes": {
             "format": "int64",
             "type": "integer"
+          },
+          "takeOver": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CheckInSavegameResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "holdsClaim": {
+            "type": "boolean"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/SavegameSnapshotDto"
+          },
+          "takenFrom": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavegameCheckoutDto"
+              }
+            ]
           }
         },
         "type": "object"
@@ -354,6 +384,14 @@
               "contentHash": {
                 "nullable": true,
                 "type": "string"
+              },
+              "holder": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SavegameCheckoutDto"
+                  }
+                ]
               },
               "type": {
                 "$ref": "#/components/schemas/ProblemType"
@@ -935,6 +973,7 @@
           "https://server.modsdude.com/api/problems/savegame-snapshot-stale",
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
           "https://server.modsdude.com/api/problems/savegame-not-checked-out",
+          "https://server.modsdude.com/api/problems/savegame-claim-held-by-other",
           "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
           "https://server.modsdude.com/api/problems/invalid-mod-file-name",
           "https://server.modsdude.com/api/problems/savegame-current-conflict",
@@ -978,6 +1017,7 @@
           "SavegameSnapshotStale",
           "SavegameCheckoutConflict",
           "SavegameNotCheckedOut",
+          "SavegameClaimHeldByOther",
           "ProfileInUseBySavegame",
           "InvalidModFileName",
           "SavegameCurrentConflict",
@@ -6410,7 +6450,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SavegameSnapshotDto"
+                  "$ref": "#/components/schemas/CheckInSavegameResponse"
                 }
               }
             },

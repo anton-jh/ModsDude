@@ -913,16 +913,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
     private void ShowTimeline(GetSavegameSnapshotsResponse snapshots, GetSavegameCheckoutsResponse checkouts)
     {
-        // Which claims a snapshot already speaks for. Those get no ending row of their own - the
-        // snapshot minted against a claim is the check-in, and a thin "Checked back in" at the same
-        // second would only say it again. Taken from the loaded window rather than from the whole
-        // history on purpose: a check-in whose snapshot has since been pruned, or scrolled past,
-        // then gets its ending drawn, which is the point of the claim log outliving the blobs.
-        var recorded = snapshots.Snapshots
-            .Where(x => x.CheckoutId is not null)
-            .Select(x => x.CheckoutId!.Value)
-            .ToHashSet();
-
         // Newest first, and the rank behind it carries weight rather than tidying: publishing,
         // checking in and taking a save over each write two rows off one clock reading, so the
         // moment alone leaves the tie to whichever read was concatenated first - which is what put
@@ -930,8 +920,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         var entries = snapshots.Snapshots
             .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot))
             .Concat(checkouts.Checkouts.Select(SavegameTimelineEntryViewModel.ForClaimTaken))
-            .Concat(checkouts.Checkouts
-                .Where(x => x.EndedAt is not null && recorded.Contains(x.Id) is false)
+            .Concat(SavegameTimelineRules.EndingsToShow(snapshots.Snapshots, checkouts.Checkouts)
                 .Select(SavegameTimelineEntryViewModel.ForClaimEnded))
             .OrderByDescending(x => x.Moment)
             .ThenByDescending(x => x.Rank)

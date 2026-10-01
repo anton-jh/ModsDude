@@ -101,7 +101,7 @@ public class SavegameHoldsTests
         Assert.DoesNotContain(slots, x => x.Ref.Target == _client.Target);
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None));
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
         Assert.Contains("no longer has the folder", exception.UserMessage);
     }
@@ -149,7 +149,7 @@ public class SavegameHoldsTests
         Assert.Empty(harness.Holds.GetUnreachableHolds(harness.Game));
 
         await harness.CheckIn.CheckInAsync(
-            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, CancellationToken.None);
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
         Assert.Single(harness.Server.CheckIns);
     }

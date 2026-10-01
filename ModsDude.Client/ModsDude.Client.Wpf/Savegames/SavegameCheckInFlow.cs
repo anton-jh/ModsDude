@@ -67,7 +67,7 @@ public sealed class SavegameCheckInFlow(
 
             if (outcome.WasDeferred)
             {
-                toasts.Show($"Left as it is. Your copy of '{savegameName}' is still in its slot and still yours.");
+                toasts.Show($"Left as it is. Your copy of '{savegameName}' is still in its slot.");
 
                 return;
             }
@@ -82,6 +82,12 @@ public sealed class SavegameCheckInFlow(
                 toasts.Show(
                     $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take. {notRecycled}",
                     ToastSeverity.Warning);
+            }
+            else if (outcome.TakenFrom is SavegameCheckoutDto takenFrom)
+            {
+                toasts.Show(
+                    $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and yours again - " +
+                    $"{takenFrom.User.DisplayName} no longer has it, and their ModsDude will tell them.");
             }
             else
             {
@@ -144,9 +150,13 @@ public sealed class SavegameCheckInFlow(
     }
 
     /// <summary>
+    /// Sends the check-in, and turns the two refusals that need a decision into questions: a stale base,
+    /// and somebody else holding the claim of a save being kept.
+    /// </summary>
+    /// <remarks>
     /// A forced check-in becomes the head with the snapshot it was built on recorded beside it, so
     /// neither answer to a stale base loses anything.
-    /// </summary>
+    /// </remarks>
     private async Task<SavegameCheckInOutcome> SendAsync(
         Game game,
         Guid savegameId,
@@ -155,7 +165,8 @@ public sealed class SavegameCheckInFlow(
         bool keepPlaying,
         bool force,
         CancellationToken cancellationToken,
-        string? renameTo = null)
+        string? renameTo = null,
+        bool takeOver = false)
     {
         try
         {
@@ -163,9 +174,31 @@ public sealed class SavegameCheckInFlow(
             task.DeclareTransfers(TransferDirection.Upload);
 
             var result = await savegameCheckIn.CheckInAsync(
-                game, savegameId, label, keepPlaying, force, cancellationToken, new SavegameStripProgress(task), renameTo);
+                game, savegameId, label, keepPlaying, force, takeOver, cancellationToken, new SavegameStripProgress(task), renameTo);
 
-            return SavegameCheckInOutcome.CheckedIn(result.Snapshot, keepPlaying, result.LocalCopy);
+            return SavegameCheckInOutcome.CheckedIn(result);
+        }
+        catch (ApiException<CustomProblemDetails> exception)
+            when (exception.Result.Type is ProblemType.SavegameClaimHeldByOther && exception.Result.Holder is SavegameCheckoutDto holder)
+        {
+            var name = holder.User.DisplayName;
+
+            var choice = new ConfirmationModalViewModel(
+                $"{name} has '{savegameName}' checked out",
+                $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Keeping playing takes it from them, " +
+                "and their ModsDude will tell them. Leaving it with them checks nothing in and keeps your copy where it is.",
+                IconKind.Warning,
+                $"Take it from {name}",
+                "Leave it with them");
+
+            await modalService.Value.Show(choice);
+
+            if (choice.Result is false)
+            {
+                return SavegameCheckInOutcome.Deferred;
+            }
+
+            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force, cancellationToken, renameTo, takeOver: true);
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
@@ -185,7 +218,7 @@ public sealed class SavegameCheckInFlow(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken, renameTo);
+            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken, renameTo, takeOver);
         }
         catch (UserFriendlyException exception)
         {

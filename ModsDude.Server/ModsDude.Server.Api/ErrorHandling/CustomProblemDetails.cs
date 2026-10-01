@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using ModsDude.Server.Api.Dtos;
 using System.Text.Json.Serialization;
 using static ModsDude.Server.Api.ErrorHandling.Problems;
 
@@ -19,6 +20,14 @@ public class CustomProblemDetails : ProblemDetails
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ContentHash { get; init; }
+
+    /// <summary>
+    /// Who holds a savegame the caller would take the claim of, set only by
+    /// <see cref="Problems.SavegameClaimHeldByOther"/>. On the shared type for the reason
+    /// <see cref="ContentHash"/> is.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SavegameCheckoutDto? Holder { get; init; }
 
 
     public CustomProblemDetails With(Action<CustomProblemDetails> modifyAction)

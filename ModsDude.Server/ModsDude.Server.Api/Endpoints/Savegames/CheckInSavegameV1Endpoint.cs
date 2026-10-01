@@ -19,41 +19,29 @@ using System.Security.Claims;
 namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
-/// Hands a savegame back, as a new snapshot of it.
+/// Records a new snapshot of a savegame, and hands it back or keeps it checked out.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Check-in asks nothing about which savegame it is.</b> The route names one and the client knows
-/// it from the checkout binding it wrote when the save went into the slot. Choosing between twenty
-/// near-identical folders from memory is where the MVP went wrong, and it is precisely the moment
-/// where a wrong answer publishes somebody else's slot under this save's name and burns a snapshot
-/// doing it.
-/// </para>
-/// <para>
 /// <b><c>BasedOn</c> is the guarantee; the claim is only the manners.</b> Anybody may take a save
-/// from anybody, so what actually stops one person's evening overwriting another's is that a
-/// check-in names the snapshot it was built on and is refused when that is no longer the head. The
-/// claim is what makes that refusal rare - the base check is what makes it impossible to lose play
-/// silently.
+/// from anybody, so what stops one person's evening overwriting another's is that a check-in names
+/// the snapshot it was built on and is refused when that is no longer the head. Forcing past it is
+/// allowed, and the snapshot is stamped <see cref="SavegameSnapshotOrigin.Forced"/> with
+/// <c>BaseSnapshot</c> naming what was actually played.
 /// </para>
 /// <para>
-/// <b>Forcing is allowed, and leaves the fork in the record.</b> Somebody who has played four hours
-/// on a base that has since moved is not helped by being told no and nothing else. The forced
-/// check-in becomes the head, stamped <see cref="SavegameSnapshotOrigin.Forced"/> with
-/// <c>BaseSnapshot</c> naming what was actually played, so the history says a fork happened and
-/// which snapshot was superseded - without anybody having to render a tree.
+/// <b>A check-in whose bytes equal the head's mints nothing.</b> The head is answered with instead,
+/// and the claim is treated exactly as for a check-in that minted one.
 /// </para>
 /// <para>
-/// <b>A check-in whose bytes equal the head's mints nothing.</b> Launching the game, looking at it
-/// and quitting must not cost a 400 MB blob and a line of history. The head is answered with
-/// instead, exactly as a profile save that changes nothing answers with its head.
+/// <b>What happens to the claim</b> is <see cref="SavegameCheckInClaimRule"/>'s: the caller's own
+/// claim ends, or stays open when they keep playing. Keeping playing without a claim opens one, and
+/// taking one from somebody else needs <see cref="CheckInSavegameRequest.TakeOver"/>.
 /// </para>
 /// <para>
-/// <b>The claim is only ended when the caller is the one holding it.</b> A forced check-in is
-/// routinely made by somebody who never had the save - that is what forcing is - and ending
-/// somebody else's claim as <see cref="SavegameCheckoutEndReason.CheckedIn"/> would put a sentence
-/// in the log that never happened. Their claim stands, and the new head is what tells them they were
-/// overtaken.
+/// <b>A repeat is answered as the original was.</b> The request id of each person's latest check-in
+/// on a savegame is recorded with its answer, and is looked up before anything else, since a repeat
+/// would otherwise be refused as stale against the snapshot it minted itself.
 /// </para>
 /// </remarks>
 public class CheckInSavegameV1Endpoint : IEndpoint
@@ -66,7 +54,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>>> CheckIn(
+    private static async Task<Results<Ok<CheckInSavegameResponse>, BadRequest<CustomProblemDetails>>> CheckIn(
         Guid repoId, Guid savegameId,
         CheckInSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -78,6 +66,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
+        var requestId = new SavegameCheckInRequestId(request.RequestId);
 
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)
@@ -85,12 +74,18 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
         }
 
+        var previous = await dbContext.SavegameCheckInRequests.FirstOrDefaultAsync(
+            x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
+
+        if (previous is not null && previous.Answers(requestId))
+        {
+            return await AnswerAgainAsync(dbContext, previous, cancellationToken);
+        }
+
         var basedOn = new SavegameSnapshotNumber(request.BasedOn);
 
         // Paired with the savegame's own profile rather than checked on its own: a save that follows
-        // no mod list records no revision, and one that follows a mod list has to record which. The
-        // request cannot decide either way - the savegame does - so a mismatch is refused rather
-        // than being resolved in one direction or the other.
+        // no mod list records no revision, and one that follows a mod list has to record which.
         if (savegame.ProfileId is null != request.ProfileRevision is null)
         {
             return TypedResults.BadRequest(Problems.SavegameProfileNotPaired);
@@ -98,26 +93,22 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
         var profileRevision = request.ProfileRevision is int sent ? new RevisionNumber(sent) : (RevisionNumber?)null;
 
-        // The revision is looked up against the profile the savegame follows rather than one the
-        // request names, so a check-in cannot quietly move a save onto another profile. Nothing
-        // moves a save between profiles at all; see UpdateSavegameV1Endpoint.
+        // Looked up against the profile the savegame follows rather than one the request names, so a
+        // check-in cannot quietly move a save onto another profile.
         if (savegame.ProfileId is ProfileId profileId && profileRevision is RevisionNumber played
             && !await dbContext.ProfileRevisions.ExistsAsync(savegame.RepoId, profileId, played, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId.Value}' has no revision {request.ProfileRevision}"));
         }
 
-        // Before storage sees it, and before the snapshot's own constructor does. Both validate the
-        // hash again, and both throw where this reports - and there is no global handler to turn a
-        // domain validation exception into anything but a 500.
+        // Before storage and the snapshot's constructor see it: both throw where this reports.
         if (!ModImageHash.IsValid(request.ContentHash))
         {
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        // Before anything is written, and for the same reason as at publish: a snapshot whose blob is
-        // absent is a head nobody can check out, and the savegame is stuck there until somebody
-        // restores past it. A refused check-in is retried by uploading and asking again.
+        // A snapshot whose blob is absent is a head nobody can check out. A refused check-in is
+        // retried by uploading and asking again.
         if (!await savegameStorageService.CheckIfSavegameExists(savegame.RepoId, savegame.Id, request.ContentHash, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(savegame.RepoId, savegame.Id, request.ContentHash));
@@ -127,10 +118,16 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
         if (isStale && !request.Force)
         {
-            // The head is carried in the problem so the client can say what it is now rather than
-            // only that it is not what was sent - and so the person can decide to force past it,
-            // which is a decision only they can make.
             return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, savegame.HeadSnapshot));
+        }
+
+        var open = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(savegame.RepoId, savegame.Id, cancellationToken);
+        var claim = SavegameCheckInClaimRule.Decide(open, userId, request.KeepPlaying, request.TakeOver);
+
+        if (claim is SavegameCheckInClaim.RefusedHeldByOther)
+        {
+            return TypedResults.BadRequest(Problems.SavegameClaimHeldByOther(
+                savegame.Id, await SavegameReads.ToDtoAsync(dbContext, open!, cancellationToken)));
         }
 
         var now = timeService.Now();
@@ -138,37 +135,39 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         var head = await dbContext.SavegameSnapshots.GetRowAsync(
             savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
 
-        if (head is not null && head.ContentHash == request.ContentHash)
-        {
-            // Nothing happened to the save, so nothing is recorded. The head is answered with
-            // instead, which is what the client would have been given had a snapshot been minted.
-            //
-            // The claim still ends: the person pressed check in, and leaving them holding a save
-            // they have just handed back would keep the slot claimed for a night that never
-            // happened.
-            await EndOwnCheckoutAsync(dbContext, savegame, userId, now, cancellationToken);
-            await unitOfWork.CommitAsync(cancellationToken);
+        // Nothing happened to the save, so nothing is recorded, and the head is answered with.
+        var snapshot = head is not null && head.ContentHash == request.ContentHash
+            ? null
+            : savegame.CreateSnapshot(
+                profileRevision,
+                request.ContentHash,
+                request.SizeBytes,
+                userId,
+                now,
+                request.Label,
+                isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
+                basedOn,
+                claim.RecordsAgainstOpenClaim() ? open!.Id : null,
+                SavegameDetails.From(request.Details));
 
-            return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, savegame.RepoId, head, cancellationToken));
+        var answeredWith = snapshot?.Number ?? savegame.HeadSnapshot;
+
+        var takenFrom = ApplyClaim(dbContext, claim, open, savegame, userId, now, snapshot?.ProfileRevision ?? head?.ProfileRevision);
+
+        if (snapshot is not null)
+        {
+            dbContext.SavegameSnapshots.Add(snapshot);
         }
 
-        var checkout = await EndOwnCheckoutAsync(dbContext, savegame, userId, now, cancellationToken);
-
-        var snapshot = savegame.CreateSnapshot(
-            profileRevision,
-            request.ContentHash,
-            request.SizeBytes,
-            userId,
-            now,
-            request.Label,
-            isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
-            basedOn,
-            // Null where somebody else holds the save, which is the ordinary shape of a forced
-            // check-in: the snapshot was not checked in against any claim of this person's.
-            checkout?.Id,
-            SavegameDetails.From(request.Details));
-
-        dbContext.SavegameSnapshots.Add(snapshot);
+        if (previous is null)
+        {
+            dbContext.SavegameCheckInRequests.Add(new SavegameCheckInRequest(
+                savegame.RepoId, savegame.Id, userId, requestId, now, answeredWith, claim.CallerHolds(), takenFrom?.Id));
+        }
+        else
+        {
+            previous.Replace(requestId, now, answeredWith, claim.CallerHolds(), takenFrom?.Id);
+        }
 
         try
         {
@@ -176,15 +175,39 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
         catch (DbUpdateException)
         {
-            // Two check-ins holding the same head both computed the same next number, and the
-            // primary key let exactly one of them through. The check above is what gives the good
-            // error message; the key is what makes it a guarantee rather than a likelihood.
-            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, snapshot.Number));
+            // The same check-in sent twice at once: the other copy committed first, and its answer is
+            // this one's too.
+            var repeated = await dbContext.SavegameCheckInRequests.AsNoTracking().FirstOrDefaultAsync(
+                x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
+
+            if (repeated is not null && repeated.Answers(requestId))
+            {
+                return await AnswerAgainAsync(dbContext, repeated, cancellationToken);
+            }
+
+            // Two check-ins holding the same head both computed the same next number, and the primary
+            // key let exactly one through. Or two people took the claim at once, and the one-open-claim
+            // index did.
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, savegame.HeadSnapshot));
         }
 
-        await ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
+        if (snapshot is not null)
+        {
+            await ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
+        }
+        else if (claim is SavegameCheckInClaim.OpensCallers or SavegameCheckInClaim.TakesOver
+            && savegame.ProfileId is ProfileId heldProfile)
+        {
+            // The new claim holds revisions, so any of them shown as due to go stops saying so.
+            await retentionUpkeep.ReleaseProfileAsync(savegame.RepoId, heldProfile, cancellationToken);
+        }
 
-        return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
+        return TypedResults.Ok(new CheckInSavegameResponse(
+            snapshot is not null
+                ? await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken)
+                : await SavegameReads.ToDtoAsync(dbContext, savegame.RepoId, head!, cancellationToken),
+            claim.CallerHolds(),
+            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, cancellationToken)));
     }
 
 
@@ -206,64 +229,106 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
     }
 
-    /// <summary>
-    /// Ends the caller's own claim on the savegame as checked in, and returns it - or <c>null</c>
-    /// where the caller was not the one holding it, which is not an error.
-    /// </summary>
-    private static async Task<SavegameCheckout?> EndOwnCheckoutAsync(
+    /// <returns>The claim taken from somebody else, or null where none was.</returns>
+    /// <param name="playsFrom">The revision the save is on once the check-in is done, which is where a new claim's play starts.</param>
+    private static SavegameCheckout? ApplyClaim(
         ApplicationDbContext dbContext,
+        SavegameCheckInClaim claim,
+        SavegameCheckout? open,
         Savegame savegame,
         UserId userId,
         DateTime now,
+        RevisionNumber? playsFrom)
+    {
+        switch (claim)
+        {
+            case SavegameCheckInClaim.EndsCallers:
+                open!.End(now, SavegameCheckoutEndReason.CheckedIn);
+                return null;
+
+            case SavegameCheckInClaim.OpensCallers:
+                dbContext.SavegameCheckouts.Add(new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now, playsFrom));
+                return null;
+
+            case SavegameCheckInClaim.TakesOver:
+                open!.End(now, SavegameCheckoutEndReason.TakenOver);
+                dbContext.SavegameCheckouts.Add(new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now, playsFrom));
+                return open;
+
+            default:
+                return null;
+        }
+    }
+
+    private static async Task<Results<Ok<CheckInSavegameResponse>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
+        ApplicationDbContext dbContext,
+        SavegameCheckInRequest original,
         CancellationToken cancellationToken)
     {
-        var checkout = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(savegame.RepoId, savegame.Id, cancellationToken);
+        var snapshot = await dbContext.SavegameSnapshots.GetRowAsync(
+            original.RepoId, original.SavegameId, original.AnsweredWith, cancellationToken);
 
-        if (checkout is null || checkout.UserId != userId)
+        if (snapshot is null)
         {
-            return null;
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail =
+                $"Snapshot {original.AnsweredWith.Value} of savegame '{original.SavegameId.Value}', which this check-in was answered with, has since been deleted."));
         }
 
-        checkout.End(now, SavegameCheckoutEndReason.CheckedIn);
+        var takenFrom = original.TakenFrom is SavegameCheckoutId id
+            ? await dbContext.SavegameCheckouts.AsNoTracking().FirstAsync(x => x.Id == id, cancellationToken)
+            : null;
 
-        return checkout;
+        return TypedResults.Ok(new CheckInSavegameResponse(
+            await SavegameReads.ToDtoAsync(dbContext, original.RepoId, snapshot, cancellationToken),
+            original.CallerHoldsClaim,
+            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, cancellationToken)));
     }
 
 
+    /// <param name="RequestId">
+    /// Chosen by the client and sent again with a repeat of the same check-in, which is then answered
+    /// as the original was.
+    /// </param>
     /// <param name="BasedOn">
     /// The snapshot that was checked out and played. A check-in is refused when it is no longer the
     /// head, so that somebody who was away is told rather than silently overwriting an evening.
     /// </param>
     /// <param name="ProfileRevision">
-    /// Which revision of the savegame's profile the folder was actually on when this was played.
-    /// Recorded rather than derived, because the truth about a save is the mod list it ran against
-    /// and not the one the profile happens to be at now.
-    /// <para>
-    /// <c>null</c>, and only null, for a savegame that follows no mod list: there is no revision to
-    /// name and nothing observed one. Sending it for such a save, or omitting it for one that does
-    /// follow a list, is refused rather than guessed at.
-    /// </para>
+    /// Which revision of the savegame's profile the folder was on when this was played. <c>null</c>,
+    /// and only null, for a savegame that follows no mod list.
     /// </param>
     /// <param name="ContentHash">
     /// SHA-256 of the packed save, which is also the address its blob was uploaded to. Equal to the
-    /// head's is how "nothing was played" is recognised, and it costs nothing to send.
+    /// head's is how "nothing was played" is recognised.
     /// </param>
-    /// <param name="Label">What to call this snapshot in the history. Optional; most check-ins are not named.</param>
-    /// <param name="Details">
-    /// What the client's adapter says about the save as it stands now. Recorded per snapshot rather
-    /// than per savegame, because a map and a playtime describe the bytes being checked in.
-    /// </param>
+    /// <param name="Label">What to call this snapshot in the history. Optional.</param>
+    /// <param name="Details">What the client's adapter says about the save as it stands now.</param>
     /// <param name="Force">
     /// Check in anyway over a base that is no longer the head. Never a default: it supersedes
-    /// somebody's play, so it is a decision a person makes after being told what they are about to
-    /// do.
+    /// somebody's play.
+    /// </param>
+    /// <param name="KeepPlaying">Carry on holding the save instead of handing it back.</param>
+    /// <param name="TakeOver">
+    /// With <paramref name="KeepPlaying"/>, take the claim from whoever holds it. Without it, that is
+    /// refused as <see cref="Problems.ProblemType.SavegameClaimHeldByOther"/> naming them.
     /// </param>
     public record CheckInSavegameRequest(
+        Guid RequestId,
         int BasedOn,
         int? ProfileRevision,
         string ContentHash,
         long SizeBytes,
         string? Label,
         bool Force,
+        bool KeepPlaying,
+        bool TakeOver,
         IEnumerable<SavegameDetailDto>? Details);
+
+    /// <param name="Snapshot">The snapshot minted, or the head where the save had not changed.</param>
+    /// <param name="HoldsClaim">Whether the caller holds the savegame now. The client keeps or hands back its copy by this.</param>
+    /// <param name="TakenFrom">The claim taken from somebody else, or null where none was.</param>
+    public record CheckInSavegameResponse(
+        SavegameSnapshotDto Snapshot,
+        bool HoldsClaim,
+        SavegameCheckoutDto? TakenFrom);
 }

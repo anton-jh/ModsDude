@@ -26,6 +26,9 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 {
     private readonly List<SavegameSnapshotDto> _snapshots = [];
     private readonly Dictionary<string, byte[]> _blobs = [];
+    private readonly UserDto _me = new() { Id = "me", DisplayName = "Me", Tag = "0002" };
+
+    private (Guid RequestId, CheckInSavegameResponse Response)? _lastCheckIn;
 
     private SavegameDto _savegame = null!;
 
@@ -119,19 +122,42 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     {
         CheckoutsTaken++;
 
-        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Checkout(), TakenFrom = HeldBySomebodyElse });
+        Claim = Checkout();
+
+        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Claim, TakenFrom = HeldBySomebodyElse });
     }
 
     public Task DiscardSavegameCheckoutV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
     {
         CheckoutsDiscarded++;
 
+        Claim = null;
+
         return Task.CompletedTask;
     }
 
-    public Task<SavegameSnapshotDto> CheckInSavegameV1Async(Guid repoId, Guid savegameId, CheckInSavegameRequest request, CancellationToken cancellationToken = default)
+    /// <summary>The open claim as the server holds it. Null is nobody holding it.</summary>
+    public SavegameCheckoutDto? Claim { get; private set; }
+
+    public bool ClaimIsMine => Claim?.User.Id == _me.Id;
+
+    /// <summary>Somebody else took the save over while this machine was holding it.</summary>
+    public void TakenOverBy(string displayName)
+        => Claim = Checkout(new UserDto { Id = displayName.ToLowerInvariant(), DisplayName = displayName, Tag = "0003" });
+
+    /// <summary>The next check-in is recorded and answered, and the answer never reaches the client.</summary>
+    public bool LoseNextAnswer { get; set; }
+
+    public Task<CheckInSavegameResponse> CheckInSavegameV1Async(Guid repoId, Guid savegameId, CheckInSavegameRequest request, CancellationToken cancellationToken = default)
     {
         CheckIns.Add(request);
+
+        // A repeat of the latest check-in is answered as the first one was, before anything else -
+        // otherwise it would be refused as stale against the snapshot it minted itself.
+        if (_lastCheckIn is { } last && last.RequestId == request.RequestId)
+        {
+            return Task.FromResult(last.Response);
+        }
 
         if (_blobs.ContainsKey(request.ContentHash) is false)
         {
@@ -157,19 +183,67 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             throw Problem(ProblemType.SavegameSnapshotStale, $"Based on {request.BasedOn}, head is {head!.Number}.");
         }
 
+        var (holds, takenFrom) = DecideClaim(request);
+
         // A check-in that changes nothing mints nothing, and is answered with the head instead.
-        if (head is not null && head.ContentHash == request.ContentHash)
+        var snapshot = head is not null && head.ContentHash == request.ContentHash
+            ? head
+            : AddSnapshot(
+                request.ContentHash,
+                request.SizeBytes,
+                request.ProfileRevision,
+                isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
+                request.BasedOn,
+                request.Label);
+
+        var response = new CheckInSavegameResponse { Snapshot = snapshot, HoldsClaim = holds, TakenFrom = takenFrom };
+
+        _lastCheckIn = (request.RequestId, response);
+
+        if (LoseNextAnswer)
         {
-            return Task.FromResult(head);
+            LoseNextAnswer = false;
+
+            throw new HttpRequestException("The connection dropped before the answer arrived.");
         }
 
-        return Task.FromResult(AddSnapshot(
-            request.ContentHash,
-            request.SizeBytes,
-            request.ProfileRevision,
-            isStale ? SavegameSnapshotOrigin.Forced : SavegameSnapshotOrigin.CheckedIn,
-            request.BasedOn,
-            request.Label));
+        return Task.FromResult(response);
+    }
+
+    /// <summary>The server's claim rule: see <c>SavegameCheckInClaimRule</c>.</summary>
+    private (bool Holds, SavegameCheckoutDto? TakenFrom) DecideClaim(CheckInSavegameRequest request)
+    {
+        if (ClaimIsMine)
+        {
+            if (request.KeepPlaying is false)
+            {
+                Claim = null;
+            }
+
+            return (request.KeepPlaying, null);
+        }
+
+        if (request.KeepPlaying is false)
+        {
+            return (false, null);
+        }
+
+        if (Claim is null)
+        {
+            Claim = Checkout();
+
+            return (true, null);
+        }
+
+        if (request.TakeOver is false)
+        {
+            throw Problem(ProblemType.SavegameClaimHeldByOther, $"Checked out to {Claim.User.DisplayName}.", Claim);
+        }
+
+        var takenFrom = Claim;
+        Claim = Checkout();
+
+        return (true, takenFrom);
     }
 
     public Task<SavegameDto> PublishSavegameV1Async(Guid repoId, PublishSavegameRequest request, CancellationToken cancellationToken = default)
@@ -189,6 +263,8 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         };
 
         AddSnapshot(request.ContentHash, request.SizeBytes, request.ProfileRevision, SavegameSnapshotOrigin.Created, null, request.Label);
+
+        Claim = Checkout();
 
         return Task.FromResult(_savegame);
     }
@@ -302,21 +378,22 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         return snapshot;
     }
 
-    private SavegameCheckoutDto Checkout() => new()
+    private SavegameCheckoutDto Checkout(UserDto? user = null) => new()
     {
         Id = Guid.NewGuid(),
         RepoId = RepoId,
         SavegameId = _savegame.Id,
-        User = new UserDto { Id = "me", DisplayName = "Me", Tag = "0002" },
+        User = user ?? _me,
         TakenAt = DateTime.UtcNow,
         Status = SavegameCheckoutStatus.Held
     };
 
-    private static ApiException<CustomProblemDetails> Problem(ProblemType type, string detail)
+    private static ApiException<CustomProblemDetails> Problem(ProblemType type, string detail, SavegameCheckoutDto? holder = null)
         => new("A server side error occurred.", 400, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails
         {
             Type = type,
-            Detail = detail
+            Detail = detail,
+            Holder = holder
         }, null);
 }
 
