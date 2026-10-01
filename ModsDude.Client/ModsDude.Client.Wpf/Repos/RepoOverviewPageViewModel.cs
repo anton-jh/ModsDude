@@ -1,6 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -9,9 +12,9 @@ using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Profiles;
+using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Toasts;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
@@ -19,12 +22,24 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Repos;
 
 /// <summary>
-/// What the repo looks like from here: the game it offers and how that installation stands, the
-/// profiles it holds, and the caller's standing in it.
+/// The repo's own pages that the overview opens, handed in by the repo page that owns the menu.
 /// </summary>
+public sealed record RepoOverviewLinks(Action ConnectGame, Action ConfigureGame);
+
+
+/// <summary>
+/// What the repo looks like from here: the repo itself, the game this machine has connected for it,
+/// and who else is on which profile.
+/// </summary>
+/// <remarks>
+/// The "This machine" card is the one place a connected game is shown and managed. Connecting,
+/// configuring and disconnecting are offered only for a game whose adapter has local settings; one
+/// without connects by itself and has nothing to configure.
+/// </remarks>
 public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
+    private readonly RepoOverviewLinks _links;
     private readonly ProfileService _profileService;
     private readonly MembershipService _membershipService;
     private readonly DriftMonitor _driftMonitor;
@@ -33,12 +48,15 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly GameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IToastService _toasts;
+    private readonly IModalService _modalService;
+    private readonly ILogger<RepoOverviewPageViewModel> _logger;
 
     private int? _fetchedMemberCount;
 
 
     public RepoOverviewPageViewModel(
         Repo repo,
+        RepoOverviewLinks links,
         ProfileService profileService,
         MembershipService membershipService,
         DriftMonitor driftMonitor,
@@ -47,9 +65,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         GameRepository gameRepository,
         ProfileApplyService applyService,
         IToastService toasts,
+        IModalService modalService,
+        ILogger<RepoOverviewPageViewModel> logger,
         FriendActivityListViewModel.Factory friendsFactory)
     {
         _repo = repo;
+        _links = links;
         _profileService = profileService;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
@@ -58,10 +79,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _gameRepository = gameRepository;
         _applyService = applyService;
         _toasts = toasts;
+        _modalService = modalService;
+        _logger = logger;
 
         Friends = friendsFactory.Create(repo.Id);
-
-        Games = [];
 
         _repo.PropertyChanged += OnRepoPropertyChanged;
         _repo.Games.CollectionChanged += OnSourceCollectionChanged;
@@ -69,21 +90,33 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _driftMonitor.Changed += OnDriftChanged;
 
         // Which profile a game follows changes without the collection, the profiles or the drift
-        // answer changing - deactivating a game with nothing wrong with it is exactly that - so the
-        // "Set to ..." line would otherwise go on saying what it said.
+        // answer changing - deactivating a game with nothing wrong with it is exactly that.
         _gameRepository.GameChanged += OnGameChanged;
 
         // A savegame taken or handed back changes the holding line without touching a mod folder or
         // a profile, so nothing else here would say so.
         _bindingStore.BindingsChanged += OnBindingsChanged;
 
-        RefreshGames();
+        RefreshGame();
     }
 
 
     public string RepoName => _repo.Name;
-    public string Game => _repo.Adapter.DisplayName;
-    public ObservableCollection<GameOverviewViewModel> Games { get; }
+
+    public string GameName => _repo.Adapter.GameDisplayName;
+
+    /// <summary>The game this machine has connected for this repo, or null where none is.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasGame))]
+    [NotifyPropertyChangedFor(nameof(HasNoGame))]
+    [NotifyPropertyChangedFor(nameof(CanCheckAgain))]
+    [NotifyPropertyChangedFor(nameof(CanConnectGame))]
+    [NotifyPropertyChangedFor(nameof(CanManageGame))]
+    private GameOverviewViewModel? _game;
+
+    public bool HasGame => Game is not null;
+
+    public bool HasNoGame => Game is null;
 
     /// <summary>Who else in this repo is on which of its profiles, most recently active first.</summary>
     public FriendActivityListViewModel Friends { get; }
@@ -102,21 +135,31 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         var count => $"{count} profiles."
     };
 
-    public bool HasGames => Games.Count > 0;
-    public bool HasNoGames => Games.Count == 0;
+    /// <summary>
+    /// Whether this game has local settings, and so is connected, configured and disconnected by
+    /// hand. One without connects by itself the moment it is found.
+    /// </summary>
+    public bool HasLocalSettings => GameRepository.ConnectsAutomatically(_repo.Adapter) is false;
+
+    public string NotConnectedStatus => HasLocalSettings ? "Not connected" : "Not found on this machine";
 
     /// <summary>
-    /// What the machine section says while no game is connected. For a game that connects by
-    /// itself that can only mean it is not installed here, so it says that rather than pointing at a
-    /// Connect game entry the sidebar does not have.
+    /// Whether looking again could change anything: always for a connected game, and for an
+    /// unconnected one only where it connects by itself.
     /// </summary>
-    public string NoGameText => ConnectsAutomatically
-        ? $"{_repo.Adapter.GameDisplayName} was not found on this machine. It creates its data folder the first time it is launched - " +
-          "launch it once, then check again."
-        : "No game on this machine is connected to this repo yet. Use 'Connect game' to point one at its mod folder.";
+    public bool CanCheckAgain => HasGame || HasLocalSettings is false;
 
-    /// <summary>Whether <see cref="CheckForGameCommand"/> has anything to do while no game is connected.</summary>
-    public bool ConnectsAutomatically => GameRepository.ConnectsAutomatically(_repo.Adapter);
+    public bool CanConnectGame => HasNoGame && HasLocalSettings;
+
+    /// <summary>Whether the game can be configured and disconnected.</summary>
+    public bool CanManageGame => HasGame && HasLocalSettings;
+
+    /// <summary>Why the last thing the user did to the game here was refused, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasGameError))]
+    private string? _gameError;
+
+    public bool HasGameError => GameError is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMemberSummary))]
@@ -138,59 +181,109 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     }
 
 
-    /// <summary>
-    /// Looks for the game again, for somebody who has just launched it for the first time. Where it
-    /// is still not there, the reason is shown as an error rather than nothing happening.
-    /// </summary>
     [RelayCommand]
-    private void CheckForGame()
+    private void ConnectGame()
     {
-        _gameRepository.ConnectAutomatically(_repo.Adapter);
+        _links.ConnectGame();
+    }
+
+    [RelayCommand]
+    private void ConfigureGame()
+    {
+        _links.ConfigureGame();
     }
 
     /// <summary>
-    /// Stops the game following its profile and leaves the mod folders exactly as they are.
+    /// Looks for the game again: connects one that has turned up, catches a connected one up with
+    /// wherever its folders are now, and reads the folders for drift.
     /// </summary>
+    /// <remarks>
+    /// A game still not found is not an error here: the card says so either way.
+    /// </remarks>
     [RelayCommand]
-    private Task Deactivate(GameOverviewViewModel row, CancellationToken cancellationToken)
-        => DeactivateAsync(row, clearMods: false, cancellationToken);
+    private async Task CheckAgain()
+    {
+        GameError = null;
+
+        try
+        {
+            if (_gameRepository.Find(_repo.Scope) is Game game)
+            {
+                _gameRepository.RefreshTargets(game, _repo.Adapter);
+            }
+            else
+            {
+                _gameRepository.ConnectAutomatically(_repo.Adapter);
+            }
+        }
+        catch (UserFriendlyException exception)
+        {
+            _logger.LogInformation("Game of repo {Repo} is still not readable: {Reason}", _repo.Id, exception.DeveloperMessage);
+        }
+
+        await _driftMonitor.CheckAsync();
+
+        RefreshGame();
+    }
+
+    [RelayCommand]
+    private async Task Disconnect()
+    {
+        if (Game is not GameOverviewViewModel row)
+        {
+            return;
+        }
+
+        GameError = null;
+
+        var modal = ConfirmationModalViewModel.ConfirmDisconnectGame(row.Name);
+
+        await _modalService.Show(modal);
+
+        if (modal.Result is false)
+        {
+            return;
+        }
+
+        try
+        {
+            _gameRepository.Delete(row.Game);
+        }
+        catch (UserFriendlyException exception)
+        {
+            _logger.LogInformation("Did not disconnect game {Game}: {Reason}", row.Game.Identity, exception.DeveloperMessage);
+            GameError = exception.UserMessage;
+        }
+    }
+
+    /// <summary>Stops the game following its profile and leaves the mod folders exactly as they are.</summary>
+    [RelayCommand]
+    private Task Deactivate(CancellationToken cancellationToken)
+        => DeactivateAsync(clearMods: false, cancellationToken);
 
     /// <summary>Stops the game following its profile and takes every mod out of its folders too.</summary>
     [RelayCommand]
-    private Task DeactivateAndClear(GameOverviewViewModel row, CancellationToken cancellationToken)
-        => DeactivateAsync(row, clearMods: true, cancellationToken);
+    private Task DeactivateAndClear(CancellationToken cancellationToken)
+        => DeactivateAsync(clearMods: true, cancellationToken);
 
     /// <remarks>
     /// Not greyed while something else is applying or a savegame is held: the service refuses both
-    /// with a sentence that says what to wait for or check in, which is a better answer on a page with
-    /// no room for a reason than a button that just does not work.
+    /// with a sentence that says what to wait for or check in.
     /// </remarks>
-    private async Task DeactivateAsync(GameOverviewViewModel row, bool clearMods, CancellationToken cancellationToken)
+    private async Task DeactivateAsync(bool clearMods, CancellationToken cancellationToken)
     {
+        if (Game is not GameOverviewViewModel row)
+        {
+            return;
+        }
+
         var outcome = await _applyService.DeactivateAsync(_repo, row.Game, clearMods, progress: null, cancellationToken);
 
         _toasts.Show(outcome.Message, outcome.ToastSeverity);
 
         await _driftMonitor.CheckAsync();
 
-        RefreshGames();
-    }
-
-
-    /// <summary>
-    /// Reads the folders again, for somebody who has just changed something outside the app.
-    /// </summary>
-    /// <remarks>
-    /// The game page's Re-check, which came here with the rest of its sidebar. Worth keeping: mods
-    /// updated from inside the game are the commonest way a folder drifts, and the alternative to a
-    /// button is waiting for the next window activation and wondering whether it ran.
-    /// </remarks>
-    [RelayCommand]
-    private async Task Recheck()
-    {
-        await _driftMonitor.CheckAsync();
-
-        RefreshGames();
+        RefreshGame();
     }
 
 
@@ -223,58 +316,61 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private void OnRepoPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(RepoName));
-        OnPropertyChanged(nameof(Game));
+        OnPropertyChanged(nameof(GameName));
         OnPropertyChanged(nameof(MembershipSummary));
+
+        // The adapter is replaced whenever the repo's base settings are.
+        OnPropertyChanged(nameof(HasLocalSettings));
+        OnPropertyChanged(nameof(NotConnectedStatus));
+        OnPropertyChanged(nameof(CanCheckAgain));
+        OnPropertyChanged(nameof(CanConnectGame));
+        OnPropertyChanged(nameof(CanManageGame));
     }
 
     private void OnSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        RefreshGames();
+        RefreshGame();
 
         OnPropertyChanged(nameof(ProfileSummary));
     }
 
     private void OnDriftChanged(object? sender, EventArgs e)
     {
-        // The monitor checks off the UI thread, and these rows are bound.
-        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
+        // The monitor checks off the UI thread, and the card is bound.
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGame);
     }
 
     /// <inheritdoc cref="OnDriftChanged"/>
     private void OnGameChanged(object? sender, EventArgs e)
     {
-        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGame);
     }
 
     /// <summary>A savegame taken or handed back, here or anywhere else on this machine.</summary>
     /// <remarks>Dispatched for the same reason: a check-in completing is not guaranteed to be on the UI thread.</remarks>
     private void OnBindingsChanged(object? sender, EventArgs e)
     {
-        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGames);
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshGame);
     }
 
-    private void RefreshGames()
+    /// <remarks>
+    /// <see cref="Repo.Games"/> holds at most one game, filtered to the identity this repo is about.
+    /// </remarks>
+    private void RefreshGame()
     {
-        // Every entry per game rather than the first of them: a game reaching three folders has an
-        // entry each, and the row places them onto the folders they are about.
-        var drifted = _driftMonitor.Drifted
-            .GroupBy(x => x.Game.Identity)
-            .ToDictionary(x => x.Key, IReadOnlyList<TargetDrift> (x) => [.. x]);
-
-        Games.Clear();
-
-        foreach (var game in _repo.Games)
+        if (_repo.Games.FirstOrDefault() is not Game game)
         {
-            Games.Add(new GameOverviewViewModel(
-                game,
-                _repo.Adapter,
-                DescribeActiveProfile(game),
-                DescribeHolding(game),
-                drifted.GetValueOrDefault(game.Identity, [])));
+            Game = null;
+
+            return;
         }
 
-        OnPropertyChanged(nameof(HasGames));
-        OnPropertyChanged(nameof(HasNoGames));
+        Game = new GameOverviewViewModel(
+            game,
+            GameInstallation.Read(game, _repo.Adapter, _logger),
+            DescribeActiveProfile(game),
+            DescribeHolding(game),
+            [.. _driftMonitor.Drifted.Where(x => x.Game.Identity == game.Identity)]);
     }
 
     private string DescribeActiveProfile(Game game)
@@ -301,18 +397,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     /// a mod list.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>Asked of <see cref="SavegameHoldRules"/> rather than worked out here.</b> The same questions
-    /// decide whether the sync engine refuses an apply, and a second copy of them on this page is one
-    /// that eventually disagrees with the surfaces that act on it.
-    /// </para>
-    /// <para>
-    /// <b>It names the mod list rather than the savegame</b>, which is where this differs from the
-    /// game page's version of the line. Naming the save cost a round trip per repo holding one, and
-    /// the repo's Saves list is both where the name is and where anything can be done about it - so
-    /// the half worth a line here is the half that explains why the folder will not move: a pinned
-    /// revision.
-    /// </para>
+    /// Asked of <see cref="SavegameHoldRules"/> rather than worked out here: the same questions decide
+    /// whether the sync engine refuses an apply.
     /// </remarks>
     private string? DescribeHolding(Game game)
     {
@@ -334,7 +420,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public RepoOverviewPageViewModel Create(Repo repo)
-            => ActivatorUtilities.CreateInstance<RepoOverviewPageViewModel>(serviceProvider, repo);
+        public RepoOverviewPageViewModel Create(Repo repo, RepoOverviewLinks links)
+            => ActivatorUtilities.CreateInstance<RepoOverviewPageViewModel>(serviceProvider, repo, links);
     }
 }

@@ -66,28 +66,12 @@ public partial class RepoPageViewModel
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
 
     /// <summary>
-    /// The two entries at the bottom of the menu, exactly one of which is in it at a time: the
-    /// settings of the game this machine has connected for this repo, or the invitation to connect
-    /// one.
+    /// Connect game and Configure game: pages reached from the Overview's "This machine" card rather
+    /// than from the menu, held here the way <see cref="_createProfileMenuItem"/> is. Only a game whose
+    /// adapter has local settings has either.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>There is no game list any more.</b> A game is keyed by its identity and a repo is about one
-    /// game, so a repo offers at most one - which makes a list of them a list that is always empty or
-    /// always one long, under a heading saying "Games".
-    /// </para>
-    /// <para>
-    /// <b>And no game page behind it either.</b> The entry used to be titled with the game's own
-    /// name and to open a shell of its own over Sync, Saves and Manage - a proper noun sitting in a
-    /// list of nouns-of-function, which is what made a local installation read as a fourth kind of
-    /// entity beside repos and profiles. It is settings now, named for what it holds and nothing
-    /// else: <em>Configure game</em>, the folders this machine points at. Where the game stands -
-    /// which profile it follows, what it is holding, how far each folder has drifted - is on the
-    /// repo's Overview, and what to do about it is on a profile's page or the app-level notice.
-    /// </para>
-    /// </remarks>
-    private readonly MenuItemViewModel _connectGameMenuItem;
-    private readonly MenuItemViewModel _gameMenuItem;
+    private readonly MenuItemViewModel _connectGameItem;
+    private readonly MenuItemViewModel _configureGameItem;
 
 
     public RepoPageViewModel(
@@ -132,17 +116,13 @@ public partial class RepoPageViewModel
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
 
-        _connectGameMenuItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo))
-            .WithIcon(MenuIcons.ConnectGame);
+        _connectGameItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo))
+            .WithIcon(MenuIcons.Game);
 
-        // Titled for what it holds rather than for the game, which is the whole of the entry's job
-        // now: the game it acts on is whichever one the repo offers at the time it is clicked, and a
-        // repo offers at most one, so there is nothing to pick between and nothing to re-title. It
-        // falls back to Connect game rather than asserting: the entry is only in the menu while
-        // there is a game, but nothing stops a deep link setting the selection to it, and the shell
-        // must not fall over on a race with a disconnect.
-        _gameMenuItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
-            ? _gameSettingsPageViewModelFactory.Create(_repo, game)
+        // Falls back to Connect game rather than asserting: the game can be disconnected between the
+        // click and the page being built, and the shell must not fall over on that race.
+        _configureGameItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
+            ? _gameSettingsPageViewModelFactory.Create(_repo, game, GoToOverview)
             : _connectGamePageViewModelFactory.Create(_repo))
             .WithIcon(MenuIcons.Game);
 
@@ -152,7 +132,9 @@ public partial class RepoPageViewModel
         var isGuest = repo.MembershipLevel < RepoMembershipLevel.Member;
         var isNotAdmin = repo.MembershipLevel < RepoMembershipLevel.Admin;
 
-        _overviewMenuItem = new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo))
+        var overviewLinks = new RepoOverviewLinks(ConnectGame, ConfigureGame);
+
+        _overviewMenuItem = new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo, overviewLinks))
             .WithIcon(MenuIcons.Overview);
 
         MenuItems = [
@@ -214,23 +196,14 @@ public partial class RepoPageViewModel
         _profileService.PendingChangesChanged += OnPendingProfileChangesChanged;
         _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
 
-        NavManager = new(navigationLockService, modalService)
-        {
-            Selected = MenuItems.First()
-        };
-
-        // Before the selection below and after the manager exists, because it moves the selection
-        // when the entry under it leaves the menu.
-        RefreshGameEntry();
-
         // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
         // that fixes that beats landing on an overview describing it - where there is anything to
         // do about it here. A game that connects by itself has no connect page, and the overview is
         // where it says it was not found.
-        if (ConnectedGame() is null && ConnectsAutomatically() is false)
+        NavManager = new(navigationLockService, modalService)
         {
-            NavManager.Selected = _connectGameMenuItem;
-        }
+            Selected = NeedsConnecting() ? _connectGameItem : _overviewMenuItem
+        };
 
         _repo.Games.CollectionChanged += OnGamesChanged;
         _repo.PropertyChanged += OnRepoChanged;
@@ -281,9 +254,8 @@ public partial class RepoPageViewModel
     /// Whether the header offers to connect a game: only while none is, and not on the page that does
     /// it.
     /// </summary>
-    public bool ShowConnectGame => ConnectedGame() is null
-        && ConnectsAutomatically() is false
-        && ReferenceEquals(NavManager.Selected, _connectGameMenuItem) is false;
+    public bool ShowConnectGame => NeedsConnecting()
+        && ReferenceEquals(NavManager.Selected, _connectGameItem) is false;
 
     /// <summary>Whether the Create profile page is showing, for the "+" to draw as selected.</summary>
     public bool IsCreateProfileSelected => ReferenceEquals(NavManager.Selected, _createProfileMenuItem);
@@ -337,16 +309,20 @@ public partial class RepoPageViewModel
         NavManager.Selected = _overviewMenuItem;
     }
 
-    /// <summary>
-    /// Takes the user to the Connect game entry, which is in the sidebar for exactly as long as no game
-    /// is connected - so the page the header sends them to is always one the menu also names.
-    /// </summary>
     [RelayCommand]
     private void ConnectGame()
     {
-        if (ConnectedGame() is null && ConnectsAutomatically() is false)
+        if (NeedsConnecting())
         {
-            NavManager.Selected = _connectGameMenuItem;
+            NavManager.Selected = _connectGameItem;
+        }
+    }
+
+    private void ConfigureGame()
+    {
+        if (ConnectedGame() is not null && ConnectsAutomatically() is false)
+        {
+            NavManager.Selected = _configureGameItem;
         }
     }
 
@@ -664,58 +640,22 @@ public partial class RepoPageViewModel
     /// </remarks>
     private bool ConnectsAutomatically() => GameRepository.ConnectsAutomatically(_repo.Adapter);
 
+    private bool NeedsConnecting() => ConnectedGame() is null && ConnectsAutomatically() is false;
+
     /// <summary>
-    /// Puts at most one of the two bottom entries in the menu: the connected game's settings, or the
-    /// invitation to connect one - and neither for a game that connects by itself, which has nothing
-    /// to connect with and nothing to configure.
+    /// Leaves Connect game once a game is connected, and Configure game once it is gone: either page
+    /// would be about a state the user is no longer in. The Overview says what happened.
     /// </summary>
-    /// <remarks>
-    /// Absent rather than closed, the same way the Saves entry is for an adapter with no savegames:
-    /// "Connect game" on a repo that already has one, or a settings entry leading to a form about
-    /// nothing, are both entries that describe a state the user is not in.
-    /// </remarks>
-    private void RefreshGameEntry()
-    {
-        if (ConnectsAutomatically())
-        {
-            if (ReferenceEquals(NavManager.Selected, _connectGameMenuItem) || ReferenceEquals(NavManager.Selected, _gameMenuItem))
-            {
-                NavManager.Selected = _overviewMenuItem;
-            }
-
-            MenuItems.Remove(_connectGameMenuItem);
-            MenuItems.Remove(_gameMenuItem);
-
-            return;
-        }
-
-        var game = ConnectedGame();
-
-        var wanted = game is null ? _connectGameMenuItem : _gameMenuItem;
-        var unwanted = game is null ? _gameMenuItem : _connectGameMenuItem;
-
-        // In before out, and the selection moved between them: a selection naming an entry the
-        // bound list does not hold is one the ListView pushes straight back to null, so the entry
-        // being selected has to be in the menu before it is selected and the one being dropped has
-        // to be off the selection before it leaves.
-        if (MenuItems.Contains(wanted) is false)
-        {
-            MenuItems.Add(wanted);
-        }
-
-        if (ReferenceEquals(NavManager.Selected, unwanted))
-        {
-            // Whatever was on screen is about a game that has just gone, or about connecting one
-            // that has just arrived. Either way the page under it is about to stop making sense.
-            NavManager.Selected = wanted;
-        }
-
-        MenuItems.Remove(unwanted);
-    }
-
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        RefreshGameEntry();
+        var connected = ConnectedGame() is not null;
+
+        if ((connected && ReferenceEquals(NavManager.Selected, _connectGameItem))
+            || (connected is false && ReferenceEquals(NavManager.Selected, _configureGameItem)))
+        {
+            NavManager.Selected = _overviewMenuItem;
+        }
+
         OnPropertyChanged(nameof(ShowConnectGame));
     }
 

@@ -9,15 +9,9 @@ using ModsDude.Client.Wpf.Shell.Navigation;
 namespace ModsDude.Client.Wpf.Games;
 
 /// <summary>
-/// Connecting the game a repo is about, as this machine has it.
+/// Connecting the game a repo is about, as this machine has it: the adapter's local settings form and
+/// nothing else. The game is called what its adapter calls it.
 /// </summary>
-/// <remarks>
-/// <b>It is the settings form and nothing else.</b> There used to be a name box above it, defaulting
-/// to "Game" and checked for uniqueness within the scope; both went in slice 5. A game is called what
-/// its adapter calls it - Farming Simulator 25 - and one is configured once per identity, so there
-/// was nothing left for a typed name to distinguish and nothing it could say that
-/// <c>Adapter.GameDisplayName</c> did not already.
-/// </remarks>
 public partial class ConnectGamePageViewModel
     : PageViewModel, IDisposable
 {
@@ -75,9 +69,20 @@ public partial class ConnectGamePageViewModel
             return;
         }
 
-        _gameRepository.Create(_repo.Adapter, LocalSettingsEditor.ExtractResults());
-
+        // Released first: connecting takes the repo page off this page, which would otherwise ask
+        // whether to discard the changes that were just saved.
         _navigationLockService.ReleaseLock(this);
+
+        try
+        {
+            _gameRepository.Create(_repo.Adapter, LocalSettingsEditor.ExtractResults());
+        }
+        catch
+        {
+            _navigationLockService.AcquireLock(this);
+
+            throw;
+        }
     }
 
     public void Dispose()

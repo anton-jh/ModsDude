@@ -17,16 +17,11 @@
 
                 <navigation:PageTitle Text="Configure game" />
 
-                <!-- Said out loud, because it is the whole reason this page is settings and not a
-                     place: what is being configured is the copy of the game on this machine, not
-                     anything the repo holds or anybody else can see. -->
                 <TextBlock Margin="0 0 0 24"
                            TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Text="{Binding Summary}" />
 
-                <!-- The settings are the whole of what a machine decides about a game: every folder
-                     it reaches falls out of them, and its name comes from the adapter. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16">
@@ -41,10 +36,6 @@
         <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
             <Button Width="250" Style="{DynamicResource AccentButtonStyle}"
                     Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
-
-            <Button Width="250" Margin="8 0 0 0"
-                    ToolTip="ModsDude stops managing this installation. Nothing on disk is changed or removed."
-                    Content="Disconnect game" Command="{Binding Path=DeleteCommand}" />
         </StackPanel>
 
     </Grid>

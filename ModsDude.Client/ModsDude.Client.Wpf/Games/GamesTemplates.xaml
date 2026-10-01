@@ -9,4 +9,29 @@
         <games:GameSettingsPage />
     </DataTemplate>
 
+    <!-- A label/value row. The label column is shared across the rows of one list, so the paths line
+         up; the list sets Grid.IsSharedSizeScope. -->
+    <DataTemplate DataType="{x:Type games:GameFolderLine}">
+        <Grid RowDefinitions="Auto, Auto">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="GameFolderLabel" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Margin="0 0 16 0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="{Binding Label}" />
+            <TextBlock Grid.Column="1"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Path}"
+                       Text="{Binding Path}" />
+            <TextBlock Grid.Row="1" Grid.Column="1"
+                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                       TextWrapping="Wrap"
+                       Text="{Binding Drift}"
+                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
+        </Grid>
+    </DataTemplate>
+
 </ResourceDictionary>

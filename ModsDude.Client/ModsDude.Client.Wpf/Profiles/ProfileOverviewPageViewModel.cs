@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -44,6 +46,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly SavegameFlowService _flowService;
     private readonly ShellNavigationService _navigation;
     private readonly DriftMonitor _driftMonitor;
+    private readonly ILogger<ProfileOverviewPageViewModel> _logger;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -70,7 +73,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         CurrentUserService currentUserService,
         SavegameFlowService flowService,
         ShellNavigationService navigation,
-        DriftMonitor driftMonitor)
+        DriftMonitor driftMonitor,
+        ILogger<ProfileOverviewPageViewModel> logger)
     {
         _repo = repo;
         _profile = profile;
@@ -80,6 +84,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _flowService = flowService;
         _navigation = navigation;
         _driftMonitor = driftMonitor;
+        _logger = logger;
 
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
@@ -574,7 +579,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         {
             Games.Add(new GameOverviewViewModel(
                 game,
-                _repo.Adapter,
+                GameInstallation.Read(game, _repo.Adapter, _logger),
                 "Set to this profile",
                 // Null: this page has a Savegames card of its own saying which savegame the profile
                 // follows, which is the same fact from the end somebody reading a profile cares

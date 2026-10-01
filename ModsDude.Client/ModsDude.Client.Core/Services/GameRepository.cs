@@ -1,4 +1,5 @@
-﻿using ModsDude.Client.Core.Exceptions;
+﻿using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
@@ -32,12 +33,14 @@ public class GameRepository : IModFolders, IDriftCandidateSource
 {
     private readonly StateStore _store;
     private readonly SyncManifestStore _manifestStore;
+    private readonly IResourceLeases _leases;
 
 
-    public GameRepository(StateStore store, SyncManifestStore manifestStore)
+    public GameRepository(StateStore store, SyncManifestStore manifestStore, IResourceLeases leases)
     {
         _store = store;
         _manifestStore = manifestStore;
+        _leases = leases;
 
         Games = new(store.Read(state => state.Games.Select(x => new Game(x.Key, x.Value)).ToList()));
 
@@ -139,9 +142,9 @@ public class GameRepository : IModFolders, IDriftCandidateSource
     /// local settings form has no fields, so there is nothing a connect page could ask.
     /// </summary>
     /// <remarks>
-    /// Such a game has no Connect game or Configure game entry either, and nothing to disconnect:
-    /// connecting only writes the game down and touches nothing on disk, and a game that follows no
-    /// profile does nothing at all, so there is no state a user would choose over "connected".
+    /// Such a game cannot be configured or disconnected either: connecting only writes the game down
+    /// and touches nothing on disk, and a game that follows no profile does nothing at all, so there
+    /// is no state a user would choose over "connected".
     /// </remarks>
     public static bool ConnectsAutomatically(IBaseGameAdapter baseAdapter)
     {
@@ -332,9 +335,39 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Disconnects the game: forgets its settings and which profile it follows. Nothing on disk is
+    /// touched.
+    /// </summary>
+    /// <exception cref="UserFriendlyException">
+    /// The game holds a savegame, whose check-out record would be lost with it, or something is
+    /// working on its folders right now.
+    /// </exception>
     public void Delete(Game game)
     {
-        _store.Update(state => state.Games.Remove(game.Identity));
+        using var lease = _leases.TryAcquireExclusive(
+            game.TargetRefs.Select(ResourceKeys.Target),
+            $"Disconnecting '{game.Name}'")
+            ?? throw new UserFriendlyException(
+                $"'{game.Name}' is busy",
+                $"Something is working on the folders of '{game.Name}', so it was not disconnected.");
+
+        var outcome = DisconnectOutcome.AlreadyGone;
+
+        _store.UpdateIf(state =>
+        {
+            outcome = Disconnect(state, game.Identity);
+
+            return outcome is DisconnectOutcome.Removed;
+        });
+
+        if (outcome is DisconnectOutcome.HoldsSavegame)
+        {
+            throw new UserFriendlyException(
+                "Check in the savegame first",
+                $"'{game.Name}' holds a checked-out savegame, so it was not disconnected.");
+        }
+
         Games.Remove(game);
 
         // Nothing reads a manifest for a folder no game reaches any more, and leaving one behind
@@ -415,6 +448,37 @@ public class GameRepository : IModFolders, IDriftCandidateSource
         }
 
         return null;
+    }
+
+    internal enum DisconnectOutcome
+    {
+        Removed,
+        AlreadyGone,
+        HoldsSavegame
+    }
+
+    /// <summary>
+    /// Removes the game from the state unless it holds a savegame.
+    /// </summary>
+    /// <remarks>
+    /// Over the state rather than through the store, so the rule can be exercised without a real
+    /// <c>state.json</c> - see <see cref="FindFolderConflict(IEnumerable{Game}, IReadOnlyList{PersistedModTarget}, GameIdentity?)"/>.
+    /// </remarks>
+    internal static DisconnectOutcome Disconnect(LocalState state, GameIdentity identity)
+    {
+        if (state.Games.TryGetValue(identity, out var persisted) is false)
+        {
+            return DisconnectOutcome.AlreadyGone;
+        }
+
+        if (persisted.SavegameCheckouts.Count > 0)
+        {
+            return DisconnectOutcome.HoldsSavegame;
+        }
+
+        state.Games.Remove(identity);
+
+        return DisconnectOutcome.Removed;
     }
 
     /// <summary>

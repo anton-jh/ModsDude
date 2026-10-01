@@ -102,6 +102,16 @@ public partial class ConfirmationModalViewModel(
             "Keep it here");
     }
 
+    public static ConfirmationModalViewModel ConfirmDisconnectGame(string name)
+    {
+        return new ConfirmationModalViewModel(
+            $"Disconnect {name}?",
+            $"ModsDude forgets where '{name}' is installed and which profile it follows. Nothing on disk changes.",
+            IconKind.Question,
+            "Disconnect",
+            "Keep");
+    }
+
     /// <summary>
     /// The permanent one, reached from the archive. This is the modal that gets to be alarming.
     /// </summary>

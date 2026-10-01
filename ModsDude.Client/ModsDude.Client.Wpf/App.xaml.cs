@@ -57,6 +57,7 @@ public partial class App : Application
     private SavegameClaimWatcher? _claimWatcher;
     private PlaySessionWatcher? _playSessionWatcher;
     private FriendActivityWatcher? _friendWatcher;
+    private GameConnectionToasts? _gameConnectionToasts;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -164,6 +165,10 @@ public partial class App : Application
             Environment.ProcessPath,
             // An installed copy has the installer's shortcut, made with this same identity.
             ensureShortcut: _serviceProvider.GetRequiredService<AppUpdater>().IsInstalled is false);
+
+        // Before anything can load the repos, which connects games that connect by themselves.
+        _gameConnectionToasts = _serviceProvider.GetRequiredService<GameConnectionToasts>();
+        _gameConnectionToasts.Start();
 
         var window = _serviceProvider.GetRequiredService<MainWindow>();
         window.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
@@ -377,6 +382,7 @@ public partial class App : Application
         Interlocked.Exchange(ref _claimWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _playSessionWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _friendWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _gameConnectionToasts, null)?.Dispose();
         Interlocked.Exchange(ref _tray, null)?.Dispose();
         Interlocked.Exchange(ref _singleInstance, null)?.Dispose();
     }
@@ -490,6 +496,8 @@ public partial class App : Application
 
         // Reads what friends are on, so a switch or a check-out reaches the column - see the class.
         services.AddSingleton<FriendActivityWatcher>();
+
+        services.AddSingleton<GameConnectionToasts>();
 
         // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
         // library's own way of saying so, which Core cannot see.
