@@ -131,6 +131,7 @@ A change is done only when all of these hold:
 - No fire-and-forget: every started task is awaited, or explicitly owned with its errors observed.
 - No `async void` and no `.Result` / `.Wait()` / `GetAwaiter().GetResult()`, except where WPF requires it (such as event handlers).
 - Never read the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`). Use the time service or `TimeProvider`.
+  - Exception: logging, error handling and startup code may read the clock directly.
 
 ### Files and size
 
