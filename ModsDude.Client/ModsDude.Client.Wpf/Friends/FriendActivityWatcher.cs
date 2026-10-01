@@ -24,7 +24,7 @@ public sealed class FriendActivityWatcher(
     FriendActivityService friends,
     RepoRepository repoRepository,
     ILogger<FriendActivityWatcher> logger)
-    : IDisposable
+    : IFriendActivityWatcher
 {
     /// <summary>One small list read, so this can be as frequent as the other watchers.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);

@@ -28,7 +28,7 @@ public sealed class SavegameClaimWatcher(
     DriftMonitor monitor,
     RepoRepository repoRepository,
     ILogger<SavegameClaimWatcher> logger)
-    : IDisposable
+    : ISavegameClaimWatcher
 {
     /// <summary>One list read per repo holding a save, and none where nothing is held.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);

@@ -43,6 +43,7 @@ public sealed class ToastNotifier(
     DriftMonitor monitor,
     PlaySessionWatch sessions,
     ISystemToasts system)
+    : IToastNotifier
 {
     private const string _driftGroup = "drift";
     private const string _reminderGroup = "reminder";

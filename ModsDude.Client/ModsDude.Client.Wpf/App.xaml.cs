@@ -51,13 +51,13 @@ public partial class App : Application
     private FileLoggerProvider _logProvider = null!;
 
     private SingleInstance? _singleInstance;
-    private TrayService? _tray;
-    private DriftBackstop? _backstop;
-    private RemoteChangeWatcher? _remoteChanges;
-    private SavegameClaimWatcher? _claimWatcher;
-    private PlaySessionWatcher? _playSessionWatcher;
-    private FriendActivityWatcher? _friendWatcher;
-    private GameConnectionToasts? _gameConnectionToasts;
+    private ITrayService? _tray;
+    private IDriftBackstop? _backstop;
+    private IRemoteChangeWatcher? _remoteChanges;
+    private ISavegameClaimWatcher? _claimWatcher;
+    private IPlaySessionWatcher? _playSessionWatcher;
+    private IFriendActivityWatcher? _friendWatcher;
+    private IGameConnectionToasts? _gameConnectionToasts;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -167,7 +167,7 @@ public partial class App : Application
             ensureShortcut: _serviceProvider.GetRequiredService<AppUpdater>().IsInstalled is false);
 
         // Before anything can load the repos, which connects games that connect by themselves.
-        _gameConnectionToasts = _serviceProvider.GetRequiredService<GameConnectionToasts>();
+        _gameConnectionToasts = _serviceProvider.GetRequiredService<IGameConnectionToasts>();
         _gameConnectionToasts.Start();
 
         var window = _serviceProvider.GetRequiredService<MainWindow>();
@@ -190,7 +190,7 @@ public partial class App : Application
 
         // The opposite of the background presence above: it only asks while the window is in sight,
         // because what it finds is a dot in the sidebar and nothing else.
-        _remoteChanges = _serviceProvider.GetRequiredService<RemoteChangeWatcher>();
+        _remoteChanges = _serviceProvider.GetRequiredService<IRemoteChangeWatcher>();
         _remoteChanges.Start(window);
 
         RepairAutostart();
@@ -339,21 +339,21 @@ public partial class App : Application
         // Windows ending the session must not be answered with a window that will not close.
         SessionEnding += (_, _) => window.AllowClose();
 
-        _serviceProvider.GetRequiredService<ToastNotifier>().Start();
+        _serviceProvider.GetRequiredService<IToastNotifier>().Start();
 
-        _tray = _serviceProvider.GetRequiredService<TrayService>();
+        _tray = _serviceProvider.GetRequiredService<ITrayService>();
         var trayUp = _tray.Start();
 
-        _backstop = _serviceProvider.GetRequiredService<DriftBackstop>();
+        _backstop = _serviceProvider.GetRequiredService<IDriftBackstop>();
         _backstop.Start();
 
-        _claimWatcher = _serviceProvider.GetRequiredService<SavegameClaimWatcher>();
+        _claimWatcher = _serviceProvider.GetRequiredService<ISavegameClaimWatcher>();
         _claimWatcher.Start();
 
-        _playSessionWatcher = _serviceProvider.GetRequiredService<PlaySessionWatcher>();
+        _playSessionWatcher = _serviceProvider.GetRequiredService<IPlaySessionWatcher>();
         _playSessionWatcher.Start();
 
-        _friendWatcher = _serviceProvider.GetRequiredService<FriendActivityWatcher>();
+        _friendWatcher = _serviceProvider.GetRequiredService<IFriendActivityWatcher>();
         _friendWatcher.Start();
 
         _serviceProvider.GetRequiredService<AppUpdater>().Start();
@@ -482,22 +482,22 @@ public partial class App : Application
 
         // Who is left running when the window is closed: the icon that brings it back, and the checks
         // that no longer wait for it to be looked at.
-        services.AddSingleton<TrayService>();
-        services.AddSingleton<DriftBackstop>();
+        services.AddSingleton<ITrayService, TrayService>();
+        services.AddSingleton<IDriftBackstop, DriftBackstop>();
 
         // Asks whether the sidebar's lists are behind the server, and only says so - see the class.
-        services.AddSingleton<RemoteChangeWatcher>();
+        services.AddSingleton<IRemoteChangeWatcher, RemoteChangeWatcher>();
 
         // Asks who holds the savegames checked out here, so a takeover reaches the notice - see the class.
-        services.AddSingleton<SavegameClaimWatcher>();
+        services.AddSingleton<ISavegameClaimWatcher, SavegameClaimWatcher>();
 
         // Notices a game closing after a checked-out savegame was played in it - see the class.
-        services.AddSingleton<PlaySessionWatcher>();
+        services.AddSingleton<IPlaySessionWatcher, PlaySessionWatcher>();
 
         // Reads what friends are on, so a switch or a check-out reaches the column - see the class.
-        services.AddSingleton<FriendActivityWatcher>();
+        services.AddSingleton<IFriendActivityWatcher, FriendActivityWatcher>();
 
-        services.AddSingleton<GameConnectionToasts>();
+        services.AddSingleton<IGameConnectionToasts, GameConnectionToasts>();
 
         // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
         // library's own way of saying so, which Core cannot see.
@@ -509,7 +509,7 @@ public partial class App : Application
         // window's own notices and toasts are worth sending through it.
         services.AddSingleton<WindowsToasts>();
         services.AddSingleton<ISystemToasts>(sp => sp.GetRequiredService<WindowsToasts>());
-        services.AddSingleton<ToastNotifier>();
+        services.AddSingleton<IToastNotifier, ToastNotifier>();
 
         // Updates for an installed copy. One object seen two ways: the column and the tray ask it whether
         // something is waiting, the Settings page and the shell ask it for the rest.

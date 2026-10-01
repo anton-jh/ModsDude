@@ -30,7 +30,7 @@ public sealed class RemoteChangeWatcher(
     RepoRepository repoRepository,
     ProfileService profileService,
     ILogger<RemoteChangeWatcher> logger)
-    : IDisposable
+    : IRemoteChangeWatcher
 {
     /// <summary>Two small list reads a time, so this can be frequent without costing anything.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);

@@ -32,7 +32,7 @@ public sealed class TrayService(
     NoticeCenterViewModel notices,
     ClientSettingsRepository settings,
     IUpdateStatus updates,
-    ILogger<TrayService> logger) : IDisposable
+    ILogger<TrayService> logger) : ITrayService
 {
     private static string _name => AppIdentity.DisplayName;
 
@@ -41,7 +41,6 @@ public sealed class TrayService(
     private MenuItem? _restart;
 
 
-    /// <returns>Whether the icon is up. False leaves the app behaving as if there were no tray.</returns>
     public bool Start()
     {
         try

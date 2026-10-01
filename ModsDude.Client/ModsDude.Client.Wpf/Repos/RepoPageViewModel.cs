@@ -267,7 +267,7 @@ public partial class RepoPageViewModel
 
     /// <summary>
     /// Whether the server has profile changes the list does not show yet. Brought in by the refresh
-    /// button and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
+    /// button and nothing else - see <see cref="Shared.RemoteChangeWatcher"/>.
     /// </summary>
     public bool HasPendingProfileChanges => PendingProfileChanges() is not null;
 

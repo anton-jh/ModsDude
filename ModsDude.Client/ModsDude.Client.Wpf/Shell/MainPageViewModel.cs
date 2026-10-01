@@ -186,7 +186,7 @@ public partial class MainPageViewModel
 
     /// <summary>
     /// Whether the server has repo changes the list does not show yet. Brought in by the menu's
-    /// Refresh and nothing else - see <see cref="Wpf.Services.RemoteChangeWatcher"/>.
+    /// Refresh and nothing else - see <see cref="Shared.RemoteChangeWatcher"/>.
     /// </summary>
     public bool HasPendingRepoChanges => _repoService.PendingChanges is not null;
 

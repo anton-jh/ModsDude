@@ -27,7 +27,7 @@ public sealed class PlaySessionWatcher(
     DriftMonitor monitor,
     RepoRepository repoRepository,
     ILogger<PlaySessionWatcher> logger)
-    : IDisposable
+    : IPlaySessionWatcher
 {
     /// <summary>Soon enough after the game closes that the reminder arrives while somebody is still at the machine.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);

@@ -10,7 +10,7 @@ namespace ModsDude.Client.Wpf.Games;
 /// on finding the game installed.
 /// </summary>
 public sealed class GameConnectionToasts(GameRepository gameRepository, IToastService toasts)
-    : IDisposable
+    : IGameConnectionToasts
 {
     public void Start()
     {
