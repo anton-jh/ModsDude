@@ -26,7 +26,7 @@ namespace ModsDude.Client.Wpf.Shell.Notices;
 /// continues underneath, so what comes back afterwards shows the full total.
 /// </para>
 /// </remarks>
-public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) : IBackgroundProblemReporter
+public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) : IBackgroundProblemSource
 {
     /// <summary>Notice keys are prefixed with this, so the column knows whose dismissal to route here.</summary>
     public const string KeyPrefix = "background/";
@@ -44,7 +44,6 @@ public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) :
     private DateTimeOffset? _dismissedAt;
 
 
-    /// <summary>Raised when the column would say something different. Fired from whatever thread reported.</summary>
     public event EventHandler? Changed;
 
 
@@ -61,10 +60,6 @@ public sealed class BackgroundProblemSource(TimeProvider? timeProvider = null) :
     /// <summary>Whether this key is one of these, and therefore dismissed by cooldown rather than by signature.</summary>
     public static bool Owns(string key) => key.StartsWith(KeyPrefix, StringComparison.Ordinal);
 
-    /// <summary>
-    /// Starts the cooldown. Every kind at once, because they share it - the user is saying "stop
-    /// telling me about absorbed failures for a while", not picking one of three.
-    /// </summary>
     public void Dismiss()
     {
         lock (_lock)

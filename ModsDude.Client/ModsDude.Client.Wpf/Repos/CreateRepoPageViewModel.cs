@@ -13,7 +13,7 @@ namespace ModsDude.Client.Wpf.Repos;
 public partial class CreateRepoPageViewModel(
     IRepoRepository repoRepository,
     IGameAdapterIndex gameAdapterIndex,
-    NavigationLockService navigationLockService,
+    INavigationLockService navigationLockService,
     IFilePickerService filePickerService,
     IModalService modalService)
     : PageViewModel, IDisposable

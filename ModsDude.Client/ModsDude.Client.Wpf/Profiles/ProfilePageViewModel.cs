@@ -53,10 +53,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly ProfileApplyService _applyService;
+    private readonly IProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly IDriftMonitor _driftMonitor;
-    private readonly ProfileSyncStatusService _syncStatus;
+    private readonly IProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
     private readonly MenuItemViewModel _modsMenuItem;
@@ -79,10 +79,10 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         Repo repo,
         ProfileDto profile,
         NavigationManager navigationManager,
-        ProfileApplyService applyService,
+        IProfileApplyService applyService,
         IHeldSavegames heldSavegames,
         IDriftMonitor driftMonitor,
-        ProfileSyncStatusService syncStatus,
+        IProfileSyncStatusService syncStatus,
         IResourceLeases leases,
         IToastService toasts,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,

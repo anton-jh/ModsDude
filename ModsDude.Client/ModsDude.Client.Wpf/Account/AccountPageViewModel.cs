@@ -27,7 +27,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     public const int MaximumNameLength = 32;
 
     private readonly IUserAccountService _userAccountService;
-    private readonly AuthenticationService _authenticationService;
+    private readonly IAuthenticationService _authenticationService;
     private readonly IFilePickerService _filePickerService;
     private readonly IToastService _toasts;
     private readonly ILogger<AccountPageViewModel> _logger;
@@ -36,7 +36,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     public AccountPageViewModel(
         AccountViewModel account,
         IUserAccountService userAccountService,
-        AuthenticationService authenticationService,
+        IAuthenticationService authenticationService,
         IFilePickerService filePickerService,
         IToastService toasts,
         ILogger<AccountPageViewModel> logger)

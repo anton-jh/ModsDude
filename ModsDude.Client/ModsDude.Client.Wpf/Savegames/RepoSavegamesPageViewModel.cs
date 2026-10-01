@@ -50,8 +50,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly IProfileService _profileService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDriftMonitor _driftMonitor;
-    private readonly SavegameFlowService _flowService;
-    private readonly ShellNavigationService _shellNavigation;
+    private readonly ISavegameFlowService _flowService;
+    private readonly IShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly LatestLoad _timelineLoad;
@@ -76,8 +76,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         IProfileService profileService,
         ICurrentUserService currentUserService,
         IDriftMonitor driftMonitor,
-        SavegameFlowService flowService,
-        ShellNavigationService shellNavigation,
+        ISavegameFlowService flowService,
+        IShellNavigationService shellNavigation,
         IModalService modalService,
         IErrorReporter errorReporter,
         IBackgroundProblemReporter problems,

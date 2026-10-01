@@ -87,7 +87,7 @@ public partial class App : Application
             return;
         }
 
-        var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
+        var authentication = _serviceProvider.GetRequiredService<IAuthenticationService>();
         var connection = _serviceProvider.GetRequiredService<IConnectionRetry>();
 
         if (started.InBackground)
@@ -140,7 +140,7 @@ public partial class App : Application
 
         // First instance, and nothing shown yet: the one safe moment to install what was downloaded on an
         // earlier run. See AppUpdater.ApplyPendingAtStartup.
-        if (_serviceProvider.GetRequiredService<AppUpdater>().ApplyPendingAtStartup(e.Args))
+        if (_serviceProvider.GetRequiredService<IAppUpdater>().ApplyPendingAtStartup(e.Args))
         {
             Shutdown();
 
@@ -159,12 +159,12 @@ public partial class App : Application
 
         // Before the first window, so the taskbar button is filed under the same identity as the
         // notifications and the shortcut that makes Windows show them.
-        _serviceProvider.GetRequiredService<WindowsToasts>().Register(
+        _serviceProvider.GetRequiredService<ISystemToasts>().Register(
             AppIdentity.Name,
             AppIdentity.DisplayName,
             Environment.ProcessPath,
             // An installed copy has the installer's shortcut, made with this same identity.
-            ensureShortcut: _serviceProvider.GetRequiredService<AppUpdater>().IsInstalled is false);
+            ensureShortcut: _serviceProvider.GetRequiredService<IAppUpdater>().IsInstalled is false);
 
         // Before anything can load the repos, which connects games that connect by themselves.
         _gameConnectionToasts = _serviceProvider.GetRequiredService<IGameConnectionToasts>();
@@ -261,7 +261,7 @@ public partial class App : Application
     /// retry - and from there it is retried like any other start.
     /// </para>
     /// </remarks>
-    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, IConnectionRetry connection, MainWindow window)
+    private async Task SignInWithoutInterruptingAsync(IAuthenticationService authentication, IConnectionRetry connection, MainWindow window)
     {
         try
         {
@@ -356,7 +356,7 @@ public partial class App : Application
         _friendWatcher = _serviceProvider.GetRequiredService<IFriendActivityWatcher>();
         _friendWatcher.Start();
 
-        _serviceProvider.GetRequiredService<AppUpdater>().Start();
+        _serviceProvider.GetRequiredService<IAppUpdater>().Start();
 
         return trayUp;
     }
@@ -375,7 +375,7 @@ public partial class App : Application
     private void ReleaseResources()
     {
         // Nobody is left to answer a click on what is still in Action Center, so it goes with the app.
-        _serviceProvider?.GetService<WindowsToasts>()?.ClearAll();
+        _serviceProvider?.GetService<ISystemToasts>()?.ClearAll();
 
         Interlocked.Exchange(ref _backstop, null)?.Dispose();
         Interlocked.Exchange(ref _remoteChanges, null)?.Dispose();
@@ -507,19 +507,18 @@ public partial class App : Application
 
         // Windows notifications: the toolkit behind one seam, and the object that decides when the
         // window's own notices and toasts are worth sending through it.
-        services.AddSingleton<WindowsToasts>();
-        services.AddSingleton<ISystemToasts>(sp => sp.GetRequiredService<WindowsToasts>());
+        services.AddSingleton<ISystemToasts, WindowsToasts>();
         services.AddSingleton<IToastNotifier, ToastNotifier>();
 
         // Updates for an installed copy. One object seen two ways: the column and the tray ask it whether
         // something is waiting, the Settings page and the shell ask it for the rest.
         services.AddSingleton(sp => new Lazy<MainWindow>(sp.GetRequiredService<MainWindow>));
-        services.AddSingleton(sp => new AppUpdater(
+        services.AddSingleton<IAppUpdater>(sp => new AppUpdater(
             configuration["Updates:GithubRepository"],
             configuration["Updates:Directory"],
             sp.GetRequiredService<Lazy<MainWindow>>(),
             sp.GetRequiredService<ILogger<AppUpdater>>()));
-        services.AddSingleton<IUpdateStatus>(sp => sp.GetRequiredService<AppUpdater>());
+        services.AddSingleton<IUpdateStatus>(sp => sp.GetRequiredService<IAppUpdater>());
 
         // Only the production install ever registers itself; see AutostartService for why, and for
         // why a debug build running under the dotnet host has nothing stable to register anyway.
@@ -553,7 +552,7 @@ public partial class App : Application
         services.AddFactory<ArchivePageViewModel>();
         services.AddSingleton<FriendActivityListViewModel.Factory>();
 
-        services.AddSingleton<NavigationLockService>();
+        services.AddSingleton<INavigationLockService, NavigationLockService>();
         services.AddTransient<NavigationManager>();
 
         // One table of who is touching what, for the whole process. A singleton is not a convenience
@@ -562,8 +561,8 @@ public partial class App : Application
         services.AddSingleton<IResourceLeases, ResourceLeases>();
 
         // One notice for the whole app, and one way in to it from outside the sidebar.
-        services.AddSingleton<ShellNavigationService>();
-        services.AddSingleton<ProfileApplyService>();
+        services.AddSingleton<IShellNavigationService, ShellNavigationService>();
+        services.AddSingleton<IProfileApplyService, ProfileApplyService>();
 
         // What friends are on: the report every activation makes, the one read every surface draws from,
         // and the one gesture that follows them. See FriendActivityService.
@@ -572,24 +571,24 @@ public partial class App : Application
         services.AddSingleton<IFriendActivityService, FriendActivityService>();
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IFriendActivityService>());
         services.AddSingleton<IFriendActivityEnvironment, FriendActivityEnvironment>();
-        services.AddSingleton<FriendFollowService>();
+        services.AddSingleton<IFriendFollowService, FriendFollowService>();
 
         // Where the profile a game follows stands against its folders, asked once for the sidebar rows,
         // the repo entries and the header rather than three times with three chances to disagree.
-        services.AddSingleton<ProfileSyncStatusService>();
+        services.AddSingleton<IProfileSyncStatusService, ProfileSyncStatusService>();
 
         // The other half of that pair: one way into an import, so the repo claim and the two
         // questions an import cannot answer for itself live somewhere a new page cannot forget them.
-        services.AddSingleton<ModImportCoordinator>();
+        services.AddSingleton<IModImportCoordinator, ModImportCoordinator>();
 
         // And the third of the set: a profile save claims the profile, runs the import under it, and
         // outlives the editor that started it - which is what stopped a navigation mid-upload from
         // registering the files and never writing the revision.
-        services.AddSingleton<ProfileSaveService>();
+        services.AddSingleton<IProfileSaveService, ProfileSaveService>();
 
         // Check-in is reached from a slot row and from the check-out modal's way out of a refused
         // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
-        services.AddSingleton<SavegameFlowService>();
+        services.AddSingleton<ISavegameFlowService, SavegameFlowService>();
 
         // The column on the right and the two things it is built from: what the notices are allowed
         // to ask the running app, and what the user has waved away.
@@ -599,8 +598,8 @@ public partial class App : Application
 
         // Both faces of one object again: everything that absorbs a failure reports it through the
         // interface, and the column draws a notice per kind out of what those reports add up to.
-        services.AddSingleton<BackgroundProblemSource>();
-        services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<BackgroundProblemSource>());
+        services.AddSingleton<IBackgroundProblemSource, BackgroundProblemSource>();
+        services.AddSingleton<IBackgroundProblemReporter>(sp => sp.GetRequiredService<IBackgroundProblemSource>());
 
         // And once more for work in progress: everything long-running announces itself through the
         // interface, and the shell draws the strip along the top out of whatever is still running.
@@ -691,9 +690,9 @@ public partial class App : Application
         services.AddSingleton<IGameProcesses, SystemGameProcesses>();
         services.AddSingleton<IPlaySessionWatch, PlaySessionWatch>();
 
-        services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
+        services.AddCore<IAuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
-        services.AddSingleton<AuthenticationService>();
+        services.AddSingleton<IAuthenticationService, AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
         services.AddSingleton<IStateStore, StateStore>();
     }

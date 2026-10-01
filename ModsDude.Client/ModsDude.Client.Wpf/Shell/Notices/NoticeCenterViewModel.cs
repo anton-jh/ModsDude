@@ -60,16 +60,16 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly IGameRepository _gameRepository;
     private readonly IProfileService _profileService;
     private readonly ISavegameBindingStore _bindingStore;
-    private readonly ProfileApplyService _applyService;
-    private readonly ShellNavigationService _navigation;
+    private readonly IProfileApplyService _applyService;
+    private readonly IShellNavigationService _navigation;
     private readonly INoticeEnvironment _environment;
     private readonly IDismissalLedger _dismissals;
-    private readonly BackgroundProblemSource _problems;
+    private readonly IBackgroundProblemSource _problems;
     private readonly IUpdateStatus _updates;
     private readonly IConnectionRetry _connection;
     private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _friendEnvironment;
-    private readonly FriendFollowService _follow;
+    private readonly IFriendFollowService _follow;
     private readonly ILogger _logger;
 
     /// <summary>The one place a notice is suppressed: the drifted profile's own mod list editor.</summary>
@@ -95,16 +95,16 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         IGameRepository gameRepository,
         IProfileService profileService,
         ISavegameBindingStore bindingStore,
-        ProfileApplyService applyService,
-        ShellNavigationService navigation,
+        IProfileApplyService applyService,
+        IShellNavigationService navigation,
         INoticeEnvironment environment,
         IDismissalLedger dismissals,
-        BackgroundProblemSource problems,
+        IBackgroundProblemSource problems,
         IUpdateStatus updates,
         IConnectionRetry connection,
         IFriendActivityService friends,
         IFriendActivityEnvironment friendEnvironment,
-        FriendFollowService follow,
+        IFriendFollowService follow,
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;

@@ -29,10 +29,9 @@ namespace ModsDude.Client.Wpf.Friends;
 public sealed class FriendFollowService(
     IRepoRepository repoRepository,
     IGameRepository gameRepository,
-    ProfileApplyService applyService,
-    IDriftMonitor driftMonitor)
+    IProfileApplyService applyService,
+    IDriftMonitor driftMonitor) : IFriendFollowService
 {
-    /// <returns>What to tell the user, and how loudly.</returns>
     public async Task<(string Message, ToastSeverity Severity)> FollowAsync(GameActivityDto activity, CancellationToken cancellationToken)
     {
         if (repoRepository.Repos.FirstOrDefault(x => x.Id == activity.RepoId) is not Repo repo)

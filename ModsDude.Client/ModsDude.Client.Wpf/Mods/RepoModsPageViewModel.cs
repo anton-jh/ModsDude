@@ -37,7 +37,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
-    private readonly ShellNavigationService _shellNavigation;
+    private readonly IShellNavigationService _shellNavigation;
     private readonly IModsClient _modsClient;
     private readonly IBackgroundTaskReporter _backgroundTasks;
 
@@ -54,7 +54,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         ModListItemViewModel.Factory itemFactory,
         IModalService modalService,
         IErrorReporter errorReporter,
-        ShellNavigationService shellNavigation,
+        IShellNavigationService shellNavigation,
         IModsClient modsClient,
         IBackgroundTaskReporter backgroundTasks)
     {

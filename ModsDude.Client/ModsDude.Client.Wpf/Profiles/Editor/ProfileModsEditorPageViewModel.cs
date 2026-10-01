@@ -46,14 +46,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ProfileDto _profile;
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
-    private readonly ProfileSaveService _saveService;
+    private readonly IProfileSaveService _saveService;
     private readonly IModDependenciesClient _dependenciesClient;
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
-    private readonly NavigationLockService _navigationLock;
+    private readonly INavigationLockService _navigationLock;
     private readonly IGameRepository _gameRepository;
-    private readonly ProfileApplyService _applyService;
+    private readonly IProfileApplyService _applyService;
     private readonly IModSyncService _syncService;
     private readonly IDriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
@@ -87,15 +87,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ProfileDto profile,
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
-        ProfileSaveService saveService,
+        IProfileSaveService saveService,
         IModDependenciesClient dependenciesClient,
         IProfilesClient profilesClient,
         IModalService modalService,
         IErrorReporter errorReporter,
         IFilePickerService filePickerService,
-        NavigationLockService navigationLock,
+        INavigationLockService navigationLock,
         IGameRepository gameRepository,
-        ProfileApplyService applyService,
+        IProfileApplyService applyService,
         IModSyncService syncService,
         IDriftMonitor driftMonitor,
         NoticeCenterViewModel notices,

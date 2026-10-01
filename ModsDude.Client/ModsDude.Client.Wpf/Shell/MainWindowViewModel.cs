@@ -19,7 +19,7 @@ public partial class MainWindowViewModel
 
 
     public MainWindowViewModel(
-        AuthenticationService authService,
+        IAuthenticationService authService,
         IFactory<MainPageViewModel> mainPageViewModelFactory,
         IEnumerable<IUserScopedState> userScopedState,
         NoticeCenterViewModel notices,

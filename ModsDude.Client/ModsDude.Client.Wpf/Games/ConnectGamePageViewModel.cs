@@ -17,7 +17,7 @@ public partial class ConnectGamePageViewModel
 {
     private readonly Repo _repo;
     private readonly IGameRepository _gameRepository;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly bool _alreadyConnected;
 
@@ -26,7 +26,7 @@ public partial class ConnectGamePageViewModel
         Repo repo,
         IGameRepository gameRepository,
         IFilePickerService filePickerService,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IModalService modalService)
     {
         // One game per identity, so connecting a second one is refused rather than offered - see

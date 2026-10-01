@@ -1,7 +1,7 @@
 ﻿
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 
-public class NavigationLockService : IDisposable
+public class NavigationLockService : INavigationLockService
 {
     public PageViewModel? Lock { get; private set; }
 

@@ -47,16 +47,16 @@ public enum ProfileSyncState
 /// raised on the UI thread, because two of those are raised by whichever thread finished the work.
 /// </para>
 /// </remarks>
-public sealed class ProfileSyncStatusService
+public sealed class ProfileSyncStatusService : IProfileSyncStatusService
 {
     private readonly IDriftMonitor _driftMonitor;
-    private readonly ProfileApplyService _applyService;
+    private readonly IProfileApplyService _applyService;
 
 
     public ProfileSyncStatusService(
         IDriftMonitor driftMonitor,
         IResourceLeases leases,
-        ProfileApplyService applyService,
+        IProfileApplyService applyService,
         IGameRepository games)
     {
         _driftMonitor = driftMonitor;
@@ -69,14 +69,9 @@ public sealed class ProfileSyncStatusService
     }
 
 
-    /// <summary>Raised on the UI thread after anything that can change an answer from here.</summary>
     public event EventHandler? Changed;
 
 
-    /// <summary>
-    /// Which profile of this repo the game follows, or null where it follows another repo's or none -
-    /// or where no game is connected, which is the same answer.
-    /// </summary>
     public Guid? ActiveProfileOf(Repo repo)
     {
         return repo.Games.FirstOrDefault()?.ActiveProfile is ActiveProfile active && active.RepoId == repo.Id
@@ -84,7 +79,6 @@ public sealed class ProfileSyncStatusService
             : null;
     }
 
-    /// <summary>The state of whichever profile of this repo the game follows.</summary>
     public ProfileSyncState StateOf(Repo repo)
     {
         return ActiveProfileOf(repo) is Guid profileId

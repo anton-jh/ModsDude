@@ -16,7 +16,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly IGameRepository _gameRepository;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly Game _subject;
     private readonly IModalService _modalService;
     private readonly Action _onSaved;
@@ -29,7 +29,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         IGameRepository gameRepository,
         IFilePickerService filePickerService,
         IModalService modalService,
-        NavigationLockService navigationLockService)
+        INavigationLockService navigationLockService)
     {
         _repo = repo;
         _subject = subject;

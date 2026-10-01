@@ -13,14 +13,14 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly IRepoRepository _repoService;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
 
 
     public RepoAdminPageViewModel(
         Repo repo,
         IRepoRepository repoService,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IModalService modalService,
         IFilePickerService filePickerService)
     {

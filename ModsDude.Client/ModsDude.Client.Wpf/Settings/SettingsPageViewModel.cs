@@ -51,13 +51,13 @@ public partial class SettingsPageViewModel
     private readonly IClientSettingsRepository _settingsRepository;
     private readonly IContentStoreMaintenance _maintenance;
     private readonly IModImageCache _imageCache;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IFilePickerService _filePickerService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
     private readonly IAutostartService _autostart;
-    private readonly AppUpdater _updater;
+    private readonly IAppUpdater _updater;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -76,11 +76,11 @@ public partial class SettingsPageViewModel
         IModImageCache imageCache,
         IFilePickerService filePickerService,
         IModalService modalService,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
         TransferLimits transferLimits,
         IAutostartService autostart,
-        AppUpdater updater)
+        IAppUpdater updater)
     {
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;

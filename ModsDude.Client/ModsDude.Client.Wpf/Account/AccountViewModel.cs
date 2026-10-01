@@ -30,18 +30,18 @@ namespace ModsDude.Client.Wpf.Account;
 /// </remarks>
 public partial class AccountViewModel : ObservableObject
 {
-    private readonly AuthenticationService _authenticationService;
+    private readonly IAuthenticationService _authenticationService;
     private readonly ICurrentUserService _currentUserService;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly Lazy<IModalService> _modalService;
     private readonly ILogger<AccountViewModel> _logger;
 
 
     public AccountViewModel(
-        AuthenticationService authenticationService,
+        IAuthenticationService authenticationService,
         ICurrentUserService currentUserService,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IUserAvatarFactory avatarFactory,
         Lazy<IModalService> modalService,
         ILogger<AccountViewModel> logger)

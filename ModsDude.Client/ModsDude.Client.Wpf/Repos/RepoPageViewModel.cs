@@ -39,7 +39,7 @@ public partial class RepoPageViewModel
     private readonly MenuItemViewModel? _savesMenuItem;
     private readonly MenuItemViewModel _archiveMenuItem;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly ProfileSyncStatusService _syncStatus;
+    private readonly IProfileSyncStatusService _syncStatus;
 
     /// <summary>The Overview entry, kept so the header's repo name can take the user back to it.</summary>
     private readonly MenuItemViewModel _overviewMenuItem;
@@ -87,11 +87,11 @@ public partial class RepoPageViewModel
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ISavegamesClient savegamesClient,
-        ProfileSyncStatusService syncStatus,
+        IProfileSyncStatusService syncStatus,
         IProfileService profileService,
         ILastSelectionRepository lastSelectionRepository,
         IGameRepository gameRepository,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IModalService modalService)
     {
         // A game installed since the repo list was last read is picked up on opening the repo rather

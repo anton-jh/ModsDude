@@ -43,8 +43,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly IProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
     private readonly ICurrentUserService _currentUserService;
-    private readonly SavegameFlowService _flowService;
-    private readonly ShellNavigationService _navigation;
+    private readonly ISavegameFlowService _flowService;
+    private readonly IShellNavigationService _navigation;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ILogger<ProfileOverviewPageViewModel> _logger;
 
@@ -71,8 +71,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         IProfileService profileService,
         ISavegamesClient savegamesClient,
         ICurrentUserService currentUserService,
-        SavegameFlowService flowService,
-        ShellNavigationService navigation,
+        ISavegameFlowService flowService,
+        IShellNavigationService navigation,
         IDriftMonitor driftMonitor,
         ILogger<ProfileOverviewPageViewModel> logger)
     {

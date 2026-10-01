@@ -57,7 +57,7 @@ public class RepoItemViewModel
     /// would turn the list into noise; the profile rows inside the repo say "in sync", and this says
     /// "something over there needs you" from wherever the user is standing.
     /// </remarks>
-    public void RefreshSyncState(ProfileSyncStatusService syncStatus)
+    public void RefreshSyncState(IProfileSyncStatusService syncStatus)
     {
         var state = syncStatus.StateOf(_repo);
 

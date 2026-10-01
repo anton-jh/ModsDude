@@ -28,7 +28,7 @@ public partial class MainPageViewModel
     private readonly IRepoRepository _repoService;
     private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
-    private readonly ShellNavigationService _shellNavigationService;
+    private readonly IShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
     /// <summary>
@@ -56,7 +56,7 @@ public partial class MainPageViewModel
     /// </summary>
     private readonly MenuItemViewModel _welcomeMenuItem;
 
-    private readonly ProfileSyncStatusService _syncStatus;
+    private readonly IProfileSyncStatusService _syncStatus;
     private readonly IConnectionRetry _connection;
     private readonly CancellationTokenSource _disposed = new();
 
@@ -71,13 +71,13 @@ public partial class MainPageViewModel
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IFactory<AccountPageViewModel> accountPageViewModelFactory,
         IGameAdapterIndex gameAdapterIndex,
-        NavigationLockService navigationLockService,
-        ShellNavigationService shellNavigationService,
+        INavigationLockService navigationLockService,
+        IShellNavigationService shellNavigationService,
         AccountViewModel account,
         IFilePickerService filePickerService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
-        ProfileSyncStatusService syncStatus,
+        IProfileSyncStatusService syncStatus,
         IConnectionRetry connection)
     {
         Account = account;

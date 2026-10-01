@@ -51,7 +51,7 @@ public enum UpdateStage
 /// <param name="feedDirectory">
 /// A folder to read releases from instead, for trying an update without publishing one. Wins over the repo.
 /// </param>
-public sealed class AppUpdater : IUpdateStatus, IDisposable
+public sealed class AppUpdater : IAppUpdater
 {
     /// <summary>Long enough that a start at sign-in has finished being busy before it goes to the network.</summary>
     private static readonly TimeSpan _firstCheck = TimeSpan.FromSeconds(20);
@@ -110,12 +110,10 @@ public sealed class AppUpdater : IUpdateStatus, IDisposable
 
     public string? ReadyVersion => _ready?.Version.ToString();
 
-    /// <summary>The version this copy is: the installed package's, or the assembly's for a build that is not installed.</summary>
     public string CurrentVersion => _manager?.CurrentVersion?.ToString()
         ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3)
         ?? "unknown";
 
-    /// <summary>One line for Settings.</summary>
     public string StatusText => _stage switch
     {
         UpdateStage.NotInstalled => "Updates only apply to the installed copy of ModsDude.",
@@ -129,7 +127,6 @@ public sealed class AppUpdater : IUpdateStatus, IDisposable
     public bool CanCheck => IsInstalled && _stage is not (UpdateStage.Checking or UpdateStage.Downloading or UpdateStage.Ready);
 
 
-    /// <summary>Starts the periodic check. Nothing to start for a copy that is not installed.</summary>
     public void Start()
     {
         if (IsInstalled is false)
@@ -140,10 +137,6 @@ public sealed class AppUpdater : IUpdateStatus, IDisposable
         _timer = new Timer(_ => _ = CheckAsync(), null, _firstCheck, _interval);
     }
 
-    /// <summary>
-    /// Looks for a newer version and downloads it. Safe to call whenever: overlapping calls are dropped,
-    /// and it never throws.
-    /// </summary>
     public async Task CheckAsync()
     {
         if (_manager is null || IsInstalled is false || _stage is UpdateStage.Ready)
@@ -189,16 +182,6 @@ public sealed class AppUpdater : IUpdateStatus, IDisposable
         }
     }
 
-    /// <summary>
-    /// Installs a version that was downloaded on an earlier run, if there is one, by restarting into it.
-    /// </summary>
-    /// <remarks>
-    /// <b>Only ever called by the first instance, before anything is on screen.</b> That is the one moment
-    /// nothing can be running and nobody asked: a launch that finds the app already going never gets this
-    /// far, so a second click on the shortcut brings the window forward instead of replacing the app under
-    /// somebody who is playing. The arguments are passed on so a start at sign-in comes back up in the tray.
-    /// </remarks>
-    /// <returns>True where the process is on its way out, and nothing more should be started.</returns>
     public bool ApplyPendingAtStartup(string[] arguments)
     {
         if (_manager is null || IsInstalled is false || _ready is null)

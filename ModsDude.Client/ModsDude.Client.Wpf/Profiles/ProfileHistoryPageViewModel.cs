@@ -46,7 +46,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly LatestLoad _modsLoad;
     private readonly LatestLoad _changesLoad;
     private readonly IToastService _toasts;
-    private readonly ShellNavigationService _shellNavigation;
+    private readonly IShellNavigationService _shellNavigation;
 
     private ProfileHistory? _fetched;
 
@@ -77,7 +77,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         IModalService modalService,
         IErrorReporter errorReporter,
         IToastService toasts,
-        ShellNavigationService shellNavigation)
+        IShellNavigationService shellNavigation)
     {
         _errorReporter = errorReporter;
         _modsLoad = new LatestLoad(loading => IsLoadingMods = loading);

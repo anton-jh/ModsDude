@@ -46,7 +46,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly ISavegameService _savegameService;
     private readonly ISavegameBindingStore _bindingStore;
     private readonly IGameRepository _gameRepository;
-    private readonly ProfileApplyService _applyService;
+    private readonly IProfileApplyService _applyService;
     private readonly IToastService _toasts;
     private readonly IModalService _modalService;
     private readonly ILogger<RepoOverviewPageViewModel> _logger;
@@ -63,7 +63,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         ISavegameService savegameService,
         ISavegameBindingStore bindingStore,
         IGameRepository gameRepository,
-        ProfileApplyService applyService,
+        IProfileApplyService applyService,
         IToastService toasts,
         IModalService modalService,
         ILogger<RepoOverviewPageViewModel> logger,

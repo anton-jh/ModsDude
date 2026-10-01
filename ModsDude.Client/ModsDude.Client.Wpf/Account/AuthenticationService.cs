@@ -16,7 +16,7 @@ namespace ModsDude.Client.Wpf.Account;
 /// cancelled switch - or a failed one - leaves the current user exactly where they were rather than
 /// stranding the app in a state it has no page for.
 /// </remarks>
-public class AuthenticationService : IAccessTokenAccessor
+public class AuthenticationService : IAuthenticationService
 {
     private const string _clientId = "17e5db7c-9023-40cd-9cd8-3c49b7f98927";
     private static readonly string _authority = "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/susi_1/v2.0";
@@ -37,15 +37,9 @@ public class AuthenticationService : IAccessTokenAccessor
     }
 
 
-    /// <summary>
-    /// Raised when the signed-in account becomes a different one - the first sign-in, or a switch.
-    /// Always on the UI thread: MSAL finishes wherever it likes, and everything listening to this
-    /// rebuilds bound state.
-    /// </summary>
     public event EventHandler<SignedInAccount>? AccountChanged;
 
 
-    /// <summary>Null until the first sign-in completes, and never null again.</summary>
     public SignedInAccount? CurrentAccount { get; private set; }
 
 
@@ -60,16 +54,6 @@ public class AuthenticationService : IAccessTokenAccessor
         return result.AccessToken;
     }
 
-    /// <summary>
-    /// Signs in only if that takes no one at the keyboard.
-    /// </summary>
-    /// <remarks>
-    /// For an app that started itself at sign-in and has no window up: <see cref="Get"/> falls back to
-    /// a browser, and a browser tab appearing unprompted at logon is the one thing a background start
-    /// must not do. What it does not swallow is anything other than "needs the user" - a network that
-    /// is not up yet arrives as an exception, and it is the caller's to decide what that means.
-    /// </remarks>
-    /// <returns>False where the account has to be asked for interactively, or there is none.</returns>
     public async Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken)
     {
         await EnsureTokenCacheAsync();
@@ -91,13 +75,6 @@ public class AuthenticationService : IAccessTokenAccessor
         }
     }
 
-    /// <summary>
-    /// Prompts for an account and signs in as whoever is picked.
-    /// </summary>
-    /// <returns>
-    /// False where the user cancelled the prompt, asked for another before finishing it, or picked the
-    /// account they were already on. Either way nothing changed and no event was raised.
-    /// </returns>
     public async Task<bool> SwitchUser(CancellationToken cancellationToken)
     {
         await EnsureTokenCacheAsync();
@@ -114,17 +91,6 @@ public class AuthenticationService : IAccessTokenAccessor
         return Adopt(result);
     }
 
-    /// <summary>
-    /// Opens the sign-in page on the current account, where "Forgot password?" is the way to a new
-    /// password: the identity provider has no page for changing one while signed in, and a reset by
-    /// emailed code is the change it offers.
-    /// </summary>
-    /// <remarks>
-    /// Finishing the page signs in again, which for the same account changes nothing here. Somebody
-    /// who signs in as a different account on it has switched user, and is treated exactly as
-    /// <see cref="SwitchUser"/> would treat them.
-    /// </remarks>
-    /// <returns>False where the user closed the page, or asked for another, without finishing it.</returns>
     public async Task<bool> ResetPassword(CancellationToken cancellationToken)
     {
         if (CurrentAccount is not SignedInAccount current)

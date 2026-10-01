@@ -13,7 +13,7 @@ public partial class EditProfilePageViewModel(
     Repo repo,
     ProfileDto profile,
     IProfileService profileService,
-    NavigationLockService navigationLockService,
+    INavigationLockService navigationLockService,
     IModalService modalService)
     : PageViewModel, IDisposable
 {

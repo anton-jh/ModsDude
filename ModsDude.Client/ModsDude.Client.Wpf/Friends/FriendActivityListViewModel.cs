@@ -110,7 +110,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _environment;
     private readonly IUserAvatarFactory _avatarFactory;
-    private readonly FriendFollowService _follow;
+    private readonly IFriendFollowService _follow;
     private readonly IGameRepository _games;
     private readonly IToastService _toasts;
     private readonly ILogger _logger;
@@ -121,7 +121,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         IFriendActivityService friends,
         IFriendActivityEnvironment environment,
         IUserAvatarFactory avatarFactory,
-        FriendFollowService follow,
+        IFriendFollowService follow,
         IGameRepository games,
         IToastService toasts,
         ILogger<FriendActivityListViewModel> logger,
@@ -236,7 +236,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
                 serviceProvider.GetRequiredService<IFriendActivityService>(),
                 serviceProvider.GetRequiredService<IFriendActivityEnvironment>(),
                 serviceProvider.GetRequiredService<IUserAvatarFactory>(),
-                serviceProvider.GetRequiredService<FriendFollowService>(),
+                serviceProvider.GetRequiredService<IFriendFollowService>(),
                 serviceProvider.GetRequiredService<IGameRepository>(),
                 serviceProvider.GetRequiredService<IToastService>(),
                 serviceProvider.GetRequiredService<ILogger<FriendActivityListViewModel>>(),

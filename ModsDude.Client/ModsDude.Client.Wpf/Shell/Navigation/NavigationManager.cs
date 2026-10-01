@@ -6,7 +6,7 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 
 public partial class NavigationManager(
-    NavigationLockService navigationLockService,
+    INavigationLockService navigationLockService,
     IModalService modalService)
     : ObservableObject, IDisposable
 {

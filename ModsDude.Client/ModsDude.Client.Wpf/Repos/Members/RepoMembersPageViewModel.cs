@@ -27,7 +27,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly IInviteService _inviteService;
     private readonly IRepoRepository _repoRepository;
     private readonly ICurrentUserService _currentUserService;
-    private readonly NavigationLockService _navigationLockService;
+    private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IUserAvatarFactory _avatarFactory;
@@ -43,7 +43,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         IInviteService inviteService,
         IRepoRepository repoRepository,
         ICurrentUserService currentUserService,
-        NavigationLockService navigationLockService,
+        INavigationLockService navigationLockService,
         IModalService modalService,
         IErrorReporter errorReporter,
         IUserAvatarFactory avatarFactory)

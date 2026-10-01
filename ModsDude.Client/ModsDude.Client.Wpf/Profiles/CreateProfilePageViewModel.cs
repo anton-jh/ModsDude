@@ -10,7 +10,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class CreateProfilePageViewModel(
     Repo repo,
     IProfileService profileService,
-    NavigationLockService navigationLockService)
+    INavigationLockService navigationLockService)
     : PageViewModel, IDisposable
 {
     private readonly Repo _repo = repo;
