@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.Builds;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
@@ -574,7 +575,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         var built = _connection.Build()
             .Concat(NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment))
             .Concat(_problems.Build())
-            .Concat(_updates.ReadyVersion is string ready ? [UpdateNotice.For(ready)] : [])
+            .Concat(_updates.ReadyBuild is BuildNumber ready ? [UpdateNotice.For(ready)] : [])
             // Last: somebody else's evening is worth a card, never more than what is wrong here.
             .Concat(FriendActivityRules.BuildNotices(_friends.News, _friendEnvironment))
             .ToList();

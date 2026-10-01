@@ -1,7 +1,7 @@
 using System.IO;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Updates;
-using System.Reflection;
 using System.Windows;
 using Velopack;
 using Velopack.Sources;
@@ -46,6 +46,10 @@ public enum UpdateStage
 /// is still being uploaded are all ordinary. It is logged, shown as <see cref="UpdateStage.Failed"/> in
 /// Settings, and tried again on the next round.
 /// </para>
+/// <para>
+/// <b>Urgent once the server has moved past this build.</b> Nothing works until the update is installed, so
+/// it is looked for straight away and then every minute, rather than every few hours.
+/// </para>
 /// </remarks>
 /// <param name="githubRepository">The public repo whose releases are the feed. Null or empty means no feed.</param>
 /// <param name="feedDirectory">
@@ -58,7 +62,10 @@ public sealed class AppUpdater : IAppUpdater
 
     private static readonly TimeSpan _interval = TimeSpan.FromHours(4);
 
+    private static readonly TimeSpan _behindInterval = TimeSpan.FromMinutes(1);
+
     private readonly UpdateManager? _manager;
+    private readonly IServerCompatibility _compatibility;
     private readonly Lazy<MainWindow> _window;
     private readonly ILogger<AppUpdater> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -71,9 +78,11 @@ public sealed class AppUpdater : IAppUpdater
     public AppUpdater(
         string? githubRepository,
         string? feedDirectory,
+        IServerCompatibility compatibility,
         Lazy<MainWindow> window,
         ILogger<AppUpdater> logger)
     {
+        _compatibility = compatibility;
         _window = window;
         _logger = logger;
 
@@ -108,18 +117,15 @@ public sealed class AppUpdater : IAppUpdater
 
     public UpdateStage Stage => _stage;
 
-    public string? ReadyVersion => _ready?.Version.ToString();
-
-    public string CurrentVersion => _manager?.CurrentVersion?.ToString()
-        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3)
-        ?? "unknown";
+    /// <summary>A package's version is 0.0.N for build N; see Directory.Build.props.</summary>
+    public BuildNumber? ReadyBuild => _ready is null ? null : new BuildNumber(_ready.Version.Patch);
 
     public string StatusText => _stage switch
     {
         UpdateStage.NotInstalled => "Updates only apply to the installed copy of ModsDude.",
         UpdateStage.Checking => "Checking for updates...",
         UpdateStage.Downloading => "Downloading an update...",
-        UpdateStage.Ready => $"Version {ReadyVersion} is ready. Restart to install it.",
+        UpdateStage.Ready => $"{ReadyBuild} is ready. Restart to install it.",
         UpdateStage.Failed => "The last check for updates did not work. It is tried again later.",
         _ => "ModsDude is up to date."
     };
@@ -135,6 +141,8 @@ public sealed class AppUpdater : IAppUpdater
         }
 
         _timer = new Timer(_ => _ = CheckAsync(), null, _firstCheck, _interval);
+
+        _compatibility.Changed += OnCompatibilityChanged;
     }
 
     public async Task CheckAsync()
@@ -189,7 +197,7 @@ public sealed class AppUpdater : IAppUpdater
             return false;
         }
 
-        _logger.LogInformation("Installing the downloaded update {Version} at startup.", ReadyVersion);
+        _logger.LogInformation("Installing the downloaded update {Build} at startup.", ReadyBuild);
 
         _manager.ApplyUpdatesAndRestart(_ready, arguments);
 
@@ -219,8 +227,19 @@ public sealed class AppUpdater : IAppUpdater
 
     public void Dispose()
     {
+        _compatibility.Changed -= OnCompatibilityChanged;
         _timer?.Dispose();
         _gate.Dispose();
+    }
+
+
+    /// <summary>Never back to the slow pace: a server that has moved past this build stays past it.</summary>
+    private void OnCompatibilityChanged(object? sender, EventArgs e)
+    {
+        if (_compatibility.Mismatch is { ClientIsBehind: true })
+        {
+            _timer?.Change(TimeSpan.Zero, _behindInterval);
+        }
     }
 
 
@@ -228,7 +247,7 @@ public sealed class AppUpdater : IAppUpdater
     {
         _stage = stage;
 
-        _logger.LogInformation("Update: {Stage}{Version}.", stage, stage is UpdateStage.Ready ? $" ({ReadyVersion})" : "");
+        _logger.LogInformation("Update: {Stage}{Build}.", stage, stage is UpdateStage.Ready ? $" ({ReadyBuild})" : "");
 
         Changed?.Invoke(this, EventArgs.Empty);
     }

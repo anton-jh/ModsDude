@@ -603,6 +603,17 @@
             </Grid>
         </Button>
 
+        <!-- Over the page and the notices both: nothing on them works while the server refuses this build. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}"
+              Visibility="{Binding BuildMismatch.IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <ContentControl Content="{Binding BuildMismatch}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+
+        </Grid>
+
         <Grid Grid.Column="0" Grid.ColumnSpan="2"
               Background="{DynamicResource SmokeFillColorDefaultBrush}"
               Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}">

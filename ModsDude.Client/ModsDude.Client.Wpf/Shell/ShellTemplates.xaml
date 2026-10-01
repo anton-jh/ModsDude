@@ -1,10 +1,15 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
-                    xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell">
+                    xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell"
+                    xmlns:updates="clr-namespace:ModsDude.Client.Wpf.Shell.Updates">
 
     <DataTemplate DataType="{x:Type shell:MainPageViewModel}">
         <shell:MainPage />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type updates:BuildMismatchViewModel}">
+        <updates:BuildMismatchView />
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type modals:ModalViewModel}">

@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Builds;
+
 namespace ModsDude.Client.Core.Updates;
 
 /// <summary>
@@ -18,10 +20,10 @@ namespace ModsDude.Client.Core.Updates;
 /// </remarks>
 public interface IUpdateStatus
 {
-    /// <summary>The version waiting to be installed, or null where there is none - including in a copy that cannot update.</summary>
-    string? ReadyVersion { get; }
+    /// <summary>The build waiting to be installed, or null where there is none - including in a copy that cannot update.</summary>
+    BuildNumber? ReadyBuild { get; }
 
-    /// <summary>Raised, from any thread, when <see cref="ReadyVersion"/> changed.</summary>
+    /// <summary>Raised, from any thread, when <see cref="ReadyBuild"/> changed.</summary>
     event EventHandler? Changed;
 
     /// <summary>

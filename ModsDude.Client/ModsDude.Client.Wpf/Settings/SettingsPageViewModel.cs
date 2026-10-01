@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core;
@@ -194,14 +195,14 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     private bool _startWithWindows;
 
-    /// <summary>The version this copy is, for the line above the update status.</summary>
-    public string VersionText => $"Version {_updater.CurrentVersion}";
+    /// <summary>The build this copy is, for the line above the update status.</summary>
+    public string BuildText => $"Build {AppBuild.Description}";
 
     /// <summary>What the updater is doing, in a sentence.</summary>
     public string UpdateStatusText => _updater.StatusText;
 
     /// <summary>Whether there is a downloaded version to restart into.</summary>
-    public bool IsUpdateReady => _updater.ReadyVersion is not null;
+    public bool IsUpdateReady => _updater.ReadyBuild is not null;
 
     /// <summary>Looks for an update now instead of at the next round. Only an installed copy has one to look for.</summary>
     [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]

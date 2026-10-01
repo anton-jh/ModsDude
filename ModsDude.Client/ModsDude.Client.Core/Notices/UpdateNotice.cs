@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Builds;
+
 namespace ModsDude.Client.Core.Notices;
 
 /// <summary>
@@ -20,9 +22,9 @@ public static class UpdateNotice
     public const string Key = "update/ready";
 
 
-    public static Notice For(string version)
+    public static Notice For(BuildNumber build)
     {
-        var headline = $"ModsDude {version} is ready to install";
+        var headline = $"ModsDude {build} is ready to install";
 
         const string body = "It has been downloaded. Restarting installs it and opens ModsDude again.";
 

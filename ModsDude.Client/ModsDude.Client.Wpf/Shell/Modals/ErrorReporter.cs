@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Exceptions;
 
 namespace ModsDude.Client.Wpf.Shell.Modals;
@@ -43,6 +44,14 @@ public sealed class ErrorReporter(
 
     public Task ShowAsync(Exception exception, string? context = null)
     {
+        // The window is covered by the build mismatch, which is the one place that says so.
+        if (BuildRefusal.Is(exception))
+        {
+            logger.LogWarning(exception, "Not shown while {Context}: the server refuses this build.", context ?? "working");
+
+            return Task.CompletedTask;
+        }
+
         return modalService.Value.Show(Record(exception, context));
     }
 }

@@ -124,8 +124,8 @@ public sealed class TrayService(
 
         if (_restart is not null)
         {
-            _restart.Header = $"Restart to update to {updates.ReadyVersion}";
-            _restart.Visibility = updates.ReadyVersion is null ? Visibility.Collapsed : Visibility.Visible;
+            _restart.Header = $"Restart to update to {updates.ReadyBuild}";
+            _restart.Visibility = updates.ReadyBuild is null ? Visibility.Collapsed : Visibility.Visible;
         }
 
         _icon?.ToolTipText = $"{_name} - {summary}";

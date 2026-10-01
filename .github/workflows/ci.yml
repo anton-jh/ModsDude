@@ -1,12 +1,28 @@
 name: CI
 
-# Two jobs rather than one because the solution cannot be built in one place. The persistence tests
-# need a real PostgreSQL, and GitHub only runs service containers on Linux runners; the WPF client
-# only builds on Windows, and ModsDude.Client.Core's content store is Windows P/Invoke — hardlinks
-# and the Recycle Bin — so running its tests anywhere else would prove nothing.
+# Tests run on every push and pull request. A push to main also ships: the API and the client of one
+# build are deployed and released together, because each refuses to talk to any other build.
+#
+# The tests are two jobs rather than one because the solution cannot be built in one place. The
+# persistence tests need a real PostgreSQL, and GitHub only runs service containers on Linux runners;
+# the WPF client only builds on Windows, and ModsDude.Client.Core's content store is Windows P/Invoke —
+# hardlinks and the Recycle Bin — so running its tests anywhere else would prove nothing.
+#
+# Shipping, in order, each step only after the one before succeeded:
+#   1. build-number: N is the count of commits on main, so the same commit is always the same build.
+#   2. publish-server: the API, stamped with N.
+#   3. deploy-server: the API goes first. If it fails nothing is released, and installed clients keep
+#      working against the server they match.
+#   4. release-client: published as release bN, which installed clients update to. A client already
+#      released is not released again, so a failed run can simply be re-run.
 on:
   push:
   pull_request:
+
+# Runs on main one at a time and never cancelled part way, so builds ship in order.
+concurrency:
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ship' || format('ci-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
   server:
@@ -76,3 +92,196 @@ jobs:
       # PostgreSQL on this runner. The server's tests belong to the job that has one.
       - name: Client tests
         run: dotnet test ModsDude.Client/ModsDude.Client.Core.Tests/ModsDude.Client.Core.Tests.csproj --no-build
+
+  build-number:
+    name: Build number
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [server, client]
+    runs-on: ubuntu-latest
+
+    outputs:
+      number: ${{ steps.count.outputs.number }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Count the commits
+        id: count
+        run: echo "number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      # A re-run of an old run would otherwise put an older API in front of clients already on a newer
+      # build, and release a client older than the latest.
+      - name: Refuse to ship an older build than the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.count.outputs.number }}
+        run: |
+          latest=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --limit 100 --json tagName --jq '.[].tagName' \
+            | sed -n 's/^b\([0-9]\+\)$/\1/p' | sort -n | tail -1)
+
+          if [ -n "$latest" ] && [ "$latest" -gt "$NUMBER" ]; then
+            echo "::error::b$NUMBER is older than the latest release, b$latest."
+            exit 1
+          fi
+
+  publish-server:
+    name: Publish the API
+    needs: build-number
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: >
+          dotnet publish ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj
+          -c Release
+          -p:BuildNumber=${{ needs.build-number.outputs.number }}
+          -o server
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-b${{ needs.build-number.outputs.number }}
+          path: server
+          if-no-files-found: error
+
+  deploy-server:
+    name: Deploy the API
+    needs: [build-number, publish-server]
+    runs-on: ubuntu-latest
+
+    # Fails until there is a way to deploy, which also keeps any client from being released: a client
+    # whose API is not deployed is refused by the one that is.
+    steps:
+      - name: Deploy
+        run: |
+          echo "::error::Deploying the API is not set up yet, so b${{ needs.build-number.outputs.number }} is not released."
+          exit 1
+
+  release-client:
+    name: Release the client
+    needs: [build-number, deploy-server]
+    runs-on: windows-latest
+
+    env:
+      BUILD: ${{ needs.build-number.outputs.number }}
+      TAG: b${{ needs.build-number.outputs.number }}
+      GH_TOKEN: ${{ github.token }}
+
+    permissions:
+      contents: write
+
+    steps:
+      # Released by an earlier attempt of this run: nothing left to do. A draft is what an attempt that
+      # failed part way through uploading leaves, and it is started over.
+      - name: Check for an earlier attempt
+        id: existing
+        shell: pwsh
+        run: |
+          $release = gh release view $env:TAG --repo "${{ github.repository }}" --json isDraft 2>$null | ConvertFrom-Json
+
+          if ($LASTEXITCODE -ne 0 -or $null -eq $release) {
+            "released=false" >> $env:GITHUB_OUTPUT
+          }
+          elseif ($release.isDraft) {
+            gh release delete $env:TAG --repo "${{ github.repository }}" --yes
+            if ($LASTEXITCODE -ne 0) { throw "Could not delete the draft left by an earlier attempt." }
+            "released=false" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            "released=true" >> $env:GITHUB_OUTPUT
+          }
+
+          # gh's exit code for a release that does not exist yet, which is not a failure of this step.
+          exit 0
+
+      - uses: actions/checkout@v4
+        if: steps.existing.outputs.released == 'false'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.existing.outputs.released == 'false'
+        with:
+          dotnet-version: 10.0.x
+
+      # The installed app reads the server's address from this file, and the one in the repo's base
+      # appsettings.json is the developer's own machine. A release that shipped without it would be an app
+      # that cannot reach anything, on every machine that installed it.
+      - name: Refuse to ship without the production settings
+        if: steps.existing.outputs.released == 'false'
+        shell: pwsh
+        run: |
+          $path = 'ModsDude.Client/ModsDude.Client.Wpf/appsettings.Production.json'
+
+          if (-not (Test-Path $path)) {
+            throw "$path is missing. It holds the deployed server's address and has to be committed before a release."
+          }
+
+          if ((Get-Content $path -Raw) -match 'localhost|127\.0\.0\.1') {
+            throw "$path still points at this machine. A release has to point at the deployed server."
+          }
+
+      # Self-contained, so nobody has to install .NET first. Release is the Production install: it files its
+      # data under %LocalAppData%\ModsDude and never touches a developer's Development one.
+      - name: Publish
+        if: steps.existing.outputs.released == 'false'
+        run: >
+          dotnet publish ModsDude.Client/ModsDude.Client.Wpf/ModsDude.Client.Wpf.csproj
+          -c Release -r win-x64 --self-contained
+          -p:BuildNumber=${{ env.BUILD }}
+          -o publish
+
+      # The same version as the Velopack package the app is built against; a CLI of another version warns
+      # about the mismatch and can produce packages the app's updater does not read.
+      - name: Install the Velopack CLI
+        if: steps.existing.outputs.released == 'false'
+        shell: pwsh
+        run: |
+          $csproj = Get-Content ModsDude.Client/ModsDude.Client.Wpf/ModsDude.Client.Wpf.csproj -Raw
+          $version = [regex]::Match($csproj, 'Include="Velopack" Version="([^"]+)"').Groups[1].Value
+          dotnet tool install -g vpk --version $version
+
+      # Earlier releases, so the new one is packed as a small delta on top of them instead of every update
+      # being the whole app. Nothing to download for the first release, which is not an error.
+      - name: Fetch earlier releases
+        if: steps.existing.outputs.released == 'false'
+        shell: pwsh
+        continue-on-error: true
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ github.token }}
+
+      # packId is not the data folder's name on purpose. Velopack installs to %LocalAppData%\<packId> and an
+      # uninstall deletes that folder, and the app's own data is in %LocalAppData%\ModsDude.
+      # --aumid is the app's own identity (AppIdentity.Name), so the installer's shortcuts and the running
+      # process agree on who they are and Windows shows the app's notifications.
+      # The package version is 0.0.N; see Directory.Build.props.
+      - name: Pack
+        if: steps.existing.outputs.released == 'false'
+        run: >
+          vpk pack
+          --packId ModsDude.Client
+          --packVersion 0.0.${{ env.BUILD }}
+          --packDir publish
+          --mainExe ModsDude.Client.Wpf.exe
+          --packTitle ModsDude
+          --packAuthors anton-jh
+          --icon ModsDude.Client/ModsDude.Client.Wpf/Assets/AppIcon.ico
+          --aumid ModsDude
+          --shortcuts Desktop,StartMenuRoot
+
+      # Tagged on the commit that was built rather than wherever main is by now. The API's GET /download
+      # links to this release's installer by its tag.
+      - name: Publish the release
+        if: steps.existing.outputs.released == 'false'
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ github.token }}
+          --tag ${{ env.TAG }}
+          --targetCommitish ${{ github.sha }}
+          --releaseName "ModsDude ${{ env.TAG }}"
+          --publish

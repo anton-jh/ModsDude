@@ -211,7 +211,7 @@
                             <StackPanel Orientation="Vertical">
 
                                 <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Text="{Binding VersionText}" />
+                                           Text="{Binding BuildText}" />
                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                            Margin="0 4 0 0"

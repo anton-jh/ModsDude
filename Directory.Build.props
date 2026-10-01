@@ -1,0 +1,15 @@
+<Project>
+
+  <!-- One number for the API and the client built from the same commit: the count of commits on main,
+       passed by CI as -p:BuildNumber=N and shown as bN. 0 is a local build. The client and the API refuse
+       to talk unless their numbers are equal. Velopack needs a semantic version, so the package is 0.0.N. -->
+  <PropertyGroup>
+    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
+    <Version>0.0.$(BuildNumber)</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildNumber" Value="$(BuildNumber)" />
+  </ItemGroup>
+
+</Project>

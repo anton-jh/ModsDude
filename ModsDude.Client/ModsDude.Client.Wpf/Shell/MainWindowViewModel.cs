@@ -8,6 +8,7 @@ using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Notices;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
+using ModsDude.Client.Wpf.Shell.Updates;
 
 namespace ModsDude.Client.Wpf.Shell;
 public partial class MainWindowViewModel
@@ -25,10 +26,12 @@ public partial class MainWindowViewModel
         NoticeCenterViewModel notices,
         BackgroundTaskViewModel backgroundTasks,
         ToastCenterViewModel toasts,
+        BuildMismatchViewModel buildMismatch,
         IResourceLeases leases)
     {
         BackgroundTasks = backgroundTasks;
         Toasts = toasts;
+        BuildMismatch = buildMismatch;
 
         _leases = leases;
         _mainPageViewModelFactory = mainPageViewModelFactory;
@@ -59,6 +62,9 @@ public partial class MainWindowViewModel
     /// modal layer, so a result reported while a modal is open is still seen.
     /// </summary>
     public ToastCenterViewModel Toasts { get; }
+
+    /// <summary>Over everything but the modal layer and the toasts, while the server refuses this build.</summary>
+    public BuildMismatchViewModel BuildMismatch { get; }
 
 
     [ObservableProperty]

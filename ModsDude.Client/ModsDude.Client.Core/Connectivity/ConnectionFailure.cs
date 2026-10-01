@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Net;
 using System.Net.Sockets;
@@ -13,6 +14,10 @@ namespace ModsDude.Client.Core.Connectivity;
 /// nothing behind it - the server restarting, a network that is not up yet - fixes itself, so it is
 /// worth trying again without asking anybody. A 400 or a 500 is the server's actual answer and will
 /// be the same answer next time, so it stays an error somebody is shown.
+/// </para>
+/// <para>
+/// <b>A server that refuses this build counts too</b>: it ends by the update arriving or the server
+/// catching up, and <see cref="IServerCompatibility"/> is what says so on screen.
 /// </para>
 /// <para>
 /// <b>Down the whole inner chain</b>, because the thing that failed is rarely the thing that throws:
@@ -31,6 +36,7 @@ public static class ConnectionFailure
         {
             var counts = current switch
             {
+                _ when BuildRefusal.Is(current) => true,
                 ApiException api => IsGateway(api.StatusCode),
                 HttpRequestException { StatusCode: null } => true,
                 HttpRequestException { StatusCode: HttpStatusCode status } => IsGateway((int)status),

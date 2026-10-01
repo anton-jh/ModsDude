@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Extensions;
@@ -517,6 +518,7 @@ public partial class App : Application
         services.AddSingleton<IAppUpdater>(sp => new AppUpdater(
             configuration["Updates:GithubRepository"],
             configuration["Updates:Directory"],
+            sp.GetRequiredService<IServerCompatibility>(),
             sp.GetRequiredService<Lazy<MainWindow>>(),
             sp.GetRequiredService<ILogger<AppUpdater>>()));
         services.AddSingleton<IUpdateStatus>(sp => sp.GetRequiredService<IAppUpdater>());
@@ -616,6 +618,8 @@ public partial class App : Application
         // and the shell draws the card along the bottom edge out of what is still up.
         services.AddSingleton<ToastCenterViewModel>();
         services.AddSingleton<IToastService>(sp => sp.GetRequiredService<ToastCenterViewModel>());
+
+        services.AddSingleton<BuildMismatchViewModel>();
 
         services.AddSingleton<ModListItemViewModel.Factory>();
 

@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
 namespace ModsDude.Client.Core.ModsDudeServer;
@@ -10,42 +12,34 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddModsDudeClient(this IServiceCollection services, string serverBaseUrl)
     {
-        services.AddHttpClient<IReposClient, ReposClient>()
-            .AddTypedClient<IReposClient>((http, sp) => new ReposClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+        services.AddSingleton<IServerCompatibility>(new ServerCompatibility(BuildNumber.Current));
+        services.AddTransient(sp => new BuildHeaderHandler(
+            BuildNumber.Current,
+            sp.GetRequiredService<IServerCompatibility>(),
+            sp.GetRequiredService<ILogger<BuildHeaderHandler>>()));
 
-        services.AddHttpClient<IUsersClient, UsersClient>()
-            .AddTypedClient<IUsersClient>((http, sp) => new UsersClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IInvitesClient, InvitesClient>()
-            .AddTypedClient<IInvitesClient>((http, sp) => new InvitesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IMembersClient, MembersClient>()
-            .AddTypedClient<IMembersClient>((http, sp) => new MembersClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IProfilesClient, ProfilesClient>()
-            .AddTypedClient<IProfilesClient>((http, sp) => new ProfilesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IModDependenciesClient, ModDependenciesClient>()
-            .AddTypedClient<IModDependenciesClient>((http, sp) => new ModDependenciesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IModsClient, ModsClient>()
-            .AddTypedClient<IModsClient>((http, sp) => new ModsClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<ISavegamesClient, SavegamesClient>()
-            .AddTypedClient<ISavegamesClient>((http, sp) => new SavegamesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IFilesClient, FilesClient>()
-            .AddTypedClient<IFilesClient>((http, sp) => new FilesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IModHubClient, ModHubClient>()
-            .AddTypedClient<IModHubClient>((http, sp) => new ModHubClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IImagesClient, ImagesClient>()
-            .AddTypedClient<IImagesClient>((http, sp) => new ImagesClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
-
-        services.AddHttpClient<IActivityClient, ActivityClient>()
-            .AddTypedClient<IActivityClient>((http, sp) => new ActivityClient(sp.GetRequiredService<ClientConfiguration>(), http) { BaseUrl = serverBaseUrl });
+        AddClient<IReposClient>(services, (configuration, http) => new ReposClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IUsersClient>(services, (configuration, http) => new UsersClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IInvitesClient>(services, (configuration, http) => new InvitesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IMembersClient>(services, (configuration, http) => new MembersClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IProfilesClient>(services, (configuration, http) => new ProfilesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IModDependenciesClient>(services, (configuration, http) => new ModDependenciesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IModsClient>(services, (configuration, http) => new ModsClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<ISavegamesClient>(services, (configuration, http) => new SavegamesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IFilesClient>(services, (configuration, http) => new FilesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IModHubClient>(services, (configuration, http) => new ModHubClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IImagesClient>(services, (configuration, http) => new ImagesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IActivityClient>(services, (configuration, http) => new ActivityClient(configuration, http) { BaseUrl = serverBaseUrl });
 
         return services;
+    }
+
+
+    private static void AddClient<TClient>(IServiceCollection services, Func<ClientConfiguration, HttpClient, TClient> create)
+        where TClient : class
+    {
+        services.AddHttpClient(typeof(TClient).Name)
+            .AddHttpMessageHandler<BuildHeaderHandler>()
+            .AddTypedClient((http, sp) => create(sp.GetRequiredService<ClientConfiguration>(), http));
     }
 }

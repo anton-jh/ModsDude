@@ -190,6 +190,17 @@ public static class Problems
         Detail = "The request carries no identity this server can act on."
     };
 
+    /// <param name="clientBuild">Null where the request carried no readable build number.</param>
+    public static CustomProblemDetails ClientBuildMismatch(int? clientBuild, int serverBuild) => new()
+    {
+        Type = ProblemType.ClientBuildMismatch,
+        Title = "The client does not match the server",
+        Detail = $"This server is build {serverBuild} and only accepts requests from the same build of the client; "
+            + $"this request came from {(clientBuild is int build ? $"build {build}" : "an unknown build")}.",
+        ClientBuild = clientBuild,
+        ServerBuild = serverBuild
+    };
+
     public static CustomProblemDetails CannotDemoteOnlyAdmin => new()
     {
         Type = ProblemType.CannotDemoteOnlyAdmin,
@@ -609,5 +620,9 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invalid-display-name")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-display-name")]
         InvalidDisplayName,
+
+        [EnumMember(Value = _typeBaseUri + "client-build-mismatch")]
+        [JsonStringEnumMemberName(_typeBaseUri + "client-build-mismatch")]
+        ClientBuildMismatch,
     }
 }

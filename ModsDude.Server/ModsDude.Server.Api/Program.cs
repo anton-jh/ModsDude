@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
+using ModsDude.Server.Api.Builds;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Api.Maintenance;
@@ -113,10 +114,17 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<UserLoadingMiddleware>();
 builder.Services.AddScoped<NotAuthenticatedMiddleware>();
+builder.Services.AddScoped<ClientBuildMiddleware>();
 
 builder.Services
     .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
 builder.Services.AddScoped<BlobReclamationJob>();
+
+builder.Services
+    .AddOptions<ClientDownloadOptions>()
+    .Bind(builder.Configuration.GetSection(ClientDownloadOptions.SectionName))
+    .Validate(x => x.GithubRepository.Length > 0, $"{ClientDownloadOptions.SectionName}:GithubRepository is required.")
+    .ValidateOnStart();
 
 builder.Services.AddModHub(builder.Configuration);
 builder.Services.AddScoped<ModHubCrawlJob>();
@@ -199,6 +207,12 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// Before authentication, so a client that is the wrong build hears that rather than anything its
+// request would have run into on the way.
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api"),
+    api => api.UseMiddleware<ClientBuildMiddleware>());
+
 app.UseMiddleware<NotAuthenticatedMiddleware>();
 
 app.UseAuthentication();
@@ -206,8 +220,9 @@ app.UseAuthorization();
 
 app.UseMiddleware<UserLoadingMiddleware>();
 
-// The 401 is declared once here rather than in every endpoint's Results<...> union, because the
-// endpoints that can produce it include the ones that return a bare Ok<T> and have no union.
+// The 401 and the 412 are declared once here rather than in every endpoint's Results<...> union,
+// because middleware produces them for every endpoint, including the ones that return a bare Ok<T>
+// and have no union.
 app.MapGroup("api/v{v:apiVersion}")
     .WithApiVersionSet(apiVersionSet)
     .RequireAuthorization()
@@ -215,7 +230,13 @@ app.MapGroup("api/v{v:apiVersion}")
         StatusCodes.Status401Unauthorized,
         typeof(CustomProblemDetails),
         ["application/json"]))
+    .WithMetadata(new ProducesResponseTypeMetadata(
+        StatusCodes.Status412PreconditionFailed,
+        typeof(CustomProblemDetails),
+        ["application/json"]))
     .MapAllEndpointsFromAssembly(typeof(Program).Assembly);
+
+app.MapClientDownload();
 
 
 if (!isDescribingOnly)

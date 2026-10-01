@@ -29,6 +29,18 @@ public class CustomProblemDetails : ProblemDetails
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SavegameCheckoutDto? Holder { get; init; }
 
+    /// <summary>
+    /// The build the request came from and the build this server is, set only by
+    /// <see cref="Problems.ClientBuildMismatch"/>. On the shared type for the reason
+    /// <see cref="ContentHash"/> is.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ClientBuild { get; init; }
+
+    /// <inheritdoc cref="ClientBuild"/>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ServerBuild { get; init; }
+
 
     public CustomProblemDetails With(Action<CustomProblemDetails> modifyAction)
     {

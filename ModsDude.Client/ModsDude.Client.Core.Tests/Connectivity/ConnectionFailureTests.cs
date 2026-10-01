@@ -63,6 +63,13 @@ public class ConnectionFailureTests
     }
 
     [Fact]
+    public void A_server_refusing_this_build_counts_but_another_412_does_not()
+    {
+        Assert.True(ConnectionFailure.Is(new InvalidOperationException("Outer", Problem(412, ProblemType.ClientBuildMismatch))));
+        Assert.False(ConnectionFailure.Is(Problem(412, ProblemType.NotFound)));
+    }
+
+    [Fact]
     public void What_the_caller_also_counts_is_asked_of_the_whole_chain()
     {
         var exception = new InvalidOperationException("Outer", new ProviderUnreachable());
@@ -74,6 +81,9 @@ public class ConnectionFailureTests
 
     private static ApiException Api(int status)
         => new("The HTTP status code of the response was not expected.", status, null, new Dictionary<string, IEnumerable<string>>(), null);
+
+    private static ApiException<CustomProblemDetails> Problem(int status, ProblemType type)
+        => new("A server side error occurred.", status, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = type }, null);
 
     private sealed class ProviderUnreachable : Exception;
 }

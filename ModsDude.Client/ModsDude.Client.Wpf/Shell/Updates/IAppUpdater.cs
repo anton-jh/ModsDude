@@ -8,9 +8,6 @@ public interface IAppUpdater : IUpdateStatus, IDisposable
 
     UpdateStage Stage { get; }
 
-    /// <summary>The version this copy is: the installed package's, or the assembly's for a build that is not installed.</summary>
-    string CurrentVersion { get; }
-
     /// <summary>One line for Settings.</summary>
     string StatusText { get; }
 
