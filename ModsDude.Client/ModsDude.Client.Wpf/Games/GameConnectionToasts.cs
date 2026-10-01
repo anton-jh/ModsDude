@@ -9,7 +9,7 @@ namespace ModsDude.Client.Wpf.Games;
 /// Says when a game is connected or disconnected, whether somebody did it or it happened by itself
 /// on finding the game installed.
 /// </summary>
-public sealed class GameConnectionToasts(GameRepository gameRepository, IToastService toasts)
+public sealed class GameConnectionToasts(IGameRepository gameRepository, IToastService toasts)
     : IGameConnectionToasts
 {
     public void Start()

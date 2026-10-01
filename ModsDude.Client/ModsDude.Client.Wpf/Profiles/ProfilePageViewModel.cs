@@ -55,7 +55,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     private readonly ProfileDto _profile;
     private readonly ProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
-    private readonly DriftMonitor _driftMonitor;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly ProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
@@ -81,7 +81,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         NavigationManager navigationManager,
         ProfileApplyService applyService,
         IHeldSavegames heldSavegames,
-        DriftMonitor driftMonitor,
+        IDriftMonitor driftMonitor,
         ProfileSyncStatusService syncStatus,
         IResourceLeases leases,
         IToastService toasts,

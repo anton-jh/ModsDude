@@ -23,7 +23,7 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 /// the trip, and a watcher that silently stopped is worse than none.
 /// </para>
 /// </remarks>
-public sealed class DriftBackstop(DriftMonitor monitor) : IDriftBackstop
+public sealed class DriftBackstop(IDriftMonitor monitor) : IDriftBackstop
 {
     /// <summary>
     /// A directory listing per folder and a hash per held savegame slot, so this is not a loop to run

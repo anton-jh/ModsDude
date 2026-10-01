@@ -107,22 +107,22 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
 /// </remarks>
 public sealed partial class FriendActivityListViewModel : ObservableObject, IDisposable
 {
-    private readonly FriendActivityService _friends;
+    private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _environment;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly FriendFollowService _follow;
-    private readonly GameRepository _games;
+    private readonly IGameRepository _games;
     private readonly IToastService _toasts;
     private readonly ILogger _logger;
     private readonly Guid _repoId;
 
 
     public FriendActivityListViewModel(
-        FriendActivityService friends,
+        IFriendActivityService friends,
         IFriendActivityEnvironment environment,
         IUserAvatarFactory avatarFactory,
         FriendFollowService follow,
-        GameRepository games,
+        IGameRepository games,
         IToastService toasts,
         ILogger<FriendActivityListViewModel> logger,
         Guid repoId)
@@ -233,11 +233,11 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     {
         public FriendActivityListViewModel Create(Guid repoId)
             => new(
-                serviceProvider.GetRequiredService<FriendActivityService>(),
+                serviceProvider.GetRequiredService<IFriendActivityService>(),
                 serviceProvider.GetRequiredService<IFriendActivityEnvironment>(),
                 serviceProvider.GetRequiredService<IUserAvatarFactory>(),
                 serviceProvider.GetRequiredService<FriendFollowService>(),
-                serviceProvider.GetRequiredService<GameRepository>(),
+                serviceProvider.GetRequiredService<IGameRepository>(),
                 serviceProvider.GetRequiredService<IToastService>(),
                 serviceProvider.GetRequiredService<ILogger<FriendActivityListViewModel>>(),
                 repoId);

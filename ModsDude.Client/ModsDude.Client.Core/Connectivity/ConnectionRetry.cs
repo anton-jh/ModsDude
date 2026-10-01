@@ -41,7 +41,7 @@ public enum ConnectionTarget
 public sealed class ConnectionRetry(
     ILogger<ConnectionRetry> logger,
     TimeProvider? timeProvider = null,
-    Func<Exception, bool>? alsoConnectionFailure = null)
+    Func<Exception, bool>? alsoConnectionFailure = null) : IConnectionRetry
 {
     /// <summary>Notice keys are prefixed with this.</summary>
     public const string KeyPrefix = "connection/";
@@ -53,7 +53,6 @@ public sealed class ConnectionRetry(
     private TaskCompletionSource _wake = NewWake();
 
 
-    /// <summary>Raised when the column would say something different. Fired from whatever thread the attempt ran on.</summary>
     public event EventHandler? Changed;
 
 
@@ -71,11 +70,6 @@ public sealed class ConnectionRetry(
     };
 
 
-    /// <summary>
-    /// Runs <paramref name="attempt"/> until it gets through.
-    /// </summary>
-    /// <returns>True once it has; false where <paramref name="cancellationToken"/> stopped it first.</returns>
-    /// <exception cref="Exception">Whatever the attempt threw that was not a connection failure.</exception>
     public async Task<bool> RunAsync(
         ConnectionTarget target,
         Func<CancellationToken, Task> attempt,
@@ -129,7 +123,6 @@ public sealed class ConnectionRetry(
         }
     }
 
-    /// <summary>Cuts short every wait in progress, so each one tries again straight away.</summary>
     public void RetryNow()
     {
         TaskCompletionSource woken;

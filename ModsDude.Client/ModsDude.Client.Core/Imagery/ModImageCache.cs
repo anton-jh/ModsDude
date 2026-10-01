@@ -23,7 +23,7 @@ namespace ModsDude.Client.Core.Imagery;
 /// refreshes the timestamp once it has gone stale.
 /// </para>
 /// </remarks>
-public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<ModImageCache> logger)
+public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<ModImageCache> logger) : IModImageCache
 {
     /// <summary>
     /// Walking the directory costs the same whether one file or a thousand were added since, so
@@ -92,10 +92,6 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
         }
     }
 
-    /// <summary>
-    /// Drops the least recently used entries until the cache is back under its configured size.
-    /// Called on its own only by tests and by a caller that knows it has just written a lot.
-    /// </summary>
     public async Task EvictAsync(CancellationToken cancellationToken)
     {
         if (await _sweepLock.WaitAsync(0, cancellationToken) is false)
@@ -159,14 +155,6 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
     }
 
 
-    /// <summary>
-    /// How much the cache is holding, for a settings page to report.
-    /// </summary>
-    /// <remarks>
-    /// Walks the directory, so it belongs off the drawing thread. Reported as-is rather than
-    /// remembered: the folder is the only record of what is in there, and a cached number would be
-    /// wrong the moment a sweep ran.
-    /// </remarks>
     public ModImageCacheUsage Measure()
     {
         try
@@ -190,15 +178,6 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
         }
     }
 
-    /// <summary>
-    /// Empties the cache.
-    /// </summary>
-    /// <remarks>
-    /// Costs nothing but re-fetching: every entry is either a server derivative addressed by its own
-    /// hash or a rendition decoded out of a local archive, so both come back on demand. Files
-    /// something is reading are skipped and swept later.
-    /// </remarks>
-    /// <returns>The bytes reclaimed.</returns>
     public long Clear()
     {
         long reclaimed = 0;

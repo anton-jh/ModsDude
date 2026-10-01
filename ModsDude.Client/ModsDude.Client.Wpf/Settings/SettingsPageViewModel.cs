@@ -48,15 +48,15 @@ public partial class SettingsPageViewModel
 {
     private const long _bytesPerGigabyte = 1024L * 1024 * 1024;
 
-    private readonly ClientSettingsRepository _settingsRepository;
-    private readonly ContentStoreMaintenance _maintenance;
-    private readonly ModImageCache _imageCache;
+    private readonly IClientSettingsRepository _settingsRepository;
+    private readonly IContentStoreMaintenance _maintenance;
+    private readonly IModImageCache _imageCache;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IFilePickerService _filePickerService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
-    private readonly AutostartService _autostart;
+    private readonly IAutostartService _autostart;
     private readonly AppUpdater _updater;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
@@ -70,16 +70,16 @@ public partial class SettingsPageViewModel
 
 
     public SettingsPageViewModel(
-        ClientSettingsRepository settingsRepository,
-        GameRepository gameRepository,
-        ContentStoreMaintenance maintenance,
-        ModImageCache imageCache,
+        IClientSettingsRepository settingsRepository,
+        IGameRepository gameRepository,
+        IContentStoreMaintenance maintenance,
+        IModImageCache imageCache,
         IFilePickerService filePickerService,
         IModalService modalService,
         NavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
         TransferLimits transferLimits,
-        AutostartService autostart,
+        IAutostartService autostart,
         AppUpdater updater)
     {
         _settingsRepository = settingsRepository;

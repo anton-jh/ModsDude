@@ -24,7 +24,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly ProfileService _profileService;
+    private readonly IProfileService _profileService;
     private readonly ModListItemViewModel.Factory _itemFactory;
 
     private IReadOnlyList<PinnedMod> _fetched = [];
@@ -33,7 +33,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
     public ProfileModsPageViewModel(
         Repo repo,
         ProfileDto profile,
-        ProfileService profileService,
+        IProfileService profileService,
         ModListItemViewModel.Factory itemFactory)
     {
         _repo = repo;

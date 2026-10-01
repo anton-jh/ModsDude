@@ -15,7 +15,7 @@ namespace ModsDude.Client.Wpf.Games;
 public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly GameRepository _gameRepository;
+    private readonly IGameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly Game _subject;
     private readonly IModalService _modalService;
@@ -26,7 +26,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         Repo repo,
         Game subject,
         Action onSaved,
-        GameRepository gameRepository,
+        IGameRepository gameRepository,
         IFilePickerService filePickerService,
         IModalService modalService,
         NavigationLockService navigationLockService)

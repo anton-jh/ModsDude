@@ -39,7 +39,7 @@ public interface ILocalSavegameAdapters
 
 
 /// <summary><see cref="ILocalSavegameAdapters"/> over the repos this client has loaded.</summary>
-public sealed class RepoSavegameAdapters(RepoRepository repos, GameRepository games)
+public sealed class RepoSavegameAdapters(IRepoRepository repos, IGameRepository games)
     : ILocalSavegameAdapters
 {
     public ILocalSavegameAdapter? TryGet(GameIdentity identity)
@@ -485,11 +485,11 @@ public sealed class SavegameService(
     ISavegamesClient savegamesClient,
     IFilesClient filesClient,
     ISavegamePacker packer,
-    SavegameBindingStore bindings,
+    ISavegameBindingStore bindings,
     ILocalSavegameAdapters adapters,
     IModFileDownloader downloader,
     IModFileUploader uploader,
-    SyncManifestStore manifestStore,
+    ISyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IContentStoreProvider storeProvider,
     IGameFileEditor fileEditor,

@@ -12,14 +12,14 @@ namespace ModsDude.Client.Wpf.Repos;
 public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly RepoRepository _repoService;
+    private readonly IRepoRepository _repoService;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
 
 
     public RepoAdminPageViewModel(
         Repo repo,
-        RepoRepository repoService,
+        IRepoRepository repoService,
         NavigationLockService navigationLockService,
         IModalService modalService,
         IFilePickerService filePickerService)

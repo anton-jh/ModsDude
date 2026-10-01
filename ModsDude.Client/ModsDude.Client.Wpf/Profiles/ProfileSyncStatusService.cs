@@ -49,15 +49,15 @@ public enum ProfileSyncState
 /// </remarks>
 public sealed class ProfileSyncStatusService
 {
-    private readonly DriftMonitor _driftMonitor;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly ProfileApplyService _applyService;
 
 
     public ProfileSyncStatusService(
-        DriftMonitor driftMonitor,
+        IDriftMonitor driftMonitor,
         IResourceLeases leases,
         ProfileApplyService applyService,
-        GameRepository games)
+        IGameRepository games)
     {
         _driftMonitor = driftMonitor;
         _applyService = applyService;

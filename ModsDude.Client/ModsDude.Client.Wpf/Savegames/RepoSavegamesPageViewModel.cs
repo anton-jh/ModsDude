@@ -44,12 +44,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 {
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly SavegameSightingCache _sightings;
+    private readonly ISavegameSightingCache _sightings;
     private readonly ISavegameService _savegameService;
-    private readonly SavegameBindingStore _bindingStore;
-    private readonly ProfileService _profileService;
-    private readonly CurrentUserService _currentUserService;
-    private readonly DriftMonitor _driftMonitor;
+    private readonly ISavegameBindingStore _bindingStore;
+    private readonly IProfileService _profileService;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly SavegameFlowService _flowService;
     private readonly ShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
@@ -71,11 +71,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         Repo repo,
         ISavegamesClient savegamesClient,
         ISavegameService savegameService,
-        SavegameSightingCache sightings,
-        SavegameBindingStore bindingStore,
-        ProfileService profileService,
-        CurrentUserService currentUserService,
-        DriftMonitor driftMonitor,
+        ISavegameSightingCache sightings,
+        ISavegameBindingStore bindingStore,
+        IProfileService profileService,
+        ICurrentUserService currentUserService,
+        IDriftMonitor driftMonitor,
         SavegameFlowService flowService,
         ShellNavigationService shellNavigation,
         IModalService modalService,

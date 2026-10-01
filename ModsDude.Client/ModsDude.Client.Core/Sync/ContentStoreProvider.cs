@@ -24,7 +24,7 @@ public interface IContentStoreProvider
 
 /// <inheritdoc cref="IContentStoreProvider"/>
 public sealed class ContentStoreProvider(
-    ClientSettingsRepository settingsRepository,
+    IClientSettingsRepository settingsRepository,
     ILogger<ContentStore> storeLogger)
     : IContentStoreProvider
 {

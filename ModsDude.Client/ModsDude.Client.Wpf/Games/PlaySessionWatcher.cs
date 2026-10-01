@@ -23,9 +23,9 @@ namespace ModsDude.Client.Wpf.Games;
 /// </para>
 /// </remarks>
 public sealed class PlaySessionWatcher(
-    PlaySessionWatch watch,
-    DriftMonitor monitor,
-    RepoRepository repoRepository,
+    IPlaySessionWatch watch,
+    IDriftMonitor monitor,
+    IRepoRepository repoRepository,
     ILogger<PlaySessionWatcher> logger)
     : IPlaySessionWatcher
 {

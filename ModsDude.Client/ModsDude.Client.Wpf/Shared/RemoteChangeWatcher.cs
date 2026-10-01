@@ -27,8 +27,8 @@ namespace ModsDude.Client.Wpf.Shared;
 /// </para>
 /// </remarks>
 public sealed class RemoteChangeWatcher(
-    RepoRepository repoRepository,
-    ProfileService profileService,
+    IRepoRepository repoRepository,
+    IProfileService profileService,
     ILogger<RemoteChangeWatcher> logger)
     : IRemoteChangeWatcher
 {

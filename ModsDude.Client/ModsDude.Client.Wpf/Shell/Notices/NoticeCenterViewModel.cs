@@ -55,19 +55,19 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// </summary>
     private const int MaxVisible = 6;
 
-    private readonly DriftMonitor _monitor;
-    private readonly RepoRepository _repoRepository;
-    private readonly GameRepository _gameRepository;
-    private readonly ProfileService _profileService;
-    private readonly SavegameBindingStore _bindingStore;
+    private readonly IDriftMonitor _monitor;
+    private readonly IRepoRepository _repoRepository;
+    private readonly IGameRepository _gameRepository;
+    private readonly IProfileService _profileService;
+    private readonly ISavegameBindingStore _bindingStore;
     private readonly ProfileApplyService _applyService;
     private readonly ShellNavigationService _navigation;
     private readonly INoticeEnvironment _environment;
-    private readonly DismissalLedger _dismissals;
+    private readonly IDismissalLedger _dismissals;
     private readonly BackgroundProblemSource _problems;
     private readonly IUpdateStatus _updates;
-    private readonly ConnectionRetry _connection;
-    private readonly FriendActivityService _friends;
+    private readonly IConnectionRetry _connection;
+    private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _friendEnvironment;
     private readonly FriendFollowService _follow;
     private readonly ILogger _logger;
@@ -90,19 +90,19 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
 
     public NoticeCenterViewModel(
-        DriftMonitor monitor,
-        RepoRepository repoRepository,
-        GameRepository gameRepository,
-        ProfileService profileService,
-        SavegameBindingStore bindingStore,
+        IDriftMonitor monitor,
+        IRepoRepository repoRepository,
+        IGameRepository gameRepository,
+        IProfileService profileService,
+        ISavegameBindingStore bindingStore,
         ProfileApplyService applyService,
         ShellNavigationService navigation,
         INoticeEnvironment environment,
-        DismissalLedger dismissals,
+        IDismissalLedger dismissals,
         BackgroundProblemSource problems,
         IUpdateStatus updates,
-        ConnectionRetry connection,
-        FriendActivityService friends,
+        IConnectionRetry connection,
+        IFriendActivityService friends,
         IFriendActivityEnvironment friendEnvironment,
         FriendFollowService follow,
         ILogger<NoticeCenterViewModel> logger)

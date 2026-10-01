@@ -36,8 +36,8 @@ namespace ModsDude.Client.Wpf.Repos.Archive;
 public partial class RepoArchivePageViewModel : PageViewModel
 {
     private readonly Repo _repo;
-    private readonly ProfileService _profileService;
-    private readonly GameRepository _games;
+    private readonly IProfileService _profileService;
+    private readonly IGameRepository _games;
     private readonly ISavegamesClient _savegamesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -53,8 +53,8 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
     public RepoArchivePageViewModel(
         Repo repo,
-        ProfileService profileService,
-        GameRepository games,
+        IProfileService profileService,
+        IGameRepository games,
         ISavegamesClient savegamesClient,
         IModalService modalService,
         IErrorReporter errorReporter,

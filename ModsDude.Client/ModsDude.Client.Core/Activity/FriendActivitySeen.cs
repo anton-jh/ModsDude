@@ -15,7 +15,7 @@ public interface IFriendActivitySeen
 
 
 /// <summary><see cref="IFriendActivitySeen"/> over the real <c>state.json</c>.</summary>
-public sealed class StateStoreFriendActivitySeen(StateStore store) : IFriendActivitySeen
+public sealed class StateStoreFriendActivitySeen(IStateStore store) : IFriendActivitySeen
 {
     public DateTime? Get(string userId)
         => store.Read(state => state.FriendActivitySeenUntil.TryGetValue(userId, out var until) ? until : (DateTime?)null);

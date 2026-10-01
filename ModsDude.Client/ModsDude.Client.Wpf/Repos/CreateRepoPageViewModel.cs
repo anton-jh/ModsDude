@@ -11,7 +11,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.Repos;
 public partial class CreateRepoPageViewModel(
-    RepoRepository repoRepository,
+    IRepoRepository repoRepository,
     IGameAdapterIndex gameAdapterIndex,
     NavigationLockService navigationLockService,
     IFilePickerService filePickerService,

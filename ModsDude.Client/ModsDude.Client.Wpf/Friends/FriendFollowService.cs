@@ -27,10 +27,10 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </para>
 /// </remarks>
 public sealed class FriendFollowService(
-    RepoRepository repoRepository,
-    GameRepository gameRepository,
+    IRepoRepository repoRepository,
+    IGameRepository gameRepository,
     ProfileApplyService applyService,
-    DriftMonitor driftMonitor)
+    IDriftMonitor driftMonitor)
 {
     /// <returns>What to tell the user, and how loudly.</returns>
     public async Task<(string Message, ToastSeverity Severity)> FollowAsync(GameActivityDto activity, CancellationToken cancellationToken)

@@ -24,11 +24,9 @@ namespace ModsDude.Client.Core.Activity;
 /// </remarks>
 public class GameActivityReporter(
     IActivityClient activityClient,
-    ILogger<GameActivityReporter> logger)
+    ILogger<GameActivityReporter> logger) : IGameActivityReporter
 {
-    /// <param name="pinnedRevision">The revision the game is held on, or null where it follows head.</param>
-    /// <param name="savegameId">The savegame checked out, where <paramref name="kind"/> is a check-out.</param>
-    public virtual void Report(
+    public void Report(
         GameIdentity game,
         Guid repoId,
         Guid profileId,
@@ -49,8 +47,7 @@ public class GameActivityReporter(
         _ = SendAsync(() => activityClient.RecordGameActivityV1Async(request), game);
     }
 
-    /// <summary>Says this game follows no profile any more, which takes it off friends' lists.</summary>
-    public virtual void ReportCleared(GameIdentity game)
+    public void ReportCleared(GameIdentity game)
     {
         _ = SendAsync(() => activityClient.ClearGameActivityV1Async(game.ToString()), game);
     }

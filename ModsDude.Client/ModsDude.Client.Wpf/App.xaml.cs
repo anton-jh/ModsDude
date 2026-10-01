@@ -88,7 +88,7 @@ public partial class App : Application
         }
 
         var authentication = _serviceProvider.GetRequiredService<AuthenticationService>();
-        var connection = _serviceProvider.GetRequiredService<ConnectionRetry>();
+        var connection = _serviceProvider.GetRequiredService<IConnectionRetry>();
 
         if (started.InBackground)
         {
@@ -261,7 +261,7 @@ public partial class App : Application
     /// retry - and from there it is retried like any other start.
     /// </para>
     /// </remarks>
-    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, ConnectionRetry connection, MainWindow window)
+    private async Task SignInWithoutInterruptingAsync(AuthenticationService authentication, IConnectionRetry connection, MainWindow window)
     {
         try
         {
@@ -292,7 +292,7 @@ public partial class App : Application
     {
         try
         {
-            _serviceProvider.GetRequiredService<AutostartService>().Reconcile();
+            _serviceProvider.GetRequiredService<IAutostartService>().Reconcile();
         }
         catch (Exception exception)
         {
@@ -406,7 +406,7 @@ public partial class App : Application
     /// </remarks>
     private void TidyStoresInBackground()
     {
-        var maintenance = _serviceProvider.GetRequiredService<ContentStoreMaintenance>();
+        var maintenance = _serviceProvider.GetRequiredService<IContentStoreMaintenance>();
         var log = _serviceProvider.GetRequiredService<ILogger<App>>();
 
         _ = Task.Run(async () =>
@@ -501,7 +501,7 @@ public partial class App : Application
 
         // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
         // library's own way of saying so, which Core cannot see.
-        services.AddSingleton(sp => new ConnectionRetry(
+        services.AddSingleton<IConnectionRetry>(sp => new ConnectionRetry(
             sp.GetRequiredService<ILogger<ConnectionRetry>>(),
             alsoConnectionFailure: AuthenticationService.IsUnreachable));
 
@@ -524,7 +524,7 @@ public partial class App : Application
         // Only the production install ever registers itself; see AutostartService for why, and for
         // why a debug build running under the dotnet host has nothing stable to register anyway.
         services.AddSingleton<IStartupRegistry, RegistryStartupRegistry>();
-        services.AddSingleton(sp => new AutostartService(
+        services.AddSingleton<IAutostartService>(sp => new AutostartService(
             sp.GetRequiredService<IStartupRegistry>(),
             AppIdentity.Name,
             Environment.ProcessPath,
@@ -567,10 +567,10 @@ public partial class App : Application
 
         // What friends are on: the report every activation makes, the one read every surface draws from,
         // and the one gesture that follows them. See FriendActivityService.
-        services.AddSingleton<GameActivityReporter>();
+        services.AddSingleton<IGameActivityReporter, GameActivityReporter>();
         services.AddSingleton<IFriendActivitySeen, StateStoreFriendActivitySeen>();
-        services.AddSingleton<FriendActivityService>();
-        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<FriendActivityService>());
+        services.AddSingleton<IFriendActivityService, FriendActivityService>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IFriendActivityService>());
         services.AddSingleton<IFriendActivityEnvironment, FriendActivityEnvironment>();
         services.AddSingleton<FriendFollowService>();
 
@@ -595,7 +595,7 @@ public partial class App : Application
         // to ask the running app, and what the user has waved away.
         services.AddSingleton<NoticeCenterViewModel>();
         services.AddSingleton<INoticeEnvironment, NoticeEnvironment>();
-        services.AddSingleton<DismissalLedger>();
+        services.AddSingleton<IDismissalLedger, DismissalLedger>();
 
         // Both faces of one object again: everything that absorbs a failure reports it through the
         // interface, and the column draws a notice per kind out of what those reports add up to.
@@ -632,8 +632,8 @@ public partial class App : Application
 
         // One cache per machine, not one per volume: images are always copies, so the hardlink
         // constraint that makes content stores per-volume does not apply to them.
-        services.AddSingleton(sp => new ModImageCache(
-            () => sp.GetRequiredService<ClientSettingsRepository>().Read(x => x.ImageCache),
+        services.AddSingleton<IModImageCache>(sp => new ModImageCache(
+            () => sp.GetRequiredService<IClientSettingsRepository>().Read(x => x.ImageCache),
             sp.GetRequiredService<ILogger<ModImageCache>>()));
         services.AddSingleton<IModImageStore, ModImageStore>();
         services.AddSingleton<IModImagerySource, ModImagerySource>();
@@ -647,55 +647,55 @@ public partial class App : Application
         services.AddSingleton<IModImagePublisher>(sp => sp.GetRequiredService<ModImagePublisher>());
         services.AddSingleton<IModImageBackfill>(sp => sp.GetRequiredService<ModImagePublisher>());
 
-        services.AddSingleton<RepoRepository>();
-        services.AddSingleton<ProfileService>();
-        services.AddSingleton<MembershipService>();
-        services.AddSingleton<InviteService>();
-        services.AddSingleton<CurrentUserService>();
-        services.AddSingleton<UserAccountService>();
-        services.AddSingleton<GameRepository>();
+        services.AddSingleton<IRepoRepository, RepoRepository>();
+        services.AddSingleton<IProfileService, ProfileService>();
+        services.AddSingleton<IMembershipService, MembershipService>();
+        services.AddSingleton<IInviteService, InviteService>();
+        services.AddSingleton<ICurrentUserService, CurrentUserService>();
+        services.AddSingleton<IUserAccountService, UserAccountService>();
+        services.AddSingleton<IGameRepository, GameRepository>();
 
         // Sync's store eviction has to spare what other games are running, and the game list
         // is the only thing that knows which folders those are.
-        services.AddSingleton<IModFolders>(sp => sp.GetRequiredService<GameRepository>());
+        services.AddSingleton<IModFolders>(sp => sp.GetRequiredService<IGameRepository>());
 
         // The drift monitor asks the same list for the folder and the standing intent behind each one.
-        services.AddSingleton<IDriftCandidateSource>(sp => sp.GetRequiredService<GameRepository>());
-        services.AddSingleton<ClientSettingsRepository>();
+        services.AddSingleton<IDriftCandidateSource>(sp => sp.GetRequiredService<IGameRepository>());
+        services.AddSingleton<IClientSettingsRepository, ClientSettingsRepository>();
         // A catalog is created per surface and disposed with it, so its per-source scan cache lives
         // exactly as long as the page whose checkboxes recompose from it.
         services.AddSingleton<ModCatalog.Factory>();
-        services.AddSingleton<LastSelectionRepository>();
+        services.AddSingleton<ILastSelectionRepository, LastSelectionRepository>();
 
         // What the shell drops when the signed-in user changes. Everything else the client holds
         // describes this machine's game installations and survives the switch - see IUserScopedState.
-        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<RepoRepository>());
-        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ProfileService>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRepoRepository>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IProfileService>());
 
         // The same object again, for the one fact the drift check needs of it: which revision each
         // profile it has loaded is on. It answers null for every other repo, which is why the check
         // still works before anything has been loaded at all.
-        services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<ProfileService>());
+        services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileService>());
 
         // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
         // page, or the claim watch reading the lists of whatever this machine holds. Registered under
         // both names for the same reason: those record into it, the drift check reads it, and they
         // have to be the one object.
-        services.AddSingleton<SavegameSightingCache>();
-        services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<SavegameSightingCache>());
-        services.AddSingleton<SavegameClaimWatch>();
+        services.AddSingleton<ISavegameSightingCache, SavegameSightingCache>();
+        services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<ISavegameSightingCache>());
+        services.AddSingleton<ISavegameClaimWatch, SavegameClaimWatch>();
 
         // Which processes are which game comes off the repos' adapters, for the same reason the
         // savegame adapters do: a game does not carry the base settings that hydrate one.
         services.AddSingleton<IGameProcessNames, RepoGameProcessNames>();
         services.AddSingleton<IGameProcesses, SystemGameProcesses>();
-        services.AddSingleton<PlaySessionWatch>();
+        services.AddSingleton<IPlaySessionWatch, PlaySessionWatch>();
 
         services.AddCore<AuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
         services.AddSingleton<AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
-        services.AddSingleton<StateStore>();
+        services.AddSingleton<IStateStore, StateStore>();
     }
 
 

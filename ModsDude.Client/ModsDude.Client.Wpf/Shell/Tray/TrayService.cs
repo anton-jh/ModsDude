@@ -30,7 +30,7 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 public sealed class TrayService(
     MainWindow window,
     NoticeCenterViewModel notices,
-    ClientSettingsRepository settings,
+    IClientSettingsRepository settings,
     IUpdateStatus updates,
     ILogger<TrayService> logger) : ITrayService
 {

@@ -26,8 +26,8 @@ public partial class RepoPageViewModel
     private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
-    private readonly ProfileService _profileService;
-    private readonly LastSelectionRepository _lastSelectionRepository;
+    private readonly IProfileService _profileService;
+    private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
@@ -88,9 +88,9 @@ public partial class RepoPageViewModel
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ISavegamesClient savegamesClient,
         ProfileSyncStatusService syncStatus,
-        ProfileService profileService,
-        LastSelectionRepository lastSelectionRepository,
-        GameRepository gameRepository,
+        IProfileService profileService,
+        ILastSelectionRepository lastSelectionRepository,
+        IGameRepository gameRepository,
         NavigationLockService navigationLockService,
         IModalService modalService)
     {

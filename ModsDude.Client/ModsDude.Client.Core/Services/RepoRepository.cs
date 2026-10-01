@@ -12,52 +12,21 @@ namespace ModsDude.Client.Core.Services;
 public class RepoRepository(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
-    GameRepository gameRepository,
+    IGameRepository gameRepository,
     ILogger<RepoRepository> logger)
-    : IUserScopedState
+    : IRepoRepository
 {
-    public delegate void RepoCreatedEventHandler(Guid repoId);
-
-    /// <summary>
-    /// Raised for a repo that did not exist a moment ago, so the shell can navigate to it. Renames
-    /// need no equivalent: the model is updated in place and the menu entry follows it.
-    /// </summary>
-    public event RepoCreatedEventHandler? RepoCreated;
+    public event Action<Guid>? RepoCreated;
 
     public ObservableCollection<Repo> Repos { get; } = [];
 
-    /// <summary>
-    /// Whether this account's repos have been read at least once.
-    /// </summary>
-    /// <remarks>
-    /// <b>An empty list means two different things and something has to tell them apart.</b> Before
-    /// the first read it means "not asked yet"; after one it means this account is in no repos. The
-    /// drift notice is the caller that cares: a game whose repo it cannot find is either a shell
-    /// that started three seconds ago or a game this account can do nothing about, and those get
-    /// opposite sentences. Set on success only - a failed read has established nothing.
-    /// </remarks>
     public bool HasLoaded { get; private set; }
 
-    /// <summary>
-    /// What the last background check found on the server that <see cref="Repos"/> does not show
-    /// yet, or null where it found nothing. Cleared by any refresh, which is what brings it in.
-    /// </summary>
     public RemoteChanges? PendingChanges { get; private set; }
 
-    /// <summary>Raised when <see cref="PendingChanges"/> is set or cleared.</summary>
     public event EventHandler? PendingChangesChanged;
 
 
-    /// <summary>
-    /// Asks the server whether the list has changed, and records the answer in
-    /// <see cref="PendingChanges"/> without touching <see cref="Repos"/>.
-    /// </summary>
-    /// <remarks>
-    /// <b>Discarded where the list moved while the question was out.</b> Creating, joining or
-    /// renaming a repo on this machine changes the list between the request and the answer, and
-    /// comparing an answer from before that with a list from after it would report this client's
-    /// own change as somebody else's.
-    /// </remarks>
     public async Task CheckForChanges(CancellationToken cancellationToken)
     {
         // Nothing to compare against yet, and before sign-in there is nobody to ask for.
@@ -180,11 +149,6 @@ public class RepoRepository(
         RepoCreated?.Invoke(repo.Id);
     }
 
-    /// <summary>
-    /// Puts a repo the user has just joined into the list, so the shell can navigate to it without
-    /// waiting for a refresh. Ignored where the repo is already there - redeeming a code twice is
-    /// allowed, and must not produce two of the same repo.
-    /// </summary>
     public void AddJoinedRepo(RepoMembershipDto membership)
     {
         if (FindRepo(membership.Repo.Id) is not null)
@@ -231,10 +195,6 @@ public class RepoRepository(
         SetPendingChanges(null);
     }
 
-    /// <summary>
-    /// Permanently deletes an archived repo. Refused by the server for one that is still live, and
-    /// for one that still holds mods.
-    /// </summary>
     public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)
     {
         await repoClient.DeleteRepoV1Async(id, cancellationToken);
@@ -245,10 +205,6 @@ public class RepoRepository(
         }
     }
 
-    /// <summary>
-    /// Puts a repo away, for everybody. Archiving is repo state rather than membership state, so
-    /// this is not a personal "hide it from me" - it leaves every member's sidebar at once.
-    /// </summary>
     public async Task ArchiveRepo(Guid id, CancellationToken cancellationToken)
     {
         await repoClient.ArchiveRepoV1Async(id, cancellationToken);
@@ -259,11 +215,6 @@ public class RepoRepository(
         }
     }
 
-    /// <summary>
-    /// Brings one back, under the name it went away with. Unlike restoring a profile or a savegame
-    /// this takes no name and cannot fail on one: repo names are not unique, so an archived repo
-    /// never gave its name up for anybody else to take.
-    /// </summary>
     public async Task RestoreRepo(Guid id, CancellationToken cancellationToken)
     {
         await repoClient.RestoreRepoV1Async(id, cancellationToken);
@@ -274,10 +225,6 @@ public class RepoRepository(
         await RefreshRepos(cancellationToken);
     }
 
-    /// <summary>
-    /// The archived repos this user is a member of. Read on demand: the Archive is a page somebody
-    /// visits, not part of the shell.
-    /// </summary>
     public async Task<IReadOnlyList<RepoMembershipDto>> GetArchivedRepos(CancellationToken cancellationToken)
     {
         return [.. await repoClient.GetArchivedReposV1Async(cancellationToken)];

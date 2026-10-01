@@ -22,7 +22,7 @@ namespace ModsDude.Client.Core.Savegames;
 /// over-report, which is why taking one records it here at once: see <see cref="RecordOwnClaim"/>.
 /// </para>
 /// </remarks>
-public sealed class SavegameSightingCache : ISavegameSightings
+public sealed class SavegameSightingCache : ISavegameSightingCache
 {
     private readonly ConcurrentDictionary<(Guid RepoId, Guid SavegameId), int> _heads = [];
     private readonly ConcurrentDictionary<(Guid RepoId, Guid SavegameId), SavegameClaimSighting> _claims = [];
@@ -38,15 +38,6 @@ public sealed class SavegameSightingCache : ISavegameSightings
         return _claims.TryGetValue((repoId, savegameId), out var claim) ? claim : null;
     }
 
-    /// <summary>
-    /// Records what a freshly read savegame list says. Called by whatever just read one; a savegame
-    /// with no head yet - published in the same breath and not yet answered for - is skipped rather
-    /// than recorded as zero.
-    /// </summary>
-    /// <param name="currentUserId">
-    /// Who is signed in, which is what decides whether a claim is yours. Null where the caller could
-    /// not find out, and then the claims are left as they were rather than all read as somebody else's.
-    /// </param>
     public void Record(Guid repoId, IEnumerable<SavegameDto> savegames, string? currentUserId)
     {
         foreach (var savegame in savegames)

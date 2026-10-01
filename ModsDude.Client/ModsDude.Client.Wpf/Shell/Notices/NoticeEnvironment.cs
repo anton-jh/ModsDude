@@ -16,8 +16,8 @@ namespace ModsDude.Client.Wpf.Shell.Notices;
 /// nothing else.
 /// </remarks>
 public sealed class NoticeEnvironment(
-    RepoRepository repoRepository,
-    GameRepository gameRepository,
+    IRepoRepository repoRepository,
+    IGameRepository gameRepository,
     IHeldSavegames heldSavegames)
     : INoticeEnvironment
 {

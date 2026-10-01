@@ -11,7 +11,7 @@ namespace ModsDude.Client.Wpf.Mods.Imaging;
 
 /// <inheritdoc cref="IModImageProvider"/>
 public class ModImageProvider(
-    ModImageCache cache,
+    IModImageCache cache,
     ILogger<ModImageProvider> logger,
     IBackgroundProblemReporter problems)
     : IModImageProvider, IDisposable

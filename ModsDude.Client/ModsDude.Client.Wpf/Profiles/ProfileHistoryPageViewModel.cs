@@ -39,7 +39,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly ProfileService _profileService;
+    private readonly IProfileService _profileService;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -72,7 +72,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     public ProfileHistoryPageViewModel(
         Repo repo,
         ProfileDto profile,
-        ProfileService profileService,
+        IProfileService profileService,
         ModListItemViewModel.Factory itemFactory,
         IModalService modalService,
         IErrorReporter errorReporter,

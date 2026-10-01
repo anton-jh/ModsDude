@@ -16,7 +16,7 @@ public partial class ConnectGamePageViewModel
     : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly GameRepository _gameRepository;
+    private readonly IGameRepository _gameRepository;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly bool _alreadyConnected;
@@ -24,7 +24,7 @@ public partial class ConnectGamePageViewModel
 
     public ConnectGamePageViewModel(
         Repo repo,
-        GameRepository gameRepository,
+        IGameRepository gameRepository,
         IFilePickerService filePickerService,
         NavigationLockService navigationLockService,
         IModalService modalService)

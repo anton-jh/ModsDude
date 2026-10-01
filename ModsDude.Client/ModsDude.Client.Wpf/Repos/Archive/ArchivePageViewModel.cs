@@ -26,7 +26,7 @@ namespace ModsDude.Client.Wpf.Repos.Archive;
 /// </remarks>
 public partial class ArchivePageViewModel : PageViewModel
 {
-    private readonly RepoRepository _repoRepository;
+    private readonly IRepoRepository _repoRepository;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IToastService _toasts;
@@ -37,7 +37,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
 
     public ArchivePageViewModel(
-        RepoRepository repoRepository,
+        IRepoRepository repoRepository,
         IModalService modalService,
         IErrorReporter errorReporter,
         IToastService toasts)

@@ -25,8 +25,8 @@ namespace ModsDude.Client.Wpf.Shell;
 public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
-    private readonly RepoRepository _repoService;
-    private readonly LastSelectionRepository _lastSelectionRepository;
+    private readonly IRepoRepository _repoService;
+    private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
     private readonly ShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
@@ -57,15 +57,15 @@ public partial class MainPageViewModel
     private readonly MenuItemViewModel _welcomeMenuItem;
 
     private readonly ProfileSyncStatusService _syncStatus;
-    private readonly ConnectionRetry _connection;
+    private readonly IConnectionRetry _connection;
     private readonly CancellationTokenSource _disposed = new();
 
     private bool _selectionRestored;
 
 
     public MainPageViewModel(
-        RepoRepository repoService,
-        LastSelectionRepository lastSelectionRepository,
+        IRepoRepository repoService,
+        ILastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         JoinRepoPageViewModel.Factory joinRepoPageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
@@ -78,7 +78,7 @@ public partial class MainPageViewModel
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
         ProfileSyncStatusService syncStatus,
-        ConnectionRetry connection)
+        IConnectionRetry connection)
     {
         Account = account;
         _syncStatus = syncStatus;

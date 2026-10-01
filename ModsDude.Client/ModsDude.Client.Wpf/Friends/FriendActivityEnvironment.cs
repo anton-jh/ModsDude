@@ -13,8 +13,8 @@ namespace ModsDude.Client.Wpf.Friends;
 /// shell already holds. Thin for the reason <see cref="NoticeEnvironment"/> is.
 /// </summary>
 public sealed class FriendActivityEnvironment(
-    RepoRepository repoRepository,
-    GameRepository gameRepository,
+    IRepoRepository repoRepository,
+    IGameRepository gameRepository,
     IHeldSavegames heldSavegames)
     : IFriendActivityEnvironment
 {

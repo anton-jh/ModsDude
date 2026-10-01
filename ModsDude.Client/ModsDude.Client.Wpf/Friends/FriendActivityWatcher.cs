@@ -21,8 +21,8 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </para>
 /// </remarks>
 public sealed class FriendActivityWatcher(
-    FriendActivityService friends,
-    RepoRepository repoRepository,
+    IFriendActivityService friends,
+    IRepoRepository repoRepository,
     ILogger<FriendActivityWatcher> logger)
     : IFriendActivityWatcher
 {

@@ -24,9 +24,9 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </para>
 /// </remarks>
 public sealed class SavegameClaimWatcher(
-    SavegameClaimWatch watch,
-    DriftMonitor monitor,
-    RepoRepository repoRepository,
+    ISavegameClaimWatch watch,
+    IDriftMonitor monitor,
+    IRepoRepository repoRepository,
     ILogger<SavegameClaimWatcher> logger)
     : ISavegameClaimWatcher
 {

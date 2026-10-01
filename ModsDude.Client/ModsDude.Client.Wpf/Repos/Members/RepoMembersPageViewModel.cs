@@ -23,10 +23,10 @@ namespace ModsDude.Client.Wpf.Repos.Members;
 public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly MembershipService _membershipService;
-    private readonly InviteService _inviteService;
-    private readonly RepoRepository _repoRepository;
-    private readonly CurrentUserService _currentUserService;
+    private readonly IMembershipService _membershipService;
+    private readonly IInviteService _inviteService;
+    private readonly IRepoRepository _repoRepository;
+    private readonly ICurrentUserService _currentUserService;
     private readonly NavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -39,10 +39,10 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
     public RepoMembersPageViewModel(
         Repo repo,
-        MembershipService membershipService,
-        InviteService inviteService,
-        RepoRepository repoRepository,
-        CurrentUserService currentUserService,
+        IMembershipService membershipService,
+        IInviteService inviteService,
+        IRepoRepository repoRepository,
+        ICurrentUserService currentUserService,
         NavigationLockService navigationLockService,
         IModalService modalService,
         IErrorReporter errorReporter,

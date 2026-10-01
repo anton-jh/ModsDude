@@ -37,11 +37,11 @@ public sealed class ToastNotifier(
     NoticeCenterViewModel notices,
     ToastCenterViewModel appToasts,
     INoticeEnvironment environment,
-    ClientSettingsRepository settings,
-    FriendActivityService friends,
+    IClientSettingsRepository settings,
+    IFriendActivityService friends,
     IFriendActivityEnvironment friendEnvironment,
-    DriftMonitor monitor,
-    PlaySessionWatch sessions,
+    IDriftMonitor monitor,
+    IPlaySessionWatch sessions,
     ISystemToasts system)
     : IToastNotifier
 {

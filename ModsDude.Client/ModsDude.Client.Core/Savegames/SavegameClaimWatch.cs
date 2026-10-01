@@ -25,19 +25,12 @@ namespace ModsDude.Client.Core.Savegames;
 /// </remarks>
 public sealed class SavegameClaimWatch(
     IDriftCandidateSource games,
-    SavegameBindingStore bindings,
+    ISavegameBindingStore bindings,
     ISavegamesClient savegamesClient,
-    CurrentUserService currentUserService,
-    SavegameSightingCache sightings,
-    ILogger<SavegameClaimWatch> logger)
+    ICurrentUserService currentUserService,
+    ISavegameSightingCache sightings,
+    ILogger<SavegameClaimWatch> logger) : ISavegameClaimWatch
 {
-    /// <summary>
-    /// Reads the lists and records what they say.
-    /// </summary>
-    /// <returns>
-    /// Whether anything the drift check reads about a held save - its head or its claim - changed, so
-    /// the caller knows whether the notice's answer is now stale.
-    /// </returns>
     public async Task<bool> RefreshAsync(CancellationToken ct)
     {
         var held = games.GetDriftCandidates()

@@ -40,12 +40,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly RepoOverviewLinks _links;
-    private readonly ProfileService _profileService;
-    private readonly MembershipService _membershipService;
-    private readonly DriftMonitor _driftMonitor;
+    private readonly IProfileService _profileService;
+    private readonly IMembershipService _membershipService;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameService _savegameService;
-    private readonly SavegameBindingStore _bindingStore;
-    private readonly GameRepository _gameRepository;
+    private readonly ISavegameBindingStore _bindingStore;
+    private readonly IGameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IToastService _toasts;
     private readonly IModalService _modalService;
@@ -57,12 +57,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     public RepoOverviewPageViewModel(
         Repo repo,
         RepoOverviewLinks links,
-        ProfileService profileService,
-        MembershipService membershipService,
-        DriftMonitor driftMonitor,
+        IProfileService profileService,
+        IMembershipService membershipService,
+        IDriftMonitor driftMonitor,
         ISavegameService savegameService,
-        SavegameBindingStore bindingStore,
-        GameRepository gameRepository,
+        ISavegameBindingStore bindingStore,
+        IGameRepository gameRepository,
         ProfileApplyService applyService,
         IToastService toasts,
         IModalService modalService,

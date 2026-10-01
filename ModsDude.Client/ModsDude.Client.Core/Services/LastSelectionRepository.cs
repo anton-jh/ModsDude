@@ -12,7 +12,7 @@ namespace ModsDude.Client.Core.Services;
 /// the one the user was on there.
 /// </remarks>
 public class LastSelectionRepository(
-    StateStore store)
+    IStateStore store) : ILastSelectionRepository
 {
     /// <summary>
     /// Enough to cover the repos and profiles anybody keeps in rotation. The list is rewritten on

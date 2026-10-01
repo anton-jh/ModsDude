@@ -13,7 +13,7 @@ namespace ModsDude.Client.Core.Services;
 /// </remarks>
 public class MembershipService(
     IReposClient reposClient,
-    IMembersClient membersClient)
+    IMembersClient membersClient) : IMembershipService
 {
     public async Task<IReadOnlyList<RepoMemberDto>> GetMembers(Guid repoId, CancellationToken cancellationToken)
     {

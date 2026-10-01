@@ -12,7 +12,7 @@ namespace ModsDude.Client.Core.Services;
 /// </remarks>
 public class InviteService(
     IInvitesClient invitesClient,
-    RepoRepository repoRepository)
+    IRepoRepository repoRepository) : IInviteService
 {
     public async Task<IReadOnlyList<RepoInviteDto>> GetInvites(Guid repoId, CancellationToken cancellationToken)
     {
@@ -65,14 +65,6 @@ public class InviteService(
         }
     }
 
-    /// <summary>
-    /// Joins the repo the code belongs to and puts it in the shell's list, so the caller can navigate
-    /// straight to it.
-    /// </summary>
-    /// <remarks>
-    /// Redeeming a code for a repo the user is already in is not an error and does not spend a use;
-    /// the server hands back the membership they already had, and this returns it like any other.
-    /// </remarks>
     public async Task<RepoMembershipDto> RedeemInvite(string code, CancellationToken cancellationToken)
     {
         var request = new RedeemInviteRequest() { Code = code };

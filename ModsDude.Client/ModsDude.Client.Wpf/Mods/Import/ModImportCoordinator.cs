@@ -56,8 +56,8 @@ public sealed record ModImportOutcome(ModImportResult? Result, string? Refusal)
 /// </para>
 /// </remarks>
 public sealed class ModImportCoordinator(
-    ModImportService importService,
-    ContentStoreMaintenance maintenance,
+    IModImportService importService,
+    IContentStoreMaintenance maintenance,
     Lazy<IModalService> modalService,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases)

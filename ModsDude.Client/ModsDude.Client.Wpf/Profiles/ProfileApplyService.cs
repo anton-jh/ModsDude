@@ -159,13 +159,13 @@ public sealed record PlanAttempt(IReadOnlyList<ModSyncPlan> Plans, IReadOnlyList
 /// </remarks>
 public sealed class ProfileApplyService(
     IModSyncService syncService,
-    GameRepository games,
+    IGameRepository games,
     IHeldSavegames heldSavegames,
     Lazy<IModalService> modalService,
     IFilePickerService filePicker,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases,
-    GameActivityReporter activity)
+    IGameActivityReporter activity)
 {
     /// <summary>
     /// The folder the user last chose to keep unrecognised files in, so the second apply of a session

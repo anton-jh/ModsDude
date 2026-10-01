@@ -40,12 +40,12 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly ProfileDto _profile;
-    private readonly ProfileService _profileService;
+    private readonly IProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly CurrentUserService _currentUserService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly SavegameFlowService _flowService;
     private readonly ShellNavigationService _navigation;
-    private readonly DriftMonitor _driftMonitor;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly ILogger<ProfileOverviewPageViewModel> _logger;
 
     private readonly CancellationTokenSource _pageLifetime = new();
@@ -68,12 +68,12 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     public ProfileOverviewPageViewModel(
         Repo repo,
         ProfileDto profile,
-        ProfileService profileService,
+        IProfileService profileService,
         ISavegamesClient savegamesClient,
-        CurrentUserService currentUserService,
+        ICurrentUserService currentUserService,
         SavegameFlowService flowService,
         ShellNavigationService navigation,
-        DriftMonitor driftMonitor,
+        IDriftMonitor driftMonitor,
         ILogger<ProfileOverviewPageViewModel> logger)
     {
         _repo = repo;

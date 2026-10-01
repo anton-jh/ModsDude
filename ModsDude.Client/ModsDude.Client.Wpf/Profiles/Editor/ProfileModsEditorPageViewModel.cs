@@ -52,10 +52,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly NavigationLockService _navigationLock;
-    private readonly GameRepository _gameRepository;
+    private readonly IGameRepository _gameRepository;
     private readonly ProfileApplyService _applyService;
     private readonly IModSyncService _syncService;
-    private readonly DriftMonitor _driftMonitor;
+    private readonly IDriftMonitor _driftMonitor;
     private readonly NoticeCenterViewModel _notices;
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
@@ -94,10 +94,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         IFilePickerService filePickerService,
         NavigationLockService navigationLock,
-        GameRepository gameRepository,
+        IGameRepository gameRepository,
         ProfileApplyService applyService,
         IModSyncService syncService,
-        DriftMonitor driftMonitor,
+        IDriftMonitor driftMonitor,
         NoticeCenterViewModel notices,
         IResourceLeases leases,
         IToastService toasts)

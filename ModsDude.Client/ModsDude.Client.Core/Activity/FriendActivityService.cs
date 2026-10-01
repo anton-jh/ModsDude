@@ -28,9 +28,9 @@ namespace ModsDude.Client.Core.Activity;
 /// </remarks>
 public sealed class FriendActivityService(
     IActivityClient activityClient,
-    CurrentUserService currentUserService,
+    ICurrentUserService currentUserService,
     IFriendActivitySeen seen)
-    : IUserScopedState
+    : IFriendActivityService
 {
     private readonly Lock _lock = new();
 
@@ -41,17 +41,11 @@ public sealed class FriendActivityService(
     private Task? _refreshing;
 
 
-    /// <summary>Raised after every read that landed, on whichever thread it completed.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>
-    /// Raised with the rows that changed since the last time this fired. Once per change, never
-    /// again for the same one.
-    /// </summary>
     public event EventHandler<IReadOnlyList<GameActivityDto>>? Announced;
 
 
-    /// <summary>Every friend's game in the last week, most recently active first.</summary>
     public IReadOnlyList<GameActivityDto> Rows
     {
         get
@@ -63,10 +57,8 @@ public sealed class FriendActivityService(
         }
     }
 
-    /// <summary>Whether anything has been read yet, so a page can tell "nobody" from "not asked".</summary>
     public bool HasLoaded { get; private set; }
 
-    /// <summary>The rows that changed since this session began.</summary>
     public IReadOnlyList<GameActivityDto> News
     {
         get
@@ -81,9 +73,6 @@ public sealed class FriendActivityService(
     }
 
 
-    /// <summary>
-    /// Reads the list again. Calls that arrive while one is in flight share it.
-    /// </summary>
     public Task RefreshAsync(CancellationToken cancellationToken)
     {
         lock (_lock)

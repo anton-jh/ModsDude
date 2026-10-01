@@ -45,11 +45,11 @@ public sealed record PlayedSavegame(
 /// </remarks>
 public sealed class PlaySessionWatch(
     IDriftCandidateSource games,
-    SavegameBindingStore bindings,
+    ISavegameBindingStore bindings,
     IHeldSavegames held,
     IGameProcessNames processNames,
     IGameProcesses processes,
-    ILogger<PlaySessionWatch> logger)
+    ILogger<PlaySessionWatch> logger) : IPlaySessionWatch
 {
     private readonly Lock _lock = new();
 
@@ -59,14 +59,9 @@ public sealed class PlaySessionWatch(
     private bool _polledBefore;
 
 
-    /// <summary>
-    /// Raised by <see cref="PollAsync"/>, on the thread that called it, for a session that ended with
-    /// at least one checked-out savegame played in it.
-    /// </summary>
     public event EventHandler<IReadOnlyList<PlayedSavegame>>? Played;
 
 
-    /// <summary>Whether the game was running at the last poll.</summary>
     public bool IsRunning(GameIdentity game)
     {
         lock (_lock)
@@ -75,10 +70,6 @@ public sealed class PlaySessionWatch(
         }
     }
 
-    /// <summary>
-    /// Looks at which games are running now, and reports the checked-out savegames played in every
-    /// session that has ended since the last look.
-    /// </summary>
     public async Task<IReadOnlyList<PlayedSavegame>> PollAsync(CancellationToken ct)
     {
         var played = new List<PlayedSavegame>();

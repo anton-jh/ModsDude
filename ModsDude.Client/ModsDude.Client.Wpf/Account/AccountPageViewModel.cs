@@ -26,7 +26,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     /// <summary>The server's limit, repeated so the field can say so before the server has to.</summary>
     public const int MaximumNameLength = 32;
 
-    private readonly UserAccountService _userAccountService;
+    private readonly IUserAccountService _userAccountService;
     private readonly AuthenticationService _authenticationService;
     private readonly IFilePickerService _filePickerService;
     private readonly IToastService _toasts;
@@ -35,7 +35,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
     public AccountPageViewModel(
         AccountViewModel account,
-        UserAccountService userAccountService,
+        IUserAccountService userAccountService,
         AuthenticationService authenticationService,
         IFilePickerService filePickerService,
         IToastService toasts,

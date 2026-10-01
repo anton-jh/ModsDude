@@ -16,10 +16,10 @@ namespace ModsDude.Client.Wpf.Repos;
 /// </remarks>
 public partial class JoinRepoPageViewModel : PageViewModel
 {
-    private readonly InviteService _inviteService;
+    private readonly IInviteService _inviteService;
 
 
-    public JoinRepoPageViewModel(InviteService inviteService)
+    public JoinRepoPageViewModel(IInviteService inviteService)
     {
         _inviteService = inviteService;
     }

@@ -27,7 +27,7 @@ public sealed class ModSyncService(
     IFilesClient filesClient,
     IModFileDownloader downloader,
     IContentStoreProvider storeProvider,
-    SyncManifestStore manifestStore,
+    ISyncManifestStore manifestStore,
     IRecycleBin recycleBin,
     IModFolders modFolders,
     IHeldSavegames heldSavegames,

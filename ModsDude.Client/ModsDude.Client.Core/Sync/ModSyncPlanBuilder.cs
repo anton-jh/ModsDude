@@ -16,7 +16,7 @@ internal sealed class ModSyncPlanBuilder(
     IModDependenciesClient modDependenciesClient,
     IModsClient modsClient,
     IContentStoreProvider storeProvider,
-    SyncManifestStore manifestStore,
+    ISyncManifestStore manifestStore,
     IHeldSavegames heldSavegames,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,

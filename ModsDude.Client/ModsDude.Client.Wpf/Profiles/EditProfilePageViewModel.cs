@@ -12,7 +12,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class EditProfilePageViewModel(
     Repo repo,
     ProfileDto profile,
-    ProfileService profileService,
+    IProfileService profileService,
     NavigationLockService navigationLockService,
     IModalService modalService)
     : PageViewModel, IDisposable

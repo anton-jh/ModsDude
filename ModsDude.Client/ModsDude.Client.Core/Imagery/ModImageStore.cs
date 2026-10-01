@@ -22,7 +22,7 @@ public interface IModImageStore
 /// <inheritdoc cref="IModImageStore"/>
 public class ModImageStore(
     IImagesClient imagesClient,
-    ModImageCache cache)
+    IModImageCache cache)
     : IModImageStore
 {
     /// <summary>

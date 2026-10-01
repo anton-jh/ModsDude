@@ -14,21 +14,13 @@ namespace ModsDude.Client.Core.Services;
 public class UserAccountService(
     IUsersClient usersClient,
     IImagesClient imagesClient,
-    IModImageStore imageStore)
+    IModImageStore imageStore) : IUserAccountService
 {
     public Task<CurrentUserDto> SetDisplayName(string displayName, CancellationToken cancellationToken)
     {
         return usersClient.SetDisplayNameV1Async(new SetDisplayNameRequest { DisplayName = displayName }, cancellationToken);
     }
 
-    /// <summary>
-    /// Stores <paramref name="picture"/> at its own address, unless something already is, and makes
-    /// it this user's.
-    /// </summary>
-    /// <param name="picture">
-    /// Already cropped, sized and encoded the way it is to be drawn - the server stores what it is
-    /// given and has no image stack to make it so.
-    /// </param>
     public async Task<CurrentUserDto> SetAvatar(byte[] picture, string contentType, CancellationToken cancellationToken)
     {
         var hash = ModImageHashing.Compute(picture);

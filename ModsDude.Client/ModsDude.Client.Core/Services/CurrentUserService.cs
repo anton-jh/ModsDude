@@ -12,7 +12,7 @@ namespace ModsDude.Client.Core.Services;
 /// the shell can close that option with an explanation instead of letting a form be filled in and
 /// refused.
 /// </remarks>
-public class CurrentUserService(IUsersClient usersClient)
+public class CurrentUserService(IUsersClient usersClient) : ICurrentUserService
 {
     public virtual Task<CurrentUserDto> Get(CancellationToken cancellationToken)
     {

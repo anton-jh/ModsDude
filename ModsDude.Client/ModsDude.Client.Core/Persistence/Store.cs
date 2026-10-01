@@ -28,10 +28,6 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
     private ILogger Log { get; } = logger ?? NullLogger.Instance;
 
 
-    /// <summary>
-    /// Reads under the lock. What <paramref name="read"/> returns must not be a live collection of
-    /// the state - copy it - or it can be changed while the caller enumerates it.
-    /// </summary>
     public TResult Read<TResult>(Func<T, TResult> read)
     {
         lock (_lock)
@@ -40,7 +36,6 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
         }
     }
 
-    /// <summary>Changes the state and writes it, under the lock.</summary>
     public void Update(Action<T> update)
     {
         lock (_lock)
@@ -50,8 +45,6 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
         }
     }
 
-    /// <summary>Changes the state, and writes it only where <paramref name="update"/> says it changed.</summary>
-    /// <returns>What <paramref name="update"/> returned.</returns>
     public bool UpdateIf(Func<T, bool> update)
     {
         lock (_lock)

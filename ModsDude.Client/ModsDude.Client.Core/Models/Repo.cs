@@ -12,8 +12,8 @@ namespace ModsDude.Client.Core.Models;
 public class Repo
     : INotifyPropertyChanged, IDisposable
 {
-    private readonly RepoRepository _repoService;
-    private readonly GameRepository _gameRepository;
+    private readonly IRepoRepository _repoService;
+    private readonly IGameRepository _gameRepository;
 
     private ObservableCollectionSynchronizer<Game, Game, string> _gamesSynchronizer;
 
@@ -21,8 +21,8 @@ public class Repo
     public Repo(
         RepoMembershipDto repoMembershipDto,
         IGameAdapterIndex gameAdapterIndex,
-        RepoRepository repoService,
-        GameRepository gameRepository)
+        IRepoRepository repoService,
+        IGameRepository gameRepository)
     {
         Adapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembershipDto.Repo.AdapterId)).WithBaseSettings(repoMembershipDto.Repo.AdapterConfiguration);
         _repoService = repoService;

@@ -24,23 +24,15 @@ namespace ModsDude.Client.Core.Notices;
 /// again rather than being silenced by a dismissal nobody remembers making.
 /// </para>
 /// </remarks>
-public sealed class DismissalLedger
+public sealed class DismissalLedger : IDismissalLedger
 {
     private readonly Lock _lock = new();
     private readonly Dictionary<string, string> _dismissed = [];
 
 
-    /// <summary>Raised when something here changed, so the shell can redraw without re-checking.</summary>
     public event EventHandler? Changed;
 
 
-    /// <summary>
-    /// Whether this notice, saying exactly this, has been waved away.
-    /// </summary>
-    /// <param name="signature">
-    /// What it says now. A dismissal recorded against a different one does not count, which is how a
-    /// third stray mod under a dismissed notice brings it straight back.
-    /// </param>
     public bool IsDismissed(string key, string signature)
     {
         lock (_lock)
@@ -61,10 +53,6 @@ public sealed class DismissalLedger
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Everything currently showing, in one gesture. The column's own button, for the morning after
-    /// an update-all that touched every game on the machine.
-    /// </summary>
     public void DismissAll(IEnumerable<Notice> notices)
     {
         lock (_lock)
@@ -78,14 +66,6 @@ public sealed class DismissalLedger
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Forgets every dismissal whose notice is no longer being raised.
-    /// </summary>
-    /// <remarks>
-    /// Called with the keys of a fresh build, before the dismissals are applied to it. A problem that
-    /// was waved away and then actually fixed leaves no entry behind, so the same problem occurring
-    /// again next week is announced rather than swallowed by a dismissal from a previous evening.
-    /// </remarks>
     public void Retain(IEnumerable<string> liveKeys)
     {
         var live = liveKeys as IReadOnlySet<string> ?? liveKeys.ToHashSet(StringComparer.Ordinal);
@@ -99,7 +79,6 @@ public sealed class DismissalLedger
         }
     }
 
-    /// <summary>Signing out, or switching accounts: none of it is this user's any more.</summary>
     public void Clear()
     {
         lock (_lock)
