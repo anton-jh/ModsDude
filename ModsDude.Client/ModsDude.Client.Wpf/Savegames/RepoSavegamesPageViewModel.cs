@@ -51,7 +51,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly IProfileService _profileService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDriftMonitor _driftMonitor;
-    private readonly ISavegameFlowService _flowService;
+    private readonly ISavegameOffers _offers;
+    private readonly ILockedPinDrift _lockedPinDrift;
+    private readonly ISavegameCheckInFlow _checkInFlow;
+    private readonly ISavegameCheckOutFlow _checkOutFlow;
+    private readonly ISavegamePublishFlow _publishFlow;
+    private readonly ISavegameDisconnectFlow _disconnectFlow;
     private readonly IShellNavigationService _shellNavigation;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -78,7 +83,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         IProfileService profileService,
         ICurrentUserService currentUserService,
         IDriftMonitor driftMonitor,
-        ISavegameFlowService flowService,
+        ISavegameOffers offers,
+        ILockedPinDrift lockedPinDrift,
+        ISavegameCheckInFlow checkInFlow,
+        ISavegameCheckOutFlow checkOutFlow,
+        ISavegamePublishFlow publishFlow,
+        ISavegameDisconnectFlow disconnectFlow,
         IShellNavigationService shellNavigation,
         IModalService modalService,
         IErrorReporter errorReporter,
@@ -100,7 +110,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _profileService = profileService;
         _currentUserService = currentUserService;
         _driftMonitor = driftMonitor;
-        _flowService = flowService;
+        _offers = offers;
+        _lockedPinDrift = lockedPinDrift;
+        _checkInFlow = checkInFlow;
+        _checkOutFlow = checkOutFlow;
+        _publishFlow = publishFlow;
+        _disconnectFlow = disconnectFlow;
         _shellNavigation = shellNavigation;
         _modalService = modalService;
         _errorReporter = errorReporter;
@@ -393,20 +408,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     }
 
     /// <summary>
-    /// Makes a savegame out of a save that is already on this disk.
+    /// Makes a savegame out of a save that is already on this disk. Here so a repo's first savegame
+    /// can be made from the list that is empty and saying so.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Here rather than on the game's own slot list</b>, which is where it used to be a button on
-    /// a row. Publishing is the way a repo's first savegame comes into existence, so it has to be
-    /// reachable from the list that is empty and saying so - and under one game per machine there is
-    /// no sidebar of installations to go looking through for it.
-    /// </para>
-    /// <para>
-    /// <b>The flow is <see cref="SavegameFlowService.PublishAsync"/>'s</b>, because a profile's Overview
-    /// offers the same publish, opened on that profile.
-    /// </para>
-    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private async Task PublishSave()
     {
@@ -414,7 +418,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         try
         {
-            await _flowService.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id), _lifetime);
+            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id), _lifetime);
         }
         finally
         {
@@ -702,7 +706,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // One read of the game's folder state for the whole list, rather than one per row: a
         // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
         // parses of it.
-        var host = _flowService.ReadHost(_repo);
+        var host = _offers.ReadHost(_repo);
 
         foreach (var savegame in InListOrder(shown))
         {
@@ -721,7 +725,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // this same list.
         foreach (var row in Savegames)
         {
-            _flowService.Offer(_repo, row, host, NameOfHeld);
+            _offers.Offer(_repo, row, host, NameOfHeld);
         }
 
         IsEmpty = Savegames.Count == 0;
@@ -836,7 +840,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
             if (row.Savegame.Head is not SavegameSnapshotDto head ||
                 head.ProfileRevision is not int played ||
-                FindProfile(row.Savegame.ProfileId) is not ProfileDto profile)
+                _profileService.FindLive(_repo.Id, row.Savegame.ProfileId) is not ProfileDto profile)
             {
                 continue;
             }
@@ -850,7 +854,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
             row.SetRevisionDrift(
                 behind,
-                await _flowService.LockedPinMovedAsync(_repo.Id, profile.Id, played, profile.HeadRevision, _lifetime));
+                await _lockedPinDrift.HasMovedAsync(_repo.Id, profile.Id, played, profile.HeadRevision, _lifetime));
         }
     }
 
@@ -963,7 +967,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// </remarks>
     Task ISavegameRowActions.CheckInAsync(SavegameListItemViewModel row)
         => row.HeldHere is Game game
-            ? RunAsync("checking a savegame in", () => _flowService.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime))
+            ? RunAsync("checking a savegame in", () => _checkInFlow.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime))
             : Task.CompletedTask;
 
     /// <summary>
@@ -987,7 +991,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             // The savegame's name where the modal wants a slot label, as the check-in does: a slot
             // id is a folder name the player has never thought in, and what they are giving back is
             // the save rather than the folder.
-            if (await _flowService.DiscardAsync(hold.Game, row.Id, row.Name, row.Name, played, _lifetime) is false)
+            if (await _checkInFlow.DiscardAsync(hold.Game, row.Id, row.Name, row.Name, played, _lifetime) is false)
             {
                 return;
             }
@@ -1015,7 +1019,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         return RunAsync("disconnecting a savegame", async () =>
         {
-            if (await _flowService.DisconnectAsync(hold.Game, row.Id, row.Name, hold.FolderName) is false)
+            if (await _disconnectFlow.DisconnectAsync(hold.Game, row.Id, row.Name, hold.FolderName) is false)
             {
                 return;
             }
@@ -1123,24 +1127,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         return $"'{incumbent.Name}' is {row.ProfileName}'s current savegame. This swaps them: {moves} '{incumbent.Name}' becomes past - {stays}.";
     }
 
-    /// <summary>
-    /// The check-out modal and everything after it, which is <see cref="SavegameFlowService.CheckOutAsync"/>'s
-    /// - a profile's Overview offers the same check-out for its own savegame.
-    /// </summary>
     private Task StartAsync(SavegameListItemViewModel row, int snapshotNumber, SavegameCheckOutMode mode)
-        => RunAsync("checking a savegame out", () => _flowService.CheckOutAsync(
+        => RunAsync("checking a savegame out", () => _checkOutFlow.CheckOutAsync(
             _repo, row.Savegame, snapshotNumber, mode, _currentUserId, NameOfHeld, () => ReloadAsync(row.Id), _lifetime));
-
-    /// <summary>
-    /// The profile a savegame follows, or <c>null</c> where it follows none - or follows an archived
-    /// one, which the repo's live profile list does not hold. The caller says nothing about head
-    /// revisions on that row either way. Not where a row's profile name comes from: see
-    /// <see cref="SavegameWording.ProfileOf"/>.
-    /// </summary>
-    private ProfileDto? FindProfile(Guid? profileId)
-        => profileId is Guid id
-            ? _profileService.Profiles.FirstOrDefault(x => x.Id == id && x.RepoId == _repo.Id)
-            : null;
 
 
     public class Factory(IServiceProvider serviceProvider)

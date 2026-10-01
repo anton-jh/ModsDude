@@ -1,12 +1,12 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Savegames;
 using System.Text;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
 /// <summary>
-/// How a slot is described where there is room for all of it. Shared by the two pickers - check-out
-/// and publish - which show the same slots and must not describe them two different ways.
+/// How a slot is described, shared by every savegame modal and toast so they describe it one way.
 /// </summary>
 internal static class SavegameSlotWording
 {
@@ -16,6 +16,35 @@ internal static class SavegameSlotWording
     /// </summary>
     public const int DetailsOnTheRow = 3;
 
+
+    /// <summary>
+    /// How a slot is named in a sentence: by its number where the game has them, and always by the save it
+    /// holds. <c>slot 4 ('Zielonka')</c>, or just <c>'Zielonka'</c> for a game whose slots are not numbered.
+    /// </summary>
+    public static string Named(int? number, string label)
+        => number is int slot ? $"slot {slot} ('{label}')" : $"'{label}'";
+
+    public static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
+
+    /// <summary>
+    /// What a hand-back says where the claim went back but the slot would not go to the Recycle Bin.
+    /// Suggesting deletion is safe: nothing is handed back until the bytes are on the server.
+    /// </summary>
+    public static string LeftBehind(string slot)
+        => $"Your copy could not be moved to the Recycle Bin, so it is still in {slot} - an ordinary save ModsDude " +
+           "no longer tracks. Delete it yourself, or keep it as a save of your own.";
+
+    /// <summary>What a hand-back says where the slot was not recycled, or null where it was.</summary>
+    public static string? NotRecycled(SavegameLocalCopy localCopy, string slot) => localCopy switch
+    {
+        SavegameLocalCopy.LeftBehind => LeftBehind(slot),
+
+        SavegameLocalCopy.ChangedSinceUpload =>
+            $"{Capitalised(slot)} changed after it was uploaded - the game may have saved again - so it was left where it is " +
+            "rather than recycled. That change is not in the snapshot; the copy is now an ordinary save ModsDude no longer tracks.",
+
+        _ => null
+    };
 
     /// <summary>
     /// Everything about a slot, for the tooltip: what the save is called, every detail the adapter
@@ -32,13 +61,6 @@ internal static class SavegameSlotWording
     /// choosing where a save goes is a worse answer than "savegame1" - which is what the game itself
     /// calls that folder, and is the one thing here they can go and look at.
     /// </remarks>
-    /// <summary>
-    /// How a slot is named in a sentence: by its number where the game has them, and always by the save it
-    /// holds. <c>slot 4 ('Zielonka')</c>, or just <c>'Zielonka'</c> for a game whose slots are not numbered.
-    /// </summary>
-    public static string Named(int? number, string label)
-        => number is int slot ? $"slot {slot} ('{label}')" : $"'{label}'";
-
     public static string DescribeFully(
         string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetail> details, int? number = null)
     {

@@ -137,6 +137,25 @@ public class ProfileServiceTests
     }
 
 
+    [Fact]
+    public void A_held_profile_is_found_by_its_repo_and_id()
+    {
+        var service = ServiceWithProfileAtRevision(4);
+
+        Assert.Equal(_profileId, service.FindLive(_repoId, _profileId)?.Id);
+    }
+
+    [Fact]
+    public void A_profile_is_not_found_under_another_repo_nor_without_an_id()
+    {
+        var service = ServiceWithProfileAtRevision(4);
+
+        Assert.Null(service.FindLive(Guid.NewGuid(), _profileId));
+        Assert.Null(service.FindLive(_repoId, null));
+        Assert.Null(service.FindLive(_repoId, Guid.NewGuid()));
+    }
+
+
     private static ProfileDto Profile(string name, int head)
     {
         return new ProfileDto

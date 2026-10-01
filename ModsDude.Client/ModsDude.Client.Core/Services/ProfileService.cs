@@ -29,6 +29,11 @@ public class ProfileService(
     public event EventHandler? PendingChangesChanged;
 
 
+    public ProfileDto? FindLive(Guid repoId, Guid? profileId)
+        => profileId is Guid id
+            ? Profiles.FirstOrDefault(x => x.Id == id && x.RepoId == repoId)
+            : null;
+
     public async Task CheckForChanges(CancellationToken cancellationToken)
     {
         if (HeldRepoId is not Guid repoId)

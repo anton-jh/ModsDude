@@ -587,9 +587,14 @@ public partial class App : Application
         // registering the files and never writing the revision.
         services.AddSingleton<IProfileSaveService, ProfileSaveService>();
 
-        // Check-in is reached from a slot row and from the check-out modal's way out of a refused
-        // slot, so the ask-send-resolve-a-stale-base sequence lives in one object rather than two.
-        services.AddSingleton<ISavegameFlowService, SavegameFlowService>();
+        // The savegame verbs, shared by the Saves list and a profile's Overview.
+        services.AddSingleton<ISavegameOffers, SavegameOffers>();
+        services.AddSingleton<ISavegameCheckInFlow, SavegameCheckInFlow>();
+        services.AddSingleton<ISavegameDisconnectFlow, SavegameDisconnectFlow>();
+        services.AddSingleton<ISavegameProfileActivation, SavegameProfileActivation>();
+        services.AddSingleton<ISavegameCheckOutContextBuilder, SavegameCheckOutContextBuilder>();
+        services.AddSingleton<ISavegameCheckOutFlow, SavegameCheckOutFlow>();
+        services.AddSingleton<ISavegamePublishFlow, SavegamePublishFlow>();
 
         // The column on the right and the two things it is built from: what the notices are allowed
         // to ask the running app, and what the user has waved away.
@@ -676,6 +681,7 @@ public partial class App : Application
         // profile it has loaded is on. It answers null for every other repo, which is why the check
         // still works before anything has been loaded at all.
         services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileService>());
+        services.AddSingleton<IProfileRevisionComparer>(sp => sp.GetRequiredService<IProfileService>());
 
         // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
         // page, or the claim watch reading the lists of whatever this machine holds. Registered under

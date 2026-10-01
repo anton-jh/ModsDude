@@ -133,10 +133,8 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
     public string Title => "Publish this save";
 
-    private static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
-
     public string Message =>
-        $"{Capitalised(SavegameSlotWording.Named(SlotNumber, SlotLabel))} is uploaded to {RepoName} as a savegame of its own.";
+        $"{SavegameSlotWording.Capitalised(SavegameSlotWording.Named(SlotNumber, SlotLabel))} is uploaded to {RepoName} as a savegame of its own.";
 
 
     [ObservableProperty]

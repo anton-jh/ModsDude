@@ -7,7 +7,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 
-public interface IProfileService : IUserScopedState, IProfileRevisions
+public interface IProfileService : IUserScopedState, IProfileRevisions, IProfileRevisionComparer
 {
     /// <summary>Raised for a profile that did not exist a moment ago, so the shell can navigate to it.</summary>
     event Action<Guid>? ProfileCreated;
@@ -21,6 +21,12 @@ public interface IProfileService : IUserScopedState, IProfileRevisions
     event Action<Guid>? ProfileUpdated;
 
     ObservableCollection<ProfileDto> Profiles { get; }
+
+    /// <summary>
+    /// The profile in <see cref="Profiles"/> with this id in this repo, or null where there is none -
+    /// including an archived one, which <see cref="Profiles"/> does not hold.
+    /// </summary>
+    ProfileDto? FindLive(Guid repoId, Guid? profileId);
 
     /// <summary>
     /// Which repo <see cref="Profiles"/> was last refreshed for, or null before the first refresh.
@@ -158,16 +164,4 @@ public interface IProfileService : IUserScopedState, IProfileRevisions
     /// to one.
     /// </param>
     Task<IReadOnlyList<PinnedMod>> GetPinnedMods(Guid repoId, Guid profileId, int? revision, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// What changed between two revisions of a profile, mod by mod.
-    /// </summary>
-    /// <remarks>
-    /// Two dependency reads and <b>one</b> walk of the registered mod list, which is why this is a
-    /// method rather than two calls to <see cref="GetPinnedMods"/>: the catalog walk is the
-    /// expensive half, and doing it twice to compare two lists of the same repo's mods would be
-    /// paying for the same answer again.
-    /// </remarks>
-    Task<ProfileRevisionComparison> CompareRevisions(
-        Guid repoId, Guid profileId, int from, int to, CancellationToken cancellationToken);
 }

@@ -32,8 +32,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// <para>
 /// <b>But the current one can be acted on here.</b> Publish, check in and check out are the three
 /// things somebody does with the savegame a profile is following, and they are the Saves list's own
-/// flows - <see cref="SavegameFlowService"/> - with the current savegame's row rules deciding what is
-/// enabled, so the two pages cannot come to disagree about when a check-out is allowed.
+/// flows, with the current savegame's row rules deciding what is enabled, so the two pages cannot come to disagree about when a check-out is allowed.
 /// </para>
 /// </remarks>
 public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
@@ -43,7 +42,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly IProfileService _profileService;
     private readonly ISavegamesClient _savegamesClient;
     private readonly ICurrentUserService _currentUserService;
-    private readonly ISavegameFlowService _flowService;
+    private readonly ISavegameOffers _offers;
+    private readonly ISavegameCheckInFlow _checkInFlow;
+    private readonly ISavegameCheckOutFlow _checkOutFlow;
+    private readonly ISavegamePublishFlow _publishFlow;
     private readonly IShellNavigationService _navigation;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ILogger<ProfileOverviewPageViewModel> _logger;
@@ -71,7 +73,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         IProfileService profileService,
         ISavegamesClient savegamesClient,
         ICurrentUserService currentUserService,
-        ISavegameFlowService flowService,
+        ISavegameOffers offers,
+        ISavegameCheckInFlow checkInFlow,
+        ISavegameCheckOutFlow checkOutFlow,
+        ISavegamePublishFlow publishFlow,
         IShellNavigationService navigation,
         IDriftMonitor driftMonitor,
         ILogger<ProfileOverviewPageViewModel> logger)
@@ -81,7 +86,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _profileService = profileService;
         _savegamesClient = savegamesClient;
         _currentUserService = currentUserService;
-        _flowService = flowService;
+        _offers = offers;
+        _checkInFlow = checkInFlow;
+        _checkOutFlow = checkOutFlow;
+        _publishFlow = publishFlow;
         _navigation = navigation;
         _driftMonitor = driftMonitor;
         _logger = logger;
@@ -256,7 +264,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _flowService.PublishAsync(_repo, _profile.Id, _ => ReloadSavegamesAsync(), _lifetime);
+            await _publishFlow.PublishAsync(_repo, _profile.Id, _ => ReloadSavegamesAsync(), _lifetime);
         }
         finally
         {
@@ -281,7 +289,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _flowService.CheckOutAsync(
+            await _checkOutFlow.CheckOutAsync(
                 _repo,
                 current.Savegame,
                 current.Savegame.Head?.Number ?? 0,
@@ -312,7 +320,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _flowService.CheckInHeldAsync(game, current.Id, current.Name, ReloadSavegamesAsync, _lifetime);
+            await _checkInFlow.CheckInHeldAsync(game, current.Id, current.Name, ReloadSavegamesAsync, _lifetime);
         }
         finally
         {
@@ -487,7 +495,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         if (Current is SavegameListItemViewModel current)
         {
-            _flowService.Offer(_repo, current, _flowService.ReadHost(_repo), NameOf);
+            _offers.Offer(_repo, current, _offers.ReadHost(_repo), NameOf);
         }
 
         OnPropertyChanged(nameof(ChecksInAsPrimary));

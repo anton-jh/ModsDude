@@ -65,6 +65,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Savegames.ISavegameCheckOut, Savegames.SavegameCheckOut>();
         services.AddSingleton<Savegames.ISavegameCheckIn, Savegames.SavegameCheckIn>();
         services.AddSingleton<Savegames.ISavegamePublisher, Savegames.SavegamePublisher>();
+        services.AddSingleton<Savegames.ILockedPinDrift, Savegames.LockedPinDrift>();
 
         // One per app: the drift answer is app-level, and every view reads the same one.
         services.AddSingleton<IDriftMonitor, DriftMonitor>();
