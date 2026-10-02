@@ -1,0 +1,70 @@
+# The whole server: the API, its database and the reverse proxy in front of it. Lives in ~/modsdude on the
+# server next to .env (see .env.example) and is uploaded fresh by every deploy; see README.md.
+#
+# Only Caddy publishes ports. Docker opens published ports past ufw, so anything else listed here with
+# ports would be on the internet whatever the firewall says.
+
+name: modsdude
+
+x-logging: &logging
+  # Docker keeps every line otherwise, until the disk is full.
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: modsdude
+      POSTGRES_DB: modsdude
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username", "modsdude", "--dbname", "modsdude"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  # Loaded by deploy.sh from the image CI built, never pulled: there is no registry, and a modsdude-api on
+  # Docker Hub would be somebody else's.
+  api:
+    image: modsdude-api:current
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Database: Host=db;Port=5432;Username=modsdude;Password=${POSTGRES_PASSWORD:?};Database=modsdude
+      Storage__StorageAccountName: ${STORAGE_ACCOUNT_NAME:?}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:?}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:?}
+      HangfireDashboard__Password: ${HANGFIRE_DASHBOARD_PASSWORD:?}
+    logging: *logging
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # The folder rather than the file: a mounted file keeps showing the old content once it is
+      # replaced, a mounted folder shows the new one.
+      - ./caddy:/etc/caddy:ro
+      # The certificates. Losing them means asking Let's Encrypt again, which rate-limits.
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+volumes:
+  db:
+  caddy-data:
+  caddy-config:

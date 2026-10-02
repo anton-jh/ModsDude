@@ -10,9 +10,10 @@ name: CI
 #
 # Shipping, in order, each step only after the one before succeeded:
 #   1. build-number: N is the count of commits on main, so the same commit is always the same build.
-#   2. publish-server: the API, stamped with N.
-#   3. deploy-server: the API goes first. A failed migration leaves the running API as it was. There is
-#      no rollback past that point: a later failure is fixed by deploying a fixed build.
+#   2. publish-server: the API's container image, stamped with N, and the migration script for it.
+#   3. deploy-server: the API goes first, onto the server described by deploy/compose.yml. A failed
+#      migration leaves the running API as it was. There is no rollback past that point: a later failure
+#      is fixed by deploying a fixed build.
 #   4. release-client: published as release bN, which installed clients update to. A client already
 #      released is not released again, so a failed run can simply be re-run.
 on:
@@ -138,16 +139,19 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # Self-contained, so the VPS needs no matching ASP.NET Core runtime installed via apt - one less
-      # thing to keep in step with what's published here.
-      - name: Publish
+      # The image is written to a file rather than pushed anywhere: deploy-server carries it to the server
+      # itself, so there is no registry to sign in to. Based on mcr.microsoft.com/dotnet/aspnet, which runs
+      # as a non-root user and listens on 8080.
+      - name: Publish the image
         run: >
           dotnet publish ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj
           -c Release
           -r linux-x64
-          --self-contained
+          -t:PublishContainer
           -p:BuildNumber=${{ needs.build-number.outputs.number }}
-          -o server
+          -p:ContainerRepository=modsdude-api
+          -p:ContainerImageTag=b${{ needs.build-number.outputs.number }}
+          -p:ContainerArchiveOutputPath=${{ github.workspace }}/release/modsdude-api.tar
 
       # Idempotent: wrapped in checks against __EFMigrationsHistory, so applying it twice, or when
       # nothing is pending, is a no-op. Generated here from the exact code being published, rather than
@@ -168,12 +172,12 @@ jobs:
             --idempotent \
             --project ModsDude.Server/ModsDude.Server.Persistence/ModsDude.Server.Persistence.csproj \
             --startup-project ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj \
-            --output server/migrate.sql
+            --output release/migrate.sql
 
       - uses: actions/upload-artifact@v4
         with:
           name: server-b${{ needs.build-number.outputs.number }}
-          path: server
+          path: release
           if-no-files-found: error
 
   deploy-server:
@@ -192,7 +196,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: server-b${{ needs.build-number.outputs.number }}
-          path: server
+          path: release
 
       - name: Set up the deploy key
         run: |
@@ -201,27 +205,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
-      - name: Create the release directory
-        run: ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p ~/modsdude/releases/b$BUILD"
-
-      - name: Upload the release
+      # Into ~/modsdude, next to the .env with the server's secrets; see deploy/README.md.
+      - name: Upload the build and the server's configuration
         run: >
-          rsync -az -e "ssh -i ~/.ssh/deploy_key"
-          server/ deploy/apply-migration.sh
-          "$DEPLOY_USER@$DEPLOY_HOST:modsdude/releases/b$BUILD/"
+          scp -i ~/.ssh/deploy_key -r -C
+          deploy/compose.yml deploy/caddy deploy/deploy.sh deploy/prune-images.sh
+          release/modsdude-api.tar release/migrate.sql
+          "$DEPLOY_USER@$DEPLOY_HOST:modsdude/"
 
-      # Stops here, with the symlink and the running service both untouched, if the migration fails -
-      # rather than restarting into a process that may not even start against a half-migrated database.
-      - name: Apply the migration, then switch over
-        run: |
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "
-            set -euo pipefail
-            cd ~/modsdude/releases/b$BUILD
-            chmod +x ModsDude.Server.Api apply-migration.sh
-            ./apply-migration.sh migrate.sql
-            ln -sfn ~/modsdude/releases/b$BUILD ~/modsdude/current
-            systemctl --user restart modsdude-api
-          "
+      - name: Deploy
+        run: ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "bash ~/modsdude/deploy.sh $BUILD"
 
       # Not just any answer: the one that says it is this build.
       - name: Wait for the API to come back up
@@ -237,27 +230,8 @@ jobs:
           echo "::error::b$BUILD is not answering /health."
           exit 1
 
-      # Only after this build is up, so a failed deploy never removes anything. Keeps the current release
-      # and the two newest others.
-      - name: Remove old releases
-        run: |
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'EOF'
-            set -euo pipefail
-            cd ~/modsdude/releases
-            current=$(basename "$(readlink ~/modsdude/current)")
-            kept=0
-            for number in $(ls -1 | sed -n 's/^b\([0-9]\+\)$/\1/p' | sort -rn); do
-              if [ "b$number" = "$current" ]; then
-                continue
-              fi
-              if [ "$kept" -lt 2 ]; then
-                kept=$((kept + 1))
-                continue
-              fi
-              echo "Removing b$number."
-              rm -rf -- "b$number"
-            done
-          EOF
+      - name: Remove old images
+        run: ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "bash ~/modsdude/prune-images.sh"
 
   release-client:
     name: Release the client
