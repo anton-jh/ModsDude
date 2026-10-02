@@ -172,7 +172,10 @@ var apiVersionSet = app.NewApiVersionSet()
     .Build();
 
 
-app.UseHttpsRedirection();
+if (builder.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 var dashboard = app.Services.GetRequiredService<IOptions<HangfireDashboardOptions>>().Value;
 if (isDescribingOnly)
