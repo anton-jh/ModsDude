@@ -162,9 +162,7 @@ builder.Services
 builder.Services
     .AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
 
-builder.Services.AddStorage(
-    builder.Configuration.GetValue<string>("Storage:StorageAccountName")!,
-    builder.Environment.IsDevelopment());
+builder.Services.AddStorage(builder.Configuration.GetValue<string>("Storage:StorageAccountName")!);
 
 
 var app = builder.Build();
@@ -245,14 +243,19 @@ if (!isDescribingOnly)
 {
     using (var scope = app.Services.CreateScope())
     {
-        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
-            .Database.Migrate();
+        // A deployed server's database is migrated by the deploy, before this build is started; see
+        // deploy-server in ci.yml.
+        if (app.Environment.IsDevelopment())
+        {
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
+                .Database.Migrate();
+        }
 
-        // Every container this server writes to, created if it is not there. Not fatal, unlike the
-        // migration above: the API serves every metadata route perfectly well without them, and a
-        // storage account that is momentarily unreachable is not a reason to refuse to start. Logged as
-        // an error because uploads fail until it succeeds, and a fresh storage account otherwise
-        // presents as a feature that silently never works.
+        // Every container this server writes to, created if it is not there. Not fatal: the API serves
+        // every metadata route perfectly well without them, and a storage account that is momentarily
+        // unreachable is not a reason to refuse to start. Logged as an error because uploads fail until
+        // it succeeds, and a fresh storage account otherwise presents as a feature that silently never
+        // works.
         var containers = new (string Name, Func<CancellationToken, Task> Ensure)[]
         {
             ("mod image", scope.ServiceProvider.GetRequiredService<IModImageStorageService>().EnsureContainerExists),

@@ -11,8 +11,8 @@ name: CI
 # Shipping, in order, each step only after the one before succeeded:
 #   1. build-number: N is the count of commits on main, so the same commit is always the same build.
 #   2. publish-server: the API, stamped with N.
-#   3. deploy-server: the API goes first. If it fails nothing is released, and installed clients keep
-#      working against the server they match.
+#   3. deploy-server: the API goes first. A failed migration leaves the running API as it was. There is
+#      no rollback past that point: a later failure is fixed by deploying a fixed build.
 #   4. release-client: published as release bN, which installed clients update to. A client already
 #      released is not released again, so a failed run can simply be re-run.
 on:
@@ -223,17 +223,41 @@ jobs:
             systemctl --user restart modsdude-api
           "
 
+      # Not just any answer: the one that says it is this build.
       - name: Wait for the API to come back up
         run: |
           for i in $(seq 1 30); do
-            if curl --fail --silent --output /dev/null https://modsdude.com/health; then
+            if curl --fail --silent --max-time 5 https://modsdude.com/health \
+              | jq --exit-status --argjson build "$BUILD" '.build == $build' > /dev/null 2>&1; then
               echo "b$BUILD is up."
               exit 0
             fi
             sleep 2
           done
-          echo "::error::b$BUILD did not answer /health after restarting."
+          echo "::error::b$BUILD is not answering /health."
           exit 1
+
+      # Only after this build is up, so a failed deploy never removes anything. Keeps the current release
+      # and the two newest others.
+      - name: Remove old releases
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'EOF'
+            set -euo pipefail
+            cd ~/modsdude/releases
+            current=$(basename "$(readlink ~/modsdude/current)")
+            kept=0
+            for number in $(ls -1 | sed -n 's/^b\([0-9]\+\)$/\1/p' | sort -rn); do
+              if [ "b$number" = "$current" ]; then
+                continue
+              fi
+              if [ "$kept" -lt 2 ]; then
+                kept=$((kept + 1))
+                continue
+              fi
+              echo "Removing b$number."
+              rm -rf -- "b$number"
+            done
+          EOF
 
   release-client:
     name: Release the client
