@@ -2,3 +2,7 @@
 # endings must not depend on which machine checked it out. Without this, core.autocrlf=true hands a
 # Windows working tree CRLF and scripts/openapi.ps1 reports drift that is not there.
 openapi/*.json text eol=lf
+
+# Shell scripts run on the Linux VPS, where a CRLF shebang line fails to launch at all ("bad
+# interpreter"). Without this, core.autocrlf=true hands a Windows working tree CRLF.
+deploy/*.sh text eol=lf

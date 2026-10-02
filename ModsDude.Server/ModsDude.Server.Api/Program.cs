@@ -9,6 +9,7 @@ using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Builds;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Api.Health;
 using ModsDude.Server.Api.Maintenance;
 using ModsDude.Server.Api.ModHub;
 using ModsDude.Server.Api.Middleware.ErrorHandling;
@@ -237,6 +238,7 @@ app.MapGroup("api/v{v:apiVersion}")
     .MapAllEndpointsFromAssembly(typeof(Program).Assembly);
 
 app.MapClientDownload();
+app.MapHealth();
 
 
 if (!isDescribingOnly)

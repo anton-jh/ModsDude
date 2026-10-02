@@ -138,12 +138,37 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # Self-contained, so the VPS needs no matching ASP.NET Core runtime installed via apt - one less
+      # thing to keep in step with what's published here.
       - name: Publish
         run: >
           dotnet publish ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj
           -c Release
+          -r linux-x64
+          --self-contained
           -p:BuildNumber=${{ needs.build-number.outputs.number }}
           -o server
+
+      # Idempotent: wrapped in checks against __EFMigrationsHistory, so applying it twice, or when
+      # nothing is pending, is a no-op. Generated here from the exact code being published, rather than
+      # applied by the app at startup, so a migration failure is caught before deploy-server touches the
+      # running service at all.
+      - name: Generate the migration script
+        env:
+          # Design-time only - this never opens either connection, it only needs both config keys
+          # present so the app's startup doesn't fail constructing its DbContext and storage clients.
+          ConnectionStrings__Database: Host=localhost;Username=postgres;Password=postgres;Database=designtime
+          Storage__StorageAccountName: designtime
+        run: |
+          # Matches the project's own EF Core version, so the tool never warns about - or breaks on - a
+          # mismatch with it.
+          version=$(grep -oP 'Include="Microsoft.EntityFrameworkCore" Version="\K[^"]+' ModsDude.Server/ModsDude.Server.Persistence/ModsDude.Server.Persistence.csproj)
+          dotnet tool install --global dotnet-ef --version "$version"
+          dotnet ef migrations script \
+            --idempotent \
+            --project ModsDude.Server/ModsDude.Server.Persistence/ModsDude.Server.Persistence.csproj \
+            --startup-project ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj \
+            --output server/migrate.sql
 
       - uses: actions/upload-artifact@v4
         with:
@@ -156,12 +181,58 @@ jobs:
     needs: [build-number, publish-server]
     runs-on: ubuntu-latest
 
-    # Fails until there is a way to deploy, which also keeps any client from being released: a client
-    # whose API is not deployed is refused by the one that is.
+    env:
+      BUILD: ${{ needs.build-number.outputs.number }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
     steps:
-      - name: Deploy
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-b${{ needs.build-number.outputs.number }}
+          path: server
+
+      - name: Set up the deploy key
         run: |
-          echo "::error::Deploying the API is not set up yet, so b${{ needs.build-number.outputs.number }} is not released."
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Create the release directory
+        run: ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p ~/modsdude/releases/b$BUILD"
+
+      - name: Upload the release
+        run: >
+          rsync -az -e "ssh -i ~/.ssh/deploy_key"
+          server/ deploy/apply-migration.sh
+          "$DEPLOY_USER@$DEPLOY_HOST:modsdude/releases/b$BUILD/"
+
+      # Stops here, with the symlink and the running service both untouched, if the migration fails -
+      # rather than restarting into a process that may not even start against a half-migrated database.
+      - name: Apply the migration, then switch over
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            cd ~/modsdude/releases/b$BUILD
+            chmod +x ModsDude.Server.Api apply-migration.sh
+            ./apply-migration.sh migrate.sql
+            ln -sfn ~/modsdude/releases/b$BUILD ~/modsdude/current
+            systemctl --user restart modsdude-api
+          "
+
+      - name: Wait for the API to come back up
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent --output /dev/null https://modsdude.com/health; then
+              echo "b$BUILD is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::b$BUILD did not answer /health after restarting."
           exit 1
 
   release-client:
