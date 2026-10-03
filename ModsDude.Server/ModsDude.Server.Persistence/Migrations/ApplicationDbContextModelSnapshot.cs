@@ -438,6 +438,10 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("MembershipRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -718,6 +722,9 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<string>("AvatarHash")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("BlockedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");

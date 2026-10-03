@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using Newtonsoft.Json;
 using System.Globalization;
 using System.Net;
 
@@ -41,28 +41,14 @@ public sealed class BuildHeaderHandler(
 
     private async Task<int?> ReadServerBuildAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        // Buffered, so the generated client can read the body again after this.
-        await response.Content.LoadIntoBufferAsync(cancellationToken);
+        var problem = await ProblemResponse.ReadAsync(response, logger, cancellationToken);
 
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        try
+        if (problem is { Type: ProblemType.ClientBuildMismatch, ServerBuild: int server })
         {
-            var problem = JsonConvert.DeserializeObject<CustomProblemDetails>(body);
-
-            if (problem is { Type: ProblemType.ClientBuildMismatch, ServerBuild: int server })
-            {
-                return server;
-            }
-        }
-        catch (JsonException exception)
-        {
-            logger.LogWarning(exception, "Could not read a {Status} response as a problem.", (int)response.StatusCode);
-
-            return null;
+            return server;
         }
 
-        logger.LogWarning("A {Status} response was not a build mismatch: {Body}", (int)response.StatusCode, body);
+        logger.LogWarning("A {Status} response was not a build mismatch: {Type}", (int)response.StatusCode, problem?.Type);
 
         return null;
     }

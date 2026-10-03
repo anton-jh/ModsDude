@@ -13,11 +13,6 @@
         <button type="submit" class="accent">Issue trust code</button>
     </form>
 
-    @if (Model.Error is not null)
-    {
-        <div class="panel error">@Model.Error</div>
-    }
-
     @if (Model.Issued is { } issued)
     {
         <div class="panel">
@@ -56,7 +51,7 @@
                             <td>
                                 @if (row.Status is TrustCodeStatus.Active)
                                 {
-                                    <form method="post" asp-page-handler="Revoke" onsubmit="return confirm('Revoke @row.Code? It stops working at once.')">
+                                    <form method="post" asp-page-handler="Revoke" data-confirm="Revoke @row.Code? It stops working at once.">
                                         <input type="hidden" name="id" value="@row.Id">
                                         <button type="submit">Revoke</button>
                                     </form>

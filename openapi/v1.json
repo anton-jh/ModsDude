@@ -984,7 +984,9 @@
           "https://server.modsdude.com/api/problems/trust-code-not-usable",
           "https://server.modsdude.com/api/problems/trust-code-redemption-conflict",
           "https://server.modsdude.com/api/problems/invalid-display-name",
-          "https://server.modsdude.com/api/problems/client-build-mismatch"
+          "https://server.modsdude.com/api/problems/client-build-mismatch",
+          "https://server.modsdude.com/api/problems/user-blocked",
+          "https://server.modsdude.com/api/problems/repo-changed"
         ],
         "type": "string",
         "x-enumNames": [
@@ -1031,7 +1033,9 @@
           "TrustCodeNotUsable",
           "TrustCodeRedemptionConflict",
           "InvalidDisplayName",
-          "ClientBuildMismatch"
+          "ClientBuildMismatch",
+          "UserBlocked",
+          "RepoChanged"
         ]
       },
       "ProfileDependentDto": {
@@ -1942,6 +1946,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -1991,6 +2005,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2443,6 +2467,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -2501,6 +2535,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2583,6 +2627,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -2641,6 +2695,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2728,6 +2792,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -2767,6 +2841,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2880,6 +2964,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7295,6 +7389,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -7334,6 +7438,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7388,6 +7502,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -7424,6 +7548,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7498,6 +7632,16 @@
             },
             "description": ""
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "412": {
             "content": {
               "application/json": {
@@ -7556,6 +7700,16 @@
             "description": ""
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
             "content": {
               "application/json": {
                 "schema": {

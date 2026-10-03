@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
@@ -49,10 +50,11 @@ public class KickMemberV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Repo '{repoId}' does not exist"));
         }
 
+        // Already gone, which is what was asked for: a repeated request gets the same answer.
         var subjectMembership = repo.GetMembership(new UserId(userId));
         if (subjectMembership is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Member '{userId}' not found"));
+            return TypedResults.Ok();
         }
 
         authResult = user
@@ -70,7 +72,15 @@ public class KickMemberV1Endpoint : IEndpoint
         }
 
         repo.KickMember(new UserId(userId));
-        await unitOfWork.CommitAsync(cancellationToken);
+
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.RepoChanged);
+        }
 
         return TypedResults.Ok();
     }

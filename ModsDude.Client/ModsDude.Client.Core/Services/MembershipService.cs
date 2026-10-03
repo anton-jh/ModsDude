@@ -33,9 +33,17 @@ public class MembershipService(
         {
             await membersClient.UpdateMembershipV1Async(repoId, userId, request, cancellationToken);
         }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.CannotDemoteOnlyAdmin)
+        {
+            throw new UserFriendlyException("A repo needs an admin", "The only admin cannot be demoted. Promote somebody else first.", ex);
+        }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InsufficientRepoAccess)
         {
             throw new UserFriendlyException("You cannot change that membership", ex.Result.Detail, ex);
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
+        {
+            throw new UserFriendlyException("The members changed", "Check them and try again.", ex);
         }
     }
 
@@ -52,6 +60,10 @@ public class MembershipService(
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InsufficientRepoAccess)
         {
             throw new UserFriendlyException("You cannot remove that member", ex.Result.Detail, ex);
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
+        {
+            throw new UserFriendlyException("The members changed", "Check them and try again.", ex);
         }
     }
 }

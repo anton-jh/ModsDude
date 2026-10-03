@@ -254,10 +254,10 @@ public class ArchivingTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = NewRepo(userId, name);
+        var user = new User(new UserId($"user-{Guid.NewGuid()}"), new DisplayName("user"), DateTime.UtcNow);
+        var repo = NewRepo(user, name);
 
-        dbContext.Users.Add(new User(userId, new DisplayName("user"), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -272,21 +272,21 @@ public class ArchivingTests(DatabaseFixture fixture)
     /// </summary>
     private static Repo AddRepo(DbContexts.ApplicationDbContext dbContext, string? name = null)
     {
-        var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = NewRepo(userId, name);
+        var user = new User(new UserId($"user-{Guid.NewGuid()}"), new DisplayName("user"), DateTime.UtcNow);
+        var repo = NewRepo(user, name);
 
-        dbContext.Users.Add(new User(userId, new DisplayName("user"), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
 
         return repo;
     }
 
-    private static Repo NewRepo(UserId? firstAdmin = null, string? name = null)
+    private static Repo NewRepo(User firstAdmin, string? name = null)
     {
         return new Repo(
             new RepoName(name ?? $"repo-{Guid.NewGuid()}"),
             DateTime.UtcNow,
-            firstAdmin ?? new UserId($"user-{Guid.NewGuid()}"))
+            firstAdmin)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };

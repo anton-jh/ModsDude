@@ -1,11 +1,12 @@
 ﻿using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Domain.Users;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ModsDude.Server.Application.Authorization;
 
 public static class AuthorizationUserExtensions
 {
-    public static AuthorizationResult? CheckIsAllowedTo(this User? user, Action<FluentAuthorizationBuilder> authorizationAction)
+    public static AuthorizationResult? CheckIsAllowedTo([NotNull] this User? user, Action<FluentAuthorizationBuilder> authorizationAction)
     {
         if (user is null)
         {

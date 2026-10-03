@@ -30,12 +30,25 @@ public class TrustCodesPageModel(
 
     public IReadOnlyList<TrustCodeRow> TrustCodes { get; private set; } = [];
 
-    public string? Error { get; private set; }
-
 
     public async Task OnGetAsync(Guid? issued, CancellationToken cancellationToken)
     {
-        await LoadAsync(issued, cancellationToken);
+        var now = timeService.Now();
+        var trustCodes = await dbContext.TrustCodes.GetLatestAsync(_listedCodes, cancellationToken);
+
+        var redeemers = trustCodes
+            .Select(x => x.RedeemedBy)
+            .OfType<UserId>()
+            .Distinct()
+            .ToList();
+        var nameplates = await dbContext.Users.GetNameplatesAsync(redeemers, cancellationToken);
+
+        TrustCodes = [.. trustCodes.Select(x => TrustCodeRow.Of(x, now, nameplates))];
+
+        if (issued is Guid issuedId)
+        {
+            Issued = TrustCodes.FirstOrDefault(x => x.Id == issuedId);
+        }
     }
 
     public async Task<IActionResult> OnPostIssueAsync(Guid requestId, CancellationToken cancellationToken)
@@ -55,6 +68,7 @@ public class TrustCodesPageModel(
             try
             {
                 await unitOfWork.CommitAsync(cancellationToken);
+                logger.LogInformation("Admin {Operator} issued trust code {TrustCodeId}.", User.OperatorName(), trustCode.Id.Value);
 
                 return ShowIssued(trustCode);
             }
@@ -79,12 +93,12 @@ public class TrustCodesPageModel(
 
         if (trustCode is null)
         {
-            return await ShowErrorAsync("That trust code does not exist.", cancellationToken);
+            return ShowError("That trust code does not exist.");
         }
 
         if (trustCode.RedeemedAt is not null)
         {
-            return await ShowErrorAsync("That trust code has already been redeemed.", cancellationToken);
+            return ShowError("That trust code has already been redeemed.");
         }
 
         trustCode.Revoke(timeService.Now());
@@ -98,8 +112,10 @@ public class TrustCodesPageModel(
             logger.LogInformation(exception, "Revoking trust code {TrustCodeId} lost to a concurrent write.", id);
             dbContext.ChangeTracker.Clear();
 
-            return await ShowErrorAsync("That trust code changed while it was being revoked. Check it again.", cancellationToken);
+            return ShowError("That trust code changed while it was being revoked. Check it again.");
         }
+
+        logger.LogInformation("Admin {Operator} revoked trust code {TrustCodeId}.", User.OperatorName(), id);
 
         return RedirectToPage();
     }
@@ -111,32 +127,11 @@ public class TrustCodesPageModel(
         return RedirectToPage(new { issued = trustCode.Id.Value });
     }
 
-    private async Task<PageResult> ShowErrorAsync(string error, CancellationToken cancellationToken)
+    private RedirectToPageResult ShowError(string error)
     {
-        Error = error;
-        await LoadAsync(null, cancellationToken);
+        TempData.SetError(error);
 
-        return Page();
-    }
-
-    private async Task LoadAsync(Guid? issued, CancellationToken cancellationToken)
-    {
-        var now = timeService.Now();
-        var trustCodes = await dbContext.TrustCodes.GetLatestAsync(_listedCodes, cancellationToken);
-
-        var redeemers = trustCodes
-            .Select(x => x.RedeemedBy)
-            .OfType<UserId>()
-            .Distinct()
-            .ToList();
-        var nameplates = await dbContext.Users.GetNameplatesAsync(redeemers, cancellationToken);
-
-        TrustCodes = [.. trustCodes.Select(x => TrustCodeRow.Of(x, now, nameplates))];
-
-        if (issued is Guid issuedId)
-        {
-            Issued = TrustCodes.FirstOrDefault(x => x.Id == issuedId);
-        }
+        return RedirectToPage();
     }
 
 

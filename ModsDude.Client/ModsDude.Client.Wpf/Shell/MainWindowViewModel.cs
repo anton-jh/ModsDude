@@ -2,6 +2,7 @@
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Account;
+using ModsDude.Client.Wpf.Shell.AccountBlock;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -27,11 +28,13 @@ public partial class MainWindowViewModel
         BackgroundTaskViewModel backgroundTasks,
         ToastCenterViewModel toasts,
         BuildMismatchViewModel buildMismatch,
+        AccountBlockedViewModel accountBlocked,
         IResourceLeases leases)
     {
         BackgroundTasks = backgroundTasks;
         Toasts = toasts;
         BuildMismatch = buildMismatch;
+        AccountBlocked = accountBlocked;
 
         _leases = leases;
         _mainPageViewModelFactory = mainPageViewModelFactory;
@@ -65,6 +68,9 @@ public partial class MainWindowViewModel
 
     /// <summary>Over everything but the modal layer and the toasts, while the server refuses this build.</summary>
     public BuildMismatchViewModel BuildMismatch { get; }
+
+    /// <summary>Over everything but the modal layer and the toasts, while the server refuses the account.</summary>
+    public AccountBlockedViewModel AccountBlocked { get; }
 
 
     [ObservableProperty]

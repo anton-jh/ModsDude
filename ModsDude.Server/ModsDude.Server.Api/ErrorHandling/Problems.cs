@@ -176,6 +176,23 @@ public static class Problems
         ServerBuild = serverBuild
     };
 
+    /// <summary>
+    /// Returned at 403 for every API request from a blocked user, before any endpoint runs.
+    /// </summary>
+    public static CustomProblemDetails UserBlocked => new()
+    {
+        Type = ProblemType.UserBlocked,
+        Title = "User blocked",
+        Detail = "This account is blocked from using the server."
+    };
+
+    public static CustomProblemDetails RepoChanged => new()
+    {
+        Type = ProblemType.RepoChanged,
+        Title = "Repo changed",
+        Detail = "The repo changed while this request was handled. Reload it and try again."
+    };
+
     public static CustomProblemDetails CannotDemoteOnlyAdmin => new()
     {
         Type = ProblemType.CannotDemoteOnlyAdmin,
@@ -646,5 +663,13 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "client-build-mismatch")]
         [JsonStringEnumMemberName(_typeBaseUri + "client-build-mismatch")]
         ClientBuildMismatch,
+
+        [EnumMember(Value = _typeBaseUri + "user-blocked")]
+        [JsonStringEnumMemberName(_typeBaseUri + "user-blocked")]
+        UserBlocked,
+
+        [EnumMember(Value = _typeBaseUri + "repo-changed")]
+        [JsonStringEnumMemberName(_typeBaseUri + "repo-changed")]
+        RepoChanged,
     }
 }

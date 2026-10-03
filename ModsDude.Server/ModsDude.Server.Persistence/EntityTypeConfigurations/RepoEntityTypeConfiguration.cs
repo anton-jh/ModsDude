@@ -17,6 +17,7 @@ internal class RepoEntityTypeConfiguration : IEntityTypeConfiguration<Repo>
         builder.Property(x => x.Name);
         builder.ComplexProperty(x => x.AdapterData);
         builder.Property(x => x.Created);
+        builder.Property(x => x.MembershipRevision).IsConcurrencyToken();
 
         // No index on the name, unique or otherwise. Nothing looks a repo up by name - the only way
         // into one is an invite code - so the name is display text, and two repos called the same

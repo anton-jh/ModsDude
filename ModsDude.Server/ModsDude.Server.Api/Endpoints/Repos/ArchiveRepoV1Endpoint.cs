@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
@@ -50,7 +51,14 @@ public class ArchiveRepoV1Endpoint : IEndpoint
 
         repo.Archive(timeService.Now());
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.RepoChanged);
+        }
 
         return TypedResults.Ok();
     }

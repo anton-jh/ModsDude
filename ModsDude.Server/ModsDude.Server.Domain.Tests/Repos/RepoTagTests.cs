@@ -1,4 +1,5 @@
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Tests.Repos;
 
@@ -42,7 +43,7 @@ public class RepoTagTests
         // otherwise change the very thing that resolved the clash.
         var repoId = new RepoId(Guid.NewGuid());
 
-        var before = new Repo(new RepoName("Vanilla"), DateTime.UtcNow, new("someone"))
+        var before = new Repo(new RepoName("Vanilla"), DateTime.UtcNow, new User(new UserId("someone"), new DisplayName("Someone"), DateTime.UtcNow))
         {
             Id = repoId,
             AdapterData = new(new("adapter"), new("{}"))
@@ -50,7 +51,7 @@ public class RepoTagTests
 
         var tag = RepoTag.For(before.Id);
 
-        before.Name = new RepoName("Vanilla, but ours");
+        before.Rename(new RepoName("Vanilla, but ours"));
 
         Assert.Equal(tag, RepoTag.For(before.Id));
     }

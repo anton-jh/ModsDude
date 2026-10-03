@@ -28,9 +28,9 @@ public class CreateRepoV1Endpoint : IEndpoint
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var userId = httpContext.User.GetUserId();
+        var user = await dbContext.Users.GetAsync(httpContext.User.GetUserId(), cancellationToken);
 
-        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
+        var authResult = user
             .CheckIsAllowedTo(x => x
                 .CreateRepo())
             .MapToForbidden();
@@ -41,7 +41,7 @@ public class CreateRepoV1Endpoint : IEndpoint
 
         // Nothing to check the name against. Somebody else's repo may already be called this, and so
         // may one of the caller's own - RepoTag is what keeps the two apart in a list.
-        var repo = new Repo(new RepoName(request.Name), timeService.Now(), userId)
+        var repo = new Repo(new RepoName(request.Name), timeService.Now(), user)
         {
             AdapterData = new AdapterData(
                 new AdapterIdentifier(request.AdapterId),

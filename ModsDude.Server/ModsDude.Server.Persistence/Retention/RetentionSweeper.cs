@@ -36,7 +36,7 @@ namespace ModsDude.Server.Persistence.Retention;
 /// one question that makes deleting bytes safe: whether anything still refers to the address.
 /// </para>
 /// </remarks>
-public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionSweeper> logger)
+public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionSweeper> logger) : IRetentionSweeper
 {
     /// <param name="today">The date the schedules count from, in the zone the jobs run in.</param>
     /// <param name="now">What a rescheduled mod version's <see cref="ModVersion.Updated"/> moves to.</param>
@@ -72,14 +72,46 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             // In the order things hold each other: a snapshot holds a revision, a revision holds mod
             // versions. Deleting in the other order would only ever find less to delete, never more,
             // but this way round a row's deletion is never blocked by something going the same night.
-            await DeleteSnapshotsAsync(repoId, today, totals, cancellationToken);
-            await DeleteRevisionsAsync(repoId, today, totals, cancellationToken);
-            await DeleteModVersionsAsync(repoId, today, now, totals, cancellationToken);
+            var due = DueRows.ScheduledBy(today);
+
+            await DeleteSnapshotsAsync(repoId, due, totals, cancellationToken);
+            await DeleteRevisionsAsync(repoId, due, totals, cancellationToken);
+            await DeleteModVersionsAsync(repoId, due, now, totals, cancellationToken);
         }
 
         logger.LogInformation(
             "Retention deleted {Snapshots} snapshots, {Revisions} revisions and {ModVersions} mod versions.",
             totals.Snapshots, totals.Revisions, totals.ModVersions);
+    }
+
+    /// <summary>
+    /// Deletes one kind of row in one repo that is outside its window and that nothing holds, without
+    /// waiting for a schedule. Rows only eligible as winding down are left to the jobs: that reason
+    /// means a history nobody has used for a while, which only the grace period can tell. So a rerun
+    /// finds nothing new to delete.
+    /// </summary>
+    /// <param name="now">What the versions left behind a deleted mod version are stamped with.</param>
+    public async Task<PruneResult> PruneNowAsync(RepoId repoId, PrunableHistory history, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var totals = new SweepTotals();
+        var due = DueRows.OutsideWindow;
+
+        switch (history)
+        {
+            case PrunableHistory.SavegameSnapshots:
+                await DeleteSnapshotsAsync(repoId, due, totals, cancellationToken);
+                break;
+            case PrunableHistory.ProfileRevisions:
+                await DeleteRevisionsAsync(repoId, due, totals, cancellationToken);
+                break;
+            case PrunableHistory.ModVersions:
+                await DeleteModVersionsAsync(repoId, due, now, totals, cancellationToken);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(history), history, null);
+        }
+
+        return new PruneResult(totals.Snapshots + totals.Revisions + totals.ModVersions, totals.Failures);
     }
 
 
@@ -107,7 +139,7 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
         }
     }
 
-    private async Task DeleteSnapshotsAsync(RepoId repoId, DateOnly today, SweepTotals totals, CancellationToken cancellationToken)
+    private async Task DeleteSnapshotsAsync(RepoId repoId, DueRows dueRows, SweepTotals totals, CancellationToken cancellationToken)
     {
         try
         {
@@ -115,17 +147,18 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             {
                 await RetentionHistories.ApplySavegameAsync(dbContext, repoId, savegameId, history.StaleChanges(), cancellationToken);
 
-                var due = RetentionPolicy.FindDue(history.Eligible, history.Scheduled, today);
+                var due = dueRows.Select(history);
                 totals.Snapshots += await dbContext.SavegameSnapshots.DeleteSnapshotsAsync(repoId, savegameId, due, cancellationToken);
             }
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(exception, "Deleting due snapshots in repo {RepoId} failed.", repoId.Value);
+            totals.Failures++;
         }
     }
 
-    private async Task DeleteRevisionsAsync(RepoId repoId, DateOnly today, SweepTotals totals, CancellationToken cancellationToken)
+    private async Task DeleteRevisionsAsync(RepoId repoId, DueRows dueRows, SweepTotals totals, CancellationToken cancellationToken)
     {
         Dictionary<ProfileId, RetentionHistory<RevisionNumber>> histories;
 
@@ -136,12 +169,13 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(exception, "Reading revisions in repo {RepoId} for deletion failed.", repoId.Value);
+            totals.Failures++;
             return;
         }
 
         foreach (var (profileId, history) in histories)
         {
-            var due = RetentionPolicy.FindDue(history.Eligible, history.Scheduled, today);
+            var due = dueRows.Select(history);
 
             try
             {
@@ -154,11 +188,12 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
                 // Most likely a check-in played on one of these between the read and the delete, which
                 // the foreign key refuses. Tomorrow's scheduling run will see the snapshot and let it be.
                 logger.LogWarning(exception, "Deleting due revisions of profile {ProfileId} in repo {RepoId} failed.", profileId.Value, repoId.Value);
+                totals.Failures++;
             }
         }
     }
 
-    private async Task DeleteModVersionsAsync(RepoId repoId, DateOnly today, DateTimeOffset now, SweepTotals totals, CancellationToken cancellationToken)
+    private async Task DeleteModVersionsAsync(RepoId repoId, DueRows dueRows, DateTimeOffset now, SweepTotals totals, CancellationToken cancellationToken)
     {
         Dictionary<ModId, RetentionHistory<ModVersionId>> histories;
 
@@ -169,12 +204,13 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(exception, "Reading mod versions in repo {RepoId} for deletion failed.", repoId.Value);
+            totals.Failures++;
             return;
         }
 
         foreach (var (modId, history) in histories)
         {
-            var due = RetentionPolicy.FindDue(history.Eligible, history.Scheduled, today).ToHashSet();
+            var due = dueRows.Select(history).ToHashSet();
 
             try
             {
@@ -192,6 +228,7 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
                 // starts clean.
                 dbContext.ChangeTracker.Clear();
                 logger.LogWarning(exception, "Deleting due versions of mod {ModId} in repo {RepoId} failed.", modId.Value, repoId.Value);
+                totals.Failures++;
             }
         }
     }
@@ -236,6 +273,7 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
         public int Snapshots { get; set; }
         public int Revisions { get; set; }
         public int ModVersions { get; set; }
+        public int Failures { get; set; }
 
         public void Count<TKey>(RetentionChanges<TKey> changes) where TKey : notnull
         {
@@ -243,4 +281,29 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             Unscheduled += changes.Unschedule.Count;
         }
     }
+
+    /// <summary>Which rows of a history a deletion run takes.</summary>
+    private readonly record struct DueRows(DateOnly? ScheduledFor)
+    {
+        public static DueRows OutsideWindow => new(null);
+
+        public static DueRows ScheduledBy(DateOnly today) => new(today);
+
+        public IReadOnlyList<TKey> Select<TKey>(RetentionHistory<TKey> history) where TKey : notnull
+        {
+            return ScheduledFor is DateOnly today
+                ? RetentionPolicy.FindDue(history.Eligible, history.Scheduled, today)
+                : RetentionPolicy.FindOutsideWindow(history.Eligible);
+        }
+    }
 }
+
+public enum PrunableHistory
+{
+    SavegameSnapshots,
+    ProfileRevisions,
+    ModVersions
+}
+
+/// <param name="Failures">Histories whose rows could not be deleted, most likely because something started holding them.</param>
+public record PruneResult(int Deleted, int Failures);

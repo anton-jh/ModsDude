@@ -232,6 +232,30 @@ public class RetentionPolicyTests
         Assert.Empty(due);
     }
 
+    [Fact]
+    public void Outside_the_window_ignores_schedules_and_rows_only_winding_down()
+    {
+        var outside = RetentionPolicy.FindOutsideWindow(
+            Eligible((1, DeletionReason.OutsideWindow), (2, DeletionReason.OutsideWindow), (3, DeletionReason.WindingDown)));
+
+        Assert.Equal([1, 2], outside.Order());
+    }
+
+    /// <summary>
+    /// What makes pruning now safe to repeat: once the rows outside the window are gone, the history
+    /// is within it, and nothing more is outside.
+    /// </summary>
+    [Fact]
+    public void A_history_pruned_to_its_window_has_nothing_outside_it()
+    {
+        var pruned = History(1, 2, 3, 4, 5)
+            .Where(x => !RetentionPolicy.FindOutsideWindow(RetentionPolicy.Evaluate(History(1, 2, 3, 4, 5), window: 3)).Contains(x.Key))
+            .ToList();
+
+        Assert.Equal([3, 4, 5], pruned.Select(x => x.Key));
+        Assert.Empty(RetentionPolicy.FindOutsideWindow(RetentionPolicy.Evaluate(pruned, window: 3)));
+    }
+
 
     private static RetentionCandidate<int> Row(int number, bool held = false) => new(number, number, held);
 

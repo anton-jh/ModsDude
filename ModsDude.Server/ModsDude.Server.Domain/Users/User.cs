@@ -15,6 +15,11 @@ public class User(UserId id, DisplayName displayName, DateTime created)
     public DateTime ProfileLastUpdated { get; private set; } = created;
     public bool IsTrusted { get; private set; } = false;
 
+    /// <summary>When the user was blocked from the API, or null while they are not.</summary>
+    public DateTime? BlockedAt { get; private set; }
+
+    public bool IsBlocked => BlockedAt is not null;
+
     /// <summary>
     /// The address of the user's picture in the image store, or null for none - in which case they
     /// are drawn as their initial on their tag's colour.
@@ -42,9 +47,25 @@ public class User(UserId id, DisplayName displayName, DateTime created)
         ProfileLastUpdated = now;
     }
 
-    internal void GrantTrust()
+    public void GrantTrust()
     {
         IsTrusted = true;
+    }
+
+    public void RevokeTrust()
+    {
+        IsTrusted = false;
+    }
+
+    /// <summary>Keeps the time of the first block when repeated.</summary>
+    public void Block(DateTime now)
+    {
+        BlockedAt ??= now;
+    }
+
+    public void Unblock()
+    {
+        BlockedAt = null;
     }
 }
 

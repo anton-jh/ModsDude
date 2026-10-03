@@ -4,6 +4,7 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.RepoMemberships;
@@ -70,16 +71,17 @@ public class RedeemInviteV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InviteNotFound);
         }
 
-        var userId = claimsPrincipal.GetUserId();
+        var user = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+            ?? throw new NotAuthenticatedException();
 
         // Already in, so the code has done its job and must not be charged a use for saying so
         // again. A second click, or a link redeemed twice, is not an error to the person clicking.
-        if (repo.GetMembership(userId) is RepoMembership existing)
+        if (repo.GetMembership(user.Id) is RepoMembership existing)
         {
             return TypedResults.Ok(new RepoMembershipDto(RepoDto.FromModel(repo), existing.Level));
         }
 
-        repo.AddMember(userId, invite.GrantedLevel);
+        repo.AddMember(user, invite.GrantedLevel);
         invite.Redeem(now);
 
         try

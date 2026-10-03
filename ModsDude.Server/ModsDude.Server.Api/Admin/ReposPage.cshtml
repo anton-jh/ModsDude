@@ -1,5 +1,7 @@
 @page "/admin/repos"
 @model ReposPageModel
+@using ModsDude.Server.Domain.RepoMemberships
+@using ModsDude.Server.Persistence.Retention
 @{
     ViewData[AdminLayout.SectionKey] = AdminSection.Repos;
 }
@@ -28,13 +30,17 @@
 
             @foreach (var repo in Model.Repos)
             {
-                <details>
+                <details id="@ReposPageModel.RowAnchor(repo.Id)" open="@(Model.Open == repo.Id)">
                     <summary>
                         <span>
                             @repo.Name
                             @if (repo.ArchivedAt is not null)
                             {
                                 <span class="status">Archived</span>
+                            }
+                            @if (!repo.HasActiveAdmin)
+                            {
+                                <span class="status NoActiveAdmin">No active Admin</span>
                             }
                         </span>
                         <span class="code">@repo.Game</span>
@@ -54,6 +60,7 @@
                                 <div><dt>Archived</dt><dd>@AdminFormat.Time(archivedAt)</dd></div>
                             }
                             <div><dt>Mod versions</dt><dd>@AdminFormat.Count(repo.VersionCount)</dd></div>
+                            <div><dt>Profiles</dt><dd>@AdminFormat.Count(repo.ProfileCount)</dd></div>
                             <div><dt>Savegames</dt><dd>@AdminFormat.Count(repo.SavegameCount)</dd></div>
                             <div><dt>Scheduled for deletion</dt><dd>@AdminFormat.Bytes(repo.ScheduledForDeletionBytes)</dd></div>
                             @if (Model.Storage is { } storage && repo.Storage is { } stored)
@@ -65,6 +72,35 @@
                                 }
                             }
                         </dl>
+
+                        <h3>Repo</h3>
+                        <div class="toolbar">
+                            <form method="post" asp-page-handler="Rename">
+                                <input type="hidden" name="repoId" value="@repo.Id">
+                                <input type="text" name="name" value="@repo.RawName" required aria-label="Name">
+                                <button type="submit">Rename</button>
+                            </form>
+
+                            @if (repo.ArchivedAt is null)
+                            {
+                                <form method="post" asp-page-handler="Archive" data-confirm="Archive @repo.Name? It disappears from every member's repo list.">
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <button type="submit">Archive</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="Restore">
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <button type="submit">Restore</button>
+                                </form>
+
+                                <form method="post" asp-page-handler="Delete" data-confirm="Delete @repo.Name for good? This deletes @AdminFormat.Count(repo.ModCount) mods with @AdminFormat.Count(repo.VersionCount) versions, @AdminFormat.Count(repo.ProfileCount) profiles and @AdminFormat.Count(repo.SavegameCount) savegames, with all their history, and removes @AdminFormat.Count(repo.Members.Count) members.">
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <button type="submit" class="danger">Delete</button>
+                                </form>
+                            }
+                        </div>
 
                         <h3>Members</h3>
                         @if (repo.Members.Count == 0)
@@ -78,19 +114,136 @@
                                     <tr>
                                         <th>User</th>
                                         <th>Level</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var member in repo.Members)
                                     {
                                         <tr>
-                                            <td>@member.User</td>
-                                            <td>@member.Level</td>
+                                            <td>
+                                                @member.User
+                                                @if (member.IsBlocked)
+                                                {
+                                                    <span class="status Blocked">Blocked</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <form method="post" asp-page-handler="SetLevel" class="toolbar">
+                                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                                    <input type="hidden" name="userId" value="@member.UserId">
+                                                    <input type="hidden" name="revision" value="@repo.MembershipRevision">
+                                                    <select name="level" aria-label="Level">
+                                                        @foreach (var level in Enum.GetValues<RepoMembershipLevel>())
+                                                        {
+                                                            <option value="@level" selected="@(level == member.Level)">@level</option>
+                                                        }
+                                                    </select>
+                                                    <button type="submit">Save</button>
+                                                </form>
+                                            </td>
+                                            <td>
+                                                <form method="post" asp-page-handler="RemoveMember" data-confirm="Remove @member.User from @repo.Name?">
+                                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                                    <input type="hidden" name="userId" value="@member.UserId">
+                                                    <input type="hidden" name="revision" value="@repo.MembershipRevision">
+                                                    <button type="submit" class="danger">Remove</button>
+                                                </form>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
                             </table></div>
                         }
+
+                        @if (repo.AvailableUsers.Count == 0)
+                        {
+                            <div class="toolbar">
+                                <span title="Every user who can be added is already a member."><button type="button" disabled>Add member</button></span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="toolbar">
+                                <button type="button" data-open-dialog="add-member-@repo.Id">Add member</button>
+                            </div>
+
+                            <dialog id="add-member-@repo.Id">
+                                <form method="post" asp-page-handler="AddMember" class="dialog-form">
+                                    <h2>Add member to @repo.Name</h2>
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <input type="search" placeholder="Search users" aria-label="Search users" data-filters="add-member-users-@repo.Id">
+                                    <select id="add-member-users-@repo.Id" name="userId" size="10" required aria-label="User">
+                                        @foreach (var user in repo.AvailableUsers)
+                                        {
+                                            <option value="@user.Id">@user.Name</option>
+                                        }
+                                    </select>
+                                    <select name="level" aria-label="Level">
+                                        @foreach (var level in Enum.GetValues<RepoMembershipLevel>())
+                                        {
+                                            <option value="@level" selected="@(level == RepoMembershipLevel.Member)">@level</option>
+                                        }
+                                    </select>
+                                    <div class="dialog-actions">
+                                        <button type="button" data-close-dialog>Cancel</button>
+                                        <button type="submit" class="accent">Add</button>
+                                    </div>
+                                </form>
+                            </dialog>
+                        }
+
+                        <h3>Open invites</h3>
+                        @if (repo.Invites.Count == 0)
+                        {
+                            <p class="muted">No open invites.</p>
+                        }
+                        else
+                        {
+                            <div class="scroll-list"><table>
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Level</th>
+                                        <th>Created</th>
+                                        <th>Expires</th>
+                                        <th class="number">Uses</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var invite in repo.Invites)
+                                    {
+                                        <tr>
+                                            <td class="code">@invite.Code</td>
+                                            <td>@invite.Level</td>
+                                            <td>@AdminFormat.Time(invite.Created)</td>
+                                            <td>@(invite.ExpiresAt is DateTime expiresAt ? AdminFormat.Time(expiresAt) : "Never")</td>
+                                            <td class="number">@AdminFormat.Count(invite.Uses)@(invite.MaximumUses is int maximum ? $" / {AdminFormat.Count(maximum)}" : "")</td>
+                                            <td>
+                                                <form method="post" asp-page-handler="RevokeInvite" data-confirm="Revoke @invite.Code? It stops working at once.">
+                                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                                    <input type="hidden" name="inviteId" value="@invite.Id">
+                                                    <button type="submit">Revoke</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table></div>
+                        }
+
+                        <h3>Prune now</h3>
+                        <div class="toolbar">
+                            @foreach (var history in Enum.GetValues<PrunableHistory>())
+                            {
+                                <form method="post" asp-page-handler="Prune" data-confirm="Delete the @ReposPageModel.Describe(history) of @repo.Name that newer ones have replaced and nothing uses? This cannot be undone.">
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <input type="hidden" name="history" value="@history">
+                                    <button type="submit" class="danger">Prune @ReposPageModel.Describe(history)</button>
+                                </form>
+                            }
+                        </div>
 
                         <h3>Traffic, last @AdminWindows.TrafficDays days</h3>
                         <table>

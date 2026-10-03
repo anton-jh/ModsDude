@@ -70,6 +70,13 @@ public class ConnectionFailureTests
     }
 
     [Fact]
+    public void A_blocked_account_counts_but_another_403_does_not()
+    {
+        Assert.True(ConnectionFailure.Is(new InvalidOperationException("Outer", Problem(403, ProblemType.UserBlocked))));
+        Assert.False(ConnectionFailure.Is(Problem(403, ProblemType.InsufficientRepoAccess)));
+    }
+
+    [Fact]
     public void What_the_caller_also_counts_is_asked_of_the_whole_chain()
     {
         var exception = new InvalidOperationException("Outer", new ProviderUnreachable());

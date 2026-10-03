@@ -2,7 +2,6 @@
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
@@ -24,11 +23,6 @@ namespace ModsDude.Server.Api.Endpoints.Repos;
 /// can only be deleted once it has been archived, by an Admin: two deliberate acts, and the first
 /// one is visible to every member for as long as they care to notice.
 /// </para>
-/// <para>
-/// The blobs are not deleted here - neither the mod files nor the savegame bytes. They are addressed
-/// by content and shared between versions, so the reclamation sweep is what removes them once
-/// nothing refers to them. The same bargain a deleted mod or savegame already makes.
-/// </para>
 /// </remarks>
 public class DeleteRepoV1Endpoint : IEndpoint
 {
@@ -42,7 +36,6 @@ public class DeleteRepoV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> DeleteRepo(
         Guid repoId,
-        IUnitOfWork unitOfWork,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
@@ -59,29 +52,15 @@ public class DeleteRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotArchived("Repo", repoId));
         }
 
-        await DeleteContentsAsync(dbContext, unitOfWork, repo, cancellationToken);
+        try
+        {
+            await dbContext.DeleteWithContentsAsync(repo, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.RepoChanged);
+        }
 
         return TypedResults.Ok();
-    }
-
-    /// <summary>
-    /// Empties the repo and drops it. <see cref="RepoExtensions.EmptyAsync"/> is where the order the
-    /// foreign keys force is written down; the transaction is what keeps the state in between -
-    /// contents gone, row still standing - something no other request and no crash can observe.
-    /// </summary>
-    private static async Task DeleteContentsAsync(
-        ApplicationDbContext dbContext,
-        IUnitOfWork unitOfWork,
-        Repo repo,
-        CancellationToken cancellationToken)
-    {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        await dbContext.EmptyAsync(repo.Id, cancellationToken);
-
-        dbContext.Repos.Remove(repo);
-        await unitOfWork.CommitAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
     }
 }

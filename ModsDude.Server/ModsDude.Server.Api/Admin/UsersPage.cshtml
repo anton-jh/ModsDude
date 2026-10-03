@@ -1,5 +1,7 @@
 @page "/admin/users"
 @model UsersPageModel
+@using ModsDude.Server.Domain.RepoMemberships
+@using ModsDude.Server.Domain.Users
 @{
     ViewData[AdminLayout.SectionKey] = AdminSection.Users;
 }
@@ -25,10 +27,14 @@
 
             @foreach (var user in Model.Users)
             {
-                <details>
+                <details id="@UsersPageModel.RowAnchor(user.Id)" open="@(Model.Open == user.Id)">
                     <summary>
                         <span>
                             @user.Name
+                            @if (user.BlockedAt is not null)
+                            {
+                                <span class="status Blocked">Blocked</span>
+                            }
                             @if (user.IsTrusted)
                             {
                                 <span class="status Trusted">Trusted</span>
@@ -43,7 +49,58 @@
                     <div class="row-details">
                         <dl class="facts">
                             <div><dt>Created</dt><dd>@AdminFormat.Time(user.Created)</dd></div>
+                            @if (user.BlockedAt is DateTime blockedAt)
+                            {
+                                <div><dt>Blocked</dt><dd>@AdminFormat.Time(blockedAt)</dd></div>
+                            }
                         </dl>
+
+                        <h3>Account</h3>
+                        <div class="toolbar">
+                            @if (user.BlockedAt is null)
+                            {
+                                <form method="post" asp-page-handler="Block" data-confirm="Block @user.Name? They cannot use ModsDude until unblocked.">
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <button type="submit" class="danger">Block</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="Unblock">
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <button type="submit">Unblock</button>
+                                </form>
+                            }
+
+                            @if (user.IsTrusted)
+                            {
+                                <form method="post" asp-page-handler="RevokeTrust" data-confirm="Revoke trust from @user.Name? They can no longer create repos.">
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <button type="submit">Revoke trust</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="GrantTrust">
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <button type="submit">Grant trust</button>
+                                </form>
+                            }
+
+                            @if (user.HasAvatar)
+                            {
+                                <form method="post" asp-page-handler="RemoveAvatar" data-confirm="Remove the avatar of @user.Name?">
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <button type="submit">Remove avatar</button>
+                                </form>
+                            }
+
+                            <form method="post" asp-page-handler="Rename">
+                                <input type="hidden" name="userId" value="@user.Id">
+                                <input type="text" name="name" value="@user.DisplayName" maxlength="@DisplayName.MaximumLength" required aria-label="Display name">
+                                <button type="submit">Rename</button>
+                            </form>
+                        </div>
 
                         <h3>Memberships</h3>
                         @if (user.Memberships.Count == 0)
@@ -59,6 +116,7 @@
                                         <th>Level</th>
                                         <th class="number">Downloaded</th>
                                         <th class="number">Uploaded</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -66,13 +124,73 @@
                                     {
                                         <tr>
                                             <td>@membership.Repo</td>
-                                            <td>@membership.Level</td>
+                                            <td>
+                                                <form method="post" asp-page-handler="SetLevel" class="toolbar">
+                                                    <input type="hidden" name="userId" value="@user.Id">
+                                                    <input type="hidden" name="repoId" value="@membership.RepoId">
+                                                    <input type="hidden" name="revision" value="@membership.Revision">
+                                                    <select name="level" aria-label="Level">
+                                                        @foreach (var level in Enum.GetValues<RepoMembershipLevel>())
+                                                        {
+                                                            <option value="@level" selected="@(level == membership.Level)">@level</option>
+                                                        }
+                                                    </select>
+                                                    <button type="submit">Save</button>
+                                                </form>
+                                            </td>
                                             <td class="number">@AdminFormat.Bytes(membership.DownloadedBytes)</td>
                                             <td class="number">@AdminFormat.Bytes(membership.UploadedBytes)</td>
+                                            <td>
+                                                <form method="post" asp-page-handler="RemoveMembership" data-confirm="Remove @user.Name from @membership.Repo?">
+                                                    <input type="hidden" name="userId" value="@user.Id">
+                                                    <input type="hidden" name="repoId" value="@membership.RepoId">
+                                                    <input type="hidden" name="revision" value="@membership.Revision">
+                                                    <button type="submit" class="danger">Remove</button>
+                                                </form>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
                             </table></div>
+                        }
+
+                        @if (user.BlockedAt is not null || user.AvailableRepos.Count == 0)
+                        {
+                            <div class="toolbar">
+                                <span title="@(user.BlockedAt is not null ? "A blocked user cannot be added to a repo." : "Already a member of every repo.")"><button type="button" disabled>Add to repo</button></span>
+                            </div>
+                        }
+                        else
+                        {
+                            var dialogId = $"add-membership-{UsersPageModel.RowAnchor(user.Id)}";
+
+                            <div class="toolbar">
+                                <button type="button" data-open-dialog="@dialogId">Add to repo</button>
+                            </div>
+
+                            <dialog id="@dialogId">
+                                <form method="post" asp-page-handler="AddMembership" class="dialog-form">
+                                    <h2>Add @user.Name to a repo</h2>
+                                    <input type="hidden" name="userId" value="@user.Id">
+                                    <input type="search" placeholder="Search repos" aria-label="Search repos" data-filters="@dialogId-repos">
+                                    <select id="@dialogId-repos" name="repoId" size="10" required aria-label="Repo">
+                                        @foreach (var repo in user.AvailableRepos)
+                                        {
+                                            <option value="@repo.Id">@repo.Name</option>
+                                        }
+                                    </select>
+                                    <select name="level" aria-label="Level">
+                                        @foreach (var level in Enum.GetValues<RepoMembershipLevel>())
+                                        {
+                                            <option value="@level" selected="@(level == RepoMembershipLevel.Member)">@level</option>
+                                        }
+                                    </select>
+                                    <div class="dialog-actions">
+                                        <button type="button" data-close-dialog>Cancel</button>
+                                        <button type="submit" class="accent">Add</button>
+                                    </div>
+                                </form>
+                            </dialog>
                         }
                     </div>
                 </details>

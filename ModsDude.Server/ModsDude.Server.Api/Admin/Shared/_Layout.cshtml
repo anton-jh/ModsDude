@@ -102,6 +102,13 @@
         background: var(--hover);
     }
 
+    button:disabled, button:disabled:hover {
+        background: var(--panel);
+        color: var(--muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
     button.accent {
         border-color: var(--accent);
         background: var(--accent);
@@ -111,6 +118,84 @@
 
     button.accent:hover {
         background: var(--accent-hover);
+    }
+
+    button.danger {
+        border-color: var(--error);
+    }
+
+    button.danger:hover {
+        background: var(--error);
+    }
+
+    input[type="text"], input[type="search"], select {
+        padding: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+    }
+
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.5rem 0;
+    }
+
+    .toolbar form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    td .toolbar {
+        margin: 0;
+    }
+
+    .row-details td {
+        vertical-align: middle;
+    }
+
+    td button, td select {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    dialog {
+        width: min(28rem, calc(100vw - 2rem));
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        background: var(--panel);
+        color: var(--text);
+    }
+
+    dialog::backdrop {
+        background: rgb(0 0 0 / 0.6);
+    }
+
+    dialog h2 {
+        margin-bottom: 1rem;
+    }
+
+    .dialog-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .dialog-form select[size] {
+        padding: 0.25rem;
+    }
+
+    .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
     }
 
     .panel {
@@ -123,6 +208,10 @@
 
     .panel.error {
         border-color: var(--error);
+    }
+
+    .panel.notice {
+        border-color: var(--accent);
     }
 
     .code {
@@ -205,6 +294,11 @@
     .status.Redeemed {
         background: #1f2c4a;
         color: #9fb6ff;
+    }
+
+    .status.Blocked, .status.NoActiveAdmin {
+        background: #4a1f1f;
+        color: #f0a0a0;
     }
 
     .chart {
@@ -400,8 +494,54 @@
         </nav>
     </header>
 
+    @if (TempData.TakeError() is string error)
+    {
+        <div class="panel error">@error</div>
+    }
+    @if (TempData.TakeNotice() is string notice)
+    {
+        <div class="panel notice">@notice</div>
+    }
+
     @RenderBody()
 </main>
+<script>
+    // Asked here rather than in an onsubmit attribute, so a name in the question is never read as script.
+    document.addEventListener("submit", event => {
+        const question = event.target.dataset.confirm;
+        if (question && !confirm(question)) {
+            event.preventDefault();
+        }
+    });
+
+    document.addEventListener("click", event => {
+        const opener = event.target.closest("[data-open-dialog]");
+        if (opener) {
+            const dialog = document.getElementById(opener.dataset.openDialog);
+            dialog.showModal();
+            dialog.querySelector("input[type=search]")?.focus();
+        }
+
+        event.target.closest("[data-close-dialog]")?.closest("dialog").close();
+    });
+
+    // A search box narrows the list it names to the options whose text contains what was typed.
+    document.addEventListener("input", event => {
+        const list = event.target.dataset.filters && document.getElementById(event.target.dataset.filters);
+        if (!list) {
+            return;
+        }
+
+        const query = event.target.value.trim().toLowerCase();
+        for (const option of list.options) {
+            option.hidden = !option.text.toLowerCase().includes(query);
+        }
+
+        if (list.selectedOptions[0]?.hidden) {
+            list.selectedIndex = -1;
+        }
+    });
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

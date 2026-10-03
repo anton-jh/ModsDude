@@ -1,4 +1,5 @@
-﻿using ModsDude.Server.Domain.RepoMemberships;
+﻿using ModsDude.Server.Domain.Exceptions;
+using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Repos;
@@ -10,17 +11,17 @@ public class Repo : IArchivable
     // ef
     private Repo() { }
 
-    public Repo(RepoName name, DateTime created, UserId firstAdmin)
+    public Repo(RepoName name, DateTime created, User firstAdmin)
     {
         Name = name;
         Created = created;
-        UpdateMembershipLevel(firstAdmin, RepoMembershipLevel.Admin);
+        AddMember(firstAdmin, RepoMembershipLevel.Admin);
     }
 
 
     public RepoId Id { get; init; } = new(Guid.NewGuid());
 
-    public RepoName Name { get; set; }
+    public RepoName Name { get; private set; }
     public required AdapterData AdapterData { get; set; }
     public DateTime Created { get; }
 
@@ -29,6 +30,17 @@ public class Repo : IArchivable
 
     public bool IsArchived => ArchivedAt is not null;
 
+    /// <summary>
+    /// Counts membership changes. A concurrency token, so two requests that each passed the only-Admin
+    /// check against the same memberships cannot both be saved.
+    /// </summary>
+    public int MembershipRevision { get; private set; }
+
+
+    public void Rename(RepoName name)
+    {
+        Name = name;
+    }
 
     /// <summary>
     /// Puts the repo away for everybody - it is repo state, not membership state, so there is no
@@ -50,54 +62,58 @@ public class Repo : IArchivable
     }
 
 
-    public void AddMember(UserId userId, RepoMembershipLevel level)
+    public void AddMember(User user, RepoMembershipLevel level)
     {
-        if (_memberships.FirstOrDefault(x => x.UserId == userId) is RepoMembership existing)
+        if (user.IsBlocked)
         {
-            throw new InvalidOperationException($"Cannot add member '{userId.Value}' to '{Id.Value}'. User is already a member.");
+            throw new DomainValidationException($"Cannot add blocked user '{user.Id.Value}' to repo '{Id.Value}'.");
         }
-        else
+
+        if (HasMember(user.Id))
         {
-            var membership = new RepoMembership(
-                userId, Id, level);
-            _memberships.Add(membership);
+            throw new DomainValidationException($"User '{user.Id.Value}' is already a member of repo '{Id.Value}'.");
         }
+
+        _memberships.Add(new RepoMembership(user.Id, Id, level));
+        MembershipRevision++;
     }
-    
+
     /// <summary>
-    /// Upserts the membership. Demoting the only Admin is refused for the same reason kicking them
-    /// is: it leaves a repo nobody can administer, and no remaining member can undo it.
+    /// Demoting the only Admin is refused for the same reason kicking them is: it leaves a repo
+    /// nobody can administer, and no remaining member can undo it. Setting the level a member already
+    /// has changes nothing, so a repeated request does not count as a change.
     /// </summary>
     public void UpdateMembershipLevel(UserId userId, RepoMembershipLevel level)
     {
-        if (_memberships.FirstOrDefault(x => x.UserId == userId) is RepoMembership existing)
-        {
-            if (level < RepoMembershipLevel.Admin && IsOnlyAdmin(userId))
-            {
-                throw new InvalidOperationException($"Cannot demote the only Admin of repo '{Id}'");
-            }
+        var membership = GetMembership(userId)
+            ?? throw new DomainValidationException($"User '{userId.Value}' is not a member of repo '{Id.Value}'.");
 
-            existing.Level = level;
-        }
-        else
+        if (membership.Level == level)
         {
-            var membership = new RepoMembership(
-                userId, Id, level);
-            _memberships.Add(membership);
+            return;
         }
+
+        if (level < RepoMembershipLevel.Admin && IsOnlyAdmin(userId))
+        {
+            throw new DomainValidationException($"Cannot demote the only Admin of repo '{Id.Value}'.");
+        }
+
+        membership.Level = level;
+        MembershipRevision++;
     }
 
     public void KickMember(UserId userId)
     {
-        var membership = _memberships.FirstOrDefault(x => x.UserId == userId)
-            ?? throw new InvalidOperationException($"User '{userId}' is not a member of repo '{Id}'");
+        var membership = GetMembership(userId)
+            ?? throw new DomainValidationException($"User '{userId.Value}' is not a member of repo '{Id.Value}'.");
 
         if (IsOnlyAdmin(userId))
         {
-            throw new InvalidOperationException("Cannot kick the only Admin of a repo");
+            throw new DomainValidationException($"Cannot kick the only Admin of repo '{Id.Value}'.");
         }
 
         _memberships.Remove(membership);
+        MembershipRevision++;
     }
 
     public bool HasMember(UserId userId)

@@ -166,6 +166,18 @@ public static class RetentionPolicy
         ];
     }
 
+    /// <summary>The rows eligible because newer ones replaced them, ignoring any schedule.</summary>
+    public static IReadOnlyList<TKey> FindOutsideWindow<TKey>(IReadOnlyDictionary<TKey, DeletionReason> eligible)
+        where TKey : notnull
+    {
+        return
+        [
+            .. eligible
+                .Where(x => x.Value == DeletionReason.OutsideWindow)
+                .Select(x => x.Key)
+        ];
+    }
+
     /// <summary>
     /// The rows to delete today: scheduled for today or earlier, and still eligible for the reason
     /// they were scheduled for. Asked again at deletion rather than trusted from the schedule, because

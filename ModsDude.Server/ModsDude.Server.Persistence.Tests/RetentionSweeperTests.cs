@@ -398,6 +398,93 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
         Assert.All(await VersionsAsync(repoId), x => Assert.Null(x.DeletionScheduledFor));
     }
 
+    [Fact]
+    public async Task Pruning_snapshots_deletes_those_outside_the_window_without_waiting()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegameWithSnapshots(repoId, profileId, 5);
+
+        var result = await PruneAsync(repoId, PrunableHistory.SavegameSnapshots);
+
+        Assert.Equal(new PruneResult(2, 0), result);
+        Assert.Equal([3, 4, 5], (await SnapshotSchedulesAsync(repoId, savegameId)).Select(x => x.Number));
+    }
+
+    [Fact]
+    public async Task Pruning_again_deletes_nothing_more()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegameWithSnapshots(repoId, profileId, 5);
+
+        await PruneAsync(repoId, PrunableHistory.SavegameSnapshots);
+        var second = await PruneAsync(repoId, PrunableHistory.SavegameSnapshots);
+
+        Assert.Equal(new PruneResult(0, 0), second);
+        Assert.Equal([3, 4, 5], (await SnapshotSchedulesAsync(repoId, savegameId)).Select(x => x.Number));
+    }
+
+    [Fact]
+    public async Task Pruning_leaves_a_history_that_is_only_winding_down()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 2);
+
+        var result = await PruneAsync(repoId, PrunableHistory.ProfileRevisions);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal([1, 2, 3], (await RevisionSchedulesAsync(repoId, profileId)).Select(x => x.Number));
+    }
+
+    [Fact]
+    public async Task Pruning_revisions_keeps_one_a_snapshot_was_played_on()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 4);
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenSnapshots(repoId, savegameId, 1, playedOn: new RevisionNumber(1));
+
+        await PruneAsync(repoId, PrunableHistory.ProfileRevisions);
+
+        Assert.Equal([1, 3, 4, 5], (await RevisionSchedulesAsync(repoId, profileId)).Select(x => x.Number));
+    }
+
+    [Fact]
+    public async Task Pruning_mod_versions_keeps_pinned_ones_and_closes_the_gaps()
+    {
+        var repoId = await GivenAModWithVersions("1", "2", "3", "4");
+        await GivenAProfilePinning(repoId, "1");
+
+        await PruneAsync(repoId, PrunableHistory.ModVersions);
+
+        Assert.Equal(
+            [("1", 0), ("3", 1), ("4", 2)],
+            (await VersionsAsync(repoId)).Select(x => (x.Id.Value, x.SequenceNumber)));
+    }
+
+    [Fact]
+    public async Task Pruning_one_history_leaves_the_others_and_other_repos_alone()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        await GivenRevisions(repoId, profileId, 4);
+        var savegameId = await GivenASavegameWithSnapshots(repoId, profileId, 5);
+
+        var (otherRepoId, otherProfileId) = await GivenARepoWithAProfile();
+        var otherSavegameId = await GivenASavegameWithSnapshots(otherRepoId, otherProfileId, 5);
+
+        await PruneAsync(repoId, PrunableHistory.SavegameSnapshots);
+
+        Assert.Equal(3, (await SnapshotSchedulesAsync(repoId, savegameId)).Count);
+        Assert.Equal(5, (await RevisionSchedulesAsync(repoId, profileId)).Count);
+        Assert.Equal(5, (await SnapshotSchedulesAsync(otherRepoId, otherSavegameId)).Count);
+    }
+
+
+    private async Task<PruneResult> PruneAsync(RepoId repoId, PrunableHistory history)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        return await new RetentionSweeper(dbContext, NullLogger<RetentionSweeper>.Instance).PruneNowAsync(repoId, history, _now, CancellationToken.None);
+    }
 
     private static DeletionSchedule Scheduled(int days, DeletionReason reason) => new(_today.AddDays(days), reason);
 
@@ -503,12 +590,13 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
     private static Repo GivenARepo(ApplicationDbContext dbContext)
     {
         var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, userId)
+        var user = new User(userId, new DisplayName(userId.Value), DateTime.UtcNow);
+        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, user)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
 
         return repo;

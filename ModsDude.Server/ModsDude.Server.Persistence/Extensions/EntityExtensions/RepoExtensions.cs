@@ -25,8 +25,28 @@ public static class RepoExtensions
     }
 
     /// <summary>
+    /// Deletes the repo and everything in it, in one transaction, so no request and no crash can see
+    /// its contents gone while its row still stands. Nothing inside can refuse it: it takes the
+    /// dependants and the dependencies together. The caller decides whether the repo may go.
+    /// </summary>
+    /// <remarks>
+    /// The blobs stay. They are addressed by content and shared, so the reclamation sweep removes
+    /// them once nothing refers to them.
+    /// </remarks>
+    public static async Task DeleteWithContentsAsync(this ApplicationDbContext dbContext, Repo repo, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        await dbContext.EmptyAsync(repo.Id, cancellationToken);
+
+        dbContext.Repos.Remove(repo);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Deletes everything in a repo that will not fall out of the way when the repo's own row goes.
-    /// The caller removes that row and commits, both inside a transaction it owns.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -46,7 +66,7 @@ public static class RepoExtensions
     /// every dependency row the group has ever had, to send them back one at a time.
     /// </para>
     /// </remarks>
-    public static async Task EmptyAsync(this ApplicationDbContext dbContext, RepoId repoId, CancellationToken cancellationToken)
+    private static async Task EmptyAsync(this ApplicationDbContext dbContext, RepoId repoId, CancellationToken cancellationToken)
     {
         await dbContext.Savegames
             .Where(x => x.RepoId == repoId)

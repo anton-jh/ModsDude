@@ -171,12 +171,15 @@ public class GameActivityQueryTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, admin)
+        var adminUser = (await dbContext.Users.GetAsync(admin, CancellationToken.None))!;
+        var memberUser = (await dbContext.Users.GetAsync(member, CancellationToken.None))!;
+
+        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, adminUser)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        repo.AddMember(member, RepoMembershipLevel.Member);
+        repo.AddMember(memberUser, RepoMembershipLevel.Member);
 
         var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
         var revision = profile.CreateRevision([], [], admin, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created);

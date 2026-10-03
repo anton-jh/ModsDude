@@ -442,7 +442,8 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, userId)
+        var user = new User(userId, new DisplayName(userId.Value), DateTime.UtcNow);
+        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, user)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
@@ -450,7 +451,7 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
         var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
         var revision = profile.CreateRevision([], [], _author, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created);
 
-        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
         dbContext.Profiles.Add(profile);
         dbContext.ProfileRevisions.Add(revision);

@@ -614,6 +614,17 @@
 
         </Grid>
 
+        <!-- Over the page and the notices both: nothing on them works while the account is blocked. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}"
+              Visibility="{Binding AccountBlocked.IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <ContentControl Content="{Binding AccountBlocked}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+
+        </Grid>
+
         <Grid Grid.Column="0" Grid.ColumnSpan="2"
               Background="{DynamicResource SmokeFillColorDefaultBrush}"
               Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}">

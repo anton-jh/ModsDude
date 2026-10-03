@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Accounts;
 using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Exceptions;
 
@@ -44,10 +45,18 @@ public sealed class ErrorReporter(
 
     public Task ShowAsync(Exception exception, string? context = null)
     {
-        // The window is covered by the build mismatch, which is the one place that says so.
+        // The window is covered by the build mismatch or the account block, which is the one place
+        // that says so.
         if (BuildRefusal.Is(exception))
         {
             logger.LogWarning(exception, "Not shown while {Context}: the server refuses this build.", context ?? "working");
+
+            return Task.CompletedTask;
+        }
+
+        if (AccountRefusal.Is(exception))
+        {
+            logger.LogWarning(exception, "Not shown while {Context}: the account is blocked.", context ?? "working");
 
             return Task.CompletedTask;
         }

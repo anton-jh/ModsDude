@@ -32,6 +32,7 @@ using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Settings;
 using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
+using ModsDude.Client.Wpf.Shell.AccountBlock;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -623,6 +624,7 @@ public partial class App : Application
         services.AddSingleton<IToastService>(sp => sp.GetRequiredService<ToastCenterViewModel>());
 
         services.AddSingleton<BuildMismatchViewModel>();
+        services.AddSingleton<AccountBlockedViewModel>();
 
         services.AddSingleton<ModListItemViewModel.Factory>();
 

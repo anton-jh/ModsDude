@@ -20,6 +20,7 @@ public class OverviewPageModel(
     public int ActiveShortUserCount { get; private set; }
     public int ActiveLongUserCount { get; private set; }
     public int TrustedUserCount { get; private set; }
+    public int BlockedUserCount { get; private set; }
     public int RepoCount { get; private set; }
     public int ArchivedRepoCount { get; private set; }
     public int OpenInviteCount { get; private set; }
@@ -56,6 +57,7 @@ public class OverviewPageModel(
         ActiveShortUserCount = await dbContext.Users.CountAsync(x => x.LastSeen >= activeShortSince, cancellationToken);
         ActiveLongUserCount = await dbContext.Users.CountAsync(x => x.LastSeen >= activeLongSince, cancellationToken);
         TrustedUserCount = await dbContext.Users.CountAsync(x => x.IsTrusted, cancellationToken);
+        BlockedUserCount = await dbContext.Users.CountAsync(x => x.BlockedAt != null, cancellationToken);
 
         RepoCount = await dbContext.Repos.CountAsync(x => x.ArchivedAt == null, cancellationToken);
         ArchivedRepoCount = await dbContext.Repos.CountAsync(x => x.ArchivedAt != null, cancellationToken);

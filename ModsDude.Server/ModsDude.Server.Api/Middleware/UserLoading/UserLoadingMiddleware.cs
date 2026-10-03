@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
@@ -28,6 +29,14 @@ public class UserLoadingMiddleware(
 
         var userId = new UserId(subClaim.Value);
         var existingUser = await dbContext.Users.FindAsync(userId);
+
+        if (existingUser is { IsBlocked: true })
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(Problems.UserBlocked, context.RequestAborted);
+
+            return;
+        }
 
         if (existingUser is not null)
         {

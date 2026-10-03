@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -33,10 +34,17 @@ public class UpdateRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        repo.Name = new RepoName(request.Name);
+        repo.Rename(new RepoName(request.Name));
         repo.AdapterData = repo.AdapterData with { Configuration = new(request.AdapterConfiguration) };
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.RepoChanged);
+        }
 
         return TypedResults.Ok(RepoDto.FromModel(repo));
     }

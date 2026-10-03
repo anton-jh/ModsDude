@@ -128,6 +128,8 @@ builder.Services
         .AddAuthenticationSchemes(AdminAuthenticationHandler.SchemeName)
         .RequireAuthenticatedUser());
 
+builder.Services.AddScoped<IAdminMemberships, AdminMemberships>();
+
 builder.Services.AddRazorPages(options =>
 {
     options.RootDirectory = "/Admin";
@@ -160,7 +162,7 @@ builder.Services.AddScoped<ModHubCrawlJob>();
 
 builder.Services
     .Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
-builder.Services.AddScoped<RetentionSweeper>();
+builder.Services.AddScoped<IRetentionSweeper, RetentionSweeper>();
 builder.Services.AddScoped<RetentionUpkeep>();
 builder.Services.AddScoped<RetentionJobs>();
 
@@ -231,7 +233,7 @@ app.UseAuthorization();
 
 app.UseMiddleware<UserLoadingMiddleware>();
 
-// The 401 and the 412 are declared once here rather than in every endpoint's Results<...> union,
+// The 401, 403 and 412 are declared once here rather than in every endpoint's Results<...> union,
 // because middleware produces them for every endpoint, including the ones that return a bare Ok<T>
 // and have no union.
 app.MapGroup("api/v{v:apiVersion}")
@@ -239,6 +241,10 @@ app.MapGroup("api/v{v:apiVersion}")
     .RequireAuthorization()
     .WithMetadata(new ProducesResponseTypeMetadata(
         StatusCodes.Status401Unauthorized,
+        typeof(CustomProblemDetails),
+        ["application/json"]))
+    .WithMetadata(new ProducesResponseTypeMetadata(
+        StatusCodes.Status403Forbidden,
         typeof(CustomProblemDetails),
         ["application/json"]))
     .WithMetadata(new ProducesResponseTypeMetadata(

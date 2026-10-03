@@ -131,12 +131,13 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, userId)
+        var user = new User(userId, new DisplayName(userId.Value), DateTime.UtcNow);
+        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, user)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
         dbContext.ModVersions.AddRange(versionIds.Select((versionId, index) => CreateVersion(repo.Id, modId, versionId, index)));
 

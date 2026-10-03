@@ -77,9 +77,8 @@ public class RepoDeletionTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// Why <see cref="RepoExtensions.EmptyAsync"/> exists at all. The mod versions are the innermost
-    /// <c>Restrict</c>, so a repo row removed on its own walks straight into it - which is what the
-    /// delete endpoint used to do, and then had to refuse the case rather than handle it.
+    /// Why <see cref="RepoExtensions.DeleteWithContentsAsync"/> empties the repo first. The mod
+    /// versions are the innermost <c>Restrict</c>, so a repo row removed on its own walks straight into it.
     /// </summary>
     [Fact]
     public async Task Deleting_the_repo_row_on_its_own_is_refused_by_the_database()
@@ -110,7 +109,8 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var userId = new UserId($"user-{Guid.NewGuid()}");
-        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, userId)
+        var user = new User(userId, new DisplayName(userId.Value), DateTime.UtcNow);
+        var repo = new Repo(new RepoName($"repo-{Guid.NewGuid()}"), DateTime.UtcNow, user)
         {
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
@@ -123,7 +123,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
             _author,
             DateTime.UtcNow);
 
-        dbContext.Users.Add(new User(userId, new DisplayName(userId.Value), DateTime.UtcNow));
+        dbContext.Users.Add(user);
         dbContext.Repos.Add(repo);
         dbContext.ModVersions.AddRange(versions);
         dbContext.Profiles.Add(profile);
@@ -191,22 +191,13 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 
-    /// <summary>
-    /// Exactly what <c>DeleteRepoV1Endpoint</c> does once it has decided the repo may go: empty it in
-    /// the order the foreign keys force, then drop the row, in one transaction.
-    /// </summary>
     private async Task GivenTheRepoIsDeleted(RepoId repoId)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken.None);
+        var repo = (await dbContext.Repos.GetAsync(repoId, CancellationToken.None))!;
 
-        await dbContext.EmptyAsync(repoId, CancellationToken.None);
-
-        dbContext.Repos.Remove((await dbContext.Repos.GetAsync(repoId, CancellationToken.None))!);
-        await dbContext.SaveChangesAsync(CancellationToken.None);
-
-        await transaction.CommitAsync(CancellationToken.None);
+        await dbContext.DeleteWithContentsAsync(repo, CancellationToken.None);
     }
 
     private static ModVersion CreateVersion(RepoId repoId, string versionId, int sequenceNumber) => new()
